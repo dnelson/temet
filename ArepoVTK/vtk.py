@@ -7,14 +7,14 @@ from pyramid import *
 def process():
 
     # config
-    fileBase      = 'frame_1820' #frame_455 #frame_1820 #frame_jobtest1
-    outPath       = 'vtkout_metal/'
-    totNumJobs    = 256 #16 #64 #256
+    fileBase      = 'test' #frame_455 #frame_1820 #frame_jobtest1
+    outPath       = 'vtkout_test/'
+    totNumJobs    = 4096 #16 #64 #256
     tileSize      = 256
     reduceOrder   = 1 # [1-5], 1=bilinear, 3=cubic
-    fieldName     = 'Metal' # Density, Temp, Entropy, Metal, VelMag, SzY, XRay
-    makeFullImage = False
-    makePyramid   = True
+    fieldName     = 'Density' # Density, Temp, Entropy, Metal, VelMag, SzY, XRay
+    makeFullImage = True
+    makePyramid   = False
     
     # get initial (hdf5) file listing, size of each, and total image size
     fileList = []
@@ -64,6 +64,7 @@ def process():
     
     config = { 'ct'            : ct,
                'zoom'          : 0.5,
+               'zoomGlobal'    : 0.5,
                'mDims'         : mDims,
                'jobsPerDim'    : jobsPerDim,
                'totImgSize'    : totImgSize,
@@ -83,41 +84,50 @@ def process():
     #make_pyramid_all(config)
     
     # OPTION (2): make upper and lower pyramids separately (memory efficient)
-    make_pyramid_upper(config)
-    make_pyramid_lower(config)
+    #make_pyramid_upper(config)
+    #make_pyramid_lower(config)
     
     # OPTION (3): render the tiles at their natural (existing) level only for debugging
-    #render_tiles_natural_only(config)
+    render_tiles_natural_only(config)
     
     #import pdb; pdb.set_trace() #idl stop
     
 def processShy():
 
     # config
-    fileBase      = 'L75n455FPs135_75000_75000_kpc_9155_pc_tile'
+    # 455 lowres
+    #fileBase   = 'L75n455FPs135_75000_75000_kpc_9155_pc_tile'
+    #totNumJobs = 16
+    # 455 128k
+    #fileBase   = "/n/ghernquist/sgenel/Illustris/stellar_images/L75n455FP/L75n455FPholys135_75000_75000_kpc_572_pc_tile"
+    # 1820 128k
+    fileBase = "/n/ghernquist/sgenel/Illustris/stellar_images/L75n1820FP/L75n1820FPholys135_75000_75000_kpc_572_pc_tile"
+    #fileBase = "L75n1820FPholys135_75000_75000_kpc_572_pc_tile"
+    
     fieldName     = "RGB"
+    nThirdDims    = 3 # 3=RGB, 4=RGBA
     outPath       = 'vtkout_stellar/'
-    totNumJobs    = 16 #16 #64 #256
+    totNumJobs    = 64 #16 #64 #256
     tileSize      = 256
     reduceOrder   = 1 # [1-5], 1=bilinear, 3=cubic
-    makeFullImage = False
+    makeFullImage = True
     makePyramid   = True
     
     # get initial (hdf5) file listing, size of each, and total image size
     fileList = []
     
     for curJobNum in range(0,totNumJobs):
-        filename = fileBase + '_' + str(curJobNum) + '_RGBmat.hdf5'
+        filename = fileBase + '_' + str(curJobNum) + '_RGBmat_scaled.hdf5'
         fileList.append( filename )
         
     # calculate pyramid levels (where in the pyramid do the hdf5 tiles sit)
-    dummy = getDataArrayHDF5( fileList[0], fieldName )
+    dummy = getDataArrayHDF5( fileList[27], fieldName )
     mDims = np.array(dummy.shape[1:3],dtype='int64')
 
     jobsPerDim = np.int32(np.sqrt(totNumJobs))
     totImgSize      = np.zeros( (3,), dtype='int64' )
     totImgSize[0:2] = mDims * jobsPerDim
-    totImgSize[2]   = 3
+    totImgSize[2]   = nThirdDims
     totImgPx   = totImgSize[0] * totImgSize[1]
     
     if totImgSize[0] != totImgSize[1]:
@@ -145,7 +155,9 @@ def processShy():
     os.makedirs(outPath)
     
     config = { 'ct'            : None,
-               'zoom'          : (0.5,0.5,1.0),
+               'zoom'          : (1.0,0.5,0.5),
+               'zoomGlobal'    : (0.5,0.5,1.0),
+               'nThirdDims'    : nThirdDims,
                'mDims'         : mDims,
                'jobsPerDim'    : jobsPerDim,
                'totImgSize'    : totImgSize,
@@ -162,10 +174,9 @@ def processShy():
                'makePyramid'   : makePyramid }
     
     # OPTION (1): make full pyramid (global image allocation)
-    make_pyramid_all(config)
+    #make_pyramid_all(config)
     
     # OPTION (2): make upper and lower pyramids separately (memory efficient)
-    #make_pyramid_upper(config)
-    #make_pyramid_lower(config)
-    
+    make_pyramid_upper(config)
+    make_pyramid_lower(config)
     
