@@ -1,14 +1,13 @@
 # job_monitor.py
 # dnelson
-# jan.2014
-
-# 1820_128k_sphTree (31 jan): SBATCH [186 new jobs]: Submitted batch job 5722986
-#                   (10 feb): SBATCH [144 new jobs]: Submitted batch job 6266169
+# feb.2014
 
 import re
 import os
 
 def checkVisJobs():
+    """ Categorize a large job set into running/completed/failed and 
+        automatically re-submit jobs which have failed."""
     nJobs = 256
     slurmJobPath = '/n/home07/dnelson/ArepoVTK/run.illustris.box/'
     slurmJobFile = 'job_1820_256_128k_sphTree.slurm'

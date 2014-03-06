@@ -10,6 +10,29 @@ import os.path
 import scipy.ndimage
 import colorsys
 
+def rebin(a, shape):
+    """ See REBIN() IDL function. """
+    sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
+    return a.reshape(sh).mean(-1).mean(1)
+
+def reduceArray(arrayIn, numReductions, config):
+    newShape = np.array( arrayIn.shape )
+    tempArray = arrayIn
+    
+    for j in range(numReductions):
+        newShape[1] /= 2
+        newShape[2] /= 2
+        
+        array = np.zeros( newShape ) # has different size, cannot write directly over
+        
+        for k in range(config['nThirdDims']):
+            array[k,:,:] = rebin( tempArray[k,:,:], [newShape[1],newShape[2]] )
+            
+        tempArray = array # override
+        
+    array = array.round().astype('uint8').clip(0,255)
+    return array
+    
 def getDataArrayHDF5(filename, fieldName):
     if not os.path.isfile(filename):
         print( " " + filename + " -- MISSING")
@@ -163,12 +186,16 @@ def loadColorTable(ct):
     
 def saveImageToPNG(filename, array_rgb):
     dims = array_rgb.shape
+    img = open(filename, 'wb')
     
     # open image and write
-    img = open(filename, 'wb')
-    pngWriter = png.Writer(dims[0],dims[1],alpha=False,bitdepth=8)
-    
-    pngWriter.write( img, np.reshape(array_rgb, (-1,dims[0]*dims[2])) )
+    if dims[2] == 3:
+        pngWriter = png.Writer(dims[0],dims[1],alpha=False,bitdepth=8)
+        pngWriter.write( img, np.reshape(array_rgb, (-1,dims[0]*dims[2])) )
+        
+    if dims[2] == 4:
+        pngWriter = png.Writer(dims[0],dims[1],alpha=True,bitdepth=8)
+        pngWriter.write( img, np.reshape(array_rgb, (-1,dims[0]*dims[2])) )
     
     img.close()
     
@@ -281,7 +308,7 @@ def make_pyramid_all(config):
         if level != config['levelMax']:
             print(" downsizing...")
             
-            globalArray = scipy.ndimage.zoom( globalArray, config['zoom'], order=config['reduceOrder'] )
+            globalArray = scipy.ndimage.zoom( globalArray, config['zoomGlobal'], order=config['reduceOrder'] )
             
         if config['makeFullImage']:
             # save full image at this zoom level
@@ -384,7 +411,7 @@ def make_pyramid_upper(config):
     if config['totImgSize'].shape[0] == 2:
         globalArray = np.zeros( (sizePerDim,sizePerDim), dtype='float32' )
     else:
-        globalArray = np.zeros( (sizePerDim,sizePerDim,3), dtype='uint8' )
+        globalArray = np.zeros( (sizePerDim,sizePerDim,config['nThirdDims']), dtype='uint8' ) + 255
     
     numReductions = np.log10( config['mDims'][0] / config['tileSize'] ) / np.log10(2)
     numReductions = np.int32( np.round(numReductions) )
@@ -394,16 +421,21 @@ def make_pyramid_upper(config):
     print("Loading...")
     
     for i in range(len(config['fileList'])):
+    #for i in (27,28):
         # load
         array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
         
         if len(array) == 0:
             continue
-        
+                
         # resize down to tileSize x tileSize
-        for j in range(numReductions):
-            array = scipy.ndimage.zoom( array, config['zoom'], order=config['reduceOrder'] )
-
+        if len(array.shape) == 3:
+            array = reduceArray(array, numReductions, config)
+        else:
+            # OLD: scipy crap edge effects some bug WTF /Patrik style (probably only works for nat=5)
+            for j in range(numReductions):
+                array = scipy.ndimage.zoom( array, config['zoom'], order=config['reduceOrder'] )
+            
         # stamp
         jRow = (config['jobsPerDim']-1) - np.int32(np.floor( i % config['jobsPerDim'] ))
         jCol = np.int32(np.floor( i / config['jobsPerDim'] ))
@@ -414,7 +446,7 @@ def make_pyramid_upper(config):
         y1 = config['tileSize'] * (jRow+1)
         
         if len(array.shape) == 3:
-            for j in range(3):
+            for j in range(config['nThirdDims']):
                 globalArray[ x0:x1, y0:y1, j ] = np.transpose( array[j,:,:] )
         else:
             globalArray[ x0:x1, y0:y1 ] = array
@@ -443,8 +475,9 @@ def make_pyramid_upper(config):
         
         if level != startLevel:
             print(" downsizing...")
-            globalArray = scipy.ndimage.zoom( globalArray, config['zoom'], order=config['reduceOrder'] )
-            
+            # probably 1px on right side / bottom is lost due to bug here
+            globalArray = scipy.ndimage.zoom( globalArray, config['zoomGlobal'], order=config['reduceOrder'] )
+ 
         if config['makeFullImage']:
             # save full image at this zoom level
             dens_rgb = convertDataArrayToRGB(globalArray, config['ct'])
@@ -484,7 +517,7 @@ def make_pyramid_upper(config):
 def make_pyramid_lower(config):
 
     print("\nLower pyramid:")
-    
+
     sizePerDim = config['tileSize'] * config['jobsPerDim']
     
     startLevel = np.int32(np.log10(sizePerDim) / np.log10(2)) - 8 + 1
@@ -492,15 +525,17 @@ def make_pyramid_lower(config):
     
     print("Number of reductions from natural tiles: [" + str(numReductions) + "]")
     
-    # load: loop over hdf5 files for global min/max
-    print("Loading...")
-    
     for i in range(len(config['fileList'])):
+    #for i in (27,28):
         # load
         array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
         
         if len(array) == 0:
             continue
+           
+        if len(array.shape) == 3: # processShy
+            for j in range(config['nThirdDims']):
+                array[j,:,:] = np.transpose( array[j,:,:] )
             
         # set all zeros to minimum non-zero value and take log
         if config['ct'] != None:
@@ -513,7 +548,16 @@ def make_pyramid_lower(config):
             print("  level [" + str(level) + "]")
             
             if level != config['levelMax']:
-                array = scipy.ndimage.zoom( array, config['zoom'], order=config['reduceOrder'] )
+                if len(array.shape) == 3:
+                    array = reduceArray(array, 1, config)
+                else:
+                    # OLD: scipy crap edge effects some bug WTF /Patrik style (probably only works for nat=5)
+                    array = scipy.ndimage.zoom( array, config['zoom'], order=config['reduceOrder'] )
+                
+            # DEBUG:
+            #if level == 9 or level == 8:
+            #    continue
+            # END DEBUG
                 
             # global indices at this level
             levelDepth = level - startLevel + 1
@@ -526,7 +570,7 @@ def make_pyramid_lower(config):
                 os.makedirs(config['outPath'] + str(level))
                 
             # slice array into 256x256 segments
-            nSub = (array.shape)[0] / config['tileSize']
+            nSub = (array.shape)[-1] / config['tileSize']
             
             for colIndex in range(nSub):
                 globalCol = jCol*levelExpansionFac + colIndex
@@ -545,7 +589,8 @@ def make_pyramid_lower(config):
                     y1 = (colIndex+1) * config['tileSize']
                     
                     if len(array.shape) == 3:
-                        subarray = array[ x0:x1, y0:y1, : ]
+                        subarray = array[ 0:config['nThirdDims'], x0:x1, y0:y1 ]
+                        subarray = np.rollaxis( subarray, 0, 3 ) # shift (3,N,N) to (N,N,3)
                     else:
                         subarray = array[ x0:x1, y0:y1 ]
                     
