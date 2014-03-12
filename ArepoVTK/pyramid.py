@@ -9,6 +9,8 @@ import png
 import os.path
 import scipy.ndimage
 import colorsys
+import matplotlib.colors as colors
+import matplotlib.cm as cmx
 
 def rebin(a, shape):
     """ See REBIN() IDL function. """
@@ -32,6 +34,18 @@ def reduceArray(arrayIn, numReductions, config):
         
     array = array.round().astype('uint8').clip(0,255)
     return array
+
+def reduceArray2D(arrayIn, numReductions):
+    newShape = np.array( arrayIn.shape )
+    tempArray = arrayIn
+
+    for j in range(numReductions):
+        newShape /= 2
+        array = np.zeros( newShape )
+        array = rebin( tempArray, newShape )
+    
+        tempArray = array
+    return tempArray
     
 def getDataArrayHDF5(filename, fieldName):
     if not os.path.isfile(filename):
@@ -43,13 +57,19 @@ def getDataArrayHDF5(filename, fieldName):
     
     f = h5py.File(filename,'r')
     
-    if fieldName != "RGB":
+    if fieldName == "RGB":
+        # named datasets without a parent group
+        dataset = f[fieldName]
+        dtype = np.uint8
+    elif fieldName == "map":
+        # named datasets without a parent group
+        dataset = f[fieldName]
+        dtype = np.float32
+    else:
+        # generic named datasets within a named parent group
         group = f.get(fieldName)
         dataset = group.get("Array")
         dtype = np.float32
-    else:
-        dataset = f[fieldName] # RGB is a dataset without a parent group
-        dtype = np.uint8
     
     dims = dataset.shape
     
@@ -70,6 +90,14 @@ def convertDataArrayToRGB(array, colortable):
     if colortable is None:
         # fix to byte and immediate return
         return array
+        
+    if colortable['tableNum'] == 0:
+        # using matplotlib cmap
+        array_rgba = colortable['table'].to_rgba( array )
+        array_rgb = (array_rgba[:,:,0:3] * 255.0).round()
+        array_rgb = array_rgb.clip(0,255).astype('uint8')
+        #import pdb; pdb.set_trace()
+        return array_rgb
         
     # take log
     dims = array.shape
@@ -181,6 +209,32 @@ def loadColorTable(ct):
     # add actual table to ct
     ct['table']    = table
     ct['tableNum'] = nTable
+    
+    return ct
+    
+def genColorTable(fieldName):
+    if fieldName != "map":
+        print( "Error!" )
+        return
+
+    ct = {}
+    ct['log'] = True
+    ct['gamma'] = 1.0
+    ct['reverse'] = False
+    ct['minmax'] = [4.7,8.8]
+    ct['tableNum'] = 0        
+        
+    cdict = {
+    'red'  :  ((0., 0., 0.),     (0.3,0,0),     (0.6, 0.8, 0.8), (1., 1., 1.)),
+    'green':  ((0., 0., 0.),     (0.3,0.3,0.3), (0.6, 0.4, 0.4), (1., 1.0, 1.0)),
+    'blue' :  ((0., 0.05, 0.05), (0.3,0.5,0.5), (0.6, 0.6, 0.6), (1.0, 1.0, 1.0))
+    }
+    
+    dmdens_cmap = colors.LinearSegmentedColormap('dmdens_cmap', cdict, 1024)
+    cmap_norm = colors.Normalize(vmin = ct['minmax'][0], vmax = ct['minmax'][1])
+    cmap = cmx.ScalarMappable(norm=cmap_norm, cmap=dmdens_cmap)
+    
+    ct['table'] = cmap
     
     return ct
     
@@ -343,64 +397,7 @@ def make_pyramid_all(config):
                     
                     array_rgb = convertDataArrayToRGB(array, config['ct'])
                     saveImageToPNG(config['outPath'] + saveFilename,array_rgb)
-                    #print("   " + saveFilename)
 
-def render_tiles_natural_only(config):
-    
-    print("Loading and rendering natural level...")
-    
-    #DEBUG: manually combine several tiles (upper right corner) for slightly larger single image
-    #DEBUG (1820_128k):
-    #globalArray = np.zeros( (8192,8192), dtype='float32' )
-    #imgSize = 2048
-    #maxRow = 63
-    #minCol = 60
-        
-    # DEBUG (jobtest_exp):
-    #globalArray = np.zeros( (512,512), dtype='float32' )
-    #imgSize = 256
-    #maxRow = 3
-    #minCol = 2
-    
-    for i in range(len(config['fileList'])):
-        # load
-        array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
-        
-        if len(array) == 0: # missing file
-            continue
-        #DEBUG (1820_128k)
-        #if i not in (0,1,2,3,64,65,66,67,128,129,130,131,192,193,194,195):
-        #    continue
-        #DEBUG (jobtest_exp?):
-        #if i != 0:
-        #    continue
-                
-        # set all zeros to minimum non-zero value and take log
-        if config['ct']['log']:
-            array = np.log10( array )
-        
-        # calculate row,column position (TMS indexing convention)
-        colIndex = (config['jobsPerDim']-1) - np.int32(np.floor( i % config['jobsPerDim'] ))
-        rowIndex = (config['jobsPerDim']-1) - np.int32(np.floor( i / config['jobsPerDim'] ))
-        
-        # DEBUG:
-        #x0 = (colIndex-minCol) * imgSize
-        #x1 = x0 + imgSize
-        #y0 = (maxRow-rowIndex) * imgSize
-        #y1 = y0 + imgSize
-        #print("  x0: " + str(x0) + " x1: " + str(x1) + "  y0: " + str(y0) + " y1: " + str(y1))
-        #globalArray[ y0:y1, x0:x1 ] = array
-        
-        # save
-        saveFilename = "col_" + str(colIndex) + ".row_" + str(rowIndex) + ".png"
-        array_rgb = convertDataArrayToRGB(array, config['ct'])
-        saveImageToPNG(config['outPath'] + saveFilename,array_rgb)
-          
-    # DEBUG:
-    #saveFilename = "full.png"
-    #array_rgb = convertDataArrayToRGB(globalArray, config['ct'])
-    #saveImageToPNG(config['outPath'] + saveFilename,array_rgb)
-                   
 def make_pyramid_upper(config):
     
     print("\nUpper pyramid:")
@@ -421,7 +418,7 @@ def make_pyramid_upper(config):
     print("Loading...")
     
     for i in range(len(config['fileList'])):
-    #for i in (27,28):
+    #for i in (6,7,14,15):
         # load
         array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
         
@@ -429,8 +426,11 @@ def make_pyramid_upper(config):
             continue
                 
         # resize down to tileSize x tileSize
-        if len(array.shape) == 3:
+        if len(array.shape) == 3: # Shy
             array = reduceArray(array, numReductions, config)
+        elif config['ct']['tableNum'] == 0: # Mark
+            array = reduceArray2D(array, numReductions)
+            array = np.rot90(array)
         else:
             # OLD: scipy crap edge effects some bug WTF /Patrik style (probably only works for nat=5)
             for j in range(numReductions):
@@ -453,13 +453,17 @@ def make_pyramid_upper(config):
     
     # set all zeros to minimum non-zero value and take log
     if config['ct'] != None:
-        min_val = np.min( globalArray[globalArray > 0.0] )
+        if config['ct']['tableNum']:
+            min_val = np.min( globalArray[globalArray > 0.0] )
+        else:
+            min_val = 1.0 # Mark
+            
         globalArray[ globalArray <= 0.0 ] = min_val
     
         if config['ct']['log']:
             globalArray = np.log10( globalArray )
         
-    array_mm = [ np.min(globalArray), np.max(globalArray) ]
+    array_mm = [ min_val, np.max(globalArray) ]
 
     print(" Global min: " + str(array_mm[0]) + " max: " + str(array_mm[1]));
  
@@ -526,36 +530,41 @@ def make_pyramid_lower(config):
     print("Number of reductions from natural tiles: [" + str(numReductions) + "]")
     
     for i in range(len(config['fileList'])):
-    #for i in (27,28):
+    #for i in (6,7,14,15):
         # load
         array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
-        
+
         if len(array) == 0:
             continue
            
         if len(array.shape) == 3: # processShy
             for j in range(config['nThirdDims']):
                 array[j,:,:] = np.transpose( array[j,:,:] )
-            
+
         # set all zeros to minimum non-zero value and take log
         if config['ct'] != None:
             array[ array <= 0.0 ] = config['globalMin']
-            
+
             if config['ct']['log']:
                 array = np.log10( array )
-            
+                
+            if config['ct']['tableNum'] == 0:
+                array = np.rot90(array) # Mark
+                
         for level in range(config['levelMax'],startLevel-1,-1):
             print("  level [" + str(level) + "]")
             
             if level != config['levelMax']:
                 if len(array.shape) == 3:
                     array = reduceArray(array, 1, config)
+                elif config['ct']['tableNum'] == 0: # Mark
+                    array = reduceArray2D(array, 1)
                 else:
                     # OLD: scipy crap edge effects some bug WTF /Patrik style (probably only works for nat=5)
                     array = scipy.ndimage.zoom( array, config['zoom'], order=config['reduceOrder'] )
                 
             # DEBUG:
-            #if level == 9 or level == 8:
+            #if level == 8 or level == 9:
             #    continue
             # END DEBUG
                 
