@@ -1,4 +1,4 @@
-import snapHDF5 as ws
+import readsnapHDF5 as ws
 import numpy as np
 import numpy.random as rd
 from scipy.integrate import quad
@@ -8,21 +8,21 @@ from scipy.interpolate import interp1d
 ##################
 #INPUT PARAMETERS#
 ##################
-N_gas    = 10000
+N_gas    = 40000
 N_halo   = 10000
 gas_frac = 0.1
 ###################
 #NFW
-NFW_M200 = 1e2
-NFW_c    = 9
+NFW_M200 = 10
+NFW_c    = 10
 ###################
 gas_R0   = 0.1
-Lambda   = 0.2    # 0.0 for no rotation
+Lambda   = 0.1    # 0.0 for no rotation
 S_omega  = 1.0    # 0.0 for rigid body rotation
 seed     = 42
 R_min    = 1e-5   # minimum sampling radius [r200]
-R_max    = 1.0    # maximum sampling radius [r200]
-R_bins   = 1000   # number of interpolation points for function evaluation/inversion
+R_max    = 5.0    # maximum sampling radius [r200]
+R_bins   = 2000   # number of interpolation points for function evaluation/inversion
 add_halo = False  # add halo particles?
 Rcut     = 5.0    #cut the halo within that radius
 ############################################################################################################
