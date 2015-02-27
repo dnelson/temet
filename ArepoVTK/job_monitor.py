@@ -1,19 +1,22 @@
 # job_monitor.py
 # dnelson
-# feb.2014
+# may.2014
 
 import re
 import os
+#from vtk import expandedJobNums
 
 def checkVisJobs():
     """ Categorize a large job set into running/completed/failed and 
         automatically re-submit jobs which have failed."""
-    nJobs = 256
-    slurmJobPath = '/n/home07/dnelson/ArepoVTK/run.illustris.box/'
-    slurmJobFile = 'job_1820_256_128k_sphTree.slurm'
+    startJob = 0
+    endJob   = 3976 #3976
     
-    jobOutputPath = slurmJobPath + 'output/1820_256_128k_sphTree/'
-    outFileRegex = 'frame_1820_(.*?)_' + str(nJobs) + '.hdf5'
+    slurmJobPath = '/n/home07/dnelson/ArepoVTK/run.subbox0/'
+    slurmJobFile = 'job_8k.slurm'
+    
+    jobOutputPath = slurmJobPath + 'output/frames_8192/'
+    outFileRegex = 'frame_(.*?)_16bit.png' #'frame_1820_(.*?)_' + str(nJobs) + '.hdf5'
     
     tempJobFile = slurmJobPath + 'job_temp22.slurm'
     if os.path.isfile(tempJobFile):
@@ -23,20 +26,20 @@ def checkVisJobs():
     # job index lists
     jobsCompleted = []
     jobsRunning = []
-    jobsMissing = set( [str(x) for x in range(nJobs)] )
+    jobsMissing = set( [str(x) for x in range(startJob,endJob+1,1)] )
     
     # load job file and get job naming syntax
     jobFileText = open(slurmJobPath + slurmJobFile, 'r').read()
     
     jobName = re.search(r'^#SBATCH -J (.*?)$',jobFileText,re.M).group(1)
-    
+
     # get listing of existing hdf5 files (completed jobs)
     files = os.listdir(jobOutputPath)
     
     for i,file in enumerate(files):
         res = re.search(outFileRegex, file)
         if res:
-            jobsCompleted.append( res.group(1) )
+            jobsCompleted.append( res.group(1).lstrip("0") )
     
     # query slurm for list of running jobs
     slurmText = os.popen('squeue -h --array -u dnelson -o "%j %K %T"').read()
@@ -50,7 +53,7 @@ def checkVisJobs():
     # any job not running and not finished, add to array string
     jobsMissing -= set(jobsCompleted)
     jobsMissing -= set(jobsRunning)
-    
+  
     arrayLineText = "#SBATCH --array=" + ','.join( sorted(jobsMissing) )
     
     # make new jobfile and launch this new job
@@ -59,9 +62,38 @@ def checkVisJobs():
     file = open(tempJobFile, 'w')
     file.write(jobFileText)
     file.close()
-    
-    execRet = os.popen('sbatch '+tempJobFile).read()
-    print("SBATCH [" + str(len(jobsMissing)) + " new jobs]: " + execRet)
+
+    print jobsMissing
+    #execRet = os.popen('sbatch '+tempJobFile).read()
+    #print("SBATCH [" + str(len(jobsMissing)) + " new jobs]: " + execRet)
     
     os.remove(tempJobFile)
-    
+   
+def submitExpandedJobs(jobNum):
+    # config
+    totNumJobs   = 256
+    expansionFac = 16
+    slurmJobFile = "job.slurm" #"job_centos5.bsub"
+    tempJobFile  = "job22.slurm"
+    jobCommand   = "sbatch" #"bsub < "
+
+    # load job template
+    jobFileText = open(slurmJobFile, 'r').read()
+
+    # get job numbers
+    jobNums = expandedJobNums(jobNum,totNumJobs,expansionFac)
+
+    for curJob in jobNums:
+        print curJob
+        # make copy of job script, replace with jobNum
+        jobText_local = re.sub(r'NNNN',str(curJob),jobFileText)
+        jobText_local = re.sub(r'JJJJ',str(jobNum),jobText_local)
+
+        file = open(tempJobFile,"w")
+        file.write(jobText_local)
+        file.close()
+
+        # submit and delete
+        execRet = os.popen(jobCommand+" "+tempJobFile).read()
+        os.remove(tempJobFile)
+ 
