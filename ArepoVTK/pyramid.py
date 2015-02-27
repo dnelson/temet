@@ -1,6 +1,6 @@
 # pyramid.py - building image pyramid
 # dnelson
-# feb.2014
+# may.2014
 # requires: curl -O https://raw.github.com/drj11/pypng/master/code/png.py
 
 import h5py
@@ -11,6 +11,8 @@ import scipy.ndimage
 import colorsys
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 def rebin(a, shape):
     """ See REBIN() IDL function. """
@@ -95,6 +97,8 @@ def convertDataArrayToRGB(array, colortable):
         # using matplotlib cmap
         array_rgba = colortable['table'].to_rgba( array )
         array_rgb = (array_rgba[:,:,0:3] * 255.0).round()
+        #array_rgb = colortable['table'].to_rgb( array )
+        #array_rgb = (array_rgb * 255.0).round()
         array_rgb = array_rgb.clip(0,255).astype('uint8')
         #import pdb; pdb.set_trace()
         return array_rgb
@@ -113,13 +117,9 @@ def convertDataArrayToRGB(array, colortable):
     
     arr_f = (array - colortable['minmax'][0]) / (colortable['minmax'][1] - colortable['minmax'][0])
 
-    arr_r = np.interp( arr_f, x, r ) * 255.0
-    arr_g = np.interp( arr_f, x, g ) * 255.0
-    arr_b = np.interp( arr_f, x, b ) * 255.0
-    
-    array_rgb[:,:,0] = np.clip( np.round(arr_r), 0, 255 )
-    array_rgb[:,:,1] = np.clip( np.round(arr_g), 0, 255 )
-    array_rgb[:,:,2] = np.clip( np.round(arr_b), 0, 255 )
+    array_rgb[:,:,0] = np.clip( np.round(np.interp( arr_f, x, r ) * 255.0), 0, 255 )
+    array_rgb[:,:,1] = np.clip( np.round(np.interp( arr_f, x, g ) * 255.0), 0, 255 )
+    array_rgb[:,:,2] = np.clip( np.round(np.interp( arr_f, x, b ) * 255.0), 0, 255 )
     
     return array_rgb
     
@@ -165,6 +165,7 @@ def loadColorTable(ct):
     b.append(btemp)
  
     nTable = len(r)
+    print ct['file'],nTable
     x = np.array( x, np.float32 )
     r = np.array( r, np.float32 )
     g = np.array( g, np.float32 )
@@ -221,7 +222,7 @@ def genColorTable(fieldName):
     ct['log'] = True
     ct['gamma'] = 1.0
     ct['reverse'] = False
-    ct['minmax'] = [4.7,8.8]
+    ct['minmax'] = [4.75,8.9]
     ct['tableNum'] = 0        
         
     cdict = {
@@ -279,7 +280,7 @@ def getColorTableParams(fieldName):
                
     if fieldName == "Metal":
         ct = { 'file'    : ctBase + 'wkp/tubs/nrwc.cpt',
-               'minmax'  : [-5.0,-1.4],
+               'minmax'  : [-5.0,-1.4], # explorer_old: [-5.0,-1.4]
                'log'     : True,
                'reverse' : False,
                'gamma'   : 1.0 } 
@@ -300,13 +301,13 @@ def getColorTableParams(fieldName):
            
     if fieldName == "XRay":
         ct = { 'file'    : ctBase + 'kst/03_red_temperature.cpt',
-               'minmax'  : [-12.0,-2.5], # originally [-7.6,-2.5]
+               'minmax'  : [-12.0,-2.5], # explorer_old: [-12.0,-2.5], originally [-7.6,-2.5]
                'log'     : True,
                'reverse' : False,
                'gamma'   : 1.5 } 
 
     return ct
-               
+         
 def make_pyramid_all(config):
     # allocate
     if config['totImgSize'].shape[0] == 2:
@@ -353,7 +354,7 @@ def make_pyramid_all(config):
         
     array_mm = [ np.min(globalArray), np.max(globalArray) ]
     print(" Global min: " + str(array_mm[0]) + " max: " + str(array_mm[1]));
-    
+
     # loop over levels, starting at lowest (256px tiles)
     for level in range(config['levelMax'],config['levelMin']-1,-1):
         # if not at lowest (first iteration), downsize array by half its current value
@@ -396,6 +397,7 @@ def make_pyramid_all(config):
                         array = globalArray[ x0:x1, y0:y1 ]
                     
                     array_rgb = convertDataArrayToRGB(array, config['ct'])
+                    array = None
                     saveImageToPNG(config['outPath'] + saveFilename,array_rgb)
 
 def make_pyramid_upper(config):
@@ -409,16 +411,16 @@ def make_pyramid_upper(config):
         globalArray = np.zeros( (sizePerDim,sizePerDim), dtype='float32' )
     else:
         globalArray = np.zeros( (sizePerDim,sizePerDim,config['nThirdDims']), dtype='uint8' ) + 255
+        min_val = 0
     
     numReductions = np.log10( config['mDims'][0] / config['tileSize'] ) / np.log10(2)
     numReductions = np.int32( np.round(numReductions) )
     print("Number of reductions from natural tiles: [" + str(numReductions) + "]")
     
-    # load: loop over hdf5 files, downsize ecah to tileSize and stamp in
+    # load: loop over hdf5 files, downsize each to tileSize and stamp in
     print("Loading...")
     
     for i in range(len(config['fileList'])):
-    #for i in (6,7,14,15):
         # load
         array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
         
@@ -469,7 +471,6 @@ def make_pyramid_upper(config):
  
     config['globalMin'] = array_mm[0] # store for lower pyramid!
     #import pdb; pdb.set_trace() 
-    #return
     
     # render out native level up to level 0 by progressively downsizing
     startLevel = np.int32(np.log10(sizePerDim) / np.log10(2)) - 8
@@ -530,7 +531,6 @@ def make_pyramid_lower(config):
     print("Number of reductions from natural tiles: [" + str(numReductions) + "]")
     
     for i in range(len(config['fileList'])):
-    #for i in (6,7,14,15):
         # load
         array = getDataArrayHDF5(config['fileList'][i], config['fieldName'])
 
@@ -611,3 +611,149 @@ def make_pyramid_lower(config):
             
         # all levels done for this hdf5 file, move on to next
     print("\nDone.")    
+
+def shuffle4imgs(fname,fname_out):
+    # setup
+    r = png.Reader(filename=fname)
+    columnCount, rowCount, pngData, metaData = r.asDirect() 
+    
+    dims = rowCount
+    half = dims/2
+    
+    # read
+    image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
+    
+    for row_index, one_boxed_row_flat_pixels in enumerate(pngData):
+        image_2d[row_index,:]=one_boxed_row_flat_pixels
+        
+    image_3d = np.reshape(image_2d,(dims,dims,3))
+    
+    print(" Read ["+fname+"] size = "+str(dims))
+    
+    # allocate
+    image_3d_new = np.zeros( (dims,dims,3), dtype=np.uint8 )
+    
+    # shuffle
+    for i in range(3):
+        image_3d_new[half:,half:,i]   = image_3d[0:half,half:,i]   # UL -> UR
+        image_3d_new[half:,0:half:,i] = image_3d[half:,half:,i]    # UR -> LR
+        image_3d_new[0:half,0:half,i] = image_3d[half:,0:half,i]  # LR -> LL
+        image_3d_new[0:half,half:,i]  = image_3d[0:half,0:half,i]  # LL -> UL
+    
+    # write
+    pngFile = open(fname_out, 'wb')
+    pngWriter = png.Writer(dims,dims,alpha=False,bitdepth=8)
+    pngWriter.write( pngFile, np.reshape(image_3d_new, (-1,dims*3)) )
+    pngFile.close()
+    
+    print(" Wrote ["+fname_out+"].")
+    
+def shuffleFixAll():
+    for j in range(16):
+        xx = j / 4
+        yy = j % 4
+        fname = "../vtkout_dmdens/9/"+str(xx)+"/"+str(yy)+".png"
+        fname_out = "dmdens_"+str(j)+".png"
+        
+        print(fname + "  " + fname_out)
+        
+        shuffle4imgs(fname,fname_out)
+        
+def combine4to1(fnames_in,fname_out):
+    # setup
+    r = png.Reader(filename=fnames_in[0])
+    columnCount, rowCount, pngData, metaData = r.asDirect() 
+    
+    dims = rowCount
+    
+    # read [0]
+    image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
+    
+    for row_index, one_boxed_row_flat_pixels in enumerate(pngData):
+        image_2d[row_index,:]=one_boxed_row_flat_pixels
+        
+    image_3d = np.reshape(image_2d,(dims,dims,3))
+    
+    print(" Read ["+fnames_in[0]+"] size = "+str(dims))
+    
+    # allocate
+    image_3d_new = np.zeros( (dims*2,dims*2,3), dtype=np.uint8 )
+    
+    # put into new image
+    for i in range(3):
+        #image_3d_new[0:dims,dims:,i]  = image_3d[:,:,i]  # [0] -> UL (OLD)
+        image_3d_new[0:dims,0:dims,i] = image_3d[:,:,i]  # [2] -> LL
+        
+    # read [1]
+    r = png.Reader(filename=fnames_in[1])
+    columnCount, rowCount, pngData, metaData = r.asDirect() 
+    image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
+    
+    for row_index, one_boxed_row_flat_pixels in enumerate(pngData):
+        image_2d[row_index,:]=one_boxed_row_flat_pixels
+        
+    image_3d = np.reshape(image_2d,(dims,dims,3))
+    
+    print(" Read ["+fnames_in[1]+"] size = "+str(dims))
+    
+    # put into new image
+    for i in range(3):
+        #image_3d_new[dims:,dims:,i]   = image_3d[:,:,i]   # [1] -> UR (OLD)
+        image_3d_new[0:dims,dims:,i]  = image_3d[:,:,i]  # [0] -> UL
+        
+    # read [2]
+    r = png.Reader(filename=fnames_in[2])
+    columnCount, rowCount, pngData, metaData = r.asDirect() 
+    image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
+    
+    for row_index, one_boxed_row_flat_pixels in enumerate(pngData):
+        image_2d[row_index,:]=one_boxed_row_flat_pixels
+        
+    image_3d = np.reshape(image_2d,(dims,dims,3))
+    
+    print(" Read ["+fnames_in[2]+"] size = "+str(dims))
+    
+    # put into new image
+    for i in range(3):
+        #image_3d_new[0:dims,0:dims,i] = image_3d[:,:,i]  # [2] -> LL (OLD)
+        image_3d_new[dims:,0:dims:,i] = image_3d[:,:,i]   # [3] -> LR
+        
+    # read [3]
+    r = png.Reader(filename=fnames_in[3])
+    columnCount, rowCount, pngData, metaData = r.asDirect() 
+    image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
+    
+    for row_index, one_boxed_row_flat_pixels in enumerate(pngData):
+        image_2d[row_index,:]=one_boxed_row_flat_pixels
+        
+    image_3d = np.reshape(image_2d,(dims,dims,3))
+    
+    print(" Read ["+fnames_in[3]+"] size = "+str(dims))
+    
+    # put into new image
+    for i in range(3):
+        #image_3d_new[dims:,0:dims:,i] = image_3d[:,:,i]   # [3] -> LR (OLD)
+        image_3d_new[dims:,dims:,i]   = image_3d[:,:,i]   # [1] -> UR
+
+    # write
+    print(" Writing...")
+    pngFile = open(fname_out, 'wb')
+    pngWriter = png.Writer(dims*2,dims*2,alpha=False,bitdepth=8)
+    pngWriter.write( pngFile, np.reshape(image_3d_new, (-1,dims*2*3)) )
+    pngFile.close()
+    
+    print(" Wrote ["+fname_out+"].")
+    
+def combine4All():
+    sets = ([0,1,4,5],[2,3,6,7],[8,9,12,13],[10,11,14,15])
+    
+    for (i,set) in enumerate(sets):
+        fnames_in = list()
+        for index in set:
+            fnames_in.append( "dmdens_"+str(index)+".png" )
+            
+        fname_out = "out_"+str(i)+".png"
+        print(fnames_in)
+        print("  " + fname_out)
+        
+        combine4to1(fnames_in,fname_out)
