@@ -1,1 +1,1 @@
-import compareTwoHalos
+from . import compareTwoHalos
