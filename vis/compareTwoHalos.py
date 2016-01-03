@@ -1,3 +1,10 @@
+"""
+compareTwoHalos.py
+  summary plots comparing two matched halos
+"""
+from __future__ import (absolute_import,division,print_function,unicode_literals)
+from builtins import *
+
 import numpy as np
 import h5py
 import pdb
@@ -34,12 +41,12 @@ def subhaloDetails(basePath,snapNum,shID):
     # load groupcat info
     gc = il.groupcat.loadSingle(basePath,snapNum,subhaloID=shID)
 
-    print '  Subhalo Pos: [' + ' '.join([str(xyz) for xyz in gc['SubhaloPos']]) + ']'
+    print('  Subhalo Pos: [' + ' '.join([str(xyz) for xyz in gc['SubhaloPos']]) + ']')
 
     # load snapshot data
     stars = il.snapshot.loadSubhalo(basePath,snapNum,shID,'stars',fields=['Coordinates','Masses'])
 
-    print '  Stars: [' + str(stars['count']) + ']'
+    print('  Stars: [' , stars['count'] , ']')
 
     # data handling
     for i in [0,1,2]:
@@ -57,7 +64,7 @@ def multiPanelOverview(basePath1,basePath2,matchPath,snapNum,shID1):
     shID2 = f['SubhaloIndex'][shID1]
     f.close()
 
-    print 'Matched shID1 [' + str(shID1) + '] to shID2 [' + str(shID2) + ']'
+    print('Matched shID1 [' + str(shID1) + '] to shID2 [' + str(shID2) + ']')
     
     if shID2 < 0:
         terminate('Error: Unmatched.')
@@ -116,9 +123,6 @@ def gcIDList(basePath,snapNum):
     gr = gr.astype('int32') # incorrectly given as uint32 in HDF5 Subfind output (wraps -1 to 4294967295)
     sh = il.groupcat.loadSubhalos(basePath,snapNum,fields=['SubhaloGrNr'])
     
-    print ' groups: ', gr.min(), gr.max(), gr.dtype, gr.shape
-    print ' subhalos: ', sh.min(), sh.max(), sh.dtype, sh.shape
-    
     subInds = np.arange(0,len(sh))
     
     r = {}
@@ -129,7 +133,7 @@ def gcIDList(basePath,snapNum):
     if len(r['pri']) + len(r['sec']) != len(sh):
         raise Exception('failed')    
     
-    print ' pri: ' + str(len(r['pri'])) + ' sec: ' + str(len(r['sec']))
+    print(' pri: ' + str(len(r['pri'])) + ' sec: ' + str(len(r['sec'])))
     return r
     
 def matchedUniqueGCIDs(gc1,gc2,matchPath,snapNum):
@@ -145,14 +149,14 @@ def matchedUniqueGCIDs(gc1,gc2,matchPath,snapNum):
     ind1 = np.arange(0,gc1['count'])
     
     w = np.where(ind2 >= 0)
-    print 'Number matched: ' + str(len(w[0])) + ' of ' + str(gc1['count']) + ' ('+str(len(ind2))+')'
+    print('Number matched: ' + str(len(w[0])) + ' of ' + str(gc1['count']) + ' ('+str(len(ind2))+')')
     
     # non-unique, take first (highest mass) IllustrisPrime target for each Illustris subhalo
     _, ind2_uniq_inds = np.unique(ind2, return_index=True)
     w_new = np.intersect1d(w[0],ind2_uniq_inds)
     
-    print 'Number unique targets overall: ' + str(len(ind2_uniq_inds))
-    print 'Number unique matched targets: ' + str(len(w_new))
+    print('Number unique targets overall: ' + str(len(ind2_uniq_inds)))
+    print('Number unique matched targets: ' + str(len(w_new)))
     
     #TODO
     w = w_new
@@ -189,7 +193,7 @@ def priSecMatchedGCIDs(ind1,ind2,basePath1,snapNum):
         if not is_unique(ps1['pri']) or not is_unique(ps1['sec']):
             raise Exception('failed')
             
-        print ' pri: ' + str(len(r['pri1'])) + ' sec: ' + str(len(r['sec1']))
+        print(' pri: ' + str(len(r['pri1'])) + ' sec: ' + str(len(r['sec1'])))
         
         if len(r['pri1']) + len(r['sec1']) != len(ind1):
             raise Exception('failed')
@@ -258,8 +262,6 @@ def globalCatComparison(basePath1,basePath2,matchPath,snapNum):
             fieldName = 'SubhaloHalfmassRad'
             ytitle = 'log ( $r_{1/2}^{IP} / r_{1/2}^{I}$ )'
             
-        print i, fieldName
-            
         # plot (1) left, central
         ratio = np.log10( gc2['pri'][fieldName] / gc1['pri'][fieldName] )
         ax[0].set_ylabel(ytitle)
@@ -311,6 +313,6 @@ def illustrisPrimeComp():
     #multiPanelOverview(basePath1,basePath2,matchPath,snapNum,shID1)
     
     # globalCatComparison
-    print 'hi'
+    print('hi')
     #globalCatComparison(basePath1,basePath2,matchPath,snapNum)
     
