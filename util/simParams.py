@@ -7,7 +7,7 @@ from builtins import *
 
 from util import units
 from util.color import getColor24
-from cosmo.util import redshiftToSnapNum
+from cosmo.util import redshiftToSnapNum, snapNumToRedshift
 
 class simParams:
     basePath = '/n/home07/dnelson/'
@@ -302,9 +302,11 @@ class simParams:
         if self.metals:
             self.numMetals = len(self.metals)
 
-        # if redshift passed in, convert to snapshot number and save
+        # if redshift passed in, convert to snapshot number and save, and vice versa
         if self.redshift:
             self.snap = redshiftToSnapNum(sP=self)
+        else:
+            self.redshift = snapNumToRedshift(sP=self)
 
         # attach a units class at this redshift
         self.units = units(sP=self)
