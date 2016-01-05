@@ -68,6 +68,8 @@ class units(object):
     
     def __init__(self, sP=None):
         """ Compute derived and redshift dependent units and values. """
+        self._sP = sP
+
         # derived units
         self.UnitTime_in_s       = self.UnitLength_in_cm / self.UnitVelocity_in_cm_per_s
         self.UnitDensity_in_cgs  = self.UnitMass_in_g / self.UnitLength_in_cm**3.0
@@ -87,18 +89,16 @@ class units(object):
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0*np.pi*self.G) #code, z=0
 
         # derived cosmology parameters
-        self.f_b = sP.omega_b / sP.omega_m
+        self.f_b = self._sP.omega_b / self._sP.omega_m
 
         # redshift dependent values (code units)
-        self._sP = sP
-
-        if sP.redshift is not None:
-            self.H2_z_fact = sP.omega_m*(1+sP.redshift)**3.0 + \
-                              sP.omega_L + \
-                              sP.omega_k*(1+sP.redshift)**2.0
+        if self._sP.redshift is not None:
+            self.H2_z_fact = self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
+                              self._sP.omega_L + \
+                              self._sP.omega_k*(1+self._sP.redshift)**2.0
             self.H_z       = self.H0 * np.sqrt(self.H2_z_fact)
             self.rhoCrit_z = self.rhoCrit * self.H2_z_fact
-            self.scalefac  = 1.0 / (1+sP.redshift)
+            self.scalefac  = 1.0 / (1+self._sP.redshift)
 
         # derived unit conversions
         self.kmS_in_kpcYr  = self.s_in_Myr / self.kpc_in_km / 1e6 # Myr->yr
@@ -106,153 +106,144 @@ class units(object):
 
     # --- unit conversions to/from code units ---
 
-    @staticmethod
-    def codeMassToLogMsun(mass):
+    def codeMassToLogMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (log msun) self. """
-        mass_msun = np.array(mass, dtype='float32')
-        mass_msun *= np.float32(self.UnitMass_in_g / self.Msun_in_g)
-        mass_msun /= self._sP.HubbleParam
+        mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
         
         return self.logZeroSafe(mass_msun)
 
-    @staticmethod
-    def codeMassToVirTemp(mass, meanmolwt=None, log=False):
+        #TODO: float64 vs float32, copy vs. view of inputs (handle all below like this one)
+
+    def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
             at the specified redshift (Barkana & Loeb (2001) eqn.26). """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
         if not meanmolwt:
-            meanmolwt = units.meanmolwt(Y=0.25, Z=0.0) # default is primordial
+            meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
 
         # mass to msun
-        mass_msun = mass * sP.units.UnitMass_in_g / sP.units.Msun_in_g
+        mass_msun = mass.astype('float32') * self._sP.units.UnitMass_in_g / self._sP.units.Msun_in_g
 
         little_h = 1.0 # do not multiply by h since mass_msun is already over h
 
-        omega_m_z = sP.omega_m * (1+sP.redshift)**3.0 / \
-                    ( sP.omega_m*(1+sP.redshift)**3.0 + sP.omega_L + sP.omega_k*(1+sP.redshift)**2.0 )
+        omega_m_z = self._sP.omega_m * (1+self._sP.redshift)**3.0 / \
+                    ( self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
+                      self._sP.omega_L + \
+                      self._sP.omega_k*(1+self._sP.redshift)**2.0 )
 
         Delta_c = 18*np.pi**2 + 82*(omega_m_z-1.0) - 39*(omega_m_z-1.0)**2.0
 
         Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*little_h)**(2.0/3.0) * \
-                        (sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
-                        (1.0 + sP.redshift)/10.0 # K
+                        (self._sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
+                        (1.0 + self._sP.redshift)/10.0 # K
              
-        if log: Tvir = logZeroSafe(Tvir)
+        if log:
+            Tvir = self.logZeroSafe(Tvir)
         return Tvir
 
-    @staticmethod
-    def logMsunToVirTemp(mass, sP, meanmolwt=None, log=False):
+    def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
         if not meanmolwt:
-            meanmolwt = units.meanmolwt(Y=0.25, Z=0.0) # default is primordial
+            meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
 
         # mass to msun
-        mass_msun = 10.0**mass
+        mass_msun = 10.0**mass.astype('float32')
 
-        omega_m_z = sP.omega_m * (1+sP.redshift)**3.0 / \
-                    ( sP.omega_m*(1+sP.redshift)**3.0 + sP.omega_L + sP.omega_k*(1+sP.redshift)**2.0 )
+        omega_m_z = self._sP.omega_m * (1+self._sP.redshift)**3.0 / \
+                    ( self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
+                      self._sP.omega_L + \
+                      self._sP.omega_k*(1+self._sP.redshift)**2.0 )
 
         Delta_c = 18*np.pi**2 + 82*(omega_m_z-1.0) - 39*(omega_m_z-1.0)**2.0
 
-        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*sP.units.HubbleParam)**(2.0/3.0) * \
-                        (sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi^2.0)**(1.0/3.0) * \
-                        (1.0 + redshift)/10.0 # K
+        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*self._sP.units.HubbleParam)**(2.0/3.0) * \
+                        (self._sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
+                        (1.0 + self._sP.redshift)/10.0 # K
              
-        if log: Tvir = logZeroSafe(Tvir)
+        if log:
+            Tvir = self.logZeroSafe(Tvir)
         return Tvir
 
-    @staticmethod
-    def codeTempToLogK(temp, sP):
+    def codeTempToLogK(self, temp):
         """ Convert temperature in code units (e.g. tracer temp output) to log Kelvin. """
-        temp_k = temp * sP.units.UnitTemp_in_cgs
-        return logZeroSafe(temp_k)
+        temp_k = temp.astype('float32') * self._sP.units.UnitTemp_in_cgs
 
-    @staticmethod
-    def codeDensToPhys(dens, sP, cgs=False):
+        return self.logZeroSafe(temp_k)
+
+    def codeDensToPhys(self, dens, cgs=False):
         """ Convert density comoving->physical and add little_h factors. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
 
-        dens_phys = dens * sP.units.HubbleParam**2 / sP.units.scalefac**3
+        dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2 / self._sP.units.scalefac**3
 
         if cgs:
-            dens_phys *= sP.units.UnitDensity_in_cgs
-
+            dens_phys *= self._sP.units.UnitDensity_in_cgs
         return dens_phys
 
-    @staticmethod
-    def nH0ToPhys(nh0, dens, sP, cgs):
+    def nH0ToPhys(self, nh0, dens, cgs=False):
         """ Convert (NeutralHydrogenAbundance,Density) pair from code units to mass density of 
             neutral hydrogen, optionally in cgs units. """
-        dens_phys = units.codeDensToPhys(dens, sP, cgs=cgs)
-        dens_phys *= sP.units.hydrogen_massfrac # hydrogen mass density (code or cgs units)
-        # note: hydrogen number density = dens_phys / sP.units.proton_mass
+        dens_phys = self.codeDensToPhys(dens, cgs=cgs)
+        dens_phys *= self._sP.units.hydrogen_massfrac # hydrogen mass density (code or cgs units)
+        # note: hydrogen number density = dens_phys / self._sP.units.proton_mass
 
         dens_phys *= nh0 # neutral hydrogen mass density (code or cgs units)
         # note: H+ number density = (H number density) - (H0 number density)
 
         return dens_phys
 
-    @staticmethod
-    def UToTemp(u, nelec, sP, log=False):
+    def UToTemp(self, u, nelec, log=False):
         """ Convert (U,Ne) pair in code units to temperature in Kelvin. """
         # hydrogen mass fraction default
-        hmassfrac = sP.units.hydrogen_massfrac
+        hmassfrac = self._sP.units.hydrogen_massfrac
 
         # calculate mean molecular weight
-        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec) * sP.units.mass_proton
+        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float32')) 
+        meanmolwt *= self._sP.units.mass_proton
 
         # calculate temperature (K)
-        temp = (sP.units.gamma-1.0) * u / sP.units.boltzmann * sP.units.UnitEnergy_in_cgs / \
-               sP.units.UnitMass_in_g * meanmolwt
+        temp = u.astype('float32')
+        temp *= (self._sP.units.gamma-1.0) / self._sP.units.boltzmann * \
+                self._sP.units.UnitEnergy_in_cgs / self._sP.units.UnitMass_in_g * meanmolwt
 
-        if log: temp = logZeroSafe(temp)
+        if log:
+            temp = self.logZeroSafe(temp)
         return temp
 
-    @staticmethod
-    def TempToU(temp, sP, log=False):
+    def TempToU(self, temp, log=False):
         """ Convert temperature in Kelvin to InternalEnergy (u) in code units. """
         if np.max(temp) <= 10.0:
             raise Exception("Error: input temp probably in log, check.")
 
-        meanmolwt = 0.6 * sP.units.mass_proton # ionized, T > 10^4 K
+        meanmolwt = 0.6 * self._sP.units.mass_proton # ionized, T > 10^4 K
 
         # temp = (gamma-1.0) * u / units.boltzmann * units.UnitEnergy_in_cgs / units.UnitMass_in_g * meanmolwt
-        u = temp * sP.units.boltzmann * sP.units.UnitMass_in_g / \
-            (sP.units.UnitEnergy_in_cgs * meanmolwt * (sP.units.gamma-1.0))
+        u = temp.astype('float32')
+        u *= self._sP.units.boltzmann * self._sP.units.UnitMass_in_g / \
+            (self._sP.units.UnitEnergy_in_cgs * meanmolwt * (self._sP.units.gamma-1.0))
 
-        if log: u = logZeroSafe(u)
+        if log:
+            u = self.logZeroSafe(u)
         return u
 
-    @staticmethod
-    def codeMassToVirEnt(mass, sP, log=False):
-        """ Given a total halo mass, return a S200 (e.g. Pvir/rho_200crit^gamma). """
-        virTemp = codeMassToVirTemp(mass, sP=sP, log=False)
-        virU = convertTempToU(virTemp)
-        r200crit = critBaryonRatioToCode(200.0, sP=sP)
-
-        s200 = calcEntropyCGS(virU, r200crit, sP=sP, log=log)
-
-        return s200
-
-    @staticmethod
-    def coolingRateToCGS(coolrate, sP):
+    def coolingRateToCGS(self, coolrate):
         """ Convert code units (du/dt) to erg/s/g (cgs). """
-        coolrate_cgs = coolrate * sP.units.UnitEnergy_in_cgs * sP.units.UnitTime_in_s**(-1.0) * \
-                       sP.units.UnitMass_in_g**(-1.0) * sP.units.HubbleParam
+        coolrate_cgs = coolrate.astype('float32')
+        coolrate_cgs *= self._sP.units.UnitEnergy_in_cgs * self._sP.units.UnitTime_in_s**(-1.0) * \
+                       self._sP.units.UnitMass_in_g**(-1.0) * self._sP.units.HubbleParam
 
         return coolrate_cgs
 
-    @staticmethod
-    def tracerEntToCGS(ent, sP, log=False):
+    def tracerEntToCGS(self, ent, log=False):
         """ Fix cosmological/unit system in TRACER_MC[MaxEnt], output in cgs [K cm^2]. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
 
-        a3inv = 1.0 / sP.units.scalefac**3.0
+        a3inv = 1.0 / self._sP.units.scalefac**3.0
 
         # Note: dens=dens*a3inv but in the tracers only converted in dens^gamma not in the pressure
         # have to make this adjustment in loading tracers
@@ -260,101 +251,114 @@ class units(object):
         # for TRACER_MC, EntMax = SphP.Pressure / pow(SphP.Density * All.cf_a3inv, GAMMA);
 
         # fix Pressure
-        ent *= a3inv * sP.units.UnitPressure_in_cgs / sP.units.boltzmann
+        ent_cgs = ent.astype('float32')
+        ent_cgs *= a3inv * self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
 
         # fix Density
-        ent /= (sP.units.UnitDensity_in_cgs / sP.units.mass_proton)**sP.units.gamma
+        ent_cgs /= (self._sP.units.UnitDensity_in_cgs / self._sP.units.mass_proton)**self._sP.units.gamma
 
-        if log: ent = logZeroSafe(ent)
-        return ent
+        if log:
+            ent_cgs = self.logZeroSafe(ent_cgs)
+        return ent_cgs
 
-    @staticmethod
-    def calcEntropyCGS(u, dens, sP, log=False):
+    def calcEntropyCGS(self, u, dens, log=False):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
 
-        a3inv = 1.0 / sP.units.scalefac**3.0
+        a3inv = 1.0 / self._sP.units.scalefac**3.0
 
         # cosmological and unit system conversions
-        dens *= sP.units.HubbleParam**2.0 # remove all little h factors
+        dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2.0 # remove all little h factors
 
         # pressure in [K/cm^3]
-        pressure = (sP.units.gamma-1.0) * u * dens * a3inv * sP.units.UnitPressure_in_cgs / sP.units.boltzmann
+        pressure = u.astype('float32')
+        pressure *= (self._sP.units.gamma-1.0) * dens_phys * a3inv * \
+                   self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
 
         # entropy in [K cm^2]
-        entropy  = pressure / (dens * sP.units.UnitDensity_in_cgs/sP.units.mass_proton*a3inv)**sP.units.gamma
+        dens_fac = self._sP.units.UnitDensity_in_cgs/self._sP.units.mass_proton*a3inv
+        entropy  = pressure / (dens_phys * dens_fac)**self._sP.units.gamma
       
-        if log: entropy = logZeroSafe(entropy)
+        if log:
+            entropy = self.logZeroSafe(entropy)
         return entropy
 
-    @staticmethod
-    def calcPressureCGS(u, dens, sP, log=False):
+    def calcPressureCGS(self, u, dens, log=False):
         """ Calculate pressure as (gamma-1)*u*rho in cgs units, converting rho from comoving to physical. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
 
-        a3inv = 1.0 / sP.units.scalefac**3.0
+        a3inv = 1.0 / self._sP.units.scalefac**3.0
 
-        pressure = (sP.units.gamma-1.0) * u * (dens*a3inv)
+        pressure = u.astype('float32') * ( dens.astype('float32') * a3inv )
+        pressure *= (self._sP.units.gamma-1.0)
 
         # convert to CGS = 1 barye (ba) = 1 dyn/cm^2 = 0.1 Pa = 0.1 N/m^2 = 0.1 kg/m/s^2
         # and divide by boltzmann's constant -> [K/cm^3]
-        pressure *= sP.units.UnitPressure_in_cgs / sP.units.boltzmann
+        pressure *= self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
 
-        if log: pressure = logZeroSafe(pressure)
+        if log:
+            pressure = self.logZeroSafe(pressure)
         return pressure
 
-    @staticmethod
-    def codeDensToCritRatio(rho, sP, baryon=None, log=False):
+    def codeDensToCritRatio(self, rho, baryon=None, log=False):
         """ Normalize code density by the critical (total/baryonic) density at some redshift. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
         if baryon is None:
             raise Exception("Specify baryon True or False, note... change of behavior.")
 
-        rho_crit = sP.units.rhoCrit_z
+        rho_crit = self._sP.units.rhoCrit_z
         if baryon:
-            rho_crit *= sP.units.omega_b
+            rho_crit *= self._sP.omega_b
 
-        if log: return logZeroSafe(rho/rho_crit)
-        return rho/rho_crit
+        ratio_crit = rho.astype('float32') / rho_crit
 
-    @staticmethod
-    def critRatioToCodeDens(ratioToCrit, sP, baryon=None):
+        if log:
+            ratio_crit = logZeroSafe(ratio_crit)
+        return ratio_crit
+
+    def critRatioToCodeDens(self, ratioToCrit, baryon=None):
         """ Convert a ratio of the critical density at some redshift to a code density. """
-        if sP.redshift is None:
+        if self._sP.redshift is None:
             raise Exception("Need redshift.")
         if baryon is None:
             raise Exception("Specify baryon True or False, note... change of behavior.")
 
+        code_dens = ratioToCrit.astype('float32') * self._sP.units.rhoCrit_z
+
         if baryon:
-            return ratioToCritB * sP.units.omega_b * sP.units.rhoCrit_z
+            code_dens *= self._sP.omega_b
 
-        return ratioToCrit * sP.units.rhoCrit_z
+        return code_dens
 
-    @staticmethod
-    def redshiftToAge(z, sP):
-        """ Calculate age of the universe [Gyr] at the given redshift (numerically, arbitrary cosmology). """
-        raise Exception("TODO")
+    def codeMassToVirEnt(self, mass, log=False):
+        """ Given a total halo mass, return a S200 (e.g. Pvir/rho_200crit^gamma). """
+        virTemp = self.codeMassToVirTemp(mass, log=False)
+        virU = self.TempToU(virTemp)
+        r200crit = self.critRatioToCodeDens(np.array(200.0), baryon=True)
 
-    @staticmethod
-    def redshiftToAgeFlat(z, sP):
+        s200 = self.calcEntropyCGS(virU, r200crit, log=log)
+
+        return s200
+
+    # --- other ---
+
+    def redshiftToAgeFlat(self, z):
         """ Calculate age of the universe [Gyr] at the given redshift (assuming flat cosmology).
             Analytical formula from Peebles, p.317, eq 13.2. """
         w = np.where(z >= 0.0)
 
-        age = np.zeros(len(z)) - 100.0 # negative indicates not set
+        age = np.zeros(len(z), dtype='float32') - 100.0 # negative indicates not set
 
-        age[w] = 2*np.asinh(np.sqrt( (1-sP.units.omega_m)/sP.units.omega_m ) * (1+z[w])**(-3.0/2.0)) / \
-                   (sP.units.H0_kmsMpc * 3 * np.sqrt(1-sP.units.omega_m))
+        arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+z[w])**(-3.0/2.0)
+        age[w] = 2 * np.arcsinh(arcsinh_arg) / (self._sP.units.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
         age[w] *= 3.085678e+19 / 3.15567e+7 / 1e9 # Gyr
 
         if len(age) == 1:
             return age[0]
         return age
-
-    # --- other ---
 
     def meanmolwt(self, Y, Z):
         """ Mean molecular weight, from Monaco+ (2007) eqn 14, for hot halo gas.
@@ -366,7 +370,8 @@ class units(object):
 
     def logZeroSafe(self, x):
         """ Take log of input variable or array, keeping zeros at zero. """
-        if x.ndim:
+        if not isinstance(x, (int,long,float)) and x.ndim:
+            # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
             # array
             w = np.where(x == 0.0)
             x[w] = 1.0

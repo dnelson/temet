@@ -10,3 +10,7 @@ import numpy as np
 
 def redshiftToSnapNum(redshift=None, sP=None):
 	return 0 # TODO
+
+def snapNumToRedshift(snap=None, sP=None):
+	return 0.0 # TODO
+	
