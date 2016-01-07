@@ -8,4 +8,5 @@ import illustris_python as il
 
 # dnelson
 import vis
+import cosmo
 from util import *
