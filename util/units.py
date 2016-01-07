@@ -13,9 +13,9 @@ class units(object):
         system and redshift-dependent constants.
     """
     # units (from parameter file, currently same for all runs)
-    UnitLength_in_cm         = 3.085678**21       # 1.0 kpc
-    UnitMass_in_g            = 1.989 * 10.0**43   # 1.0e10 solar masses
-    UnitVelocity_in_cm_per_s = 1.0**5             # 1 km/sec
+    UnitLength_in_cm         = 3.085678e21   # 1.0 kpc
+    UnitMass_in_g            = 1.989e43      # 1.0e10 solar masses
+    UnitVelocity_in_cm_per_s = 1.0e5         # 1 km/sec
 
     # derived units
     UnitTime_in_s       = None
@@ -57,7 +57,7 @@ class units(object):
     s_in_yr     = 3.155693e7
     s_in_Myr    = 3.155693e13
     s_in_Gyr    = 3.155693e16
-    Msun_in_g   = 1.98892 * 10.0**33
+    Msun_in_g   = 1.98892e33
     pc_in_cm    = 3.085680e18
     Mpc_in_cm   = 3.085680e24
     kpc_in_km   = 3.085680e16
@@ -111,8 +111,6 @@ class units(object):
         mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
         
         return self.logZeroSafe(mass_msun)
-
-        #TODO: float64 vs float32, copy vs. view of inputs (handle all below like this one)
 
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
