@@ -8,8 +8,8 @@ from builtins import *
 import numpy as np
 import h5py
 from os.path import isfile
+import glob
 import illustris_python as il
-import pdb
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
     """ Find and return absolute path to a group catalog HDF5 file.
@@ -125,6 +125,26 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
     else:
         raise Exception("No snapshot found.")
 
+def snapNumChunks(basePath, snapNum, subbox=None):
+    """ Find number of file chunks in a snapshot. """
+    import glob
+
+    # subbox support
+    sbStr = ''
+    if subbox is not None:
+        sbNum = subbox if isinstance(subbox, (int,long)) else 0
+        sbStr = 'subbox' + str(sbNum) + '_'
+
+    # check for existence of files inside directory
+    path = basePath + 'snapdir_' + sbStr + str(snapNum).zfill(3) + '/*.hdf5'
+
+    nChunks = len(glob.glob(path))
+
+    if nChunks == 0:
+        nChunks = 1 # single file per snapshot
+
+    return nChunks
+
 def snapshotHeader(sP, subbox=None, fileName=None):
     """ Load complete snapshot header. """
     if fileName is None:
@@ -147,11 +167,14 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
 
           the following four optional, but at most one can be specified:
             * inds      : known indices requested, optimize the load
-            * indRange  : same, but specify only min and max indices
+            * indRange  : same, but specify only min and max indices (inclusive)
             * haloID    : if input, load particles only of the specified fof halo
             * subhaloID : if input, load particles only of the specified subalo
     """
     from illustris_python.util import partTypeNum as ptNum
+
+    kwargs = {'inds':inds, 'indRange':indRange, 'haloID':haloID, 'subhaloID':subhaloID}
+    subset = None
 
     if (inds is not None or indRange is not None) and (haloID is not None or subhaloID is not None):
         raise Exception("Can only specify one of (inds,indRange,haloID,subhaloID).")
@@ -159,6 +182,10 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
         raise Exception("Cannot specify both inds and indRange.")
     if haloID is not None and subhaloID is not None:
         raise Exception("Cannot specify both haloID and subhaloID.")
+    if (haloID is not None) or (subhaloID is not None) and sP.groupOrdered is False:
+        raise Exception("Not yet implemented (group/halo load in non-groupordered.")
+    if sP.snap is None:
+        raise Exception("Must specify sP.snap for snapshotSubset load.")
 
     # override path function
     il.snapshot.snapPath = snapPath
@@ -170,42 +197,74 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
         fields = [fields]
 
     # composite fields (temp, vmag, ...)
-    kwargs = {'inds':inds, 'indRange':indRange, 'haloID':haloID, 'subhaloID':subhaloID}
-
     for i,field in enumerate(fields):
-        # temperature (from u,nelec)
-        if field.lower() == "temp" or field.lower() == "temperature":
-            if ptNum(partType) != ptNum('gas'):
-                raise Exception("Only gas has temperature.")
-
+        # temperature (from u,nelec) [log K]
+        if field.lower() in ["temp", "temperature"]:
             u  = snapshotSubset(sP, partType, 'u', **kwargs)
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
             return sP.units.UToTemp(u,ne,log=True)
 
-        # entropy (from u,dens)
-        # TODO
+        # entropy (from u,dens) [log cgs]
+        if field.lower() in ["ent", "entr", "entropy"]:
+            u    = snapshotSubset(sP, partType, 'u', **kwargs)
+            dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+            return sP.units.calcEntropyCGS(u,dens,log=True)
 
-        # velmag (from vel)
-        # TODO
+        # velmag (from 3d velocity) [km/s comoving]
+        if field.lower() in ["vmag", "velmag"]:
+            vel = snapshotSubset(sP, partType, 'vel', **kwargs)
+            return np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
 
-        # cellsize (from volume)
-        # TODO
+        # cellsize (from volume) [ckpc/h]
+        if field.lower() in ["cellsize", "cellrad"]:
+            vol = snapshotSubset(sP, partType, 'vol', **kwargs)
+            return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
     # alternate field names mappings
-    altNames = [ [['xyz','positions','pos'], 'Coordinates'],
-                 [['ids'], 'ParticleIDs'],
+    altNames = [ [['center_of_mass','com'], 'Center-of-Mass'],
+                 [['xyz','positions','pos'], 'Coordinates'],
+                 [['dens','rho'], 'Density'],
                  [['ne','nelec'], 'ElectronAbundance'],
+                 [['agnrad','gfm_agnrad'], 'GFM_AGNRadiation'],
+                 [['coolrate','gfm_coolrate'], 'GFM_CoolingRate'],
+                 [['winddmveldisp'], 'GFM_WindDMVelDisp'],
+                 [['metal','Z','gfm_metal'], 'GFM_Metallicity'],
+                 [['metals'], 'GFM_Metals'],
                  [['u'], 'InternalEnergy'],
-                 [['vel'], 'Velocities'] # TODO finish
+                 [['machnum'], 'MachNumber'],
+                 [['mass'], 'Masses'],
+                 [['nh'], 'NeutralHydrogenAbundance'],
+                 [['numtr'], 'NumTracers'],
+                 [['ids'], 'ParticleIDs'],
+                 [['pres'], 'Pressure'],
+                 [['hsml'], 'SmoothingLength'],
+                 [['sfr'], 'StarFormationRate'],
+                 [['vel'], 'Velocities'],
+                 [['vol'], 'Volume'],
+                 # stars only:
+                 [['initialmass','ini_mass'], 'GFM_InitialMass'],
+                 [['stellarformationtime','sftime'], 'GFM_StellarFormationTime'],
+                 [['stellarphotometrics','stellarphot','sphot'], 'GFM_StellarPhotometrics'],
+                 # blackholes only:
+                 [['bh_dens','bh_rho'], 'BH_Density'], \
                ]
 
     for i,field in enumerate(fields):
         for altLabels,toLabel in altNames:
+            # alternate field name map
             if field in altLabels:
                 fields[i] = toLabel
                 print(field + ' -> ' + fields[i])
+            # lowercase versions accepted
+            if field == toLabel.lower():
+                fields[i] = toLabel
+                print(field + ' -> ' + fields[i])
+            # BH_* accepted without prefix
+            if 'bh_'+field.lower() == toLabel.lower():
+                fields[i] = toLabel
+                print(field + ' -> ' + fields[i])
 
-    # multi-dimensional field slicing during load (pos_x, tracer_maxtemp, ...)
+    # multi-dimensional field slicing during load
     multiDimSliceMaps = [ \
       { 'names':['x','pos_x','posx'],                   'field':'Coordinates',     'fN':0 },
       { 'names':['y','pos_y','posy'],                   'field':'Coordinates',     'fN':1 },
@@ -225,7 +284,15 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
       { 'names':['tracer_windcounter','windcounter'],   'field':'FluidQuantities', 'fN':sP.trMCFields[9] },
       { 'names':['tracer_exchcounter','exchcounter'],   'field':'FluidQuantities', 'fN':sP.trMCFields[10] },
       { 'names':['tracer_exchdist','exchdist'],         'field':'FluidQuantities', 'fN':sP.trMCFields[11] },
-      { 'names':['tracer_exchdisterr','exchdisterr'],   'field':'FluidQuantities', 'fN':sP.trMCFields[11] } \
+      { 'names':['tracer_exchdisterr','exchdisterr'],   'field':'FluidQuantities', 'fN':sP.trMCFields[11] },
+      { 'names':['phot_U','U'],                         'field':'GFM_StellarPhotometrics', 'fN':0 },
+      { 'names':['phot_B','B'],                         'field':'GFM_StellarPhotometrics', 'fN':1 },
+      { 'names':['phot_V','V'],                         'field':'GFM_StellarPhotometrics', 'fN':2 },
+      { 'names':['phot_K','K'],                         'field':'GFM_StellarPhotometrics', 'fN':3 },
+      { 'names':['phot_g','g'],                         'field':'GFM_StellarPhotometrics', 'fN':4 },
+      { 'names':['phot_r','r'],                         'field':'GFM_StellarPhotometrics', 'fN':5 },
+      { 'names':['phot_i','i'],                         'field':'GFM_StellarPhotometrics', 'fN':6 },
+      { 'names':['phot_z','z'],                         'field':'GFM_StellarPhotometrics', 'fN':7 } \
     ]
 
     for i,field in enumerate(fields):
@@ -233,15 +300,49 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
             if field in multiDimMap['names']:
                 raise Exception("Not implemented.") #TODO
 
-    # inds and indRange based subset (TODO)
+    # inds and indRange based subset
     if inds is not None:
-        raise Exception("Not implemented.")
+        # load the range which bounds the minimum and maximum indices, then return subset
+        indRange = [inds.min(), inds.max()]
+
+        val = snapshotSubset(sP, partType, fields, indRange=indRange)
+        return val[ inds-inds.min() ]
+
     if indRange is not None:
-        raise Exception("Not implemented.")
+        # load a contiguous chunk by making a subset specification in analogy to the group ordered loads
+        nTypes = 6
+        subset = { 'offsetType'  : np.zeros(nTypes, dtype='int64'),
+                   'lenType'     : np.zeros(nTypes, dtype='int64'),
+                   'snapOffsets' : None }
+
+        subset['offsetType'][ptNum(partType)] = indRange[0]
+        subset['lenType'][ptNum(partType)]    = indRange[1]-indRange[0]+1
+
+        # snapshot offset file (by type) exists? load or make it now
+        saveFilename = sP.derivPath + 'offsets/offsets_snap_' + str(sP.snap) + '.hdf5'
+
+        if isfile(saveFilename):
+            with h5py.File(saveFilename,'r') as f:
+                subset['snapOffsets'] = f['offsets'][()]
+        else:
+            # walk through snapshot files, save len per type in each, and so offsets
+            nChunks = snapNumChunks(sP.simPath, sP.snap)
+            subset['snapOffsets'] = np.zeros( (nTypes,nChunks), dtype='int64' )
+
+            for i in range(1,nChunks+1):
+                f = h5py.File( snapPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
+
+                if i < nChunks:
+                    for j in range(nTypes):
+                        subset['snapOffsets'][j,i] = subset['snapOffsets'][j,i-1] + \
+                                                     f['Header'].attrs['NumPart_ThisFile'][j]
+
+                    f.close()
+
+            with h5py.File(saveFilename,'w') as f:
+                f['offsets'] = subset['snapOffsets']
 
     # halo or subhalo based subset
-    subset = None
-
     if haloID is not None:
         subset = getSnapOffsets(sP.simPath, sP.snap, haloID, "Group")
     if subhaloID is not None:

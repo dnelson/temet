@@ -25,6 +25,7 @@ class simParams:
     # snapshots
     snapRange     = None  # snapshot range of simulation
     #groupCatRange = None  # snapshot range of fof/subfind catalogs (subset of above)
+    groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
     snap          = None  # convenience for passing between functions
     run           = ''    # copied from input
     redshift      = None  # copied from input
@@ -113,6 +114,7 @@ class simParams:
             self.validResLevels = [455,910,1820]
             self.boxSize        = 75000.0
             self.snapRange      = [0,135] # z6=45, z5=49, z4=54, z3=60, z2=68, z1=85, z0=135
+            self.groupOrdered   = True
 
             self.omega_m     = 0.2726
             self.omega_L     = 0.7274
@@ -154,7 +156,8 @@ class simParams:
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zoom_20mpc','zoom_20mpc_dm']:
-            self.boxSize = 20000.0
+            self.boxSize      = 20000.0
+            self.groupOrdered = False
 
             self.omega_m     = 0.264
             self.omega_L     = 0.736
@@ -203,6 +206,7 @@ class simParams:
             self.validResLevels = [128,256,512]
             self.boxSize        = 20000.0
             self.snapRange      = [0,130] # z6=5, z5=14, z4=21, z3=36, z2=60, z1=81, z0=130
+            self.groupOrdered   = False
 
             self.omega_m     = 0.27
             self.omega_L     = 0.73
@@ -247,6 +251,7 @@ class simParams:
             self.validResLevels = [128,256,512]
             self.boxSize        = 20000.0
             self.snapRange      = [0,314]
+            self.groupOrdered   = False
 
             self.omega_m     = 0.27
             self.omega_L     = 0.73
