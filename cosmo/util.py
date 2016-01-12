@@ -238,21 +238,29 @@ def gasMassesFromIDs(search_ids, sP):
 
     return masses
 
+# --- plotting ---
+
+def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
+    """ Add a redshift axis as a second x-axis on top (assuming bottom axis is Age of Universe [Gyr]). """
+    axTop = ax.twiny()
+    axTickVals = sP.units.redshiftToAgeFlat( np.array(zVals) )
+
+    axTop.set_xlim(ax.get_xlim())
+    axTop.set_xticks(axTickVals)
+    axTop.set_xticklabels(zVals)
+    axTop.set_xlabel("Redshift")
+
 def plotRedshiftSpacings():
     """ Compare redshift spacing of snapshots of different runs. """
     import matplotlib.pyplot as plt
     import matplotlib.style
     from util import simParams
 
-    csfont = {'fontname':'Arial'}
-
     # config
     sPs = []
     sPs.append( simParams(res=512,run='tracer') )
     sPs.append( simParams(res=512,run='feedback') )
     sPs.append( simParams(res=1820,run='illustris') )
-
-    #matplotlib.style.use('default')
 
     # plot setup
     xrange = [0.0, 14.0]
@@ -268,7 +276,7 @@ def plotRedshiftSpacings():
     ax.set_xlim(xrange)
     ax.set_ylim(yrange)
 
-    ax.set_xlabel('Age of Universe [Gyr $Gyr \,M_{sun} / \Sigma^{3\pi}$]') #, **csfont)
+    ax.set_xlabel('Age of Universe [Gyr]')
     ax.set_ylabel('')
 
     ax.set_yticks( np.arange(len(sPs))+1 )
@@ -282,20 +290,10 @@ def plotRedshiftSpacings():
         yLoc = (i+1) + np.array([-0.4,0.4])
 
         for zVal in zVals:
-            ax.plot([zVal,zVal],yLoc)
-            #ax.plot([zVal,zVal],yLoc,'-',lw=1.0,color=(0.1,0.3,0.1))
+            ax.plot([zVal,zVal],yLoc,lw=0.5,color=sP.colors[1])
 
     # redshift axis
-    zVals = np.array([0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0])
-    axTop = ax.twiny()
-    axTickVals = sPs[0].units.redshiftToAgeFlat(zVals)
+    addRedshiftAxis(ax, sP)
 
-    axTop.set_xlim(ax.get_xlim())
-    axTop.set_xticks(axTickVals)
-    axTop.set_xticklabels(zVals)
-    axTop.set_xlabel("Redshift")
-
-    #ax.legend(loc='best', frameon=False)
-    fig.tight_layout()
-    
+    fig.tight_layout()    
     fig.savefig(sP.plotPath + 'redshift_spacing.pdf')
