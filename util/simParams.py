@@ -308,10 +308,11 @@ class simParams:
             self.numMetals = len(self.metals)
 
         # if redshift passed in, convert to snapshot number and save, and vice versa
-        if self.redshift:
+        if self.redshift is not None:
             self.snap = redshiftToSnapNum(sP=self)
         else:
-            self.redshift = snapNumToRedshift(sP=self)
+            if self.snap is not None:
+                self.redshift = snapNumToRedshift(sP=self)
 
         # attach a units class at this redshift
         self.units = units(sP=self)

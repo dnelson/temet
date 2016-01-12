@@ -7,9 +7,9 @@ from builtins import *
 
 import numpy as np
 import h5py
-from os.path import isfile
 import glob
 import illustris_python as il
+from os.path import isfile
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
     """ Find and return absolute path to a group catalog HDF5 file.
@@ -84,11 +84,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
 
     return r
 
-def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
-    """ Find and return absolute path to a snapshot HDF5 file.
-        Can be used to redefine illustris_python version (il.snapshot.snapPath = cosmo.load.snapPath). """
-
-    # subbox support
+def subboxVals(subbox):
+    """ Return sbNum (integer) and sbStr1 and sbStr2 for use in locating subbox files. """
     sbNum = subbox if isinstance(subbox, (int,long)) else 0
 
     if subbox is not None:
@@ -98,7 +95,13 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
         sbStr1 = ''
         sbStr2 = ''
 
-    # format snapshot number
+    return sbNum, sbStr1, sbStr2
+
+def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
+    """ Find and return absolute path to a snapshot HDF5 file.
+        Can be used to redefine illustris_python version (il.snapshot.snapPath = cosmo.load.snapPath). """
+
+    sbNum, sbStr1, sbStr2 = subboxVals(subbox)
     ext = str(snapNum).zfill(3)
 
     # file naming possibilities
@@ -129,14 +132,9 @@ def snapNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a snapshot. """
     import glob
 
-    # subbox support
-    sbStr = ''
-    if subbox is not None:
-        sbNum = subbox if isinstance(subbox, (int,long)) else 0
-        sbStr = 'subbox' + str(sbNum) + '_'
-
     # check for existence of files inside directory
-    path = basePath + 'snapdir_' + sbStr + str(snapNum).zfill(3) + '/*.hdf5'
+    _, sbStr1, _ = subboxVals(subbox)
+    path = basePath + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
 
     nChunks = len(glob.glob(path))
 
@@ -250,19 +248,13 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
                ]
 
     for i,field in enumerate(fields):
-        for altLabels,toLabel in altNames:
-            # alternate field name map
-            if field in altLabels:
+        for altLabels,toLabel in altNames:            
+            if field in altLabels: # alternate field name map
+                fields[i] = toLabel            
+            if field == toLabel.lower(): # lowercase versions accepted
+                fields[i] = toLabel            
+            if 'bh_'+field.lower() == toLabel.lower(): # BH_* accepted without prefix
                 fields[i] = toLabel
-                print(field + ' -> ' + fields[i])
-            # lowercase versions accepted
-            if field == toLabel.lower():
-                fields[i] = toLabel
-                print(field + ' -> ' + fields[i])
-            # BH_* accepted without prefix
-            if 'bh_'+field.lower() == toLabel.lower():
-                fields[i] = toLabel
-                print(field + ' -> ' + fields[i])
 
     # multi-dimensional field slicing during load
     multiDimSliceMaps = [ \
