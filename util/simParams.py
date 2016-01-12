@@ -6,7 +6,6 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 from util import units
-from util.color import getColor24
 from cosmo.util import redshiftToSnapNum, snapNumToRedshift
 
 class simParams:
@@ -87,8 +86,8 @@ class simParams:
     # phyiscal models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
     numMetals = 0     # number of metals, set in post
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model)
+    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=IllustrisPrime Model)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=IllustrisPrime Model)
 
     def __init__(self, res=None, run=None, redshift=None, snap=None, hInd=None):
         """ Fill parameters based on inputs. """
@@ -105,9 +104,31 @@ class simParams:
         self.redshift = redshift
         self.snap     = snap
 
-        # ILLUSTRISPRIME
+        # ILLUSTRIS PRIME
         if run in ['illustrisprime']:
-            raise Exception('todo')
+            self.validResLevels = [1820]
+            self.boxSize        = 75000.0
+            self.snapRange      = [0,135] # z6=45, z5=49, z4=54, z3=60, z2=68, z1=85, z05=103, z0=135
+            self.groupOrdered   = True
+
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            self.gravSoft       = 1.0 # 1820 # comoving until z=1,: fixed at z=1 value after (except DM)
+            self.trMCPerCell    = 0 # corrupt, cannot use
+            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.winds          = 2
+            self.BHs            = 2
+            self.targetGasMass  = 8.85678e-5 # 1820
+
+            self.arepoPath  = self.basePath + 'sims.illustris/IllustrisPrime-1/'
+            self.savPrefix  = 'IP'
+            self.simName    = 'ILLUSTRISPRIME'
+            self.saveTag    = 'ilP'
+            self.plotPrefix = 'ilP'
+            self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
         # ILLUSTRIS
         if run in ['illustris','illustris_dm']:
@@ -146,6 +167,7 @@ class simParams:
                 self.simName    = 'ILLUSTRIS'
                 self.saveTag    = 'il'
                 self.plotPrefix = 'il'
+                self.colors     = ['#e67a22', '#b35f1b', '#804413'] # brown, light to dark
 
             if run == 'illustris_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.illustris/'+str(res)+'_'+bs+'Mpc_DM/'
@@ -153,6 +175,7 @@ class simParams:
                 self.simName    = 'ILLUSTRIS_DM'
                 self.saveTag    = 'ilDM'
                 self.plotPrefix = 'ilDM'
+                self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zoom_20mpc','zoom_20mpc_dm']:
@@ -241,10 +264,7 @@ class simParams:
             self.simName    = 'FEEDBACK'
             self.saveTag    = 'feMC'
             self.plotPrefix = 'feMC'
-
-            self.colors = [getColor24(['3e','41','e8']), # blue, light to dark
-                           getColor24(['15','1a','ac']), 
-                           getColor24(['08','0b','74'])]
+            self.colors     = ['#3e41e8', '#151aac', '#080b74'] # blue, light to dark
 
         # TRACER (paper.gasaccretion, 20Mpc box of ComparisonProject)
         if run == 'tracer':
@@ -291,10 +311,7 @@ class simParams:
             self.simName    = 'NO FEEDBACK'
             self.saveTag    = 'trMC'
             self.plotPrefix = 'trMC'
-
-            self.colors = [getColor24(['00','ab','33']), # green, light to dark
-                           getColor24(['00','7d','23']), 
-                           getColor24(['00','90','13'])]
+            self.colors     = ['#00ab33', '#007d23', '#009013']  # green, light to dark
 
         # ALL RUNS
         if res not in self.validResLevels:
@@ -343,18 +360,18 @@ class simParams:
         if self.levelMax == 11: self.ids_offset = 500000000
 
         # colors as a function of hInd and resolution (vis/ColorWheel-Base.png - outer/3rd/6th rings)
-        colors_red    = [['94','07','0a'],['ce','18','1e'],['f3','7b','70']]
-        colors_maroon = [['68','00','59'],['8f','18','7c'],['bd','7c','b5']]
-        colors_purple = [['39','0a','5d'],['51','24','80'],['82','6a','af']]
-        colors_navy   = [['9d','1f','63'],['1c','36','87'],['55','65','af']]
-        colors_blue   = [['00','3d','73'],['00','59','9d'],['5e','8a','c7']]
-        colors_teal   = [['00','6d','6f'],['00','95','98'],['59','c5','c7']]
-        colors_green  = [['00','6c','3b'],['00','93','53'],['65','c2','95']]
-        colors_lime   = [['40','79','27'],['62','a7','3b'],['ad','d5','8a']]
-        colors_yellow = [['a0','96','00'],['e3','d2','00'],['ff','f6','85']]
-        colors_brown  = [['9a','67','04'],['d9','91','16'],['fd','c5','78']]
-        colors_orange = [['98','50','06'],['d4','71','1a'],['f9','a8','70']]
-        colors_pink   = [['95','23','1f'],['cf','38','34'],['f6','8e','76']]
+        colors_red    = ['#94070a', '#ce181e', '#f37b70']
+        colors_maroon = ['#680059', '#8f187c', '#bd7cb5']
+        colors_purple = ['#390a5d', '#512480', '#826aaf']
+        colors_navy   = ['#9d1f63', '#1c3687', '#5565af']
+        colors_blue   = ['#003d73', '#00599d', '#5e8ac7']
+        colors_teal   = ['#006d6f', '#009598', '#59c5c7']
+        colors_green  = ['#006c3b', '#009353', '#65c295']
+        colors_lime   = ['#407927', '#62a73b', '#add58a']
+        colors_yellow = ['#a09600', '#e3d200', '#fff685']
+        colors_brown  = ['#9a6704', '#d99116', '#fdc578']
+        colors_orange = ['#985006', '#d4711a', '#f9a870']
+        colors_pink   = ['#95231f', '#cf3834', '#f68e76']
 
         if hInd == 0:
             #hInd =   95 mass = 11.97 rvir = 239.9 vol =  69.3 pos = [ 7469.41  5330.66  3532.18 ]
@@ -369,7 +386,7 @@ class simParams:
             if self.levelMax >= 9: self.zoomShift = [13,32,41]
             self.rVirFac = -0.1 * self.zoomLevel + 4.0
 
-            self.colors = getColor24(transpose(colors_red))
+            self.colors = colors_red
             self.hIndDisp = 0
 
         if hInd == 1:
@@ -392,7 +409,7 @@ class simParams:
                 self.zoomShift = [22, -43, -39]
                 self.rVirFac = 6.0
 
-            self.colors = getColor24(transpose(colors_lime))
+            self.colors = colors_lime
             self.hIndDisp = 1
 
         if hInd == 2:
@@ -412,7 +429,7 @@ class simParams:
             self.rVirFac = 0.2 * self.zoomLevel + 4.0
             if self.levelMax == 11: self.rVirFac = 6.0
 
-            self.colors = getColor24(transpose(colors_purple))
+            self.colors = colors_purple
             self.hIndDisp = 4
 
         if hInd == 3:
@@ -430,7 +447,7 @@ class simParams:
             if self.levelMax == 11: self.zoomShift = [-5, 12, 32]
             self.rVirFac = 1.0 * self.zoomLevel + 3.0
 
-            self.colors = getColor24(transpose(colors_navy))
+            self.colors = colors_navy
             self.hIndDisp = 9
 
         if hInd == 4:
@@ -446,7 +463,7 @@ class simParams:
             if self.levelMax == 11: self.zoomShift = [37,20,27]
             self.rVirFac = 4.2
 
-            self.colors = getColor24(transpose(colors_blue))
+            self.colors = colors_blue
             self.hIndDisp = 5
 
         if hInd == 5:
@@ -464,7 +481,7 @@ class simParams:
             if self.levelMax == 11: self.zoomShift = [12,0,-36]
             self.rVirFac = 0.2 * self.zoomLevel + 4.0
 
-            self.colors = getColor24(transpose(colors_teal)) #h5
+            self.colors = colors_teal #h5
             self.hIndDisp = 6
 
         if hInd == 6:
@@ -483,7 +500,7 @@ class simParams:
 
             self.rVirFac = 1.0 * self.zoomLevel + 3.0
 
-            self.colors = getColor24(transpose(colors_green))
+            self.colors = colors_green
             self.hIndDisp = 8
 
         if hInd == 7:
@@ -510,7 +527,7 @@ class simParams:
             if self.levelMax == 12: self.zoomShift = [43, -19, -12]
             if self.levelMax == 12: self.rVirFac = 8.0
 
-            self.colors = getColor24(transpose(colors_orange))
+            self.colors = colors_orange
             self.hIndDisp = 2
 
         if hInd == 8:
@@ -528,7 +545,7 @@ class simParams:
             if self.levelMax == 11: self.zoomShift = [-27, -50, -14]
             self.rVirFac = 0.5 * self.zoomLevel + 5.0
 
-            self.colors = getColor24(transpose(colors_brown))
+            self.colors = colors_brown
             self.hIndDisp = 3
 
         if hInd == 9:
@@ -546,7 +563,7 @@ class simParams:
             if self.levelMax == 11: self.zoomShift = [6,0,-39]
             self.rVirFac = 0.1 * self.zoomLevel + 4.0
 
-            self.colors = getColor24(transpose(colors_maroon))
+            self.colors = colors_maroon
             self.hIndDisp = 7
 
         # convert zoomShift to zoomShiftPhys
