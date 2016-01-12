@@ -10,7 +10,7 @@ import h5py
 import illustris_python as il
 import cosmo.load
 from os.path import isfile
-from util.helper import getIDIndexMap
+from util.helper import getIDIndexMap, closest
 
 def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
@@ -78,11 +78,10 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
 
     for i,redshift in np.ndenumerate(redshifts):
         # closest snapshot redshift to requested
-        dists = np.abs(r['redshifts'] - redshift)
-        w = np.argmin( dists )
+        distMin, w = closest( r['redshifts'], redshift )
 
-        if dists[w] > 0.1:
-            print("Warning! Snapshot selected with redshift error = " + str(dists[w]))
+        if distMin > 0.1:
+            print("Warning! Snapshot selected with redshift error = " + str(distMin))
 
         snaps[i] = w
 
@@ -193,8 +192,8 @@ def periodicPairwiseDists(pts, sP):
     # set up indexing
     for i in np.arange(nPts-2):
         n1 = nPts - (i+1)
-        index1[ii : ii+n1-1] = i
-        index2[ii] = index0[0 : n1-1] + i
+        index1[ii:ii+n1] = i
+        index2[ii] = index0[0:n1] + i
         ii += n1
 
     # component wise difference
