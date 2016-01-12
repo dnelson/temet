@@ -321,7 +321,7 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
             nChunks = snapNumChunks(sP.simPath, sP.snap)
             subset['snapOffsets'] = np.zeros( (nTypes,nChunks), dtype='int64' )
 
-            for i in range(1,nChunks+1):
+            for i in np.arange(1,nChunks+1):
                 f = h5py.File( snapPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
 
                 if i < nChunks:
