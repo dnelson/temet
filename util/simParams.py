@@ -39,6 +39,7 @@ class simParams:
     omega_k       = 0.0  # always
     omega_b       = None # omega baryon
     HubbleParam   = None # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
+    nTypes        = 6    # number of particle types
 
     # subboxes
     subboxCen     = None # subbox0 center
@@ -129,6 +130,31 @@ class simParams:
             self.saveTag    = 'ilP'
             self.plotPrefix = 'ilP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
+
+        # DEV.PRIME
+        if run in ['winds_save_on','winds_save_off','enrich_count','enrich_discrete']:
+            self.validResLevels = [128]
+            self.boxSize        = 25000.0
+            self.snapRange      = [0,5] # z0=5
+            self.groupOrdered   = True
+
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            self.gravSoft       = 2.0 # 1820 # comoving until z=1,: fixed at z=1 value after (except DM)
+            self.trMCPerCell    = 0 # corrupt, cannot use
+            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.winds          = 2
+            self.BHs            = 2
+            self.targetGasMass  = 9.42966e-3
+
+            self.arepoPath  = self.basePath + 'dev.prime/' + run + '/'
+            self.savPrefix  = 'DP'
+            self.simName    = 'DEVPRIME'
+            self.saveTag    = 'idP'
+            self.plotPrefix = 'idP'
 
         # ILLUSTRIS
         if run in ['illustris','illustris_dm']:
@@ -314,6 +340,8 @@ class simParams:
             self.colors     = ['#00ab33', '#007d23', '#009013']  # green, light to dark
 
         # ALL RUNS
+        if self.boxSize == 0.0:
+            raise Exception("Run not recognized.")
         if res not in self.validResLevels:
             raise Exception("Invalid resolution.")
 
