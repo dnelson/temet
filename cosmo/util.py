@@ -78,10 +78,10 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
 
     for i,redshift in np.ndenumerate(redshifts):
         # closest snapshot redshift to requested
-        distMin, w = closest( r['redshifts'], redshift )
+        zFound, w = closest( r['redshifts'], redshift )
 
-        if distMin > 0.1:
-            print("Warning! Snapshot selected with redshift error = " + str(distMin))
+        if np.abs(zFound-redshift) > 0.1:
+            print("Warning! Snapshot selected with redshift error = " + str(np.abs(zFound-redshift)))
 
         snaps[i] = w
 
@@ -131,15 +131,15 @@ def snapNumToAgeFlat(sP, snap=None):
 
 def correctPeriodicDistVecs(vecs, sP):
     """ Enforce periodic B.C. for distance vectors (effectively component by component). """
-    vecs[ np.where(vecs > sP.boxSize*0.5)  ] -= sP.boxSize
-    vecs[ np.where(vecs < -sP.boxSize*0.5) ] += sP.boxSize
+    vecs[ np.where(vecs > sP.boxSize*0.5)  ]  -= sP.boxSize
+    vecs[ np.where(vecs <= -sP.boxSize*0.5) ] += sP.boxSize
 
 def correctPeriodicPosVecs(vecs, sP):
     """ Enforce periodic B.C. for positions (add boxSize to any negative points, subtract boxSize from any 
         points outside box).
     """
-    vecs[ np.where(vecs < 0.0) ]        += sP.boxSize
-    vecs[ np.where(vecs > sP.boxSize) ] -= sP.boxSize
+    vecs[ np.where(vecs < 0.0) ]         += sP.boxSize
+    vecs[ np.where(vecs >= sP.boxSize) ] -= sP.boxSize
 
 def periodicDists(pt, vecs, sP, chebyshev=False):
     """ Calculate distances correctly taking into account periodic B.C.
@@ -252,7 +252,6 @@ def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.
 def plotRedshiftSpacings():
     """ Compare redshift spacing of snapshots of different runs. """
     import matplotlib.pyplot as plt
-    import matplotlib.style
     from util import simParams
 
     # config
