@@ -9,9 +9,13 @@ import numpy as np
 
 # --- utility functions ---
 
-def nUniq(x):
+def nUnique(x):
     """ Return number of unique elements in input numpy array x. """
     return (np.unique(x)).size
+
+def isUnique(x):
+    """ Does input array contain only unique values? """
+    return x.size == (np.unique(x)).size
 
 def closest(array, value):
     """ Return closest element of array to input value. """

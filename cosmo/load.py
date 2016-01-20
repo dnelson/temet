@@ -1,6 +1,6 @@
 """
 cosmo/load.py
-  Cosmological simulations - loading procedures (snapshots, fof/subhalo group cataloges).
+  Cosmological simulations - loading procedures (snapshots, fof/subhalo group cataloges, merger trees).
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -9,7 +9,8 @@ import numpy as np
 import h5py
 import glob
 import illustris_python as il
-from os.path import isfile
+from os.path import isfile, isdir
+from os import mkdir
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
     """ Find and return absolute path to a group catalog HDF5 file.
@@ -54,6 +55,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
        skipIDs=1 : acknowledge we are working with a STOREIDS type .hdf5 group cat and don't warn
        fields    : read only a subset fields from the catalog
     """
+    if sP.snap is None:
+        raise Exception("Must specify sP.snap for snapshotSubset load.")
 
     # override path function
     il.groupcat.gcPath = gcPath
@@ -62,7 +65,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
 
     # IDs exist? either read or skip
     with h5py.File(gcPath(sP.simPath,sP.snap),'r') as f:
-        if 'IDs' in f.keys():
+        if 'IDs' in f.keys() and len(f['IDs']):
             if readIDs:
                 r['ids'] = f['IDs']['ID'][:]
             else:
@@ -78,11 +81,45 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
         r['halos'] = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=fieldsHalos)
     
         # override HDF5 datatypes if needed
-        r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32') # unsigned -> signed
-
-    # TODO: lots of offset related thoughts and functionality
+        if isinstance(r['halos'],dict) and 'GroupFirstSub' in r['halos']:
+            r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32') # unsigned -> signed
 
     return r
+
+def groupCatSingle(sP, haloID=None, subhaloID=None):
+    """ Return complete group catalog information for one halo or subhalo. """
+    if haloID is not None and subhaloID is not None:
+        raise Exception("Cannot specify both haloID and subhaloID.")
+    if sP.snap is None:
+        raise Exception("Must specify sP.snap for snapshotSubset load.")
+        
+    gcName = "Subhalo" if subhaloID is not None else "Group"
+    gcID = subhaloID if subhaloID is not None else haloID
+ 
+    # load groupcat offsets, calculate target file and offset
+    groupFileOffsets = groupCatOffsetList(sP)['offsets'+gcName]
+    groupFileOffsets = gcID - groupFileOffsets
+    fileNum = np.max( np.where(groupFileOffsets >= 0) )
+    groupOffset = groupFileOffsets[fileNum]
+ 
+    # load halo/subhalo fields into a dict
+    r = {}
+    
+    with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
+        for haloProp in f[gcName].keys():
+            r[haloProp] = f[gcName][haloProp][groupOffset]
+            
+    return r
+
+def groupCatHeader(sP, fileName=None):
+    """ Load complete group catalog header. """
+    if fileName is None:
+        fileName = gcPath(sP.simPath, sP.snap)
+
+    with h5py.File(fileName,'r') as f:
+        header = dict( f['Header'].attrs.items() )
+
+    return header
 
 def subboxVals(subbox):
     """ Return sbNum (integer) and sbStr1 and sbStr2 for use in locating subbox files. """
@@ -158,6 +195,138 @@ def snapshotHeader(sP, subbox=None, fileName=None):
 
     return header
 
+def snapOffsetList(sP):
+    """ Make the offset table (by type) for the snapshot files, to be able to quickly determine within 
+        which file(s) a given offset+length will exist. """
+    saveFilename = sP.derivPath + 'offsets/snapshot_' + str(sP.snap) + '.hdf5'
+
+    if not isdir(sP.derivPath+'offsets'):
+        mkdir(sP.derivPath+'offsets')
+
+    if isfile(saveFilename):
+            with h5py.File(saveFilename,'r') as f:
+                snapOffsets = f['offsets'][()]
+    else:
+        nChunks = snapNumChunks(sP.simPath, sP.snap)
+        snapOffsets = np.zeros( (sP.nTypes, nChunks), dtype='int64' )
+
+        for i in np.arange(1,nChunks+1):
+            f = h5py.File( snapPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
+
+            if i < nChunks:
+                for j in range(sP.nTypes):
+                    snapOffsets[j,i] = snapOffsets[j,i-1] + f['Header'].attrs['NumPart_ThisFile'][j]
+
+                f.close()
+
+        with h5py.File(saveFilename,'w') as f:
+            f['offsets'] = snapOffsets
+            print('Wrote: ' + saveFilename)
+
+    return snapOffsets
+
+def groupCatOffsetList(sP):
+    """ Make the offset table for the group catalog files, to be able to quickly determine which
+        which file a given group/subgroup number exists. """
+    saveFilename = sP.derivPath + 'offsets/groupcat_' + str(sP.snap) + '.hdf5'
+
+    r = {}
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            r['offsetsGroup']   = f['offsetsGroup'][()]
+            r['offsetsSubhalo'] = f['offsetsSubhalo'][()]
+    else:
+        nChunks = snapNumChunks(sP.simPath, sP.snap)
+        r['offsetsGroup']   = np.zeros( nChunks, dtype='int32' )
+        r['offsetsSubhalo'] = np.zeros( nChunks, dtype='int32' )
+
+        for i in np.arange(1,nChunks+1):
+            f = h5py.File( gcPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
+
+            if i < nChunks:
+                r['offsetsGroup'][i]   = r['offsetsGroup'][i-1]   + f['Header'].attrs['Ngroups_ThisFile']
+                r['offsetsSubhalo'][i] = r['offsetsSubhalo'][i-1] + f['Header'].attrs['Nsubgroups_ThisFile']
+
+                f.close()
+
+        with h5py.File(saveFilename,'w') as f:
+            f['offsetsGroup']   = r['offsetsGroup']
+            f['offsetsSubhalo'] = r['offsetsSubhalo']
+            print('Wrote: ' + saveFilename)
+
+    return r
+
+def groupCatOffsetListIntoSnap(sP):
+    """ Make the offset table (by type) for every group/subgroup, such that the global location of 
+        the members of any group/subgroup can be quickly located. """
+    saveFilename = sP.derivPath + 'offsets/snap_groups_' + str(sP.snap) + '.hdf5'
+
+    r = {}
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            r['snapOffsetsGroup']   = f['snapOffsetsGroup'][()]
+            r['snapOffsetsSubhalo'] = f['snapOffsetsSubhalo'][()]
+    else:
+        nChunks = snapNumChunks(sP.simPath, sP.snap)
+
+        with h5py.File( gcPath(sP.simPath,sP.snap), 'r' ) as f:
+            totGroups    = f['Header'].attrs['Ngroups_Total']
+            totSubGroups = f['Header'].attrs['Nsubgroups_Total']
+
+        r['snapOffsetsGroup']   = np.zeros( (totGroups+1, sP.nTypes), dtype=np.int64 )
+        r['snapOffsetsSubhalo'] = np.zeros( (totSubGroups+1, sP.nTypes), dtype=np.int64 )
+        
+        groupCount    = 0
+        subgroupCount = 0
+        
+        # load following 3 fields across all chunks
+        groupLenType    = np.zeros( (totGroups, sP.nTypes), dtype=np.int32 )
+        groupNsubs      = np.zeros( (totGroups,), dtype=np.int32 )
+        subgroupLenType = np.zeros( (totSubGroups, sP.nTypes), dtype=np.int32 )
+
+        for i in range(1,nChunks+1):
+            # load header, get number of groups/subgroups in this file, and lengths
+            f = h5py.File( gcPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
+            header = dict( f['Header'].attrs.items() )
+            
+            if header['Ngroups_ThisFile'] > 0:
+                groupLenType[groupCount:groupCount+header['Ngroups_ThisFile']] = f['Group']['GroupLenType']
+                groupNsubs[groupCount:groupCount+header['Ngroups_ThisFile']]   = f['Group']['GroupNsubs']
+            if header['Nsubgroups_ThisFile'] > 0:
+                subgroupLenType[subgroupCount:subgroupCount+header['Nsubgroups_ThisFile']] = f['Subhalo']['SubhaloLenType']
+            
+            groupCount += header['Ngroups_ThisFile']
+            subgroupCount += header['Nsubgroups_ThisFile']
+            
+            f.close()
+            
+        # loop over each particle type, then over groups, calculate offsets from length
+        for j in range(sP.nTypes):
+            subgroupCount = 0
+            
+            # compute group offsets first
+            r['snapOffsetsGroup'][1:,j] = np.cumsum( groupLenType[:,j] )
+            
+            for k in np.arange(totGroups):
+                # subhalo offsets depend on group (to allow fuzz)
+                if groupNsubs[k] > 0:
+                    r['snapOffsetsSubhalo'][subgroupCount,j] = r['snapOffsetsGroup'][k,j]
+                    
+                    subgroupCount += 1
+                    for m in np.arange(1, groupNsubs[k]):
+                        r['snapOffsetsSubhalo'][subgroupCount,j] = \
+                          r['snapOffsetsSubhalo'][subgroupCount-1,j] + subgroupLenType[subgroupCount-1,j]
+                        subgroupCount += 1
+
+        with h5py.File(saveFilename,'w') as f:
+            f['snapOffsetsGroup']   = r['snapOffsetsGroup']
+            f['snapOffsetsSubhalo'] = r['snapOffsetsSubhalo']
+            print('Wrote: ' + saveFilename)
+
+    return r    
+
 def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None):
     """ For a given snapshot load only one field for one particle type
           partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
@@ -180,15 +349,13 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
         raise Exception("Cannot specify both inds and indRange.")
     if haloID is not None and subhaloID is not None:
         raise Exception("Cannot specify both haloID and subhaloID.")
-    if (haloID is not None) or (subhaloID is not None) and sP.groupOrdered is False:
+    if ((haloID is not None) or (subhaloID is not None)) and not sP.groupOrdered:
         raise Exception("Not yet implemented (group/halo load in non-groupordered.")
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
 
     # override path function
     il.snapshot.snapPath = snapPath
-
-    r = {}
 
     # make sure fields is not a single element
     if isinstance(fields, basestring):
@@ -241,7 +408,7 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
                  [['vol'], 'Volume'],
                  # stars only:
                  [['initialmass','ini_mass'], 'GFM_InitialMass'],
-                 [['stellarformationtime','sftime'], 'GFM_StellarFormationTime'],
+                 [['stellarformationtime','sftime','birthtime'], 'GFM_StellarFormationTime'],
                  [['stellarphotometrics','stellarphot','sphot'], 'GFM_StellarPhotometrics'],
                  # blackholes only:
                  [['bh_dens','bh_rho'], 'BH_Density'], \
@@ -257,6 +424,8 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
                 fields[i] = toLabel
 
     # multi-dimensional field slicing during load
+    trMCFields = sP.trMCFields if sP.trMCFields else np.repeat(-1,12)
+
     multiDimSliceMaps = [ \
       { 'names':['x','pos_x','posx'],                   'field':'Coordinates',     'fN':0 },
       { 'names':['y','pos_y','posy'],                   'field':'Coordinates',     'fN':1 },
@@ -264,19 +433,19 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
       { 'names':['vx','vel_x','velx'],                  'field':'Velocities',      'fN':0 },
       { 'names':['vy','vel_y','vely'],                  'field':'Velocities',      'fN':1 },
       { 'names':['vz','vel_z','velz'],                  'field':'Velocities',      'fN':2 },
-      { 'names':['tracer_maxtemp','maxtemp'],           'field':'FluidQuantities', 'fN':sP.trMCFields[0] },
-      { 'names':['tracer_maxtemp_time','maxtemp_time'], 'field':'FluidQuantities', 'fN':sP.trMCFields[1] },
-      { 'names':['tracer_maxtemp_dens','maxtemp_dens'], 'field':'FluidQuantities', 'fN':sP.trMCFields[2] },
-      { 'names':['tracer_maxdens','maxdens'],           'field':'FluidQuantities', 'fN':sP.trMCFields[3] },
-      { 'names':['tracer_maxdens_time','maxdens_time'], 'field':'FluidQuantities', 'fN':sP.trMCFields[4] },
-      { 'names':['tracer_maxmachnum','maxmachnum'],     'field':'FluidQuantities', 'fN':sP.trMCFields[5] },
-      { 'names':['tracer_maxent','maxent'],             'field':'FluidQuantities', 'fN':sP.trMCFields[6] },
-      { 'names':['tracer_maxent_time','maxent_time'],   'field':'FluidQuantities', 'fN':sP.trMCFields[7] },
-      { 'names':['tracer_laststartime','laststartime'], 'field':'FluidQuantities', 'fN':sP.trMCFields[8] },
-      { 'names':['tracer_windcounter','windcounter'],   'field':'FluidQuantities', 'fN':sP.trMCFields[9] },
-      { 'names':['tracer_exchcounter','exchcounter'],   'field':'FluidQuantities', 'fN':sP.trMCFields[10] },
-      { 'names':['tracer_exchdist','exchdist'],         'field':'FluidQuantities', 'fN':sP.trMCFields[11] },
-      { 'names':['tracer_exchdisterr','exchdisterr'],   'field':'FluidQuantities', 'fN':sP.trMCFields[11] },
+      { 'names':['tracer_maxtemp','maxtemp'],           'field':'FluidQuantities', 'fN':trMCFields[0] },
+      { 'names':['tracer_maxtemp_time','maxtemp_time'], 'field':'FluidQuantities', 'fN':trMCFields[1] },
+      { 'names':['tracer_maxtemp_dens','maxtemp_dens'], 'field':'FluidQuantities', 'fN':trMCFields[2] },
+      { 'names':['tracer_maxdens','maxdens'],           'field':'FluidQuantities', 'fN':trMCFields[3] },
+      { 'names':['tracer_maxdens_time','maxdens_time'], 'field':'FluidQuantities', 'fN':trMCFields[4] },
+      { 'names':['tracer_maxmachnum','maxmachnum'],     'field':'FluidQuantities', 'fN':trMCFields[5] },
+      { 'names':['tracer_maxent','maxent'],             'field':'FluidQuantities', 'fN':trMCFields[6] },
+      { 'names':['tracer_maxent_time','maxent_time'],   'field':'FluidQuantities', 'fN':trMCFields[7] },
+      { 'names':['tracer_laststartime','laststartime'], 'field':'FluidQuantities', 'fN':trMCFields[8] },
+      { 'names':['tracer_windcounter','windcounter'],   'field':'FluidQuantities', 'fN':trMCFields[9] },
+      { 'names':['tracer_exchcounter','exchcounter'],   'field':'FluidQuantities', 'fN':trMCFields[10] },
+      { 'names':['tracer_exchdist','exchdist'],         'field':'FluidQuantities', 'fN':trMCFields[11] },
+      { 'names':['tracer_exchdisterr','exchdisterr'],   'field':'FluidQuantities', 'fN':trMCFields[11] },
       { 'names':['phot_U','U'],                         'field':'GFM_StellarPhotometrics', 'fN':0 },
       { 'names':['phot_B','B'],                         'field':'GFM_StellarPhotometrics', 'fN':1 },
       { 'names':['phot_V','V'],                         'field':'GFM_StellarPhotometrics', 'fN':2 },
@@ -302,43 +471,30 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
 
     if indRange is not None:
         # load a contiguous chunk by making a subset specification in analogy to the group ordered loads
-        nTypes = 6
-        subset = { 'offsetType'  : np.zeros(nTypes, dtype='int64'),
-                   'lenType'     : np.zeros(nTypes, dtype='int64'),
-                   'snapOffsets' : None }
+        subset = { 'offsetType'  : np.zeros(sP.nTypes, dtype='int64'),
+                   'lenType'     : np.zeros(sP.nTypes, dtype='int64'),
+                   'snapOffsets' : snapOffsetList(sP) }
 
         subset['offsetType'][ptNum(partType)] = indRange[0]
         subset['lenType'][ptNum(partType)]    = indRange[1]-indRange[0]+1
 
-        # snapshot offset file (by type) exists? load or make it now
-        saveFilename = sP.derivPath + 'offsets/offsets_snap_' + str(sP.snap) + '.hdf5'
-
-        if isfile(saveFilename):
-            with h5py.File(saveFilename,'r') as f:
-                subset['snapOffsets'] = f['offsets'][()]
-        else:
-            # walk through snapshot files, save len per type in each, and so offsets
-            nChunks = snapNumChunks(sP.simPath, sP.snap)
-            subset['snapOffsets'] = np.zeros( (nTypes,nChunks), dtype='int64' )
-
-            for i in np.arange(1,nChunks+1):
-                f = h5py.File( snapPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
-
-                if i < nChunks:
-                    for j in range(nTypes):
-                        subset['snapOffsets'][j,i] = subset['snapOffsets'][j,i-1] + \
-                                                     f['Header'].attrs['NumPart_ThisFile'][j]
-
-                    f.close()
-
-            with h5py.File(saveFilename,'w') as f:
-                f['offsets'] = subset['snapOffsets']
-
     # halo or subhalo based subset
-    if haloID is not None:
-        subset = getSnapOffsets(sP.simPath, sP.snap, haloID, "Group")
-    if subhaloID is not None:
-        subset = getSnapOffsets(sP.simPath, sP.snap, subhaloID, "Subhalo")
+    if haloID is not None or subhaloID is not None:
+        gcName = 'Group' if haloID is not None else 'Subhalo'
+        gcID = haloID if haloID is not None else subhaloID
+
+        subset = { 'snapOffsets' : snapOffsetList(sP) }
+
+        # calculate target groups file chunk which contains this id
+        groupFileOffsets = groupCatOffsetList(sP)['offsets'+gcName]
+        groupFileOffsets = int(gcID) - groupFileOffsets
+        fileNum = np.max( np.where(groupFileOffsets >= 0) )
+        groupOffset = groupFileOffsets[fileNum]
+    
+        # load the length (by type) of this group/subgroup from the group catalog, and its offset within the snapshot
+        with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
+            subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
+            subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][groupOffset,:]
 
     # load
     return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset)
