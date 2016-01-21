@@ -132,8 +132,9 @@ class simParams:
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
         # DEV.PRIME
-        if run in ['winds_save_on','winds_save_off','enrich_count','enrich_discrete']:
-            self.validResLevels = [128]
+        if run in ['winds_save_on','winds_save_off','enrich_count','enrich_discrete',
+                   'zoom_01_ill3','zoom_02_ill3','zoom_03_ill3','zoom_04_ill3']:
+            self.validResLevels = [3,128]
             self.boxSize        = 25000.0
             self.snapRange      = [0,5] # z0=5
             self.groupOrdered   = True
@@ -144,7 +145,7 @@ class simParams:
             self.HubbleParam    = 0.704
 
             self.gravSoft       = 2.0 # 1820 # comoving until z=1,: fixed at z=1 value after (except DM)
-            self.trMCPerCell    = 0 # corrupt, cannot use
+            self.trMCPerCell    = 0
             self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
             self.winds          = 2
             self.BHs            = 2

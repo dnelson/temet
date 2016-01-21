@@ -10,41 +10,23 @@ import h5py
 import pdb
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+
 import illustris_python as il
 from util import units
+from util.helper import isUnique, nUnique
+from cosmo.util import correctPeriodicDistVecs, correctPeriodicPosVecs
 
-def periodicWrapPos(xyz, boxSize=75000.0):
-    """ Enforce periodic B.C. for positions (add boxSize to any negative
-        points, subtract boxSize from any points outside boxSize).
-        xyz: (N,3) numpy array """
-    
-    w = np.where(xyz < 0.0)
-    xyz[w] += boxSize
-    
-    w = np.where(xyz >= boxSize)
-    xyz[w] -= boxSize
-    
-def periodicWrapDist(xyz, boxSize=75000.0):
-    """ Enforce periodic B.C. for distance vectors (effectively component by component).
-        xyz: (N,3) numpy array """
-    
-    w = np.where(xyz > boxSize*0.5)
-    xyz[w] -= boxSize
-    
-    w = np.where(xyz <= -boxSize*0.5)
-    xyz[w] += boxSize
-    
-def subhaloDetails(basePath,snapNum,shID):
+def subhaloDetails(sP,shID):
     """ Load/calculate some values for a single subhalo. """
     r = {}
 
     # load groupcat info
-    gc = il.groupcat.loadSingle(basePath,snapNum,subhaloID=shID)
+    gc = il.groupcat.loadSingle(sP.simPath,sP.snap,subhaloID=shID)
 
     print('  Subhalo Pos: [' + ' '.join([str(xyz) for xyz in gc['SubhaloPos']]) + ']')
 
     # load snapshot data
-    stars = il.snapshot.loadSubhalo(basePath,snapNum,shID,'stars',fields=['Coordinates','Masses'])
+    stars = il.snapshot.loadSubhalo(sP.simPath,sP.snap,shID,'stars',fields=['Coordinates','Masses'])
 
     print('  Stars: [' , stars['count'] , ']')
 
@@ -52,15 +34,15 @@ def subhaloDetails(basePath,snapNum,shID):
     for i in [0,1,2]:
         stars['Coordinates'][:,i] -= gc['SubhaloPos'][i]
 
-    periodicWrapDist(stars['Coordinates'])
+    correctPeriodicDistVecs(stars['Coordinates'], sP)
 
     r['stars'] = stars
     return r
 
-def multiPanelOverview(basePath1,basePath2,matchPath,snapNum,shID1):
-    """ desc """    
+def multiPanelOverview(sP1,sP2,matchPath,shID1):
+    """ Create a 2x2 multi-panel overview comparison of a single subhalo between two runs. """    
     # get subhalo ID of sim2 from matching catalog
-    f = h5py.File(matchPath + "subhalos_Illustris1_" + str(snapNum).zfill(3) + ".hdf5")
+    f = h5py.File(matchPath + "subhalos_Illustris1_" + str(sP1.snap).zfill(3) + ".hdf5")
     shID2 = f['SubhaloIndex'][shID1]
     f.close()
 
@@ -70,8 +52,8 @@ def multiPanelOverview(basePath1,basePath2,matchPath,snapNum,shID1):
         terminate('Error: Unmatched.')
     
     # load
-    sh1 = subhaloDetails(basePath1,snapNum,shID1)
-    sh2 = subhaloDetails(basePath2,snapNum,shID2)   
+    sh1 = subhaloDetails(sP1,shID1)
+    sh2 = subhaloDetails(sP2,shID2)   
  
     # init plot
     fig = plt.figure(figsize=(12,9)) #, facecolor='white')    
@@ -112,7 +94,7 @@ def multiPanelOverview(basePath1,basePath2,matchPath,snapNum,shID1):
     ax.hist2d(x,y,bins=nBins,norm=LogNorm())
 
     # save plot
-    fig.savefig('out.png')
+    fig.savefig('out.pdf')
     plt.close(fig)
     
     #pdb.set_trace()
@@ -188,9 +170,9 @@ def priSecMatchedGCIDs(ind1,ind2,basePath1,snapNum):
     
     # debug verify
     if True:
-        if not is_unique(ind1) or not is_unique(ind2):
+        if not isUnique(ind1) or not isUnique(ind2):
             raise Exception('failed')
-        if not is_unique(ps1['pri']) or not is_unique(ps1['sec']):
+        if not isUnique(ps1['pri']) or not isUnique(ps1['sec']):
             raise Exception('failed')
             
         print(' pri: ' + str(len(r['pri1'])) + ' sec: ' + str(len(r['sec1'])))
@@ -209,17 +191,8 @@ def priSecMatchedGCIDs(ind1,ind2,basePath1,snapNum):
     
     return r
     
-def is_unique(x):
-    """ Input numpy array x contains only unique elements? """
-    u = np.unique(x)
-    return len(u) == len(x)
-    
-def num_uniq(x):
-    """ Number of unique entries in numpy array x. """
-    return len(np.unique(x))
-    
-def globalCatComparison(basePath1,basePath2,matchPath,snapNum):
-    """ desc """
+def globalCatComparison(sP1,sP22,matchPath):
+    """ Compare population statistic plots/ratios between two runs using matched objects. """
     fields = ['SubhaloMass','SubhaloHalfmassRad','SubhaloMassType']
     
     # plot config
@@ -230,8 +203,8 @@ def globalCatComparison(basePath1,basePath2,matchPath,snapNum):
     yLineVals = [-0.1249,0.0,0.0969] #-25%, equal, +25%
     
     # load
-    gc1 = il.groupcat.loadSubhalos(basePath1,snapNum,fields=fields)
-    gc2 = il.groupcat.loadSubhalos(basePath2,snapNum,fields=fields)
+    gc1 = il.groupcat.loadSubhalos(sP1.simPath,sP1.snap,fields=fields)
+    gc2 = il.groupcat.loadSubhalos(sP2.simPath,sP2.snap,fields=fields)
     
     # match indices between runs, split into pri/sec
     ind1, ind2 = matchedUniqueGCIDs(gc1,gc2,matchPath,snapNum)
@@ -301,18 +274,22 @@ def globalCatComparison(basePath1,basePath2,matchPath,snapNum):
     #pdb.set_trace()
     
 def illustrisPrimeComp():
-    """ desc """
+    """ Driver for Illustris-1 vs. IllustrisPrime-1 comparison plots. """
+    from util import simParams
+
     # config
-    basePath1 = '/n/home07/dnelson/sims.illustris/Illustris-1/output/'
-    basePath2 = '/n/home07/dnelson/sims.illustris/IllustrisPrime-1/output/'
+    redshift = 0.5
+    sP1 = simParams(res=1820, run='illustris', redshift=redshift)
+    sP2 = simParams(res=1820, run='illustrisprime', redshift=redshift)
     matchPath = '/n/home07/dnelson/sims.illustris/IllustrisPrime-1/postprocessing/HaloMatching/'
-    snapNum = 85
     
+    print(sP1.snap)
+    print(sP2.snap)
+
     # multiPanelOverview: run single
-    #shID1 = 221674    
-    #multiPanelOverview(basePath1,basePath2,matchPath,snapNum,shID1)
+    shID1 = 228421
+    multiPanelOverview(sP1,sP2,matchPath,shID1)
     
     # globalCatComparison
-    print('hi')
     #globalCatComparison(basePath1,basePath2,matchPath,snapNum)
     
