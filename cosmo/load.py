@@ -230,6 +230,9 @@ def groupCatOffsetList(sP):
         which file a given group/subgroup number exists. """
     saveFilename = sP.derivPath + 'offsets/groupcat_' + str(sP.snap) + '.hdf5'
 
+    if not isdir(sP.derivPath+'offsets'):
+        mkdir(sP.derivPath+'offsets')
+
     r = {}
 
     if isfile(saveFilename):

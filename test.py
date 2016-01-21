@@ -4,6 +4,92 @@ import glob
 import pdb
 from os import path
 
+def checkWindPartType():
+    import cosmo
+    from util import simParams
+
+    fileBase = '/n/home07/dnelson/dev.prime/winds_save_on/output/'
+    snapMax = 5
+
+    # check particle counts in snapshots
+    for i in range(snapMax+1):
+        print(i)
+
+        sP1 = simParams(run='winds_save_on',res=128,snap=i)
+        sP2 = simParams(run='winds_save_off',res=128,snap=i)
+
+        h1 = cosmo.load.snapshotHeader(sP1)
+        h2 = cosmo.load.snapshotHeader(sP2)   
+
+        if h1['NumPart'][2]+h1['NumPart'][4] != h2['NumPart'][4]:
+            raise Exception("count mismatch")
+
+        # load group and subhalo LenTypes and compare
+        gc1 = cosmo.load.groupCat(sP1, fieldsHalos=['GroupLenType'], fieldsSubhalos=['SubhaloLenType'])
+        gc2 = cosmo.load.groupCat(sP2, fieldsHalos=['GroupLenType'], fieldsSubhalos=['SubhaloLenType'])
+
+        gc1_halos_len24 = gc1['halos'][:,2] + gc1['halos'][:,4]
+
+        if np.max( gc1_halos_len24 - gc2['halos'][:,4] ) > 0:
+            raise Exception("error")
+        else:
+            print(" Global counts ok.")
+
+        # global id match
+        ids1_wind_g = cosmo.load.snapshotSubset(sP1, 2, fields='ids')
+        ids2_pt4_g  = cosmo.load.snapshotSubset(sP2, 4, fields='ids')
+        sft2_pt4_g  = cosmo.load.snapshotSubset(sP2, 4, fields='sftime')
+
+        w = np.where(sft2_pt4_g <= 0.0)
+
+        if not np.array_equal(ids1_wind_g,ids2_pt4_g[w]):
+            raise Exception("fail")
+        else:
+            print(" Global ID match ok.")
+
+        continue
+
+        # halo by halo, load wind and star IDs and compare
+        gch1 = cosmo.load.groupCatHeader(sP1)
+        gch2 = cosmo.load.groupCatHeader(sP2)
+        print(' Total groups/subhalos: ' + str(gch1['Ngroups_Total']) + ' ' + str(gch1['Nsubgroups_Total']))
+
+        for j in [4]: #gch1['Ngroups_Total']):
+            if j % 100 == 0:
+                print j
+
+            ids1_wind = cosmo.load.snapshotSubset(sP1, 2, fields='ids', haloID=j)
+            #ids1_star = cosmo.load.snapshotSubset(sP1, 4, fields='ids', haloID=j)
+            ids2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='ids', haloID=j)
+            sft2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='sftime', haloID=j)
+
+            w = np.where(sft2_pt4 <= 0.0)
+            if not np.array_equal(ids1_wind,ids2_pt4[w]):
+                print(len(ids1_wind))
+                print(len(w[0]))
+                g1 = cosmo.load.groupCatSingle(sP1, haloID=j)
+                g2 = cosmo.load.groupCatSingle(sP2, haloID=j)
+                print(gc1['halos'][j,:])
+                print(gc2['halos'][j,:])
+                raise Exception("fail")
+
+        # TODO: check HaloWindMass or similar derivative quantity
+
+        #for j in gch1['Nsubgroups_Total']):
+        #    if j % 100 == 0:
+        #        print j
+
+        #    ids1_wind = cosmo.load.snapshotSubset(sP1, 2, fields='ids', subhaloID=j)
+        #    #ids1_star = cosmo.load.snapshotSubset(sP1, 4, fields='ids', subhaloID=j)
+        #    ids2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='ids', subhaloID=j)
+        #    sft2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='sftime', subhaloID=j)
+
+        #    w = np.where(sft2_pt4 <= 0.0)
+        #    if not np.array_equal(ids1_wind,ids2_pt4[w]):
+        #        raise Exception("fail")
+
+    #pdb.set_trace()
+
 def lhaloMissingSnaps1820FP():
     fileBase = '/n/ghernquist/Illustris/Runs/L75n1820FP/'
     nChunks = 4096
