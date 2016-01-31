@@ -70,6 +70,10 @@ class units(object):
         """ Compute derived and redshift dependent units and values. """
         self._sP = sP
 
+        # Mpc for lengths instead of the usual kpc?
+        if self._sP.mpcUnits:
+            self.UnitLength_in_cm = 3.085678e24 # 1000.0 kpc
+
         # derived units
         self.UnitTime_in_s       = self.UnitLength_in_cm / self.UnitVelocity_in_cm_per_s
         self.UnitDensity_in_cgs  = self.UnitMass_in_g / self.UnitLength_in_cm**3.0
@@ -170,6 +174,17 @@ class units(object):
         temp_k = temp.astype('float32') * self._sP.units.UnitTemp_in_cgs
 
         return self.logZeroSafe(temp_k)
+
+    def codeLengthToKpc(self, x):
+        """ Convert length/distance in code units to physical kpc. """
+        if self._sP.redshift is None:
+            raise Exception("Need redshift.")
+
+        x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
+        x_phys *= self._sP.units.scalefac # comoving -> physical
+        x_phys *= (3.085678e21/self._sP.units.UnitLength_in_cm) # account for non-kpc code lengths
+
+        return x_phys
 
     def codeDensToPhys(self, dens, cgs=False):
         """ Convert density comoving->physical and add little_h factors. """
@@ -346,17 +361,35 @@ class units(object):
     def redshiftToAgeFlat(self, z):
         """ Calculate age of the universe [Gyr] at the given redshift (assuming flat cosmology).
             Analytical formula from Peebles, p.317, eq 13.2. """
-        w = np.where(z >= 0.0)
+        redshifts = np.array(z)
+        w = np.where(redshifts >= 0.0)
 
-        age = np.zeros(len(z), dtype='float32') - 100.0 # negative indicates not set
-
-        arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+z[w])**(-3.0/2.0)
+        age = np.zeros(redshifts.size, dtype='float32') - 100.0 # negative indicates not se
+        
+        arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+redshifts[w])**(-3.0/2.0)
         age[w] = 2 * np.arcsinh(arcsinh_arg) / (self._sP.units.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
         age[w] *= 3.085678e+19 / 3.15567e+7 / 1e9 # Gyr
 
         if len(age) == 1:
             return age[0]
         return age
+
+    def ageFlatToRedshift(self, age):
+        """ Calculate redshift from age of the universe [Gyr] (assuming flat cosmology).
+            Inversion of analytical formula from redshiftToAgeFlat(). """
+        w = np.where(age >= 0.0)
+
+        z = np.zeros(len(age), dtype='float32')
+
+        sinh_arg = (self._sP.units.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
+        sinh_arg *= 3.15567e+7 * 1e9 * age[w] / 2.0 / 3.085678e+19
+
+        z = np.sinh(sinh_arg) / np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m )
+        z = z**(-2.0/3.0) - 1
+
+        if len(z) == 1:
+            return z[0]
+        return z
 
     def meanmolwt(self, Y, Z):
         """ Mean molecular weight, from Monaco+ (2007) eqn 14, for hot halo gas.

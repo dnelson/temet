@@ -22,6 +22,18 @@ def closest(array, value):
     ind = ( np.abs(array-value) ).argmin()
     return array[ind], ind
 
+def evenlySample(sequence, num, logSpace=False):
+    """ Return num samples from sequence roughly equally spaced. """
+    if sequence.size <= num:
+        return sequence
+
+    if logSpace:
+        inds = np.logspace(0.0, np.log10(float(sequence.size)-1), num)
+    else:
+        inds = np.linspace(0.0, float(sequence.size)-1, num)
+
+    return sequence[inds.astype('int32')]
+
 def reportMemory():
     """ Return current Python process memory usage in GB. """
     import os
@@ -31,6 +43,29 @@ def reportMemory():
     return process.memory_info().rss / 1024.0**3 # GB
 
 # --- general algorithms ---
+
+def running_median(X, Y, nBins=100, binSize=None):
+    """ Create a median line of a (x,y) point set using some number of bins. """
+    if binSize is not None:
+        nBins = round( (X.max()-X.min()) / binSize )
+
+    bins = np.linspace(X.min(),X.max(), nBins)
+    delta = bins[1]-bins[0]
+
+    running_median = []
+    running_std    = []
+    bin_centers    = []
+
+    for i, bin in enumerate(bins):
+        binMax = bin + delta
+        w = np.where((X >= bin) & (X < binMax))
+
+        if len(w[0]):
+            running_median.append( np.nanmedian(Y[w]) )
+            running_std.append( np.std(Y[w]) )
+            bin_centers.append( np.nanmedian(X[w]) )
+
+    return bin_centers, running_median, running_std
 
 def replicateVar(childCounts, subsetInds=None):
     """ Given a number of children for each parent, replicate the parent indices for each child.

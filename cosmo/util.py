@@ -9,7 +9,8 @@ import numpy as np
 import h5py
 import illustris_python as il
 import cosmo.load
-from os.path import isfile
+from os.path import isfile, isdir
+from os import mkdir
 from util.helper import getIDIndexMap, closest
 
 def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
@@ -30,6 +31,9 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
     # load if exists, otherwise create
     r = {}
     saveFilename = sP.derivPath + sP.savPrefix + '_' + sbStr1 + 'snapnum.redshift.hdf5'
+
+    if not isdir(sP.derivPath):
+        mkdir(sP.derivPath)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename, 'r') as f:
@@ -55,10 +59,14 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
             if not isfile(fileName):
                 fileName = sP.simPath + sbStr2 + 'snap-groupordered_' + ext + '.hdf5'
 
+            # allow for existence of groups only (e.g. dev.prime)
+            if not isfile(fileName):
+                fileName = sP.simPath + 'groups_' + ext + '/fof_subhalo_tab_' + ext + '.0.hdf5'
+
             # if file doesn't exist yet, skip (e.g. missing/deleted snapshots are ok)
             if not isfile(fileName):
                 continue
-
+                
             with h5py.File(fileName, 'r') as f:
                 r['redshifts'][i] = f['Header'].attrs['Redshift']
                 r['times'][i]     = f['Header'].attrs['Time']
@@ -90,6 +98,22 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
 
     return snaps
   
+def validSnapList(sP, maxNum=None):
+    """ Return a list of all snapshot numbers which exist. """
+    from util.helper import evenlySample
+
+    redshifts = snapNumToRedshift(sP, all=True)
+    w = np.where(redshifts >= 0.0)[0]
+
+    if len(w) == 0:
+        return None, 0
+
+    # cap at a maximum number of snaps? (evenly spaced)
+    if maxNum is not None:
+        w = evenlySample(w, maxNum)
+
+    return w, len(w)
+
 def snapNumToRedshift(sP, snap=None, time=False, all=False, subbox=None):
     """ Convert snapshot number to redshift or time (scale factor). """
     if not all:
@@ -104,12 +128,13 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False, subbox=None):
     r = {}
     saveFilename = sP.derivPath + sP.savPrefix + '_' + sbStr1 + 'snapnum.redshift.hdf5'
 
-    if isfile(saveFilename):
-        with h5py.File(saveFilename, 'r') as f:
-            for key in f.keys():
-                r[key] = f[key][()]
-    else:
-        raise Exception("Call redshiftToSnapNum() once first.")
+    if not isfile(saveFilename):
+        # redshiftToSnapNum() not yet run, do it now
+        _ = redshiftToSnapNum(2.0, sP=sP)
+
+    with h5py.File(saveFilename, 'r') as f:
+        for key in f.keys():
+            r[key] = f[key][()]
 
     # scale factor or redshift?
     val = r['redshifts']
@@ -245,9 +270,40 @@ def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.
     axTickVals = sP.units.redshiftToAgeFlat( np.array(zVals) )
 
     axTop.set_xlim(ax.get_xlim())
+    axTop.set_xscale(ax.get_xscale())
     axTop.set_xticks(axTickVals)
     axTop.set_xticklabels(zVals)
     axTop.set_xlabel("Redshift")
+
+def addUniverseAgeAxis(ax, sP, ageVals=[0.7,1.0,1.5,2.0,3.0,4.0,6.0,9.0]):
+    """ Add a age of the universe [Gyr] axis as a second x-axis on top (assuming bottom is redshift). """
+    axTop = ax.twiny()
+
+    ageVals.append( sP.units.redshiftToAgeFlat([0.0]).round(2) )
+    axTickVals = sP.units.ageFlatToRedshift( np.array(ageVals) )
+
+    axTop.set_xlim(ax.get_xlim())
+    axTop.set_xscale(ax.get_xscale())
+    axTop.set_xticks(axTickVals)
+    axTop.set_xticklabels(ageVals)
+    axTop.set_xlabel("Age of the Universe [Gyr]")
+
+def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
+    """ Add bottom vs. redshift (and top vs. universe age) axis for standard X vs. redshift plots. """
+    ax.set_xlim(xrange)
+    ax.set_xlabel('Redshift')
+
+    if xlog:
+        ax.set_xscale('symlog')
+        zVals = [0,0.5,1,1.5,2,3,4,5,6,7,8] # [10]
+    else:
+        ax.set_xscale('linear')
+        zVals = [0,1,2,3,4,5,6,7,8]
+
+    ax.set_xticks(zVals)
+    ax.set_xticklabels(zVals)
+
+    addUniverseAgeAxis(ax, sP)
 
 def plotRedshiftSpacings():
     """ Compare redshift spacing of snapshots of different runs. """
