@@ -8,11 +8,14 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
 
-def loadCpuTxt(filePath, saveFilename, maxSize=1e3, cols=3, keys=None):
-    """ Load and parse Arpeo cpu.txt """
+def loadCpuTxt(filePath, saveFilename, maxSize=1e3, keys=None):
+    """ Load and parse Arpeo cpu.txt, save into hdf5 format. """
     r = {}
+
+    cols = None
 
     # load save if it exists already
     if isfile(saveFilename):
@@ -49,6 +52,10 @@ def loadCpuTxt(filePath, saveFilename, maxSize=1e3, cols=3, keys=None):
             line = line.split()
 
             name = line[0]
+
+            # how many columns (how old is this file)?
+            if cols == None:
+                cols = len(line)-1
 
             # names with a space
             offset = 0
@@ -91,97 +98,57 @@ def loadCpuTxt(filePath, saveFilename, maxSize=1e3, cols=3, keys=None):
 
 def cpuTxtMake():
     """ Make hdf5 """
-    # test
-    #filePath = '/n/home07/dnelson/out.txt'
-    #saveFilename = '/n/home07/dnelson/out.hdf5'
-    #maxSize = 3
-    #cols = 4
-    
-    cols = 3
-
-    # Illustris-3
-    #filePath = '/n/home07/dnelson/sims.illustris/Illustris-3/output/txt-files/cpu.txt'
-    #saveFilename = '/n/home07/dnelson/sims.illustris/Illustris-3/data.files/cpu.hdf5'
-    #maxSize = 268961
-
-    # Illustris-2
-    #filePath = '/n/home07/dnelson/sims.illustris/Illustris-2/output/txt-files/cpu.txt'
-    #saveFilename = '/n/home07/dnelson/sims.illustris/Illustris-2/data.files/cpu.hdf5'
-    #maxSize = 876580
-
-    # Illustris-1
-    #filePath = '/n/home07/dnelson/sims.illustris/Illustris-1/data.files/cpu.txt'
-    #saveFilename = '/n/home07/dnelson/sims.illustris/Illustris-1/data.files/cpu.hdf5'
-    #maxSize = 912916
-
-    # IllustrisPrime-1
-    filePath = '/n/home07/dnelson/sims.illustris/IllustrisPrime-1/output/txt-files/cpu.txt'
-    saveFilename = '/n/home07/dnelson/sims.illustris/IllustrisPrime-1/data.files/cpu.hdf5'
-    maxSize = 3815602
-    cols = 4
-
-    # default_gfm_12.5_128
-    #filePath = '/n/hernquistfs3/ptorrey/Share/apillepich/Runs/default_gfm/12.5/128/cpu.txt'
-    #saveFilename = '/n/home07/dnelson/sims.illustris/12.5_128_default/data.files/cpu.hdf5'
-    #maxSize = 98442
-    #cols = 4
-
-    # stochastic_gfm_12.5_256
-    #filePath = '/n/home07/dnelson/sims.illustris/12.5_128_stochastic/cpu.txt'
-    #saveFilename = '/n/home07/dnelson/sims.illustris/12.5_128_stochastic/data.files/cpu.hdf5'
-    #maxSize = 4748
-    #cols = 4
-
     # NGB runs 
     #filePath = '/n/home07/dnelson/sims.illustris/ngb_01/cpu.txt'
     #saveFilename = '/n/home07/dnelson/sims.illustris/ngb_01/data.files/cpu.hdf5'
     #maxSize = 309339  # 00=308242  01=309339  02=266277  03=303447
-    #cols = 4
 
-    cpu = loadCpuTxt(filePath,saveFilename,maxSize,cols=cols)
+    # enrichment
+    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n128_discrete/output/cpu.txt'
+    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n128_discrete/data.files/cpu.hdf5'
+    maxSize = 182836
+
+    cpu = loadCpuTxt(filePath,saveFilename,maxSize)
 
 def cpuTxtPlot():
     """ Plot code time usage fractions from cpu.txt """
     # config
-    runs = ['IllustrisPrime-1', 'Illustris-1','Illustris-2','Illustris-3']#,
-            #'12.5_128_default','12.5_128_stochastic',
-            #'ngb_00_n32_pm4','ngb_01_n8_pm4','ngb_02_n1_pm1','ngb_03_n128_pm8']
+    #runPrefix = 'sims.illustris/'
+    #runs = ['IllustrisPrime-1', 'Illustris-1','Illustris-2','Illustris-3']
+    #cpus = [12000,8192,4096,128]
 
-    cpus = [12000,8192,4096,128]
+    runPrefix = 'dev.prime/enrichment/'
+    runs = ['L12.5n128_count','L12.5n128_discrete','L12.5n256_count','L12.5n256_discrete']
+    cpus = [128,128,256,256]
 
-    plotKeys = ['treegrav','voronoi','blackholes','hydro','gradients','enrich']
-    ind = 3 # 1=diff perc, 3=cum perc
-    ylimit = [0.0,20.0] # 40 for IllustrisPrime
-
-    #plotKeys = ['total']
-    #ind = 2 # 0=diff time, 2=cum time
-    #ylimit = [0.1,30.0]
+    plotKeys = ['total','treegrav','voronoi','blackholes','hydro','gradients','enrich']
 
     # one plot per value
+    pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(runs)) + '.pdf')
+
     for plotKey in plotKeys:
         fig = plt.figure(figsize=(14,7))
 
         ax = fig.add_subplot(111)
         ax.set_xlim([0.0,1.0])
-        #ax.set_ylim(ylimit)
 
         ax.set_title('')
         ax.set_xlabel('Scale Factor')
 
-        if ind in [0,2]:
+        if plotKey in ['total']:
+            ind = 2 # 0=diff time, 2=cum time
             ax.set_ylabel('CPU Time ' + plotKey + ' [Mh]')
-        if ind in [1,3]:
+            #ax.set_yscale('log')
+        else:
+            ind = 3 # 1=diff perc (missing in 3col format), 3=cum perc
             ax.set_ylabel('CPU Percentage [' + plotKey + ']')
-
-        #if ind in [0,2]:
-        #    ax.set_yscale('log')
 
         keys = ['time','hatb',plotKey]
 
         for i,run in enumerate(runs):
-            saveFilename = '/n/home07/dnelson/sims.illustris/' + run + '/data.files/cpu.hdf5'
+            saveFilename = '/n/home07/dnelson/' + runPrefix + run + '/data.files/cpu.hdf5'
 
-            cpu = loadCpuTxt('',saveFilename,1,keys=keys)
+            cpu = loadCpuTxt('',saveFilename,keys=keys)
 
             # include only full timesteps
             w = np.where( cpu['hatb'] >= cpu['hatb'].max()-4 )
@@ -208,5 +175,96 @@ def cpuTxtPlot():
 
         ax.legend(loc='upper left')
         fig.tight_layout()    
-        fig.savefig('cpu_' + plotKey + '_n' + str(len(runs))+'.pdf')
+        pdf.savefig()
         plt.close(fig)
+
+    pdf.close()
+
+def enrichChecks():
+    """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
+    import cosmo
+    from util import simParams
+
+    # config
+    sP1 = simParams(res=256, run='L12.5n128_count', redshift=0.0)
+    sP2 = simParams(res=256, run='L12.5n128_discrete', redshift=0.0)
+
+    #sP1 = simParams(res=256, run='L25n256_PR00', redshift=0.0)
+    #sP2 = simParams(res=256, run='L12.5n256_PR00', redshift=0.0)
+
+    nBins = 60 # 60 for 128, 100 for 256
+
+    pdf = PdfPages('enrichChecks_' + sP1.run + '_' + sP2.run + '.pdf')
+
+    # (1) - enrichment counter
+    if 1:
+        ec1 = cosmo.load.snapshotSubset(sP1,'stars','GFM_EnrichCount')
+        ec2 = cosmo.load.snapshotSubset(sP2,'stars','GFM_EnrichCount')
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+
+        ax.set_title('')
+        ax.set_xlabel('Number of Enrichments per Star')
+        ax.set_ylabel('N$_{\\rm stars}$')
+
+        hRange = [ 0, max(ec1.max(),ec2.max()) ]
+        plt.hist(ec1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
+        plt.hist(ec2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    # (2) final stellar masses
+    if 1:
+        mstar1 = cosmo.load.snapshotSubset(sP1,'stars','mass')
+        mstar2 = cosmo.load.snapshotSubset(sP2,'stars','mass')
+        mstar1 = sP1.units.codeMassToLogMsun(mstar1)
+        mstar2 = sP2.units.codeMassToLogMsun(mstar2)
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+
+        ax.set_title('')
+        ax.set_xlabel('Final Stellar Masses [ log M$_{\\rm sun}$ z=0 ]')
+        ax.set_ylabel('N$_{\\rm stars}$')
+
+        hRange = [ min(mstar1.min(),mstar2.min()), max(mstar1.max(),mstar2.max()) ]
+        plt.hist(mstar1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
+        plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    # (3) final gas metallicities
+    if 1:
+        zgas1 = cosmo.load.snapshotSubset(sP1,'gas','GFM_Metallicity')
+        zgas2 = cosmo.load.snapshotSubset(sP2,'gas','GFM_Metallicity')
+        zgas1 = np.log10(zgas1)
+        zgas2 = np.log10(zgas2)
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+        ax.set_yscale('log')
+
+        ax.set_title('')
+        ax.set_xlabel('Final Gas Metallicities [ log code z=0 ]')
+        ax.set_ylabel('N$_{\\rm cells}$')
+
+        hRange = [ min(zgas1.min(),zgas2.min()), max(zgas1.max(),zgas2.max()) ]
+        plt.hist(zgas1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
+        plt.hist(zgas2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()

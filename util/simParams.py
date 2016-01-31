@@ -23,23 +23,24 @@ class simParams:
 
     # snapshots
     snapRange     = None  # snapshot range of simulation
-    #groupCatRange = None  # snapshot range of fof/subfind catalogs (subset of above)
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
     snap          = None  # convenience for passing between functions
     run           = ''    # copied from input
+    variant       = ''    # copied from input
     redshift      = None  # copied from input
     
     # run parameters
-    res           = 0    # copied from input
-    boxSize       = 0.0  # boxsize of simulation, kpc
-    targetGasMass = 0.0  # refinement/derefinement target, equal to SPH gas mass in equivalent run
-    gravSoft      = 0.0  # gravitational softening length (ckpc)
-    omega_m       = None # omega matter, total
-    omega_L       = None # omega lambda
-    omega_k       = 0.0  # always
-    omega_b       = None # omega baryon
-    HubbleParam   = None # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
-    nTypes        = 6    # number of particle types
+    res           = 0     # copied from input
+    boxSize       = 0.0   # boxsize of simulation, kpc
+    targetGasMass = 0.0   # refinement/derefinement target, equal to SPH gas mass in equivalent run
+    gravSoft      = 0.0   # gravitational softening length (ckpc)
+    omega_m       = None  # omega matter, total
+    omega_L       = None  # omega lambda
+    omega_k       = 0.0   # always
+    omega_b       = None  # omega baryon
+    HubbleParam   = None  # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
+    mpcUnits      = False # code unit system lengths in Mpc instead of the usual kpc?
+    nTypes        = 6     # number of particle types
 
     # subboxes
     subboxCen     = None # subbox0 center
@@ -83,14 +84,15 @@ class simParams:
 
     # plotting/vis parameters
     colors = None # color sequence (one per res level)
+    marker = None # matplotlib marker (for placing single points for zoom sims)
+    data   = None # cache
     
     # phyiscal models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
-    numMetals = 0     # number of metals, set in post
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=IllustrisPrime Model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=IllustrisPrime Model)
+    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=IllustrisPrime Model, TODO)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=IllustrisPrime Model, TODO)
 
-    def __init__(self, res=None, run=None, redshift=None, snap=None, hInd=None):
+    def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None):
         """ Fill parameters based on inputs. """
         # general validation
         if not run:
@@ -101,9 +103,12 @@ class simParams:
             print("Warning: simParams: both redshift and snap specified.")
 
         self.run      = run
+        self.variant  = variant
         self.res      = res
         self.redshift = redshift
         self.snap     = snap
+        self.hInd     = hInd
+        self.data     = {}
 
         # ILLUSTRIS PRIME
         if run in ['illustrisprime']:
@@ -126,18 +131,21 @@ class simParams:
 
             self.arepoPath  = self.basePath + 'sims.illustris/IllustrisPrime-1/'
             self.savPrefix  = 'IP'
-            self.simName    = 'ILLUSTRISPRIME'
+            self.simName    = 'IllustrisPrime-1'
             self.saveTag    = 'ilP'
             self.plotPrefix = 'ilP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-        # DEV.PRIME
-        if run in ['winds_save_on','winds_save_off','enrich_count','enrich_discrete',
-                   'zoom_01_ill3','zoom_02_ill3','zoom_03_ill3','zoom_04_ill3']:
-            self.validResLevels = [3,128]
-            self.boxSize        = 25000.0
+        # DEV.PRIME (enrichment / windsPT2)
+        if run in ['winds_save_on','winds_save_off'] or '_count' in run or '_discrete' in run:
+            self.validResLevels = [3,128,256]
             self.snapRange      = [0,5] # z0=5
             self.groupOrdered   = True
+
+            if 'L25' in run:
+                self.boxSize = 25000.0
+            if 'L12.5' in run:
+                self.boxSize = 12500.0
 
             self.omega_m        = 0.2726
             self.omega_L        = 0.7274
@@ -151,11 +159,83 @@ class simParams:
             self.BHs            = 2
             self.targetGasMass  = 9.42966e-3
 
-            self.arepoPath  = self.basePath + 'dev.prime/' + run + '/'
+            dirStr = ''
+            if '_count' in run or '_discrete' in run:
+                dirStr = 'enrichment/'
+
+            self.arepoPath  = self.basePath + 'dev.prime/' + dirStr + run + '/'
             self.savPrefix  = 'DP'
-            self.simName    = 'DEVPRIME'
+            self.simName    = self.run
             self.saveTag    = 'idP'
             self.plotPrefix = 'idP'
+
+        # DEV.PRIME (model variations Jan/Feb 2016)
+        if '_PR' in run:
+            self.validResLevels = [256,512]
+
+            self.gravSoft = 0.0
+            self.targetGasMass = 0.0
+
+            if 'L25' in run:
+                self.boxSize = 25000.0
+            if 'L12.5' in run:
+                self.boxSize = 12500.0
+            if 'PR00' in run or 'PR02' in run:
+                self.snapRange = [0,5] # z0=5
+            if 'PRVS' in run:
+                self.snapRange = [0,15]
+
+            self.groupOrdered = True
+
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            self.trMCPerCell    = 0
+            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.winds          = 2
+            self.BHs            = 2
+
+            self.arepoPath  = self.basePath + 'dev.prime/primeReloaded/' + run + '/'
+            self.savPrefix  = 'DP'
+            self.simName    = run
+            self.saveTag    = 'idP'
+            self.plotPrefix = 'idP'
+
+        # iClusters
+        if run in ['iClusters']:
+            if self.variant not in ['TNG_00','TNG_11']:
+                raise Exception("Unknown or unspecified variant for iClusters run selection.")
+
+            self.mpcUnits = True
+
+            self.validResLevels = [1,2,3]
+            self.boxSize        = 3000.0 # 3 Gpc
+            self.snapRange      = [0,255] # z0=255
+            self.groupOrdered   = True
+
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            if res == 1: self.gravSoft = 1.0
+            if res == 2: self.gravSoft = 2.0
+            if res == 3: self.gravSoft = 4.0
+            self.zoomLevel = 9 - (self.res-1) # I1=9, I2=8, I3=7
+
+            if self.variant == 'TNG_11' and self.res == 3: self.marker = 'D'
+            if self.variant == 'TNG_11' and self.res == 2: self.marker = 's'
+            if self.variant == 'TNG_00' and self.res == 3: self.marker = 'o'
+            if self.variant == 'TNG_00' and self.res == 2: self.marker = '*'
+
+            dirStr = 'zoom_' + str(self.hInd).zfill(2) + '_ill' + str(self.res) + '_' + self.variant
+            self.arepoPath  = self.basePath + 'dev.prime/iClusters/' + dirStr + '/'
+            self.savPrefix  = 'IC'
+            self.saveTag    = 'iC'
+            self.plotPrefix = 'iC'
+            self.simName    = self.run + ' ' + self.variant + ' r' + str(self.res)
 
         # ILLUSTRIS
         if run in ['illustris','illustris_dm']:
@@ -191,10 +271,13 @@ class simParams:
 
                 self.arepoPath  = self.basePath + 'sims.illustris/'+str(res)+'_'+bs+'Mpc_FP/'
                 self.savPrefix  = 'I'
-                self.simName    = 'ILLUSTRIS'
                 self.saveTag    = 'il'
                 self.plotPrefix = 'il'
                 self.colors     = ['#e67a22', '#b35f1b', '#804413'] # brown, light to dark
+
+                if res == 455:  self.simName = 'Illustris-3'
+                if res == 910:  self.simName = 'Illustris-2'
+                if res == 1820: self.simName = 'Illustris-1'
 
             if run == 'illustris_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.illustris/'+str(res)+'_'+bs+'Mpc_DM/'
@@ -349,9 +432,6 @@ class simParams:
         self.simPath   = self.arepoPath + 'output/'
         self.derivPath = self.arepoPath + 'data.files/'
         self.plotPath  = self.basePath + 'plots/'
-
-        if self.metals:
-            self.numMetals = len(self.metals)
 
         # if redshift passed in, convert to snapshot number and save, and vice versa
         if self.redshift is not None:
@@ -602,3 +682,27 @@ class simParams:
             raise Exception('Unrecognized zoom hInd.')
         if self.zoomLevel == 0:
             raise Exception('Strange, zoomLevel not set.')
+
+    # attribute helpers
+    @property
+    def isZoom(self):
+        return self.zoomLevel != 0
+
+    @property
+    def numMetals(self):
+        if self.metals:
+            return len(self.metals)
+        return 0
+    
+    @property
+    def scalefac(self):
+        if self.redshift is None:
+            raise Exception("Need sP.redshift")
+        return 1.0/(1.0+self.redshift)
+    
+    @property
+    def boxSizeCubicMpc(self):
+        if self.redshift != 0.0:
+            print("Warning: Make sure you mean it (smaller physical boxsize at z>0).")
+        return (self.units.codeLengthToKpc(self.boxSize)/1000.0)**3
+    
