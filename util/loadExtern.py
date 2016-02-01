@@ -47,8 +47,9 @@ def behrooziSFRAvgs():
     """ Load from data files: Behroozi+ (2013) average SFR histories in halo mass bins. """
     from scipy.signal import savgol_filter
 
-    haloMassBins = [11.0,12.0,13.0,14.0,15.0]
-    basePath  = '/n/home07/dnelson/obs/behroozi/release-sfh_z0_z8_052913/sfr/'
+    haloMassBins = np.linspace(10.0,15.0,26) # 0.2 spacing #[11.0,12.0,3.0,14.0,15.0]
+    #basePath  = '/n/home07/dnelson/obs/behroozi/release-sfh_z0_z8_052913/sfr/' # from website
+    basePath  = '/n/home07/dnelson/obs/behroozi/analysis/' # private communication
     fileNames = ['sfr_corrected_'+str(haloMass)+'.dat' for haloMass in haloMassBins]
 
     # filenames have halo mass at z=0 in log msun (e.g. 11.0 is halos from 11.0 to 11.2)
@@ -311,39 +312,156 @@ def mcconnellMa2013():
 
     return r
 
-def baldrySizeMass():
+def baldry2012SizeMass():
     """ Load observational data points from Baldry+ (2012). """
     path = '/n/home07/dnelson/obs/baldry/size-mass.txt'
+
+    def logPcToKpc(x):
+        return 10.0**x / 1000.0
 
     # Columns: Ngal, stellar mass [log Msun], size 16th percentile, median size log [pc], 84th percentile
     #   first 11 rows: "Blue galaxies"
     #   next 9 rows: "Red galaxies"
     data = np.loadtxt(path)
-    n = 12
+    n = 11
 
     r = {}
     r['blue'] = { 'stellarMass' : data[:n,1], 
-                  'sizeKpc'     : 10.0**data[:n,3] / 1000.0,
-                  'errorUp'     : 10.0**data[:n,2] / 1000.0, 
-                  'errorDown'   : 10.0**data[:n,4] / 1000.0,
-                  'label'       : 'Baldry+ (2012) GAMA blue' }
+                  'sizeKpc'     : logPcToKpc(data[:n,3]),
+                  'sizeKpcUp'   : logPcToKpc(data[:n,2]), 
+                  'sizeKpcDown' : logPcToKpc(data[:n,4]),
+                  'label'       : 'Baldry+ (2012) GAMA R$_{\\rm e}$ blue' }
 
     r['red'] = { 'stellarMass' : data[n:,1], 
-                 'sizeKpc'     : 10.0**data[n:,3] / 1000.0,
-                 'errorUp'     : 10.0**data[n:,2] / 1000.0, 
-                 'errorDown'   : 10.0**data[n:,4] / 1000.0,
-                 'label'       : 'Baldry+ (2012) GAMA red' }
+                 'sizeKpc'     : logPcToKpc(data[n:,3]),
+                 'sizeKpcUp'   : logPcToKpc(data[n:,2]), 
+                 'sizeKpcDown' : logPcToKpc(data[n:,4]),
+                 'label'       : 'Baldry+ (2012) GAMA R$_{\\rm e}$ red' }
 
-    # convert errorUp, errorDown to linear deltas
-    #r['errorUp']   = 10.0**(r['sfrd']+r['errorUp']) - 10.0**r['sfrd']
-    #r['errorDown'] = 10.0**r['sfrd'] - 10.0**(r['sfrd']-r['errorDown'])
-    #r['sfrd']      = 10.0**r['sfrd']
+    for t in ['red','blue']:
+        r[t]['errorUp']   = r[t]['sizeKpcUp'] - r[t]['sizeKpc']
+        r[t]['errorDown'] = r[t]['sizeKpc'] - r[t]['sizeKpcDown']
+
+    return r
+
+def shen2003SizeMass():
+    """ Load observational data points from Shen+ (2013). Table 1 and Eqns 17-19 (Fig 11). """
+    def earlyTypeR(stellar_mass_msun, b=2.88e-6, a=0.56): # see Erratum for b coefficient
+        rKpc = b * (stellar_mass_msun)**a
+        return rKpc
+
+    def lateTypeR(stellar_mass_msun, alpha=0.14, beta=0.39, gamma=0.10, M0=3.98e10):
+        rKpc = gamma * (stellar_mass_msun)**alpha * (1 + stellar_mass_msun/M0)**(beta-alpha)
+        return rKpc
+
+    def stddevR(stellar_mass_msun, M0=3.98e10, sigma1=0.47, sigma2=0.34):
+        ln_sigmaR = sigma2 + (sigma1-sigma2) / (1 + (stellar_mass_msun/M0)**2)
+        return np.e**ln_sigmaR
+
+    r = {}
+    r['early'] = { 'stellarMass' : np.linspace(9.5, 12.0, 2),
+                   'label'       : 'Shen+ (2003) SDSS R$_{\\rm e}$ early (n>2.5)' }
+    r['late']  = { 'stellarMass' : np.linspace(8.0, 12.0, 2),
+                   'label'       : 'Shen+ (2003) SDSS R$_{\\rm e}$ late (n<2.5)' }
+
+    r['early']['sizeKpc'] = earlyTypeR(10.0**r['early']['stellarMass'])
+    r['late']['sizeKpc']  = lateTypeR(10.0**r['late']['stellarMass'])
+
+    for t in ['early','late']:
+        r[t]['sizeKpcUp']   = r[t]['sizeKpc'] + r[t]['sizeKpc']/stddevR(10.0**r[t]['stellarMass'])
+        r[t]['sizeKpcDown'] = r[t]['sizeKpc'] - r[t]['sizeKpc']/stddevR(10.0**r[t]['stellarMass'])
+
+    return r
+
+def baldry2008SMF():
+    """ Load observational data points from Baldry+ (2008). """
+    path = '/n/home07/dnelson/obs/baldry/gsmf-BGD08.txt'
+
+    # Columns: log stellar mass (bin center), Ngal, ndens (/Mpc^3/dex), Poisson error, min n, max n
+    data = np.loadtxt(path)
+
+    r = { 'stellarMass' : data[:,0],
+          'numDens'     : data[:,2],
+          'numDensDown' : data[:,4],
+          'numDensUp'   : data[:,5],        
+          'label'       : 'Baldry+ (2008) SDSS z~0' }
+
+    r['errorUp']   = r['numDensUp'] - r['numDens']
+    r['errorDown'] = r['numDens'] - r['numDensDown']
+
+    return r
+
+def baldry2012SMF():
+    """ Load observational data points from Baldry+ (2012). """
+    path = '/n/home07/dnelson/obs/baldry/gsmf-B12.txt'
+
+    # Columns: log mass, bin width, num dens, error, number in sample
+    # number density is per dex per 10^3 Mpc^3, assuming H0=70 km/s/Mpc
+    data = np.loadtxt(path)
+
+    r = { 'stellarMass' : data[:,0],
+          'numDens'     : data[:,2] * 1e-3,
+          'error'       : data[:,3] * 1e-3,
+          'label'       : 'Baldry+ (2012) GAMA z<0.05' }
+
+    return r
+
+def liWhite2009SMF(little_h=0.704):
+    """ Load observational data ponts from Li & White (2009). Triple-Schechter fit of Table 1. """
+    def fSchechter(M, phi_star, M_star, alpha):
+        return phi_star * (M/M_star)**alpha * np.exp(-M/M_star)
+
+    massRanges = [ np.log10( 10.0**np.array([8.00,9.33]) / little_h**2 ),
+                   np.log10( 10.0**np.array([9.33,10.67]) / little_h**2 ),
+                   np.log10( 10.0**np.array([10.67,12.00]) / little_h**2 )]
+    phiStar    = np.array([10.0**0.0146,10.0**0.0132,10.0**0.0044]) * little_h**3
+    alpha      = np.array([-1.13,-0.90,-1.99])
+    mStar      = np.array([10.0**9.61,10.0**10.37,10.0**10.71]) / little_h**2
+
+    phiStar_err = [0.0005,0.0007,0.0006]
+    alpha_err   = [0.09,0.04,0.18]
+    mStar_err   = [0.24,0.02,0.04]
+
+    r = { 'stellarMass' : np.linspace(8.31,12.3,200),
+          'numDens'     : np.zeros(200, dtype='float32'),
+          'label'       : 'Li & White (2009) SDSS DR7' }
+
+    for i, massRange in enumerate(massRanges):
+        w = np.where((r['stellarMass'] >= massRange[0]) & (r['stellarMass'] < massRange[1]))
+        r['numDens'][w] = fSchechter(10.0**r['stellarMass'][w],phiStar[i],mStar[i],alpha[i])
+
+    # single Schechter fit
+    phiStar   = 0.0083 * little_h**3 # +/- 0.0002, Mpc^(-3)
+    alpha     = -1.155 # +/- 0.008
+    log_mStar = 10.525 # +/- 0.005
+    mStar     = 10.0**log_mStar / little_h**2 # Msun
+    r['numDensSingle'] = fSchechter(10.0**r['stellarMass'],phiStar,mStar,alpha)
+    raise Exception('Not finished, needs to be checked.')
+
+    return r
+
+def bernardi2013SMF():
+    """ Load observational data points from Bernardi+ (2013). """
+    models = ['Ser','SerExp','Ser_Simard','cmodel']
+    paths = ['/n/home07/dnelson/obs/bernardi/MsF_' + m + '.dat' for m in models]
+
+    # Columns: stellar mass (log msun), num dens (all), err, num dens (Ell), err, num dens (S0), err, 
+    #          num dens (Sab), err, num dens (Scd), err
+    # number densities are in log10( Mpc^-3 dex^-1 )
+    r = {}
+
+    for i, path in enumerate(paths):
+        data = np.loadtxt(path)
+        r[models[i]] = { 'stellarMass' : data[:,0], 
+                         'numDens'     : 10.0**data[:,1],
+                         'errorUp'     : 10.0**(data[:,1]+data[:,2]) - 10.0**data[:,1],
+                         'errorDown'   : 10.0**data[:,1] - 10.0**(data[:,1]-data[:,2]),
+                         'label'       : 'Bernardi+ (2013) SDSS '+models[i] }
 
     return r
 
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
-    path = sP.simPath + 'sfr.txt'
     nPts = 2000
 
     # cached?
@@ -351,8 +469,13 @@ def sfrTxt(sP):
         return sP.data['sfrd']
 
     # Illustris txt-files directories and Illustris-1 curie/supermuc split
-    if sP.run == 'illustris':
+    path = sP.simPath + 'sfr.txt'
+    if not isfile(path):
         path = sP.simPath + 'txt-files/sfr.txt'
+    if not isfile(path):
+        path = sP.derivPath + 'sfr.txt'
+    if not isfile(path):
+        raise Exception('Cannot find sfr.txt file.')
 
     # columns: All.Time, total_sm, totsfrrate, rate_in_msunperyear, total_sum_mass_stars, cum_mass_stars
     data = np.loadtxt(path)

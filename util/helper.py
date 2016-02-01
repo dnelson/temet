@@ -45,7 +45,7 @@ def reportMemory():
 # --- general algorithms ---
 
 def running_median(X, Y, nBins=100, binSize=None):
-    """ Create a median line of a (x,y) point set using some number of bins. """
+    """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     if binSize is not None:
         nBins = round( (X.max()-X.min()) / binSize )
 
@@ -66,6 +66,30 @@ def running_median(X, Y, nBins=100, binSize=None):
             bin_centers.append( np.nanmedian(X[w]) )
 
     return bin_centers, running_median, running_std
+
+def running_histogram(X, nBins=100, binSize=None, normFac=None):
+    """ Create a adaptive histogram of a (x) point set using some number of bins. """
+    if binSize is not None:
+        nBins = round( (X.max()-X.min()) / binSize )
+
+    bins = np.linspace(X.min(),X.max(), nBins)
+    delta = bins[1]-bins[0]
+
+    running_h   = []
+    bin_centers = []
+
+    for i, bin in enumerate(bins):
+        binMax = bin + delta
+        w = np.where((X >= bin) & (X < binMax))
+
+        if len(w[0]):
+            running_h.append( len(w[0]) )
+            bin_centers.append( np.nanmedian(X[w]) )
+
+    if normFac is not None:
+        running_h /= normFac
+
+    return bin_centers, running_h
 
 def replicateVar(childCounts, subsetInds=None):
     """ Given a number of children for each parent, replicate the parent indices for each child.
