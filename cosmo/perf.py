@@ -104,9 +104,9 @@ def cpuTxtMake():
     #maxSize = 309339  # 00=308242  01=309339  02=266277  03=303447
 
     # enrichment
-    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n128_discrete/output/cpu.txt'
-    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n128_discrete/data.files/cpu.hdf5'
-    maxSize = 182836
+    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete/output/cpu.txt'
+    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete/data.files/cpu.hdf5'
+    maxSize = 452338
 
     cpu = loadCpuTxt(filePath,saveFilename,maxSize)
 
@@ -186,8 +186,8 @@ def enrichChecks():
     from util import simParams
 
     # config
-    sP1 = simParams(res=256, run='L12.5n128_count', redshift=0.0)
-    sP2 = simParams(res=256, run='L12.5n128_discrete', redshift=0.0)
+    sP1 = simParams(res=256, run='L12.5n256_count', redshift=0.0)
+    sP2 = simParams(res=256, run='L12.5n256_discrete', redshift=0.0)
 
     #sP1 = simParams(res=256, run='L25n256_PR00', redshift=0.0)
     #sP2 = simParams(res=256, run='L12.5n256_PR00', redshift=0.0)
