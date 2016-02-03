@@ -30,14 +30,14 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
     ext = str(snapNum).zfill(3)
 
     # file naming possibilities
-    fileNames = [ # rewritten new group catalogs with offsets
-                  basePath + 'groups_' + ext + '/groups_' + ext + '.' + str(chunkNum) + '.hdf5',
-                  # both fof+subfind in single (non-split) file in root directory
+    fileNames = [ # both fof+subfind in single (non-split) file in root directory
                   basePath + '/fof_subhalo_tab_' + ext + '.hdf5',
                   # standard: both fof+subfind in >1 files per snapshot, in subdirectory
                   basePath + 'groups_' + ext + '/fof_subhalo_tab_' + ext + '.' + str(chunkNum) + '.hdf5',
                   # fof only, in >1 files per snapshot, in subdirectory
-                  basePath + 'groups_' + ext + '/fof_tab_' + ext + '.' + str(chunkNum) + '.hdf5'
+                  basePath + 'groups_' + ext + '/fof_tab_' + ext + '.' + str(chunkNum) + '.hdf5',
+                  # rewritten new group catalogs with offsets
+                  basePath + 'groups_' + ext + '/groups_' + ext + '.' + str(chunkNum) + '.hdf5'
                 ]
 
     for fileName in fileNames:
@@ -273,6 +273,7 @@ def groupCatOffsetListIntoSnap(sP):
             r['snapOffsetsSubhalo'] = f['snapOffsetsSubhalo'][()]
     else:
         nChunks = snapNumChunks(sP.simPath, sP.snap)
+        print(' Calculating new groupCatOffsetsListIntoSnap... ['+str(nChunks)+' chunks]')
 
         with h5py.File( gcPath(sP.simPath,sP.snap), 'r' ) as f:
             totGroups    = f['Header'].attrs['Ngroups_Total']
