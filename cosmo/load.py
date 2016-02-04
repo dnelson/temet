@@ -273,7 +273,7 @@ def groupCatOffsetListIntoSnap(sP):
             r['snapOffsetsSubhalo'] = f['snapOffsetsSubhalo'][()]
     else:
         nChunks = snapNumChunks(sP.simPath, sP.snap)
-        print(' Calculating new groupCatOffsetsListIntoSnap... ['+str(nChunks)+' chunks]')
+        print('Calculating new groupCatOffsetsListIntoSnap... ['+str(nChunks)+' chunks]')
 
         with h5py.File( gcPath(sP.simPath,sP.snap), 'r' ) as f:
             totGroups    = f['Header'].attrs['Ngroups_Total']
@@ -331,7 +331,7 @@ def groupCatOffsetListIntoSnap(sP):
 
     return r    
 
-def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None):
+def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, mdi=None):
     """ For a given snapshot load only one field for one particle type
           partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
           fields   = e.g. ['ParticleIDs','Coordinates',...]
@@ -404,7 +404,7 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
                  [['mass'], 'Masses'],
                  [['nh'], 'NeutralHydrogenAbundance'],
                  [['numtr'], 'NumTracers'],
-                 [['ids'], 'ParticleIDs'],
+                 [['id','ids'], 'ParticleIDs'],
                  [['pres'], 'Pressure'],
                  [['hsml'], 'SmoothingLength'],
                  [['sfr'], 'StarFormationRate'],
@@ -420,14 +420,32 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
 
     for i,field in enumerate(fields):
         for altLabels,toLabel in altNames:            
-            if field in altLabels: # alternate field name map
+            if field.lower() in altLabels: # alternate field name map
                 fields[i] = toLabel            
             if field == toLabel.lower(): # lowercase versions accepted
                 fields[i] = toLabel            
             if 'bh_'+field.lower() == toLabel.lower(): # BH_* accepted without prefix
                 fields[i] = toLabel
 
+    # inds and indRange based subset
+    if inds is not None:
+        # load the range which bounds the minimum and maximum indices, then return subset
+        indRange = [inds.min(), inds.max()]
+
+        val = snapshotSubset(sP, partType, fields, indRange=indRange)
+        return val[ inds-inds.min() ]
+
+    if indRange is not None:
+        # load a contiguous chunk by making a subset specification in analogy to the group ordered loads
+        subset = { 'offsetType'  : np.zeros(sP.nTypes, dtype='int64'),
+                   'lenType'     : np.zeros(sP.nTypes, dtype='int64'),
+                   'snapOffsets' : snapOffsetList(sP) }
+
+        subset['offsetType'][ptNum(partType)] = indRange[0]
+        subset['lenType'][ptNum(partType)]    = indRange[1]-indRange[0]+1
+
     # multi-dimensional field slicing during load
+    mdi = [None] * len(fields) # multi-dimensional index to restrict load to
     trMCFields = sP.trMCFields if sP.trMCFields else np.repeat(-1,12)
 
     multiDimSliceMaps = [ \
@@ -463,24 +481,14 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
     for i,field in enumerate(fields):
         for multiDimMap in multiDimSliceMaps:
             if field in multiDimMap['names']:
-                raise Exception("Not implemented.") #TODO
+                #print('Multi-dimensional slice load: ' + field + ' -> ' + \
+                #      multiDimMap['field'] + ' [mdi=' + str(multiDimMap['fN']) + ']')
 
-    # inds and indRange based subset
-    if inds is not None:
-        # load the range which bounds the minimum and maximum indices, then return subset
-        indRange = [inds.min(), inds.max()]
+                fields[i] = multiDimMap['field']
+                mdi[i] = multiDimMap['fN']
 
-        val = snapshotSubset(sP, partType, fields, indRange=indRange)
-        return val[ inds-inds.min() ]
-
-    if indRange is not None:
-        # load a contiguous chunk by making a subset specification in analogy to the group ordered loads
-        subset = { 'offsetType'  : np.zeros(sP.nTypes, dtype='int64'),
-                   'lenType'     : np.zeros(sP.nTypes, dtype='int64'),
-                   'snapOffsets' : snapOffsetList(sP) }
-
-        subset['offsetType'][ptNum(partType)] = indRange[0]
-        subset['lenType'][ptNum(partType)]    = indRange[1]-indRange[0]+1
+    if sum(m is not None for m in mdi) > 1:
+        raise Exception('Not supported for multiple MDI at once.')
 
     # halo or subhalo based subset
     if haloID is not None or subhaloID is not None:
@@ -501,4 +509,4 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
             subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][groupOffset,:]
 
     # load
-    return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset)
+    return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi)
