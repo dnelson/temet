@@ -553,6 +553,86 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False):
     pdf.savefig()
     plt.close(fig)
 
+def massMetallicityStars(sPs, pdf):
+    """ Stellar mass-metallicity relation at z=0. """
+    from cosmo.load import groupCat
+
+    binSize     = 0.2
+    metalFields = ['SubhaloStarMetallicityHalfRad','SubhaloStarMetallicity','SubhaloStarMetallicityMaxRad']
+    linestyles  = ['-',':','--']
+
+    # plot setup
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([7.0, 12.0])
+    ax.set_ylim([-2.0,1.0])
+    ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
+    ax.set_ylabel('Z$_{\\rm stars}$ [ log Z$_{\\rm sun}$ ] [ centrals and satellites ]')
+
+    # observational points
+    g = gallazzi2005()
+    w = woo2008(sPs[0])
+    k = kirby2013()
+
+    l1, = ax.plot(g['stellarMass'], g['Zstars'], '-', color='#333333')
+    ax.fill_between(g['stellarMass'], g['ZstarsDown'], g['ZstarsUp'], 
+                    color='#333333', interpolate=True, alpha=0.3)
+
+    l2,_,_ = ax.errorbar(w['stellarMass'], w['Zstars'], yerr=w['ZstarsErr'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
+
+    l3,_,_ = ax.errorbar(k['stellarMass'], k['Zstars'], 
+                         xerr=[k['stellarMassErr'],k['stellarMassErr']], yerr=[k['ZstarsErr'],k['ZstarsErr']],
+                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='o')
+
+    legend1 = ax.legend([l1,l2,l3], [g['label'],w['label'],k['label']], loc='upper left')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('MMStars: '+sP.simName)
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+            fieldsSubhalos=['SubhaloMassInRadType']+metalFields)
+
+        # include: centrals + satellites (no noticeable difference vs. centrals only)
+        w = np.arange(gc['subhalos']['count'])
+        #w = np.where(gc['subhalos']['SubhaloMassInRadType'][:,partTypeNum('stars')] > 0.0)[0]
+
+        # stellar mass definition
+        xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
+        xx = sP.units.codeMassToLogMsun( xx_code )
+
+        # metallicity measured within what radius?
+        c = ax._get_lines.prop_cycler.next()['color']
+                
+        for i, metalField in enumerate(metalFields):
+            yy = np.log10( gc['subhalos'][metalField][w] / sP.units.Z_solar )
+
+            xm, ym, sm = running_median(xx,yy,binSize=binSize)
+            ym2 = savgol_filter(ym,5,3)
+
+            label = sP.simName if i==0 else ''
+            ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
+
+    # second legeng
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
+              plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1]),
+              plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+    lExtra = ['Z$_{\\rm stars}$ (r < 1r$_{1/2})$', 
+              'Z$_{\\rm stars}$ (r < 2r$_{1/2})$',
+              'Z$_{\\rm stars}$ (r < r$_{\\rm max})$']
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
     from matplotlib.backends.backend_pdf import PdfPages
@@ -561,17 +641,17 @@ def plots():
 
     # config
     sPs = []
-
-    # zooms
-    zoomNums = [1,2,3,4]
     redshift = 0.0
 
-    for hInd in zoomNums:
-        sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=hInd, redshift=redshift) )
+    # zooms
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=1, redshift=redshift) )
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=2, redshift=redshift) )
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=3, redshift=redshift) )
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=4, redshift=redshift) )
     sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1, redshift=redshift) )
 
     # fullboxes
-    sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
+    #sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L25n512_PRVS', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L12.5n256_PR02_04', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L12.5n256_PRVS_B', redshift=redshift) )
@@ -584,8 +664,9 @@ def plots():
     #sPs.append( simParams(res=512, run='L12.5n256_PR07_02', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L12.5n256_PR07_03', redshift=redshift) )
 
-    sPs.append( simParams(res=128, run='L12.5n256_count', redshift=redshift) )
-    sPs.append( simParams(res=128, run='L12.5n256_discrete', redshift=redshift) )
+    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0', redshift=redshift) )
+    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001', redshift=redshift) )
+    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.00001', redshift=redshift) )
 
     #sPs.append( simParams(res=1820, run='illustrisprime', redshift=0.5) )
     #sPs.append( simParams(res=910, run='illustris', redshift=redshift) )
@@ -606,5 +687,25 @@ def plots():
     galaxySizes(sPs, pdf, vsHaloMass=True)
     stellarMassFunction(sPs, pdf, highMassEnd=False)
     stellarMassFunction(sPs, pdf, highMassEnd=True)
+    massMetallicityStars(sPs, pdf)
+
+    # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
+    # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
+    # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
+    # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
+    # todo: mass-metallicity gas (Torrey fig 10) (Schaye Fig 13)
+    # todo: color PDFs (no dust, Vog 14b Fig 13)
+    # todo: SFR main sequence (Schaye Fig 11)
+    # todo: active/passive fraction vs Mstar (Schaye Fig 11)
+
+    # with additional modeling:
+    # todo: fgas<r500 (Genel Fig ?) (Schaye Fig 15)
+    # todo: M_HI vs Mstar (Vog 14a Fig 3)
+    # todo: R_HI vs Mstar
+    # todo: f(N_HI) CDDF and Z_DLA PDF (Vog 14a Fig 4)
+    # todo: metal CDDF (e.g. Schaye Fig 17)
+    # todo: Omega_X(z) (e.g. Bird? Fig ?)
+    # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)
+    # todo: X-ray (e.g. Schaye Fig 16)
 
     pdf.close()

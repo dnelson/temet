@@ -1,13 +1,31 @@
+"""
+test.py
+  Temporary stuff.
+"""
+from __future__ import (absolute_import,division,print_function,unicode_literals)
+from builtins import *
+
 import numpy as np
 import h5py
 import glob
 import pdb
 from os import path
+import matplotlib.pyplot as plt
+
+import cosmo
+from util import simParams
+
+def shockMaxMachNum():
+    """ histogram of shock maxmimum mach numbers from test run. """
+    sP = simParams(res=128, run='shocks', redshift=2.0)
+
+    x = cosmo.load.snapshotSubset(sP, 'tracer', 'shockmaxmach')
+
+    print(x.mean())
+    print(x.min())
+    print(x.max())
 
 def checkWindPartType():
-    import cosmo
-    from util import simParams
-
     fileBase = '/n/home07/dnelson/dev.prime/winds_save_on/output/'
     snapMax = 5
 
@@ -56,7 +74,7 @@ def checkWindPartType():
 
         for j in [4]: #gch1['Ngroups_Total']):
             if j % 100 == 0:
-                print j
+                print(j)
 
             ids1_wind = cosmo.load.snapshotSubset(sP1, 2, fields='ids', haloID=j)
             #ids1_star = cosmo.load.snapshotSubset(sP1, 4, fields='ids', haloID=j)
@@ -125,14 +143,13 @@ def lhaloMissingSnaps1820FP():
             
         f.close()
     
-    print 'snapSeen: ',snapSeen
+    print('snapSeen: ',snapSeen)
     w = np.where( snapSeen == 0 )
-    print 'CHECK: SHOULD BE ZERO: ',len(w[0])
-    print 'MISSING SNAPS: ',w
+    print('CHECK: SHOULD BE ZERO: ',len(w[0]))
+    print('MISSING SNAPS: ',w)
 
 def compGalpropSubhaloStellarMetallicity():
     import matplotlib as mpl
-    import matplotlib.pyplot as plt
     import illustris_python.groupcat as gc
     
     simName = 'L75n1820FP'
@@ -154,19 +171,19 @@ def compGalpropSubhaloStellarMetallicity():
     x = np.array( stellar_metallicity_inrad, dtype='float32' )
     y = subhalos['SubhaloStarMetallicity']
     
-    print len(x),len(y)
+    print(len(x),len(y))
     wx = np.where( x < 0.0 )
     wy = np.where( y < 0.0 )
-    print 'num negative: ',len(wx[0]),len(wy[0])
+    print('num negative: ',len(wx[0]),len(wy[0]))
     wx = np.where( x == 0.0 )
     wy = np.where( y == 0.0 )
-    print 'num zero: ',len(wx[0]),len(wy[0])
+    print('num zero: ',len(wx[0]),len(wy[0]))
     
     #x[wx] = 1e-20
     #y[wy] = 1e-20
     
-    print np.min(x),np.max(x)
-    print np.min(y),np.max(y)
+    print(np.min(x),np.max(x))
+    print(np.min(y),np.max(y))
     #pdb.set_trace()
     
     plt.plot(x,y,'.', alpha=0.1, markeredgecolor='none')
@@ -193,44 +210,44 @@ def checkMusic():
     hKeys    = ['NumPart_ThisFile','NumPart_Total','NumPart_Total_HighWord']
     
     # load parent
-    print 'Parent:\n'
+    print('Parent:\n')
     
     with h5py.File(basePath + fileBase + '_temp.hdf5','r') as f:
 
         # header
         for hKey in hKeys:
-            print ' ', hKey, f['Header'].attrs[hKey], f['Header'].attrs[hKey].dtype        
+            print(' ', hKey, f['Header'].attrs[hKey], f['Header'].attrs[hKey].dtype)
         
         nPart = il.snapshot.getNumPart(f['Header'].attrs)
-        print '  nPart: ', nPart
+        print('  nPart: ', nPart)
         
         # datasets
         for key in f[gName].keys():
-            print ' ', key, f[gName][key].shape, f[gName][key].dtype
+            print(' ', key, f[gName][key].shape, f[gName][key].dtype)
     
     # load split
-    print '\n---'
+    print('\n---')
     nPartSum = np.zeros(6,dtype='int64')
     
     files = sorted(glob.glob(basePath + fileBase + '.*.hdf5'))
     for file in files:
-        print '\n' + file
+        print('\n' + file)
         
         with h5py.File(file) as f:
         
             # header
             for hKey in hKeys:
-                print ' ', hKey, f['Header'].attrs[hKey], f['Header'].attrs[hKey].dtype
+                print(' ', hKey, f['Header'].attrs[hKey], f['Header'].attrs[hKey].dtype)
                 
             nPart = il.snapshot.getNumPart(f['Header'].attrs)
-            print '  nPart: ', nPart
+            print('  nPart: ', nPart)
             nPartSum += f['Header'].attrs['NumPart_ThisFile']
             
             # datasets
             for key in f[gName].keys():
-                print ' ', key, f[gName][key].shape, f[gName][key].dtype
+                print(' ', key, f[gName][key].shape, f[gName][key].dtype)
     
-    print '\n nPartSum: ',nPartSum,'\n'
+    print('\n nPartSum: ',nPartSum,'\n')
     
     # compare data
     parent   = {}
@@ -238,28 +255,27 @@ def checkMusic():
     dsets = ['ParticleIDs','Coordinates','Velocities']
     
     for key in dsets:
-        print key
+        print(key)
         
         with h5py.File(basePath + fileBase + '_temp.hdf5','r') as f:
-            print 'parent load: ', f[gName][key].shape, f[gName][key].dtype
+            print('parent load: ', f[gName][key].shape, f[gName][key].dtype)
             parent[key] = f[gName][key][:]
             
         for file in files:
-            print '',file
+            print(file)
             with h5py.File(file) as f:
                 if key not in children:
                     children[key] = f[gName][key][:]
                 else:
                     children[key] = np.concatenate( (children[key],f[gName][key][:]), axis=0 )
             
-        print key, parent[key].shape, children[key].shape, parent[key].dtype, children[key].dtype
-        print '', np.allclose(parent[key], children[key]), np.array_equal(parent[key],children[key])
+        print(key, parent[key].shape, children[key].shape, parent[key].dtype, children[key].dtype)
+        print('', np.allclose(parent[key], children[key]), np.array_equal(parent[key],children[key]))
         
         parent = {}
         children = {}
         
 def plotUsersData():
-    import numpy as np
     from datetime import datetime
     
     # config

@@ -33,11 +33,12 @@ class units(object):
     mass_proton       = 1.672622e-24    # cgs
     gamma             = 1.666666667     # 5/3
     hydrogen_massfrac = 0.76            # XH (solar)
-    helium_massfrac   = 0.25            # Y (solar)
+    helium_massfrac   = 0.24            # Y (solar)
     mu                = 0.6             # for ionized primordial (e.g. hot halo gas)
     HubbleParam       = 0.7             # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
     Gravity           = 6.673e-8        # G in cgs, cm**3/g/s**2
     H0_kmsMpc         = 70.0            # km/s/Mpc
+    Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
 
     # derived constants (code units)
     H0          = None    # km/s/kpc (hubble constant at z=0)
