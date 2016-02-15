@@ -380,7 +380,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, toRedshift, trFields, parFields):
     # snapshot config
     startSnap = sP.snap
     finalSnap = cosmo.util.redshiftToSnapNum(toRedshift,sP)
-    snapStep  = 1 if finalSnap > startSnap else -1
+    snapStep  = 2 if finalSnap > startSnap else -2
+    print('SNAP STEPPING 2')
 
     snaps     = np.arange(startSnap,finalSnap+snapStep,snapStep)
     redshifts = cosmo.util.snapNumToRedshift(sP, snaps)
@@ -474,7 +475,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, toRedshift, trFields, parFields):
                     continue # no parents of this type
 
                 # does this property exist for parents of this type? flag NaN (hardcoded for now)
-                if field == 'temp' and ptName != 'gas':
+                if field in ['temp','sfr'] and ptName != 'gas':
                     r[field][m,wType] = np.nan
                     continue
 
@@ -491,12 +492,12 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
     """ For a set of subhaloIDs, determine all their child tracers at sP.redshift then record their 
         properties back in time. """
     # load global ParentID for all tracers at the starting snapshot, and pre-sort
-    ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
-    ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
-    ParentID = ParentID[ParentIDSortInds]
+    #ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+    #ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
+    #ParentID = ParentID[ParentIDSortInds]
     # or: if we have already cached all the initial subhaloTracerChildren(), can skip
-    #ParentID = None
-    #ParentIDSortInds = None
+    ParentID = None
+    ParentIDSortInds = None
 
     # for each subhalo, get a list of all child tracer IDs of parPartTypes
     trIDsBySubhalo = {}
@@ -558,7 +559,7 @@ def guinevereData():
     parPartTypes = ['gas','stars']
     toRedshift   = 0.5
     trFields     = ['tracer_windcounter'] 
-    parFields    = ['pos','vel','temp']
+    parFields    = ['pos','vel','temp','sfr']
     outPath      = sP.derivPath
 
     # subhalo list
@@ -574,12 +575,14 @@ def testPosPlot():
     # config
     axis1 = 1
     axis2 = 2
-    boxSize = 500.0 # ckpc/h
+    boxSize = 2000.0 # ckpc/h
     sP = simParams(res=455, run='illustris', redshift=0.0)
 
     # load
     with h5py.File(sP.derivPath + 'subhalo_3.hdf5') as f:
-        pos = f['pos'][:]
+        pos = f['pos'][()]
+        temp = f['temp'][()]
+        redshift = f['Redshift'][()]
 
     # plot
     fig = plt.figure(figsize=(10,10))
@@ -597,4 +600,22 @@ def testPosPlot():
 
     fig.tight_layout()
     plt.savefig('test.pdf')
+    plt.close(fig)
+
+    # plot 2
+    fig = plt.figure(figsize=(16,8))
+    ax = fig.add_subplot(111)
+    ax.set_xlim([0.0,0.5])
+    ax.set_ylim([3.5,7.0])
+
+    ax.set_title('Evolution of tracer temperatures with time check')
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Temp [log K]')
+
+    for i in np.arange(temp.shape[1]):
+        ww = np.isfinite(temp[:,i])
+        ax.plot(redshift[ww], temp[ww,i], '-', color='#333333', alpha=0.2, lw=1.0)
+
+    fig.tight_layout()
+    plt.savefig('test2.pdf')
     plt.close(fig)

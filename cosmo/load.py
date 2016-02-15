@@ -446,7 +446,7 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
 
     # multi-dimensional field slicing during load
     mdi = [None] * len(fields) # multi-dimensional index to restrict load to
-    trMCFields = sP.trMCFields if sP.trMCFields else np.repeat(-1,12)
+    trMCFields = sP.trMCFields if sP.trMCFields else np.repeat(-1,14)
 
     multiDimSliceMaps = [ \
       { 'names':['x','pos_x','posx'],                   'field':'Coordinates',     'fN':0 },
@@ -467,7 +467,8 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
       { 'names':['tracer_windcounter','windcounter'],   'field':'FluidQuantities', 'fN':trMCFields[9] },
       { 'names':['tracer_exchcounter','exchcounter'],   'field':'FluidQuantities', 'fN':trMCFields[10] },
       { 'names':['tracer_exchdist','exchdist'],         'field':'FluidQuantities', 'fN':trMCFields[11] },
-      { 'names':['tracer_exchdisterr','exchdisterr'],   'field':'FluidQuantities', 'fN':trMCFields[11] },
+      { 'names':['tracer_exchdisterr','exchdisterr'],   'field':'FluidQuantities', 'fN':trMCFields[12] },
+      { 'names':['tracer_shockmaxmach','shockmaxmach'], 'field':'FluidQuantities', 'fN':trMCFields[13] },
       { 'names':['phot_U','U'],                         'field':'GFM_StellarPhotometrics', 'fN':0 },
       { 'names':['phot_B','B'],                         'field':'GFM_StellarPhotometrics', 'fN':1 },
       { 'names':['phot_V','V'],                         'field':'GFM_StellarPhotometrics', 'fN':2 },

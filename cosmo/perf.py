@@ -104,9 +104,9 @@ def cpuTxtMake():
     #maxSize = 309339  # 00=308242  01=309339  02=266277  03=303447
 
     # enrichment
-    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete/output/cpu.txt'
-    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete/data.files/cpu.hdf5'
-    maxSize = 452338
+    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.00001/output/cpu.txt'
+    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.00001/data.files/cpu.hdf5'
+    maxSize = 443512
 
     cpu = loadCpuTxt(filePath,saveFilename,maxSize)
 
@@ -118,8 +118,8 @@ def cpuTxtPlot():
     #cpus = [12000,8192,4096,128]
 
     runPrefix = 'dev.prime/enrichment/'
-    runs = ['L12.5n128_count','L12.5n128_discrete','L12.5n256_count','L12.5n256_discrete']
-    cpus = [128,128,256,256]
+    runs = ['L12.5n256_discrete_dm'+dm for dm in ['0.0','0.0001','0.00001']]
+    cpus = [256,256,256]
 
     plotKeys = ['total','treegrav','voronoi','blackholes','hydro','gradients','enrich']
 
@@ -186,8 +186,8 @@ def enrichChecks():
     from util import simParams
 
     # config
-    sP1 = simParams(res=256, run='L12.5n256_count', redshift=0.0)
-    sP2 = simParams(res=256, run='L12.5n256_discrete', redshift=0.0)
+    sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
+    sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.00001', redshift=0.0)
 
     #sP1 = simParams(res=256, run='L25n256_PR00', redshift=0.0)
     #sP2 = simParams(res=256, run='L12.5n256_PR00', redshift=0.0)

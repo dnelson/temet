@@ -460,6 +460,58 @@ def bernardi2013SMF():
 
     return r
 
+def gallazzi2005():
+    """ Load observational data points (M-Z and ages) from Gallazzi+ (2005). """
+    path = '/n/home07/dnelson/obs/gallazzi/table2.txt'
+
+    # columns: log(Mstar/Msun), log(Z/Zun) [P50, P16, P84], log(tr/yr) [P50, P16, P84]
+    data = np.loadtxt(path)
+
+    r = { 'stellarMass'  : data[:,0], 
+          'Zstars'       : data[:,1],
+          'ZstarsDown'   : data[:,2],
+          'ZstarsUp'     : data[:,3],
+          'ageStars'     : data[:,4],
+          'ageStarsDown' : data[:,5],
+          'ageStarsUp'   : data[:,6],
+          'label'        : 'Gallazzi+ (2005) SDSS z<0.2' }
+
+    return r
+
+def woo2008(sP):
+    """ Load observational data points (M-Z of local group dwarfs) from Woo+ (2008). """
+    path = '/n/home07/dnelson/obs/woo/table1.txt'
+
+    # columns: Name, log(Mstar/Msun), log(Z) where log(Z/0.019)=[Fe/H]
+    # note: using instead Z_solar = 0.019 below would convert to [Fe/H] instead of Z/Z_solar
+    data = np.genfromtxt(path, dtype=None)
+
+    r = { 'name'           : np.array([d[0] for d in data]), 
+          'stellarMass'    : np.array([d[1] for d in data]),
+          'Zstars'         : np.log10(10.0**np.array([d[2] for d in data]) / sP.units.Z_solar),
+          'stellarMassErr' : 0.17, # dex, average
+          'ZstarsErr'      : 0.2, # dex, average
+          'label'          : 'Woo+ (2008) Local Group' }
+
+    return r
+
+def kirby2013():
+    """ Load observational data points (M-Z of local group dwarfs) from Kirby+ (2013). """
+    path = '/n/home07/dnelson/obs/kirby/2013_table4.txt'
+
+    # columns: Name, Num, Lv, Lv_err, log(Mstar/Msun), err, <[Fe/H]>, err, sigma, err, 
+    #          median, mad, IQR, skewness, err, kurtosis, err
+    data = np.genfromtxt(path, dtype=None)
+
+    r = { 'name'           : np.array([d[0] for d in data]), 
+          'stellarMass'    : np.array([d[4] for d in data]),
+          'stellarMassErr' : np.array([d[5] for d in data]),
+          'Zstars'         : np.array([d[6] for d in data]),
+          'ZstarsErr'      : np.array([d[7] for d in data]),
+          'label'          : 'Kirby+ (2013) Local Group' }
+
+    return r
+
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
     nPts = 2000

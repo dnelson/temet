@@ -136,8 +136,35 @@ class simParams:
             self.plotPrefix = 'ilP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
+        # sims.shocks
+        if run in ['shocks']:
+            self.validResLevels = [128,256]
+            self.groupOrdered   = True
+
+            self.boxSize        = 25000.0
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            self.trMCFields     = [0,-1,-1,1,-1,-1,2,-1,-1,-1,-1,-1,-1,3] # only 1+8+64+8192 (shockmaxmach)
+            self.gravSoft       = 0
+            self.trMCPerCell    = 5
+            self.winds          = 0
+            self.BHs            = 0
+            self.targetGasMass  = 0
+
+            self.trMassConst = self.targetGasMass / self.trMCPerCell
+
+            bs = str( round(self.boxSize/1000) )
+            self.arepoPath  = self.basePath + 'sims.shocks/'+str(res)+'_'+bs+'Mpc/'
+            self.savPrefix  = 'SH'
+            self.simName    = self.run + ' ' + str(self.res)
+            self.saveTag    = 'sh'
+            self.plotPrefix = 'sh'
+
         # DEV.PRIME (enrichment / windsPT2)
-        if run in ['winds_save_on','winds_save_off'] or '_count' in run or '_discrete' in run:
+        if run in ['winds_save_on','winds_save_off'] or '_discrete' in run:
             self.validResLevels = [3,128,256]
             self.snapRange      = [0,5] # z0=5
             self.groupOrdered   = True
@@ -157,10 +184,10 @@ class simParams:
             self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
             self.winds          = 2
             self.BHs            = 2
-            self.targetGasMass  = 9.42966e-3
+            self.targetGasMass  = 0.0
 
             dirStr = ''
-            if '_count' in run or '_discrete' in run:
+            if '_discrete' in run:
                 dirStr = 'enrichment/'
 
             self.arepoPath  = self.basePath + 'dev.prime/' + dirStr + run + '/'
@@ -258,7 +285,7 @@ class simParams:
 
             if run == 'illustris': # FP
                 self.trMCPerCell = 1
-                self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,10,11,12] # all (=4096, 13 of 13)
+                self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,10,11,12,-1] # all but shockmaxmach (=4096, 13 of 13)
                 self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe']
                 self.winds       = 1
                 self.BHs         = 1
@@ -314,7 +341,7 @@ class simParams:
             # DM+gas single halo zooms
             if run == 'zoom_20mpc':
                 self.trMCPerCell = 5
-                self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1] # up to and with WIND_COUNTER (=512, 10/13)
+                self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1] # up to and with WIND_COUNTER (=512, 10/13)
                 self.trMassConst = self.targetGasMass / self.trMCPerCell
 
             bs = str(round(self.boxSize/1000))
@@ -355,7 +382,7 @@ class simParams:
             if res == 512:  self.gravSoft = 1.0
 
             self.trMCPerCell  = 5
-            self.trMCFields   = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1] # up to and including WIND_COUNTER (=512, 10/13)
+            self.trMCFields   = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1] # up to and including WIND_COUNTER (=512, 10/13)
             self.metals       = ['H','He','C','N','O','Ne','Mg','Si','Fe']
             self.winds        = 1
             self.BHs          = 1
@@ -403,10 +430,10 @@ class simParams:
 
             if res in [128,256]:
                 # even older code version than tracer.512, indices specified manually in Config.sh
-                self.trMCFields = [0,1,5,2,-1,3,4,-1,-1,-1,-1,-1,-1]
+                self.trMCFields = [0,1,5,2,-1,3,4,-1,-1,-1,-1,-1,-1,-1]
             if res in [512]:
                 # up to and including ENTMAX but in older code, ordering permuted (6 vals, CAREFUL)
-                self.trMCFields = [0,1,4,2,-1,3,5,-1,-1,-1,-1,-1,-1]
+                self.trMCFields = [0,1,4,2,-1,3,5,-1,-1,-1,-1,-1,-1,-1]
 
             if res == 128: self.targetGasMass = 4.76446157e-03
             if res == 256: self.targetGasMass = 5.95556796e-04
