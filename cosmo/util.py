@@ -11,10 +11,11 @@ import illustris_python as il
 import cosmo.load
 from os.path import isfile, isdir
 from os import mkdir
-from util.helper import getIDIndexMap, closest
 
 def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
+    from util.helper import closest
+
     if sP is None:
         raise Exception("Must input sP.")
     if redshifts is None:
@@ -234,11 +235,13 @@ def periodicPairwiseDists(pts, sP):
     dists = np.sqrt( xDist*xDist + yDist*yDist + zDist*zDist )
 
     return dists
-    
+
 # --- other ---
 
 def gasMassesFromIDs(search_ids, sP):
     """ Return individual gas cell/particle masses given input ID list. """
+    from util.helper import getIDIndexMap
+
     if sP.snap is None:
         raise Exception("Need sP.snap")
 
