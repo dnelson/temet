@@ -21,9 +21,23 @@ def shockMaxMachNum():
 
     x = cosmo.load.snapshotSubset(sP, 'tracer', 'shockmaxmach')
 
-    print(x.mean())
-    print(x.min())
-    print(x.max())
+    machMax = 100
+
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    ax.set_xlim([0,machMax])
+    #ax.set_ylim(yrange)
+    ax.set_yscale('log')
+    #ax.set_xscale('symlog')
+    ax.set_xlabel('Maximum Past ShockMachNumber (at z=0, all gas cells)')
+    ax.set_ylabel('$N_{\\rm gas}$')
+
+    ax.hist(x, machMax+1, range=[0,machMax], label=sP.simName)
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('shocks.pdf')
+    plt.close(fig)
 
 def checkWindPartType():
     fileBase = '/n/home07/dnelson/dev.prime/winds_save_on/output/'
