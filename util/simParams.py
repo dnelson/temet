@@ -159,7 +159,7 @@ class simParams:
             bs = str( round(self.boxSize/1000) )
             self.arepoPath  = self.basePath + 'sims.shocks/'+str(res)+'_'+bs+'Mpc/'
             self.savPrefix  = 'SH'
-            self.simName    = self.run + ' ' + str(self.res)
+            self.simName    = self.run + ' L' + bs + 'n' + str(self.res)
             self.saveTag    = 'sh'
             self.plotPrefix = 'sh'
 
