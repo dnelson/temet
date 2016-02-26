@@ -15,6 +15,8 @@ from functools import partial
 from os.path import isfile, isdir, getsize
 from os import mkdir, remove
 
+basePath = '/n/home07/dnelson/code/cloudy.run/'
+
 def loadFG11UVB(redshifts=None):
     """ Load the Faucher-Giguerre (2011) UVB at one or more redshifts and convert to CLOUDY units. """
     basePath = '/n/home07/dnelson/obs/faucher.giguere/UVB_tables/'
@@ -217,9 +219,9 @@ def runCloudySim(gv, temp):
     fileNameStr = "z" + str(gv['redshift']) + "_n" + str(gv['hydrogenDens']) + \
                   "_Z" + str(gv['metallicity']) + "_T" + str(gv['temperature'])
 
-    gv['inputFileName']    = 'input_' + fileNameStr # in cwd of basePathIn
-    gv['inputFileNameAbs'] = gv['basePathIn'] + 'input_' + fileNameStr
-    gv['outputFileName']   = gv['basePathOut'] + 'output_' + fileNameStr + '.txt'
+    gv['inputFileName']    = 'input_' + fileNameStr # in cwd of basePath
+    gv['inputFileNameAbs'] = gv['basePath'] + 'input_' + fileNameStr
+    gv['outputFileName']   = gv['basePath'] + 'output_' + fileNameStr + '.txt'
 
     # skip if this output has already been made
     if not isfile(gv['outputFileName']) or getsize(gv['outputFileName']) == 0:
@@ -227,7 +229,7 @@ def runCloudySim(gv, temp):
         makeCloudyConfigFile(gv)
 
         # spawn cloudy using subprocess
-        rc = subprocess.call( ['cloudy', '-r', gv['inputFileName']], cwd=gv['basePathIn'] )
+        rc = subprocess.call( ['cloudy', '-r', gv['inputFileName']], cwd=gv['basePath'] )
 
         if rc != 0:
             raise Exception('We should stop, cloudy is misbehaving.')
@@ -254,50 +256,46 @@ def getRhoTZzGrid(res):
     eps = 0.0001
 
     if res == 'test':
-        hydrogenDensities = np.arange(-3.0,-2.5+eps, 0.5)
-        temperatures      = np.arange(6.0,6.6+eps,0.1)
-        metallicities     = np.arange(-0.1,0.1+eps,0.1)
-        redshifts         = np.array([1.0,2.2])
+        densities = np.arange(-3.0,-2.5+eps, 0.5)
+        temps     = np.arange(6.0,6.6+eps,0.1)
+        metals    = np.arange(-0.1,0.1+eps,0.1)
+        redshifts = np.array([1.0,2.2])
 
     if res == 'sm':
-        hydrogenDensities = np.arange(-7.0, 4.0+eps, 0.2)
-        temperatures      = np.arange(3.0, 9.0+eps, 0.1)
-        metallicities     = np.arange(-3.0,1.0+eps,0.2)
-        redshifts         = np.arange(0.0,8.0+eps,1.0)
+        densities = np.arange(-7.0, 4.0+eps, 0.2)
+        temps     = np.arange(3.0, 9.0+eps, 0.1)
+        metals    = np.arange(-3.0,1.0+eps,0.2)
+        redshifts = np.arange(0.0,8.0+eps,1.0)
 
     if res == 'lg':
-        hydrogenDensities = np.arange(-7.0, 4.0+eps, 0.1)
-        temperatures      = np.arange(3.0, 9.0+eps, 0.05)
-        metallicities     = np.arange(-3.0,1.0+eps,0.1)
-        redshifts         = np.arange(0.0,8.0+eps,0.5)
+        densities = np.arange(-7.0, 4.0+eps, 0.1)
+        temps     = np.arange(3.0, 9.0+eps, 0.05)
+        metals    = np.arange(-3.0,1.0+eps,0.1)
+        redshifts = np.arange(0.0,8.0+eps,0.5)
 
-    hydrogenDensities[np.where(np.abs(hydrogenDensities)) < eps] = 0.0
-    metallicities[np.where(np.abs(metallicities)) < eps] = 0.0
+    densities[np.abs(densities) < eps] = 0.0
+    metals[np.abs(metals) < eps] = 0.0
 
-    return hydrogenDensities, temperatures, metallicities, redshifts
+    return densities, temps, metals, redshifts
 
 def runCloudyGrid(redshiftInd, nThreads=61, res='sm'):
     """ Run a sequence of CLOUDY models over a parameter grid at a redshift (one redshift per job). """
     # config
-    basePath = '/n/home07/dnelson/code/cloudy.run/'
     densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
 
     # init
     gv = {}
     gv['redshift'] = redshifts[redshiftInd]
-    gv['basePathIn']  = basePath + 'input/' + 'redshift_' + '%04.2f' % gv['redshift'] + '/'
-    gv['basePathOut'] = basePath + 'output/' + 'redshift_' + '%04.2f' % gv['redshift'] + '/'
+    gv['basePath']  = basePath + 'redshift_' + '%04.2f' % gv['redshift'] + '/'
 
-    if not isdir(gv['basePathIn']):
-        mkdir(gv['basePathIn'])
-    if not isdir(gv['basePathOut']):
-        mkdir(gv['basePathOut']) 
+    if not isdir(gv['basePath']):
+        mkdir(gv['basePath'])
 
     nTotGrid = densities.size * temps.size * metals.size
     print('Total grid size at this redshift [' + str(redshiftInd+1) + ' of ' + str(redshifts.size) + \
           '] (z=' + str(gv['redshift']) + '): [' + str(nTotGrid) + '] points (launching ' + \
           str(temps.size) + ' threads ' + str(nTotGrid/temps.size) + ' times)')
-    print('Writing to: ' + gv['basePathOut'] + '\n')
+    print('Writing to: ' + gv['basePath'] + '\n')
 
     # loop over densities and metallicities, for each farm out the temp grid to a set of threads
     pool = mp.Pool(processes=nThreads)
@@ -321,21 +319,20 @@ def runCloudyGrid(redshiftInd, nThreads=61, res='sm'):
 
     print('Redshift done.')
 
-def collectCloudyOutputs(res='test'):
+def collectCloudyOutputs(res='sm'):
     """ Combine all CLOUDY outputs for a grid into our master HDF5 table used for post-processing. """
     # config
     maxNumIons = 10 # keep at most the 10 lowest ions per element
-    basePath = '/n/home07/dnelson/code/cloudy.run/'
     densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
 
     def parseCloudyIonFile(basePath,r,d,Z,T,maxNumIons=99):
         """ Construct file path to a given Cloudy output, load and parse. """
-        basePathOut = basePath + 'output/' + 'redshift_' + '%04.2f' % r + '/'
+        basePath = basePath + 'redshift_' + '%04.2f' % r + '/'
         fileNameStr = "z" + str(r) + "_n" + str(d) + "_Z" + str(Z) + "_T" + str(T)
-        path = basePathOut + 'output_' + fileNameStr + '.txt'
+        path = basePath + 'output_' + fileNameStr + '.txt'
 
         data = [line.split('#',1)[0].replace('\n','').strip().split() for line in open(path)]
-        data = filter(None, data) # remove all blank lines
+        data = [d for d in data if d] # remove all blank lines
 
         if len(data) != 30:
             raise Exception('Did not find expected [30] elements in output.')
@@ -367,9 +364,11 @@ def collectCloudyOutputs(res='test'):
 
     # loop over all outputs
     for i, r in enumerate(redshifts):
-        print( '[' + str(i+1).zfill(3) + ' of ' + str(redshifts.size).zfill(3) + '] redshift = ' + str(r))
+        print( '[' + str(i+1).zfill(2) + ' of ' + str(redshifts.size).zfill(2) + '] redshift = ' + str(r))
 
         for j, d in enumerate(densities):
+            print( ' [' + str(j+1).zfill(3) + ' of ' + str(densities.size).zfill(3) + '] dens = ' + str(d))
+
             for k, Z in enumerate(metals):
                 for l, T in enumerate(temps):
 
@@ -397,20 +396,239 @@ def collectCloudyOutputs(res='test'):
 
     print('Done.')
 
+
+class cloudyIon():
+    """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
+    # basic atomic information and helpers:
+    #   number    = atomic number (#p = #e = numIonizationStates-1)
+    #   solar     = solar abundance [n/nH] (Grevesse+ 2010, Hazy c13 Table 7.4)
+    #   isotopes  = mass numbers (#p+n) of isotopes of this element
+    #   ionEnergy = ionization energies [eV]
+    el = [ {'number':1,  'name':'Hydrogen',  'symbol':'H',  'solar':1.00e+00, 'isotopes':[1,2], 
+            'ionEnergy':[13.5984]},
+           {'number':2,  'name':'Helium',    'symbol':'He', 'solar':8.51e-02, 'isotopes':[3,4],
+            'ionEnergy':[24.5874, 54.416]},
+           {'number':3,  'name':'Lithium',   'symbol':'Li', 'solar':1.12e-11, 'isotopes':[6,7],
+            'ionEnergy':[5.3917, 75.638, 122.451]},
+           {'number':4,  'name':'Beryllium', 'symbol':'Be', 'solar':2.40e-11, 'isotopes':[9],
+           'ionEnergy':[9.3227, 18.211, 153.893, 217.713]},
+           {'number':5,  'name':'Boron',     'symbol':'B',  'solar':5.01e-10, 'isotopes':[10,11],
+            'ionEnergy':[8.298, 25.154, 37.93, 59.368, 340.217]},
+           {'number':6,  'name':'Carbon',    'symbol':'C',  'solar':2.69e-04, 'isotopes':[12,13],
+            'ionEnergy':[11.2603, 24.383, 47.877, 64.492, 392.077, 489.981]},
+           {'number':7,  'name':'Nitrogen',  'symbol':'N',  'solar':6.76e-05, 'isotopes':[14,15],
+            'ionEnergy':[14.5341, 39.601, 47.488, 77.472, 97.888, 522.057, 667.029]},
+           {'number':8,  'name':'Oxygen',    'symbol':'O',  'solar':4.90e-04, 'isotopes':[16,17,18],
+            'ionEnergy':[13.6181, 35.116, 54.934, 77.412, 113.896, 138.116, 739.315, 871.387]},
+           {'number':9,  'name':'Flourine',  'symbol':'F',  'solar':3.63e-08, 'isotopes':[19],
+            'ionEnergy':[17.4228, 34.97, 62.707, 87.138, 114.24, 157.161, 185.182, 953.886, 1103.089]},
+           {'number':10, 'name':'Neon',      'symbol':'Ne', 'solar':8.51e-05, 'isotopes':[20,21,22],
+            'ionEnergy':[21.5645, 40.962, 63.45, 97.11, 126.21, 157.93, 207.27, 239.09, 1195.797, 
+                         1362.164]},
+           {'number':11, 'name':'Sodium',    'symbol':'Na', 'solar':1.74e-06, 'isotopes':[23],
+            'ionEnergy':[5.1391, 47.286, 71.64, 98.91, 138.39, 172.15, 208.47, 264.18, 299.87, 
+                         1465.091, 1648.659]},
+           {'number':12, 'name':'Magnesium', 'symbol':'Mg', 'solar':3.98e-05, 'isotopes':[24,25,26],
+            'ionEnergy':[7.6462, 15.035, 80.143, 109.24, 141.26, 186.5, 224.94, 265.9, 327.95, 
+                         367.53, 1761.802, 1962.613]},
+           {'number':13, 'name':'Aluminium', 'symbol':'Al', 'solar':2.82e-06, 'isotopes':[27],
+            'ionEnergy':[5.9858, 18.828, 28.447, 119.99, 153.71, 190.47, 241.43, 284.59, 330.21, 
+                         398.57, 442.07, 2085.983, 2304.08]},
+           {'number':14, 'name':'Silicon',   'symbol':'Si', 'solar':3.24e-05, 'isotopes':[28,29,30],
+            'ionEnergy':[8.1517, 16.345, 33.492, 45.141, 166.77, 205.05, 246.52, 303.17, 351.1, 
+                         401.43, 476.06, 523.5, 2437.676, 2673.108]},
+           {'number':15, 'name':'Phosphorus','symbol':'P',  'solar':2.57e-07, 'isotopes':[31],
+            'ionEnergy':[10.4867, 19.725, 30.18, 51.37, 65.023, 220.43, 263.22, 309.41, 371.73, 
+                         424.5, 479.57, 560.41, 611.85, 2816.943, 3069.762]},
+           {'number':16, 'name':'Sulfur',    'symbol':'S',  'solar':1.32e-05, 'isotopes':[32,33,34,36],
+            'ionEnergy':[10.36, 23.33, 34.83, 47.3, 72.68, 88.049, 280.93, 328.23, 379.1, 447.09,
+                         504.78, 564.65, 651.63, 707.14, 3223.836, 3494.099]},
+           {'number':17, 'name':'Chlorine',  'symbol':'Cl', 'solar':3.16e-07, 'isotopes':[35,37],
+            'ionEnergy':[12.9676, 23.81, 39.61, 53.46, 67.8, 98.03, 114.193, 348.28, 400.05, 455.62,
+                         529.97, 591.97, 656.69, 749.75, 809.39,3658.425, 3946.193]},
+           {'number':18, 'name':'Argon',     'symbol':'Ar', 'solar':2.51e-06, 'isotopes':[36,38,40],
+            'ionEnergy':[15.7596, 27.629, 40.74, 59.81, 75.02, 91.007, 124.319, 143.456, 422.44, 
+                         478.68, 538.95, 618.24, 686.09, 755.73, 854.75, 918.0, 4120.778, 4426.114]},
+           {'number':19, 'name':'Potassium', 'symbol':'K',  'solar':1.07e-07, 'isotopes':[39,40,41],
+            'ionEnergy':[4.3407, 31.625, 45.72, 60.91, 82.66, 100.0, 117.56, 154.86, 175.814, 503.44,
+                         564.13, 629.09, 714.02, 787.13, 861.77, 968.0, 1034.0, 4610.955, 4933.931]},
+           {'number':20, 'name':'Calcium',   'symbol':'Ca', 'solar':2.19e-06, 'isotopes':[40,42,43,44,46,48],
+            'ionEnergy':[6.1132, 11.71, 50.908, 67.1, 84.41, 108.78, 127.7, 147.24, 188.54, 211.27,
+                         591.25, 656.39, 726.03, 816.61, 895.12, 974.0, 1087.0, 1157.0, 5129.045, 5469.738]},
+           {'number':21, 'name':'Scandium',  'symbol':'Sc', 'solar':1.41e-09, 'isotopes':[45],
+            'ionEnergy':[6.5615, 12.8, 24.76, 73.47, 91.66, 110.68, 138.0, 158.7, 180.02, 225.32,
+                         225.32, 685.89, 755.47, 829.79, 926.0]},
+           {'number':22, 'name':'Titanium',  'symbol':'Ti', 'solar':8.91e-08, 'isotopes':[46,47,48,49,50],
+            'ionEnergy':[6.8281, 13.58, 27.491, 43.266, 99.22, 119.36, 140.8, 168.5, 193.5, 193.2,
+                         215.91, 265.23, 291.497, 787.33, 861.33]},
+           {'number':23, 'name':'Vanadium',  'symbol':'V',  'solar':8.51e-09, 'isotopes':[50,51],
+            'ionEnergy':[6.7462, 14.65, 29.31, 46.707, 65.23, 128.12, 150.17, 173.7, 205.8, 230.5,
+                         255.04, 308.25, 336.267, 895.58, 974.02]},
+           {'number':24, 'name':'Chromium',  'symbol':'Cr', 'solar':4.37e-07, 'isotopes':[50,52,53,54],
+            'ionEnergy':[6.7665, 16.5, 30.96, 49.1, 69.3, 90.56, 161.1, 184.7, 209.3, 244.4,
+                         270.8, 298.0, 355.0, 384.3, 1010.64]},
+           {'number':25, 'name':'Manganese', 'symbol':'Mn', 'solar':2.69e-07, 'isotopes':[55],
+            'ionEnergy':[7.434, 15.64, 33.667, 51.2, 72.4, 95.0, 119.27, 196.46, 221.8, 248.3,
+                         286.0, 314.4, 343.6, 404.0, 435.3, 1136.2]},
+           {'number':26, 'name':'Iron',      'symbol':'Fe', 'solar':3.16e-05, 'isotopes':[54,56,57,58],
+            'ionEnergy':[7.9024, 16.18, 30.651, 54.8, 75.0, 99.0, 125.0, 151.06, 235.04, 262.1,
+                         290.4, 330.8, 361.0, 392.2, 457.0, 485.5, 1266.1]},
+           {'number':27, 'name':'Cobalt',    'symbol':'Co', 'solar':9.77e-08, 'isotopes':[59],
+            'ionEnergy':[7.881, 17.06, 33.5, 51.3, 79.5, 102.0, 129.0, 157.0, 186.13, 276.0,
+                         305.0, 336.0, 376.0, 411.0, 444.0, 512.0, 546.8, 1403.0]},
+           {'number':28, 'name':'Nickel',    'symbol':'Ni', 'solar':1.66e-06, 'isotopes':[58,60,61,62,64],
+            'ionEnergy':[7.6398, 18.168, 35.17, 54.9, 75.5, 108.0, 133.0, 162.0, 193.0, 224.5, 
+                         321.2, 352.0, 384.0, 430.0, 464.0, 499.0, 571.0, 607.2, 1547.0]},
+           {'number':29, 'name':'Copper',    'symbol':'Cu', 'solar':1.55e-08, 'isotopes':[63,65],
+            'ionEnergy':[7.7264, 20.292, 26.83, 55.2, 79.9, 103.0, 139.0, 166.0, 199.0, 232.0,
+                         266.0, 368.8, 401.0, 435.0, 484.0, 520.0, 557.0, 633.0, 671.0, 1698.0]},
+           {'number':30, 'name':'Zinc',      'symbol':'Zn', 'solar':3.63e-08, 'isotopes':[64,66,67,68,70],
+            'ionEnergy':[9.3942, 17.964, 39.722, 59.4, 82.6, 108.0, 134.0, 174.0, 203.0, 238.0,
+                         274.0, 310.8, 419.7, 454.0, 490.0, 542.0, 579.0, 619.0, 698.8, 738.0, 1856.0]} \
+         ]
+
+    # simple roman numeral mapping
+    roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
+
+    def __init__(self, sP, el=None, res='sm', redshiftInterp=False, order=3):
+        """ Load the table, optionally only for a given element(s). """
+        from util.helper import closest
+        self.data = {}
+        self.grid = {}
+
+        self.redshiftInterp = redshiftInterp
+        self.order = order # quadcubic interpolation by default (1 = quadlinear)
+
+        with h5py.File(basePath + 'grid_' + res + '.hdf5','r') as f:
+            # load 5D ion abundance tables
+            if el is not None:
+                elements = self.resolveElementNames(el)
+            else:
+                elements = f.keys()
+
+            for element in elements:
+                self.data[element] = f[element][()]
+
+            # load metadata/grid coordinates
+            for attr in dict(f.attrs).keys():
+                self.grid[attr] = f.attrs[attr]
+
+        # not going to be interpolating in redshift?
+        if not redshiftInterp:
+            # select closest redshift, squeeze grids to 4D
+            redshiftSel, redshiftInd = closest(self.grid['redshift'], sP.redshift)
+
+            if np.abs(redshiftSel - sP.redshift) > 0.05:
+                raise Exception('Redshift error too big: [' + str(np.abs(redshiftSel - sP.redshift)) + ']')
+
+            for element in self.data.keys():
+                self.data[element] = np.squeeze( self.data[element][:,redshiftInd,:,:,:] )
+
+        # init interpolation?: pre-filter at order=self.order
+        # http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.ndimage.interpolation.map_coordinates.html
+        # spline_filter()
+
+    def resolveElementNames(self, elements):
+        """ Map symbols to full element names, and leave full names unchanged. """
+        if isinstance(elements, basestring): elements = [elements] # ensure iterable
+
+        for i, element in enumerate(elements):
+            if len(element) <= 2:
+                elInfo = [el for el in self.el if el['symbol'] == element]
+
+                if not len(elInfo):
+                    raise Exception('Failed to resolve element symbol: ' + element)
+
+                elements[i] = elInfo[0]['name']
+
+            if elements[i] not in [el['name'] for el in self.el]:
+                raise Exception('Unknown element name: ' + elements[i])
+
+        if len(elements) == 1: return elements[0]
+        return elements
+
+    def resolveIonNumbers(self, ionNums):
+        """ Map roman numeral ion numbers to integers, and leave integers unchanged. """
+        if isinstance(ionNums, (int,long,basestring)): ionNums = [ionNums] # ensure iterable
+
+        for i, ionNum in enumerate(ionNums):
+            if str(ionNum) in self.roman.keys():
+                ionNums[i] = self.roman[str(ionNum)]
+
+            if not isinstance(ionNums[i], (int,long)) or ionNums[i] == 0:
+                raise Exception('Failed to map ionization number to integer, or is 0-based index.')
+
+        if len(ionNums) == 1: return ionNums[0]
+        return ionNums
+
+    def frac(self, element, ionNum, dens, metal, temp, redshift=None):
+        """ Interpolate the ion abundance table, return log(ionization fraction).
+            Input gas properties can be scalar or np.array(), in which case they must have the same size.
+            e.g. x = ion.frac('O','VI',-3.0,0.0,6.5)
+                 x = ion.frac('O',6,dens=-3.0,metal=0.0,temp=6.5,redshift=2.2)
+              element : name or symbol
+              ionNum  : roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2)
+                        where I = neutral (e.g. HeI = He), II = single ionized (e.g. HeII = He+)
+                        (e.g. HII region = fully ionized hydrogen, HeIII = fully ionized helium)
+              dens    : hydrogen number density [log cm^-3]
+              temp    : temperature [log K]
+              metal   : metallicity [log solar]
+        """
+        from scipy.ndimage import map_coordinates
+
+        element = self.resolveElementNames(element)
+        ionNum  = self.resolveIonNumbers(ionNum)
+
+        if redshift is not None and self.redshiftInterp == False:
+            raise Exception('Redshift input for interpolation, but we have selected nearest hyperslice.')
+        if redshift is None and self.redshiftInterp == True:
+            raise Exception('We are interpolating in redshift space, but no redshift specified.')
+        if not isinstance(element,basestring) or not isinstance(ionNum,(int,long)):
+            raise Exception('Allowed only a single element (string) and ionNum (int).')
+        if element not in self.data:
+            raise Exception('Requested element [' + element + '] not in grid.')
+        if ionNum-1 >= self.data[element].shape[0]:
+            raise Exception('Requested ion number of ' + element + ' [' + str(ionNum) + '] out of range.')
+
+        # convert input interpolant point into fractional 3D/4D (+ionNum) array indices
+        # Note: we are clamping here at [0,size-1], which means that although we never 
+        # extrapolate below (nearest grid edge value is returned), there is no warning given
+        i1 = np.interp( dens,  self.grid['dens'],  np.arange(self.grid['dens'].size) )
+        i2 = np.interp( metal, self.grid['metal'], np.arange(self.grid['metal'].size) )
+        i3 = np.interp( temp,  self.grid['temp'],  np.arange(self.grid['temp'].size) )
+
+        if redshift is None:
+            iND = np.vstack( (i1,i2,i3) )
+            locData = self.data[element][ionNum-1,:,:,:]
+        else:
+            i0 = np.interp( redshift, self.grid['redshift'], np.arange(self.grid['redshift'].size) )
+            iND = np.vstack( (i0,i1,i2,i3) )
+            locData = self.data[element][ionNum-1,:,:,:,:]
+
+        # do 3D or 4D interpolation on this ion sub-table at the requested order
+        abunds = map_coordinates( locData, iND, order=self.order, mode='nearest')
+
+        return abunds
+
 def plotUVB():
-    """ Debug plot of the UVB(nu) at a few redshifts, and at one wavelength vs redshift. """
+    """ Debug plots of the UVB(nu) as a function of redshift. """
     import matplotlib.pyplot as plt
 
     # config
     redshifts = [0.0, 2.0, 4.0, 6.0, 10.0]
-    nusRyd = [0.5,1.0,20.0]
+    nusRyd = [0.9,1.1,3.9,4.1,20.0]
 
-    # (A) start plot
-    fig = plt.figure(figsize=(20,10))
+    freq_range = [5e-1,4e3]
+    Jnu_range  = [-35,-18]
+    Jnu_rangeB = [-26,-18]
+    z_range    = [0.0,10.0]
+
+    # (A) start plot: J_nu(nu) at a few specific redshifts
+    fig = plt.figure(figsize=(26,10))
 
     ax = fig.add_subplot(131)
-    ax.set_xlim([4e-1,5e3])
-    ax.set_ylim([-35,-18])
+    ax.set_xlim(freq_range)
+    ax.set_ylim(Jnu_range)
     ax.set_xscale('log')
 
     ax.set_title('')
@@ -425,10 +643,10 @@ def plotUVB():
 
     ax.legend()
 
-    # (B) start second plot
+    # (B) start second plot: J_nu(z) at a few specific nu's
     ax = fig.add_subplot(132)
-    ax.set_xlim([0.0,10.0])
-    ax.set_ylim([-26,-18])
+    ax.set_xlim(z_range)
+    ax.set_ylim(Jnu_rangeB)
 
     ax.set_title('')
     ax.set_xlabel('Redshift')
@@ -452,8 +670,8 @@ def plotUVB():
 
     # (C) start third plot
     ax = fig.add_subplot(133)
-    ax.set_xlim([4e-1,5e3])
-    ax.set_ylim([0.0,10.0])
+    ax.set_xlim(freq_range)
+    ax.set_ylim(z_range)
     ax.set_xscale('log')
 
     ax.set_title('')
@@ -461,7 +679,30 @@ def plotUVB():
     ax.set_ylabel('Redshift')
 
     # make a 2D colormap of the J_nu magnitude in this plane (what is the spike?)
-    # TODO
+    #x, y = np.meshgrid(uvbs[0]['freqRyd'], [uvb['redshift'] for uvb in uvbs])
+
+    x = uvbs[0]['freqRyd']
+    y = np.array([uvb['redshift'] for uvb in uvbs])
+    XX, YY = np.meshgrid(x, y, indexing='ij')
+
+    z = np.zeros( (x.size, y.size), dtype='float32' )
+    for i, uvb in enumerate(uvbs):
+        z[:,i] = uvb['J_nu']
+    z = np.clip(z, Jnu_range[0], Jnu_range[1])
+
+    #plt.pcolormesh(y, x, z, vmin=z_min, vmax=z_max) #cmap='RdBu', 
+    #plt.imshow(z, extent=[x.min(),x.max(),y.min(),y.max()], origin='lower', interpolation='nearest')
+
+    #plt.contour(XX, YY, z, 40, lw=1.0, linestyles='solid')
+    cnt = plt.contourf(XX, YY, z, 40)
+    #plt.contourf(XX, YY, z, 40) # twice to fix sub-pixel AA issue
+
+    for c in cnt.collections:
+        c.set_edgecolor("face")
+        c.set_linewidth(0.1) # must be nonzero to fix sub-pixel AA issue
+
+    cb = plt.colorbar()
+    cb.ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     # finish
     fig.tight_layout()    
