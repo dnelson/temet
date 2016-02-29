@@ -733,3 +733,10 @@ class simParams:
             print("Warning: Make sure you mean it (smaller physical boxsize at z>0).")
         return (self.units.codeLengthToKpc(self.boxSize)/1000.0)**3
     
+    @property
+    def zoomSubhaloID(self):
+        if self.run in ['iClusters']:
+            return 0 # hardcoded for now
+        if self.run in ['zoom_20mpc','zoom_20mpc_dm']:
+            raise Exception('Not implemented yet.')
+    

@@ -460,17 +460,18 @@ def bernardi2013SMF():
 
     return r
 
-def gallazzi2005():
+def gallazzi2005(sP):
     """ Load observational data points (M-Z and ages) from Gallazzi+ (2005). """
     path = '/n/home07/dnelson/obs/gallazzi/table2.txt'
 
     # columns: log(Mstar/Msun), log(Z/Zun) [P50, P16, P84], log(tr/yr) [P50, P16, P84]
+    # rescale metallicities from old Z_solar=0.02 to present GS10 (0.0127) value
     data = np.loadtxt(path)
 
     r = { 'stellarMass'  : data[:,0], 
-          'Zstars'       : data[:,1],
-          'ZstarsDown'   : data[:,2],
-          'ZstarsUp'     : data[:,3],
+          'Zstars'       : np.log10(10.0**data[:,1] * 0.02 / sP.units.Z_solar),
+          'ZstarsDown'   : np.log10(10.0**data[:,2] * 0.02 / sP.units.Z_solar),
+          'ZstarsUp'     : np.log10(10.0**data[:,3] * 0.02 / sP.units.Z_solar),
           'ageStars'     : data[:,4],
           'ageStarsDown' : data[:,5],
           'ageStarsUp'   : data[:,6],
@@ -501,6 +502,7 @@ def kirby2013():
 
     # columns: Name, Num, Lv, Lv_err, log(Mstar/Msun), err, <[Fe/H]>, err, sigma, err, 
     #          median, mad, IQR, skewness, err, kurtosis, err
+    # "assume a solar abundance of 12 + log(Fe/H) = 7.52" (this is within 5% of GS10)
     data = np.genfromtxt(path, dtype=None)
 
     r = { 'name'           : np.array([d[0] for d in data]), 

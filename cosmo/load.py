@@ -59,6 +59,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
         raise Exception("Must specify sP.snap for snapshotSubset load.")
 
     # override path function
+    il.groupcat.gcPathOrig = il.groupcat.gcPath
     il.groupcat.gcPath = gcPath
 
     r = {}
@@ -77,9 +78,28 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
 
     if subhalos:
         r['subhalos'] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=fieldsSubhalos)
+
+        # Illustris-1 metallicity fixes if needed
+        if sP.run == 'illustris':
+            for field in fieldsSubhalos:
+                if 'Metallicity' in field:
+                    il.groupcat.gcPath = il.groupcat.gcPathOrig # set to new catalogs
+                    print('Note: Overriding subhalo ['+field+'] with groups_ new catalog values.')
+                    r['subhalos'][field] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=field)
+            il.groupcat.gcPath = gcPath # restore
+
     if halos:
         r['halos'] = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=fieldsHalos)
     
+        # Illustris-1 metallicity fixes if needed
+        if sP.run == 'illustris':
+            for field in fieldsHalos:
+                if 'Metallicity' in field:
+                    il.groupcat.gcPath = il.groupcat.gcPathOrig # set to new catalogs
+                    print('Note: Overriding halo ['+field+'] with groups_ new catalog values.')
+                    r['halos'][field] = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=field)
+            il.groupcat.gcPath = gcPath # restore
+
         # override HDF5 datatypes if needed
         if isinstance(r['halos'],dict) and 'GroupFirstSub' in r['halos']:
             r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32') # unsigned -> signed
@@ -101,7 +121,7 @@ def groupCatSingle(sP, haloID=None, subhaloID=None):
     groupFileOffsets = gcID - groupFileOffsets
     fileNum = np.max( np.where(groupFileOffsets >= 0) )
     groupOffset = groupFileOffsets[fileNum]
- 
+
     # load halo/subhalo fields into a dict
     r = {}
     
