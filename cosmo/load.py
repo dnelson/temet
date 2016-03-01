@@ -12,6 +12,42 @@ import illustris_python as il
 from os.path import isfile, isdir
 from os import mkdir
 
+def auxCat(sP, fields=None):
+    """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. """
+    from cosmo import auxcatalog
+
+    if sP.snap is None:
+        raise Exception("Must specify sP.snap for snapshotSubset load.")
+    r = {}
+
+    # protect against scalar
+    if isinstance(fields,basestring):
+        fields = [fields]
+
+    # open auxiliary catalog file for this snasphot
+    auxCatPath = sP.derivPath + 'auxCat/catalog_%03d.hdf5' % sP.snap
+
+    if not isdir(sP.derivPath + 'auxCat'):
+        mkdir(sP.derivPath + 'auxCat')
+
+    with h5py.File(auxCatPath,'a') as f:
+
+        # loop over all requested fields (prefix 'Group/' or 'Subhalo/' maps into a HDF5 group)
+        for field in fields:
+            if field not in auxcatalog.fieldComputeFunctionMapping:
+                raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
+
+            if field in f.keys():
+                # load pre-computed values
+                r[field] = f[field][()]
+            else:
+                # computation required? do now and save
+                print('Compute and save: ['+field+']')
+                r[field] = auxcatalog.fieldComputeFunctionMapping[field] (sP)
+                #f[field] = r[field] # TODO enable save
+
+    return r
+
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
     """ Find and return absolute path to a group catalog HDF5 file.
         Can be used to redefine illustris_python version (il.groupcat.gcPath = cosmo.load.gcPath). """
@@ -46,14 +82,13 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
 
     return None
 
-def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True, 
-             fieldsSubhalos=None, fieldsHalos=None):
-    """ Load new HDF5 fof/subfind group catalog for a given snapshot.
+def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None):
+    """ Load HDF5 fof+subfind group catalog for a given snapshot.
                          
        readIDs=1 : by default, skip IDs since we operate under the group ordered snapshot assumption, but
                    if this flag is set then read IDs and include them (if they exist)
        skipIDs=1 : acknowledge we are working with a STOREIDS type .hdf5 group cat and don't warn
-       fields    : read only a subset fields from the catalog
+       fields*   : read only a subset fields from the catalog
     """
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
@@ -76,7 +111,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
     # read
     r['header'] = il.groupcat.loadHeader(sP.simPath,sP.snap)
 
-    if subhalos:
+    if fieldsSubhalos is not None:
         r['subhalos'] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=fieldsSubhalos)
 
         # Illustris-1 metallicity fixes if needed
@@ -88,7 +123,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, subhalos=True, halos=True,
                     r['subhalos'][field] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=field)
             il.groupcat.gcPath = gcPath # restore
 
-    if halos:
+    if fieldsHalos is not None:
         r['halos'] = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=fieldsHalos)
     
         # Illustris-1 metallicity fixes if needed
@@ -351,7 +386,9 @@ def groupCatOffsetListIntoSnap(sP):
 
     return r    
 
-def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, mdi=None):
+def snapshotSubset(sP, partType, fields, 
+                   inds=None, indRange=None, haloID=None, subhaloID=None, 
+                   mdi=None, sq=True):
     """ For a given snapshot load only one field for one particle type
           partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
           fields   = e.g. ['ParticleIDs','Coordinates',...]
@@ -361,6 +398,8 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
             * indRange  : same, but specify only min and max indices (inclusive)
             * haloID    : if input, load particles only of the specified fof halo
             * subhaloID : if input, load particles only of the specified subalo
+          mdi : multi-dimensional index slice load
+          sq  : squeeze single field return into a numpy array instead of within a dict
     """
     from illustris_python.util import partTypeNum as ptNum
 
@@ -530,4 +569,4 @@ def snapshotSubset(sP, partType, fields, inds=None, indRange=None, haloID=None, 
             subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][groupOffset,:]
 
     # load
-    return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi)
+    return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq)
