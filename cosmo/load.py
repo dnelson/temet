@@ -566,7 +566,7 @@ def snapshotSubset(sP, partType, fields,
         # load the length (by type) of this group/subgroup from the group catalog, and its offset within the snapshot
         with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
             subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
-            subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][groupOffset,:]
+            subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
 
     # load
     return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq)
