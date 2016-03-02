@@ -12,6 +12,8 @@ import cosmo.load
 import numpy as np
 import h5py
 import pdb
+import glob
+import matplotlib.pyplot as plt
 
 debug = False # enable expensive debug consistency checks and verbose output
 
@@ -563,26 +565,30 @@ def guinevereData():
     outPath      = sP.derivPath
 
     # subhalo list
-    #subhaloIDs = np.array([3,4])
     subhaloIDs = np.loadtxt(sP.derivPath + 'guinevere.list.subs.txt', dtype='int32')
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
 
-def testPosPlot():
-    """ test """
-    import matplotlib.pyplot as plt
-
+def plotPosTempVsRedshift():
+    """ Plot trMC position (projected) and temperature evolution vs redshift. """
     # config
-    axis1 = 1
-    axis2 = 2
+    axis1 = 0
+    axis2 = 1
+    alpha = 0.05
     boxSize = 2000.0 # ckpc/h
-    sP = simParams(res=455, run='illustris', redshift=0.0)
+    sP = simParams(res=1820, run='illustris', redshift=0.0)
+
+    shNums = [int(s[:-5].rsplit('_',1)[1]) for s in glob.glob(sP.derivPath + 'subhalo_*.hdf5')]
+    shNum = shNums[75]
 
     # load
-    with h5py.File(sP.derivPath + 'subhalo_3.hdf5') as f:
-        pos = f['pos'][()]
+    with h5py.File(sP.derivPath + 'subhalo_'+str(shNum)+'.hdf5') as f:
+        pos  = f['pos'][()]
         temp = f['temp'][()]
+        sfr  = f['sfr'][()]
         redshift = f['Redshift'][()]
+
+        pt = cosmo.load.groupCatSingle(sP, subhaloID=f['SubhaloID'][0])['SubhaloPos']
 
     # plot
     fig = plt.figure(figsize=(10,10))
@@ -595,27 +601,78 @@ def testPosPlot():
     ax.set_xlabel('x [ckpc/h]')
     ax.set_ylabel('y [ckpc/h]')
 
-    for i in np.arange(pos.shape[1]):
-        ax.plot(pos[:,i,axis1], pos[:,i,axis2], '-', color='#333333', alpha=0.3, lw=1.0)
+    # make relative and periodic correct
+    xDist = vecs[:,0] - pt[0]
+    yDist = vecs[:,1] - pt[1]
+    zDist = vecs[:,2] - pt[2]
+
+    correctPeriodicDistVecs(xDist, sP)
+    correctPeriodicDistVecs(yDist, sP)
+    correctPeriodicDistVecs(zDist, sP)
+
+    for i in np.arange(pos.shape[1]): #np.arange(1000)
+        ax.plot(pos[:,i,axis1], pos[:,i,axis2], '-', color='#333333', alpha=alpha, lw=1.0)
 
     fig.tight_layout()
-    plt.savefig('test.pdf')
+    plt.savefig('trMC_checkPos_'+sP.simName+'_sh'+str(shNum)+'.pdf')
     plt.close(fig)
 
     # plot 2
     fig = plt.figure(figsize=(16,8))
     ax = fig.add_subplot(111)
     ax.set_xlim([0.0,0.5])
-    ax.set_ylim([3.5,7.0])
+    ax.set_ylim([3.5,8.0])
 
     ax.set_title('Evolution of tracer temperatures with time check')
     ax.set_xlabel('Redshift')
     ax.set_ylabel('Temp [log K]')
 
-    for i in np.arange(temp.shape[1]):
-        ww = np.isfinite(temp[:,i])
-        ax.plot(redshift[ww], temp[ww,i], '-', color='#333333', alpha=0.2, lw=1.0)
+    #for i in np.arange(temp.shape[1]):
+    for i in np.arange(100):
+        ww = np.isfinite(temp[:,i]) & (sfr[:,i] == 0.0)
+        if not np.count_nonzero(ww[0]):
+            print('skip: '+str(i))
+            continue
+
+        ax.plot(redshift[ww], np.squeeze(temp[ww,i]), '-', color='#333333', alpha=alpha, lw=1.0)
 
     fig.tight_layout()
-    plt.savefig('test2.pdf')
+    plt.savefig('trMC_checkTemp_'+sP.simName+'_sh'+str(shNum)+'.pdf')
+    plt.close(fig)
+
+def plotStarFracVsRedshift():
+    """ Plot the fraction of tracers in stars vs. gas parents vs redshift. """
+    # config
+    alpha = 0.3
+    sP = simParams(res=1820, run='illustris', redshift=0.0)
+
+    shNums = [int(s[:-5].rsplit('_',1)[1]) for s in glob.glob(sP.derivPath + 'subhalo_*.hdf5')]
+
+    # plot
+    fig = plt.figure(figsize=(16,8))
+    ax = fig.add_subplot(111)
+    ax.set_xlim([0.0,0.5])
+    #ax.set_ylim([0.0,0.4])
+
+    ax.set_title('')
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Fraction of trMC in Stellar Parents')
+
+    for shNum in shNums:
+        # load
+        with h5py.File(sP.derivPath + 'subhalo_'+str(shNum)+'.hdf5') as f:
+            temp = f['temp'][()]
+            sfr  = f['sfr'][()]
+            redshift = f['Redshift'][()]
+
+        # calculate fraction at each snapshot (using temp=nan->in star)
+        fracInStars = np.zeros( temp.shape[0] )
+        for i in np.arange(temp.shape[0]):
+            numInStars = np.count_nonzero(np.isfinite(temp[i,:]))
+            fracInStars[i] = numInStars / float(temp.shape[1])
+
+        ax.plot(redshift, fracInStars, '-', color='#333333', alpha=alpha, lw=1.0)
+
+    fig.tight_layout()
+    plt.savefig('trMC_starFracs_'+sP.simName+'.pdf')
     plt.close(fig)
