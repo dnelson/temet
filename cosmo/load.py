@@ -15,6 +15,8 @@ from os import mkdir
 def auxCat(sP, fields=None):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. """
     from cosmo import auxcatalog
+    import datetime
+    import subprocess
 
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
@@ -37,15 +39,19 @@ def auxCat(sP, fields=None):
             if field not in auxcatalog.fieldComputeFunctionMapping:
                 raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
-            if field in f.keys():
+            if field in f:
                 # load pre-computed values
                 r[field] = f[field][()]
             else:
-                # computation required? do now and save
+                # computation required? request now
                 print('Compute and save: ['+field+']')
-                r[field] = auxcatalog.fieldComputeFunctionMapping[field] (sP)
-                #f[field] = r[field] # TODO enable save
+                r[field], desc = auxcatalog.fieldComputeFunctionMapping[field] (sP)
 
+                # save dataset and descriptors as attributes
+                f[field] = r[field]
+                f[field].attrs['Description'] = desc.encode('ascii')
+                f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
+                f[field].attrs['CreatedRev']  = subprocess.check_output(["hg", "id"]).strip()
     return r
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
@@ -138,6 +144,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         # override HDF5 datatypes if needed
         if isinstance(r['halos'],dict) and 'GroupFirstSub' in r['halos']:
             r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32') # unsigned -> signed
+        if isinstance(fieldsHalos,basestring) and fieldsHalos == 'GroupFirstSub':
+            r['halos'] = r['halos'].astype('int32') # unsigned -> signed
 
     return r
 

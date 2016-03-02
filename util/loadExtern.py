@@ -514,6 +514,22 @@ def kirby2013():
 
     return r
 
+def giodini2009(sP):
+    """ Load observational data points (gas/stellar mass fractions in r500crit) from Giodini+ (2009). """
+    # Table 2 (masses are M500/h_72 [Msun]) (errors are symmetric, stddev of the mean)
+    M500h72Msun   = np.array([2.1e13, 5.1e13, 1.2e14, 3.0e14, 7.1e14])
+
+    r = {'m500_logMsun'  : np.log10( M500h72Msun/(0.72/sP.HubbleParam) ),
+         'fStars500'     : np.array([0.062, 0.045, 0.036, 0.021, 0.019]),
+         'fStars500Err'  : np.array([0.005, 0.002, 0.004, 0.002, 0.002]),
+         'fGas500'       : np.array([0.074, 0.068, 0.080, 0.103, 0.123]),
+         'fGas500Err'    : np.array([0.028, 0.005, 0.003, 0.008, 0.007]),
+         'fBaryon500'    : np.array([0.136, 0.113, 0.116, 0.124, 0.141]),
+         'fBaryon500Err' : np.array([0.028, 0.005, 0.005, 0.009, 0.007]),
+         'label'         : 'Giodini+ (2009) z<0.2' }
+
+    return r
+
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
     nPts = 2000

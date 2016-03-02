@@ -649,6 +649,93 @@ def massMetallicityStars(sPs, pdf):
     pdf.savefig()
     plt.close(fig)
 
+def baryonicFractionsR500Crit(sPs, pdf):
+    """ Gas, star, and total baryonic fractions within r500_crit (for massive systems). """
+    from cosmo.load import groupCat, auxCat
+
+    # config
+    binSize = 0.2
+    linestyles  = ['-',':','--'] # gas, stars, baryons
+    fracTypes = ['gas','stars','baryons']
+
+    # plot setup
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([11.0, 15.0])
+    ax.set_ylim([0,0.22])
+    ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ < r$_{\\rm 500c}$ ]')
+    ax.set_ylabel('Gas/Star/Baryon Fraction [ M / M$_{\\rm 500c}$ ]')
+
+    # observational points
+    g = giodini2009(sPs[0])
+
+    l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='o-')
+    l2,_,_ = ax.errorbar(g['m500_logMsun'], g['fStars500'], yerr=g['fStars500Err'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D:')
+    l3,_,_ = ax.errorbar(g['m500_logMsun'], g['fBaryon500'], yerr=g['fBaryon500Err'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='s--')
+
+    legend1 = ax.legend([l1,l2,l3], [g['label']+' f$_{\\rm gas}$',
+                                     g['label']+' f$_{\\rm stars}$',
+                                     g['label']+' f$_{\\rm baryons}$'], loc='upper left')
+    ax.add_artist(legend1)
+
+    # universal baryon fraction line
+    OmegaU = sPs[0].omega_b / sPs[0].omega_m
+    ax.plot( [14.75,15.0], [OmegaU,OmegaU], '--', color='#444444', alpha=0.4)
+    ax.text( 14.79, OmegaU+0.003, '$\Omega_b / \Omega_m$', size='large', alpha=0.4)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        print('MMStars: '+sP.simName)
+
+        if sP.isZoom:
+            pass
+        else:
+            ac = auxCat(sP, fields=['Group/Mass_Crit500_Type'])
+
+            # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
+            xx_code = np.sum( ac['Group/Mass_Crit500_Type'], axis=1 )
+            xx = sP.units.codeMassToLogMsun( xx_code )
+
+            # metallicity measured within what radius?
+            c = ax._get_lines.prop_cycler.next()['color']
+                    
+            for i, fracType in enumerate(fracTypes):
+                if fracType == 'gas':
+                    yy = ac['Group/Mass_Crit500_Type'][:,1]
+                if fracType == 'stars':
+                    yy = ac['Group/Mass_Crit500_Type'][:,2]
+                if fracType == 'baryons':
+                    yy = ac['Group/Mass_Crit500_Type'][:,1] + ac['Group/Mass_Crit500_Type'][:,2]
+
+                # exclude NaNs, which indicate either the type sum or the total sum had 0 particles
+                ww = np.isfinite(yy) & np.isfinite(xx_code)
+                yy = yy / xx_code # fraction with respect to total
+
+                xm, ym, sm = running_median(xx[ww],yy[ww],binSize=binSize)
+                ym2 = savgol_filter(ym,5,3)
+
+                label = sP.simName if i==0 else ''
+                ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
+
+                #if fracType == 'gas':
+                #    ax.fill_between(xm[:-1], ym2[:-1]-sm[:-1], ym2[:-1]+sm[:-1], 
+                #                    color=c, interpolate=True, alpha=0.3)
+
+    # second legeng
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra = ['f$_{\\rm '+t+'}$' for t in fracTypes]
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
     from matplotlib.backends.backend_pdf import PdfPages
@@ -667,10 +754,10 @@ def plots():
     sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1, redshift=redshift) )
 
     # fullboxes
-    sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
-    sPs.append( simParams(res=512, run='L25n512_PRVS', redshift=redshift) )
+    #sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
+    #sPs.append( simParams(res=512, run='L25n512_PRVS', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L12.5n256_PR02_04', redshift=redshift) )
-    #sPs.append( simParams(res=512, run='L12.5n256_PRVS_B', redshift=redshift) )
+    sPs.append( simParams(res=512, run='L12.5n256_PRVS_B', redshift=redshift) )
 
     ##sPs.append( simParams(res=512, run='L12.5n256_PR06_01', redshift=redshift) )
     ##sPs.append( simParams(res=512, run='L12.5n256_PR06_02', redshift=redshift) )
@@ -686,7 +773,7 @@ def plots():
 
     #sPs.append( simParams(res=1820, run='illustrisprime', redshift=0.5) )
     #sPs.append( simParams(res=910, run='illustris', redshift=redshift) )
-    #sPs.append( simParams(res=455, run='illustris', redshift=redshift) )
+    sPs.append( simParams(res=455, run='illustris', redshift=redshift) )
     #sPs.append( simParams(res=256, run='L25n256_PR00', redshift=redshift) )
 
     # make multipage PDF
@@ -703,7 +790,8 @@ def plots():
     #galaxySizes(sPs, pdf, vsHaloMass=True)
     #stellarMassFunction(sPs, pdf, highMassEnd=False)
     #stellarMassFunction(sPs, pdf, highMassEnd=True)
-    massMetallicityStars(sPs, pdf)
+    #massMetallicityStars(sPs, pdf)
+    baryonicFractionsR500Crit(sPs, pdf)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
