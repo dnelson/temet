@@ -200,7 +200,9 @@ def loadColorTable(ctName):
 
 def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """
-    raise Exception("Not implemented.")
+    from matplotlib.pyplot import cm
+    cmap = cm.get_cmap(ctName)
+    return cmap( np.linspace(0,1,num) )
 
 # --- I/O ---
 
