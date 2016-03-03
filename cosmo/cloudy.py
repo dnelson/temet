@@ -270,8 +270,8 @@ def getRhoTZzGrid(res):
     if res == 'lg':
         densities = np.arange(-7.0, 4.0+eps, 0.1)
         temps     = np.arange(3.0, 9.0+eps, 0.05)
-        metals    = np.arange(-3.0,1.0+eps,0.1)
-        redshifts = np.arange(0.0,8.0+eps,0.5)
+        metals    = np.arange(-3.0,1.0+eps,0.1) # TODO: needed?
+        redshifts = np.arange(0.0,8.0+eps,0.5) # TODO: needed? with 3 of 4, our table will be ~5GB
 
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
@@ -322,7 +322,8 @@ def runCloudyGrid(redshiftInd, nThreads=61, res='sm'):
 def collectCloudyOutputs(res='sm'):
     """ Combine all CLOUDY outputs for a grid into our master HDF5 table used for post-processing. """
     # config
-    maxNumIons = 10 # keep at most the 10 lowest ions per element
+    maxNumIons = 10    # keep at most the 10 lowest ions per element
+    zeroValLog = -30.0 # what Cloudy reports log(zero fraction) as
     densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
 
     def parseCloudyIonFile(basePath,r,d,Z,T,maxNumIons=99):
@@ -360,7 +361,7 @@ def collectCloudyOutputs(res='sm'):
                                     redshifts.size,
                                     densities.size,
                                     metals.size,
-                                    temps.size), dtype='float32' )
+                                    temps.size), dtype='float32' ) + zeroValLog
 
     # loop over all outputs
     for i, r in enumerate(redshifts):
@@ -395,7 +396,6 @@ def collectCloudyOutputs(res='sm'):
         f.attrs['metal']    = metals
 
     print('Done.')
-
 
 class cloudyIon():
     """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
@@ -493,8 +493,10 @@ class cloudyIon():
     def __init__(self, sP, el=None, res='sm', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
         from util.helper import closest
-        self.data = {}
-        self.grid = {}
+        self.data    = {}
+        self.numIons = {}
+        self.grid    = {}
+        self.range   = {}
 
         self.redshiftInterp = redshiftInterp
         self.order = order # quadcubic interpolation by default (1 = quadlinear)
@@ -508,6 +510,7 @@ class cloudyIon():
 
             for element in elements:
                 self.data[element] = f[element][()]
+                self.numIons[element] = f[element].attrs['NumIons']
 
             # load metadata/grid coordinates
             for attr in dict(f.attrs).keys():
@@ -523,6 +526,9 @@ class cloudyIon():
 
             for element in self.data.keys():
                 self.data[element] = np.squeeze( self.data[element][:,redshiftInd,:,:,:] )
+
+        for field in self.grid.keys():
+            self.range[field] = [ self.grid[field].min(), self.grid[field].max() ]
 
         # init interpolation?: pre-filter at order=self.order
         # http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.ndimage.interpolation.map_coordinates.html
@@ -560,6 +566,37 @@ class cloudyIon():
 
         if len(ionNums) == 1: return ionNums[0]
         return ionNums
+
+    def slice(self, element, ionNum, redshift=None, dens=None, metal=None, temp=None):
+        """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
+          input can remain None). """
+        from util.helper import closest
+
+        if sum(pt is not None for pt in (redshift,dens,metal,temp)) != 3:
+            raise Exception('Must specify 3 of 4 grid positions.')
+        if self.redshiftInterp == False:
+            raise Exception('Redshift has been already removed from table, not implemented.')
+
+        element = self.resolveElementNames(element)
+        ionNum  = self.resolveIonNumbers(ionNum)
+
+        # closest array indices
+        _, i0 = closest( self.grid['redshift'], redshift if redshift else 0 )
+        _, i1 = closest( self.grid['dens'], dens if dens else 0 )
+        _, i2 = closest( self.grid['metal'], metal if metal else 0 )
+        _, i3 = closest( self.grid['temp'], temp if temp else 0 )
+
+        # subset of array for element/ionNum
+        locData = self.data[element][ionNum-1,:,:,:,:]
+
+        if redshift is None:
+            return self.grid['redshift'], locData[:,i1,i2,i3]
+        if dens is None:
+            return self.grid['dens'], locData[i0,:,i2,i3]
+        if metal is None:
+            return self.grid['metal'], locData[i0,i1,:,i3]
+        if temp is None:
+            return self.grid['temp'], locData[i0,i1,i2,:]
 
     def frac(self, element, ionNum, dens, metal, temp, redshift=None):
         """ Interpolate the ion abundance table, return log(ionization fraction).
@@ -668,7 +705,7 @@ def plotUVB():
 
     ax.legend(loc='lower left')
 
-    # (C) start third plot
+    # (C) start third plot: 2D colormap of the J_nu magnitude in this plane
     ax = fig.add_subplot(133)
     ax.set_xlim(freq_range)
     ax.set_ylim(z_range)
@@ -678,9 +715,7 @@ def plotUVB():
     ax.set_xlabel('$\\nu$ [ Ryd ]')
     ax.set_ylabel('Redshift')
 
-    # make a 2D colormap of the J_nu magnitude in this plane (what is the spike?)
-    #x, y = np.meshgrid(uvbs[0]['freqRyd'], [uvb['redshift'] for uvb in uvbs])
-
+    # collect data
     x = uvbs[0]['freqRyd']
     y = np.array([uvb['redshift'] for uvb in uvbs])
     XX, YY = np.meshgrid(x, y, indexing='ij')
@@ -690,6 +725,7 @@ def plotUVB():
         z[:,i] = uvb['J_nu']
     z = np.clip(z, Jnu_range[0], Jnu_range[1])
 
+    # render methods
     #plt.pcolormesh(y, x, z, vmin=z_min, vmax=z_max) #cmap='RdBu', 
     #plt.imshow(z, extent=[x.min(),x.max(),y.min(),y.max()], origin='lower', interpolation='nearest')
 
@@ -708,3 +744,95 @@ def plotUVB():
     fig.tight_layout()    
     fig.savefig('uvb.pdf')
     plt.close(fig)
+
+def plotIonAbundances(res='sm'):
+    """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    from datetime import datetime
+    from util import simParams
+    from util.helper import evenlySample, sampleColorTable
+
+    # plot config
+    abund_range = [-10.0,0.0]
+    lw = 3.0
+    ct = 'jet'
+
+    # data config and load full table
+    elements = ['Lithium']
+    redshift = 2.0
+    gridSize = 3 # 3x3
+
+    ion = cloudyIon(sP=simParams(res=455,run='illustris'),res=res,redshiftInterp=True)
+
+    for element in elements:
+        # start pdf, one per element
+        pdf = PdfPages('cloudyIons_' + element + '_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+
+        # (A): plot vs. temperature, lines for different metals, panels for different densities
+        cm = sampleColorTable(ct, ion.grid['metal'].size)
+
+        # loop over all ions of this elemnet
+        for ionNum in np.arange(ion.numIons[element])+1:
+            print(' [%s] %2d' % (element,ionNum))
+
+            fig = plt.figure(figsize=(26,16))
+
+            for i, dens in enumerate( evenlySample(ion.grid['dens'],gridSize**2) ):
+                # panel setup
+                ax = fig.add_subplot(gridSize,gridSize,i+1)
+                ax.set_title(element + str(ionNum) + ' dens='+str(dens))
+                ax.set_xlim(ion.range['temp'])
+                ax.set_ylim(abund_range)
+                ax.set_xlabel('Temp [ log K ]')
+                ax.set_ylabel('Log Abundance Fraction')
+
+                # load table slice and plot
+                for j, metal in enumerate(ion.grid['metal']):
+                    T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
+                    
+                    label = 'Z = '+str(metal) if np.abs(metal-round(metal)) < 0.00001 else ''
+                    ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
+
+            ax.legend(loc='upper right')
+
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
+
+        # (B): plot vs. temperature, lines for different densities, panels for different metals
+        cm = sampleColorTable(ct, ion.grid['dens'].size)
+
+        # loop over all ions of this elemnet
+        for ionNum in np.arange(ion.numIons[element])+1:
+            print(' [%s] %2d' % (element,ionNum))
+
+            fig = plt.figure(figsize=(26,16))
+
+            for i, metal in enumerate( evenlySample(ion.grid['metal'],gridSize**2) ):
+                # panel setup
+                ax = fig.add_subplot(gridSize,gridSize,i+1)
+                ax.set_title(element + str(ionNum) + ' metal='+str(metal))
+                ax.set_xlim(ion.range['temp'])
+                ax.set_ylim(abund_range)
+                ax.set_xlabel('Temp [ log K ]')
+                ax.set_ylabel('Log Abundance Fraction')
+
+                # load table slice and plot
+                for j, dens in enumerate(ion.grid['dens']):
+                    T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
+                    
+                    label = 'dens = '+str(dens) if np.abs(dens-round(dens)) < 0.00001 else ''
+                    ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
+
+            ax.legend(loc='upper right')
+
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
+
+        pdf.close()
+
+        # (C): 2d histograms (x=T, y=dens, color=log fraction) (different panels for metals)
+
+        # (D): compare ions on same plot: (x=T, y=log fraction) (lines=ions) (panels=dens)
