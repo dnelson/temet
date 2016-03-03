@@ -201,3 +201,17 @@ def loadColorTable(ctName):
 def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """
     raise Exception("Not implemented.")
+
+# --- I/O ---
+
+def curRepoVersion():
+    """ Return a hash of the current state of the mercurial python repo. """
+    import subprocess
+    from os import getcwd, chdir
+
+    oldCwd = getcwd()
+    chdir('/n/home07/dnelson/python/')
+    repoRevStr = subprocess.check_output(["hg", "id"]).strip()
+    chdir(oldCwd)
+
+    return repoRevStr

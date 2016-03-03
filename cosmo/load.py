@@ -15,8 +15,9 @@ from os import mkdir
 def auxCat(sP, fields=None):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. """
     from cosmo import auxcatalog
+    from util.helper import curRepoVersion
     import datetime
-    import subprocess
+    import getpass
 
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
@@ -45,13 +46,15 @@ def auxCat(sP, fields=None):
             else:
                 # computation required? request now
                 print('Compute and save: ['+field+']')
-                r[field], desc = auxcatalog.fieldComputeFunctionMapping[field] (sP)
+                r[field], desc, select = auxcatalog.fieldComputeFunctionMapping[field] (sP)
 
                 # save dataset and descriptors as attributes
                 f[field] = r[field]
-                f[field].attrs['Description'] = desc.encode('ascii')
                 f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
-                f[field].attrs['CreatedRev']  = subprocess.check_output(["hg", "id"]).strip()
+                f[field].attrs['CreatedRev']  = curRepoVersion()
+                f[field].attrs['CreatedBy']   = getpass.getuser()
+                f[field].attrs['Description'] = desc.encode('ascii')
+                f[field].attrs['Selection']   = select.encode('ascii')
     return r
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
@@ -455,6 +458,9 @@ def snapshotSubset(sP, partType, fields,
         if field.lower() in ["cellsize", "cellrad"]:
             vol = snapshotSubset(sP, partType, 'vol', **kwargs)
             return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+
+        # DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
+        # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
 
     # alternate field names mappings
     altNames = [ [['center_of_mass','com'], 'Center-of-Mass'],
