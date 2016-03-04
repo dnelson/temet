@@ -5,7 +5,7 @@ util/simParams.py
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
 
-from util import units
+from util.units import units
 from cosmo.util import redshiftToSnapNum, snapNumToRedshift
 
 class simParams:
@@ -31,12 +31,12 @@ class simParams:
     
     # run parameters
     res           = 0     # copied from input
-    boxSize       = 0.0   # boxsize of simulation, kpc
+    boxSize       = 0.0   # boxsize of simulation (ckpc/h)
     targetGasMass = 0.0   # refinement/derefinement target, equal to SPH gas mass in equivalent run
-    gravSoft      = 0.0   # gravitational softening length (ckpc)
+    gravSoft      = 0.0   # gravitational softening length (ckpc/h)
     omega_m       = None  # omega matter, total
     omega_L       = None  # omega lambda
-    omega_k       = 0.0   # always
+    omega_k       = 0.0   # always zero
     omega_b       = None  # omega baryon
     HubbleParam   = None  # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
     mpcUnits      = False # code unit system lengths in Mpc instead of the usual kpc?
@@ -44,7 +44,7 @@ class simParams:
 
     # subboxes
     subboxCen     = None # subbox0 center
-    subboxSize    = None # subbox0 extent (ckpc)
+    subboxSize    = None # subbox0 extent (ckpc/h)
     
     # zoom runs only
     levelmin       = 0    # power of two minimum level parameter (e.g. MUSIC L7=128, L8=256, L9=512, L10=1024)
@@ -57,7 +57,7 @@ class simParams:
     zoomShiftPhys  = None # the domain shift in box units
     targetHaloPos  = None # position at targetRedshift in fullbox
     targetHaloInd  = 0    # hInd (subhalo index) at targetRedshift in fullbox
-    targetHaloRvir = 0.0  # rvir (ckpc) at targetRedshift
+    targetHaloRvir = 0.0  # rvir (ckpc/h) at targetRedshift
     targetHaloMass = 0.0  # mass (logmsun) at targetRedshift
     targetRedshift = 0.0  # maximum redshift the halo can be resimulated to
     ids_offset     = 0    # IDS_OFFSET configuration parameter

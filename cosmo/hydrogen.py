@@ -1,0 +1,182 @@
+"""
+cosmo/hydrogen.py
+  Modeling of the UVB and hydrogen states following Rahmati. Credit to Simeon Bird for many ideas herein.
+"""
+from __future__ import (absolute_import,division,print_function,unicode_literals)
+from builtins import *
+
+import numpy as np
+
+def photoCrossSec(freq, atom='H'):
+    """ Find photoionisation cross-section (for hydrogen) in cm^2 as a function of frequency.
+        This is zero for energies less than 13.6 eV = 1 Ryd, and then falls off like E^-3
+        Normalized to 1 Ryd, where the radiative transfer was calculated originally.
+        From Verner+ (1996), the Opacity Project, values are from Table 1 of astro-ph/9601009.
+          freq : frequency in eV (must be numpy array)
+          return : cross-section [cm^2]
+    """
+    if atom == 'H':
+        nuthr  = 13.6
+        nu0    = 0.4298
+        sigma0 = 1e-18 * 5.475e+4 # convert from Mb to cm^2
+        ya     = 32.88
+        Pp     = 2.963
+        yw     = 0.0
+        y0     = 0.0
+        y1     = 0.0
+
+    if atom == 'Si':
+        nuthr  = 16.35
+        nu0    = 2.556
+        sigma0 = 1e-18 * 4.140 # convert from Mb to cm^2
+        ya     = 13.37
+        Pp     = 11.91
+        yw     = 1.56
+        y0     = 6.634
+        y1     = 0.1272
+
+    cross = np.zeros_like(freq)
+    x = freq / nu0 - y0
+    y = np.sqrt(x**2 + y1**2)
+    Ff = ((x-1)**2 + yw**2) * y**(0.5*Pp-5.5) * (1+np.sqrt(y/ya))**(-Pp)
+
+    ind = np.where(freq >= nuthr)
+    cross[ind] = sigma0 * Ff[ind]
+
+    return cross
+
+def uvbPhotoionAtten(log_hDens, log_temp, redshift):
+    """ Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given 
+        density [log cm^-3] and temperature [log K], using the Rahmati+ (2012) fitting formula.
+        Note the Rahmati formula is based on the FG09 UVB; if you use a different UVB,
+        the self-shielding critical density will change somewhat.
+
+        For z < 5 the UVB is probably known well enough that not much will change, but for z > 5
+        the UVB is highly uncertain; any conclusions about cold gas absorbers at these redshifts
+        need to marginalise over the UVB amplitude here. 
+
+        At energies above 13.6eV the HI cross-section reduces like freq^-3.
+        Account for this by noting that self-shielding happens when tau=1, i.e tau = n*sigma*L = 1.
+        Thus a lower cross-section requires higher densities.
+        Assume then that HI self-shielding is really a function of tau, and thus at a frequency nu,
+        the self-shielding factor can be computed by working out the optical depth for the
+        equivalent density at 13.6 eV. ie, for gamma(n, T), account for frequency dependence with:
+
+        Gamma( n / (sigma(13.6) / sigma(nu) ), T).
+
+        So that a lower x-section leads to a lower effective density. Note Rydberg ~ 1/wavelength, 
+        and 1 Rydberg is the energy of a photon at the Lyman limit, ie, with wavelength 911.8 Angstrom.
+    """
+    import scipy.interpolate.interpolate as spi
+
+    # Opacities for the FG09 UVB from Rahmati 2012.
+    # Note: The values given for z > 5 are calculated by fitting a power law and extrapolating.
+    # Gray power law: -1.12e-19*(zz-3.5)+2.1e-18 fit to z > 2.
+    # gamma_UVB: -8.66e-14*(zz-3.5)+4.84e-13
+    gray_opac = [2.59e-18,2.37e-18,2.27e-18,2.15e-18,2.02e-18,1.94e-18,1.82e-18, 1.71e-18,1.60e-18]
+    gamma_UVB = [3.99e-14,3.03e-13,6e-13,   5.53e-13,4.31e-13,3.52e-13,2.678e-13,1.81e-13,9.43e-14]
+    zz        = [0,       1,       2,       3,       4,       5,       6,        7,       8]
+
+    gamma_UVB_z    = spi.interp1d(zz, gamma_UVB) (redshift) [()] # 1/s (1.16e-12 is HM01 at z=3)
+    gray_opacity_z = spi.interp1d(zz, gray_opac) (redshift) [()] # cm^2 (2.49e-18 is HM01 at z=3)
+
+    f_bar = 0.167 # baryon fraction, Omega_b/Omega_M = 0.0456/0.2726 (Plank/iPrime)
+
+    self_shield_dens = 6.73e-3 * (gray_opacity_z / 2.49e-18)**(-2.0/3.0) * \
+      (10.0**log_temp/1e4)**0.17 * (gamma_UVB_z/1e-12)**(2.0/3.0) * (f_bar/0.17)**(-1.0/3.0) # cm^-3
+
+    # photoionisation rate vs density from Rahmati+ (2012) Eqn. 14. 
+    # (coefficients are best-fit from appendix A)
+    ratio_nH_to_selfShieldDens = 10.0**log_hDens / self_shield_dens
+    photUVBratio = 0.98 * (1+ratio_nH_to_selfShieldDens**1.64)**(-2.28) + \
+                   0.02 * (1+ratio_nH_to_selfShieldDens)**(-0.84)
+
+    # photUVBratio is attenuation fraction, e.g. multiply by gamma_UVB_z to get actual Gamma_photon
+    return photUVBratio, gamma_UVB_z
+
+def neutral_fraction(nH, sP, temp=1e4):
+    """ The neutral fraction from Rahmati+ (2012) Eqn. A8. """
+    # recombination rate from Rahmati+ (2012) Eqn. A3, also Hui & Gnedin (1997). [cm^3 / s] """
+    lamb    = 315614.0/temp
+    alpha_A = 1.269e-13*lamb**1.503 / (1+(lamb/0.522)**0.47)**1.923 
+    
+    # photoionization rate
+    _, gamma_UVB_z = uvbPhotoionAtten(np.log10(nH), np.log10(temp), sP.redshift)
+
+    # A6 from Theuns 98
+    LambdaT = 1.17e-10*temp**0.5*np.exp(-157809.0/temp)/(1+np.sqrt(temp/1e5))
+
+    A = alpha_A + LambdaT
+    B = 2*alpha_A + gamma_UVB_z/nH + LambdaT
+
+    return (B - np.sqrt(B**2-4*A*alpha_A))/(2*A)
+
+def get_H2_frac(nHI):
+    """Get the molecular fraction for neutral gas from the ISM pressure: only meaningful when nH > 0.1."""
+    fH2 = 1.0/(1+(0.1/nHI)**(0.92*5./3.)*35**0.92)
+    return fH2
+
+def neutralHydrogenFraction(gas, sP, atomicOnly=True):
+    """ Get the total neutral hydrogen fraction, by default for the atomic component only. """
+    #Above star-formation threshold, we want a neutral fraction which includes
+    #explicitly the amount of gas in cold clouds.
+    #Ideally we should compute this fraction, and then do
+    #  tcool = self.get_tcool(nH,bar)[ind]
+    #  print np.median(tcool)
+    #  cold_frac = self.star.cold_gas_frac(nH[ind], tcool,self.PhysDensThresh/0.76)
+    #  print np.mean(cold_frac)
+    #  ssnH0 = (1-cold_frac)*self.neutral_fraction(nH[ind], temp[ind])+ cold_frac*self.neutral_fraction(nH[ind], 1e4)
+    #But the cooling time reported by the code is not quite what we want here,
+    #because it uses the internal energy reported by U, whereas we really want
+    #the cooling time using the energy for the hot phase, at a given density.
+    #So just assume that at the threshold all gas is in cold clouds.
+    #In reality, this should be about 90% of gas in cold clouds, so
+    #we will overpredict the neutral fraction by a small amount.
+
+    # fraction of total hydrogen mass which is neutral, as reported by the code, which is already 
+    # based on Rahmati+ (2012) if UVB_SELF_SHIELDING is enabled. But, above the star formation 
+    # threshold, values are reported according to the eEOS, so apply the Rahmati correction directly.
+    frac_nH0 = gas['NeutralHydrogenAbundance'].astype('float32')
+
+    # number density [1/cm^3] of total neutral hydrogen
+    nH = sP.units.nH0ToPhys(frac_nH0, gas['Density'], cgs=True, numDens=True)
+
+    # physical density threshold for star formation [H atoms / cm^3]
+    PhysDensThresh = 0.13 # TODO factor out #cold_gas.StarFormation.get_rho_thresh()
+
+    ww = np.where(nH > PhysDensThresh)
+    frac_nH0[ww] = neutral_fraction(nH[ww], sP)
+
+    # remove H2 contribution?
+    if atomicOnly:
+        frac_nH0[ww] *= ( 1-get_H2_frac(nH[ww]) )
+
+    return frac_nH0
+
+def hydrogenMass(gas, sP, total=False, totalNeutral=False, atomic=False, molecular=False):
+    """ Calculate the (total, total neutral, atomic, or molecular) hydrogen mass per cell. Here we 
+        use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
+        density. Return still in code units, e.g. [10^10 Msun/h].
+    """
+    reqFields = ['Masses','GFM_Metals','Density','NeutralHydrogenAbundance']
+    if not all( [f in gas for f in reqFields] ):
+        raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')
+    if sum( [total,totalNeutral,atomic,molecular] ) != 1:
+        raise Exception('Must request exactly one of total, totalNeutral, atomic, or molecular.')
+    if gas['GFM_Metals'].ndim != 1:
+        raise Exception('Please load just "metals_H" into GFM_Metals to avoid ambiguity.')
+
+    # total hydrogen mass (alternatively, multiple by sP.units.hydrogen_massfrac=0.76)
+    massH = gas['Masses'] * gas['GFM_Metals']
+
+    # which fraction to apply?
+    if total:
+        mass_fraction = 1.0
+    if totalNeutral:
+        mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=False)
+    if atomic:
+        mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=True)
+    if molecular:
+        raise Exception('Not really implemented, though could use the simple model of get_H2_frac.')
+    
+    return massH * mass_fraction
