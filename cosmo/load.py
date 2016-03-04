@@ -436,6 +436,7 @@ def snapshotSubset(sP, partType, fields,
         fields = [fields]
 
     # composite fields (temp, vmag, ...)
+    # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
     for i,field in enumerate(fields):
         # temperature (from u,nelec) [log K]
         if field.lower() in ["temp", "temperature"]:
@@ -456,10 +457,11 @@ def snapshotSubset(sP, partType, fields,
 
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:
+            # TODO: Volume is no more, handle with Mass/Density
             vol = snapshotSubset(sP, partType, 'vol', **kwargs)
             return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
-        # DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
+        # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
 
     # alternate field names mappings
@@ -496,8 +498,6 @@ def snapshotSubset(sP, partType, fields,
             if field.lower() in altLabels: # alternate field name map
                 fields[i] = toLabel            
             if field == toLabel.lower(): # lowercase versions accepted
-                fields[i] = toLabel            
-            if 'bh_'+field.lower() == toLabel.lower(): # BH_* accepted without prefix
                 fields[i] = toLabel
 
     # inds and indRange based subset
@@ -549,7 +549,16 @@ def snapshotSubset(sP, partType, fields,
       { 'names':['phot_g','g'],                         'field':'GFM_StellarPhotometrics', 'fN':4 },
       { 'names':['phot_r','r'],                         'field':'GFM_StellarPhotometrics', 'fN':5 },
       { 'names':['phot_i','i'],                         'field':'GFM_StellarPhotometrics', 'fN':6 },
-      { 'names':['phot_z','z'],                         'field':'GFM_StellarPhotometrics', 'fN':7 } \
+      { 'names':['phot_z','z'],                         'field':'GFM_StellarPhotometrics', 'fN':7 },
+      { 'names':['metals_H', 'hydrogen'],               'field':'GFM_Metals', 'fN':0 },
+      { 'names':['metals_He','helium'],                 'field':'GFM_Metals', 'fN':1 },
+      { 'names':['metals_C', 'carbon'],                 'field':'GFM_Metals', 'fN':2 },
+      { 'names':['metals_N', 'nitrogen'],               'field':'GFM_Metals', 'fN':3 },
+      { 'names':['metals_O', 'oxygen'],                 'field':'GFM_Metals', 'fN':4 },
+      { 'names':['metals_Ne','neon'],                   'field':'GFM_Metals', 'fN':5 },
+      { 'names':['metals_Mg','magnesium'],              'field':'GFM_Metals', 'fN':6 },
+      { 'names':['metals_Si','silicon'],                'field':'GFM_Metals', 'fN':7 },
+      { 'names':['metals_Fe','iron'],                   'field':'GFM_Metals', 'fN':8 } \
     ]
 
     for i,field in enumerate(fields):

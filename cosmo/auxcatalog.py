@@ -12,9 +12,15 @@ from illustris_python.util import partTypeNum
 from cosmo.util import correctPeriodicDistVecs
 from functools import partial
 
-# only compute quantities above a minimum total number of particles threshold? (0=disabled)
-# this could be changed, and for reference is attached as an attribute in the auxCat file
-minNumPartGroup = 100
+""" Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
+    as metadata attributes in the auxCat file. """
+# Group/*: parameters for computations done over each FoF halo
+minNumPartGroup = 100 # only consider halos above a minimum total number of particles? (0=disabled)
+
+# Subhalo/*: parameters for computations done over each Subfind subhalo
+
+# Box/*: parameters for whole box (halo-independent) computations
+boxGridDim = 200
 
 def fofRadialSumType(sP, ptProperty, rad, method='B'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -189,9 +195,91 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
 
     return r, desc, select
 
+def wholeBoxColDensGrid(sP, species):
+    """ Compute a 2D grid of gas column densities [cm^-2] covering the entire simulation box. For 
+        example to derive the neutral hydrogen CDDF. The grid has dimensions of boxGridDim x boxGridDim 
+        and so a grid cell size of (sP.boxSize/boxGridDim) in each dimension. Strategy is a chunked 
+        load of the snapshot files, for each using SPH-kernel deposition to distribute the mass of 
+        the requested species (e.g. HI, CIV) in all gas cells onto the grid.
+    """
+    from cosmo import hydrogen
+    from util.sphMap import sphMap
+
+    if species != 'HI':
+        raise Exception('Not implemented.')
+    if sP.mpcUnits:
+        print('WARNING: VERIFY MPC BEHAVIOR')
+
+    # config
+    nChunks = 10    # split loading into how many pieces
+    axes    = [0,1] # x,y projection
+    
+    # info
+    h = cosmo.load.snapshotHeader(sP)
+
+    cellSize = sP.boxSize / boxGridDim
+    chunkSize = int(h['NumPart'][partTypeNum('gas')] / nChunks)
+
+    desc   = "Square grid of integrated column densities of ["+species+"] in units of [cm^-2]."
+    select = "Grid dimensions: %dx%d pixels (cell size = %06.2f codeunits)." % (boxGridDim,boxGridDim,cellSize)
+
+    print(' '+desc)
+    print(' '+select)
+    print(' Total # Snapshot Load Chunks: '+str(nChunks)+' ('+str(chunkSize)+' cells per load)')
+
+    # allocate return
+    r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
+
+    # loop over chunks (we are simply accumulating, so no need to load everything at once)
+    # we can farm this loop to threads or MPI, so long as each has their own r, and reduce at the end
+    for i in np.arange(nChunks):
+        # calculate load indices (make sure we get to the end)
+        indRange = [i*chunkSize, (i+1)*chunkSize-1]
+        if i == nChunks-1: indRange[1] = h['NumPart'][partTypeNum('gas')]-1
+        print('  [%d] %8d - %d' % (i,indRange[0],indRange[1]))
+
+        # load
+        fields = ['Coordinates','Density','Masses','metals_H','NeutralHydrogenAbundance']
+        gas = cosmo.load.snapshotSubset(sP, 'gas', fields, indRange=indRange)
+
+        # calculate atomic hydrogen mass (HI) [10^10 Msun/h]
+        mHI = hydrogen.hydrogenMass(gas, sP, atomic=True)
+
+        print(' mHI. Min: %f Max: %f' % (mHI.min(), mHI.max()))
+
+        # calculate smoothing size (V = 4/3*pi*h^3)
+        vol = gas['Masses'] / gas['Density']
+        gas['Cellsize'] = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+
+        # info
+        avgsmth = gas['Cellsize'].mean()
+        minsmth = gas['Cellsize'].min()
+        print(" Avg smoothing:",avgsmth," ckpc/h, maximum grid cell size allowed: ",minsmth)
+
+        # grid gas using SPH kernel, return in units of [10^10 Msun * h / ckpc^2]
+        ri = sphMap( pos=gas['Coordinates'], hsml=gas['Cellsize'], mass=mHI, quant=None, axes=axes, ndims=3, 
+                     boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0]), 
+                     boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[boxGridDim,boxGridDim], colDens=True )
+
+        # cumulative sum result for this chunk with previous
+        if ri.shape != r.shape:
+            raise Exception('Shape mismatch.')
+
+        r += ri
+        print(' ri: min %g max %g mean %g     r: min %g max %g mean %g' % (ri.min(),ri.max(),ri.mean(),
+                r.min(),r.max(),r.mean()))
+
+    # convert units from [code column density, above] to [atoms/cm^2] and take log
+    colDens = codeColDensToPhys(r, cgs=True, numDens=True)
+    colDens = np.log10(colDens)
+
+    pdb.set_trace()
+    return colDens, desc, select
+
 # this dictionary contains a mapping between all auxCatalog fields and their generating functions, 
 # where the first sP input is stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
   {'Group/Mass_Crit500_Type' : partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
-   'second'                  : 0
+   'Box/Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
+   'other'                   : 0
   }

@@ -187,21 +187,50 @@ class units(object):
 
         return x_phys
 
-    def codeDensToPhys(self, dens, cgs=False):
-        """ Convert density comoving->physical and add little_h factors. """
+    def codeDensToPhys(self, dens, cgs=False, numDens=False):
+        """ Convert mass density comoving->physical and add little_h factors. 
+            Input: dens in code units should have [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3].
+            Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or [1/cm^3 if cgs=True and numDens=True].
+        """
         if self._sP.redshift is None:
             raise Exception("Need redshift.")
+        if numDens and not cgs:
+            raise Exception('Odd choice.')
 
         dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2 / self._sP.units.scalefac**3
 
         if cgs:
             dens_phys *= self._sP.units.UnitDensity_in_cgs
+        if numDens:
+            dens_phys /= self._sP.units.mass_proton
         return dens_phys
 
-    def nH0ToPhys(self, nh0, dens, cgs=False):
-        """ Convert (NeutralHydrogenAbundance,Density) pair from code units to mass density of 
-            neutral hydrogen, optionally in cgs units. """
-        dens_phys = self.codeDensToPhys(dens, cgs=cgs)
+    def codeColDensToPhys(self, colDens, cgs=False, numDens=False):
+        """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
+            Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
+            Return: [10^10 Msun/kpc^2] or [g/cm^2 if cgs=True] or [1/cm^2] if cgs=True and numDens=True].
+        """
+        if self._sP.redshift is None:
+            raise Exception("Need redshift.")
+        if numDens and not cgs:
+            raise Exception('Odd choice.')
+
+        # convert to 'physical code units' of 10^10 Msun/kpc^2
+        colDensPhys = colDens.astype('float32') * self._sP.units.HubbleParam / self._sP.units.scalefac**2.0
+
+        if cgs:
+            UnitColumnDensity_in_cgs = self._sP.units.UnitMass_in_g / self._sP.units.UnitLength_in_cm**2.0
+            colDensPhys *= UnitColumnDensity_in_cgs # g/cm^2
+        if numDens:
+            colDensPhys /= self._sP.units.mass_proton # 1/cm^2
+
+        return colDensPhys
+
+    def nH0ToPhys(self, nh0, dens, cgs=False, numDens=False):
+        """ Convert (NeutralHydrogenAbundance,Density) pair from code units to mass or number density of 
+            neutral hydrogen, optionally in cgs units. This is total neutral, so includes both atomic 
+            and molecular phases. H2 modeling required to separate them. """
+        dens_phys = self.codeDensToPhys(dens, cgs=cgs, numDens=False)
         dens_phys *= self._sP.units.hydrogen_massfrac # hydrogen mass density (code or cgs units)
         # note: hydrogen number density = dens_phys / self._sP.units.proton_mass
 
