@@ -6,14 +6,16 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
-from numba import jit # TODO
+from numba import jit
 
+@jit(nopython=True, nogil=True)
 def _NEAREST(x, BoxHalf, BoxSize):
-    """ Periodic wrap distance. """
+    """ Periodic wrap distance. 
+        #define NEAREST(x) (((x)>BoxHalf)?((x)-BoxSize):(((x)<-BoxHalf)?((x)+BoxSize):(x)))
+    """
     if BoxSize == 0.0:
         return x
     
-    #define NEAREST(x) (((x)>BoxHalf)?((x)-BoxSize):(((x)<-BoxHalf)?((x)+BoxSize):(x)))
     if x > BoxHalf:
         return x-BoxSize
     else:
@@ -22,12 +24,14 @@ def _NEAREST(x, BoxHalf, BoxSize):
         else:
             return x
 
+@jit(nopython=True, nogil=True)
 def _NEAREST_POS(x, BoxSize):
-    """ Periodic wrap position. """
+    """ Periodic wrap position. 
+        #define NEAREST_POS(x) (((x)>BoxSize)?((x)-BoxSize):(((x)<0)?((x)+BoxSize):(x)))
+    """
     if BoxSize == 0.0:
         return x
 
-    #define NEAREST_POS(x) (((x)>BoxSize)?((x)-BoxSize):(((x)<0)?((x)+BoxSize):(x)))
     if x > BoxSize:
         return x-BoxSize
     else:
@@ -36,6 +40,7 @@ def _NEAREST_POS(x, BoxSize):
         else:
             return x
 
+@jit(nopython=True, nogil=True)
 def _getkernel(hinv, r2, C1, C2, C3):
     """ Project spline kernel. """
     u = np.sqrt(r2) * hinv
@@ -45,6 +50,7 @@ def _getkernel(hinv, r2, C1, C2, C3):
     else:
         return C3 * (1.0 - u) * (1.0 - u) * (1.0 - u)
 
+@jit(nopython=True, nogil=True)
 def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                 normQuant,normColDens):
@@ -54,7 +60,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     BoxHalf = boxSizeSim / 2.0
     axis3   = 3 - axes[0] - axes[1]
 
-    p = np.zeros( 3, dtype='float32' )
+    p = np.zeros( 3, dtype=np.float32 )
 
     # coefficients for SPH spline kernel and its derivative
     if ndims == 1:
@@ -84,15 +90,15 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 
     # loop over all particles
     for k in np.arange(NumPart):
-        if k % int(NumPart/10) == 0:
-            print(str(k/NumPart*100.0) + '%')
+        #if k % int(NumPart/10) == 0:
+        #    print(str(k/NumPart*100.0) + '%')
 
         p[0] = pos[k,0]
         p[1] = pos[k,1]
         p[2] = pos[k,2] if pos.shape[1] == 3 else 0.0
         h    = hsml[k]
         v    = mass[k] if mass.size > 1 else mass[0]
-        w    = quant[k] if quant is not None else 0.0
+        w    = quant[k] if quant.size > 1 else 0.0
 
         # clip points ouside box (z) dimension
         if pos.shape[1] == 3:
@@ -118,8 +124,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         hinv = 1.0 / h
 
         # number of pixels covered by particle
-        nx = int(h / pixelSizeX + 1)
-        ny = int(h / pixelSizeY + 1)
+        nx = np.int(h / pixelSizeX + 1)
+        ny = np.int(h / pixelSizeY + 1)
 
         # coordinates of pixel center of particle
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
@@ -151,8 +157,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim)
 
                 # pixel array indices
-                i = int(xxx / pixelSizeX)
-                j = int(yyy / pixelSizeY)
+                i = np.int(xxx / pixelSizeX)
+                j = np.int(yyy / pixelSizeY)
 
                 # skip if desired pixel is out of bounds
                 if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:
@@ -182,7 +188,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     if normColDens:
         dens_out /= pixelArea
 
-    print('Done')
+    # void return
 
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, colDens=False):
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
@@ -238,15 +244,18 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     normQuant   = True # must be false and then done at the end if multiple
     normColDens = colDens
 
+    # massage quant if not specified
+    if quant is None:
+        quant = np.array([0])
+
     # call JIT compiled kernel
     # TODO: could here split pos,hsml,mass,quant among threads, give them separate rArrays to write, and sum
     _calcSphMap(pos,hsml,mass,quant,rDens,rQuant,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                 normQuant,normColDens)
 
-    if quant is not None:
+    if quant.size > 1:
         return rQuant
-
     return rDens
 
 def test():
@@ -258,6 +267,7 @@ def test():
 
     from cosmo.load import snapshotSubset
     from util.simParams import simParams
+    import time
 
     # config data
     if 0:
@@ -278,22 +288,26 @@ def test():
     if 1:
         # load some gas in a box
         sP = simParams(res=128, run='tracer', redshift=0.0)
-        pos   = snapshotSubset(sP, 'gas', 'pos', inds=np.arange(10000)*100)
-        hsml  = snapshotSubset(sP, 'gas', 'cellrad', inds=np.arange(10000)*100)
-        mass  = snapshotSubset(sP, 'gas', 'mass', inds=np.arange(10000)*100)
-        quant = snapshotSubset(sP, 'gas', 'temp', inds=np.arange(10000)*100)
+        pos   = snapshotSubset(sP, 'gas', 'pos')#, inds=np.arange(10000)*100)
+        hsml  = snapshotSubset(sP, 'gas', 'cellrad')#, inds=np.arange(10000)*100)
+        mass  = snapshotSubset(sP, 'gas', 'mass')#, inds=np.arange(10000)*100)
+        quant = snapshotSubset(sP, 'gas', 'temp')#, inds=np.arange(10000)*100)
 
     # config imaging
-    nPixels    = [30,30]
+    nPixels    = [100,100]
     ndims      = 3
     boxCen     = sP.boxSize * np.array([0.5,0.5,0.5])
     boxSizeImg = np.array([sP.boxSize,sP.boxSize,sP.boxSize])
     axes       = [0,1]
 
     # map
-    densMap  = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
-    colMap   = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims, colDens=True)
-    quantMap = sphMap(pos, hsml, mass, quant, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
+    start_time = time.time()
+    nLoops = 1
+    for i in np.arange(nLoops):
+        densMap  = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
+        colMap   = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims, colDens=True)
+        quantMap = sphMap(pos, hsml, mass, quant, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
+    print('3 maps took [' + str((time.time()-start_time)/nLoops) + '] sec')
 
     # plot
     extent = [ boxCen[axes[0]] - 0.5*boxSizeImg[0], boxCen[axes[0]] + 0.5*boxSizeImg[0], 
