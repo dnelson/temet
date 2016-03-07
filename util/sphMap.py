@@ -56,13 +56,12 @@ def _getkernel(hinv, r2, C1, C2, C3):
 def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                 normQuant,normColDens):
-    """ Core routine for sphMap(), see below. """
+    """ Core routine for sphMap(), see below. 
+        Note: np.arange() seems to have a huge penalty here instead of range(). """
     # init
     NumPart = pos.shape[0]
     BoxHalf = boxSizeSim / 2.0
     axis3   = 3 - axes[0] - axes[1]
-
-    p = np.zeros( 3, dtype=np.float32 )
 
     # coefficients for SPH spline kernel and its derivative
     if ndims == 1:
@@ -91,25 +90,22 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         hsmlMax = pixelSizeY * 50.0
 
     # loop over all particles
-    for k in np.arange(NumPart):
-        #if k % int(NumPart/10) == 0:
-        #    print(str(k/NumPart*100.0) + '%')
-
-        p[0] = pos[k,0]
-        p[1] = pos[k,1]
-        p[2] = pos[k,2] if pos.shape[1] == 3 else 0.0
-        h    = hsml[k]
-        v    = mass[k] if mass.size > 1 else mass[0]
-        w    = quant[k] if quant.size > 1 else 0.0
+    for k in range(NumPart):
+        p0 = pos[k,axes[0]]
+        p1 = pos[k,axes[1]]
+        p2 = pos[k,axis3] if pos.shape[1] == 3 else 0.0
+        h  = hsml[k]
+        v  = mass[k] if mass.size > 1 else mass[0]
+        w  = quant[k] if quant.size > 1 else 0.0
 
         # clip points ouside box (z) dimension
         if pos.shape[1] == 3:
-            if np.abs( _NEAREST(p[axis3]-boxCen[2],BoxHalf,boxSizeSim) ) > 0.5 * boxSizeImg[2]:
+            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf,boxSizeSim) ) > 0.5 * boxSizeImg[2]:
                 continue
 
         # position relative to box (x,y) minimum
-        pos0 = p[axes[0]] - (boxCen[0] - 0.5*boxSizeImg[0])
-        pos1 = p[axes[1]] - (boxCen[1] - 0.5*boxSizeImg[1])
+        pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
+        pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
 
         # clamp smoothing length
         if h < hsmlMin:
@@ -118,8 +114,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
             h = hsmlMax
 
         # clip points outside box (x,y) dimensions
-        if np.abs( _NEAREST(p[axes[0]]-boxCen[0],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[0]+h or \
-           np.abs( _NEAREST(p[axes[1]]-boxCen[1],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[1]+h:
+        if np.abs( _NEAREST(p0-boxCen[0],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[0]+h or \
+           np.abs( _NEAREST(p1-boxCen[1],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[1]+h:
            continue
 
         h2 = h*h
@@ -136,8 +132,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         # calculate sum (normalization)
         kSum = 0.0
         
-        for dx in np.arange(-nx,nx+1):
-            for dy in np.arange(-ny,ny+1):
+        for dx in range(-nx,nx+1):
+            for dy in range(-ny,ny+1):
                 # distance of covered pixel from actual position
                 xx = x + dx * pixelSizeX - pos0
                 yy = y + dy * pixelSizeY - pos1
@@ -152,8 +148,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         v_over_sum = v / kSum # normalization such that all kernel values sum to the weight v
 
         # calculate contribution
-        for dx in np.arange(-nx,nx+1):
-            for dy in np.arange(-ny,ny+1):
+        for dx in range(-nx,nx+1):
+            for dy in range(-ny,ny+1):
                 # coordinates of pixel center of covering pixels
                 xxx = _NEAREST_POS(x + dx * pixelSizeX, boxSizeSim)
                 yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim)
@@ -181,8 +177,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     # normalize mass weighted quantity
     # this only works for all-at-once calcs, otherwise maps need first to be collected, then divided
     if normQuant:
-        for j in np.arange(nPixels[1]):
-            for i in np.arange(nPixels[0]):
+        for j in range(nPixels[1]):
+            for i in range(nPixels[0]):
                 if dens_out[j, i] > 0:
                     quant_out[j, i] /= dens_out[j, i]
 
@@ -193,7 +189,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     # void return
 
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, 
-           colDens=False, nThreads=1):
+           colDens=False, nThreads=16):
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
         quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
         returned, optionally converted to a column density map if colDens=True. If quant is specified, 
@@ -207,6 +203,9 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       boxSizeImg[3]  : the physical size the image should cover, same units as pos
       boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
       boxCen[3]      : (x,y,z) coordinates of the center of the imaging box, same units as pos
+      nPixels[2]     : number of pixels in x,y directions for output image
+      ndims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
+      colDens        : if True, normalize each grid value by its area (default=False)
     """
     # input sanity checks
     if len(boxSizeImg) != 3 or not isinstance(boxSizeSim,(float)) or len(boxCen) != 3:
@@ -244,43 +243,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     if quant is None:
         quant = np.array([0])
 
-    class mapThread(threading.Thread):
-        """ desc """
-        def __init__(self, threadNum, nThreads):
-            super(mapThread, self).__init__()
-
-            print(' create %d of %d' % (threadNum,nThreads))
-
-            # allocate local return grids as attributes of the function
-            self.rDens = np.zeros( nPixels, dtype='float32' )
-            self.rQuant = np.zeros( nPixels, dtype='float32' )
-
-            # determine local slice (these are probably views not copies, even better)
-            self.threadNum = threadNum
-            self.nThreads = nThreads
-
-            self.pos  = pSplit(pos, nThreads, threadNum)
-            self.hsml = pSplit(hsml, nThreads, threadNum)
-            self.mass = pSplit(mass, nThreads, threadNum)
-
-            print(np.may_share_memory(self.mass,mass))
-
-            self.quant = quant
-            if quant.size > 1:
-                self.quant = pSplit(quant, nThreads, threadNum)
-
-        def run(self):
-            # call JIT compiled kernel (normQuant=False since we handle this later)
-            #print(' run %d of %d [pos.size=%d mass.size=%d]' % (self.threadNum,self.nThreads,self.pos.size,self.mass.size))
-            _calcSphMap(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,
-                        boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
-                        False,colDens)
-            #self.rDens += 5.0
-
     # single threaded?
-    import time
-    start_time = time.time()
-
+    # ----------------
     if nThreads == 1:
         # allocate return grids
         rDens = np.zeros( nPixels, dtype='float32' )
@@ -291,30 +255,63 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                     boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                     True,colDens)
 
-        #print('serial %g sec' % (time.time()-start_time))
         if quant.size > 1:
             return rQuant
         return rDens
 
-    # else, multithreaded: allocate master return grids
+    # else, multithreaded
+    # -------------------
+    class mapThread(threading.Thread):
+        """ Subclass Thread() to provide local storage (rDens,rQuant) which can be retrieved after 
+            this thread terminates and added to the global return. Note: This technique with this 
+            algorithm has ~94 percent scaling efficiency to 16 threads, drops to ~70 percent at 32. """
+        def __init__(self, threadNum, nThreads):
+            super(mapThread, self).__init__()
+
+            # allocate local return grids as attributes of the function
+            self.rDens = np.zeros( nPixels, dtype='float32' )
+            self.rQuant = np.zeros( nPixels, dtype='float32' )
+
+            # determine local slice (these are views not copies, even better)
+            self.threadNum = threadNum
+            self.nThreads = nThreads
+
+            self.pos  = pSplit(pos, nThreads, threadNum)
+            self.hsml = pSplit(hsml, nThreads, threadNum)
+            self.mass = pSplit(mass, nThreads, threadNum)
+
+            self.quant = quant
+            if quant.size > 1:
+                self.quant = pSplit(quant, nThreads, threadNum)
+
+            # copy others into local space (non-self inputs to _calc() appears to prevent GIL release)
+            self.boxSizeImg = boxSizeImg
+            self.boxSizeSim = boxSizeSim
+            self.boxCen = boxCen
+            self.axes = axes
+            self.ndims = ndims
+            self.nPixels = nPixels
+            self.colDens = colDens
+
+        def run(self):
+            # call JIT compiled kernel (normQuant=False since we handle this later)
+            _calcSphMap(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,
+                        self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
+                        False,self.colDens)
+
+    # create threads, start them, and wait for all to finish
+    threads = [mapThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
+
+    # allocate master return grids
     rDens = np.zeros( nPixels, dtype='float32' )
     rQuant = np.zeros( nPixels, dtype='float32' )
 
-    # create threads, start them, and wait for all to finish
-    print(' global pos.size=%d mass.size=%d' % (pos.size,mass.size))
-    threads = [mapThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
-    # TODO: nogil is working? nThreads>1 is always slower it seems
-
-    #threads = [threading.Thread(target=_calcSphMap, args=(pos,hsml,mass,quant,rDens,rQuant,
-    #                boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
-    #                True,colDens)) for threadNum in np.arange(nThreads)]
-
+    # launch each thread, detach, and then wait for each to finish
     for thread in threads:
         thread.start()
-    for i, thread in enumerate(threads):
-        print('wait %d' % i)
+        
+    for thread in threads:
         thread.join()
-        print('done %d afer %g sec' % (i, time.time()-start_time))
 
         # after each has finished, add its result array to the global
         rQuant += thread.rQuant
@@ -346,7 +343,7 @@ def test():
         class sP:
             boxSize = 100.0
 
-        nPts = 2000
+        nPts = 200000
         posDtype = 'float32'
         hsmlMinMax = [1.0,10.0]
         massMinMax = [1e-5,1e-4]
@@ -359,10 +356,10 @@ def test():
     if 1:
         # load some gas in a box
         sP = simParams(res=128, run='tracer', redshift=0.0)
-        pos   = snapshotSubset(sP, 'gas', 'pos')#, inds=np.arange(10000)*100)
-        hsml  = snapshotSubset(sP, 'gas', 'cellrad')#, inds=np.arange(10000)*100)
-        mass  = snapshotSubset(sP, 'gas', 'mass')#, inds=np.arange(10000)*100)
-        quant = snapshotSubset(sP, 'gas', 'temp')#, inds=np.arange(10000)*100)
+        pos   = snapshotSubset(sP, 'gas', 'pos')
+        hsml  = snapshotSubset(sP, 'gas', 'cellrad')
+        mass  = snapshotSubset(sP, 'gas', 'mass')
+        quant = snapshotSubset(sP, 'gas', 'temp')
 
     # config imaging
     nPixels    = [100,100]
@@ -375,8 +372,8 @@ def test():
     start_time = time.time()
     nLoops = 1
     for i in np.arange(nLoops):
-        densMap  = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims, nThreads=1)
-        colMap   = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims, colDens=True, nThreads=4)
+        densMap  = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
+        colMap   = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims, colDens=True)
         quantMap = sphMap(pos, hsml, mass, quant, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
     print('3 maps took [' + str((time.time()-start_time)/nLoops) + '] sec')
 
