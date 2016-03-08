@@ -571,15 +571,17 @@ def guinevereData():
 
 def plotPosTempVsRedshift():
     """ Plot trMC position (projected) and temperature evolution vs redshift. """
+    from cosmo.util import correctPeriodicPosBoxWrap
+
     # config
     axis1 = 0
-    axis2 = 1
+    axis2 = 2
     alpha = 0.05
-    boxSize = 2000.0 # ckpc/h
+    boxSize = 1000.0 # ckpc/h
     sP = simParams(res=1820, run='illustris', redshift=0.0)
 
     shNums = [int(s[:-5].rsplit('_',1)[1]) for s in glob.glob(sP.derivPath + 'subhalo_*.hdf5')]
-    shNum = shNums[75]
+    shNum = shNums[0]
 
     # load
     with h5py.File(sP.derivPath + 'subhalo_'+str(shNum)+'.hdf5') as f:
@@ -588,57 +590,73 @@ def plotPosTempVsRedshift():
         sfr  = f['sfr'][()]
         redshift = f['Redshift'][()]
 
-        pt = cosmo.load.groupCatSingle(sP, subhaloID=f['SubhaloID'][0])['SubhaloPos']
+        #pt = cosmo.load.groupCatSingle(sP, subhaloID=f['SubhaloID'][0])['SubhaloPos']
 
     # plot
-    fig = plt.figure(figsize=(10,10))
-    ax = fig.add_subplot(111)
-    ax.set_xlim(pos[:,:,axis1].mean() + np.array([-boxSize,boxSize]))
-    ax.set_ylim(pos[:,:,axis2].mean() + np.array([-boxSize,boxSize]))
-    ax.set_aspect(1.0)
+    if 0:
+        fig = plt.figure(figsize=(10,10))
+        ax = fig.add_subplot(111)
+        ax.set_xlim(pos[:,:,axis1].mean() + np.array([-boxSize,boxSize]))
+        ax.set_ylim(pos[:,:,axis2].mean() + np.array([-boxSize,boxSize]))
+        ax.set_aspect(1.0)
 
-    ax.set_title('Evolution of tracer positions with time check')
-    ax.set_xlabel('x [ckpc/h]')
-    ax.set_ylabel('y [ckpc/h]')
+        ax.set_title('Evolution of tracer positions with time check')
+        ax.set_xlabel('x [ckpc/h]')
+        ax.set_ylabel('y [ckpc/h]')
 
-    # make relative and periodic correct
-    xDist = vecs[:,0] - pt[0]
-    yDist = vecs[:,1] - pt[1]
-    zDist = vecs[:,2] - pt[2]
+        # make relative and periodic correct
+        correctPeriodicPosBoxWrap(pos, sP)
 
-    correctPeriodicDistVecs(xDist, sP)
-    correctPeriodicDistVecs(yDist, sP)
-    correctPeriodicDistVecs(zDist, sP)
+        #for i in np.arange(pos.shape[1]):
+        for i in np.arange(10000):
+            ax.plot(pos[:,i,axis1], pos[:,i,axis2], '-', color='#333333', alpha=alpha, lw=1.0)
 
-    for i in np.arange(pos.shape[1]): #np.arange(1000)
-        ax.plot(pos[:,i,axis1], pos[:,i,axis2], '-', color='#333333', alpha=alpha, lw=1.0)
-
-    fig.tight_layout()
-    plt.savefig('trMC_checkPos_'+sP.simName+'_sh'+str(shNum)+'.pdf')
-    plt.close(fig)
+        fig.tight_layout()
+        plt.savefig('trMC_checkPos_'+sP.simName+'_sh'+str(shNum)+'.pdf')
+        plt.close(fig)
 
     # plot 2
-    fig = plt.figure(figsize=(16,8))
-    ax = fig.add_subplot(111)
-    ax.set_xlim([0.0,0.5])
-    ax.set_ylim([3.5,8.0])
+    if 1:
+        fig = plt.figure(figsize=(16,8))
+        ax = fig.add_subplot(111)
+        ax.set_xlim([0.0,0.5])
+        ax.set_ylim([3.5,8.0])
 
-    ax.set_title('Evolution of tracer temperatures with time check')
-    ax.set_xlabel('Redshift')
-    ax.set_ylabel('Temp [log K]')
+        ax.set_title('Evolution of tracer temperatures with time check')
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('Temp [log K]')
 
-    #for i in np.arange(temp.shape[1]):
-    for i in np.arange(100):
-        ww = np.isfinite(temp[:,i]) & (sfr[:,i] == 0.0)
-        if not np.count_nonzero(ww[0]):
-            print('skip: '+str(i))
-            continue
+        #for i in np.arange(temp.shape[1]):
+        for i in [205]:
+            # plot only snapshots with temp (in gas) and sfr=0 (not eEOS)
+            #ww = np.isfinite(temp[:,i]) & (sfr[:,i] == 0.0)
+            #if not np.count_nonzero(ww):
+            #    continue
+            #ax.plot(redshift[ww], np.squeeze(temp[ww,i]), '-', color='#333333', alpha=alpha*5, lw=2.0)
 
-        ax.plot(redshift[ww], np.squeeze(temp[ww,i]), '-', color='#333333', alpha=alpha, lw=1.0)
+            # plot only those tracers which have been always in gas with sfr=0 their whole track
+            #ww = np.isnan(temp[:,i]) | (sfr[:,i] > 0.0)
+            #if np.count_nonzero(ww):
+            #    continue
+            #ax.plot(redshift, np.squeeze(temp[:,i]), '-', color='#333333', alpha=alpha, lw=1.0)
 
-    fig.tight_layout()
-    plt.savefig('trMC_checkTemp_'+sP.simName+'_sh'+str(shNum)+'.pdf')
-    plt.close(fig)
+            # test
+            ww = np.isfinite(temp[:,i]) & (sfr[:,i] == 0.0)
+            ax.plot(redshift[ww], np.squeeze(temp[ww,i]), '-', alpha=alpha*10, lw=2.0, label='gas sfr==0')
+
+            ww = np.isfinite(temp[:,i])
+            ax.plot(redshift[ww], np.squeeze(temp[ww,i]), '--', alpha=alpha*10, lw=2.0, label='gas sfr any')
+
+            ax.plot(redshift, np.squeeze(temp[:,i]), 'o', alpha=alpha*10, lw=2.0, label='star or gas')
+
+            print(temp[:,i])
+
+        # test
+        ax.legend()
+
+        fig.tight_layout()
+        plt.savefig('trMC_checkTempB_'+sP.simName+'_sh'+str(shNum)+'.pdf')
+        plt.close(fig)
 
 def plotStarFracVsRedshift():
     """ Plot the fraction of tracers in stars vs. gas parents vs redshift. """
