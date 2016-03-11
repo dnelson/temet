@@ -101,7 +101,7 @@ def makeCloudyConfigFile(gridVals):
     confLines = []
 
     # general parameters to control the CLOUDY run
-    confLines.append( "no molecules" )               # only atomic cooling processes (TODO: use for H2?)
+    #confLines.append( "no molecules" )              # only atomic cooling processes (use for H2)
     confLines.append( "no induced processes" )       # following Wiersma+ (2009)
     confLines.append( "abundances GASS10" )          # solar abundances of Grevesse+ (2010)
     confLines.append( "iterate to convergence" )     # iterate until optical depths converge
@@ -179,14 +179,14 @@ def getRhoTZzGrid(res):
     if res == 'sm':
         densities = np.arange(-7.0, 4.0+eps, 0.2)
         temps     = np.arange(3.0, 9.0+eps, 0.1)
-        metals    = np.arange(-3.0,1.0+eps,0.2)
+        metals    = np.arange(-3.0,1.0+eps,0.4)
         redshifts = np.arange(0.0,8.0+eps,1.0)
 
     if res == 'lg':
         densities = np.arange(-7.0, 4.0+eps, 0.1)
         temps     = np.arange(3.0, 9.0+eps, 0.05)
-        metals    = np.arange(-3.0,1.0+eps,0.1) # TODO: needed?
-        redshifts = np.arange(0.0,8.0+eps,0.5) # TODO: needed? with 3 of 4, our table will be ~5GB
+        metals    = np.arange(-3.0,1.0+eps,0.4)
+        redshifts = np.arange(0.0,8.0+eps,0.5)
 
     densities[np.abs(densities) < eps] = 0.0
     metals[np.abs(metals) < eps] = 0.0
@@ -737,6 +737,7 @@ def plotIonAbundances(res='sm'):
                 for j, dens in enumerate(ion.grid['dens']):
                     T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
                     
+                    # TODO: change dens labels to only even ints
                     label = 'dens = '+str(dens) if np.abs(dens-round(dens)) < 0.00001 else ''
                     ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
 
@@ -751,3 +752,5 @@ def plotIonAbundances(res='sm'):
         # (C): 2d histograms (x=T, y=dens, color=log fraction) (different panels for metals)
 
         # (D): compare ions on same plot: (x=T, y=log fraction) (lines=ions) (panels=dens)
+
+        # (E): vs redshift

@@ -182,3 +182,28 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, atomic=False, molecul
         raise Exception('Not really implemented, though could use the simple model of get_H2_frac.')
     
     return massH * mass_fraction
+
+def calculateCDDF(N_HI_GridVals, binMin, binMax, binSize, sP):
+    """ Calculate the CDDF (column density distribution function) f(N) given an input array of 
+        HI column densities values [cm^-2], from a grid of sightlines covering an entire box.
+      N_HI_GridVals, binMin, binMax : column densities in [log cm^-2]
+      binSize : in [log cm^-2] """
+
+    # Delta_X(z): absorption distance per sightline (Bird+ 2014 Eqn. 10) (Nagamine+ 2003 Eqn. 9) 
+    dX = sP.units.H0_h1_s/sP.units.c_cgs * (1+sP.redshift)**2
+    dX *= sP.boxSize * sP.units.UnitLength_in_cm # [dimensionless]
+
+    # setup binning (Delta_N is the width of the colDens bin)
+    hBinPts = 10**np.arange(binMin, binMax, binSize)
+    binCen  = np.array([0.5*(hBinPts[i]+hBinPts[i+1]) for i in np.arange(0,hBinPts.size-1)])
+    delta_N = np.array([hBinPts[i+1]-hBinPts[i] for i in np.arange(hBinPts.size-1)])
+
+    #ind = np.where(N_HI_GridVals >= binMin)
+
+    # f(N) defined as f(N)=F(N) / Delta_N * Delta_X(z)
+    # where F(N) is the fraction of the total number of grid cells in a given colDens bin
+    F_N = np.histogram( np.ravel(N_HI_GridVals), np.log10(hBinPts) )[0]
+    f_N = F_N / (delta_N * dX * N_HI_GridVals.size) # units of [cm^2]
+
+    return f_N, binCen
+    

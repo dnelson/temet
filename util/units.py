@@ -232,12 +232,13 @@ class units(object):
     def nH0ToPhys(self, nh0, dens, cgs=False, numDens=False):
         """ Convert (NeutralHydrogenAbundance,Density) pair from code units to mass or number density of 
             neutral hydrogen, optionally in cgs units. This is total neutral, so includes both atomic 
-            and molecular phases. H2 modeling required to separate them. """
+            and molecular phases. If nh0=None, then return instead total hydrogen density. """
         dens_phys = self.codeDensToPhys(dens, cgs=cgs, numDens=numDens)
         dens_phys *= self._sP.units.hydrogen_massfrac # hydrogen mass density (code or cgs units)
         # note: hydrogen number density = dens_phys / self._sP.units.proton_mass
 
-        dens_phys *= nh0 # neutral hydrogen mass density (code or cgs units)
+        if nh0 is not None:
+            dens_phys *= nh0 # neutral hydrogen mass density (code or cgs units)
         # note: H+ number density = (H number density) - (H0 number density)
 
         return dens_phys

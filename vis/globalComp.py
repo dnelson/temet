@@ -774,6 +774,108 @@ def baryonicFractionsR500Crit(sPs, pdf):
     pdf.savefig()
     plt.close(fig)
 
+def nHIcddf(sPs, pdf, moment=0):
+    """ CDDF (column density distribution function) of neutral (atomic) hydrogen in the whole box. """
+    from cosmo.load import auxCat
+    from util.helper import logZeroSafe
+    from util import simParams
+
+    # config
+    simRedshift = 3.0 # at what redshift calculate the HI grid for the simulations?
+    linestyles  = ['-',':'] # HI_H2, HI_noH2
+    speciesList = ['nHI','nHI_noH2']
+
+    # plot setup
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([17.0, 23.0])
+    ax.set_xlabel('log N$_{\\rm HI}$ [ cm$^{-2}$ ]')
+
+    if moment == 0:
+        ax.set_ylim([-27, -18])
+        ax.set_ylabel('CDDF$_{0}$:  log f(N$_{\\rm HI}$)  [ cm$^{2}$ ]')
+    if moment == 1:
+        ax.set_ylim([-4, 0])
+        ax.set_ylabel('CDDF$_{1}$:  log N$_{\\rm HI}$ f(N$_{\\rm HI}$)')
+
+    # observational points
+    z13 = zafar2013()
+    n12 = noterdaeme2012()
+    n09 = noterdaeme2009()
+    k13 = kim2013cddf()
+    p10 = prochaska10cddf()
+
+    if moment == 1:
+        z13['log_fHI'] = np.log10( 10.0**z13['log_fHI'] * 10.0**z13['log_NHI'] )
+        n12['log_fHI'] = np.log10( 10.0**n12['log_fHI'] * 10.0**n12['log_NHI'] )
+        n09['log_fHI'] = np.log10( 10.0**n09['log_fHI'] * 10.0**n09['log_NHI'] )
+        k13['log_fHI'] = np.log10( 10.0**k13['log_fHI'] * 10.0**k13['log_NHI'] )
+        p10['log_fHI_lower'] = np.log10( 10.0**p10['log_fHI_lower'] * 10.0**p10['log_NHI'] )
+        p10['log_fHI_upper'] = np.log10( 10.0**p10['log_fHI_upper'] * 10.0**p10['log_NHI'] )
+
+    l1,_,_ = ax.errorbar(z13['log_NHI'], z13['log_fHI'], yerr=[z13['log_fHI_errDown'],z13['log_fHI_errUp']],
+               xerr=z13['log_NHI_xerr'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
+    l2,_,_ = ax.errorbar(n12['log_NHI'], n12['log_fHI'], yerr=n12['log_fHI_err'], xerr=n12['log_NHI_xerr'], 
+                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='s')
+    l3,_,_ = ax.errorbar(n09['log_NHI'], n09['log_fHI'], yerr=n09['log_fHI_err'], xerr=n12['log_NHI_xerr'], 
+                         color='#cccccc', ecolor='#cccccc', alpha=0.9, capsize=0.0, fmt='o')
+    l4,_,_ = ax.errorbar(k13['log_NHI'], k13['log_fHI'], yerr=[k13['log_fHI_errDown'],k13['log_fHI_errUp']],
+                         color='#444444', ecolor='#444444', alpha=0.9, capsize=0.0, fmt='D')
+
+    l5 = ax.fill_between(p10['log_NHI'], p10['log_fHI_lower'], p10['log_fHI_upper'], 
+                    color='#dddddd', interpolate=True, alpha=0.3)
+
+    labels = [z13['label'],n12['label'],n09['label'],k13['label'],p10['label']]
+    legend1 = ax.legend([l1,l2,l3,l4,l5], labels, loc='lower left')
+    ax.add_artist(legend1)
+
+    # colDens definitions, plot vertical dotted lines [cm^-2] at dividing points
+    limitDLA = 20.3
+    ax.plot( [limitDLA,limitDLA], ax.get_ylim(), '--', color='#dddddd', alpha=0.5 )
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+        else:
+            print('CDDF HI: '+sP.simName)
+
+            # redshift != 0
+            sPgrid = simParams(res=sP.res, run=sP.run, redshift=simRedshift)
+
+            c = ax._get_lines.prop_cycler.next()['color']
+
+            # once including H2 modeling, once without
+            for i, species in enumerate(speciesList):
+                # load pre-computed CDDF
+                ac = auxCat(sPgrid, fields=['Box/CDDF_'+species])
+
+                n_HI  = ac['Box/CDDF_'+species][0,:]
+                fN_HI = ac['Box/CDDF_'+species][1,:]
+
+                # plot
+                xx = np.log10(n_HI)
+
+                if moment == 0:
+                    yy = logZeroSafe(fN_HI, zeroVal=np.nan)
+                if moment == 1:
+                    yy = logZeroSafe(fN_HI*n_HI, zeroVal=np.nan)
+
+                label = sP.simName+' z=%3.1f' % sPgrid.redshift if i == 0 else ''
+                ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
+
+    # second legend
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra = [str(s) for s in speciesList]
+
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
     from matplotlib.backends.backend_pdf import PdfPages
@@ -792,10 +894,11 @@ def plots():
     sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1, redshift=redshift) )
 
     # fullboxes
-    sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
+    #sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L25n512_PRVS', redshift=redshift) )
     #sPs.append( simParams(res=512, run='L12.5n256_PR02_04', redshift=redshift) )
     sPs.append( simParams(res=512, run='L12.5n256_PRVS_B', redshift=redshift) )
+    #sPs.append( simParams(res=256, run='feedback', redshift=redshift) )
 
     ##sPs.append( simParams(res=512, run='L12.5n256_PR06_01', redshift=redshift) )
     ##sPs.append( simParams(res=512, run='L12.5n256_PR06_02', redshift=redshift) )
@@ -811,7 +914,7 @@ def plots():
 
     #sPs.append( simParams(res=1820, run='illustrisprime', redshift=0.5) )
     #sPs.append( simParams(res=910, run='illustris', redshift=redshift) )
-    #sPs.append( simParams(res=455, run='illustris', redshift=redshift) )
+    sPs.append( simParams(res=455, run='illustris', redshift=redshift) )
     #sPs.append( simParams(res=256, run='L25n256_PR00', redshift=redshift) )
 
     # make multipage PDF
@@ -829,7 +932,9 @@ def plots():
     #stellarMassFunction(sPs, pdf, highMassEnd=False)
     #stellarMassFunction(sPs, pdf, highMassEnd=True)
     #massMetallicityStars(sPs, pdf)
-    baryonicFractionsR500Crit(sPs, pdf)
+    #baryonicFractionsR500Crit(sPs, pdf)
+    nHIcddf(sPs, pdf)
+    nHIcddf(sPs, pdf, moment=1)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)

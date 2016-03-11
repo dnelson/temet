@@ -20,7 +20,7 @@ minNumPartGroup = 100 # only consider halos above a minimum total number of part
 # Subhalo/*: parameters for computations done over each Subfind subhalo
 
 # Box/*: parameters for whole box (halo-independent) computations
-boxGridDim = 200
+boxGridSize = 5.0 # code units, e.g. ckpc/h
 
 def fofRadialSumType(sP, ptProperty, rad, method='B'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -193,7 +193,10 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
         # scipy methods may work ('toroidal geometry' for periodic BC searches), but probably not fast
         raise Exception('Not implemented.')
 
-    return r, desc, select
+    attrs = {'Description' : desc.encode('ascii'), 
+             'Selection'   : select.encode('ascii')}
+
+    return r, attrs
 
 def wholeBoxColDensGrid(sP, species):
     """ Compute a 2D grid of gas column densities [cm^-2] covering the entire simulation box. For 
@@ -205,81 +208,139 @@ def wholeBoxColDensGrid(sP, species):
     from cosmo import hydrogen
     from util.sphMap import sphMap
 
-    if species != 'HI':
+    if species not in ['HI','HI_noH2','Z']:
         raise Exception('Not implemented.')
-    if sP.mpcUnits:
-        print('WARNING: VERIFY MPC BEHAVIOR')
 
     # config
-    nChunks = 10    # split loading into how many pieces
+    nChunks = 20    # split loading into how many pieces
     axes    = [0,1] # x,y projection
     
     # info
     h = cosmo.load.snapshotHeader(sP)
 
-    cellSize = sP.boxSize / boxGridDim
+    boxGridDim = round(sP.boxSize / boxGridSize)
     chunkSize = int(h['NumPart'][partTypeNum('gas')] / nChunks)
 
-    desc   = "Square grid of integrated column densities of ["+species+"] in units of [cm^-2]."
-    select = "Grid dimensions: %dx%d pixels (cell size = %06.2f codeunits)." % (boxGridDim,boxGridDim,cellSize)
+    if species == 'HI':
+        desc = "Square grid of integrated column densities of [HI] in units of [cm^-2]. "
+        desc += "Atomic only, H2 calculated and removed."
+    if species == 'HI_noH2':
+        desc = "Square grid of integrated column densities of [HI] in units of [cm^-2]. "
+        desc += "All neutral hydrogen included, any contribution of H2 ignored."
+    if species == 'Z':
+        desc = "Square grid of mean gas metallicity in units of [log solar]."
+
+    select = "Grid dimensions: %dx%d pixels (cell size = %06.2f codeunits) along axes=[%d,%d]." % \
+             (boxGridDim,boxGridDim,boxGridSize,axes[0],axes[1])
 
     print(' '+desc)
     print(' '+select)
     print(' Total # Snapshot Load Chunks: '+str(nChunks)+' ('+str(chunkSize)+' cells per load)')
 
-    # allocate return
-    r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
+    # specify needed data load, and allocate accumulation array(s)
+    if species in ['HI','HI_noH2']:
+        fields = ['Coordinates','Density','Masses','metals_H','NeutralHydrogenAbundance']
+
+        r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
+    if species == 'Z':
+        fields = ['Coordinates','Density','Masses','GFM_Metallicity']
+
+        rM = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
+        rZ = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
 
     # loop over chunks (we are simply accumulating, so no need to load everything at once)
-    # we can farm this loop to threads or MPI, so long as each has their own r, and reduce at the end
     for i in np.arange(nChunks):
-        # calculate load indices (make sure we get to the end)
+        # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
         indRange = [i*chunkSize, (i+1)*chunkSize-1]
         if i == nChunks-1: indRange[1] = h['NumPart'][partTypeNum('gas')]-1
-        print('  [%d] %8d - %d' % (i,indRange[0],indRange[1]))
+        print('  [%2d] %9d - %d' % (i,indRange[0],indRange[1]))
 
         # load
-        fields = ['Coordinates','Density','Masses','metals_H','NeutralHydrogenAbundance']
         gas = cosmo.load.snapshotSubset(sP, 'gas', fields, indRange=indRange)
-
-        # calculate atomic hydrogen mass (HI) [10^10 Msun/h]
-        mHI = hydrogen.hydrogenMass(gas, sP, atomic=True)
-
-        print(' mHI. Min: %f Max: %f' % (mHI.min(), mHI.max()))
 
         # calculate smoothing size (V = 4/3*pi*h^3)
         vol = gas['Masses'] / gas['Density']
-        gas['Cellsize'] = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+        gas['hsml'] = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
-        # info
-        avgsmth = gas['Cellsize'].mean()
-        minsmth = gas['Cellsize'].min()
-        print(" Avg smoothing:",avgsmth," ckpc/h, maximum grid cell size allowed: ",minsmth)
+        if species in ['HI','HI_noH2']:
+            # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
+            mHI = hydrogen.hydrogenMass(gas, sP, atomic=(species=='HI'), totalNeutral=(species=='HI_noH2'))
 
-        # grid gas using SPH kernel, return in units of [10^10 Msun * h / ckpc^2]
-        ri = sphMap( pos=gas['Coordinates'], hsml=gas['Cellsize'], mass=mHI, quant=None, axes=axes, ndims=3, 
-                     boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0]), 
-                     boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[boxGridDim,boxGridDim], colDens=True )
+            # grid gas mHI using SPH kernel, return in units of [10^10 Msun * h / ckpc^2]
+            ri = sphMap( pos=gas['Coordinates'], hsml=gas['hsml'], mass=mHI, quant=None, axes=axes, 
+                         ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0]), 
+                         boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[boxGridDim,boxGridDim], 
+                         colDens=True )
 
-        # cumulative sum result for this chunk with previous
-        if ri.shape != r.shape:
-            raise Exception('Shape mismatch.')
+            r += ri
 
-        r += ri
-        print(' ri: min %g max %g mean %g     r: min %g max %g mean %g' % (ri.min(),ri.max(),ri.mean(),
-                r.min(),r.max(),r.mean()))
+        if species == 'Z':
+            # grid total gas mass using SPH kernel, return in units of [10^10 Msun / h]
+            rMi = sphMap( pos=gas['Coordinates'], hsml=gas['hsml'], mass=gas['Masses'], quant=None, axes=axes, 
+                          ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0]), 
+                          boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[boxGridDim,boxGridDim] )
 
-    # convert units from [code column density, above] to [atoms/cm^2] and take log
-    colDens = codeColDensToPhys(r, cgs=True, numDens=True)
-    colDens = np.log10(colDens)
+            # grid total gas metal mass
+            mMetal = gas['Masses'] * gas['GFM_Metallicity']
 
-    pdb.set_trace()
-    return colDens, desc, select
+            rZi = sphMap( pos=gas['Coordinates'], hsml=gas['hsml'], mass=mMetal, quant=None, axes=axes, 
+                          ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0]), 
+                          boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[boxGridDim,boxGridDim] )
+
+            rM += rMi
+            rZ += rZi
+
+    # finalize
+    if species in ['HI','HI_noH2']:
+        # column density: convert units from [code column density, above] to [atoms/cm^2] and take log
+        rr = sP.units.codeColDensToPhys(r, cgs=True, numDens=True)
+        rr = np.log10(rr)
+
+    if species == 'Z':
+        # metallicity: take Z = mass_tot/mass_gas for each pixel, normalize by solar, take log
+        rr = rZ / rM
+        rr = np.log10( rr / sP.units.Z_solar )
+
+    attrs = {'Description' : desc.encode('ascii'), 
+             'Selection'   : select.encode('ascii')}
+
+    return rr, attrs
+
+def wholeBoxCDDF(sP, species):
+    """ Compute the column density distribution function (CDDF, i.e. histogram) of column densities 
+        given a full box colDens grid."""
+    from cosmo.load import auxCat
+    from cosmo.hydrogen import calculateCDDF
+
+    # config
+    binSize   = 0.1 # log cm^-2
+    binMinMax = [11.0, 24.0] # log cm^-2
+
+    desc   = "Column density distribution function (CDDF) for ["+species+"]. "
+    desc  += "Return has shape [2,nBins] where the first slice gives n_HI [cm^-2], the second fN_HI [cm^-2]."
+    select = "Binning min: [%g] max: [%g] size: [%g]." % (binMinMax[0], binMinMax[1], binSize)
+
+    # load
+    ac = auxCat(sP, fields=['Box/Grid_n'+species])
+
+    # calculate
+    fN_HI, n_HI = calculateCDDF(ac['Box/Grid_n'+species], binMinMax[0], binMinMax[1], binSize, sP)
+
+    rr = np.vstack( (n_HI,fN_HI) )
+    attrs = {'Description' : desc.encode('ascii'), 
+             'Selection'   : select.encode('ascii')}
+
+    return rr, attrs
 
 # this dictionary contains a mapping between all auxCatalog fields and their generating functions, 
 # where the first sP input is stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
   {'Group/Mass_Crit500_Type' : partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
+
    'Box/Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
-   'other'                   : 0
+   'Box/Grid_nHI_noH2'       : partial(wholeBoxColDensGrid,species='HI_noH2'),
+   'Box/Grid_Z'              : partial(wholeBoxColDensGrid,species='Z'),
+
+   'Box/CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
+   'Box/CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2')
   }
