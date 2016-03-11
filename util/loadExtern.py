@@ -530,6 +530,96 @@ def giodini2009(sP):
 
     return r
 
+def zafar2013():
+    """ Load observational data points (HI absorption, f_HI(N) z=[1.51,5.0]) from Zafar+ (2013), sub-DLAs. """
+    # Table 4
+    r = {'log_NHI'         : np.array( [19.15, 19.45, 19.75, 20.00, 20.20] ),
+         'log_NHI_xerr'    : 0.15, # symmetric, in both directions
+         'log_fHI'         : np.array( [-20.43, -20.75, -21.15, -21.30, -21.61] ),
+         'log_fHI_errUp'   : np.array( [0.09, 0.09, 0.09, 0.09, 0.11] ),
+         'log_fHI_errDown' : -1*np.array( [-0.10, -0.10, -0.13, -0.12, -0.16] ),
+         'label'           : 'Zafar+ (2013) combined sub-DLA sample (1.5 < z < 5)' }
+    return r
+
+def noterdaeme2012():
+    """ Load observational data points (HI absorption, f_HI(N)) from Noterdaeme+ (2012), DLA range. """
+    path = '/n/home07/dnelson/obs/noterdaeme/noterdaeme2012.txt'
+
+    # columns: log_N(Hi)_low log_N(Hi)_high log_f(NHI,chi) log_f(NHI,chi)_corr sigma(log_f(NHI,chi))
+    data = np.loadtxt(path)
+
+    r = {'log_NHI'      : np.array( [np.mean([data[i,0],data[i,1]]) for i in range(len(data))]),
+         'log_NHI_xerr' : data[0,1]-data[0,0],
+         'log_fHI'      : data[:,3],
+         'log_fHI_err'  : data[:,4], # corrected
+         'label'        : 'Noterdaeme+ (2012) SDSS-DR9 <z> = 2.5'}
+
+    return r
+
+def noterdaeme2009():
+    """ Load observational data points (HI absorption, f_HI(N)) from Noterdaeme+ (2009), DLA range. """
+    # Gamma-function fit, Table 1 & Fig 11, http://adsabs.harvard.edu/abs/2009A%26A...505.1087N
+    k_g = -22.75
+    N_g = 21.26
+    alpha_g = -1.27
+
+    log_NHI = np.linspace(20.0, 22.0, 50)
+    log_fHI = k_g * (log_NHI/N_g)**alpha_g * np.exp(-log_NHI/N_g)
+
+    # we have the raw points instead from Fig 11 (priv comm)
+    path = '/n/home07/dnelson/obs/noterdaeme/fhix.dat'
+    data = np.loadtxt(path)
+
+    r = {'log_NHI'      : np.array( [np.mean([data[i,0],-data[i,1]]) for i in range(len(data))]),
+         'log_NHI_xerr' : 0.5*(data[0,1]+data[0,0]),
+         'log_fHI'      : data[:,2],
+         'log_fHI_err'  : data[:,3],
+         'label'        : 'Noterdaeme+ (2009) SDSS-DR7 (2.1 < z < 5.2)'}
+
+    return r
+
+def kim2013cddf():
+    """ Load observational data points (HI absorption, f_HI(N)) from Kim+ (2013), Lya forest range. """
+    # Table A.3 http://adsabs.harvard.edu/abs/2013A%26A...552A..77K
+    path = '/n/home07/dnelson/obs/kim/kim2013_A3.txt'
+
+    # columns: log_NH [f +f -f]   [f +f -f]   [f +f -f]
+    #                 [z=1.9-3.2] [z=1.9-2.4] [z=2.4-3.2]
+    data = np.loadtxt(path)
+
+    r = {'log_NHI'         : data[:,0],
+         'log_fHI'         : data[:,7],
+         'log_fHI_errUp'   : data[:,8],
+         'log_fHI_errDown' : data[:,9],
+         'label'           : 'Kim+ (2013) VLT/UVES (2.4 < z < 3.2)'}
+
+    return r
+
+def prochaska10cddf():
+    """ Load observational data (f_HI(N) cddf) from Prochaska+ (2010), LLS range. """
+    # Table 5 and Fig 10: five powerlaws of the form f_LLS(N_HI) = k * N_HI^beta
+    # take envelope, but k_LLS by forcing f to agree at f19
+    nPts = 50
+
+    beta_lls  = np.array([-0.8, -0.9, -1.3, -0.1, -0.8])
+    log_k_lls = np.array([-5.05, -3.15, 4.45, -17.95, -4.65])
+
+    r = {'log_NHI'       : np.linspace(17.5, 19.0, nPts),
+         'log_fHI'       : np.zeros(nPts),
+         'log_fHI_upper' : np.zeros(nPts),
+         'log_fHI_lower' : np.zeros(nPts),
+         'label'         : 'Prochaska+ (2010) SDSS-DR7 (3.3 < z < 4.4)'}
+
+    for i in range(nPts):
+        N_HI = 10.0**r['log_NHI'][i]
+        fHI_variations = 10.0**log_k_lls * N_HI**beta_lls
+
+        r['log_fHI'][i] = np.log10( fHI_variations[0] )
+        r['log_fHI_upper'][i] = np.log10( fHI_variations ).max()
+        r['log_fHI_lower'][i] = np.log10( fHI_variations ).min()
+
+    return r
+
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
     nPts = 2000
