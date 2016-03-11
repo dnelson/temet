@@ -6,6 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+from util.helper import logZeroSafe
 
 class units(object):
     """ Contains static methods which perform various unit conversions.
@@ -38,7 +39,9 @@ class units(object):
     HubbleParam       = 0.7             # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
     Gravity           = 6.673e-8        # G in cgs, cm**3/g/s**2
     H0_kmsMpc         = 70.0            # km/s/Mpc
+    H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km)
     Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
+    c_cgs             = 2.9979e10       # speed of light in [cm/s]
 
     # derived constants (code units)
     H0          = None    # km/s/kpc (hubble constant at z=0)
@@ -115,7 +118,7 @@ class units(object):
         """ Convert mass from code units (10**10 msun/h) to (log msun) self. """
         mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
         
-        return self.logZeroSafe(mass_msun)
+        return logZeroSafe(mass_msun)
 
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
@@ -142,7 +145,7 @@ class units(object):
                         (1.0 + self._sP.redshift)/10.0 # K
              
         if log:
-            Tvir = self.logZeroSafe(Tvir)
+            Tvir = logZeroSafe(Tvir)
         return Tvir
 
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
@@ -167,14 +170,14 @@ class units(object):
                         (1.0 + self._sP.redshift)/10.0 # K
              
         if log:
-            Tvir = self.logZeroSafe(Tvir)
+            Tvir = logZeroSafe(Tvir)
         return Tvir
 
     def codeTempToLogK(self, temp):
         """ Convert temperature in code units (e.g. tracer temp output) to log Kelvin. """
         temp_k = temp.astype('float32') * self._sP.units.UnitTemp_in_cgs
 
-        return self.logZeroSafe(temp_k)
+        return logZeroSafe(temp_k)
 
     def codeLengthToKpc(self, x):
         """ Convert length/distance in code units to physical kpc. """
@@ -230,7 +233,7 @@ class units(object):
         """ Convert (NeutralHydrogenAbundance,Density) pair from code units to mass or number density of 
             neutral hydrogen, optionally in cgs units. This is total neutral, so includes both atomic 
             and molecular phases. H2 modeling required to separate them. """
-        dens_phys = self.codeDensToPhys(dens, cgs=cgs, numDens=False)
+        dens_phys = self.codeDensToPhys(dens, cgs=cgs, numDens=numDens)
         dens_phys *= self._sP.units.hydrogen_massfrac # hydrogen mass density (code or cgs units)
         # note: hydrogen number density = dens_phys / self._sP.units.proton_mass
 
@@ -254,7 +257,7 @@ class units(object):
                 self._sP.units.UnitEnergy_in_cgs / self._sP.units.UnitMass_in_g * meanmolwt
 
         if log:
-            temp = self.logZeroSafe(temp)
+            temp = logZeroSafe(temp)
         return temp
 
     def TempToU(self, temp, log=False):
@@ -270,7 +273,7 @@ class units(object):
             (self._sP.units.UnitEnergy_in_cgs * meanmolwt * (self._sP.units.gamma-1.0))
 
         if log:
-            u = self.logZeroSafe(u)
+            u = logZeroSafe(u)
         return u
 
     def coolingRateToCGS(self, coolrate):
@@ -301,7 +304,7 @@ class units(object):
         ent_cgs /= (self._sP.units.UnitDensity_in_cgs / self._sP.units.mass_proton)**self._sP.units.gamma
 
         if log:
-            ent_cgs = self.logZeroSafe(ent_cgs)
+            ent_cgs = logZeroSafe(ent_cgs)
         return ent_cgs
 
     def calcEntropyCGS(self, u, dens, log=False):
@@ -324,7 +327,7 @@ class units(object):
         entropy  = pressure / (dens_phys * dens_fac)**self._sP.units.gamma
       
         if log:
-            entropy = self.logZeroSafe(entropy)
+            entropy = logZeroSafe(entropy)
         return entropy
 
     def calcPressureCGS(self, u, dens, log=False):
@@ -342,7 +345,7 @@ class units(object):
         pressure *= self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
 
         if log:
-            pressure = self.logZeroSafe(pressure)
+            pressure = logZeroSafe(pressure)
         return pressure
 
     def codeDensToCritRatio(self, rho, baryon=None, log=False):
@@ -428,17 +431,3 @@ class units(object):
         """
         mu = 4.0 / (8 - 5*Y - 6*Z)
         return mu
-
-    def logZeroSafe(self, x):
-        """ Take log of input variable or array, keeping zeros at zero. """
-        if not isinstance(x, (int,long,float)) and x.ndim:
-            # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
-            # array
-            w = np.where(x == 0.0)
-            x[w] = 1.0
-        else:
-            # single scalar
-            if x == 0.0:
-                x = 1.0
-
-        return np.log10(x)

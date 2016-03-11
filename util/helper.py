@@ -34,6 +34,18 @@ def evenlySample(sequence, num, logSpace=False):
 
     return sequence[inds.astype('int32')]
 
+def logZeroSafe(x, zeroVal=1.0):
+    """ Take log of input variable or array, keeping zeros at zero. """
+    if not isinstance(x, (int,long,float)) and x.ndim: # array
+        # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
+        w = np.where(x == 0.0)
+        x[w] = zeroVal
+    else: # scalar
+        if x == 0.0:
+            x = zeroVal
+
+    return np.log10(x)
+
 def reportMemory():
     """ Return current Python process memory usage in GB. """
     import os
