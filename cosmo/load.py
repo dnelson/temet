@@ -12,8 +12,10 @@ import illustris_python as il
 from os.path import isfile, isdir
 from os import mkdir
 
-def auxCat(sP, fields=None):
-    """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. """
+def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
+    """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
+      reCalculate  : force redo of computation now, even if data is already saved in catalog
+      searchExists : return None if data is not already computed, i.e. do not calculate right now """
     from cosmo import auxcatalog
     from util.helper import curRepoVersion
     import datetime
@@ -35,26 +37,44 @@ def auxCat(sP, fields=None):
 
     with h5py.File(auxCatPath,'a') as f:
 
-        # loop over all requested fields (prefix 'Group/' or 'Subhalo/' maps into a HDF5 group)
+        # loop over all requested fields (prefix 'Group/' or 'Subhalo/' or 'Box/' maps into a HDF5 group)
         for field in fields:
             if field not in auxcatalog.fieldComputeFunctionMapping:
                 raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
-            if field in f:
+            # checking for existence? (do not calculate right now if missing)
+            if field not in f and searchExists:
+                r[field] = None
+                continue
+
+            if field in f and not reCalculate:
                 # load pre-computed values
-                r[field] = f[field][()]
+                r[field] = f[field][...]
+
+                # load metadata
+                r[field+'_attrs'] = {}
+                for attr in f[field].attrs:
+                    r[field+'_attrs'][attr] = f[field].attrs[attr]
             else:
                 # computation required? request now
                 print('Compute and save: ['+field+']')
-                r[field], desc, select = auxcatalog.fieldComputeFunctionMapping[field] (sP)
+                r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP)
 
-                # save dataset and descriptors as attributes
-                f[field] = r[field]
+                # save new dataset (or overwrite existing)
+                if field not in f:
+                    f.create_dataset(field, data=r[field])
+                    print(' Saved new.')
+                else:
+                    f[field][...] = r[field]
+                    print(' Saved over existing.')
+
+                # save metadata and any additional descriptors as attributes
                 f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
                 f[field].attrs['CreatedRev']  = curRepoVersion()
                 f[field].attrs['CreatedBy']   = getpass.getuser()
-                f[field].attrs['Description'] = desc.encode('ascii')
-                f[field].attrs['Selection']   = select.encode('ascii')
+                for attrName, attrValue in attrs.iteritems():
+                    f[field].attrs[attrName] = attrValue
+                    
     return r
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
@@ -397,7 +417,7 @@ def groupCatOffsetListIntoSnap(sP):
 
     return r    
 
-def snapshotSubset(sP, partType, fields, 
+def snapshotSubset(sP, partType, fieldsIn, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
                    mdi=None, sq=True):
     """ For a given snapshot load only one field for one particle type
@@ -431,7 +451,8 @@ def snapshotSubset(sP, partType, fields,
     # override path function
     il.snapshot.snapPath = snapPath
 
-    # make sure fields is not a single element
+    # make sure fields is not a single element, and don't modify input
+    fields = list(fieldsIn)
     if isinstance(fields, basestring):
         fields = [fields]
 
