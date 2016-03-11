@@ -112,9 +112,11 @@ def neutral_fraction(nH, sP, temp=1e4):
     return (B - np.sqrt(B**2-4*A*alpha_A))/(2*A)
 
 def get_H2_frac(nHI):
-    """Get the molecular fraction for neutral gas from the ISM pressure: only meaningful when nH > 0.1."""
-    fH2 = 1.0/(1+(0.1/nHI)**(0.92*5./3.)*35**0.92)
-    return fH2
+    """ Get the molecular fraction for neutral gas from the ISM pressure: only meaningful when nH > 0.1.
+        From Bird+ (2014) Eqn 4, e.g. the pressure-based model of Blitz & Rosolowsky (2006).
+      nHI : [ cm^-3 ] """
+    fH2 = 1.0 / ( 1.0 + (35.0*(0.1/nHI)**(5.0/3.0))**0.92 )
+    return fH2 # Sigma_H2 / Sigma_H
 
 def neutralHydrogenFraction(gas, sP, atomicOnly=True):
     """ Get the total neutral hydrogen fraction, by default for the atomic component only. """
@@ -138,11 +140,11 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True):
     # threshold, values are reported according to the eEOS, so apply the Rahmati correction directly.
     frac_nH0 = gas['NeutralHydrogenAbundance'].astype('float32')
 
-    # number density [1/cm^3] of total neutral hydrogen
-    nH = sP.units.nH0ToPhys(frac_nH0, gas['Density'], cgs=True, numDens=True)
+    # number density [1/cm^3] of total hydrogen
+    nH = sP.units.nH0ToPhys(None, gas['Density'], cgs=True, numDens=True)
 
-    # physical density threshold for star formation [H atoms / cm^3]
-    PhysDensThresh = 0.13 # TODO factor out #cold_gas.StarFormation.get_rho_thresh()
+    # compare to physical density threshold for star formation [H atoms / cm^3]
+    PhysDensThresh = 0.13
 
     ww = np.where(nH > PhysDensThresh)
     frac_nH0[ww] = neutral_fraction(nH[ww], sP)
