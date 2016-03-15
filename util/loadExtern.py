@@ -620,6 +620,56 @@ def prochaska10cddf():
 
     return r
 
+def rafelski2012(sP, redshiftRange=[2.5, 3.5]):
+    """ Load observational data (DLA metallicities) from Rafelski+ (2012). z>1.5. """
+    # Tables 2 and 3 from online data
+    # http://vizier.cfa.harvard.edu/viz-bin/VizieR-3?-source=J/ApJ/755/89/table3
+    path1 = '/n/home07/dnelson/obs/rafelski/raf2012_table2.txt'
+    path2 = '/n/home07/dnelson/obs/rafelski/raf2012_table3.txt'
+
+    data1 = np.genfromtxt(path1, dtype=None)
+    data2 = np.genfromtxt(path2, dtype=None)
+
+    redshifts     = np.array([d[1] for d in data1] + [d[1] for d in data2])
+    metallicities = np.array([d[11] for d in data1] + [d[11] for d in data2]) # 8=[Fe/H], 11=[M/H]
+
+    #metalBins = [-2.8, -2.4, -2.0, -1.6, -1.2, -0.8, -0.4]
+    #binSize = 0.4
+    metalBins = [-2.7, -2.4, -2.1, -1.8, -1.5, -1.2, -0.9, -0.6, -0.3]
+    binSize = 0.3
+
+    ww = np.where((redshifts >= redshiftRange[0]) & (redshifts < redshiftRange[1]))
+
+    metalX = np.zeros(len(metalBins)-1)
+    metalY = np.zeros(len(metalBins)-1)
+    metalS = np.zeros(len(metalBins)-1)
+    count = 0
+
+    for i in range(len(metalBins)-1):
+        metalX[i] = 0.5*(metalBins[i]+metalBins[i+1])
+
+        # which DLAs are in this redshift+metallicity bin
+        wwZ = (metallicities[ww] >= metalBins[i]) & (metallicities[ww] < metalBins[i+1])
+
+        # number/total, and their stddev
+        metalY[i] = np.count_nonzero( wwZ )
+        metalS[i] = np.sqrt(metalY[i]) # rough Poisson errors
+        count += metalY[i]
+
+    metalY /= ( len(ww[0]) * binSize )
+    metalS /= ( len(ww[0]) * binSize )
+
+    # metalY is [M/H] = total metal abundance = log10(N_M/N_H)_DLA -log10(N_M/N_H)_solar
+    Z_solar_raf = 0.0182 # = MZ/MH = 0.0134/0.7381 (Asplund 2009 Table 1 http://arxiv.org/abs/0909.0948)
+
+    r = {'log_Z'     : np.log10( 10.0**metalX * (Z_solar_raf/sP.units.Z_solar) ),
+         'log_Z_err' : 0.5*binSize,
+         'pdf'       : metalY,
+         'pdf_err'   : metalS,
+         'label'     : 'Rafelski+ (2012) DLA [M/H] 2.5 < z < 3.5'}
+
+    return r
+
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
     nPts = 2000
