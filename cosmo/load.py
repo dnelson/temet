@@ -35,8 +35,10 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
     if not isdir(sP.derivPath + 'auxCat'):
         mkdir(sP.derivPath + 'auxCat')
 
-    with h5py.File(auxCatPath,'a') as f:
+    # make a list of fields to calculate, and only open the HDF5 file when actually writing a dataset
+    fieldsTodo = []
 
+    with h5py.File(auxCatPath,'a') as f:
         # loop over all requested fields (prefix 'Group/' or 'Subhalo/' or 'Box/' maps into a HDF5 group)
         for field in fields:
             if field not in auxcatalog.fieldComputeFunctionMapping:
@@ -56,24 +58,28 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
                 for attr in f[field].attrs:
                     r[field+'_attrs'][attr] = f[field].attrs[attr]
             else:
-                # computation required? request now
-                print('Compute and save: ['+field+']')
-                r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP)
+                # computation required? add to request list
+                fieldsTodo.append(field)
 
-                # save new dataset (or overwrite existing)
-                if field not in f:
-                    f.create_dataset(field, data=r[field])
-                    print(' Saved new.')
-                else:
-                    f[field][...] = r[field]
-                    print(' Saved over existing.')
+    for field in fieldsTodo:
+        print('Compute and save: ['+field+']')
+        r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP)
 
-                # save metadata and any additional descriptors as attributes
-                f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
-                f[field].attrs['CreatedRev']  = curRepoVersion()
-                f[field].attrs['CreatedBy']   = getpass.getuser()
-                for attrName, attrValue in attrs.iteritems():
-                    f[field].attrs[attrName] = attrValue
+        # save new dataset (or overwrite existing)
+        with h5py.File(auxCatPath,'a') as f:
+            if field not in f:
+                f.create_dataset(field, data=r[field])
+                print(' Saved new.')
+            else:
+                f[field][...] = r[field]
+                print(' Saved over existing.')
+
+            # save metadata and any additional descriptors as attributes
+            f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
+            f[field].attrs['CreatedRev']  = curRepoVersion()
+            f[field].attrs['CreatedBy']   = getpass.getuser()
+            for attrName, attrValue in attrs.iteritems():
+                f[field].attrs[attrName] = attrValue
                     
     return r
 
