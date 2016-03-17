@@ -459,8 +459,8 @@ def snapshotSubset(sP, partType, fieldsIn,
 
     # make sure fields is not a single element, and don't modify input
     fields = list(fieldsIn)
-    if isinstance(fields, basestring):
-        fields = [fields]
+    if isinstance(fieldsIn, basestring):
+        fields = list([fieldsIn])
 
     # composite fields (temp, vmag, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
