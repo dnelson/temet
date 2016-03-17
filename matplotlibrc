@@ -300,12 +300,12 @@ figure.facecolor : white    # figure facecolor; 0.75 is scalar gray
 
 ### IMAGES
 #image.aspect : equal             # equal | auto | a number
-#image.interpolation  : bilinear  # see help(imshow) for options
+image.interpolation  : none  # see help(imshow) for options
 #image.cmap   : jet               # gray | jet etc...
 #image.lut    : 256               # the size of the colormap lookup table
-#image.origin : upper             # lower | upper
+image.origin : lower             # lower | upper
 #image.resample  : False
-#image.composite_image : True     # When True, all the images on a set of axes are 
+image.composite_image : False     # When True, all the images on a set of axes are 
                                   # combined into a single composite image before 
                                   # saving a figure as a vector graphics file, 
                                   # such as a PDF.
@@ -348,7 +348,7 @@ figure.facecolor : white    # figure facecolor; 0.75 is scalar gray
 # the default savefig params can be different from the display params
 # e.g., you may want a higher resolution, or to make the figure
 # background white
-#savefig.dpi         : 100      # figure dots per inch
+savefig.dpi         : 100       # figure dots per inch
 #savefig.facecolor   : white    # figure facecolor when saving
 #savefig.edgecolor   : white    # figure edgecolor when saving
 #savefig.format      : png      # png, ps, pdf, svg

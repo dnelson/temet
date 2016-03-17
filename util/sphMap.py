@@ -171,8 +171,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                     # divide by sum for normalization
                     kVal = _getkernel(hinv, r2, COEFF_1, COEFF_2, COEFF_3)
 
-                    dens_out [j, i] += kVal * v_over_sum
-                    quant_out[j, i] += kVal * v_over_sum * w
+                    dens_out [i, j] += kVal * v_over_sum
+                    quant_out[i, j] += kVal * v_over_sum * w
 
     # normalize mass weighted quantity
     # this only works for all-at-once calcs, otherwise maps need first to be collected, then divided
@@ -193,7 +193,9 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
         quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
         returned, optionally converted to a column density map if colDens=True. If quant is specified, 
-        the mass-weighted map of the quantity is instead returned.
+        the mass-weighted map of the quantity is instead returned. Note, transpose of _calcSphMap() is 
+        taken such that with default plotting approaches e.g. axes=[0,1] gives imshow(return[i,j]) 
+        with x and y axes corresponding correctly to code coordinates.
 
       pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords only, to ignore z-axis)
       hsml[N]        : array of smoothing lengths to use for the particles, same units as pos
@@ -256,8 +258,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                     True,colDens)
 
         if quant.size > 1:
-            return rQuant
-        return rDens
+            return rQuant.T
+        return rDens.T
 
     # else, multithreaded
     # -------------------
@@ -322,9 +324,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         w = np.where(rDens > 0.0)
         rQuant[w] /= rDens[w]
 
-        return rQuant
-
-    return rDens
+        return rQuant.T
+    return rDens.T
 
 def test():
     """ Debugging plots for accuracy/performance of sphMap(). """
