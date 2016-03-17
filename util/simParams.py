@@ -22,7 +22,6 @@ class simParams:
     derivPath   = ''    # path to put derivative (data) files
 
     # snapshots
-    snapRange     = None  # snapshot range of simulation
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
     snap          = None  # convenience for passing between functions
     run           = ''    # copied from input
@@ -114,7 +113,6 @@ class simParams:
         if run in ['illustrisprime']:
             self.validResLevels = [1820]
             self.boxSize        = 75000.0
-            self.snapRange      = [0,135] # z6=45, z5=49, z4=54, z3=60, z2=68, z1=85, z05=103, z0=135
             self.groupOrdered   = True
 
             self.omega_m        = 0.2726
@@ -166,7 +164,6 @@ class simParams:
         # DEV.PRIME (enrichment / windsPT2)
         if run in ['winds_save_on','winds_save_off'] or '_discrete' in run:
             self.validResLevels = [3,128,256]
-            self.snapRange      = [0,5] # z0=5
             self.groupOrdered   = True
 
             if 'L25' in run:
@@ -199,6 +196,7 @@ class simParams:
         # DEV.PRIME (model variations Jan/Feb 2016)
         if '_PR' in run:
             self.validResLevels = [256,512]
+            self.groupOrdered = True
 
             self.gravSoft = 0.0
             self.targetGasMass = 0.0
@@ -207,12 +205,6 @@ class simParams:
                 self.boxSize = 25000.0
             if 'L12.5' in run:
                 self.boxSize = 12500.0
-            if 'PR00' in run or 'PR02' in run:
-                self.snapRange = [0,5] # z0=5
-            if 'PRVS' in run:
-                self.snapRange = [0,15]
-
-            self.groupOrdered = True
 
             self.omega_m        = 0.2726
             self.omega_L        = 0.7274
@@ -239,7 +231,6 @@ class simParams:
 
             self.validResLevels = [1,2,3]
             self.boxSize        = 3000.0 # 3 Gpc
-            self.snapRange      = [0,255] # z0=255
             self.groupOrdered   = True
 
             self.omega_m        = 0.2726
@@ -268,7 +259,6 @@ class simParams:
         if run in ['illustris','illustris_dm']:
             self.validResLevels = [455,910,1820]
             self.boxSize        = 75000.0
-            self.snapRange      = [0,135] # z6=45, z5=49, z4=54, z3=60, z2=68, z1=85, z0=135
             self.groupOrdered   = True
 
             self.omega_m     = 0.2726
@@ -315,7 +305,7 @@ class simParams:
                 self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
-        if run in ['zoom_20mpc','zoom_20mpc_dm']:
+        if run in ['zooms','zooms_dm']:
             self.boxSize      = 20000.0
             self.groupOrdered = False
 
@@ -329,17 +319,14 @@ class simParams:
 
             if hInd:
                 # fillZoomParams for individual halo
-                self.snapRange      = [0,59] # z10=0, z6=5, z5=14, z4=21, z3=36, z2=59 (sometimes less total)
                 self.validResLevels = [9,10,11]
-
-                self.fillZoomParams(res=res,hInd=hInd)
+                self.fillZoomParams(res=res,hInd=hInd,variant='gen1')
             else:
                 # parent box
-                self.snapRange    = [0,10] # z99=0, z0=10
                 self.validResLevels = [7]
 
             # DM+gas single halo zooms
-            if run == 'zoom_20mpc':
+            if run == 'zooms':
                 self.trMCPerCell = 5
                 self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1] # up to and with WIND_COUNTER (=512, 10/13)
                 self.trMassConst = self.targetGasMass / self.trMCPerCell
@@ -358,14 +345,41 @@ class simParams:
             self.plotPrefix = 'zL' + str(self.levelMax) + ds
 
         # ZOOMS-2 (testing)
-        if run in ['zoom2_20mpc']:
-            raise Exception("todo")
+        if run in ['zooms2']:
+            self.validResLevels = [9,10,11,12]
+            self.boxSize        = 20000.0
+            self.groupOrdered   = True
+
+            self.omega_m     = 0.264
+            self.omega_L     = 0.736
+            self.omega_b     = 0.0441
+            self.HubbleParam = 0.712
+
+            self.levelMin = 7 # uniform box @ 128
+            self.levelMax = 7 # default, replaced later
+
+            if hInd is None:
+                raise Exception('Must specify hInd, no sims.zooms2 parent box.')
+
+            # fillZoomParams for individual halo
+            self.fillZoomParams(res=res,hInd=hInd,variant='gen2_nofb')
+
+            self.trMCPerCell = 5
+            self.trMCFields  = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1] # up to and with ENTMAX_TIME (=128, 8/14)
+            self.trMassConst = self.targetGasMass / self.trMCPerCell
+
+            bs = str(round(self.boxSize/1000))
+
+            self.arepoPath  = self.basePath+'sims.zooms/128_'+bs+'Mpc_h'+str(hInd)+'_L'+str(self.levelMax)+'/'
+            self.savPrefix  = 'Z2'
+            self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + ds
+            self.saveTag    = 'z2H' + str(hInd) + 'L' + str(self.levelMax)
+            self.plotPrefix = 'z2L' + str(self.levelMax) + ds
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
         if run == 'feedback':
             self.validResLevels = [128,256,512]
             self.boxSize        = 20000.0
-            self.snapRange      = [0,130] # z6=5, z5=14, z4=21, z3=36, z2=60, z1=81, z0=130
             self.groupOrdered   = False
 
             self.omega_m     = 0.27
@@ -407,7 +421,6 @@ class simParams:
         if run == 'tracer':
             self.validResLevels = [128,256,512]
             self.boxSize        = 20000.0
-            self.snapRange      = [0,314]
             self.groupOrdered   = False
 
             self.omega_m     = 0.27
@@ -470,7 +483,7 @@ class simParams:
         # attach a units class at this redshift
         self.units = units(sP=self)
 
-    def fillZoomParams(self, res=None, hInd=None):
+    def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
         self.levelMax = res
         if self.levelMax >= 64:
@@ -493,7 +506,10 @@ class simParams:
 
         if self.levelMax == 9:  self.ids_offset =  10000000
         if self.levelMax == 10: self.ids_offset =  50000000
-        if self.levelMax == 11: self.ids_offset = 500000000
+        if self.levelMax == 11:
+            if variant == 'gen1': self.ids_offset = 500000000
+            if 'gen2' in variant: self.ids_offset = 200000000
+        if self.levelMax == 12: self.ids_offset = 800000000
 
         # colors as a function of hInd and resolution (vis/ColorWheel-Base.png - outer/3rd/6th rings)
         colors_red    = ['#94070a', '#ce181e', '#f37b70']
@@ -509,198 +525,175 @@ class simParams:
         colors_orange = ['#985006', '#d4711a', '#f9a870']
         colors_pink   = ['#95231f', '#cf3834', '#f68e76']
 
-        if hInd == 0:
-            #hInd =   95 mass = 11.97 rvir = 239.9 vol =  69.3 pos = [ 7469.41  5330.66  3532.18 ]
-            #ref_center = 0.3938, 0.2466, 0.1794
-            #ref_extent = 0.2450, 0.1850, 0.1778
-            self.targetHaloInd  = 95
-            self.targetHaloPos  = [7469.41, 5330.66, 3532.18]
-            self.targetHaloRvir = 239.9 # ckpc
-            self.targetHaloMass = 11.97 # log msun
-            self.targetRedshift = 2.0
+        # SIMS.ZOOMS-I
+        if variant == 'gen1':
+            if hInd == 0:
+                self.targetHaloInd  = 95
+                self.targetHaloPos  = [7469.41, 5330.66, 3532.18]
+                self.targetHaloRvir = 239.9 # ckpc
+                self.targetHaloMass = 11.97 # log msun
+                self.targetRedshift = 2.0
 
-            if self.levelMax >= 9: self.zoomShift = [13,32,41]
-            self.rVirFac = -0.1 * self.zoomLevel + 4.0
+                if self.levelMax >= 9: self.zoomShift = [13,32,41]
+                self.rVirFac = -0.1 * self.zoomLevel + 4.0
 
-            self.colors = colors_red
-            self.hIndDisp = 0
+                self.colors = colors_red
+                self.hIndDisp = 0
 
-        if hInd == 1:
-            #hInd=   98 mass= 11.90 rvir= 218.0 vol_bbox=  75.9 vol_chull=  38.2 rVirFac= 4.4 pos= [ 6994.99 16954.28 16613.29 ]
-            #hInd=   98 mass= 11.90 rvir= 218.0 vol_bbox=  79.2 vol_chull=  39.7 rVirFac= 4.6 pos= [ 6994.99 16954.28 16613.29 ]
-            #hInd=   98 mass= 11.90 rvir= 218.0 vol_bbox=  79.3 vol_chull=  41.4 rVirFac= 4.8 pos= [ 6994.99 16954.28 16613.29 ]
-            #hInd=   98 mass= 11.90 rvir= 218.0 vol_bbox= 142.7 vol_chull=  62.0 rVirFac= 6.0 pos= [ 6994.99 16954.28 16613.29 ]
-            self.targetHaloInd  = 98
-            self.targetHaloPos  = [6994.99, 16954.28, 16613.29]
-            self.targetHaloRvir = 218.0 # ckpc
-            self.targetHaloMass = 11.90 # log msun
-            self.targetRedshift = 2.0
+            if hInd == 1:
+                self.targetHaloInd  = 98
+                self.targetHaloPos  = [6994.99, 16954.28, 16613.29]
+                self.targetHaloRvir = 218.0 # ckpc
+                self.targetHaloMass = 11.90 # log msun
+                self.targetRedshift = 2.0
 
-            if self.levelMax == 9 : self.zoomShift = [21,-46,-40]
-            if self.levelMax == 10: self.zoomShift = [21,-45,-40]
-            if self.levelMax == 11: self.zoomShift = [21,-45,-40]
-            self.rVirFac = 0.2 * self.zoomLevel + 4.0
+                if self.levelMax == 9 : self.zoomShift = [21,-46,-40]
+                if self.levelMax == 10: self.zoomShift = [21,-45,-40]
+                if self.levelMax == 11: self.zoomShift = [22,-43,-39]
+                self.rVirFac = 0.2 * self.zoomLevel + 4.0
+                if self.levelMax == 11: self.rVirFac = 6.0
 
-            if str(hInd) == '1b':
-                self.zoomShift = [22, -43, -39]
-                self.rVirFac = 6.0
+                self.colors = colors_lime
+                self.hIndDisp = 1
 
-            self.colors = colors_lime
-            self.hIndDisp = 1
+            if hInd == 2:
+                self.targetHaloInd  = 104
+                self.targetHaloPos  = [4260.38, 5453.91, 6773.12]
+                self.targetHaloRvir = 214.8 # ckpc
+                self.targetHaloMass = 11.82 # log msun
+                self.targetRedshift = 2.0
 
-        if hInd == 2:
-            #hInd=  104 mass= 11.82 rvir= 214.8 vol_bbox=  91.7 vol_chull=  47.5 rVirFac= 4.4 pos= [ 4260.38  5453.91  6773.12 ]
-            #hInd=  104 mass= 11.82 rvir= 214.8 vol_bbox=  94.9 vol_chull=  49.3 rVirFac= 4.6 pos= [ 4260.38  5453.91  6773.12 ]
-            #hInd=  104 mass= 11.82 rvir= 214.8 vol_bbox=  95.1 vol_chull=  50.6 rVirFac= 4.8 pos= [ 4260.38  5453.91  6773.12 ]
-            #hInd=  104 mass= 11.82 rvir= 214.8 vol_bbox= 127.2 vol_chull=  63.5 rVirFac= 6.0 pos= [ 4260.38  5453.91  6773.12 ]
-            self.targetHaloInd  = 104
-            self.targetHaloPos  = [4260.38, 5453.91, 6773.12]
-            self.targetHaloRvir = 214.8 # ckpc
-            self.targetHaloMass = 11.82 # log msun
-            self.targetRedshift = 2.0
+                if self.levelMax == 9 : self.zoomShift = [37, 29, 18]
+                if self.levelMax == 10: self.zoomShift = [37, 29, 18]
+                if self.levelMax == 11: self.zoomShift = [36, 29, 17]
+                self.rVirFac = 0.2 * self.zoomLevel + 4.0
+                if self.levelMax == 11: self.rVirFac = 6.0
 
-            if self.levelMax == 9 : self.zoomShift = [37, 29, 18]
-            if self.levelMax == 10: self.zoomShift = [37, 29, 18]
-            if self.levelMax == 11: self.zoomShift = [36, 29, 17]
-            self.rVirFac = 0.2 * self.zoomLevel + 4.0
-            if self.levelMax == 11: self.rVirFac = 6.0
+                self.colors = colors_purple
+                self.hIndDisp = 4
 
-            self.colors = colors_purple
-            self.hIndDisp = 4
+            if hInd == 3:
+                self.targetHaloInd  = 49
+                self.targetHaloPos  = [10805.00, 8047.92, 4638.30]
+                self.targetHaloRvir = 263.3 # ckpc
+                self.targetHaloMass = 12.17 # log msun
+                self.targetRedshift = 2.0
 
-        if hInd == 3:
-            #hInd=   49 mass= 12.17 rvir= 263.3 vol_bbox= 108.6 vol_chull=  54.5 rVirFac= 5.0 pos= [10805.00  8047.92  4638.30 ]
-            #hInd=   49 mass= 12.17 rvir= 263.3 vol_bbox= 141.2 vol_chull=  65.7 rVirFac= 6.0 pos= [10805.00  8047.92  4638.30 ]
-            #hInd=   49 mass= 12.17 rvir= 263.3 vol_bbox= 171.1 vol_chull=  79.1 rVirFac= 7.0 pos= [10805.00  8047.92  4638.30 ]
-            self.targetHaloInd  = 49
-            self.targetHaloPos  = [10805.00, 8047.92, 4638.30]
-            self.targetHaloRvir = 263.3 # ckpc
-            self.targetHaloMass = 12.17 # log msun
-            self.targetRedshift = 2.0
+                if self.levelMax == 9 : self.zoomShift = [-8, 11, 31]
+                if self.levelMax == 10: self.zoomShift = [-7, 11, 32]
+                if self.levelMax == 11: self.zoomShift = [-5, 12, 32]
+                self.rVirFac = 1.0 * self.zoomLevel + 3.0
 
-            if self.levelMax == 9 : self.zoomShift = [-8, 11, 31]
-            if self.levelMax == 10: self.zoomShift = [-7, 11, 32]
-            if self.levelMax == 11: self.zoomShift = [-5, 12, 32]
-            self.rVirFac = 1.0 * self.zoomLevel + 3.0
+                self.colors = colors_navy
+                self.hIndDisp = 9
 
-            self.colors = colors_navy
-            self.hIndDisp = 9
+            if hInd == 4:
+                self.targetHaloInd  = 101
+                self.targetHaloPos  = [4400.06, 6559.38, 5376.06]
+                self.targetHaloRvir = 217.2 # ckpc
+                self.targetHaloMass = 11.86 # log msun
+                self.targetRedshift = 2.0
 
-        if hInd == 4:
-            #hInd =  101 mass = 11.86 rvir = 217.2 vol = 107.4 zL = 2 rVirFac = 4.2 pos = [ 4400.06  6559.38  5376.06 ]
-            self.targetHaloInd  = 101
-            self.targetHaloPos  = [4400.06, 6559.38, 5376.06]
-            self.targetHaloRvir = 217.2 # ckpc
-            self.targetHaloMass = 11.86 # log msun
-            self.targetRedshift = 2.0
+                if self.levelMax == 9 : self.zoomShift = [37,20,27]
+                if self.levelMax == 10: self.zoomShift = [37,20,27]
+                if self.levelMax == 11: self.zoomShift = [37,20,27]
+                self.rVirFac = 4.2
 
-            if self.levelMax == 9 : self.zoomShift = [37,20,27]
-            if self.levelMax == 10: self.zoomShift = [37,20,27]
-            if self.levelMax == 11: self.zoomShift = [37,20,27]
-            self.rVirFac = 4.2
+                self.colors = colors_blue
+                self.hIndDisp = 5
 
-            self.colors = colors_blue
-            self.hIndDisp = 5
+            if hInd == 5:
+                self.targetHaloInd  = 87
+                self.targetHaloPos  = [9018.07, 9343.99, 15998.66]
+                self.targetHaloRvir = 203.7 # ckpc
+                self.targetHaloMass = 11.99 # log msun
+                self.targetRedshift = 2.0
 
-        if hInd == 5:
-            #hInd=   87 mass= 11.99 rvir= 203.7 vol_bbox= 132.4 vol_chull=  61.4 rVirFac= 4.4 pos= [ 9018.07  9343.99 15998.66 ]
-            #hInd=   87 mass= 11.99 rvir= 203.7 vol_bbox= 135.8 vol_chull=  64.7 rVirFac= 4.6 pos= [ 9018.07  9343.99 15998.66 ]
-            #hInd=   87 mass= 11.99 rvir= 203.7 vol_bbox= 139.1 vol_chull=  69.1 rVirFac= 4.8 pos= [ 9018.07  9343.99 15998.66 ]
-            self.targetHaloInd  = 87
-            self.targetHaloPos  = [9018.07, 9343.99, 15998.66]
-            self.targetHaloRvir = 203.7 # ckpc
-            self.targetHaloMass = 11.99 # log msun
-            self.targetRedshift = 2.0
+                if self.levelMax == 9 : self.zoomShift = [12,0,-36]
+                if self.levelMax == 10: self.zoomShift = [12,0,-36]
+                if self.levelMax == 11: self.zoomShift = [12,0,-36]
+                self.rVirFac = 0.2 * self.zoomLevel + 4.0
 
-            if self.levelMax == 9 : self.zoomShift = [12,0,-36]
-            if self.levelMax == 10: self.zoomShift = [12,0,-36]
-            if self.levelMax == 11: self.zoomShift = [12,0,-36]
-            self.rVirFac = 0.2 * self.zoomLevel + 4.0
+                self.colors = colors_teal #h5
+                self.hIndDisp = 6
 
-            self.colors = colors_teal #h5
-            self.hIndDisp = 6
+            if hInd == 6:
+                self.targetHaloInd  = 79
+                self.targetHaloPos  = [3948.16, 6635.06, 5649.64]
+                self.targetHaloRvir = 214.0 # ckpc
+                self.targetHaloMass = 11.77 # log msun
+                self.targetRedshift = 2.0
 
-        if hInd == 6:
-            #hInd=   79 mass= 11.77 rvir= 214.0 vol_bbox= 118.5 vol_chull=  65.3 rVirFac= 5.0 pos= [ 3948.16  6635.06  5649.64 ]
-            #hInd=   79 mass= 11.77 rvir= 214.0 vol_bbox= 145.2 vol_chull=  77.9 rVirFac= 6.0 pos= [ 3948.16  6635.06  5649.64 ]
-            #hInd=   79 mass= 11.77 rvir= 214.0 vol_bbox= 209.9 vol_chull=  99.9 rVirFac= 7.0 pos= [ 3948.16  6635.06  5649.64 ]
-            self.targetHaloInd  = 79
-            self.targetHaloPos  = [3948.16, 6635.06, 5649.64]
-            self.targetHaloRvir = 214.0 # ckpc
-            self.targetHaloMass = 11.77 # log msun
-            self.targetRedshift = 2.0
+                if self.levelMax == 9 : self.zoomShift = [38, 20, 26]
+                if self.levelMax == 10: self.zoomShift = [39, 21, 26]
+                if self.levelMax == 11: self.zoomShift = [42, 21, 26]
 
-            if self.levelMax == 9 : self.zoomShift = [38, 20, 26]
-            if self.levelMax == 10: self.zoomShift = [39, 21, 26]
-            if self.levelMax == 11: self.zoomShift = [42, 21, 26]
+                self.rVirFac = 1.0 * self.zoomLevel + 3.0
 
-            self.rVirFac = 1.0 * self.zoomLevel + 3.0
+                self.colors = colors_green
+                self.hIndDisp = 8
 
-            self.colors = colors_green
-            self.hIndDisp = 8
+            if hInd == 7:
+                self.targetHaloInd  = 132
+                self.targetHaloPos  = [3435.06, 13498.76, 12175.02]
+                self.targetHaloRvir = 191.5 # ckpc
+                self.targetHaloMass = 11.74 # log msun
+                self.targetRedshift = 2.0
 
-        if hInd == 7:
-            #hInd=  132 mass= 11.74 rvir= 191.5 vol_bbox=  35.1 vol_chull=  15.3 rVirFac= 4.2 pos= [ 3435.06 13498.76 12175.02 ]
-            #hInd=  132 mass= 11.74 rvir= 191.5 vol_bbox=  35.1 vol_chull=  15.6 rVirFac= 4.3 pos= [ 3435.06 13498.76 12175.02 ]
-            #hInd=  132 mass= 11.74 rvir= 191.5 vol_bbox=  35.2 vol_chull=  15.9 rVirFac= 4.4 pos= [ 3435.06 13498.76 12175.02 ]
-            #hInd=  132 mass= 11.74 rvir= 191.5 vol_bbox=  47.9 vol_chull=  22.5 rVirFac= 6.0 pos= [ 3435.06 13498.76 12175.02 ]
-            #hInd=  132 mass= 11.74 rvir= 191.5 vol_bbox=  79.5 vol_chull=  36.5 rVirFac= 8.0 pos= [ 3435.06 13498.76 12175.02 ]
-            self.targetHaloInd  = 132
-            self.targetHaloPos  = [3435.06, 13498.76, 12175.02]
-            self.targetHaloRvir = 191.5 # ckpc
-            self.targetHaloMass = 11.74 # log msun
-            self.targetRedshift = 2.0
+                self.zoomShift = [42,-19,-12]
+                self.rVirFac = 0.1 * self.zoomLevel + 4.0
 
-            if self.levelMax == 9 : self.zoomShift = [42,-19,-12]
-            if self.levelMax == 10: self.zoomShift = [42,-19,-12]
-            if self.levelMax == 11: self.zoomShift = [42,-19,-12]
-            self.rVirFac = 0.1 * self.zoomLevel + 4.0
+                # L11 only:
+                if self.levelMax == 11: self.rVirFac = 6.0
 
-            # L11 only:
-            if self.levelMax == 11: self.rVirFac = 6.0
+                self.colors = colors_orange
+                self.hIndDisp = 2
 
-            # L12:
-            if self.levelMax == 12: self.zoomShift = [43, -19, -12]
-            if self.levelMax == 12: self.rVirFac = 8.0
+            if hInd == 8:
+                self.targetHaloInd  = 134
+                self.targetHaloPos  = [13688.10, 17932.56, 12944.52]
+                self.targetHaloRvir = 200.7 # ckpc
+                self.targetHaloMass = 11.74 # log msun
+                self.targetRedshift = 2.0
 
-            self.colors = colors_orange
-            self.hIndDisp = 2
+                if self.levelMax == 9 : self.zoomShift = [-25, -49, -15]
+                if self.levelMax == 10: self.zoomShift = [-26, -49, -15]
+                if self.levelMax == 11: self.zoomShift = [-27, -50, -14]
+                self.rVirFac = 0.5 * self.zoomLevel + 5.0
 
-        if hInd == 8:
-            #hInd=  134 mass= 11.74 rvir= 200.7 vol_bbox=  50.5 vol_chull=  23.7 rVirFac= 6.0 pos= [13688.10 17932.56 12944.52 ]
-            #hInd=  134 mass= 11.74 rvir= 200.7 vol_bbox=  59.0 vol_chull=  27.4 rVirFac= 6.5 pos= [13688.10 17932.56 12944.52 ]
-            #hInd=  134 mass= 11.74 rvir= 200.7 vol_bbox=  66.6 vol_chull=  31.4 rVirFac= 7.0 pos= [13688.10 17932.56 12944.52 ]
-            self.targetHaloInd  = 134
-            self.targetHaloPos  = [13688.10, 17932.56, 12944.52]
-            self.targetHaloRvir = 200.7 # ckpc
-            self.targetHaloMass = 11.74 # log msun
-            self.targetRedshift = 2.0
+                self.colors = colors_brown
+                self.hIndDisp = 3
 
-            if self.levelMax == 9 : self.zoomShift = [-25, -49, -15]
-            if self.levelMax == 10: self.zoomShift = [-26, -49, -15]
-            if self.levelMax == 11: self.zoomShift = [-27, -50, -14]
-            self.rVirFac = 0.5 * self.zoomLevel + 5.0
+            if hInd == 9:
+                self.targetHaloInd  = 75
+                self.targetHaloPos  = [9767.34, 9344.03, 16377.18]
+                self.targetHaloRvir = 196.8 # ckpc
+                self.targetHaloMass = 11.79 # log msun
+                self.targetRedshift = 2.0
 
-            self.colors = colors_brown
-            self.hIndDisp = 3
+                if self.levelMax == 9 : self.zoomShift = [6,0,-39]
+                if self.levelMax == 10: self.zoomShift = [6,0,-39]
+                if self.levelMax == 11: self.zoomShift = [6,0,-39]
+                self.rVirFac = 0.1 * self.zoomLevel + 4.0
 
-        if hInd == 9:
-            #hInd=   75 mass= 11.79 rvir= 196.8 vol_bbox= 122.3 vol_chull=  46.8 rVirFac= 4.2 pos= [ 9767.34  9344.03 16377.18 ]
-            #hInd=   75 mass= 11.79 rvir= 196.8 vol_bbox= 122.3 vol_chull=  48.1 rVirFac= 4.3 pos= [ 9767.34  9344.03 16377.18 ]
-            #hInd=   75 mass= 11.79 rvir= 196.8 vol_bbox= 122.3 vol_chull=  49.0 rVirFac= 4.4 pos= [ 9767.34  9344.03 16377.18 ]
-            self.targetHaloInd  = 75
-            self.targetHaloPos  = [9767.34, 9344.03, 16377.18]
-            self.targetHaloRvir = 196.8 # ckpc
-            self.targetHaloMass = 11.79 # log msun
-            self.targetRedshift = 2.0
+                self.colors = colors_maroon
+                self.hIndDisp = 7
 
-            if self.levelMax == 9 : self.zoomShift = [6,0,-39]
-            if self.levelMax == 10: self.zoomShift = [6,0,-39]
-            if self.levelMax == 11: self.zoomShift = [6,0,-39]
-            self.rVirFac = 0.1 * self.zoomLevel + 4.0
+        if variant == 'gen2_nofb':
+            if hInd == 2:
+                self.targetHaloInd  = 132
+                self.targetHaloPos  = [3435.06, 13498.76, 12175.02]
+                self.targetHaloRvir = 191.5 # ckpc
+                self.targetHaloMass = 11.74 # log msun
+                self.targetRedshift = 2.0
 
-            self.colors = colors_maroon
-            self.hIndDisp = 7
+                if self.levelMax <= 11: self.zoomShift = [42,-19,-12]
+                if self.levelMax == 12: self.zoomShift = [43,-19,-12]
+                if self.levelMax <= 11: self.rVirFac = 6.0
+                if self.levelMax == 12: self.rVirFac = 8.0
+
+                self.colors = colors_orange
+                self.hIndDisp = 2
 
         # convert zoomShift to zoomShiftPhys
         self.zoomShiftPhys = self.zoomShift / 2.0**self.levelMin * self.boxSize
@@ -739,4 +732,8 @@ class simParams:
             return 0 # hardcoded for now
         if self.run in ['zoom_20mpc','zoom_20mpc_dm']:
             raise Exception('Not implemented yet.')
+    
+    @property
+    def snapRange(self):
+        raise Exception('Not implemented')
     
