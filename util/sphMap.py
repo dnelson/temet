@@ -56,8 +56,7 @@ def _getkernel(hinv, r2, C1, C2, C3):
 def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                 normQuant,normColDens):
-    """ Core routine for sphMap(), see below. 
-        Note: np.arange() seems to have a huge penalty here instead of range(). """
+    """ Core routine for sphMap(), see below. """
     # init
     NumPart = pos.shape[0]
     BoxHalf = boxSizeSim / 2.0
@@ -89,7 +88,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         hsmlMin = 1.001 * pixelSizeY * 0.5
         hsmlMax = pixelSizeY * 50.0
 
-    # loop over all particles
+    # loop over all particles (Note: np.arange() seems to have a huge penalty here instead of range())
     for k in range(NumPart):
         p0 = pos[k,axes[0]]
         p1 = pos[k,axes[1]]
@@ -103,10 +102,6 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
             if np.abs( _NEAREST(p2-boxCen[2],BoxHalf,boxSizeSim) ) > 0.5 * boxSizeImg[2]:
                 continue
 
-        # position relative to box (x,y) minimum
-        pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
-        pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
-
         # clamp smoothing length
         if h < hsmlMin:
             h = hsmlMin
@@ -117,6 +112,10 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         if np.abs( _NEAREST(p0-boxCen[0],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[0]+h or \
            np.abs( _NEAREST(p1-boxCen[1],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[1]+h:
            continue
+
+        # position relative to box (x,y) minimum
+        pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
+        pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
 
         h2 = h*h
         hinv = 1.0 / h
@@ -177,10 +176,10 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     # normalize mass weighted quantity
     # this only works for all-at-once calcs, otherwise maps need first to be collected, then divided
     if normQuant:
-        for j in range(nPixels[1]):
-            for i in range(nPixels[0]):
-                if dens_out[j, i] > 0:
-                    quant_out[j, i] /= dens_out[j, i]
+        for i in range(nPixels[0]):
+            for j in range(nPixels[1]):
+                if dens_out[i, j] > 0:
+                    quant_out[i, j] /= dens_out[i, j]
 
     # for column density, normalize by the pixel area, e.g. [10^10 Msun/h] -> [10^10 Msun * h / ckpc^2]
     if normColDens:
@@ -193,9 +192,14 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
         quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
         returned, optionally converted to a column density map if colDens=True. If quant is specified, 
-        the mass-weighted map of the quantity is instead returned. Note, transpose of _calcSphMap() is 
-        taken such that with default plotting approaches e.g. axes=[0,1] gives imshow(return[i,j]) 
-        with x and y axes corresponding correctly to code coordinates.
+        the mass-weighted map of the quantity is instead returned.
+        
+          Note: transpose of _calcSphMap() is taken such that with default plotting approaches e.g. 
+                axes=[0,1] gives imshow(return[i,j]) with x and y axes corresponding correctly to 
+                code coordinates. 
+          Note: both boxSizeImg and boxCenter [0,1,2] correspond to [axes[0],axes[1],axes2], meaning
+                pos[:,axes[0]] is compared against the first entries boxSizeImg[0] and boxCenter[0]
+                and not compared against e.g. boxSizeImg[axes[0]].
 
       pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords only, to ignore z-axis)
       hsml[N]        : array of smoothing lengths to use for the particles, same units as pos
@@ -265,7 +269,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     # -------------------
     class mapThread(threading.Thread):
         """ Subclass Thread() to provide local storage (rDens,rQuant) which can be retrieved after 
-            this thread terminates and added to the global return. Note: This technique with this 
+            this thread terminates and added to the global return. Note (on Ody2): This technique with this 
             algorithm has ~94 percent scaling efficiency to 16 threads, drops to ~70 percent at 32. """
         def __init__(self, threadNum, nThreads):
             super(mapThread, self).__init__()
@@ -327,13 +331,9 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         return rQuant.T
     return rDens.T
 
-def test():
-    """ Debugging plots for accuracy/performance of sphMap(). """
+def benchmark():
+    """ Benchmark performance of sphMap(). """
     np.random.seed(424242)
-    import pdb
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-
     from cosmo.load import snapshotSubset
     from util.simParams import simParams
     import time
@@ -369,47 +369,12 @@ def test():
     boxSizeImg = np.array([sP.boxSize,sP.boxSize,sP.boxSize])
     axes       = [0,1]
 
-    # map
+    # map and time
     start_time = time.time()
     nLoops = 1
+
     for i in np.arange(nLoops):
         densMap  = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
-        colMap   = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims, colDens=True)
         quantMap = sphMap(pos, hsml, mass, quant, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
-    print('3 maps took [' + str((time.time()-start_time)/nLoops) + '] sec')
 
-    # plot
-    extent = [ boxCen[axes[0]] - 0.5*boxSizeImg[0], boxCen[axes[0]] + 0.5*boxSizeImg[0], 
-               boxCen[axes[1]] - 0.5*boxSizeImg[1], boxCen[axes[1]] + 0.5*boxSizeImg[1]]
-
-    fig = plt.figure(figsize=(26,12))
-
-    ax = fig.add_subplot(131)
-    ax.set_xlabel('x [ ckpc/h ]')
-    ax.set_ylabel('y [ ckpc/h ]')
-    plt.imshow(np.log10(densMap), extent=extent, origin='lower', interpolation='nearest')
-    cax = make_axes_locatable(ax).append_axes('right', size='5%', pad=0.1)
-    cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel('Column Mass [log 10$^{10}$ Msun/h]')
-
-    ax = fig.add_subplot(132)
-    ax.set_xlabel('x [ ckpc/h ]')
-    ax.set_ylabel('y [ ckpc/h ]')
-    plt.imshow(colMap, extent=extent, origin='lower', interpolation='nearest')
-    cax = make_axes_locatable(ax).append_axes('right', size='5%', pad=0.1)
-    cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel('Column Density [10$^{10}$ Msun * h / ckpc$^2$]')
-
-    ax = fig.add_subplot(133)
-    ax.set_xlabel('x [ ckpc/h ]')
-    ax.set_ylabel('y [ ckpc/h ]')
-    plt.imshow(quantMap, extent=extent, origin='lower', interpolation='nearest')
-    cax = make_axes_locatable(ax).append_axes('right', size='5%', pad=0.1)
-    cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel('Temperature [ log K ]')
-
-    fig.tight_layout()    
-    fig.savefig('sphMap_test.pdf')
-    plt.close(fig)
-
-    pdb.set_trace()
+    print('2 maps took [' + str((time.time()-start_time)/nLoops) + '] sec')

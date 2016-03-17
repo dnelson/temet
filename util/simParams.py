@@ -50,7 +50,7 @@ class simParams:
     levelmax       = 0    # power of two maximum level parameter (equals levelmin for non-zoom runs)
     zoomLevel      = 0    # levelmax-levelmin
     rVirFac        = 0.0  # size of cutout in units of rvir tracer back from targetRedshift
-    hInd           = None # zoom halo index (as in path)
+    hInd           = None # zoom halo index (as in path) (also used in fullboxes as a unique cross-sim ID)
     hIndDisp       = None # zoom halo index to display (in plots)
     zoomShift      = None # Music output = "Domain will be shifted by (X, X, X)"
     zoomShiftPhys  = None # the domain shift in box units
@@ -703,6 +703,24 @@ class simParams:
         if self.zoomLevel == 0:
             raise Exception('Strange, zoomLevel not set.')
 
+    def matchedSubhaloID(self, hID=None):
+        """ Return a subhalo index (into the group catalog) for this simulation given a unique, 
+            cross-simulation, cross-redshift 'ID'. Useful for comparing individual halos within 
+            full box sims. Can implement either manual pre-determined mappings, or automatic 
+            cross-matching between runs, and/or merger tree tracking across redshift. """
+        if hID is None:
+            # no ID directly input, was one called when this sP was created?
+            hID = self.hInd
+
+            if hID is None:
+                raise Exception('No hID input and sP.hInd not specified previously.')
+
+        # 1. manual mappings
+        # 2. cross-matching (e.g. DM ID weighted rank match across FP/DMO runs, or snapshots of same run)
+        # 3. pos/mass-matching (e.g. across different resolution levels)
+        # 4. tree-matching (across snapshots of same run)
+        raise Exception('Not implemented')
+
     # attribute helpers
     @property
     def isZoom(self):
@@ -730,7 +748,9 @@ class simParams:
     def zoomSubhaloID(self):
         if self.run in ['iClusters']:
             return 0 # hardcoded for now
-        if self.run in ['zoom_20mpc','zoom_20mpc_dm']:
+        if self.run in ['zooms','zooms_dm']:
+            raise Exception('Not implemented yet.')
+        if self.run in ['zooms2','zooms2_dm']:
             raise Exception('Not implemented yet.')
     
     @property
