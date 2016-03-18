@@ -6,6 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+import collections
 
 # --- utility functions ---
 
@@ -45,6 +46,14 @@ def logZeroSafe(x, zeroVal=1.0):
             x = zeroVal
 
     return np.log10(x)
+
+def iterable(x):
+    """ Protect against non-list/non-tuple (e.g. scalar or single string) value of x, to guarantee that 
+        a for loop can iterate over this object correctly. """
+    if isinstance(x, collections.Iterable) and not isinstance(x, basestring):
+        return x
+    else:
+        return [x]
 
 def reportMemory():
     """ Return current Python process memory usage in GB. """

@@ -8,9 +8,12 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
-import illustris_python as il
 from os.path import isfile, isdir
 from os import mkdir
+
+import illustris_python as il
+from illustris_python.util import partTypeNum as ptNum
+from util.helper import iterable
 
 def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
@@ -25,10 +28,6 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
         raise Exception("Must specify sP.snap for snapshotSubset load.")
     r = {}
 
-    # protect against scalar
-    if isinstance(fields,basestring):
-        fields = [fields]
-
     # open auxiliary catalog file for this snasphot
     auxCatPath = sP.derivPath + 'auxCat/catalog_%03d.hdf5' % sP.snap
 
@@ -40,7 +39,7 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
 
     with h5py.File(auxCatPath,'a') as f:
         # loop over all requested fields (prefix 'Group/' or 'Subhalo/' or 'Box/' maps into a HDF5 group)
-        for field in fields:
+        for field in iterable(fields):
             if field not in auxcatalog.fieldComputeFunctionMapping:
                 raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
@@ -229,7 +228,6 @@ def subboxVals(subbox):
 def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
     """ Find and return absolute path to a snapshot HDF5 file.
         Can be used to redefine illustris_python version (il.snapshot.snapPath = cosmo.load.snapPath). """
-
     sbNum, sbStr1, sbStr2 = subboxVals(subbox)
     ext = str(snapNum).zfill(3)
 
@@ -286,6 +284,18 @@ def snapshotHeader(sP, subbox=None, fileName=None):
     del header['NumPart_Total_HighWord']
 
     return header
+
+def snapHasField(sP, partType, field, subbox=None, fileName=None):
+    """ True or False, does snapshot data for partType have field? """
+    if fileName is None:
+        fileName = snapPath(sP.simPath, sP.snap, subbox=subbox)
+
+    gName = 'PartType' + str(ptNum(partType))
+
+    with h5py.File(fileName,'r') as f:
+        if gName not in f or field not in f[gName]:
+            return False
+        return True
 
 def snapOffsetList(sP):
     """ Make the offset table (by type) for the snapshot files, to be able to quickly determine within 
@@ -438,8 +448,6 @@ def snapshotSubset(sP, partType, fieldsIn,
           mdi : multi-dimensional index slice load
           sq  : squeeze single field return into a numpy array instead of within a dict
     """
-    from illustris_python.util import partTypeNum as ptNum
-
     kwargs = {'inds':inds, 'indRange':indRange, 'haloID':haloID, 'subhaloID':subhaloID}
     subset = None
 
@@ -458,9 +466,7 @@ def snapshotSubset(sP, partType, fieldsIn,
     il.snapshot.snapPath = snapPath
 
     # make sure fields is not a single element, and don't modify input
-    fields = list(fieldsIn)
-    if isinstance(fieldsIn, basestring):
-        fields = list([fieldsIn])
+    fields = list(iterable(fieldsIn))
 
     # composite fields (temp, vmag, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
@@ -484,8 +490,14 @@ def snapshotSubset(sP, partType, fieldsIn,
 
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:
-            # TODO: Volume is no more, handle with Mass/Density
-            vol = snapshotSubset(sP, partType, 'vol', **kwargs)
+            # Volume eliminated in newer outputs, calculate as necessary from Mass/Density
+            if snapHasField(sP, partType, 'Volume'):
+                vol = snapshotSubset(sP, partType, 'vol', **kwargs)
+            else:
+                mass = snapshotSubset(sP, partType, 'mass', **kwargs)
+                dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+                vol = mass / dens
+                
             return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
