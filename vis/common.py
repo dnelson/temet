@@ -16,8 +16,14 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
+from util.helper import loadColorTable
 from illustris_python.util import partTypeNum
 from cosmo.load import snapshotSubset, snapshotHeader, groupCat
+from cosmo.cloudy import cloudyIon
+
+volDensityFields = ['density']
+colDensityFields = ['coldens','HI']
+totSumFields     = ['mass']
 
 def getHsmlForPartType(sP, partType, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
@@ -29,8 +35,6 @@ def getHsmlForPartType(sP, partType, indRange=None):
     # gas
     if partTypeNum(partType) == partTypeNum('gas'):
         hsml = snapshotSubset(sP, partType, 'cellrad', indRange=indRange)
-
-        # TODO: check for existence of volume, if not, use Mass/Density
         return hsml
 
     # stars
@@ -40,7 +44,7 @@ def getHsmlForPartType(sP, partType, indRange=None):
     raise Exception('Unimplemented partType.')
 
 def loadMassAndQuantity(sP, partType, partField, indRange=None):
-    """ desc """
+    """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
     if partType in ['gas','stars']:
         mass = snapshotSubset(sP, partType, 'mass', indRange=indRange)
@@ -48,49 +52,87 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         h = snapshotHeader(sP)
         mass = h.massTable[cosmo.util.partTypeNum('dm')]
 
-    if partField == 'hi_test':
+    # neutral hydrogen mass model
+    if partField == 'HI':
         nh0_frac = snapshotSubset(sP, partType, 'NeutralHydrogenAbundance', indRange=indRange)
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
+    # metal ion mass
+    if ' ' in partField:
+        element = partField.split()[0]
+        ionNum  = partField.split()[1]
+
+        ion = cloudyIon(sP, el=element, redshiftInterp=False)
+        mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
+
     # quantity
-    if partField in ['coldens','coldens_cgs','hi_test']:
-        # distribute mass and calculate column density grid
+    normCol = False
+
+    if partField in volDensityFields+colDensityFields+totSumFields or ' ' in partField:
+        # distribute mass and calculate column/volume density grid
         quant = None
+
+        if partField in volDensityFields+colDensityFields:
+            normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
         quant = snapshotSubset(sP, partType, partField, indRange=indRange)
 
     # unit pre-processing (only need to remove log for means)
-    if partField == 'temp':
+    if partField in ['temp','temperature','ent','entr','entropy']:
         quant = 10.0**quant
 
-    return mass, quant
+    return mass, quant, normCol
 
-def gridOutputProcess(sP, grid, partField):
-    """ desc """
+def gridOutputProcess(sP, grid, partField, boxSizeImg):
+    """ Perform any final unit conversions on grid output and set field-specific plotting configuration. """
     config = {}
 
+    # volume densities
+    if partField in volDensityFields:
+        grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
+
+    if partField == 'density':
+        grid  = np.log10( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
+        config['label']  = 'Mean Volume Density [log cm$^{-3}$]'
+        config['ctName'] = 'jet'
+
+    # total sum fields
+    if partField == 'mass':
+        grid  = np.log10( sP.units.codeMassToLogMsun(grid) )
+        config['label']  = 'Total Mass [log M$_{\\rm sun}$]'
+        config['ctName'] = 'jet'
+
+    # column densities
     if partField == 'coldens':
-        grid  = np.log10( sP.units.codeColDensToPhys( grid, cgs=False, numDens=False ) )
-        config['label'] = 'Column Density [log 10$^{10}$ Msun / kpc$^2$]'
-
-    if partField == 'coldens_cgs':
         grid  = np.log10( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
-        config['label'] = 'Column Density [log cm$^{-2}$]'
+        config['label']  = 'Total Column Density [log cm$^{-2}$]'
+        config['ctName'] = 'viridis'
 
-    if partField == 'hi_test':
-        grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
-        grid = np.log10(grid)
-        config['label'] = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
+    if partField == 'HI' or ' ' in partField:
+        grid = np.log10( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
+        config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
+        config['ctName'] = 'viridis'
 
-    if partField == 'temp':
+    # mass-weighted quantities
+    if partField in ['temp','temperature']:
         grid  = np.log10( grid )
-        config['label'] = 'Temperature [log K]'
+        config['label']  = 'Temperature [log K]'
+        config['ctName'] = 'jet'
+
+    if partField in ['ent','entr','entropy']:
+        grid  = np.log10( grid )
+        config['label']  = 'Entropy [log K cm$^2$]'
+        config['ctName'] = 'jet'
 
     if partField == 'velmag':
-        config['label'] = 'Velocity Magnitude [km/s]'
+        config['label']  = 'Velocity Magnitude [km/s]'
+        config['ctName'] = 'jet'
 
-    config['ctName'] = 'todo'
+    # failed to find?
+    if 'label' not in config:
+        raise Exception('Unrecognized field ['+partField+'].')
+
     return grid, config
 
 def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeImg, hsmlFac, **kwargs):
@@ -99,7 +141,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeIm
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
          boxSizeImg[0], boxSizeImg[1], boxSizeImg[2], axes[0], axes[1])).hexdigest()[::4]
 
-    saveFilename = sP.derivPath + 'grids/%s.%d.%s.%s.%s.hdf5' % (method, sP.snap, partType, partField, m)
+    saveFilename = sP.derivPath + 'grids/%s.%d.%s.%s.%s.hdf5' % \
+                   (method, sP.snap, partType, partField.replace(' ','_'), m)
 
     if not isdir(sP.derivPath + 'grids/'):
         mkdir(sP.derivPath + 'grids/')
@@ -114,8 +157,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeIm
         # load: 3D positions
         pos = snapshotSubset(sP, partType, 'pos')
 
-        # load: mass/weights and quantity
-        mass, quant = loadMassAndQuantity(sP, partType, partField)
+        # load: mass/weights, quantity, and normalization required
+        mass, quant, normCol = loadMassAndQuantity(sP, partType, partField)
 
         if method == 'sphMap':
             # particle by particle orthographic splat using standard SPH cubic spline kernel
@@ -123,7 +166,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeIm
 
             grid = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                            boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, nPixels=nPixels, 
-                           colDens=(quant is None) )
+                           colDens=normCol, nThreads=1 )
         else:
             raise Exception('Not implemented.')
 
@@ -133,9 +176,33 @@ def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeIm
         print('Saved: [%s]' % saveFilename)
 
     # handle units and come up with units label
-    grid, config = gridOutputProcess(sP, grid, partField)
+    grid, config = gridOutputProcess(sP, grid, partField, boxSizeImg)
 
     return grid, config
+
+def addBoxMarkers(p, ax):
+    """ Factor out common annotation/markers to overlay. """
+    if 'plotHalos' in p and p['plotHalos'] > 0:
+        # debug plotting N most massive halos
+        gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
+
+        for j in range(p['plotHalos']):
+            xPos = gc['halos']['GroupPos'][j,p['axes'][0]]
+            yPos = gc['halos']['GroupPos'][j,p['axes'][1]]
+            rad  = gc['halos']['Group_R_Crit200'][j] * 1.0
+
+            c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+            ax.add_artist(c)
+
+    if 'rVirFracs' in p:
+        # plot circles for N fractions of the virial radius
+        for rVirFrac in p['rVirFracs']:
+            xPos = p['boxCenter'][0]
+            yPos = p['boxCenter'][1]
+            rad  = rVirFrac * p['haloVirRad']
+
+            c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+            ax.add_artist(c)
 
 def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
@@ -171,29 +238,22 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
             sP = p['sP']
 
             # grid projection for image
-            print(sP.run,sP.res,sP.redshift,p['partType'],p['partField'])
-
             grid, config = gridBox(**p)
 
-            # set axes and place image
+            # set axes
             ax = fig.add_subplot(nRows,nCols,i+1)
-            ax.set_title('%s %d z=%3.1f %s %s' % (sP.simName,sP.res,sP.redshift,p['partType'],p['partField']))
+
+            ax.set_title('%s z=%3.1f %s %s' % (sP.simName,sP.redshift,p['partType'],p['partField']))
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' [ ckpc/h ]')
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' [ ckpc/h ]')
 
-            plt.imshow(grid, extent=p['extent'], aspect=1.0)
+            # color mapping and place image
+            cmap = loadColorTable(config['ctName'])
+            
+            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
+            if 'valMinMax' in p: plt.clim( p['valMinMax'] )
 
-            if 1:
-                # debug plotting 10 most massive halos
-                gc = groupCat(sP, fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
-
-                for j in range(20):
-                    xPos = gc['halos']['GroupPos'][j,p['axes'][0]]
-                    yPos = gc['halos']['GroupPos'][j,p['axes'][1]]
-                    rad  = gc['halos']['Group_R_Crit200'][j] * 1.0
-
-                    c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
-                    ax.add_artist(c)
+            addBoxMarkers(p, ax)
 
             # colobar
             cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
@@ -220,8 +280,6 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
             sP = p['sP']
 
             # grid projection for image
-            print(sP.run,sP.res,sP.redshift,p['partType'],p['partField'])
-
             grid, config = gridBox(**p)
 
             # set axes and place image
@@ -234,23 +292,16 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
             leftNorm = colWidth * curCol
 
             pos = [leftNorm, bottomNorm, colWidth, rowHeight]
-            print(curRow,curCol,pos)
             ax = fig.add_axes(pos)
             ax.set_axis_off()
 
-            plt.imshow(grid, extent=p['extent'], aspect=1.0)
+            # color mapping and place image
+            cmap = loadColorTable(config['ctName'])
 
-            if 1:
-                # debug plotting 10 most massive halos
-                gc = groupCat(sP, fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
+            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
+            if 'valMinMax' in p: plt.clim( p['valMinMax'] )
 
-                for j in range(20):
-                    xPos = gc['halos']['GroupPos'][j,p['axes'][0]]
-                    yPos = gc['halos']['GroupPos'][j,p['axes'][1]]
-                    rad  = gc['halos']['Group_R_Crit200'][j] * 1.0
-
-                    c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
-                    ax.add_artist(c)
+            addBoxMarkers(p, ax)
 
             # colobar
             factor  = 0.95 # bar length, fraction of column width, 1.0=whole

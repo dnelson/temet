@@ -79,7 +79,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     # setup pixel sizes
     pixelSizeX = boxSizeImg[0] / nPixels[0]
     pixelSizeY = boxSizeImg[1] / nPixels[1]
-    pixelArea  = pixelSizeX * pixelSizeY # e.g. (ckpc/h)^2
+
+    pixelArea   = pixelSizeX * pixelSizeY # e.g. (ckpc/h)^2
 
     if pixelSizeX < pixelSizeY:
         hsmlMin = 1.001 * pixelSizeX * 0.5
@@ -181,7 +182,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 if dens_out[i, j] > 0:
                     quant_out[i, j] /= dens_out[i, j]
 
-    # for column density, normalize by the pixel area, e.g. [10^10 Msun/h] -> [10^10 Msun * h / ckpc^2]
+    # for total column density, normalize by the pixel area, e.g. [10^10 Msun/h] -> [10^10 Msun * h / ckpc^2]
     if normColDens:
         dens_out /= pixelArea
 
@@ -212,6 +213,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       nPixels[2]     : number of pixels in x,y directions for output image
       ndims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
       colDens        : if True, normalize each grid value by its area (default=False)
+      nThreads       : do multithreaded calculation (mem required=nThreads times more)
     """
     # input sanity checks
     if len(boxSizeImg) != 3 or not isinstance(boxSizeSim,(float)) or len(boxCen) != 3:
@@ -298,6 +300,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             self.ndims = ndims
             self.nPixels = nPixels
             self.colDens = colDens
+            self.volDens = volDens
 
         def run(self):
             # call JIT compiled kernel (normQuant=False since we handle this later)
@@ -305,7 +308,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                         self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
                         False,self.colDens)
 
-    # create threads, start them, and wait for all to finish
+    # create threads
     threads = [mapThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
 
     # allocate master return grids

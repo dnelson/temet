@@ -34,23 +34,28 @@ def renderBox():
     #panels.append( {'hsmlFac':2.0} )
     #panels.append( {'hsmlFac':3.0} )
 
-    panels.append( {'run':'tracer', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'temp'} )
-    panels.append( {'run':'tracer', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'coldens'} )
+    panels.append( {'run':'zooms', 'res':10,  'partField':'coldens', 'hInd':7} )
+    panels.append( {'run':'zooms', 'res':10, 'partField':'density_cgs', 'hInd':7} )
+    panels.append( {'run':'zooms', 'res':10, 'partField':'density', 'hInd':7} )
+
+    #panels.append( {'run':'tracer', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'temp'} )
+    #panels.append( {'run':'tracer', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'coldens'} )
     #panels.append( {'run':'feedback', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'temp'} )
     #panels.append( {'run':'feedback', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'coldens'} )
 
     # plot config (common, applied to all panels)
     #run       = 'tracer'   # run name
     #res       = 128        # run resolution
-    #redshift  = 2.0        # run redshift
-    #partType  = 'gas'      # which particle type to project
+    redshift  = 2.0        # run redshift
+    partType  = 'gas'      # which particle type to project
     #partField = 'coldens'  # which quantity/field to project for that particle type
     method    = 'sphMap'    # sphMap, voronoi_const, voronoi_grads, ...
     nPixels   = 600         # number of pixels per dimension of images when projecting
-    zoomFac   = 0.5           # [0,1], only in axes, not along projection direction
+    zoomFac   = 0.1           # [0,1], only in axes, not along projection direction
     hsmlFac   = 2.5         # multiplier on smoothing lengths for sphMap
-    relCenPos = [0.75,0.75]   # [0-1,0-1] relative coordinates of where to center image, only in axes
-    axes      = [2,1]       # e.g. [0,1] is x,y
+    relCenPos = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
+    axes      = [0,1]       # e.g. [0,1] is x,y
+    plotHalos = 20          # plot virial circles for the N most massive halos in the box
 
     # render config (global)
     plotStyle    = 'open'  # open, edged
@@ -67,7 +72,7 @@ def renderBox():
             p[cName] = cVal
 
         # add simParams() and whole box image config
-        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'])
+        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'], hInd=p['hInd'])
 
         p['boxSizeImg'], p['boxCenter'], p['extent'] = boxImgSpecs(**p)
 
