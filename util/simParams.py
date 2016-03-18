@@ -5,6 +5,7 @@ util/simParams.py
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
 
+import numpy as np
 from util.units import units
 from cosmo.util import redshiftToSnapNum, snapNumToRedshift
 
@@ -370,11 +371,11 @@ class simParams:
 
             bs = str(round(self.boxSize/1000))
 
-            self.arepoPath  = self.basePath+'sims.zooms/128_'+bs+'Mpc_h'+str(hInd)+'_L'+str(self.levelMax)+'/'
+            self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+str(self.levelMax)+'/'
             self.savPrefix  = 'Z2'
-            self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + ds
+            self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + '_' + 'gen2_nofb'
             self.saveTag    = 'z2H' + str(hInd) + 'L' + str(self.levelMax)
-            self.plotPrefix = 'z2L' + str(self.levelMax) + ds
+            self.plotPrefix = 'z2L' + str(self.levelMax)
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
         if run == 'feedback':
@@ -501,7 +502,7 @@ class simParams:
         self.targetGasMass = 4.76446157e-03 # L7
         self.targetGasMass /= (8**self.zoomLevel) # 8x decrease at each increasing zoom level
 
-        self.gravSoft = 4.0 ; L7
+        self.gravSoft = 4.0 # L7
         self.gravSoft /= (2**self.zoomLevel) # 2x decrease at each increasing zoom level
 
         if self.levelMax == 9:  self.ids_offset =  10000000
@@ -680,6 +681,8 @@ class simParams:
                 self.hIndDisp = 7
 
         if variant == 'gen2_nofb':
+            self.hIndDisp = hInd
+
             if hInd == 2:
                 self.targetHaloInd  = 132
                 self.targetHaloPos  = [3435.06, 13498.76, 12175.02]
@@ -693,9 +696,9 @@ class simParams:
                 if self.levelMax == 12: self.rVirFac = 8.0
 
                 self.colors = colors_orange
-                self.hIndDisp = 2
 
         # convert zoomShift to zoomShiftPhys
+        self.zoomShift = np.array(self.zoomShift)
         self.zoomShiftPhys = self.zoomShift / 2.0**self.levelMin * self.boxSize
 
         if self.targetHaloMass == 0.0:
@@ -746,12 +749,13 @@ class simParams:
     
     @property
     def zoomSubhaloID(self):
+        print('Warning: zoomSubhaloID hard-coded todo.')
         if self.run in ['iClusters']:
             return 0 # hardcoded for now
         if self.run in ['zooms','zooms_dm']:
-            raise Exception('Not implemented yet.')
+            return 0 # hardcoded for now
         if self.run in ['zooms2','zooms2_dm']:
-            raise Exception('Not implemented yet.')
+            return 0 # hardcoded for now
     
     @property
     def snapRange(self):

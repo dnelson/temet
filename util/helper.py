@@ -217,7 +217,23 @@ def loadColorTable(ctName):
     """ Load a custom or built-in color table.
           rgb_table : do not load for active plotting, just return table as an array.
     """
-    raise Exception("Not implemented.")
+    from matplotlib.pyplot import cm
+    cmap = None
+    
+    # matplotlib
+    if ctName in cm.cmap_d:
+        cmap = cm.get_cmap(ctName)
+
+    # cubehelix
+    # ...
+
+    # other custom
+    # ...
+
+    if cmap is None:
+        raise Exception('Unrecognized colormap request ['+ctName+'] or not implemented.')
+
+    return cmap
 
 def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """

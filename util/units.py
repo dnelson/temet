@@ -115,7 +115,7 @@ class units(object):
     # --- unit conversions to/from code units ---
 
     def codeMassToLogMsun(self, mass):
-        """ Convert mass from code units (10**10 msun/h) to (log msun) self. """
+        """ Convert mass from code units (10**10 msun/h) to (log msun). """
         mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
         
         return logZeroSafe(mass_msun)
