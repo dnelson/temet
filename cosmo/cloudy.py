@@ -9,11 +9,14 @@ import numpy as np
 import h5py
 import glob
 import subprocess
-import multiprocessing as mp
+
 from functools import partial
 from os.path import isfile, isdir, getsize
 from os import mkdir, remove
+
 from cosmo import hydrogen
+from util.helper import closest, iterable
+from cosmo.load import snapshotSubset, snapHasField
 
 basePath = '/n/home07/dnelson/code/cloudy.run/'
 
@@ -193,8 +196,10 @@ def getRhoTZzGrid(res):
 
     return densities, temps, metals, redshifts
 
-def runCloudyGrid(redshiftInd, nThreads=61, res='sm'):
+def runCloudyGrid(redshiftInd, nThreads=61, res='lg'):
     """ Run a sequence of CLOUDY models over a parameter grid at a redshift (one redshift per job). """
+    import multiprocessing as mp
+
     # config
     densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
 
@@ -234,7 +239,7 @@ def runCloudyGrid(redshiftInd, nThreads=61, res='sm'):
 
     print('Redshift done.')
 
-def collectCloudyOutputs(res='sm'):
+def collectCloudyOutputs(res='lg'):
     """ Combine all CLOUDY outputs for a grid into our master HDF5 table used for post-processing. """
     # config
     maxNumIons = 10    # keep at most the 10 lowest ions per element
@@ -405,9 +410,8 @@ class cloudyIon():
     # simple roman numeral mapping
     roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
 
-    def __init__(self, sP, el=None, res='sm', redshiftInterp=False, order=3):
+    def __init__(self, sP, el=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
-        from util.helper import closest
         self.data    = {}
         self.numIons = {}
         self.grid    = {}
@@ -423,8 +427,8 @@ class cloudyIon():
             else:
                 elements = f.keys()
 
-            for element in elements:
-                self.data[element] = f[element][()]
+            for element in iterable(elements):
+                self.data[element] = f[element][...]
                 self.numIons[element] = f[element].attrs['NumIons']
 
             # load metadata/grid coordinates
@@ -451,7 +455,7 @@ class cloudyIon():
 
     def resolveElementNames(self, elements):
         """ Map symbols to full element names, and leave full names unchanged. """
-        if isinstance(elements, basestring): elements = [elements] # ensure iterable
+        elements = iterable(elements)
 
         for i, element in enumerate(elements):
             if len(element) <= 2:
@@ -468,9 +472,28 @@ class cloudyIon():
         if len(elements) == 1: return elements[0]
         return elements
 
+    def elementNameToSymbol(self, elements):
+        """ Map full element names to symbols, and leave symbols unchanged. """
+        elements = iterable(elements)
+
+        for i, element in enumerate(elements):
+            if len(element) > 2:
+                elInfo = [el for el in self.el if el['name'] == element]
+
+                if not len(elInfo):
+                    raise Exception('Failed to resolve element name: ' + element)
+
+                elements[i] = elInfo[0]['symbol']
+
+            if elements[i] not in [el['symbol'] for el in self.el]:
+                raise Exception('Unknown element symbol: ' + elements[i])
+
+        if len(elements) == 1: return elements[0]
+        return elements
+
     def resolveIonNumbers(self, ionNums):
         """ Map roman numeral ion numbers to integers, and leave integers unchanged. """
-        if isinstance(ionNums, (int,long,basestring)): ionNums = [ionNums] # ensure iterable
+        ionNums = iterable(ionNums)
 
         for i, ionNum in enumerate(ionNums):
             if str(ionNum) in self.roman.keys():
@@ -482,11 +505,21 @@ class cloudyIon():
         if len(ionNums) == 1: return ionNums[0]
         return ionNums
 
+    def numToRoman(self, ionNums):
+        """ Map numeric ion numbers to roman numeral strings. """
+        ionNums = iterable(ionNums)
+
+        for i, ionNum in enumerate(ionNums):
+            if ionNum <= 0 or ionNum > len(self.roman):
+                raise Exception('Cannot map.')
+            ionNums[i] = [numeral for numeral,arabic in self.roman.items() if arabic == ionNums[i]][0]
+
+        if len(ionNums) == 1: return ionNums[0]
+        return ionNums
+
     def slice(self, element, ionNum, redshift=None, dens=None, metal=None, temp=None):
         """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
           input can remain None). """
-        from util.helper import closest
-
         if sum(pt is not None for pt in (redshift,dens,metal,temp)) != 3:
             raise Exception('Must specify 3 of 4 grid positions.')
         if self.redshiftInterp == False:
@@ -527,6 +560,7 @@ class cloudyIon():
               metal   : metallicity [log solar]
         """
         from scipy.ndimage import map_coordinates
+        import time
 
         element = self.resolveElementNames(element)
         ionNum  = self.resolveIonNumbers(ionNum)
@@ -541,6 +575,8 @@ class cloudyIon():
             raise Exception('Requested element [' + element + '] not in grid.')
         if ionNum-1 >= self.data[element].shape[0]:
             raise Exception('Requested ion number of ' + element + ' [' + str(ionNum) + '] out of range.')
+
+        start_time = time.time()
 
         # convert input interpolant point into fractional 3D/4D (+ionNum) array indices
         # Note: we are clamping here at [0,size-1], which means that although we never 
@@ -560,7 +596,31 @@ class cloudyIon():
         # do 3D or 4D interpolation on this ion sub-table at the requested order
         abunds = map_coordinates( locData, iND, order=self.order, mode='nearest')
 
+        print('Abundance fraction interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
+
         return abunds
+
+    def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None):
+        """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
+        whole snapshot, optionally restricted to an indRange. """
+        # load required gas properties
+        dens = snapshotSubset(sP, 'gas', 'dens', indRange=indRange)
+        dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
+
+        if snapHasField(sP, 'gas', 'GFM_Metallicity'):
+            metal = snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
+        else:
+            metal = np.zeros( dens.size, dtype='float32' )
+            metal += sP.units.Z_solar * 0.1 # set fixed metallicity of -1.0 as Simeon used in his tables
+
+        metal = np.log10( metal / sP.units.Z_solar ) # log solar
+
+        temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
+        
+        # interpolate for log(abundance)
+        mass_fraction = self.frac(element, ionNum, dens, metal, temp)
+
+        return 10.0**mass_fraction
 
 def plotUVB():
     """ Debug plots of the UVB(nu) as a function of redshift. """
@@ -660,7 +720,7 @@ def plotUVB():
     fig.savefig('uvb.pdf')
     plt.close(fig)
 
-def plotIonAbundances(res='sm'):
+def plotIonAbundances(res='lg'):
     """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
@@ -669,12 +729,12 @@ def plotIonAbundances(res='sm'):
     from util.helper import evenlySample, sampleColorTable
 
     # plot config
-    abund_range = [-10.0,0.0]
+    abund_range = [-6.0,0.0]
     lw = 3.0
     ct = 'jet'
 
     # data config and load full table
-    elements = ['Lithium']
+    elements = ['Carbon']
     redshift = 2.0
     gridSize = 3 # 3x3
 
@@ -737,8 +797,8 @@ def plotIonAbundances(res='sm'):
                 for j, dens in enumerate(ion.grid['dens']):
                     T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
                     
-                    # TODO: change dens labels to only even ints
-                    label = 'dens = '+str(dens) if np.abs(dens-round(dens)) < 0.00001 else ''
+                    # dens labels only even ints
+                    label = 'dens = '+str(dens) if np.abs(dens-round(dens/2)*2) < 0.00001 else ''
                     ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
 
             ax.legend(loc='upper right')
@@ -747,10 +807,110 @@ def plotIonAbundances(res='sm'):
             pdf.savefig()
             plt.close(fig)
 
-        pdf.close()
+        # (C): 2d histograms (x=T, y=dens, color=log fraction) (different panels for ions)
+        metal = 1.0
+        ionGridSize = np.ceil( np.sqrt( ion.numIons[element] ) )
+        
+        for redshift in np.arange(ion.grid['redshift'].max()+1):
+            print(' [%s] 2d, z = %2d' % (element,redshift))
+            fig = plt.figure(figsize=(26,16))
 
-        # (C): 2d histograms (x=T, y=dens, color=log fraction) (different panels for metals)
+            for i, ionNum in enumerate(np.arange(ion.numIons[element])+1):
+                # panel setup
+                ax = fig.add_subplot(ionGridSize,ionGridSize,i+1)
+                ax.set_title(element + str(ionNum) + ' Z=' + str(metal) + ' z=' + str(redshift))
+                ax.set_xlim(ion.range['temp'])
+                ax.set_ylim(ion.range['dens'])
+                ax.set_xlabel('Temp [ log K ]')
+                ax.set_ylabel('Density [ log cm$^{-3}$ ]')
+
+                # make 2D array from slices
+                x = ion.grid['temp']
+                y = ion.grid['dens']
+                XX, YY = np.meshgrid(x, y, indexing='ij')
+
+                z = np.zeros( (x.size, y.size), dtype='float32' )
+                for j, dens in enumerate(y):
+                    _, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
+                    z[:,j] = ionFrac
+
+                z = np.clip(z, abund_range[0], abund_range[1])
+
+                # contour plot
+                cnt = plt.contourf(XX, YY, z, 40)
+
+                for c in cnt.collections:
+                    c.set_edgecolor("face")
+                    c.set_linewidth(0.1) # must be nonzero to fix sub-pixel AA issue
+
+                cb = plt.colorbar()
+                cb.ax.set_ylabel('log Abundance Fraction')
+
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
 
         # (D): compare ions on same plot: (x=T, y=log fraction) (lines=ions) (panels=dens)
+        cm = sampleColorTable(ct, ion.numIons[element])
 
-        # (E): vs redshift
+        for metal in evenlySample(ion.grid['metal'],3):
+            print(' [%s] ion comp, Z = %2d' % (element,metal))
+
+            fig = plt.figure(figsize=(26,16))
+
+            # load table slice and plot
+            for i, dens in enumerate( evenlySample(ion.grid['dens'],gridSize**2) ):
+
+                # panel setup
+                ax = fig.add_subplot(gridSize,gridSize,i+1)
+                ax.set_title(element + ' Z=' + str(metal) + ' dens='+str(dens))
+                ax.set_xlim(ion.range['temp'])
+                ax.set_ylim(abund_range)
+                ax.set_xlabel('Temp [ log K ]')
+                ax.set_ylabel('Log Abundance Fraction')
+
+                # loop over all ions of this elemnet
+                for j, ionNum in enumerate(np.arange(ion.numIons[element])+1):
+                    T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
+                
+                    label = ion.elementNameToSymbol(element) + ion.numToRoman(ionNum)
+                    ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
+
+            ax.legend(loc='upper right')
+
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
+
+        # (E): vs redshift (x=T, y=abund) (lines=redshifts) (panels=dens)
+        cm = sampleColorTable(ct, ion.grid['redshift'].max()+1)
+        metal = -1.0
+
+        for ionNum in np.arange(ion.numIons[element])+1:
+            print(' [%s] vs redshift, ion = %2d' % (element,ionNum))
+
+            fig = plt.figure(figsize=(26,16))
+
+            # load table slice and plot
+            for i, dens in enumerate( evenlySample(ion.grid['dens'],gridSize**2) ):
+
+                # panel setup
+                ax = fig.add_subplot(gridSize,gridSize,i+1)
+                ax.set_title(element + str(ionNum) + ' Z=' + str(metal) + ' dens='+str(dens))
+                ax.set_xlim(ion.range['temp'])
+                ax.set_ylim(abund_range)
+                ax.set_xlabel('Temp [ log K ]')
+                ax.set_ylabel('Log Abundance Fraction')
+
+                # loop over all ions of this elemnet
+                for j, redshift in enumerate(np.arange(ion.grid['redshift'].max()+1)):
+                    T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
+                    ax.plot(T, ionFrac, lw=lw, color=cm[j], label='z=%d' % redshift)
+
+            ax.legend(loc='upper right')
+
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
+
+        pdf.close()
