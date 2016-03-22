@@ -15,13 +15,16 @@ from illustris_python.util import partTypeNum
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.util import addRedshiftAgeAxes, validSnapList
 
-def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False):
-    """ Stellar mass / halo mass relation, full boxes and zoom points vs. abundance matching lines. """
-    # config
-    colors     = ['blue','purple','black'] # Mtot, M<2r1/2, M<r1/2 (for markers)
-    linestyles = [':','-','--','-.'] # 
-    binSize    = 0.2 # for running median lines
+# global configuration
+sKn     = 5   # savgol smoothing kernel length (1=disabled)
+sKo     = 3   # savgol smoothing kernel poly order
+binSize = 0.2 # dex in stellar/halo mass for median lines
 
+linestyles = ['-',':','--','-.']       # typically for analysis variations per run
+colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
+
+def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, simRedshift=0.0):
+    """ Stellar mass / halo mass relation, full boxes and zoom points vs. abundance matching lines. """
     # plot setup
     xrange = [10.0, 15.0]
     yrange = [0.0, 0.30]
@@ -35,7 +38,6 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False):
         ax.set_yscale('log')
         ax.set_ylim([1e-3,1e0])
 
-    #ax.set_title('')
     ax.set_xlabel('M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
     ax.set_ylabel('M$_\star$ / M$_{\\rm halo}$ $(\Omega_{\\rm b} / \Omega_{\\rm m})^{-1}$ [ only centrals ]')
 
@@ -44,7 +46,6 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False):
     m = mosterSMHM(sPs[0])
     k = kravtsovSMHM(sPs[0])
 
-    # '#ff6677', '#66ff77', 'cyan'
     ax.plot(b['haloMass_i'], b['y_mid_i'], color='#333333', label='Behroozi+ (2013)')
     ax.fill_between(b['haloMass_i'], b['y_low_i'], b['y_high_i'], color='#333333', interpolate=True, alpha=0.3)
 
@@ -69,8 +70,8 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False):
     lines = []
 
     for i, sP in enumerate(sPs):
-
         print('SMHM: '+sP.simName)
+        sP.setRedshift(simRedshift)
 
         if sP.isZoom:
             gc = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID)
@@ -110,19 +111,19 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False):
             if allMassTypes:
                 yy = gc['subhalos']['SubhaloMassType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
-                ym2 = savgol_filter(ym,5,3)
+                ym2 = savgol_filter(ym,sKn,sKo)
                 l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], color=c, lw=3.0)
 
             yy = gc['subhalos']['SubhaloMassInRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
             xm, ym, sm = running_median(xx,yy,binSize=binSize)
-            ym2 = savgol_filter(ym,5,3)
+            ym2 = savgol_filter(ym,sKn,sKo)
             l, = ax.plot(xm[:-1], ym2[:-1], linestyles[1], lw=3.0, color=c, label=sP.simName)
             lines.append(l)
 
             if allMassTypes:
                 yy = gc['subhalos']['SubhaloMassInHalfRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
-                ym2 = savgol_filter(ym,5,3)
+                ym2 = savgol_filter(ym,sKn,sKo)
                 l, = ax.plot(xm[:-1], ym2[:-1], linestyles[2], lw=3.0, color=c)
 
     # second legend
@@ -189,7 +190,7 @@ def sfrAvgVsRedshift(sPs, pdf):
 
         # loop over all snapshots
         for j, snap in enumerate(snaps):
-            sP = simParams(res=sP.res, run=sP.run, snap=snap)
+            sP.setSnap(snap)
 
             gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
               fieldsSubhalos=['SubhaloSFR','SubhaloSFRinRad','SubhaloSFRinHalfRad'])
@@ -236,7 +237,7 @@ def sfrAvgVsRedshift(sPs, pdf):
     pdf.savefig()
     plt.close(fig)
 
-def sfrdVsRedshift(sPs, pdf, xlog=True):
+def sfrdVsRedshift(sPs, pdf, xlog=True, simRedshift=0.0):
     """ Star formation rate density of the universe, vs redshift, vs observational points. """
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -269,6 +270,8 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
 
         # load sfr.txt file
         print('SFRD: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
         s = sfrTxt(sP)
 
         ax.plot(s['redshift'], s['sfrd'], '-', lw=2.5, label=sP.simName)
@@ -280,11 +283,8 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf):
+def blackholeVsStellarMass(sPs, pdf, simRedshift=0.0):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
-
-    binSize = 0.2
-
     # plot setup
     fig = plt.figure(figsize=(16,9))
     ax = fig.add_subplot(111)
@@ -317,6 +317,8 @@ def blackholeVsStellarMass(sPs, pdf):
             continue
 
         print('BHMass: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMassType','SubhaloMassInHalfRadType'])
 
@@ -332,7 +334,7 @@ def blackholeVsStellarMass(sPs, pdf):
         yy = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')] )
 
         xm, ym, sm = running_median(xx,yy,binSize=binSize)
-        ym2 = savgol_filter(ym,5,3)
+        ym2 = savgol_filter(ym,sKn,sKo)
         l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
 
     # second legeng
@@ -342,12 +344,8 @@ def blackholeVsStellarMass(sPs, pdf):
     pdf.savefig()
     plt.close(fig)
 
-def galaxySizes(sPs, pdf, vsHaloMass=False):
+def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
     """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. """
-
-    linestyles = ['-',':']
-    binSize = 0.2
-
     # plot setup
     fig = plt.figure(figsize=(16,9))
     ax = fig.add_subplot(111)
@@ -396,6 +394,8 @@ def galaxySizes(sPs, pdf, vsHaloMass=False):
             continue
 
         print('Sizes: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
 
@@ -420,10 +420,10 @@ def galaxySizes(sPs, pdf, vsHaloMass=False):
         xm, ym_gas, sm_gas     = running_median(xx,yy_gas,binSize=binSize)
         xm, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize)
 
-        ym_gas   = savgol_filter(ym_gas,5,3)
-        ym_stars = savgol_filter(ym_stars,5,3)
-        sm_gas   = savgol_filter(sm_gas,5,3)
-        sm_stars = savgol_filter(sm_stars,5,3)
+        ym_gas   = savgol_filter(ym_gas,sKn,sKo)
+        ym_stars = savgol_filter(ym_stars,sKn,sKo)
+        sm_gas   = savgol_filter(sm_gas,sKn,sKo)
+        sm_stars = savgol_filter(sm_stars,sKn,sKo)
 
         l, = ax.plot(xm[:-1], ym_stars[:-1], linestyles[0], lw=3.0, label=sP.simName)
         l, = ax.plot(xm[:-1], ym_gas[:-1], linestyles[1], color=l.get_color(), lw=3.0)
@@ -447,11 +447,9 @@ def galaxySizes(sPs, pdf, vsHaloMass=False):
     pdf.savefig()
     plt.close(fig)
 
-def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False):
+def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, simRedshift=0.0):
     """ Stellar mass function (number density of galaxies) at redshift zero. """
-
-    linestyles = ['-',':','--'] # 2rhalf, 1rhalf, total
-    binSize = 0.2 # dex, stellar mass
+    # config
     mts = ['SubhaloMassInRadType','SubhaloMassInHalfRadType','SubhaloMassType']
 
     # plot setup
@@ -499,6 +497,8 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False):
             continue
 
         print('SMF: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=mts)
 
         # centrals only
@@ -519,7 +519,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False):
             xx = sP.units.codeMassToLogMsun(xx)
 
             xm, ym = running_histogram(xx, binSize=binSize, normFac=sP.boxSizeCubicMpc*binSize)
-            ym = savgol_filter(ym,5,3)
+            ym = savgol_filter(ym,sKn,sKo)
 
             label = sP.simName if count == 0 else ''
             color = l.get_color() if count > 0 else None
@@ -546,14 +546,10 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False):
     pdf.savefig()
     plt.close(fig)
 
-def massMetallicityStars(sPs, pdf):
+def massMetallicityStars(sPs, pdf, simRedshift=0.0):
     """ Stellar mass-metallicity relation at z=0. """
-
     # config
-    binSize     = 0.2
     metalFields = ['SubhaloStarMetallicityHalfRad','SubhaloStarMetallicity','SubhaloStarMetallicityMaxRad']
-    linestyles  = ['-',':','--']
-    colors     = ['black','purple','blue'] # Z<2r1/2, Z<r1/2, Z<rmax (for markers)
 
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -586,6 +582,7 @@ def massMetallicityStars(sPs, pdf):
     # loop over each fullbox run
     for sP in sPs:
         print('MMStars: '+sP.simName)
+        sP.setRedshift(simRedshift)
 
         if sP.isZoom:
             gc = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID)
@@ -622,7 +619,7 @@ def massMetallicityStars(sPs, pdf):
                 yy = np.log10( gc['subhalos'][metalField][w] / sP.units.Z_solar )
 
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
-                ym2 = savgol_filter(ym,5,3)
+                ym2 = savgol_filter(ym,sKn,sKo)
 
                 label = sP.simName if i==0 else ''
                 ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
@@ -648,9 +645,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
     from util import simParams
 
     # config
-    binSize     = 0.2
-    metalFields = ['SubhaloGasMetallicity' + s for s in ['SfrWeighted','Sfr']]
-    linestyles  = ['-',':']
+    metalFields = ['SubhaloGasMetallicitySfrWeighted','SubhaloGasMetallicitySfr']
 
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -664,7 +659,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
         ax.set_ylim([-1.0,0.75])
     
     ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
-    ax.set_ylabel('Z$_{\\rm stars}$ [ log Z$_{\\rm sun}$ ] [ centrals and satellites ]')
+    ax.set_ylabel('Z$_{\\rm gas}$ [ log Z$_{\\rm sun}$ ] [ centrals and satellites ]')
 
     # observational points
     if simRedshift == 0.0:
@@ -723,9 +718,9 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
             continue
 
         print('MMGas (z=%3.1f): %s' % (simRedshift,sP.simName))
+        sP.setRedshift(simRedshift)
 
-        sPgrid = simParams(res=sP.res, run=sP.run, redshift=simRedshift)
-        gc = groupCat(sPgrid, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMassInRadType']+metalFields)
 
         # include: centrals + satellites (no noticeable difference vs. centrals only)
@@ -747,8 +742,8 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
             yy = np.log10( gc['subhalos'][metalField][w][wNz] / sP.units.Z_solar )
 
             xm, ym, sm = running_median(xx[wNz],yy,binSize=binSize)
-            ym2 = savgol_filter(ym,5,3)
-            sm2 = savgol_filter(sm,5,3)
+            ym2 = savgol_filter(ym,sKn,sKo)
+            sm2 = savgol_filter(sm,sKn,sKo)
 
             label = sP.simName + ' z=%3.1f' % simRedshift if i==0 else ''
             ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
@@ -770,16 +765,12 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
     pdf.savefig()
     plt.close(fig)
 
-def baryonicFractionsR500Crit(sPs, pdf):
+def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     """ Gas, star, and total baryonic fractions within r500_crit (for massive systems).
         (Genel Fig 10) (Schaye Fig 15) """
-
     # config
-    binSize = 0.2
-    linestyles  = ['-',':','--'] # gas, stars, baryons
-    markers     = ['o','D','s']  # gas, stars, baryons
+    markers   = ['o','D','s']  # gas, stars, baryons
     fracTypes = ['gas','stars','baryons']
-    zoomColor = 'purple'
 
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -816,6 +807,7 @@ def baryonicFractionsR500Crit(sPs, pdf):
     # loop over each fullbox run
     for sP in sPs:
         print('MMStars: '+sP.simName)
+        sP.setRedshift(simRedshift)
 
         if sP.isZoom:
             ac = auxCat(sP, fields=['Group/Mass_Crit500_Type'])
@@ -834,7 +826,7 @@ def baryonicFractionsR500Crit(sPs, pdf):
                     val = ac['Group/Mass_Crit500_Type'][1] + ac['Group/Mass_Crit500_Type'][2]
 
                 yy = val / xx_code # fraction with respect to total
-                ax.plot(xx,yy,markers[i],color=zoomColor)
+                ax.plot(xx,yy,markers[i],color=colors[0])
         else:
             ac = auxCat(sP, fields=['Group/Mass_Crit500_Type'])
 
@@ -864,7 +856,7 @@ def baryonicFractionsR500Crit(sPs, pdf):
                 yy = val / xx_code # fraction with respect to total
 
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
-                ym2 = savgol_filter(ym,5,3)
+                ym2 = savgol_filter(ym,sKn,sKo)
 
                 label = sP.simName if i==0 else ''
                 ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
@@ -876,9 +868,9 @@ def baryonicFractionsR500Crit(sPs, pdf):
     # second legend
     # setup the 'iClusters' line with 3 different symbols simultaneously
     # todo: http://nbviewer.jupyter.org/gist/leejjoon/5603703
-    p0 = plt.Line2D( (0,1),(0,0),color=zoomColor,lw=3.0,marker=markers[0],linestyle='')
-    p1 = plt.Line2D( (0,1),(0,0),color=zoomColor,lw=3.0,marker=markers[1],linestyle='')
-    p2 = plt.Line2D( (0,1),(0,1),color=zoomColor,lw=3.0,marker=markers[2],linestyle='')
+    p0 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[0],linestyle='')
+    p1 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[1],linestyle='')
+    p2 = plt.Line2D( (0,1),(0,1),color=colors[0],lw=3.0,marker=markers[2],linestyle='')
     sExtra = [(p0,p1,p2)]
     lExtra = ['iClusters']
 
@@ -900,7 +892,6 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
     from util import simParams
 
     # config
-    linestyles  = ['-',':','--','-.'] # HI_noH2, HI_wH2, ...
     speciesList = ['nHI_noH2','nHI']
 
     # plot setup
@@ -958,16 +949,14 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
             continue
 
         print('CDDF HI: '+sP.simName)
-
-        # redshift != 0
-        sPgrid = simParams(res=sP.res, run=sP.run, redshift=simRedshift)
+        sP.setRedshift(simRedshift)
 
         c = ax._get_lines.prop_cycler.next()['color']
 
         # once including H2 modeling, once without
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sPgrid, fields=['Box/CDDF_'+species])
+            ac = auxCat(sP, fields=['Box/CDDF_'+species])
 
             n_HI  = ac['Box/CDDF_'+species][0,:]
             fN_HI = ac['Box/CDDF_'+species][1,:]
@@ -980,7 +969,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
             if moment == 1:
                 yy = logZeroSafe(fN_HI*n_HI, zeroVal=np.nan)
 
-            label = sP.simName+' z=%3.1f' % sPgrid.redshift if i == 0 else ''
+            label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
     # second legend
@@ -1000,7 +989,6 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     from util import simParams
 
     # config
-    linestyles  = [':','-'] # HI_noH2, HI_wH2
     speciesList = ['nHI_noH2','nHI']
     log_nHI_limitDLA = 20.3
     log_Z_nBins = 50
@@ -1030,19 +1018,17 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
             continue
         else:
             print('DLA Z PDF: '+sP.simName)
-
-            # redshift != 0
-            sPgrid = simParams(res=sP.res, run=sP.run, redshift=simRedshift)
+            sP.setRedshift(simRedshift)
 
             c = ax._get_lines.prop_cycler.next()['color']
 
             # once including H2 modeling, once without
             for i, species in enumerate(speciesList):
                 # load pre-computed Z PDF
-                ac = auxCat(sPgrid, fields=['Box/Grid_'+species,'Box/Grid_Z'])
+                ac = auxCat(sP, fields=['Box/Grid_'+species,'Box/Grid_Z'])
                 ww = np.where(ac['Box/Grid_'+species] > log_nHI_limitDLA)
 
-                #ac = auxCat(sPgrid, fields=['Box/CDDF_'+species])
+                #ac = auxCat(sP, fields=['Box/CDDF_'+species])
                 #n_HI  = ac['Box/CDDF_'+species][0,:]
                 #fN_HI = ac['Box/CDDF_'+species][1,:]
 
@@ -1051,7 +1037,7 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
 
                 xx = xx[:-1] + 0.5*(log_Z_range[1]-log_Z_range[0])/log_Z_nBins
 
-                label = sP.simName+' z=%3.1f' % sPgrid.redshift if i == 0 else ''
+                label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
                 ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
     # second legend
@@ -1071,50 +1057,48 @@ def plots():
     from datetime import datetime
     from util import simParams
 
-    # config
     sPs = []
-    redshift = 0.0
 
-    # zooms
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=1, redshift=redshift) )
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=2, redshift=redshift) )
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=3, redshift=redshift) )
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=4, redshift=redshift) )
-    sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1, redshift=redshift) )
+    # add runs: zooms
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=1) )
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=2) )
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=3) )
+    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=4) )
+    sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
-    # fullboxes
-    sPs.append( simParams(res=1820, run='illustris', redshift=redshift) )
-    #sPs.append( simParams(res=512, run='L25n512_PRVS_0116', redshift=redshift) )
-    sPs.append( simParams(res=512, run='L25n512_PRVS_0311', redshift=redshift) )
+    # add runs: fullboxes
+    #sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=512, run='L25n512_PRVS_0116') )
+    #sPs.append( simParams(res=512, run='L25n512_PRVS_0311') )
 
-    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0', redshift=redshift) )
-    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001', redshift=redshift) )
-    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.00001', redshift=redshift) )
+    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0') )
+    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001') )
+    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.00001') )
 
-    #sPs.append( simParams(res=1820, run='illustrisprime', redshift=0.5) )
-    #sPs.append( simParams(res=910, run='illustris', redshift=redshift) )
-    #sPs.append( simParams(res=455, run='illustris', redshift=redshift) )
-    #sPs.append( simParams(res=256, run='feedback', redshift=redshift) )
+    #sPs.append( simParams(res=1820, run='illustrisprime') )
+    #sPs.append( simParams(res=910, run='illustris') )
+    #sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=256, run='feedback') )
 
     # make multipage PDF
     pdf = PdfPages('globalComps_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
-    #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
-    #sfrAvgVsRedshift(sPs, pdf)
-    #sfrdVsRedshift(sPs, pdf, xlog=True)
-    #sfrdVsRedshift(sPs, pdf, xlog=False)
-    #blackholeVsStellarMass(sPs, pdf)
-    #galaxySizes(sPs, pdf, vsHaloMass=False)
-    #galaxySizes(sPs, pdf, vsHaloMass=True)
-    #stellarMassFunction(sPs, pdf, highMassEnd=False)
-    #stellarMassFunction(sPs, pdf, highMassEnd=True)
-    #massMetallicityStars(sPs, pdf)
+    stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
+    stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
+    sfrAvgVsRedshift(sPs, pdf)
+    sfrdVsRedshift(sPs, pdf, xlog=True)
+    sfrdVsRedshift(sPs, pdf, xlog=False)
+    blackholeVsStellarMass(sPs, pdf)
+    galaxySizes(sPs, pdf, vsHaloMass=False)
+    galaxySizes(sPs, pdf, vsHaloMass=True)
+    stellarMassFunction(sPs, pdf, highMassEnd=False)
+    stellarMassFunction(sPs, pdf, highMassEnd=True)
+    massMetallicityStars(sPs, pdf)
     massMetallicityGas(sPs, pdf, simRedshift=0.0)
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
-    #baryonicFractionsR500Crit(sPs, pdf)
-    #nHIcddf(sPs, pdf)
-    #nHIcddf(sPs, pdf, moment=1)
+    baryonicFractionsR500Crit(sPs, pdf)
+    nHIcddf(sPs, pdf)
+    nHIcddf(sPs, pdf, moment=1)
     ##dlaMetallicityPDF(sPs, pdf)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
