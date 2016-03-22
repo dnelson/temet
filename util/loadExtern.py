@@ -9,6 +9,8 @@ import numpy as np
 from util.helper import evenlySample
 from os.path import isfile
 
+logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
+
 def behrooziSMHM(sP, logHaloMass=None):
     """ Load from data files: Behroozi+ (2013) abundance matching, stellar mass / halo mass relation. """
     from scipy import interpolate
@@ -667,6 +669,152 @@ def rafelski2012(sP, redshiftRange=[2.5, 3.5]):
          'pdf'       : metalY,
          'pdf_err'   : metalS,
          'label'     : 'Rafelski+ (2012) DLA [M/H] 2.5 < z < 3.5'}
+
+    return r
+
+def zahid2012(pp04=False, redshift=0):
+    """ Load observational data (gas MZR) from Zahid+ (2012). """
+    if redshift not in [0,1,2]:
+        raise Exception('Bad redshift')
+
+    path = '/n/home07/dnelson/obs/zahid/z2012_table1_z%d.txt' % redshift
+    # columns: log_Mstar_solar, log_OHn12, log_OHn12_err, E_BV, E_BV_err, SFR, SFR_err
+    data = np.loadtxt(path)
+
+    # Zahid+ (2014) uses KK04: to convert this to PP04_N2, use z_PP04 = a+b*x+c*x^2+d*x^3
+    #   where x=KK04 metallicity following Kewley+ (2008)
+    a = 916.7484
+    b = -309.5448
+    c = 35.051680
+    d = -1.3188
+
+    if pp04:
+        logOHp12 = a + b*data[:,1] + c*data[:,1]**2 + d*data[:,1]**3.0
+        logOHp12_err = a + b*(data[:,1]+data[:,2]) + c*(data[:,1]+data[:,2])**2 + d*(data[:,1]+data[:,2])**3.0
+        logOHp12_err -= logOHp12
+        label = 'Zahid+ (2012) PP04 SDSS-DR7 z~%d' % redshift
+    else:
+        logOHp12 = data[:,1]
+        logOHp12_err = data[:,2]
+        label = 'Zahid+ (2012) KK04 SDSS-DR7 z~%d' % redshift
+
+    # metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
+    # given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
+    # total oxygen mass divided by total hydrogen mass):
+    # log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
+    #            = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
+
+    OH_ratio = 10.0**(logOHp12 - 12.0) / 10.0**(logOHp12_solar - 12.0)
+
+    r = { 'stellarMass'  : data[:,0], 
+          'Zgas'         : np.log10(OH_ratio),#logOHp12,
+          'Zgas_err'     : logOHp12_err,
+          'label'        : label }
+
+    return r
+
+def zahid2014(pp04=False, redshift=0.08):
+    """ Load observational data (gas MZR fit) from Zahid+ (2014). """
+    # Eqn 5 with best-fit parameter values from Table 2 SDSS "BEST FIT"
+    nPts = 50
+    xx = np.linspace(9.0, 11.0, nPts)
+
+    if redshift == 0.08:
+        Z_0     = 9.102 # +/- 0.002
+        log_M_0 = 9.219 # +/- 0.004
+        gamma   = 0.513 # +/- 0.009
+    elif redshift == 0.29:
+        Z_0     = 9.102 # +/- 0.004
+        log_M_0 = 9.52  # +/- 0.02
+        gamma   = 0.52  # +/- 0.02
+    elif redshift == 0.78:
+        Z_0     = 9.10  # +/- 0.01
+        log_M_0 = 9.80  # +/- 0.05
+        gamma   = 0.52  # +/- 0.04
+    elif redshift == 1.55:
+        Z_0     = 9.08  # +/- 0.07
+        log_M_0 = 10.06 # +/- 0.2
+        gamma   = 0.61  # +/- 0.15
+    else:
+        raise Exception('Bad redshift')
+
+    logOHp12 = Z_0 + np.log10( 1.0 - np.exp( -1.0*(10.0**xx/10.0**log_M_0)**gamma ) )
+
+    # Zahid+ (2014) uses KK04: to convert this to PP04_N2, use z_PP04 = a+b*x+c*x^2+d*x^3
+    #   where x=KK04 metallicity following Kewley+ (2008)
+    a = 916.7484
+    b = -309.5448
+    c = 35.051680
+    d = -1.3188
+
+    if pp04:
+        logOHp12 = a + b*logOHp12 + c*logOHp12**2 + d*logOHp12**3.0
+        label = 'Zahid+ (2014) PP04 SDSS-fit z~'+str(redshift)
+    else:
+        label = 'Zahid+ (2014) KK04 SDSS-fit z~'+str(redshift)
+
+    OH_ratio = 10.0**(logOHp12 - 12.0) / 10.0**(logOHp12_solar - 12.0)
+
+    # metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
+    # given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
+    # total oxygen mass divided by total hydrogen mass):
+    # log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
+    #            = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
+
+    r = { 'stellarMass'  : xx, 
+          'Zgas'         : np.log10(OH_ratio),
+          'label'        : label }
+
+    return r
+
+def tremonti2004():
+    """ Load observational data (gas MZR) from Tremonti+ (2004). """
+    path = '/n/home07/dnelson/obs/tremonti/t2004_table3.txt'
+    # columns: log_Mstar_solar, p2.5, p16, p50, p84, p97.5
+    #          where p values are percentiles for 12+log(O/H) in bins of 0.1 dex, so p50 is the median
+    data = np.loadtxt(path)
+
+    OH_ratio      = 10.0**(data[:,3] - 12.0) / 10.0**(logOHp12_solar - 12.0)
+    OH_ratio_up   = 10.0**(data[:,4] - 12.0) / 10.0**(logOHp12_solar - 12.0)
+    OH_ratio_down = 10.0**(data[:,2] - 12.0) / 10.0**(logOHp12_solar - 12.0)
+
+    r = { 'stellarMass'  : data[:,0], 
+          'Zgas'         : np.log10(OH_ratio),
+          'Zgas_Up'      : np.log10(OH_ratio_up),
+          'Zgas_Down'    : np.log10(OH_ratio_down),
+          'label'        : 'Tremonti+ (2004) CL01 SDSS-EDR z~0.1' }
+
+    return r
+
+def guo2016(O3O2=False):
+    """ Load observational data (gas MZR dwarfs z~0.6) from Guo+ (2016). """
+    nPts = 50
+    xx = np.linspace(8.0, 10.5, nPts)
+
+    # Eqn 1 with best-fit parameters (LINEAR) from Table 2
+    if O3O2:
+        # [OIII]/[OII]
+        c_0     = 5.90
+        c_0_err = 0.18
+        c_1     = 0.30
+        c_1_err = 0.02
+        c_2     = 0.0
+        label   = 'Guo+ (2016) DEEP3+TKRS [OIII]/[OII] 0.6<z<0.8'
+    else:
+        # [OIII]/Hbeta (upper+lower z)
+        c_0     = 5.83
+        c_0_err = 0.19
+        c_1     = 0.30
+        c_1_err = 0.02
+        c_2     = 0.0
+        label   = 'Guo+ (2016) DEEP3+TKRS [OIII]/H$\\beta$ 0.6<z<0.8'
+
+    logOHp12 = c_0 + c_1 * xx + c_2 * xx**2.0
+    OH_ratio = 10.0**(logOHp12 - 12.0) / 10.0**(logOHp12_solar - 12.0)
+
+    r = { 'stellarMass'  : xx, 
+          'Zgas'         : np.log10(OH_ratio),
+          'label'        : label }
 
     return r
 

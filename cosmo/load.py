@@ -433,7 +433,7 @@ def groupCatOffsetListIntoSnap(sP):
 
     return r    
 
-def snapshotSubset(sP, partType, fieldsIn, 
+def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
                    mdi=None, sq=True):
     """ For a given snapshot load only one field for one particle type
@@ -466,7 +466,7 @@ def snapshotSubset(sP, partType, fieldsIn,
     il.snapshot.snapPath = snapPath
 
     # make sure fields is not a single element, and don't modify input
-    fields = list(iterable(fieldsIn))
+    fields = list(iterable(fields))
 
     # composite fields (temp, vmag, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray

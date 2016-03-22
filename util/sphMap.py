@@ -122,8 +122,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         hinv = 1.0 / h
 
         # number of pixels covered by particle
-        nx = np.int(h / pixelSizeX + 1)
-        ny = np.int(h / pixelSizeY + 1)
+        nx = np.floor(h / pixelSizeX + 1)
+        ny = np.floor(h / pixelSizeY + 1)
 
         # coordinates of pixel center of particle
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
@@ -300,7 +300,6 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             self.ndims = ndims
             self.nPixels = nPixels
             self.colDens = colDens
-            self.volDens = volDens
 
         def run(self):
             # call JIT compiled kernel (normQuant=False since we handle this later)
