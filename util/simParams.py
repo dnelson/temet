@@ -474,15 +474,9 @@ class simParams:
         self.derivPath = self.arepoPath + 'data.files/'
         self.plotPath  = self.basePath + 'plots/'
 
-        # if redshift passed in, convert to snapshot number and save, and vice versa
-        if self.redshift is not None:
-            self.snap = redshiftToSnapNum(sP=self)
-        else:
-            if self.snap is not None:
-                self.redshift = snapNumToRedshift(sP=self)
-
-        # attach a units class at this redshift
-        self.units = units(sP=self)
+        # if redshift passed in, convert to snapshot number and save, and attach units(z)
+        self.setRedshift(self.redshift)
+        self.setSnap(self.snap)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
@@ -705,6 +699,21 @@ class simParams:
             raise Exception('Unrecognized zoom hInd.')
         if self.zoomLevel == 0:
             raise Exception('Strange, zoomLevel not set.')
+
+    # helpers
+    def setRedshift(self, redshift=None):
+        """ Update sP based on new redshift. """
+        self.redshift = redshift
+        if self.redshift is not None:
+            self.snap = redshiftToSnapNum(sP=self)
+            self.units = units(sP=self)
+
+    def setSnap(self, snap=None):
+        """ Update sP based on new snapshot. """
+        self.snap = snap
+        if self.snap is not None:
+            self.redshift = snapNumToRedshift(sP=self)
+            self.units = units(sP=self)
 
     def matchedSubhaloID(self, hID=None):
         """ Return a subhalo index (into the group catalog) for this simulation given a unique, 

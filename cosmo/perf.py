@@ -97,16 +97,11 @@ def loadCpuTxt(filePath, saveFilename, maxSize=1e3, keys=None):
     return r
 
 def cpuTxtMake():
-    """ Make hdf5 """
-    # NGB runs 
-    #filePath = '/n/home07/dnelson/sims.illustris/ngb_01/cpu.txt'
-    #saveFilename = '/n/home07/dnelson/sims.illustris/ngb_01/data.files/cpu.hdf5'
-    #maxSize = 309339  # 00=308242  01=309339  02=266277  03=303447
-
-    # enrichment
-    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.00001/output/cpu.txt'
-    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.00001/data.files/cpu.hdf5'
-    maxSize = 443512
+    """ Convert cpu.txt file into a cpu.hdf5 which can be parsed much faster. """
+    # paths and maxSize=totalNumTimesteps+1
+    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.0001/output/cpu.txt'
+    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.0001/data.files/cpu.hdf5'
+    maxSize = 438671
 
     cpu = loadCpuTxt(filePath,saveFilename,maxSize)
 
@@ -182,24 +177,22 @@ def cpuTxtPlot():
 
 def enrichChecks():
     """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
-    import cosmo
+    from cosmo.load import snapshotSubset
     from util import simParams
 
     # config
     sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
+    #sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.0001', redshift=0.0)
     sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.00001', redshift=0.0)
 
-    #sP1 = simParams(res=256, run='L25n256_PR00', redshift=0.0)
-    #sP2 = simParams(res=256, run='L12.5n256_PR00', redshift=0.0)
-
-    nBins = 60 # 60 for 128, 100 for 256
+    nBins = 100 # 60 for 128, 100 for 256
 
     pdf = PdfPages('enrichChecks_' + sP1.run + '_' + sP2.run + '.pdf')
 
     # (1) - enrichment counter
     if 1:
-        ec1 = cosmo.load.snapshotSubset(sP1,'stars','GFM_EnrichCount')
-        ec2 = cosmo.load.snapshotSubset(sP2,'stars','GFM_EnrichCount')
+        ec1 = snapshotSubset(sP1,'stars','GFM_EnrichCount')
+        ec2 = snapshotSubset(sP2,'stars','GFM_EnrichCount')
 
         fig = plt.figure(figsize=(14,7))
 
@@ -220,8 +213,8 @@ def enrichChecks():
 
     # (2) final stellar masses
     if 1:
-        mstar1 = cosmo.load.snapshotSubset(sP1,'stars','mass')
-        mstar2 = cosmo.load.snapshotSubset(sP2,'stars','mass')
+        mstar1 = snapshotSubset(sP1,'stars','mass')
+        mstar2 = snapshotSubset(sP2,'stars','mass')
         mstar1 = sP1.units.codeMassToLogMsun(mstar1)
         mstar2 = sP2.units.codeMassToLogMsun(mstar2)
 
@@ -244,8 +237,8 @@ def enrichChecks():
 
     # (3) final gas metallicities
     if 1:
-        zgas1 = cosmo.load.snapshotSubset(sP1,'gas','GFM_Metallicity')
-        zgas2 = cosmo.load.snapshotSubset(sP2,'gas','GFM_Metallicity')
+        zgas1 = snapshotSubset(sP1,'gas','GFM_Metallicity')
+        zgas2 = snapshotSubset(sP2,'gas','GFM_Metallicity')
         zgas1 = np.log10(zgas1)
         zgas2 = np.log10(zgas2)
 
