@@ -14,6 +14,62 @@ import matplotlib.pyplot as plt
 
 import cosmo
 from util import simParams
+from illustris_python.util import partTypeNum
+from matplotlib.backends.backend_pdf import PdfPages
+
+def ipIOTest():
+    """ Check outputs after all changes for IllustrisPrime. """
+    sP = simParams(res=128, run='realizations/iotest_L25n256', snap=7)
+
+    pdf = PdfPages('ipIOTest_snap'+str(sP.snap)+'.pdf')
+
+    for partType in ['gas','dm','tracerMC','stars','bhs']:
+        # get field names
+        with h5py.File(cosmo.load.snapPath(sP.simPath,sP.snap)) as f:
+            gName = 'PartType'+str(partTypeNum(partType))
+
+            fields = []
+            if gName in f:
+                fields = f[gName].keys()
+
+        for field in fields:
+            # load
+            x = cosmo.load.snapshotSubset(sP, partType, field)
+
+            print('%s : %s (%g %g)' % (partType,field,x.min(),x.max()))
+
+            # plot
+            fig = plt.figure(figsize=(16,9))
+            ax = fig.add_subplot(111)
+            
+            ax.set_xlabel(partType + ' : ' + field)
+            ax.set_ylabel('Histogram')
+
+            plt.hist(x, 50)
+
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
+
+            # multi-dim? plot indiv
+            if x.ndim > 1:
+                for i in range(x.shape[1]):
+                    print('%s : %s [%d] (%g %g)' % (partType,field,i,x[:,i].min(),x[:,i].max()))
+
+                    # plot
+                    fig = plt.figure(figsize=(16,9))
+                    ax = fig.add_subplot(111)
+                    
+                    ax.set_xlabel(partType + ' : ' + field + ' ['+str(i)+']')
+                    ax.set_ylabel('Histogram')
+
+                    plt.hist(x[:,i], 50)
+
+                    fig.tight_layout()
+                    pdf.savefig()
+                    plt.close(fig)
+
+    pdf.close()
 
 def shockMaxMachNum():
     """ histogram of shock maxmimum mach numbers from test run. """
