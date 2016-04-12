@@ -324,85 +324,85 @@ class cloudyIon():
     #   solar     = solar abundance [n/nH] (Grevesse+ 2010, Hazy c13 Table 7.4)
     #   isotopes  = mass numbers (#p+n) of isotopes of this element
     #   ionEnergy = ionization energies [eV]
-    el = [ {'number':1,  'name':'Hydrogen',  'symbol':'H',  'solar':1.00e+00, 'isotopes':[1,2], 
+    el = [ {'number':1,  'name':'Hydrogen',  'symbol':'H',  'solar':1.00e+00, 'mass':1.008,  'isotopes':[1,2], 
             'ionEnergy':[13.5984]},
-           {'number':2,  'name':'Helium',    'symbol':'He', 'solar':8.51e-02, 'isotopes':[3,4],
+           {'number':2,  'name':'Helium',    'symbol':'He', 'solar':8.51e-02, 'mass':4.003,  'isotopes':[3,4],
             'ionEnergy':[24.5874, 54.416]},
-           {'number':3,  'name':'Lithium',   'symbol':'Li', 'solar':1.12e-11, 'isotopes':[6,7],
+           {'number':3,  'name':'Lithium',   'symbol':'Li', 'solar':1.12e-11, 'mass':6.941,  'isotopes':[6,7],
             'ionEnergy':[5.3917, 75.638, 122.451]},
-           {'number':4,  'name':'Beryllium', 'symbol':'Be', 'solar':2.40e-11, 'isotopes':[9],
+           {'number':4,  'name':'Beryllium', 'symbol':'Be', 'solar':2.40e-11, 'mass':9.013,  'isotopes':[9],
            'ionEnergy':[9.3227, 18.211, 153.893, 217.713]},
-           {'number':5,  'name':'Boron',     'symbol':'B',  'solar':5.01e-10, 'isotopes':[10,11],
+           {'number':5,  'name':'Boron',     'symbol':'B',  'solar':5.01e-10, 'mass':10.811, 'isotopes':[10,11],
             'ionEnergy':[8.298, 25.154, 37.93, 59.368, 340.217]},
-           {'number':6,  'name':'Carbon',    'symbol':'C',  'solar':2.69e-04, 'isotopes':[12,13],
+           {'number':6,  'name':'Carbon',    'symbol':'C',  'solar':2.69e-04, 'mass':12.011, 'isotopes':[12,13],
             'ionEnergy':[11.2603, 24.383, 47.877, 64.492, 392.077, 489.981]},
-           {'number':7,  'name':'Nitrogen',  'symbol':'N',  'solar':6.76e-05, 'isotopes':[14,15],
+           {'number':7,  'name':'Nitrogen',  'symbol':'N',  'solar':6.76e-05, 'mass':14.007, 'isotopes':[14,15],
             'ionEnergy':[14.5341, 39.601, 47.488, 77.472, 97.888, 522.057, 667.029]},
-           {'number':8,  'name':'Oxygen',    'symbol':'O',  'solar':4.90e-04, 'isotopes':[16,17,18],
+           {'number':8,  'name':'Oxygen',    'symbol':'O',  'solar':4.90e-04, 'mass':15.999, 'isotopes':[16,17,18],
             'ionEnergy':[13.6181, 35.116, 54.934, 77.412, 113.896, 138.116, 739.315, 871.387]},
-           {'number':9,  'name':'Flourine',  'symbol':'F',  'solar':3.63e-08, 'isotopes':[19],
+           {'number':9,  'name':'Flourine',  'symbol':'F',  'solar':3.63e-08, 'mass':18.998, 'isotopes':[19],
             'ionEnergy':[17.4228, 34.97, 62.707, 87.138, 114.24, 157.161, 185.182, 953.886, 1103.089]},
-           {'number':10, 'name':'Neon',      'symbol':'Ne', 'solar':8.51e-05, 'isotopes':[20,21,22],
+           {'number':10, 'name':'Neon',      'symbol':'Ne', 'solar':8.51e-05, 'mass':20.180, 'isotopes':[20,21,22],
             'ionEnergy':[21.5645, 40.962, 63.45, 97.11, 126.21, 157.93, 207.27, 239.09, 1195.797, 
                          1362.164]},
-           {'number':11, 'name':'Sodium',    'symbol':'Na', 'solar':1.74e-06, 'isotopes':[23],
+           {'number':11, 'name':'Sodium',    'symbol':'Na', 'solar':1.74e-06, 'mass':22.990, 'isotopes':[23],
             'ionEnergy':[5.1391, 47.286, 71.64, 98.91, 138.39, 172.15, 208.47, 264.18, 299.87, 
                          1465.091, 1648.659]},
-           {'number':12, 'name':'Magnesium', 'symbol':'Mg', 'solar':3.98e-05, 'isotopes':[24,25,26],
+           {'number':12, 'name':'Magnesium', 'symbol':'Mg', 'solar':3.98e-05, 'mass':24.305, 'isotopes':[24,25,26],
             'ionEnergy':[7.6462, 15.035, 80.143, 109.24, 141.26, 186.5, 224.94, 265.9, 327.95, 
                          367.53, 1761.802, 1962.613]},
-           {'number':13, 'name':'Aluminium', 'symbol':'Al', 'solar':2.82e-06, 'isotopes':[27],
+           {'number':13, 'name':'Aluminium', 'symbol':'Al', 'solar':2.82e-06, 'mass':26.982, 'isotopes':[27],
             'ionEnergy':[5.9858, 18.828, 28.447, 119.99, 153.71, 190.47, 241.43, 284.59, 330.21, 
                          398.57, 442.07, 2085.983, 2304.08]},
-           {'number':14, 'name':'Silicon',   'symbol':'Si', 'solar':3.24e-05, 'isotopes':[28,29,30],
+           {'number':14, 'name':'Silicon',   'symbol':'Si', 'solar':3.24e-05, 'mass':28.086, 'isotopes':[28,29,30],
             'ionEnergy':[8.1517, 16.345, 33.492, 45.141, 166.77, 205.05, 246.52, 303.17, 351.1, 
                          401.43, 476.06, 523.5, 2437.676, 2673.108]},
-           {'number':15, 'name':'Phosphorus','symbol':'P',  'solar':2.57e-07, 'isotopes':[31],
+           {'number':15, 'name':'Phosphorus','symbol':'P',  'solar':2.57e-07, 'mass':30.974, 'isotopes':[31],
             'ionEnergy':[10.4867, 19.725, 30.18, 51.37, 65.023, 220.43, 263.22, 309.41, 371.73, 
                          424.5, 479.57, 560.41, 611.85, 2816.943, 3069.762]},
-           {'number':16, 'name':'Sulfur',    'symbol':'S',  'solar':1.32e-05, 'isotopes':[32,33,34,36],
+           {'number':16, 'name':'Sulfur',    'symbol':'S',  'solar':1.32e-05, 'mass':32.065, 'isotopes':[32,33,34,36],
             'ionEnergy':[10.36, 23.33, 34.83, 47.3, 72.68, 88.049, 280.93, 328.23, 379.1, 447.09,
                          504.78, 564.65, 651.63, 707.14, 3223.836, 3494.099]},
-           {'number':17, 'name':'Chlorine',  'symbol':'Cl', 'solar':3.16e-07, 'isotopes':[35,37],
+           {'number':17, 'name':'Chlorine',  'symbol':'Cl', 'solar':3.16e-07, 'mass':35.453, 'isotopes':[35,37],
             'ionEnergy':[12.9676, 23.81, 39.61, 53.46, 67.8, 98.03, 114.193, 348.28, 400.05, 455.62,
                          529.97, 591.97, 656.69, 749.75, 809.39,3658.425, 3946.193]},
-           {'number':18, 'name':'Argon',     'symbol':'Ar', 'solar':2.51e-06, 'isotopes':[36,38,40],
+           {'number':18, 'name':'Argon',     'symbol':'Ar', 'solar':2.51e-06, 'mass':39.948, 'isotopes':[36,38,40],
             'ionEnergy':[15.7596, 27.629, 40.74, 59.81, 75.02, 91.007, 124.319, 143.456, 422.44, 
                          478.68, 538.95, 618.24, 686.09, 755.73, 854.75, 918.0, 4120.778, 4426.114]},
-           {'number':19, 'name':'Potassium', 'symbol':'K',  'solar':1.07e-07, 'isotopes':[39,40,41],
+           {'number':19, 'name':'Potassium', 'symbol':'K',  'solar':1.07e-07, 'mass':39.098, 'isotopes':[39,40,41],
             'ionEnergy':[4.3407, 31.625, 45.72, 60.91, 82.66, 100.0, 117.56, 154.86, 175.814, 503.44,
                          564.13, 629.09, 714.02, 787.13, 861.77, 968.0, 1034.0, 4610.955, 4933.931]},
-           {'number':20, 'name':'Calcium',   'symbol':'Ca', 'solar':2.19e-06, 'isotopes':[40,42,43,44,46,48],
+           {'number':20, 'name':'Calcium',   'symbol':'Ca', 'solar':2.19e-06, 'mass':40.078, 'isotopes':[40,42,43,44,46,48],
             'ionEnergy':[6.1132, 11.71, 50.908, 67.1, 84.41, 108.78, 127.7, 147.24, 188.54, 211.27,
                          591.25, 656.39, 726.03, 816.61, 895.12, 974.0, 1087.0, 1157.0, 5129.045, 5469.738]},
-           {'number':21, 'name':'Scandium',  'symbol':'Sc', 'solar':1.41e-09, 'isotopes':[45],
+           {'number':21, 'name':'Scandium',  'symbol':'Sc', 'solar':1.41e-09, 'mass':44.956, 'isotopes':[45],
             'ionEnergy':[6.5615, 12.8, 24.76, 73.47, 91.66, 110.68, 138.0, 158.7, 180.02, 225.32,
                          225.32, 685.89, 755.47, 829.79, 926.0]},
-           {'number':22, 'name':'Titanium',  'symbol':'Ti', 'solar':8.91e-08, 'isotopes':[46,47,48,49,50],
+           {'number':22, 'name':'Titanium',  'symbol':'Ti', 'solar':8.91e-08, 'mass':47.867, 'isotopes':[46,47,48,49,50],
             'ionEnergy':[6.8281, 13.58, 27.491, 43.266, 99.22, 119.36, 140.8, 168.5, 193.5, 193.2,
                          215.91, 265.23, 291.497, 787.33, 861.33]},
-           {'number':23, 'name':'Vanadium',  'symbol':'V',  'solar':8.51e-09, 'isotopes':[50,51],
+           {'number':23, 'name':'Vanadium',  'symbol':'V',  'solar':8.51e-09, 'mass':50.942, 'isotopes':[50,51],
             'ionEnergy':[6.7462, 14.65, 29.31, 46.707, 65.23, 128.12, 150.17, 173.7, 205.8, 230.5,
                          255.04, 308.25, 336.267, 895.58, 974.02]},
-           {'number':24, 'name':'Chromium',  'symbol':'Cr', 'solar':4.37e-07, 'isotopes':[50,52,53,54],
+           {'number':24, 'name':'Chromium',  'symbol':'Cr', 'solar':4.37e-07, 'mass':51.996, 'isotopes':[50,52,53,54],
             'ionEnergy':[6.7665, 16.5, 30.96, 49.1, 69.3, 90.56, 161.1, 184.7, 209.3, 244.4,
                          270.8, 298.0, 355.0, 384.3, 1010.64]},
-           {'number':25, 'name':'Manganese', 'symbol':'Mn', 'solar':2.69e-07, 'isotopes':[55],
+           {'number':25, 'name':'Manganese', 'symbol':'Mn', 'solar':2.69e-07, 'mass':54.938, 'isotopes':[55],
             'ionEnergy':[7.434, 15.64, 33.667, 51.2, 72.4, 95.0, 119.27, 196.46, 221.8, 248.3,
                          286.0, 314.4, 343.6, 404.0, 435.3, 1136.2]},
-           {'number':26, 'name':'Iron',      'symbol':'Fe', 'solar':3.16e-05, 'isotopes':[54,56,57,58],
+           {'number':26, 'name':'Iron',      'symbol':'Fe', 'solar':3.16e-05, 'mass':55.845, 'isotopes':[54,56,57,58],
             'ionEnergy':[7.9024, 16.18, 30.651, 54.8, 75.0, 99.0, 125.0, 151.06, 235.04, 262.1,
                          290.4, 330.8, 361.0, 392.2, 457.0, 485.5, 1266.1]},
-           {'number':27, 'name':'Cobalt',    'symbol':'Co', 'solar':9.77e-08, 'isotopes':[59],
+           {'number':27, 'name':'Cobalt',    'symbol':'Co', 'solar':9.77e-08, 'mass':58.933, 'isotopes':[59],
             'ionEnergy':[7.881, 17.06, 33.5, 51.3, 79.5, 102.0, 129.0, 157.0, 186.13, 276.0,
                          305.0, 336.0, 376.0, 411.0, 444.0, 512.0, 546.8, 1403.0]},
-           {'number':28, 'name':'Nickel',    'symbol':'Ni', 'solar':1.66e-06, 'isotopes':[58,60,61,62,64],
+           {'number':28, 'name':'Nickel',    'symbol':'Ni', 'solar':1.66e-06, 'mass':58.693, 'isotopes':[58,60,61,62,64],
             'ionEnergy':[7.6398, 18.168, 35.17, 54.9, 75.5, 108.0, 133.0, 162.0, 193.0, 224.5, 
                          321.2, 352.0, 384.0, 430.0, 464.0, 499.0, 571.0, 607.2, 1547.0]},
-           {'number':29, 'name':'Copper',    'symbol':'Cu', 'solar':1.55e-08, 'isotopes':[63,65],
+           {'number':29, 'name':'Copper',    'symbol':'Cu', 'solar':1.55e-08, 'mass':63.546, 'isotopes':[63,65],
             'ionEnergy':[7.7264, 20.292, 26.83, 55.2, 79.9, 103.0, 139.0, 166.0, 199.0, 232.0,
                          266.0, 368.8, 401.0, 435.0, 484.0, 520.0, 557.0, 633.0, 671.0, 1698.0]},
-           {'number':30, 'name':'Zinc',      'symbol':'Zn', 'solar':3.63e-08, 'isotopes':[64,66,67,68,70],
+           {'number':30, 'name':'Zinc',      'symbol':'Zn', 'solar':3.63e-08, 'mass':65.409, 'isotopes':[64,66,67,68,70],
             'ionEnergy':[9.3942, 17.964, 39.722, 59.4, 82.6, 108.0, 134.0, 174.0, 203.0, 238.0,
                          274.0, 310.8, 419.7, 454.0, 490.0, 542.0, 579.0, 619.0, 698.8, 738.0, 1856.0]} \
          ]
@@ -412,6 +412,8 @@ class cloudyIon():
 
     def __init__(self, sP, el=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
+        self.sP = sP
+
         self.data    = {}
         self.numIons = {}
         self.grid    = {}
@@ -453,43 +455,54 @@ class cloudyIon():
         # http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.ndimage.interpolation.map_coordinates.html
         # spline_filter()
 
-    def resolveElementNames(self, elements):
-        """ Map symbols to full element names, and leave full names unchanged. """
+    def _numDensRatioToMassRatio(self, metal, element):
+        """ Convert metallicity from number density ratio to mass ratio.
+            Metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
+            given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
+            total oxygen mass divided by total hydrogen mass):
+              log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
+                         = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
+        """
+        M_X  = self.atomicMass(element)
+        M_H  = self.atomicMass('Hydrogen')
+        M_He = self.atomicMass('Helium')
+
+        # for element XX, Z_gas = (nXX/nH) / ( (M_XX/M_H)/(X*M_H + Y*M_He) )
+        factor = (M_X/M_H) / (self.sP.units.hydrogen_massfrac * M_H + self.sP.units.helium_massfrac * M_He)
+        
+        return metal / factor
+
+    def _getElInfo(self, elements, fieldNameToMatch, fieldNameToReturn):
+        """ Search el[] structure and return requested information. """
         elements = iterable(elements)
 
         for i, element in enumerate(elements):
-            if len(element) <= 2:
-                elInfo = [el for el in self.el if el['symbol'] == element]
+            elInfo = [el for el in self.el if el[fieldNameToMatch] == element]
 
-                if not len(elInfo):
-                    raise Exception('Failed to resolve element symbol: ' + element)
+            if elInfo:
+                elements[i] = elInfo[0][fieldNameToReturn]
 
-                elements[i] = elInfo[0]['name']
-
-            if elements[i] not in [el['name'] for el in self.el]:
-                raise Exception('Unknown element name: ' + elements[i])
+            if elements[i] not in [el[fieldNameToReturn] for el in self.el]:
+                raise Exception('Failed to locate ['+elements[i]+'] in elInfo.')
 
         if len(elements) == 1: return elements[0]
         return elements
+
+    def resolveElementNames(self, elements):
+        """ Map symbols to full element names, and leave full names unchanged. """
+        return self._getElInfo(elements, 'symbol', 'name')
 
     def elementNameToSymbol(self, elements):
         """ Map full element names to symbols, and leave symbols unchanged. """
-        elements = iterable(elements)
+        return self._getElInfo(elements, 'name', 'symbol')
 
-        for i, element in enumerate(elements):
-            if len(element) > 2:
-                elInfo = [el for el in self.el if el['name'] == element]
+    def solarAbundance(self, elements):
+        """ Return solar abundance ratio for the given element(s). """
+        return self._getElInfo(self.resolveElementNames(elements), 'name', 'solar')
 
-                if not len(elInfo):
-                    raise Exception('Failed to resolve element name: ' + element)
-
-                elements[i] = elInfo[0]['symbol']
-
-            if elements[i] not in [el['symbol'] for el in self.el]:
-                raise Exception('Unknown element symbol: ' + elements[i])
-
-        if len(elements) == 1: return elements[0]
-        return elements
+    def atomicMass(self, elements):
+        """ Return atomic mass (A_r in AMUs) for the given element(s). """
+        return self._getElInfo(self.resolveElementNames(elements), 'name', 'mass')
 
     def resolveIonNumbers(self, ionNums):
         """ Map roman numeral ion numbers to integers, and leave integers unchanged. """
@@ -612,15 +625,25 @@ class cloudyIon():
         else:
             metal = np.zeros( dens.size, dtype='float32' )
             metal += sP.units.Z_solar * 0.1 # set fixed metallicity of -1.0 as Simeon used in his tables
+            raise Exception('Reconsider.')
 
-        metal = np.log10( metal / sP.units.Z_solar ) # log solar
+        metal_logSolar = np.log10( metal / sP.units.Z_solar ) # log solar
 
         temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
         
         # interpolate for log(abundance)
-        mass_fraction = self.frac(element, ionNum, dens, metal, temp)
+        ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp)
 
-        return 10.0**mass_fraction
+        # total mass of ion i of element X = M_gas * (M_metals/M_gas) * (M_X/M_metals) * (M_Xi/M_X)
+        # where (M_Xi/M_X) is mass_fraction, (M_X/M_metals) can assume solar abundances or take 
+        # directly from the snapshot if one of the 9 tracked GFM elements, and (M_metals/M_gas) is 
+        # the GFM_Metallicity field.
+        solarElemMetal = self.solarAbundance(element)
+        solarElemMassRatio = self._numDensRatioToMassRatio(solarElemMetal, element) # M_X/M_H
+        solarElemMassRatio /= self.sP.units.Z_solar # (M_X/M_H)*(M_H/M_Z) = (M_X/M_H) / Z_solar
+        mass_fraction = metal * solarElemMassRatio * ion_fraction
+
+        return mass_fraction
 
 def plotUVB():
     """ Debug plots of the UVB(nu) as a function of redshift. """
