@@ -755,11 +755,7 @@ def zahid2014(pp04=False, redshift=0.08):
 
     OH_ratio = 10.0**(logOHp12 - 12.0) / 10.0**(logOHp12_solar - 12.0)
 
-    # metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
-    # given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
-    # total oxygen mass divided by total hydrogen mass):
-    # log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
-    #            = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
+
 
     r = { 'stellarMass'  : xx, 
           'Zgas'         : np.log10(OH_ratio),
@@ -816,6 +812,22 @@ def guo2016(O3O2=False):
           'Zgas'         : np.log10(OH_ratio),
           'label'        : label }
 
+    return r
+
+def danforth2014():
+    """ Load observational data (OVI CDDF low-redshift) from Danforth+ (2014). """
+    path = ''
+
+    # columns: 
+    #data = np.loadtxt(path)
+
+    #r = {'log_NOVI'         : data[:,0],
+    #     'log_fOVI'         : data[:,7],
+    #     'log_fOVI_errUp'   : data[:,8],
+    #     'log_fOVI_errDown' : data[:,9],
+    #     'label'           : 'Danforth+ (2014) COS 0.1<z<0.73'}
+
+    r = {}
     return r
 
 def sfrTxt(sP):

@@ -333,6 +333,8 @@ def blackholeVsStellarMass(sPs, pdf, simRedshift=0.0):
         # stellar mass definition(s)
         yy = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')] )
 
+        import pdb; pdb.set_trace()
+
         xm, ym, sm = running_median(xx,yy,binSize=binSize)
         ym2 = savgol_filter(ym,sKn,sKo)
         l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
@@ -892,7 +894,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
     from util import simParams
 
     # config
-    speciesList = ['nHI_noH2','nHI']
+    speciesList = ['nHI_noH2','nHI'] #,'nHI2','nHI3']
 
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -968,6 +970,84 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
                 yy = logZeroSafe(fN_HI, zeroVal=np.nan)
             if moment == 1:
                 yy = logZeroSafe(fN_HI*n_HI, zeroVal=np.nan)
+
+            label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
+            ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
+
+    # second legend
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra = [str(s) for s in speciesList]
+
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
+def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
+    """ CDDF (column density distribution function) of O VI in the whole box.
+        (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
+    from util import simParams
+
+    # config
+    speciesList = ['nOVI']
+
+    # plot setup
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([12.5, 15.5])
+    ax.set_xlabel('log N$_{\\rm OVI}$ [ cm$^{-2}$ ]')
+
+    if moment == 0:
+        ax.set_ylim([-18, -11])
+        ax.set_ylabel('CDDF$_{0}$:  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
+    if moment == 1:
+        ax.set_ylim([-4, 0]) # TODO
+        ax.set_ylabel('CDDF$_{1}$:  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
+
+    # observational points
+    d14 = danforth2014()
+
+    #if moment == 1:
+    #    d14['log_fOVI'] = np.log10( 10.0**d14['log_fOVI'] * 10.0**d14['log_NOVI'] )
+
+    #l1,_,_ = ax.errorbar(d14['log_NOVI'], d14['log_fOVI'], yerr=[d14['log_fOVI_errDown'],d14['log_fOVI_errUp']],
+    #           xerr=d14['log_NOVI_xerr'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
+
+    #labels = [d14['label']]
+    #legend1 = ax.legend([l1], labels, loc='lower left')
+    #ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('CDDF OVI: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
+        c = ax._get_lines.prop_cycler.next()['color']
+
+        # TODO: remove speciesList
+        for i, species in enumerate(speciesList):
+            # load pre-computed CDDF
+            ac = auxCat(sP, fields=['Box/CDDF_'+species])# , reCalculate=True)
+
+            n_OVI  = ac['Box/CDDF_'+species][0,:]
+            fN_OVI = ac['Box/CDDF_'+species][1,:]
+
+            print('n_OVI: ', n_OVI)
+            print('f_OVI: ', fN_OVI)
+
+            # plot
+            xx = np.log10(n_OVI)
+
+            if moment == 0:
+                yy = logZeroSafe(fN_OVI, zeroVal=np.nan)
+            if moment == 1:
+                yy = logZeroSafe(fN_OVI*n_OVI, zeroVal=np.nan)
 
             label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
@@ -1060,20 +1140,24 @@ def plots():
     sPs = []
 
     # add runs: zooms
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=1) )
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=2) )
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=3) )
-    sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=4) )
-    sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
+    #sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=1) )
+    #sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=2) )
+    #sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=3) )
+    #sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=4) )
+    #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
     #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0116') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0311') )
+    #sPs.append( simParams(res=512, run='cosmo0_v6') )
 
-    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0') )
-    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001') )
-    sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.00001') )
+    sPs.append( simParams(res=270, run='realizations/L35n270_TNG_WMAP7') )
+    sPs.append( simParams(res=270, run='realizations/L35n270_TNG_PLANCK15') )
+
+    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0') )
+    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001') )
+    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.00001') )
 
     #sPs.append( simParams(res=1820, run='illustrisprime') )
     #sPs.append( simParams(res=910, run='illustris') )
@@ -1083,11 +1167,11 @@ def plots():
     # make multipage PDF
     pdf = PdfPages('globalComps_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
-    stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
-    sfrAvgVsRedshift(sPs, pdf)
-    sfrdVsRedshift(sPs, pdf, xlog=True)
-    sfrdVsRedshift(sPs, pdf, xlog=False)
+    #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
+    #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
+    #sfrAvgVsRedshift(sPs, pdf)
+    #sfrdVsRedshift(sPs, pdf, xlog=True)
+    #sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf)
     galaxySizes(sPs, pdf, vsHaloMass=False)
     galaxySizes(sPs, pdf, vsHaloMass=True)
@@ -1099,6 +1183,8 @@ def plots():
     baryonicFractionsR500Crit(sPs, pdf)
     nHIcddf(sPs, pdf)
     nHIcddf(sPs, pdf, moment=1)
+    nOVIcddf(sPs, pdf)
+    #nOVIcddf(sPs, pdf, moment=1)
     ##dlaMetallicityPDF(sPs, pdf)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
