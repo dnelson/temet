@@ -223,6 +223,36 @@ class simParams:
             self.saveTag    = 'idP'
             self.plotPrefix = 'idP'
 
+        if 'realizations' in run:
+            self.validResLevels = [128,256,270,540]
+            self.groupOrdered = True
+
+            self.gravSoft = 0.0
+            self.targetGasMass = 0.0
+
+            if 'L5' in run:
+                self.boxSize = 5000.0
+            if 'L25' in run:
+                self.boxSize = 25000.0
+            if 'L35' in run:
+                self.boxSize = 35000.0
+
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            self.trMCPerCell    = 0
+            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.winds          = 2
+            self.BHs            = 2
+
+            self.arepoPath  = self.basePath + 'dev.prime/' + run + '/'
+            self.savPrefix  = 'DP'
+            self.simName    = run.split('/')[1]
+            self.saveTag    = 'idP'
+            self.plotPrefix = 'idP'
+
         # iClusters
         if run in ['iClusters']:
             if self.variant not in ['TNG_00','TNG_11']:
@@ -304,6 +334,38 @@ class simParams:
                 self.saveTag    = 'ilDM'
                 self.plotPrefix = 'ilDM'
                 self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
+
+        if run in ['cosmo0_v6']:
+            self.validResLevels = [128,256,512]
+            self.boxSize        = 25000.0
+            self.groupOrdered   = True
+
+            self.omega_m     = 0.2726
+            self.omega_L     = 0.7274
+            self.omega_b     = 0.0456
+            self.HubbleParam = 0.704
+
+            # note: grav softenings comoving until z=1,: fixed at z=1 value after (except DM)
+            if res == 128: self.gravSoft = 4.0
+            if res == 256: self.gravSoft = 2.0
+            if res == 512: self.gravSoft = 1.0
+
+            bs = str( round(self.boxSize/1000) )
+
+            self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+            self.winds  = 1
+            self.BHs    = 1
+
+            if res == 128: self.targetGasMass = 5.66834e-3
+            if res == 256: self.targetGasMass = 7.08542e-4
+            if res == 512: self.targetGasMass = 8.85678e-5
+
+            self.simName = 'Cosmo0_V6_L'+bs+'n'+str(res)
+
+            self.arepoPath  = self.basePath + 'sims.illustris/' + self.simName + '/'
+            self.savPrefix  = 'C'
+            self.saveTag    = 'c0v6'
+            self.plotPrefix = 'c0v6'
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
