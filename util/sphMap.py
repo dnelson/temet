@@ -333,6 +333,15 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         return rQuant.T
     return rDens.T
 
+def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, colDens=False, nThreads=16):
+    """ Wrap sphMap() specialized to projecting an entire cosmological/periodic box. Specifically, 
+        (ndims,boxSizeSim,boxSizeImg,boxCen) are derived from sP, and nPixels should be input 
+        as a single scalar which is then assumed to be square. """
+    return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, 
+                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0]), 
+                   boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[nPixels,nPixels], 
+                   colDens=colDens, nThreads=nThreads )
+
 def benchmark():
     """ Benchmark performance of sphMap(). """
     np.random.seed(424242)
@@ -365,10 +374,7 @@ def benchmark():
         quant = snapshotSubset(sP, 'gas', 'temp')
 
     # config imaging
-    nPixels    = [100,100]
-    ndims      = 3
-    boxCen     = sP.boxSize * np.array([0.5,0.5,0.5])
-    boxSizeImg = np.array([sP.boxSize,sP.boxSize,sP.boxSize])
+    nPixels    = 100
     axes       = [0,1]
 
     # map and time
@@ -376,7 +382,7 @@ def benchmark():
     nLoops = 1
 
     for i in np.arange(nLoops):
-        densMap  = sphMap(pos, hsml, mass, None, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
-        quantMap = sphMap(pos, hsml, mass, quant, axes, boxSizeImg, sP.boxSize, boxCen, nPixels, ndims)
+        densMap  = sphMapWholeBox(pos, hsml, mass, None, axes, nPixels, sP)
+        quantMap = sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP)
 
     print('2 maps took [' + str((time.time()-start_time)/nLoops) + '] sec')
