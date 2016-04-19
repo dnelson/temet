@@ -144,7 +144,8 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False, subbox=None):
 
     # all values or a given scalar or array list?
     if all:
-        return val
+        w = np.where(val >= 0.0)[0] # remove empties past end of number of snaps
+        return val[0 : w.max()+1]
 
     return val[snap]
 

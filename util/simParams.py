@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 from util.units import units
 from cosmo.util import redshiftToSnapNum, snapNumToRedshift
+from illustris_python.util import partTypeNum
 
 class simParams:
     basePath = '/n/home07/dnelson/'
@@ -89,8 +90,8 @@ class simParams:
     
     # phyiscal models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=IllustrisPrime Model, TODO)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=IllustrisPrime Model, TODO)
+    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=PrimeTests Models, 3=FinalTNG Model)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=PrimeTests Models, 3=FinalTNG Model)
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None):
         """ Fill parameters based on inputs. """
@@ -109,90 +110,6 @@ class simParams:
         self.snap     = snap
         self.hInd     = hInd
         self.data     = {}
-
-        # ILLUSTRIS PRIME
-        if run in ['illustrisprime']:
-            self.validResLevels = [1820]
-            self.boxSize        = 75000.0
-            self.groupOrdered   = True
-
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
-
-            self.gravSoft       = 1.0 # 1820 # comoving until z=1,: fixed at z=1 value after (except DM)
-            self.trMCPerCell    = 0 # corrupt, cannot use
-            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
-            self.winds          = 2
-            self.BHs            = 2
-            self.targetGasMass  = 8.85678e-5 # 1820
-
-            self.arepoPath  = self.basePath + 'sims.illustris/IllustrisPrime-1/'
-            self.savPrefix  = 'IP'
-            self.simName    = 'IllustrisPrime-1'
-            self.saveTag    = 'ilP'
-            self.plotPrefix = 'ilP'
-            self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
-
-        # sims.shocks
-        if run in ['shocks']:
-            self.validResLevels = [128,256]
-            self.groupOrdered   = True
-
-            self.boxSize        = 25000.0
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
-
-            self.trMCFields     = [0,-1,-1,1,-1,-1,2,-1,-1,-1,-1,-1,-1,3] # only 1+8+64+8192 (shockmaxmach)
-            self.gravSoft       = 0
-            self.trMCPerCell    = 5
-            self.winds          = 0
-            self.BHs            = 0
-            self.targetGasMass  = 0
-
-            self.trMassConst = self.targetGasMass / self.trMCPerCell
-
-            bs = str( round(self.boxSize/1000) )
-            self.arepoPath  = self.basePath + 'sims.shocks/'+str(res)+'_'+bs+'Mpc/'
-            self.savPrefix  = 'SH'
-            self.simName    = self.run + ' L' + bs + 'n' + str(self.res)
-            self.saveTag    = 'sh'
-            self.plotPrefix = 'sh'
-
-        # DEV.PRIME (enrichment / windsPT2)
-        if run in ['winds_save_on','winds_save_off'] or '_discrete' in run:
-            self.validResLevels = [3,128,256]
-            self.groupOrdered   = True
-
-            if 'L25' in run:
-                self.boxSize = 25000.0
-            if 'L12.5' in run:
-                self.boxSize = 12500.0
-
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
-
-            self.gravSoft       = 2.0 # 1820 # comoving until z=1,: fixed at z=1 value after (except DM)
-            self.trMCPerCell    = 0
-            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
-            self.winds          = 2
-            self.BHs            = 2
-            self.targetGasMass  = 0.0
-
-            dirStr = ''
-            if '_discrete' in run:
-                dirStr = 'enrichment/'
-
-            self.arepoPath  = self.basePath + 'dev.prime/' + dirStr + run + '/'
-            self.savPrefix  = 'DP'
-            self.simName    = self.run
-            self.saveTag    = 'idP'
-            self.plotPrefix = 'idP'
 
         # DEV.PRIME (model variations Jan/Feb 2016)
         if '_PR' in run:
@@ -252,6 +169,36 @@ class simParams:
             self.simName    = run.split('/')[1]
             self.saveTag    = 'idP'
             self.plotPrefix = 'idP'
+
+        # IllustrisTNG (L25 L35 and L75 boxes)
+        if 'tng' in run or 'prime' in run:
+            self.validResLevels = [455,910,1820]
+            self.groupOrdered = True
+
+            # note: grav softenings comoving until z=1,: fixed at z=1 value after
+            if res == 455:  self.gravSoft = 4.0
+            if res == 910:  self.gravSoft = 2.0
+            if res == 1820: self.gravSoft = 1.0
+
+            self.targetGasMass = 0.0
+            self.boxSize = 75000.0
+
+            self.omega_m        = 0.2726
+            self.omega_L        = 0.7274
+            self.omega_b        = 0.0456
+            self.HubbleParam    = 0.704
+
+            self.trMCPerCell    = 2
+            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+            self.winds          = 3
+            self.BHs            = 3
+
+            self.arepoPath  = self.basePath + 'sims.TNG/L75n' + str(res) + 'TNG/'
+            self.savPrefix  = 'IP'
+            self.simName    = 'L75n' + str(res) + 'TNG'
+            self.saveTag    = 'iP'
+            self.plotPrefix = 'iP'
+            self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
         # iClusters
         if run in ['iClusters']:
@@ -794,6 +741,14 @@ class simParams:
         # 3. pos/mass-matching (e.g. across different resolution levels)
         # 4. tree-matching (across snapshots of same run)
         raise Exception('Not implemented')
+
+    def isPartType(self, ptToCheck, ptToCheckAgainst):
+        """ Return either True or False depending on if ptToCheck is the same particle type as 
+        ptToCheckAgainst. For example, ptToCheck could be 'star', 'stars', or 'stellar' and 
+        ptToCheckAgainst could then be e.g. 'stars'. The whole point is to remove any hard-coded 
+        dependencies on numeric particle types. Otherwise, you would naively check that e.g. 
+        partTypeNum(ptToCheck)==4. This can now vary for different simulations (so far it does not). """
+        return partTypeNum(ptToCheck) == partTypeNum(ptToCheckAgainst)
 
     # attribute helpers
     @property

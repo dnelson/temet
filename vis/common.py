@@ -16,13 +16,14 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
-from util.helper import loadColorTable
+from util.helper import loadColorTable, logZeroSafe
 from illustris_python.util import partTypeNum
-from cosmo.load import snapshotSubset, snapshotHeader, groupCat
+from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle
+from cosmo.load import groupCatOffsetListIntoSnap
 from cosmo.cloudy import cloudyIon
 
 volDensityFields = ['density']
-colDensityFields = ['coldens','HI']
+colDensityFields = ['coldens','coldens_msunkpc2','HI']
 totSumFields     = ['mass']
 
 def getHsmlForPartType(sP, partType, indRange=None):
@@ -39,9 +40,114 @@ def getHsmlForPartType(sP, partType, indRange=None):
 
     # stars
     if partTypeNum(partType) == partTypeNum('stars'):
-        raise Exception('Not implemented, use CalcHSML (with caching).')
+        print('WARNING: Not implemented, use CalcHSML (with caching).')
+        print('TEMPORARY TODO')
+        #hsml = 0.25 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+        #hsml[hsml > 0.1] = 0.1 # can decouple, leads to strageness/interestingness
+        hsml = 0.5 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+        return hsml
 
     raise Exception('Unimplemented partType.')
+
+def meanAngMomVector(sP, subhaloID):
+    """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
+    or the inner stellar component, for rotation and projection into disk face/edge-on views. """
+    from cosmo.util import correctPeriodicDistVecs
+
+    # star forming gas
+    sh = groupCatSingle(sP, subhaloID=subhaloID)
+
+    fields = ['Coordinates','Masses','StarFormationRate','Velocities']
+    gas = snapshotSubset(sP, 'gas', fields, subhaloID=subhaloID)
+
+    w = np.where(gas['StarFormationRate'] > 0.0)[0]
+
+    if not len(w):
+        raise Exception('No star-forming gas.')
+
+    gas['Coordinates'] = gas['Coordinates'][w,:]
+    gas['Masses']      = gas['Masses'][w]
+    gas['Velocities']  = gas['Velocities'][w,:]
+
+    gas['Masses'] = sP.units.codeMassToMsun( gas['Masses'] )
+
+    # calculate position, relative to subhalo center (pkpc)
+    for i in range(3):
+        gas['Coordinates'][:,i] -= sh['SubhaloPos'][i]
+
+    correctPeriodicDistVecs(gas['Coordinates'], sP)
+    xyz = sP.units.codeLengthToKpc(gas['Coordinates'])
+    rad = np.sqrt( xyz[:,0]**2.0 + xyz[:,1]**2.0 + xyz[:,2]**2.0 ) # equals np.linalg.norm(xyz,2,axis=1)
+
+    # calculate momentum, correcting velocities for subhalo CM motion and hubble flow (Msun km/s)
+    gas['Velocities'] = sP.units.particleCodeVelocityToKms( gas['Velocities'] )
+
+    for i in range(3):
+        gas['Velocities'][:,i] -= sh['SubhaloVel'][i] # SubhaloVel already peculiar, no scalefactor needed
+
+    #vrad_noH = ( gas['Velocities'][:,0] * xyz[:,0] + \
+    #           ( gas['Velocities'][:,1] * xyz[:,1] + \
+    #           ( gas['Velocities'][:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards, unused
+    v_H = sP.units.H_z * 1000.0 * rad # Hubble expansion velocity magnitude (km/s) at each position
+    #vrad = vrad_noH + v_H * rad # radial velocity (km/s) with hubble expansion subtracted, unused
+
+    # add Hubble expansion velocity 3-vector at each position (km/s)
+    for i in range(3):
+        gas['Velocities'][:,i] += (xyz[:,i] / rad * v_H)
+
+    mom = np.zeros( (gas['Masses'].size,3), dtype='float32' )
+    for i in range(3):
+        mom[:,i] = gas['Masses'] * gas['Velocities'][:,i]
+
+    # calculate angular momentum of each particle, rr x pp
+    ang_mom = np.cross(xyz,mom)
+
+    # calculate mean angular momentum unit 3-vector
+    ang_mom_mean = np.mean(ang_mom, axis=0)
+    ang_mom_mean /= np.linalg.norm(ang_mom_mean,2)
+
+    return ang_mom_mean
+
+def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
+    """ Calculate 3x3 rotation matrix to align input vec with a target vector. By default this is the 
+    z-axis, such that with vec the angular momentum vector of the galaxy, an (x,y) projection will 
+    yield a face on view, and an (x,z) projection will yield an edge on view. """
+
+    # verify we have unit vectors
+    vec /= np.linalg.norm(vec,2)
+    target_vec /= np.linalg.norm(target_vec,2)
+
+    v = np.cross(vec,target_vec)
+    s = np.linalg.norm(v,2)
+    c = np.dot(vec,target_vec)
+
+    # v_x is the skew-symmetric cross-product matrix of v
+    I = np.identity(3)
+    v_x = np.asmatrix( np.array( [ [0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0] ] ) )
+
+    # R * (x,y,z)_unrotated == (x,y,z)_rotated
+    R = I + v_x + v_x**2 * (1-c/s**2.0)
+
+    return R
+
+def rotationMatrixFromAngleDirection(angle, direction):
+    """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
+    about the origin. """
+
+    sin_a = np.sin(angle)
+    cos_a = np.cos(angle)
+    direction /= np.lingalg.norm(direction,2)
+
+    # rotation matrix about unit vector
+    R = np.diag( [cos_a, cos_a, cos_a] )
+    R += np.outer(direction, direction) * (1.0 - cos_a)
+    direction *= sin_a
+
+    R += np.array( [[0.0, -direction[2], direction[1]], 
+                    [direction[2], 0.0, -direction[0]], 
+                    [-direction[1], direction[0], 0.0]] )
+
+    return R
 
 def loadMassAndQuantity(sP, partType, partField, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
@@ -55,6 +161,13 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     # neutral hydrogen mass model
     if partField == 'HI':
         nh0_frac = snapshotSubset(sP, partType, 'NeutralHydrogenAbundance', indRange=indRange)
+
+        # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
+        #mHI = hydrogen.hydrogenMass(gas, sP, atomic=(species=='HI' or species=='HI2'), totalNeutral=(species=='HI_noH2'))
+        # simplified models (difference is quite small in CDDF)
+        ##mHI = gas['Masses'] * gas['GFM_Metals'] * gas['NeutralHydrogenAbundance']
+        ##mHI = gas['Masses'] * sP.units.hydrogen_massfrac * gas['NeutralHydrogenAbundance']
+
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
     # metal ion mass
@@ -84,7 +197,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     return mass, quant, normCol
 
-def gridOutputProcess(sP, grid, partField, boxSizeImg):
+def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     """ Perform any final unit conversions on grid output and set field-specific plotting configuration. """
     config = {}
 
@@ -93,39 +206,47 @@ def gridOutputProcess(sP, grid, partField, boxSizeImg):
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
     if partField == 'density':
-        grid  = np.log10( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
+        grid  = logZeroSafe( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = 'Mean Volume Density [log cm$^{-3}$]'
         config['ctName'] = 'jet'
 
     # total sum fields
     if partField == 'mass':
-        grid  = np.log10( sP.units.codeMassToLogMsun(grid) )
+        grid  = logZeroSafe( sP.units.codeMassToLogMsun(grid) )
         config['label']  = 'Total Mass [log M$_{\\rm sun}$]'
         config['ctName'] = 'jet'
 
     # column densities
     if partField == 'coldens':
-        grid  = np.log10( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
+        grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = 'Total Column Density [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
 
+    if partField == 'coldens_msunkpc2':
+        grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
+        config['label']  = 'Total Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]'
+
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'cubehelix'
+        if sP.isPartType(partType,'stars'): config['ctName'] = 'afmhot'
+
     if partField == 'HI' or ' ' in partField:
-        grid = np.log10( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
+        grid = logZeroSafe( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
 
     # mass-weighted quantities
     if partField in ['temp','temperature']:
-        grid  = np.log10( grid )
+        grid  = logZeroSafe( grid )
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'jet'
 
     if partField in ['ent','entr','entropy']:
-        grid  = np.log10( grid )
+        grid  = logZeroSafe( grid )
         config['label']  = 'Entropy [log K cm$^2$]'
         config['ctName'] = 'jet'
 
     if partField == 'velmag':
+        print('TODO: handle scale factor if this is particle-level data')
         config['label']  = 'Velocity Magnitude [km/s]'
         config['ctName'] = 'jet'
 
@@ -135,11 +256,13 @@ def gridOutputProcess(sP, grid, partField, boxSizeImg):
 
     return grid, config
 
-def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeImg, hsmlFac, **kwargs):
+def gridBox(sP, method, partType, partField, nPixels, axes, 
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
-    m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d' % \
+    m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
-         boxSizeImg[0], boxSizeImg[1], boxSizeImg[2], axes[0], axes[1])).hexdigest()[::4]
+         boxSizeImg[0], boxSizeImg[1], boxSizeImg[2], axes[0], axes[1], 
+         hsmlFac, str(rotMatrix))).hexdigest()[::4]
 
     saveFilename = sP.derivPath + 'grids/%s.%d.%s.%s.%s.hdf5' % \
                    (method, sP.snap, partType, partField.replace(' ','_'), m)
@@ -152,31 +275,58 @@ def gridBox(sP, method, partType, partField, nPixels, axes, boxCenter, boxSizeIm
         # load if already made
         with h5py.File(saveFilename,'r') as f:
             grid = f['grid'][...]
-        print('Loaded: [%s]' % saveFilename)
+        print('Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
     else:
+        # will we use a complete load or a subset particle load?
+        sh = groupCatSingle(sP, subhaloID=sP.hInd)
+        indRange = None
+
+        if not sP.isZoom and sP.hInd is not None:
+            # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
+            if not sP.groupOrdered:
+                raise Exception('Want to do a group-ordered load but cannot.')
+
+            # calculate indRange
+            pt = partTypeNum(partType)
+            startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
+            indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
+
         # load: 3D positions
-        pos = snapshotSubset(sP, partType, 'pos')
+        pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+
+        # rotation? shift points to subhalo center, rotate, and shift back
+        if rotMatrix is not None:
+            if not sP.isZoom and sP.hInd is None:
+                raise Exception('Rotation in periodic box must be about a halo center.')
+
+            for i in range(3):
+                pos[:,i] -= sh['SubhaloPos'][i]
+
+            pos = np.transpose( np.dot(rotMatrix, pos.transpose()) )
+
+            for i in range(3):
+                pos[:,i] += sh['SubhaloPos'][i]
 
         # load: mass/weights, quantity, and normalization required
-        mass, quant, normCol = loadMassAndQuantity(sP, partType, partField)
+        mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
 
         if method == 'sphMap':
             # particle by particle orthographic splat using standard SPH cubic spline kernel
-            hsml = getHsmlForPartType(sP, partType) * hsmlFac
+            hsml = getHsmlForPartType(sP, partType, indRange=indRange) * hsmlFac
 
             grid = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                            boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, nPixels=nPixels, 
-                           colDens=normCol, nThreads=1 )
+                           colDens=normCol )
         else:
             raise Exception('Not implemented.')
 
         # save
         with h5py.File(saveFilename,'w') as f:
             f['grid'] = grid
-        print('Saved: [%s]' % saveFilename)
+        print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     # handle units and come up with units label
-    grid, config = gridOutputProcess(sP, grid, partField, boxSizeImg)
+    grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
 
     return grid, config
 
@@ -196,9 +346,14 @@ def addBoxMarkers(p, ax):
 
     if 'rVirFracs' in p:
         # plot circles for N fractions of the virial radius
+        xPos = p['boxCenter'][0]
+        yPos = p['boxCenter'][1]
+
+        if p['relCoords']:
+            xPos = 0.0
+            yPos = 0.0
+
         for rVirFrac in p['rVirFracs']:
-            xPos = p['boxCenter'][0]
-            yPos = p['boxCenter'][1]
             rad  = rVirFrac * p['haloVirRad']
 
             c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
@@ -240,12 +395,30 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
             # grid projection for image
             grid, config = gridBox(**p)
 
-            # set axes
+            # create this panel, and label
             ax = fig.add_subplot(nRows,nCols,i+1)
 
-            ax.set_title('%s z=%3.1f %s %s' % (sP.simName,sP.redshift,p['partType'],p['partField']))
+            idStr = ''
+            if not sP.isZoom and sP.hInd is not None:
+                idStr = ' (id=' + str(sP.hInd) + ')'
+
+            ax.set_title('%s z=%3.1f %s %s%s' % (sP.simName,sP.redshift,p['partType'],p['partField'],idStr))
+
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' [ ckpc/h ]')
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' [ ckpc/h ]')
+
+            # rotation? indicate transformation with axis labels
+            if p['rotMatrix'] is not None:
+                old_1 = np.zeros( 3, dtype='float32' )
+                old_2 = np.zeros( 3, dtype='float32' )
+                old_1[p['axes'][0]] = 1.0
+                old_2[p['axes'][1]] = 1.0
+
+                new_1 = np.transpose( np.dot(p['rotMatrix'], old_1) )
+                new_2 = np.transpose( np.dot(p['rotMatrix'], old_2) )
+
+                ax.set_xlabel( 'rotated: %4.2fx %4.2fy %4.2fz  [ ckpc/h ]' % (new_1[0], new_1[1], new_1[2]))
+                ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz  [ ckpc/h ]' % (new_2[0], new_2[1], new_2[2]))
 
             # color mapping and place image
             cmap = loadColorTable(config['ctName'])
