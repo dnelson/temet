@@ -17,6 +17,34 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def redshiftWikiTable():
+    """ Output wiki-syntax table of snapshot spacings. """
+    fname = '/n/home07/dnelson/sims.TNG/outputs.txt'
+    with open(fname,'r') as f:
+        lines = f.readlines()
+
+    for i,line in enumerate([l.strip() for l in lines]):
+        scaleFac, snapType = line.split()
+        scaleFac = float(scaleFac)
+        snapType = int(snapType)
+
+        if snapType == 1:
+            print('| %3d || %6.4g || %5.2g || {{yes}} || - ' % (i,scaleFac,1/scaleFac-1.0))
+            print('|-')
+        if snapType == 3:
+            print('| %3d || %6.4g || %5.2g || -       || {{yes}} ' % (i,scaleFac,1/scaleFac-1.0))
+            print('|-')
+
+    sP = simParams(res=455,run='tng')
+    z = cosmo.util.snapNumToRedshift(sP, all=True)
+
+    w = np.where(z >= 0.0)[0]
+    print(len(w))
+    for redshift in z[w]:
+        pass
+
+    pdb.set_trace()
+
 def ipIOTest():
     """ Check outputs after all changes for IllustrisPrime. """
     sP = simParams(res=128, run='realizations/iotest_L25n256', snap=7)

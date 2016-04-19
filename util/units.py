@@ -114,11 +114,15 @@ class units(object):
 
     # --- unit conversions to/from code units ---
 
-    def codeMassToLogMsun(self, mass):
+    def codeMassToMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (log msun). """
         mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
         
-        return logZeroSafe(mass_msun)
+        return mass_msun
+
+    def codeMassToLogMsun(self, mass):
+        """ Convert mass from code units (10**10 msun/h) to (log msun). """
+        return logZeroSafe( codeMassToMsun(mass) )
 
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
@@ -190,6 +194,16 @@ class units(object):
 
         return x_phys
 
+    def particleCodeVelocityToKms(self, x):
+        """ Convert velocity field (for cells/particles, not group properties) into km/s. """
+        if self._sP.redshift is None:
+            raise Exception("Need redshift.")
+
+        x_phys = np.array(x, dtype='float32') * np.sqrt(self._sP.units.scalefac)
+        x_phys *= (1.0e5/self._sP.units.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+
+        return x_phys
+
     def codeDensToPhys(self, dens, cgs=False, numDens=False):
         """ Convert mass density comoving->physical and add little_h factors. 
             Input: dens in code units should have [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3].
@@ -208,15 +222,20 @@ class units(object):
             dens_phys /= self._sP.units.mass_proton
         return dens_phys
 
-    def codeColDensToPhys(self, colDens, cgs=False, numDens=False):
+    def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
             Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
-            Return: [10^10 Msun/kpc^2] or [g/cm^2 if cgs=True] or [1/cm^2] if cgs=True and numDens=True].
+            Return: [10^10 Msun/kpc^2] or 
+                    [g/cm^2 if cgs=True] or 
+                    [1/cm^2] if cgs=True and numDens=True] or 
+                    [Msun/kpc^2 if msunKpc2=True].
         """
         if self._sP.redshift is None:
             raise Exception("Need redshift.")
         if numDens and not cgs:
             raise Exception('Odd choice.')
+        if msunKpc2 and (numDens or cgs):
+            raise Exception("Invalid combination.")
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
         colDensPhys = colDens.astype('float32') * self._sP.units.HubbleParam / self._sP.units.scalefac**2.0
@@ -226,6 +245,9 @@ class units(object):
             colDensPhys *= UnitColumnDensity_in_cgs # g/cm^2
         if numDens:
             colDensPhys /= self._sP.units.mass_proton # 1/cm^2
+        if msunKpc2:
+            colDensPhys *= (self._sP.units.UnitMass_in_g/self._sP.units.Msun_in_g) # remove 10^10 factor
+            colDensPhys *= (3.085678e21/self._sP.units.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys
 

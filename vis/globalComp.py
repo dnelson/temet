@@ -333,8 +333,6 @@ def blackholeVsStellarMass(sPs, pdf, simRedshift=0.0):
         # stellar mass definition(s)
         yy = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')] )
 
-        import pdb; pdb.set_trace()
-
         xm, ym, sm = running_median(xx,yy,binSize=binSize)
         ym2 = savgol_filter(ym,sKn,sKo)
         l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
@@ -1084,6 +1082,7 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     ax.set_ylabel('PDF of DLA Metallicities')
 
     # observational points
+    sPs[0].setRedshift(simRedshift)
     r12 = rafelski2012(sPs[0])
 
     l1,_,_ = ax.errorbar(r12['log_Z'], r12['pdf'], yerr=r12['pdf_err'], xerr=r12['log_Z_err'], 
@@ -1131,6 +1130,115 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     pdf.savefig()
     plt.close(fig)
 
+def galaxyColorPDF(sPs, pdf, simRedshift=0.0):
+    """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
+    from util import simParams
+
+    # config
+    bands = ['u','i']
+    stellarMassBins = ( [9.0,9.5],   [9.5,10.0],  [10.0,10.5], 
+                        [10.5,11.0], [11.0,11.5], [11.5,12.0] )
+    nRows = 2
+    nCols = 3
+    iLeg  = 4 # which panel to place simNames legend in
+
+    # plot setup
+    mag_range = [0.5,3.5]
+    fig = plt.figure(figsize=(16*1.5,9*1.5))
+    axes = []
+
+    if bands[0] != 'u' or bands[1] != 'i':
+        raise Exception('Not implemented')
+
+    cind1 = 0 # U
+    cind2 = 6 # i
+    cFac  = 0.79 # U is in Vega, i is in AB, and U_AB = U_Vega + 0.79 
+                 # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
+
+    # load observational points
+
+    #select stellarMass,u_mag,g_mag,r_mag,i_mag,z_mag
+    # from Guo2010a..MRII
+    # where snapnum=63
+    # and stellarMass between 10.0 and 20.0
+
+    # loop over each mass bin
+    for i, stellarMassBin in enumerate(stellarMassBins):
+
+        # panel setup
+        ax = fig.add_subplot(nRows,nCols,i+1)
+        axes.append(ax)
+        
+        ax.set_xlim(mag_range)
+        ax.set_xlabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
+        #ax.set_ylim([0.0,3.0])
+        ax.set_ylabel('PDF [no dust corr, cen+sat]')
+
+        # add stellar mass bin legend
+        sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,marker='',linestyle=linestyles[0])]
+        lExtra = ['%.1f < M$_{\\rm \star}$ < %.1f' % (stellarMassBin[0],stellarMassBin[1])]
+
+        legend1 = ax.legend(sExtra, lExtra, loc='upper right')
+        ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('Color PDF: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
+        c = ax._get_lines.prop_cycler.next()['color']
+
+        # fullbox:
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
+                          fieldsSubhalos=['SubhaloMassInRadType','SubhaloStellarPhotometrics'])
+
+        # galaxy selection
+        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
+        w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
+        w2 = np.arange(gc['subhalos']['count']) # centrals + satellites
+        w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+
+        # selection:
+        for j in range(1): #disabled, all only
+            if j == 0: w = w2
+            if j == 1: w = w1
+            if j == 2: w = w3
+
+            # galaxy mass definition and color
+            stellar_mass = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassInRadType'][w,4] )
+            galaxy_color = gc['subhalos']['SubhaloStellarPhotometrics'][w,cind1] - \
+                           gc['subhalos']['SubhaloStellarPhotometrics'][w,cind2] + cFac
+            
+            # loop over each mass bin
+            for i, stellarMassBin in enumerate(stellarMassBins):
+                wBin = np.where((stellar_mass >= stellarMassBin[0]) & (stellar_mass < stellarMassBin[1]))
+
+                nBins = np.max( [16, np.floor( np.sqrt( len(wBin[0] ))) * 1.2] ) # adaptive
+                #print(sP.simName,i,nBins)
+
+                yy, xx = np.histogram(galaxy_color[wBin], bins=nBins, range=mag_range, density=True)
+                xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins
+
+                label = sP.simName if i == iLeg and j == 0 else ''
+                alpha = 1.0 if j == 0 else 0.4
+                l, = axes[i].plot(xx, yy, linestyles[j], color=c, label=label, alpha=alpha, lw=3.0)
+
+    # legend
+    #sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    #lExtra = ['all galaxies','centrals only','satellites only']
+    sExtra = []
+    lExtra = []
+
+    handles, labels = axes[iLeg].get_legend_handles_labels()
+    legend2 = axes[iLeg].legend(handles+sExtra, labels+lExtra, loc='upper left')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
     from matplotlib.backends.backend_pdf import PdfPages
@@ -1147,13 +1255,14 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0116') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0311') )
-    #sPs.append( simParams(res=512, run='cosmo0_v6') )
+    sPs.append( simParams(res=512, run='cosmo0_v6') )
+    sPs.append( simParams(res=512, run='L25n512_PRVS_0404') )
 
-    sPs.append( simParams(res=270, run='realizations/L35n270_TNG_WMAP7') )
-    sPs.append( simParams(res=270, run='realizations/L35n270_TNG_PLANCK15') )
+    #sPs.append( simParams(res=270, run='realizations/L35n270_TNG_WMAP7') )
+    #sPs.append( simParams(res=270, run='realizations/L35n270_TNG_PLANCK15') )
 
     #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0') )
     #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001') )
@@ -1162,16 +1271,17 @@ def plots():
     #sPs.append( simParams(res=1820, run='illustrisprime') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=455, run='illustris_prime') )
     #sPs.append( simParams(res=256, run='feedback') )
 
     # make multipage PDF
     pdf = PdfPages('globalComps_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
-    #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
-    #sfrAvgVsRedshift(sPs, pdf)
-    #sfrdVsRedshift(sPs, pdf, xlog=True)
-    #sfrdVsRedshift(sPs, pdf, xlog=False)
+    stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
+    stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
+    sfrAvgVsRedshift(sPs, pdf)
+    sfrdVsRedshift(sPs, pdf, xlog=True)
+    sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf)
     galaxySizes(sPs, pdf, vsHaloMass=False)
     galaxySizes(sPs, pdf, vsHaloMass=True)
@@ -1183,15 +1293,15 @@ def plots():
     baryonicFractionsR500Crit(sPs, pdf)
     nHIcddf(sPs, pdf)
     nHIcddf(sPs, pdf, moment=1)
-    nOVIcddf(sPs, pdf)
+    #nOVIcddf(sPs, pdf)
     #nOVIcddf(sPs, pdf, moment=1)
-    ##dlaMetallicityPDF(sPs, pdf)
+    dlaMetallicityPDF(sPs, pdf)
+    galaxyColorPDF(sPs, pdf)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
-    # todo: color PDFs (no dust, Vog 14b Fig 13)
     # todo: SFR main sequence (Schaye Fig 11)
     # todo: active/passive fraction vs Mstar (Schaye Fig 11)
 
