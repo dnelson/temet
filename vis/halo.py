@@ -123,13 +123,15 @@ def renderSingleHalo():
             if cName in ['panels','simParams','plotStyle','rasterPx','saveFilename','p']:
                 continue
             if cName in p:
-                print('Warning: Overriding panel specification ['+cName+'] with common value.')
+                print('Warning: Letting panel specification ['+cName+'] override common value.')
+                continue
 
             p[cName] = cVal
 
-        # add simParams() and halo image config
+        # add simParams info
         p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'], hInd=p['hInd'])
 
+        # add imaging config for single halo view
         p['boxSizeImg'], p['boxCenter'], p['extent'], p['haloVirRad'], p['rotMatrix'] = haloImgSpecs(**p)
 
     # request render and save
