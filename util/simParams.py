@@ -141,7 +141,7 @@ class simParams:
             self.plotPrefix = 'idP'
 
         if 'realizations' in run:
-            self.validResLevels = [128,256,270,540]
+            self.validResLevels = [128,256,270,375,540]
             self.groupOrdered = True
 
             self.gravSoft = 0.0
@@ -153,6 +153,8 @@ class simParams:
                 self.boxSize = 25000.0
             if 'L35' in run:
                 self.boxSize = 35000.0
+            if 'L205' in run:
+                self.boxSize = 205000.0
 
             self.omega_m        = 0.2726
             self.omega_L        = 0.7274
@@ -742,13 +744,18 @@ class simParams:
         # 4. tree-matching (across snapshots of same run)
         raise Exception('Not implemented')
 
+    def ptNum(self, partType):
+        """ Return particle type number (in snapshots) for input partType string. 
+        Allows different simulations to use arbitrary numbers for each type (so far they do not). """
+        return partTypeNum(partType)
+
     def isPartType(self, ptToCheck, ptToCheckAgainst):
         """ Return either True or False depending on if ptToCheck is the same particle type as 
         ptToCheckAgainst. For example, ptToCheck could be 'star', 'stars', or 'stellar' and 
         ptToCheckAgainst could then be e.g. 'stars'. The whole point is to remove any hard-coded 
         dependencies on numeric particle types. Otherwise, you would naively check that e.g. 
         partTypeNum(ptToCheck)==4. This can now vary for different simulations (so far it does not). """
-        return partTypeNum(ptToCheck) == partTypeNum(ptToCheckAgainst)
+        return self.ptNum(ptToCheck) == self.ptNum(ptToCheckAgainst)
 
     # attribute helpers
     @property
@@ -787,3 +794,11 @@ class simParams:
     def snapRange(self):
         raise Exception('Not implemented')
     
+    @property
+    def dmParticleMass(self):
+        """ Return dark matter particle mass (scalar constant) in code units. """
+        # load snapshot header for MassTable
+        from cosmo.load import snapshotHeader
+        h = snapshotHeader(self)
+
+        return np.array( h['MassTable'][self.ptNum('dm')], dtype='float32' )

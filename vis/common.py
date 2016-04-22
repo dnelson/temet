@@ -17,8 +17,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
 from util.helper import loadColorTable, logZeroSafe
-from illustris_python.util import partTypeNum
-from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle
+from cosmo.load import snapshotSubset, groupCat, groupCatSingle
 from cosmo.load import groupCatOffsetListIntoSnap
 from cosmo.cloudy import cloudyIon
 
@@ -30,18 +29,19 @@ def getHsmlForPartType(sP, partType, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
     # dark matter
-    if partTypeNum(partType) == partTypeNum('dm'):
-        raise Exception('Not implemented, use CalcHSML (with caching).')
+    if sP.isPartType(partType, 'dm'):
+        print('WARNING: TEMPORARY TODO, use CalcHSML for DM (with caching).')
+        hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+        return hsml
 
     # gas
-    if partTypeNum(partType) == partTypeNum('gas'):
+    if sP.isPartType(partType, 'gas'):
         hsml = snapshotSubset(sP, partType, 'cellrad', indRange=indRange)
         return hsml
 
     # stars
-    if partTypeNum(partType) == partTypeNum('stars'):
-        print('WARNING: Not implemented, use CalcHSML (with caching).')
-        print('TEMPORARY TODO')
+    if sP.isPartType(partType, 'stars'):
+        print('WARNING: TEMPORARY TODO, use CalcHSML for stars (with caching).')
         #hsml = 0.25 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         #hsml[hsml > 0.1] = 0.1 # can decouple, leads to strageness/interestingness
         hsml = 0.5 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
@@ -155,8 +155,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     if partType in ['gas','stars']:
         mass = snapshotSubset(sP, partType, 'mass', indRange=indRange)
     elif partType == 'dm':
-        h = snapshotHeader(sP)
-        mass = h.massTable[cosmo.util.partTypeNum('dm')]
+        mass = sP.dmParticleMass
 
     # neutral hydrogen mass model
     if partField == 'HI':
@@ -278,16 +277,17 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         print('Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
     else:
         # will we use a complete load or a subset particle load?
-        sh = groupCatSingle(sP, subhaloID=sP.hInd)
         indRange = None
 
+        # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
         if not sP.isZoom and sP.hInd is not None:
-            # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
+            sh = groupCatSingle(sP, subhaloID=sP.hInd)
+
             if not sP.groupOrdered:
                 raise Exception('Want to do a group-ordered load but cannot.')
 
             # calculate indRange
-            pt = partTypeNum(partType)
+            pt = sP.ptNum(partType)
             startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
             indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
 
@@ -296,6 +296,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
         # rotation? shift points to subhalo center, rotate, and shift back
         if rotMatrix is not None:
+            sh = groupCatSingle(sP, subhaloID=sP.hInd)
+
             if not sP.isZoom and sP.hInd is None:
                 raise Exception('Rotation in periodic box must be about a halo center.')
 

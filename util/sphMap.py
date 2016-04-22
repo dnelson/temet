@@ -95,7 +95,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         p1 = pos[k,axes[1]]
         p2 = pos[k,axis3] if pos.shape[1] == 3 else 0.0
         h  = hsml[k]
-        v  = mass[k] if mass.size > 1 else mass[0]
+        v  = mass[k] if mass.size != 2 else mass[0]
         w  = quant[k] if quant.size > 1 else 0.0
 
         # clip points ouside box (z) dimension
@@ -223,8 +223,10 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
     if pos.ndim != 2 or (pos.shape[1] != 3 and pos.shape[1] != 2):
         raise Exception('Strange dimensions of pos.')
-    if hsml.ndim != 1 or mass.ndim != 1 or (quant is not None and quant.ndim != 1):
+    if hsml.ndim != 1 or (mass.ndim != 1 and mass.size > 1) or (quant is not None and quant.ndim != 1):
         raise Exception('Strange dimensions of hsml/mass/quant.')
+    if (mass.ndim == 0 and mass.size != 1) or (mass.size == 2):
+        raise Exception('Strange shape of mass.')
     if pos.shape[0] != hsml.size or (pos.shape[0] != mass.size and mass.size > 1):
         raise Exception('Dimension mismatch for inputs (hsml/mass).')
     if quant is not None and pos.shape[0] != quant.size:
@@ -250,6 +252,10 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     # massage quant if not specified
     if quant is None:
         quant = np.array([0])
+
+    # massage mass if single scalar
+    if mass.size == 1:
+        mass = np.array( [mass,mass], dtype='float32' ) # single element array kills numba type inference
 
     # single threaded?
     # ----------------
@@ -286,18 +292,16 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
             self.pos  = pSplit(pos, nThreads, threadNum)
             self.hsml = pSplit(hsml, nThreads, threadNum)
-            self.mass = pSplit(mass, nThreads, threadNum)
-
-            self.quant = quant
-            if quant.size > 1:
-                self.quant = pSplit(quant, nThreads, threadNum)
+            self.mass = pSplit(mass, nThreads, threadNum) if mass.size != 2 else mass
+            self.quant = pSplit(quant, nThreads, threadNum) if quant.size > 1 else quant
 
             # copy others into local space (non-self inputs to _calc() appears to prevent GIL release)
             self.boxSizeImg = boxSizeImg
             self.boxSizeSim = boxSizeSim
-            self.boxCen = boxCen
-            self.axes = axes
-            self.ndims = ndims
+            self.boxCen     = boxCen
+
+            self.axes    = axes
+            self.ndims   = ndims
             self.nPixels = nPixels
             self.colDens = colDens
 
