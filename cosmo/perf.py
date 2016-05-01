@@ -11,8 +11,17 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
 
-def loadCpuTxt(filePath, saveFilename, maxSize=1e3, keys=None):
-    """ Load and parse Arpeo cpu.txt, save into hdf5 format. """
+def tail(fileName, nLines):
+    """ Wrap linux tail command line utility. """
+    import subprocess
+    lines = subprocess.check_output( ['tail', '-n', str(nLines), fileName] )
+    return lines
+
+def loadCpuTxt(basePath, keys=None):
+    """ Load and parse Arepo cpu.txt, save into hdf5 format. """
+    filePath = basePath + 'output/cpu.txt'
+    saveFilename = basePath + 'data.files/cpu.hdf5'
+
     r = {}
 
     cols = None
@@ -24,7 +33,18 @@ def loadCpuTxt(filePath, saveFilename, maxSize=1e3, keys=None):
 
             for key in read_keys:
                 r[key] = f[key][()]
+            r['numCPUs'] = f['numCPUs'][()]
     else:
+        # determine number of timesteps in file, and number of CPUs
+        lines = tail(filePath, 100)
+        for line in lines.split('\n')[::-1]:
+            if 'Step ' in line:
+                maxSize = int( line.split(', ')[0].split(' ')[1] ) + 1
+                r['numCPUs'] = int( line.split(', ')[2].split(' ')[1] )
+                break
+
+        print('[%s] maxSize: %d numCPUs: %d, loading...' % (basePath, maxSize, r['numCPUs']))
+
         # parse
         f = open(filePath,'r')
 
@@ -40,8 +60,8 @@ def loadCpuTxt(filePath, saveFilename, maxSize=1e3, keys=None):
                 time = float( line[1].split(": ")[1] )
                 hatb = int( line[4].split(": ")[1] )
 
-                if step % 1000 == 0:
-                    print(str(step) + ' -- ' + str(time) + ' -- ' + str(hatb))
+                if step % 10000 == 0:
+                    print(' ' + str(step) + ' -- ' + str(time) + ' -- ' + str(hatb))
 
                 continue
 
@@ -96,30 +116,23 @@ def loadCpuTxt(filePath, saveFilename, maxSize=1e3, keys=None):
 
     return r
 
-def cpuTxtMake():
-    """ Convert cpu.txt file into a cpu.hdf5 which can be parsed much faster. """
-    # paths and maxSize=totalNumTimesteps+1
-    filePath = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.0001/output/cpu.txt'
-    saveFilename = '/n/home07/dnelson/dev.prime/enrichment/L12.5n256_discrete_dm0.0001/data.files/cpu.hdf5'
-    maxSize = 438671
-
-    cpu = loadCpuTxt(filePath,saveFilename,maxSize)
-
-def cpuTxtPlot():
+def plotCpuTimes():
     """ Plot code time usage fractions from cpu.txt """
-    # config
-    #runPrefix = 'sims.illustris/'
-    #runs = ['IllustrisPrime-1', 'Illustris-1','Illustris-2','Illustris-3']
-    #cpus = [12000,8192,4096,128]
+    from util import simParams
 
-    runPrefix = 'dev.prime/enrichment/'
-    runs = ['L12.5n256_discrete_dm'+dm for dm in ['0.0','0.0001','0.00001']]
-    cpus = [256,256,256]
+    # config
+    sPs = []
+    sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=910, run='illustris') )
+    #sPs.append( simParams(res=910, run='tng') )
+    #sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=455, run='tng') )
 
     plotKeys = ['total','treegrav','voronoi','blackholes','hydro','gradients','enrich']
 
     # one plot per value
-    pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(runs)) + '.pdf')
+    pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
 
     for plotKey in plotKeys:
         fig = plt.figure(figsize=(14,7))
@@ -140,24 +153,23 @@ def cpuTxtPlot():
 
         keys = ['time','hatb',plotKey]
 
-        for i,run in enumerate(runs):
-            saveFilename = '/n/home07/dnelson/' + runPrefix + run + '/data.files/cpu.hdf5'
-
-            cpu = loadCpuTxt('',saveFilename,keys=keys)
+        for i,sP in enumerate(sPs):
+            # load select datasets from cpu.hdf5
+            cpu = loadCpuTxt(sP.arepoPath, keys=keys)
 
             # include only full timesteps
             w = np.where( cpu['hatb'] >= cpu['hatb'].max()-4 )
 
-            print(run + ': '+str(len(w[0])) + '  max time: '+str(cpu['time'].max()) )
+            print( sP.simName+' ['+str(plotKey)+']: '+str(len(w[0]))+'  max_time: '+str(cpu['time'].max()) )
 
             # loop over each run
             xx = cpu['time'][w]
             yy = np.squeeze( cpu[plotKey][w,ind] )
 
             if ind in [0,2]:
-                yy = yy / (1e6*60.0*60.0) * cpus[i]
+                yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
 
-            ax.plot(xx,yy,label=run)
+            ax.plot(xx,yy,label=sP.simName)
 
         zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
         axTop = ax.twiny()
