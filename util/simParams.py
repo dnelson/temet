@@ -172,32 +172,50 @@ class simParams:
             self.saveTag    = 'idP'
             self.plotPrefix = 'idP'
 
-        # IllustrisTNG (L25 L35 and L75 boxes)
+        # IllustrisTNG (L25 L35 L75 and L205 boxes)
         if 'tng' in run or 'prime' in run:
-            self.validResLevels = [455,910,1820]
+
+            res_L25  = [128, 256, 512]
+            res_L35  = [270, 540, 1080, 2160]
+            res_L75  = [455, 910, 1820]
+            res_L205 = [2500]
+
+            self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205
             self.groupOrdered = True
 
             # note: grav softenings comoving until z=1,: fixed at z=1 value after
-            if res == 455:  self.gravSoft = 4.0
-            if res == 910:  self.gravSoft = 2.0
-            if res == 1820: self.gravSoft = 1.0
+            if res in res_L25:  self.gravSoft = 4.0 / (res/128)
+            if res in res_L35:  self.gravSoft = 4.64 / (res/270) # todo check
+            if res in res_L75:  self.gravSoft = 4.0 / (res/455)
+            if res in res_L205: self.gravSoft = 0.0 # todo
 
-            self.targetGasMass = 0.0
-            self.boxSize = 75000.0
+            if res in res_L25:  self.targetGasMass = 1.57032e-4 * (8 ** np.log2(512/res))
+            if res in res_L35:  self.targetGasMass = 0.0 # todo
+            if res in res_L75:  self.targetGasMass = 9.4395e-5 * (8 ** np.log2(1820/res))
+            if res in res_L205: self.targetGasMass = 0.0 # todo
 
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
+            if res in res_L25:  self.boxSize = 25000.0
+            if res in res_L35:  self.boxSize = 35000.0
+            if res in res_L75:  self.boxSize = 75000.0
+            if res in res_L205: self.boxSize = 205000.0
 
-            self.trMCPerCell    = 2
-            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
-            self.winds          = 3
-            self.BHs            = 3
+            # common: Planck2015 cosmology
+            self.omega_m     = 0.2726
+            self.omega_L     = 0.7274
+            self.omega_b     = 0.0456
+            self.HubbleParam = 0.704
 
-            self.arepoPath  = self.basePath + 'sims.TNG/L75n' + str(res) + 'TNG/'
+            # common: tracers, enrichment/feedback models
+            self.trMCPerCell = 2
+            self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
+            self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+            self.winds       = 3
+            self.BHs         = 3
+
+            bs = str(int(self.boxSize/1000.0))
+            self.arepoPath  = self.basePath + 'sims.TNG/L' + bs + 'n' + str(res) + 'TNG/'
             self.savPrefix  = 'IP'
-            self.simName    = 'L75n' + str(res) + 'TNG'
+            self.simName    = 'L' + bs + 'n' + str(res) + 'TNG'
             self.saveTag    = 'iP'
             self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
