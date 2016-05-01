@@ -171,20 +171,28 @@ def correctPeriodicPosVecs(vecs, sP):
 def correctPeriodicPosBoxWrap(vecs, sP):
     """ For an array of positions [N,3], determine if they span a periodic boundary (e.g. half are near 
     x=0 and half are near x=BoxSize). If so, wrap the high coordinate value points by a BoxSize, making 
-    them negative. Suitable for plotting particle positions in global coordinates. """
+    them negative. Suitable for plotting particle positions in global coordinates. Return indices of 
+    shifted coordinates so they can be shifted back, in the form of dict with an entry for each 
+    shifted dimension and key equal to the dimensional index. """
+    r = {}
 
-    for i in range(2):
+    for i in range(3):
         w1 = np.where(vecs[:,i] < sP.boxSize * 0.1)[0]
         w2 = np.where(vecs[:,i] > sP.boxSize * 0.9)[0]
 
         # satisfy wrap criterion for this axis?
         if len(w1) and len(w2):
-            wCheck = np.where(vecs[:,i] > sP.boxSize * 0.5 and vecs[:,i] < sP.boxSize * 0.8)[0]
+            wCheck = np.where( (vecs[:,i] > sP.boxSize * 0.5) & (vecs[:,i] < sP.boxSize * 0.8) )[0]
             if len(wCheck):
                 raise Exception('Positions spanning very large fraction of box, something strange.')
 
             wMove = np.where(vecs[:,i] > sP.boxSize * 0.8)[0]
             vecs[wMove,i] -= sP.boxSize
+
+            # store indices of shifted coordinates for return
+            r[i] = wMove
+
+    return r
 
 def periodicDists(pt, vecs, sP, chebyshev=False):
     """ Calculate distances correctly taking into account periodic B.C.

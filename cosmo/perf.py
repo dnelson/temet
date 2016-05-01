@@ -123,7 +123,7 @@ def plotCpuTimes():
     # config
     sPs = []
     sPs.append( simParams(res=1820, run='illustris') )
-    sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='illustris') )
