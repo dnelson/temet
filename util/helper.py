@@ -88,6 +88,28 @@ def running_median(X, Y, nBins=100, binSize=None):
 
     return bin_centers, running_median, running_std
 
+def running_sigmawindow(X, Y, windowSize=None):
+    """ Create an local/adaptive estimate of the stddev of a (x,y) point set using a sliding 
+    window of windowSize points. """
+    assert X.size == Y.size
+    if windowSize is None:
+        windowSize = 3
+ 
+    windowHalf = round(windowSize / 2.0)
+
+    if windowHalf < 1:
+        raise Exception('Window half size is too small.')
+
+    running_std = np.zeros( X.size, dtype='float32' )
+
+    for i in np.arange( X.size ):
+        indMin = np.max( [0, i - windowHalf] )
+        indMax = np.min( [i + windowHalf, X.size] )
+
+        running_std[i] = np.std( Y[indMin:indMax] )
+
+    return running_std
+
 def running_histogram(X, nBins=100, binSize=None, normFac=None):
     """ Create a adaptive histogram of a (x) point set using some number of bins. """
     if binSize is not None:
