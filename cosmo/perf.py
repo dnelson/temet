@@ -17,7 +17,7 @@ def tail(fileName, nLines):
     lines = subprocess.check_output( ['tail', '-n', str(nLines), fileName] )
     return lines
 
-def loadCpuTxt(basePath, keys=None):
+def loadCpuTxt(basePath, keys=None, hatbMin=None):
     """ Load and parse Arepo cpu.txt, save into hdf5 format. """
     filePath = basePath + 'output/cpu.txt'
     saveFilename = basePath + 'data.files/cpu.hdf5'
@@ -49,65 +49,89 @@ def loadCpuTxt(basePath, keys=None):
         f = open(filePath,'r')
 
         step = None
+        hatbSkip = False
 
-        for line in f:
-            line = line.strip()
+        # chunked load
+        while 1:
+            lines = f.readlines(100000)
+            if not lines:
+                break
 
-            # timestep header
-            if line[0:4] == 'Step':
-                line = line.split(",")
-                step = int( line[0].split(" ")[1] )
-                time = float( line[1].split(": ")[1] )
-                hatb = int( line[4].split(": ")[1] )
+            for line in lines:
+                line = line.strip()
 
-                if step % 10000 == 0:
-                    print(' ' + str(step) + ' -- ' + str(time) + ' -- ' + str(hatb))
+                # timestep header
+                if line[0:4] == 'Step':
+                    line = line.split(",")
+                    hatb = int( line[4].split(": ")[1] )
 
-                continue
+                    if hatbMin is not None and hatb < hatbMin and hatb > 0:
+                        hatbSkip = True # skip until next timestep header
+                    else:
+                        hatbSkip = False # proceed normally
 
-            if line == '' or line[0:4] == 'diff':
-                continue
+                    step = int( line[0].split(" ")[1] )
+                    time = float( line[1].split(": ")[1] )
 
-            # normal line
-            line = line.split()
+                    if step % 10000 == 0:
+                        print(' ' + str(step) + ' -- ' + str(time) + ' -- ' + str(hatb) + ' ' + str(hatbSkip))
 
-            name = line[0]
+                    continue
 
-            # how many columns (how old is this file)?
-            if cols == None:
-                cols = len(line)-1
+                if hatbSkip == True:
+                    continue
+                if line == '' or line[0:4] == 'diff':
+                    continue
 
-            # names with a space
-            offset = 0
-            if line[1] in ['vel','zone','surface','search']:
-                name = line[0] + '_' + line[1]
-                offset = 1
-            name = name.replace('/','_')
+                # normal line
+                line = line.split()
 
-            # timings
-            if step == 0:
-                #print(str(name) + ' -- ' + str(diff_time) + ' -- ' + str(diff_perc))
-                r[name] = np.zeros( (maxSize,4), dtype='float32' )
-                r['step'] = np.zeros( maxSize, dtype='int32' )
-                r['time'] = np.zeros( maxSize, dtype='float32' )
-                r['hatb'] = np.zeros( maxSize, dtype='int16' )
+                name = line[0]
 
-            if cols == 4:
-                r[name][step,0] = float( line[1+offset].strip() ) # diff time
-                r[name][step,1] = float( line[2+offset].strip()[:-1] ) # diff percentage
-                r[name][step,2] = float( line[3+offset].strip() ) # cumulative time
-                r[name][step,3] = float( line[4+offset].strip()[:-1] ) # cumulative percentage
+                # how many columns (how old is this file)?
+                if cols == None:
+                    cols = len(line)-1
 
-            if cols == 3:
-                r[name][step,0] = float( line[1+offset].strip() ) # diff time
-                r[name][step,2] = float( line[2+offset].strip() ) # cumulative time
-                r[name][step,3] = float( line[3+offset].strip()[:-1] ) # cumulative percentage
+                # names with a space
+                offset = 0
+                if line[1] in ['vel','zone','surface','search']:
+                    name = line[0] + '_' + line[1]
+                    offset = 1
+                name = name.replace('/','_')
 
-            r['step'][step] = step
-            r['time'][step] = time
-            r['hatb'][step] = hatb
+                # timings
+                if step == 0:
+                    r[name] = np.zeros( (maxSize,4), dtype='float32' )
+                    r['step'] = np.zeros( maxSize, dtype='int32' )
+                    r['time'] = np.zeros( maxSize, dtype='float32' )
+                    r['hatb'] = np.zeros( maxSize, dtype='int16' )
+
+                if cols == 4:
+                    r[name][step,0] = float( line[1+offset].strip() ) # diff time
+                    r[name][step,1] = float( line[2+offset].strip()[:-1] ) # diff percentage
+                    r[name][step,2] = float( line[3+offset].strip() ) # cumulative time
+                    r[name][step,3] = float( line[4+offset].strip()[:-1] ) # cumulative percentage
+
+                if cols == 3:
+                    r[name][step,0] = float( line[1+offset].strip() ) # diff time
+                    r[name][step,2] = float( line[2+offset].strip() ) # cumulative time
+                    r[name][step,3] = float( line[3+offset].strip()[:-1] ) # cumulative percentage
+
+                r['step'][step] = step
+                r['time'][step] = time
+                r['hatb'][step] = hatb
 
         f.close()
+
+        # compress
+        keys = ['step','time','hatb']
+        w = np.where( r['hatb'] > 0 )
+        for key in keys:
+            r[key] = r[key][w]
+        for key in r.keys():
+            if key in keys+['numCPUs']:
+                continue
+            r[key] = r[key][w,:]
 
         # write into hdf5
         with h5py.File(saveFilename,'w') as f:
@@ -128,6 +152,11 @@ def plotCpuTimes():
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='illustris') )
     #sPs.append( simParams(res=455, run='tng') )
+
+    # L75n1820TNG cpu.txt error: there is a line:
+    # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
+    # after Step 6495017
+    hatbMin = 40 # None
 
     plotKeys = ['total','treegrav','voronoi','blackholes','hydro','gradients','enrich']
 
@@ -155,7 +184,7 @@ def plotCpuTimes():
 
         for i,sP in enumerate(sPs):
             # load select datasets from cpu.hdf5
-            cpu = loadCpuTxt(sP.arepoPath, keys=keys)
+            cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
 
             # include only full timesteps
             w = np.where( cpu['hatb'] >= cpu['hatb'].max()-4 )
@@ -164,7 +193,7 @@ def plotCpuTimes():
 
             # loop over each run
             xx = cpu['time'][w]
-            yy = np.squeeze( cpu[plotKey][w,ind] )
+            yy = np.squeeze( np.squeeze(cpu[plotKey])[w,ind] )
 
             if ind in [0,2]:
                 yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
