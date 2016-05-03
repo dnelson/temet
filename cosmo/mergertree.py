@@ -28,6 +28,27 @@ def loadMPB(sP, id, fields=None, treeName=None):
 
     raise Exception('Unrecognized treeName.')
 
+def insertMPBGhost(mpb, snapToInsert=None):
+    """ Insert a ghost entry into a MPB dict by interpolating over neighboring snapshot information.
+    Appropriate if e.g. a group catalog if corrupt but snapshot files are ok. Could also be used to 
+    selectively wipe out outlier points in the MPB. """
+    assert snapToInsert is not None
+
+    indAfter = np.where(mpb['SnapNum'] == snapToInsert - 1)[0]
+    assert len(indAfter) > 0
+
+    mpb['SubfindID'] = np.insert( mpb['SubfindID'], indAfter, -1 ) # ghost
+
+    for key in mpb:
+        if key in ['SnapNum','Group_R_Crit200','Group_M_Crit200']: # [N]
+            interpVal = np.mean([mpb[key][indAfter],mpb[key][indAfter-2]])
+            mpb[key] = np.insert( mpb[key], indAfter, interpVal )
+        if key in ['SubhaloPos','SubhaloVel']: # [N,3]
+            interpVal = np.mean( np.vstack((mpb[key][indAfter,:],mpb[key][indAfter-2,:])), axis=0)
+            mpb[key] = np.insert( mpb[key], indAfter, interpVal, axis=0)
+
+    return mpb
+
 def mpbSmoothedProperties(sP, id):
     """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 
     currently: position, mass (m200_crit), virial radius (r200_crit), virial temperature (derived), 
@@ -38,7 +59,11 @@ def mpbSmoothedProperties(sP, id):
     fields = ['SubfindID','SnapNum','SubhaloPos','SubhaloVel','Group_R_Crit200','Group_M_Crit200']
 
     mpb = loadMPB(sP, id, fields=fields)
-    mpb['sm'] = {}
+
+    # sims.zooms2/h2_L9: corrupt groups_104 override (insert interpolated snap 104 values for MPB)
+    if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 2:
+        print('WARNING: sims.zooms2/h2_L9: mpb corrupt 104 override')
+        mpb = insertMPBGhost(mpb, snapToInsert=104)
 
     # determine sK parameters
     sKn = int(len(mpb['SnapNum'])/10) # savgol smoothing kernel length (1=disabled)
@@ -52,6 +77,7 @@ def mpbSmoothedProperties(sP, id):
     mpb['Group_S_vir'] = sP.units.codeMassToVirEnt(mpb['Group_M_Crit200'], log=True)
     mpb['Group_V_vir'] = sP.units.codeMassToVirVel(mpb['Group_M_Crit200'])
 
+    mpb['sm'] = {}
     mpb['sm']['sKn'] = sKn
     mpb['sm']['sKo'] = sKo
 
@@ -124,7 +150,7 @@ def debugPlot():
 
     if 0:
         # PLOT 1: position
-        fig, axs = plt.subplots(1, 3, figsize=(20,10))        
+        fig, axs = plt.subplots(1, 3, figsize=(20,10))
 
         for i in range(3):
             addRedshiftAgeAxes(axs[i], sP, xlog=True)
