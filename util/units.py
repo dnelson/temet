@@ -127,8 +127,7 @@ class units(object):
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
             at the specified redshift (Barkana & Loeb (2001) eqn.26). """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
         if not meanmolwt:
             meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
 
@@ -154,8 +153,7 @@ class units(object):
 
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
         if not meanmolwt:
             meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
 
@@ -185,8 +183,7 @@ class units(object):
 
     def codeLengthToKpc(self, x):
         """ Convert length/distance in code units to physical kpc. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
 
         x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
         x_phys *= self._sP.units.scalefac # comoving -> physical
@@ -196,21 +193,95 @@ class units(object):
 
     def particleCodeVelocityToKms(self, x):
         """ Convert velocity field (for cells/particles, not group properties) into km/s. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
 
         x_phys = np.array(x, dtype='float32') * np.sqrt(self._sP.units.scalefac)
         x_phys *= (1.0e5/self._sP.units.UnitVelocity_in_cm_per_s) # account for non-km/s code units
 
         return x_phys
 
+    def particleSpecAngMomInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
+        """ Calculate particle specific angular momentum in [kpc km/s] given input arrays of pos,vel,mass 
+        and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
+        # make copies of input arrays
+        gas_mass = sP.units.codeMassToMsun( mass.astype('float32') )
+        gas_pos  = pos.astype('float32')
+        gas_vel  = vel.astype('float32')
+
+        # calculate position, relative to subhalo center (pkpc)
+        for i in range(3):
+            gas_pos[:,i] -= haloPos[i]
+
+        correctPeriodicDistVecs( gas_pos, sP )
+        xyz = self.codeLengthToKpc( gas_pos )
+
+        rad = np.sqrt( xyz[:,0]**2.0 + xyz[:,1]**2.0 + xyz[:,2]**2.0 ) # equals np.linalg.norm(xyz,2,axis=1)
+
+        # calculate momentum, correcting velocities for subhalo CM motion and hubble flow (Msun km/s)
+        gas_vel = self.particleCodeVelocityToKms( gas_vel )
+
+        for i in range(3):
+            gas_vel[:,i] -= haloVel[i] # SubhaloVel already peculiar, no scalefactor needed
+
+        v_H = self.H_z * 1000.0 * rad # Hubble expansion velocity magnitude (km/s) at each position
+
+        # add Hubble expansion velocity 3-vector at each position (km/s)
+        for i in range(3):
+            gas_vel[:,i] += (xyz[:,i] / rad * v_H)
+
+        mom = np.zeros( (gas_mass.size,3), dtype='float32' )
+
+        for i in range(3):
+            mom[:,i] = gas_mass * gas_vel[:,i]
+
+        # calculate angular momentum of each particle, rr x pp
+        ang_mom = np.cross(xyz,mom)
+
+        # specific
+        ang_mom /= gas_mass
+
+        return ang_mom
+
+    def particleRadialVelInKmS(self, pos, vel, haloPos, haloVel):
+        """ Calculate particle radial velocity in [km/s] (negative=inwards) given input arrays of pos,vel 
+        and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
+        from cosmo.util import correctPeriodicDistVecs
+
+        # make copies of input arrays
+        gas_pos = pos.astype('float32')
+        gas_vel = vel.astype('float32')
+
+        # calculate position, relative to subhalo center (pkpc)
+        for i in range(3):
+            gas_pos[:,i] -= haloPos[i]
+
+        correctPeriodicDistVecs( gas_pos, self._sP )
+
+        xyz = self.codeLengthToKpc( gas_pos )
+        rad = np.linalg.norm(xyz, 2, axis=1)
+
+        # correct velocities for subhalo CM motion
+        gas_vel = self.particleCodeVelocityToKms( gas_vel )
+
+        for i in range(3):
+            gas_vel[:,i] -= haloVel[i] # SubhaloVel already peculiar, no scalefactor needed
+
+        # correct velocities for hubble flow
+        vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
+                     gas_vel[:,1] * xyz[:,1] + \
+                     gas_vel[:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards
+
+        v_H = self.H_z * 1000.0 * rad # Hubble expansion velocity magnitude (km/s) at each position
+        vrad = vrad_noH + v_H * rad # radial velocity (km/s) with hubble expansion subtracted
+
+        return vrad
+
     def codeDensToPhys(self, dens, cgs=False, numDens=False):
         """ Convert mass density comoving->physical and add little_h factors. 
             Input: dens in code units should have [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3].
             Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or [1/cm^3 if cgs=True and numDens=True].
         """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
 
@@ -230,8 +301,7 @@ class units(object):
                     [1/cm^2] if cgs=True and numDens=True] or 
                     [Msun/kpc^2 if msunKpc2=True].
         """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
         if msunKpc2 and (numDens or cgs):
@@ -309,8 +379,7 @@ class units(object):
 
     def tracerEntToCGS(self, ent, log=False):
         """ Fix cosmological/unit system in TRACER_MC[MaxEnt], output in cgs [K cm^2]. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
 
         a3inv = 1.0 / self._sP.units.scalefac**3.0
 
@@ -332,8 +401,7 @@ class units(object):
 
     def calcEntropyCGS(self, u, dens, log=False):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
 
         a3inv = 1.0 / self._sP.units.scalefac**3.0
 
@@ -355,8 +423,7 @@ class units(object):
 
     def calcPressureCGS(self, u, dens, log=False):
         """ Calculate pressure as (gamma-1)*u*rho in cgs units, converting rho from comoving to physical. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
 
         a3inv = 1.0 / self._sP.units.scalefac**3.0
 
@@ -373,8 +440,7 @@ class units(object):
 
     def codeDensToCritRatio(self, rho, baryon=None, log=False):
         """ Normalize code density by the critical (total/baryonic) density at some redshift. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
         if baryon is None:
             raise Exception("Specify baryon True or False, note... change of behavior.")
 
@@ -390,8 +456,7 @@ class units(object):
 
     def critRatioToCodeDens(self, ratioToCrit, baryon=None):
         """ Convert a ratio of the critical density at some redshift to a code density. """
-        if self._sP.redshift is None:
-            raise Exception("Need redshift.")
+        assert self._sP.redshift is not None
         if baryon is None:
             raise Exception("Specify baryon True or False, note... change of behavior.")
 
@@ -410,7 +475,16 @@ class units(object):
 
         s200 = self.calcEntropyCGS(virU, r200crit, log=log)
 
-        return s200
+        return s200.astype('float32')
+
+    def codeMassToVirVel(self, mass):
+        """ Given a total halo mass, return a virial velocity (V200) in physical [km/s]. """
+        assert self._sP.redshift is not None
+
+        r200 = ( self.G * mass / 100.0 / self.H_z**2.0 )**(1.0/3.0)
+        v200 = np.sqrt( self.G * mass / r200 )
+
+        return v200.astype('float32')
 
     # --- other ---
 

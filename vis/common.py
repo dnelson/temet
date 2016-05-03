@@ -52,8 +52,6 @@ def getHsmlForPartType(sP, partType, indRange=None):
 def meanAngMomVector(sP, subhaloID):
     """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
     or the inner stellar component, for rotation and projection into disk face/edge-on views. """
-    from cosmo.util import correctPeriodicDistVecs
-
     # star forming gas
     sh = groupCatSingle(sP, subhaloID=subhaloID)
 
@@ -69,38 +67,8 @@ def meanAngMomVector(sP, subhaloID):
     gas['Masses']      = gas['Masses'][w]
     gas['Velocities']  = gas['Velocities'][w,:]
 
-    gas['Masses'] = sP.units.codeMassToMsun( gas['Masses'] )
-
-    # calculate position, relative to subhalo center (pkpc)
-    for i in range(3):
-        gas['Coordinates'][:,i] -= sh['SubhaloPos'][i]
-
-    correctPeriodicDistVecs(gas['Coordinates'], sP)
-    xyz = sP.units.codeLengthToKpc(gas['Coordinates'])
-    rad = np.sqrt( xyz[:,0]**2.0 + xyz[:,1]**2.0 + xyz[:,2]**2.0 ) # equals np.linalg.norm(xyz,2,axis=1)
-
-    # calculate momentum, correcting velocities for subhalo CM motion and hubble flow (Msun km/s)
-    gas['Velocities'] = sP.units.particleCodeVelocityToKms( gas['Velocities'] )
-
-    for i in range(3):
-        gas['Velocities'][:,i] -= sh['SubhaloVel'][i] # SubhaloVel already peculiar, no scalefactor needed
-
-    #vrad_noH = ( gas['Velocities'][:,0] * xyz[:,0] + \
-    #           ( gas['Velocities'][:,1] * xyz[:,1] + \
-    #           ( gas['Velocities'][:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards, unused
-    v_H = sP.units.H_z * 1000.0 * rad # Hubble expansion velocity magnitude (km/s) at each position
-    #vrad = vrad_noH + v_H * rad # radial velocity (km/s) with hubble expansion subtracted, unused
-
-    # add Hubble expansion velocity 3-vector at each position (km/s)
-    for i in range(3):
-        gas['Velocities'][:,i] += (xyz[:,i] / rad * v_H)
-
-    mom = np.zeros( (gas['Masses'].size,3), dtype='float32' )
-    for i in range(3):
-        mom[:,i] = gas['Masses'] * gas['Velocities'][:,i]
-
-    # calculate angular momentum of each particle, rr x pp
-    ang_mom = np.cross(xyz,mom)
+    ang_mom = sP.units.particleSpecAngMomInKpcKmS( gas['Coordinates'], gas['Velocities'], gas['Masses'], 
+                                                   sh['SubhaloPos'], sh['SubhaloVel'] )
 
     # calculate mean angular momentum unit 3-vector
     ang_mom_mean = np.mean(ang_mom, axis=0)
