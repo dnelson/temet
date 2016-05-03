@@ -5,15 +5,18 @@ util/tracerMC.py
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
 
-from util import simParams
-from illustris_python.util import partTypeNum
-from os.path import isfile
-import cosmo.load
 import numpy as np
 import h5py
-import pdb
 import glob
-import matplotlib.pyplot as plt
+from os.path import isfile, isdir
+from os import mkdir
+
+import cosmo.load
+from util import simParams
+from util.helper import iterable
+from cosmo.mergertree import mpbSmoothedProperties
+from cosmo.util import periodicDists
+from illustris_python.util import partTypeNum
 
 debug = False # enable expensive debug consistency checks and verbose output
 
@@ -225,6 +228,12 @@ def mapParentIDsToIndsByType(sP, parentIDs):
 
     for ptName in r['partTypes']:
         parIDsType = cosmo.load.snapshotSubset(sP, ptName, 'id')
+
+        # no particles of this type in the snapshot
+        if isinstance(parIDsType,dict):
+            if parIDsType['count'] == 0:
+                continue
+
         if debug:
             print(' mapParentIDsToIndsByType: '+ptName+' searching ['+str(parIDsType.size)+'] ids...')
 
@@ -276,11 +285,13 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
         optionally restricted to input particle type(s). """
     trIDsByParType = {}
 
+    doCache = False
+
     # quick caching mechanism
     saveFilename = sP.derivPath + 'trChildren/snap_' + str(sP.snap) + '_sh_' + str(subhaloID) + \
                    '_i' + str(int(inds)) + '_' + '-'.join(parPartTypes) + '.hdf5'
 
-    if isfile(saveFilename):
+    if isfile(saveFilename) and doCache:
         with h5py.File(saveFilename,'r') as f:
             for key in f.keys():
                 trIDsByParType[key] = f[key][()]
@@ -292,6 +303,11 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
         for parPartType in parPartTypes:
             # load IDs of this type in the requested object
             parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', haloID=haloID, subhaloID=subhaloID)
+
+            # no particles of this type in the snapshot
+            if isinstance(parIDsType,dict):
+                if parIDsType['count'] == 0:
+                    continue
 
             if debug:
                 print(' subhaloTracerChildren: '+parPartType+' '+str(len(parIDsType)))
@@ -347,10 +363,11 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
                     raise Exception(' sTC: Debug check on tr -> par -> tr self-consistency fail.')
 
         # save
-        with h5py.File(saveFilename,'w') as f:
-            for key in trIDsByParType.keys():
-                f[key] = trIDsByParType[key]
-        print('Wrote: ' + saveFilename)
+        if doCache:
+            with h5py.File(saveFilename,'w') as f:
+                for key in trIDsByParType.keys():
+                    f[key] = trIDsByParType[key]
+            print('Wrote: ' + saveFilename)
 
     # concatenate child tracer IDs disregarding type?
     if concatTypes:
@@ -360,6 +377,10 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
         offset = 0
 
         for parPartType in parPartTypes:
+            # no particles of this type in the snapshot
+            if parPartType not in trIDsByParType:
+                continue
+
             trIDsAllTypes[offset : offset + trIDsByParType[parPartType].size] = trIDsByParType[parPartType]
             offset += trIDsByParType[parPartType].size
 
@@ -367,12 +388,23 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
 
     return trIDsByParType
 
-def tracersTimeEvo(sP, tracerSearchIDs, toRedshift, trFields, parFields):
+def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None):
     """ For a given set of tracerIDs at sP.redshift, walk through snapshots either forwards or backwards 
         until reaching toRedshift. At each snapshot, re-locate the tracers and record trFields as a 
         time sequence (from fluid_properties). Then, locate their parents at each snapshot and record 
         parFields (from valid snapshot fields). For gas fields (e.g. temp), if the tracer is in a parent of 
         a different type at that snapshot, record NaN. If the tracer is in a BH, set Velocity=0 as a flag. """
+
+    # config
+    gas_only_fields = ['temp','sfr','entr']   # tag with NaN for values not in gas parents at some snap
+    n_3d_fields     = ['pos','vel']           # store [N,3] vector instead of [N] vector
+    d_int32_fields  = ['tracer_windcounter']  # use int32 dtype to store, otherwise default to float32
+
+    halo_rel_fields = {'rad'       : ['pos'], # require mpb as fields are relative to halo properties
+                       'rad_rvir'  : ['pos'], # (in which case the mapping is the snapshot quantities needed)
+                       'vrad'      : ['pos','vel'], 
+                       'vrad_vvir' : ['pos','vel'],
+                       'angmom'    : ['pos','vel','mass']}
 
     # create inverse sort indices for tracerSearchIDs
     sortIndsSearch = np.argsort(tracerSearchIDs)
@@ -381,31 +413,42 @@ def tracersTimeEvo(sP, tracerSearchIDs, toRedshift, trFields, parFields):
 
     # snapshot config
     startSnap = sP.snap
-    finalSnap = cosmo.util.redshiftToSnapNum(toRedshift,sP)
-    snapStep  = 2 if finalSnap > startSnap else -2
-    print('SNAP STEPPING 2')
 
-    snaps     = np.arange(startSnap,finalSnap+snapStep,snapStep)
+    if toRedshift is not None:
+        finalSnap = cosmo.util.redshiftToSnapNum(toRedshift,sP)
+    else:
+        finalSnap = 0
+
+    if finalSnap > startSnap:
+        snapStep = +1 * np.abs(snapStep)
+    else:
+        snapStep = -1 * np.abs(snapStep)
+
+    snaps = np.arange(startSnap,finalSnap+snapStep,snapStep)
+    snaps = snaps[snaps >= 0]
     redshifts = cosmo.util.snapNumToRedshift(sP, snaps)
 
     if debug:
         print('tracersTimeEvo: ['+str(startSnap)+'] to ['+str(finalSnap)+'] step = '+str(snapStep))
 
     # allocate return struct
-    r = {}
+    r = { 'snaps'     : snaps, 
+          'redshifts' : redshifts }
+
     for field in parFields+trFields:
         # hardcode some dtypes and dimensionality for now
-        dtype = 'float32' if 'tracer_' not in field else 'int32'
+        dtype = 'float32'
+        if field in d_int32_fields: dtype = 'int32'
 
-        if field in ['pos','vel']: # [N,3] vector
+        if field in n_3d_fields:
             r[field] = np.zeros( (len(snaps),tracerSearchIDs.size,3), dtype=dtype )
-        else: # [N] vector
+        else:
             r[field] = np.zeros( (len(snaps),tracerSearchIDs.size), dtype=dtype )
 
     # walk through snapshots
     for m, snap in enumerate(snaps):
-        sP = simParams(res=sP.res, run=sP.run, snap=snap)
-        print('['+str(sP.snap).zfill(3)+'] z = '+str(sP.redshift))
+        sP.setSnap(snap)
+        print(' ['+str(sP.snap).zfill(3)+'] z = '+str(sP.redshift))
 
         # for the tracers we search for: get their indices at this snapshot
         tracerIDsLocal  = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
@@ -468,7 +511,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, toRedshift, trFields, parFields):
             # load parent cells/particles by type
             for ptName in tracerParsLocal['partTypes']:
                 if debug:
-                    print(' '+field+' '+ptName)
+                    print('  '+field+' '+ptName)
 
                 wType = np.where( tracerParsLocal['parentTypes'] == partTypeNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
@@ -476,19 +519,68 @@ def tracersTimeEvo(sP, tracerSearchIDs, toRedshift, trFields, parFields):
                 if not indsType.size:
                     continue # no parents of this type
 
-                # does this property exist for parents of this type? flag NaN (hardcoded for now)
-                if field in ['temp','sfr'] and ptName != 'gas':
+                # does this property exist for parents of this type? flag NaN if not
+                if field in gas_only_fields and ptName != 'gas':
                     r[field][m,wType] = np.nan
                     continue
 
-                # load parent property and save by dimension
-                dataRead = cosmo.load.snapshotSubset(sP, ptName, field, inds=indsType)
-                if dataRead.ndim == 1:
-                    r[field][m,wType] = dataRead
-                else:
-                    r[field][m,wType,:] = dataRead
+                if field not in halo_rel_fields:
+                    # load parent property
+                    data = cosmo.load.snapshotSubset(sP, ptName, field, inds=indsType)
 
-    return r, snaps, redshifts
+                    # save directly (by dimension) if not calculating further
+                    if data.ndim == 1:
+                        r[field][m,wType] = data
+                    else:
+                        r[field][m,wType,:] = data
+
+                else:
+                    # field is relative to halo properties? extract halo values at this snapshot
+                    if mpb is None:
+                        raise Exception('Error, mpb track required as inputs.')
+
+                    mpbInd = np.where( mpb['SnapNum'] == snap )[0]
+                    if len(mpbInd) == 0:
+                        raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
+
+                    haloCenter = mpb['sm']['pos'][mpbInd[0],:]
+                    haloVel    = mpb['sm']['vel'][mpbInd[0],:]
+                    haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
+                    haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
+
+                    # load required raw fields(s) from the snapshot
+                    data = {}
+                    for fName in halo_rel_fields[field]:
+                        data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
+
+                    # compute
+                    if field in ['rad','rad_rvir']:
+                        # radial distance from halo center, optionally normalized by rvir (r200crit)
+                        val = periodicDists( haloCenter, data['pos'], sP ) # code units (e.g. ckpc/h)
+                        
+                        if field == 'rad_rvir':
+                            val /= haloVirRad # normalized, unitless
+
+                    if field in ['vrad','vrad_vvir']:
+                        # radial velocity relative to halo CM motion [km/s], hubble expansion added in, 
+                        # optionally normalized by the vvir (v200) of the halo at this snapshot
+                        val = sP.units.particleRadialVelInKmS( data['pos'], data['vel'], haloCenter, haloVel)
+
+                        if field == 'vrad_vvir':
+                            val /= haloVirVel # normalized, unitless
+
+                    if field in ['angmom']:
+                        # specific angular momentum in [kpc km/s]
+                        val = sP.units.particleSpecAngMomInKpcKmS( data['pos'], data['vel'], data['mass'], 
+                                                                   haloCenter, haloVel)
+
+                    if val.ndim != 1:
+                        raise Exception('Unexpected.')
+
+                    r[field][m,wType] = val
+
+    sP.setSnap(startSnap)
+    return r
 
 def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTypes,outPath):
     """ For a set of subhaloIDs, determine all their child tracers at sP.redshift then record their 
@@ -515,7 +607,7 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         subhaloTrIDs = subhaloTracerChildren(sP,subhaloID=subhaloID,parPartTypes=parPartTypes,
                                              ParentID=ParentID,ParentIDSortInds=ParentIDSortInds)
 
-        trIDsBySubhalo[str(subhaloID)] = subhaloTrIDs
+        trIDsBySubhalo[subhaloID] = subhaloTrIDs
         trCounts[i] = len(subhaloTrIDs)
 
     # concatenate all tracer IDs into a single search list
@@ -523,11 +615,11 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
     offset = 0
 
     for i, subhaloID in enumerate(subhaloIDs):
-        trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[str(subhaloID)]
+        trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[subhaloID]
         offset += trCounts[i]
 
     # follow tracer and tracer parent properties over the requested snapshot range
-    tracerProps, snaps, redshifts = tracersTimeEvo(sP, trSearchIDs, toRedshift, trFields, parFields)
+    tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift)
 
     # separate back out by subhalo and save one data file per subhalo
     offset = 0
@@ -538,12 +630,14 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         f = h5py.File(outFilePath,'w')
 
         # header
-        f['TracerID']  = trSearchIDs[offset : offset + trCounts[i]]
+        f['TracerIDs']  = trSearchIDs[offset : offset + trCounts[i]]
         f['SubhaloID'] = [subhaloID]
-        f['Snapshot']  = snaps
-        f['Redshift']  = redshifts
 
         for key in tracerProps.keys():
+            if key in ['snaps','redshifts']:
+                f[key] = tracerProps[key]
+                continue
+
             if tracerProps[key].ndim == 3:
                 f[key] = tracerProps[key][:,offset : offset + trCounts[i],:]
             else:
@@ -552,6 +646,79 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         f.close()
         print('Saved: ' + outFilePath)
         offset += trCounts[i]
+
+def subhaloTracersTimeEvo(sP, subhaloID, trFields=[], parFields=[],
+                          snapStep=10, toRedshift=10.0, fullHaloTracers=True):
+    """ For a single subhaloID, determine all its child tracers at sP.redshift and then record 
+    their properties back in time until the beginning of the simulation ('tracks'). 
+    Note: Nearly identical to subhaloTracersTimeEvo() and can be merged in the future. Currently, 
+    here we do a separate snapshot loop for each quantity and save each quantity in a separate file. 
+    Memory load is smaller, run time is longer, parallelized to multiple quantities easily, and only 
+    one subhaloID supported at a time. """
+    # massage inputs
+    trFields  = iterable(trFields)
+    parFields = iterable(parFields)
+
+    if not isdir(sP.derivPath + '/trTimeEvo'):
+        mkdir(sP.derivPath + '/trTimeEvo')
+    
+    def saveFilename():
+        """ Output file name (all vars are taken from locals at the time of call). """
+        snapFinal = cosmo.util.redshiftToSnapNum(toRedshift, sP)
+        return sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_%s.hdf5' % \
+          (subhaloID,fullHaloTracers,sP.snap,snapFinal,snapStep,field)
+
+    # single load requested? do now and return
+    if len(trFields + parFields) == 1:
+        field = (trFields + parFields)[0]
+
+        if isfile(saveFilename()):
+            with h5py.File(saveFilename(),'r') as f:
+                r = {}
+                for key in f:
+                    r[key] = f[key][()]
+
+            return r
+
+    if fullHaloTracers:
+        # get child tracers of all particle types in entire parent halo
+        gc = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+        haloID = gc['SubhaloGrNr']
+
+        trIDs = subhaloTracerChildren(sP, haloID=haloID)
+    else:
+        # get child tracers of all particle types in subhalo only
+        trIDs = subhaloTracerChildren(sP, subhaloID=subhaloID)
+
+    # get smoothed MPB tracks since some properties are relative to the parent halo MPB values
+    mpb = mpbSmoothedProperties(sP, subhaloID)
+
+    # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
+    # note, could simply eliminate this whole loop and hand all of trFields+parFields to tracersTimeEvo()
+    #   in one call, then save identical files as now by splitting up the vals return. only keep it as is 
+    #   to be embarassingly parallel and let different jobs handle different quantities
+    for field in trFields + parFields:
+        # check for existence of save
+        if isfile(saveFilename()):
+            print('Already exists, skipping computation: [%s]' % saveFilename().split(sP.derivPath)[1])
+        else:           
+            print('Computing: [%s]' % saveFilename().split(sP.derivPath)[1])
+
+            if field in trFields:
+                trVals = tracersTimeEvo(sP, trIDs, [field], [], toRedshift, snapStep, mpb)
+            if field in parFields:
+                trVals = tracersTimeEvo(sP, trIDs, [], [field], toRedshift, snapStep, mpb)
+
+            # save
+            with h5py.File(saveFilename(),'w') as f:
+                # header
+                f['TracerIDs']  = trIDs
+                f['SubhaloID'] = [subhaloID]
+
+                for key in trVals:
+                    f[key] = trVals[key]
+
+            print('Saved: [%s]' % saveFilename().split(sP.derivPath)[1])
 
 def guinevereData():
     """ Data for Guinevere. """
@@ -572,6 +739,7 @@ def guinevereData():
 def plotPosTempVsRedshift():
     """ Plot trMC position (projected) and temperature evolution vs redshift. """
     from cosmo.util import correctPeriodicPosBoxWrap
+    import matplotlib.pyplot as plt
 
     # config
     axis1 = 0

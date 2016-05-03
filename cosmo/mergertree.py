@@ -50,6 +50,7 @@ def mpbSmoothedProperties(sP, id):
     mpb['Redshift']    = snapNumToRedshift( sP, mpb['SnapNum'] )
     mpb['Group_T_vir'] = sP.units.codeMassToVirTemp(mpb['Group_M_Crit200'], log=True)
     mpb['Group_S_vir'] = sP.units.codeMassToVirEnt(mpb['Group_M_Crit200'], log=True)
+    mpb['Group_V_vir'] = sP.units.codeMassToVirVel(mpb['Group_M_Crit200'])
 
     mpb['sm']['sKn'] = sKn
     mpb['sm']['sKo'] = sKo
@@ -101,6 +102,7 @@ def mpbSmoothedProperties(sP, id):
     mpb['sm']['rvir'] = savgol_filter( mpb['Group_R_Crit200'], sKn, sKo )
     mpb['sm']['tvir'] = savgol_filter( mpb['Group_T_vir'], sKn, sKo )
     mpb['sm']['svir'] = savgol_filter( mpb['Group_S_vir'], sKn, sKo )
+    mpb['sm']['vvir'] = savgol_filter( mpb['Group_V_vir'], sKn, sKo )
 
     return mpb    
 
