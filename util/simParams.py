@@ -111,18 +111,14 @@ class simParams:
         self.hInd     = hInd
         self.data     = {}
 
-        # DEV.PRIME (model variations Jan/Feb 2016)
-        if '_PR' in run:
+        # IllustrisTNG (L12.5 test boxes)
+        if 'L12.5' in run:
             self.validResLevels = [256,512]
             self.groupOrdered = True
 
             self.gravSoft = 0.0
             self.targetGasMass = 0.0
-
-            if 'L25' in run:
-                self.boxSize = 25000.0
-            if 'L12.5' in run:
-                self.boxSize = 12500.0
+            self.boxSize = 12500.0
 
             self.omega_m        = 0.2726
             self.omega_L        = 0.7274
@@ -131,46 +127,14 @@ class simParams:
 
             self.trMCPerCell    = 0
             self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
-            self.winds          = 2
-            self.BHs            = 2
+            self.winds          = 3
+            self.BHs            = 3
 
-            self.arepoPath  = self.basePath + 'dev.prime/primeReloaded/' + run + '/'
-            self.savPrefix  = 'DP'
+            self.arepoPath  = self.basePath + 'sims.TNG/' + run + '/'
+            self.savPrefix  = 'IP'
             self.simName    = run
-            self.saveTag    = 'idP'
-            self.plotPrefix = 'idP'
-
-        if 'realizations' in run:
-            self.validResLevels = [128,256,270,375,540]
-            self.groupOrdered = True
-
-            self.gravSoft = 0.0
-            self.targetGasMass = 0.0
-
-            if 'L5' in run:
-                self.boxSize = 5000.0
-            if 'L25' in run:
-                self.boxSize = 25000.0
-            if 'L35' in run:
-                self.boxSize = 35000.0
-            if 'L205' in run:
-                self.boxSize = 205000.0
-
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
-
-            self.trMCPerCell    = 0
-            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
-            self.winds          = 2
-            self.BHs            = 2
-
-            self.arepoPath  = self.basePath + 'dev.prime/' + run + '/'
-            self.savPrefix  = 'DP'
-            self.simName    = run.split('/')[1]
-            self.saveTag    = 'idP'
-            self.plotPrefix = 'idP'
+            self.saveTag    = 'iP'
+            self.plotPrefix = 'iP'
 
         # IllustrisTNG (L25 L35 L75 and L205 boxes)
         if 'tng' in run or 'prime' in run:
@@ -800,13 +764,19 @@ class simParams:
     
     @property
     def zoomSubhaloID(self):
-        print('Warning: zoomSubhaloID hard-coded todo.')
         if self.run in ['iClusters']:
+            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0 # hardcoded for now
+
         if self.run in ['zooms','zooms_dm']:
+            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0 # hardcoded for now
-        if self.run in ['zooms2','zooms2_dm']:
-            return 0 # hardcoded for now
+
+        if self.run in ['zooms2']:
+            if self.hInd == 2 and self.res in [9,10,11]:
+                return 0 # verified
+
+        raise Exception('Unhandled.')
     
     @property
     def snapRange(self):
