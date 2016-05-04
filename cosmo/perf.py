@@ -10,6 +10,7 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
+from os import remove
 
 def tail(fileName, nLines):
     """ Wrap linux tail command line utility. """
@@ -17,8 +18,26 @@ def tail(fileName, nLines):
     lines = subprocess.check_output( ['tail', '-n', str(nLines), fileName] )
     return lines
 
-def loadCpuTxt(basePath, keys=None, hatbMin=None):
-    """ Load and parse Arepo cpu.txt, save into hdf5 format. """
+def getCpuTxtLastTimestep(filePath):
+    """ Parse cpu.txt for last timestep number and number of CPUs/tasks. """
+    # hardcode Illustris-1 finalized data and complicated txt-files
+    if filePath == '/n/home07/dnelson/sims.illustris/1820_75Mpc_FP/output/cpu.txt':
+        return 1.0, 912915, 8192
+
+    lines = tail(filePath, 100)
+    for line in lines.split('\n')[::-1]:
+        if 'Step ' in line:
+            maxSize = int( line.split(', ')[0].split(' ')[1] ) + 1
+            maxTime = float( line.split(', ')[1].split(' ')[1] )
+            numCPUs = int( line.split(', ')[2].split(' ')[1] )
+            break
+
+    return maxTime, maxSize, numCPUs
+
+def loadCpuTxt(basePath, keys=None, hatbMin=0):
+    """ Load and parse Arepo cpu.txt, save into hdf5 format. If hatbMin>0, then save only timesteps 
+    with active time bin above this value. """
+
     filePath = basePath + 'output/cpu.txt'
     saveFilename = basePath + 'data.files/cpu.hdf5'
 
@@ -31,19 +50,32 @@ def loadCpuTxt(basePath, keys=None, hatbMin=None):
         with h5py.File(saveFilename,'r') as f:
             read_keys = keys if keys is not None else f.keys()
 
+            # check size and ending time
+            maxTimeSaved = f['time'][()].max()
+            maxStepSaved = f['step'][()].max()
+            maxTimeAvail, maxStepAvail, _ = getCpuTxtLastTimestep(filePath)
+
+            if maxTimeAvail > maxTimeSaved:
+                # recalc for new data
+                print('recalc [%f to %f] [%d to %d] %s' % \
+                       (maxTimeSaved,maxTimeAvail,maxStepSaved,maxStepAvail,basePath))
+                remove(saveFilename)
+                return loadCpuTxt(basePath, keys, hatbMin)
+
             for key in read_keys:
                 r[key] = f[key][()]
             r['numCPUs'] = f['numCPUs'][()]
     else:
         # determine number of timesteps in file, and number of CPUs
-        lines = tail(filePath, 100)
-        for line in lines.split('\n')[::-1]:
-            if 'Step ' in line:
-                maxSize = int( line.split(', ')[0].split(' ')[1] ) + 1
-                r['numCPUs'] = int( line.split(', ')[2].split(' ')[1] )
-                break
+        _, maxSize, r['numCPUs'] = getCpuTxtLastTimestep(filePath)
+
+        maxSize = int(maxSize*1.2) # since we filter empties out anyways, let file grow as we read
 
         print('[%s] maxSize: %d numCPUs: %d, loading...' % (basePath, maxSize, r['numCPUs']))
+
+        r['step'] = np.zeros( maxSize, dtype='int32' )
+        r['time'] = np.zeros( maxSize, dtype='float32' )
+        r['hatb'] = np.zeros( maxSize, dtype='int16' )
 
         # parse
         f = open(filePath,'r')
@@ -65,7 +97,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=None):
                     line = line.split(",")
                     hatb = int( line[4].split(": ")[1] )
 
-                    if hatbMin is not None and hatb < hatbMin and hatb > 0:
+                    if hatb < hatbMin and hatb > 0:
                         hatbSkip = True # skip until next timestep header
                     else:
                         hatbSkip = False # proceed normally
@@ -73,8 +105,8 @@ def loadCpuTxt(basePath, keys=None, hatbMin=None):
                     step = int( line[0].split(" ")[1] )
                     time = float( line[1].split(": ")[1] )
 
-                    if step % 10000 == 0:
-                        print(' ' + str(step) + ' -- ' + str(time) + ' -- ' + str(hatb) + ' ' + str(hatbSkip))
+                    if step % 100000 == 0:
+                        print(' [%d] %8.6f hatb=%d %s' % (step,time,hatb,hatbSkip))
 
                     continue
 
@@ -100,11 +132,8 @@ def loadCpuTxt(basePath, keys=None, hatbMin=None):
                 name = name.replace('/','_')
 
                 # timings
-                if step == 0:
+                if name not in r:
                     r[name] = np.zeros( (maxSize,4), dtype='float32' )
-                    r['step'] = np.zeros( maxSize, dtype='int32' )
-                    r['time'] = np.zeros( maxSize, dtype='float32' )
-                    r['hatb'] = np.zeros( maxSize, dtype='int16' )
 
                 if cols == 4:
                     r[name][step,0] = float( line[1+offset].strip() ) # diff time
@@ -123,8 +152,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=None):
 
         f.close()
 
-        # compress
-        keys = ['step','time','hatb']
+        # compress (remove empty entries)
         w = np.where( r['hatb'] > 0 )
         for key in keys:
             r[key] = r[key][w]
@@ -141,7 +169,9 @@ def loadCpuTxt(basePath, keys=None, hatbMin=None):
     return r
 
 def plotCpuTimes():
-    """ Plot code time usage fractions from cpu.txt """
+    """ Plot code time usage fractions from cpu.txt. Note that this function is being automatically 
+    run and the resultant plot uploaded to http://www.illustris-project.org/w/images/c/ce/cpu_tng.pdf 
+    as of May 2016 and modifications should be made with caution. """
     from util import simParams
 
     # config
@@ -156,12 +186,11 @@ def plotCpuTimes():
     # L75n1820TNG cpu.txt error: there is a line:
     # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
     # after Step 6495017
-    hatbMin = 40 # None
-
     plotKeys = ['total','treegrav','voronoi','blackholes','hydro','gradients','enrich']
 
-    # one plot per value
-    pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
+    # multipage pdf: one plot per value
+    #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
+    pdf = PdfPages('/n/home07/dnelson/plots/cpu_tng.pdf')
 
     for plotKey in plotKeys:
         fig = plt.figure(figsize=(14,7))
@@ -184,6 +213,11 @@ def plotCpuTimes():
 
         for i,sP in enumerate(sPs):
             # load select datasets from cpu.hdf5
+            if sP.run == 'tng' and sP.res == 1820:
+                hatbMin = 40
+            else:
+                hatbMin = 0
+
             cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
 
             # include only full timesteps

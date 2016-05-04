@@ -616,7 +616,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0):
                 # note: Vogelsberger+ (2014a) scales the simulation values by Z_solar=0.02 instead of 
                 # correcting the observational Gallazzi/... points, resulting in the vertical shift 
                 # with respect to this plot (sim,Gal,Woo all shift up, but I think Kirby is good as is)
-                yy = np.log10( gc['subhalos'][metalField][w] / sP.units.Z_solar )
+                yy = logZeroSafe( gc['subhalos'][metalField][w] / sP.units.Z_solar )
 
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
@@ -739,7 +739,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
             wNz = np.where( gc['subhalos'][metalField][w] > 0.0 )
 
             # log (Z_gas/Z_solar)
-            yy = np.log10( gc['subhalos'][metalField][w][wNz] / sP.units.Z_solar )
+            yy = logZeroSafe( gc['subhalos'][metalField][w][wNz] / sP.units.Z_solar )
 
             xm, ym, sm = running_median(xx[wNz],yy,binSize=binSize)
             ym2 = savgol_filter(ym,sKn,sKo)
@@ -1246,7 +1246,6 @@ def plots():
     from util import simParams
 
     sPs = []
-
     # add runs: zooms
     #sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=1) )
     #sPs.append( simParams(res=3, run='iClusters', variant='TNG_11', hInd=2) )
@@ -1258,21 +1257,15 @@ def plots():
     sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0116') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0311') )
-    sPs.append( simParams(res=512, run='cosmo0_v6') )
-    sPs.append( simParams(res=512, run='L25n512_PRVS_0404') )
+    #sPs.append( simParams(res=512, run='cosmo0_v6') )
+    #sPs.append( simParams(res=512, run='L25n512_PRVS_0404') )
 
-    #sPs.append( simParams(res=270, run='realizations/L35n270_TNG_WMAP7') )
-    #sPs.append( simParams(res=270, run='realizations/L35n270_TNG_PLANCK15') )
-
-    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0') )
-    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.0001') )
-    #sPs.append( simParams(res=128, run='L12.5n256_discrete_dm0.00001') )
-
-    #sPs.append( simParams(res=1820, run='illustrisprime') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
-    #sPs.append( simParams(res=455, run='illustris_prime') )
-    #sPs.append( simParams(res=256, run='feedback') )
+    #sPs.append( simParams(res=455, run='tng') )
+    sPs.append( simParams(res=256, run='L12.5n256TNG') )
+    sPs.append( simParams(res=512, run='L12.5n512TNG') )
 
     # make multipage PDF
     pdf = PdfPages('globalComps_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
@@ -1291,11 +1284,11 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.0)
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf)
-    nHIcddf(sPs, pdf)
-    nHIcddf(sPs, pdf, moment=1)
-    #nOVIcddf(sPs, pdf)
-    #nOVIcddf(sPs, pdf, moment=1)
-    dlaMetallicityPDF(sPs, pdf)
+    ##nHIcddf(sPs, pdf)
+    ##nHIcddf(sPs, pdf, moment=1)
+    ##nOVIcddf(sPs, pdf)
+    ##nOVIcddf(sPs, pdf, moment=1)
+    ##dlaMetallicityPDF(sPs, pdf)
     galaxyColorPDF(sPs, pdf)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
