@@ -12,7 +12,6 @@ from os.path import isfile, isdir
 from os import mkdir
 
 import cosmo.load
-from util import simParams
 from util.helper import iterable
 from cosmo.mergertree import mpbSmoothedProperties
 from cosmo.util import periodicDists
@@ -647,17 +646,13 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         print('Saved: ' + outFilePath)
         offset += trCounts[i]
 
-def subhaloTracersTimeEvo(sP, subhaloID, trFields=[], parFields=[],
-                          snapStep=10, toRedshift=10.0, fullHaloTracers=True):
+def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fullHaloTracers=True):
     """ For a single subhaloID, determine all its child tracers at sP.redshift and then record 
     their properties back in time until the beginning of the simulation ('tracks'). 
     Note: Nearly identical to subhaloTracersTimeEvo() and can be merged in the future. Currently, 
     here we do a separate snapshot loop for each quantity and save each quantity in a separate file. 
     Memory load is smaller, run time is longer, parallelized to multiple quantities easily, and only 
     one subhaloID supported at a time. """
-    # massage inputs
-    trFields  = iterable(trFields)
-    parFields = iterable(parFields)
 
     if not isdir(sP.derivPath + '/trTimeEvo'):
         mkdir(sP.derivPath + '/trTimeEvo')
@@ -669,8 +664,10 @@ def subhaloTracersTimeEvo(sP, subhaloID, trFields=[], parFields=[],
           (subhaloID,fullHaloTracers,sP.snap,snapFinal,snapStep,field)
 
     # single load requested? do now and return
-    if len(trFields + parFields) == 1:
-        field = (trFields + parFields)[0]
+    fields = iterable(fields)
+
+    if len(fields) == 1:
+        field = fields[0]
 
         if isfile(saveFilename()):
             with h5py.File(saveFilename(),'r') as f:
@@ -697,16 +694,16 @@ def subhaloTracersTimeEvo(sP, subhaloID, trFields=[], parFields=[],
     # note, could simply eliminate this whole loop and hand all of trFields+parFields to tracersTimeEvo()
     #   in one call, then save identical files as now by splitting up the vals return. only keep it as is 
     #   to be embarassingly parallel and let different jobs handle different quantities
-    for field in trFields + parFields:
+    for field in fields:
         # check for existence of save
         if isfile(saveFilename()):
             print('Already exists, skipping computation: [%s]' % saveFilename().split(sP.derivPath)[1])
         else:           
             print('Computing: [%s]' % saveFilename().split(sP.derivPath)[1])
 
-            if field in trFields:
+            if 'tracer_' in field: # trField
                 trVals = tracersTimeEvo(sP, trIDs, [field], [], toRedshift, snapStep, mpb)
-            if field in parFields:
+            else: # parField
                 trVals = tracersTimeEvo(sP, trIDs, [], [field], toRedshift, snapStep, mpb)
 
             # save

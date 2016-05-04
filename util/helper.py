@@ -55,6 +55,15 @@ def iterable(x):
     else:
         return [x]
 
+def rebin(x, shape):
+    """ Resize input array x, must be 2D, to new shape, probably smaller, by averaging. """
+    assert x.ndim == 2
+    assert shape[0] <= x.shape[0]
+    assert shape[1] <= x.shape[1]
+    
+    sh = shape[0],x.shape[0]//shape[0],shape[1],x.shape[1]//shape[1]
+    return x.reshape(sh).mean(-1).mean(1)
+
 def reportMemory():
     """ Return current Python process memory usage in GB. """
     import os
