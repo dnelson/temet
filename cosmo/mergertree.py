@@ -62,7 +62,7 @@ def mpbSmoothedProperties(sP, id):
 
     # sims.zooms2/h2_L9: corrupt groups_104 override (insert interpolated snap 104 values for MPB)
     if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 2:
-        print('WARNING: sims.zooms2/h2_L9: mpb corrupt 104 override')
+        print('WARNING: sims.zooms2/h2_L9: mpb corrupt 104 ghost inserted')
         mpb = insertMPBGhost(mpb, snapToInsert=104)
 
     # determine sK parameters
