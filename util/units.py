@@ -53,7 +53,7 @@ class units(object):
 
     # redshift dependent values (code units)
     H2_z_fact   = None     # H^2(z)
-    H_z         = None     # hubble constant at redshift z
+    H_z         = None     # hubble constant at redshift z [km/s/kpc]
     rhoCrit_z   = None     # critical density at redshift z
     scalefac    = None     # a=1/(1+z)
 
@@ -223,7 +223,7 @@ class units(object):
         for i in range(3):
             gas_vel[:,i] -= haloVel[i] # SubhaloVel already peculiar, no scalefactor needed
 
-        v_H = self.H_z * 1000.0 * rad # Hubble expansion velocity magnitude (km/s) at each position
+        v_H = self.H_z * rad # Hubble expansion velocity magnitude (km/s) at each position
 
         # add Hubble expansion velocity 3-vector at each position (km/s)
         for i in range(3):
@@ -266,13 +266,13 @@ class units(object):
         for i in range(3):
             gas_vel[:,i] -= haloVel[i] # SubhaloVel already peculiar, no scalefactor needed
 
-        # correct velocities for hubble flow
+        # correct velocities for hubble flow (neglect mass growth term)
         vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
                      gas_vel[:,1] * xyz[:,1] + \
                      gas_vel[:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards
 
-        v_H = self.H_z * 1000.0 * rad # Hubble expansion velocity magnitude (km/s) at each position
-        vrad = vrad_noH + v_H * rad # radial velocity (km/s) with hubble expansion subtracted
+        v_H = self.H_z * rad # Hubble expansion velocity magnitude (km/s) at each position
+        vrad = vrad_noH + v_H # radial velocity (km/s) with hubble expansion subtracted
 
         return vrad
 
