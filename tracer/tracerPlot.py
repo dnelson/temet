@@ -50,10 +50,9 @@ def plotConfig(fieldName):
     if fieldName == "tracer_maxtemp":
         label     = "Tracer Tmax [ log K ]"
         valMinMax = [4.0,6.5]
-        takeLog   = True
 
     if fieldName == "tracer_maxent":
-        label     = "Tracer Entropy Max [ log K cm^2 ]" # TODO: units
+        label     = "Tracer Entropy Max [ log K cm^2 ]"
         valMinMax = None
 
     if fieldName == "rad_rvir":
