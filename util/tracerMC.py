@@ -397,13 +397,15 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     # config
     gas_only_fields = ['temp','sfr','entr']   # tag with NaN for values not in gas parents at some snap
     n_3d_fields     = ['pos','vel']           # store [N,3] vector instead of [N] vector
-    d_int32_fields  = ['tracer_windcounter']  # use int32 dtype to store, otherwise default to float32
-
-    halo_rel_fields = {'rad'       : ['pos'], # require mpb as fields are relative to halo properties
-                       'rad_rvir'  : ['pos'], # (in which case the mapping is the snapshot quantities needed)
-                       'vrad'      : ['pos','vel'], 
-                       'vrad_vvir' : ['pos','vel'],
-                       'angmom'    : ['pos','vel','mass']}
+    d_int32_fields  = ['tracer_windcounter',  # use int32 dtype to store, otherwise default to float32
+                       'subhalo_id']
+                       
+    halo_rel_fields = {'rad'        : ['pos'], # require mpb as fields are relative to halo properties
+                       'rad_rvir'   : ['pos'], # (in which case the mapping is the snapshot quantities needed)
+                       'vrad'       : ['pos','vel'], 
+                       'vrad_vvir'  : ['pos','vel'],
+                       'angmom'     : ['pos','vel','mass'],
+                       'subhalo_id' : []}
 
     # create inverse sort indices for tracerSearchIDs
     sortIndsSearch = np.argsort(tracerSearchIDs)
@@ -507,6 +509,17 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         # record parent properties
         for field in parFields:
 
+            # load anything independent of particle type
+            if field == 'subhalo_id':
+                # sims.zooms2/h2_L9: corrupt groups_104 override
+                if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 2 and sP.snap == 104:
+                    print('WARNING: sims.zooms2/h2_L9: corrupt gc subhalo_id override')
+                    r[field][m,:] = np.zeros( tracerSearchIDs.size, dtype='int32' ) - 1
+                    continue
+
+                gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])
+                gcOffsets = cosmo.load.groupCatOffsetListIntoSnap(sP)
+
             # load parent cells/particles by type
             for ptName in tracerParsLocal['partTypes']:
                 if debug:
@@ -533,50 +546,105 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     else:
                         r[field][m,wType,:] = data
 
-                else:
-                    # field is relative to halo properties? extract halo values at this snapshot
-                    if mpb is None:
-                        raise Exception('Error, mpb track required as inputs.')
+                    continue
 
-                    mpbInd = np.where( mpb['SnapNum'] == snap )[0]
-                    if len(mpbInd) == 0:
-                        raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
+                # field is relative to halo properties? extract halo values at this snapshot
+                if mpb is None:
+                    raise Exception('Error, mpb track required as inputs.')
 
-                    haloCenter = mpb['sm']['pos'][mpbInd[0],:]
-                    haloVel    = mpb['sm']['vel'][mpbInd[0],:]
-                    haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
-                    haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
+                mpbInd = np.where( mpb['SnapNum'] == snap )[0]
+                if len(mpbInd) == 0:
+                    raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
 
-                    # load required raw fields(s) from the snapshot
-                    data = {}
-                    for fName in halo_rel_fields[field]:
-                        data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
+                haloCenter = mpb['sm']['pos'][mpbInd[0],:]
+                haloVel    = mpb['sm']['vel'][mpbInd[0],:]
+                haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
+                haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
 
-                    # compute
-                    if field in ['rad','rad_rvir']:
-                        # radial distance from halo center, optionally normalized by rvir (r200crit)
-                        val = periodicDists( haloCenter, data['pos'], sP ) # code units (e.g. ckpc/h)
-                        
-                        if field == 'rad_rvir':
-                            val /= haloVirRad # normalized, unitless
+                # load required raw fields(s) from the snapshot
+                data = {}
+                for fName in halo_rel_fields[field]:
+                    data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
 
-                    if field in ['vrad','vrad_vvir']:
-                        # radial velocity relative to halo CM motion [km/s], hubble expansion added in, 
-                        # optionally normalized by the vvir (v200) of the halo at this snapshot
-                        val = sP.units.particleRadialVelInKmS( data['pos'], data['vel'], haloCenter, haloVel)
+                # compute
+                if field in ['rad','rad_rvir']:
+                    # radial distance from halo center, optionally normalized by rvir (r200crit)
+                    val = periodicDists( haloCenter, data['pos'], sP ) # code units (e.g. ckpc/h)
+                    
+                    if field == 'rad_rvir':
+                        val /= haloVirRad # normalized, unitless
 
-                        if field == 'vrad_vvir':
-                            val /= haloVirVel # normalized, unitless
+                if field in ['vrad','vrad_vvir']:
+                    # radial velocity relative to halo CM motion [km/s], hubble expansion added in, 
+                    # optionally normalized by the vvir (v200) of the halo at this snapshot
+                    val = sP.units.particleRadialVelInKmS( data['pos'], data['vel'], haloCenter, haloVel)
 
-                    if field in ['angmom']:
-                        # specific angular momentum in [kpc km/s]
-                        val = sP.units.particleSpecAngMomInKpcKmS( data['pos'], data['vel'], data['mass'], 
-                                                                   haloCenter, haloVel)
+                    if field == 'vrad_vvir':
+                        val /= haloVirVel # normalized, unitless
 
-                    if val.ndim != 1:
-                        raise Exception('Unexpected.')
+                if field in ['angmom']:
+                    # specific angular momentum in [kpc km/s]
+                    val = sP.units.particleSpecAngMomInKpcKmS( data['pos'], data['vel'], data['mass'], 
+                                                               haloCenter, haloVel)
 
-                    r[field][m,wType] = val
+                if field in ['subhalo_id']:
+                    # determine parent subhalo ID                    
+                    gcLenType = gc['subhalos'][:,sP.ptNum(ptName)]
+                    gcOffsetsType = gcOffsets['snapOffsetsSubhalo'][:,sP.ptNum(ptName)][:-1]
+
+                    # val gives the indices of gcOffsetsType such that, if each indsType was inserted 
+                    # into gcOffsetsType just -before- its index, the order of gcOffsetsType is unchanged
+                    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
+                    # subhalo offset (i.e. first particle) works correctly
+                    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
+                    # subhalo index -after- which the particle should be inserted
+                    val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
+                    val = val.astype('int32')
+
+                    # search and flag all tracers with parents whose indices exceed the length of the 
+                    # subhalo they have been assigned to, e.g. either in fof fuzz, in subhalos with 
+                    # no particles of this type, or not in any subhalo at the end of the file
+                    gcOffsetsMax = gcOffsetsType + gcLenType - 1
+                    ww = np.where( indsType > gcOffsetsMax[val] )[0]
+
+                    if len(ww):
+                        val[ww] = -1
+
+                    if debug:
+                        # for tracers we identified in subhalos, verify parents directly
+                        for i in range(indsType.size):
+                            if val[i] < 0:
+                                continue
+                            assert indsType[i] >= gcOffsetsType[val[i]]
+                            assert indsType[i] < gcOffsetsType[val[i]]+gcLenType[val[i]]
+                            assert gcLenType[val[i]] != 0
+
+                        # for tracers we identified in no subhalos, load particle IDs of this type 
+                        # from all subhalos at this snapshot, then tracerParIDsLocal[wType[noPar]] matched 
+                        # to allIDsOfThisTypeInSubhalos should be empty
+                        wwNoPar = np.where( val < 0 )[0]
+
+                        if len(wwNoPar) > 0:
+                            ParIDsToMatch = np.zeros( gcLenType.sum(), dtype=tracerParIDsLocal.dtype )
+                            offset = 0
+
+                            for i in range(gcLenType.size):
+                                if gcLenType[i] == 0:
+                                    continue
+
+                                loadIDs = cosmo.load.snapshotSubset(sP, ptName, 'ids', subhaloID=i)
+                                ParIDsToMatch[ offset : offset+gcLenType[i] ] = loadIDs
+                                offset += gcLenType[i]
+
+                            tracerParIDsShouldBeOutsideAllSubhalos = tracerParIDsLocal[wType[wwNoPar]]
+                            ind1, ind2 = match3(ParIDsToMatch, tracerParIDsShouldBeOutsideAllSubhalos)
+
+                            assert ind1 is None and ind2 is None
+
+                if val.ndim != 1:
+                    raise Exception('Unexpected.')
+
+                r[field][m,wType] = val
 
     sP.setSnap(startSnap)
     return r
