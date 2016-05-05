@@ -10,7 +10,7 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
-from os import remove
+from os import remove, rename
 
 def tail(fileName, nLines):
     """ Wrap linux tail command line utility. """
@@ -23,13 +23,17 @@ def getCpuTxtLastTimestep(filePath):
     # hardcode Illustris-1 finalized data and complicated txt-files
     if filePath == '/n/home07/dnelson/sims.illustris/1820_75Mpc_FP/output/cpu.txt':
         return 1.0, 912915, 8192
+    if filePath == '/n/home07/dnelson/sims.illustris/910_75Mpc_FP/output/cpu.txt':
+        return 1.0, 876580, 4096
+    if filePath == '/n/home07/dnelson/sims.illustris/455_75Mpc_FP/output/cpu.txt':
+        return 1.0, 268961, 128
 
     lines = tail(filePath, 100)
     for line in lines.split('\n')[::-1]:
         if 'Step ' in line:
             maxSize = int( line.split(', ')[0].split(' ')[1] ) + 1
             maxTime = float( line.split(', ')[1].split(' ')[1] )
-            numCPUs = int( line.split(', ')[2].split(' ')[1] )
+            numCPUs = np.int32( line.split(', ')[2].split(' ')[1] )
             break
 
     return maxTime, maxSize, numCPUs
@@ -55,7 +59,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
             maxStepSaved = f['step'][()].max()
             maxTimeAvail, maxStepAvail, _ = getCpuTxtLastTimestep(filePath)
 
-            if maxTimeAvail > maxTimeSaved:
+            if maxTimeAvail > maxTimeSaved*1.02:
                 # recalc for new data
                 print('recalc [%f to %f] [%d to %d] %s' % \
                        (maxTimeSaved,maxTimeAvail,maxStepSaved,maxStepAvail,basePath))
@@ -154,12 +158,12 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
 
         # compress (remove empty entries)
         w = np.where( r['hatb'] > 0 )
-        for key in keys:
-            r[key] = r[key][w]
+
         for key in r.keys():
-            if key in keys+['numCPUs']:
-                continue
-            r[key] = r[key][w,:]
+            if r[key].ndim == 1:
+                r[key] = r[key][w]
+            if r[key].ndim == 2:
+                r[key] = r[key][w,:]
 
         # write into hdf5
         with h5py.File(saveFilename,'w') as f:
@@ -178,22 +182,24 @@ def plotCpuTimes():
     sPs = []
     sPs.append( simParams(res=1820, run='illustris') )
     sPs.append( simParams(res=1820, run='tng') )
-    #sPs.append( simParams(res=910, run='illustris') )
-    #sPs.append( simParams(res=910, run='tng') )
-    #sPs.append( simParams(res=455, run='illustris') )
-    #sPs.append( simParams(res=455, run='tng') )
+    sPs.append( simParams(res=910, run='illustris') )
+    sPs.append( simParams(res=910, run='tng') )
+    sPs.append( simParams(res=455, run='illustris') )
+    sPs.append( simParams(res=455, run='tng') )
 
     # L75n1820TNG cpu.txt error: there is a line:
     # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
     # after Step 6495017
-    plotKeys = ['total','treegrav','voronoi','blackholes','hydro','gradients','enrich']
+    plotKeys = ['total','total_log','treegrav','voronoi','blackholes','hydro','gradients','enrich']
 
     # multipage pdf: one plot per value
     #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
-    pdf = PdfPages('/n/home07/dnelson/plots/cpu_tng.pdf')
+    fName1 = '/n/home07/dnelson/plots/cpu_tng_new.pdf'
+    fName2 = '/n/home07/dnelson/plots/cpu_tng.pdf'
+    pdf = PdfPages(fName1)
 
     for plotKey in plotKeys:
-        fig = plt.figure(figsize=(14,7))
+        fig = plt.figure(figsize=(14,8))
 
         ax = fig.add_subplot(111)
         ax.set_xlim([0.0,1.0])
@@ -201,10 +207,13 @@ def plotCpuTimes():
         ax.set_title('')
         ax.set_xlabel('Scale Factor')
 
-        if plotKey in ['total']:
+        if plotKey in ['total','total_log']:
             ind = 2 # 0=diff time, 2=cum time
             ax.set_ylabel('CPU Time ' + plotKey + ' [Mh]')
-            #ax.set_yscale('log')
+
+            if plotKey == 'total_log':
+                ax.set_yscale('log')
+                plotKey = 'total'
         else:
             ind = 3 # 1=diff perc (missing in 3col format), 3=cum perc
             ax.set_ylabel('CPU Percentage [' + plotKey + ']')
@@ -213,7 +222,7 @@ def plotCpuTimes():
 
         for i,sP in enumerate(sPs):
             # load select datasets from cpu.hdf5
-            if sP.run == 'tng' and sP.res == 1820:
+            if sP.run == 'tng' and sP.res in [910,1820]:
                 hatbMin = 40
             else:
                 hatbMin = 0
@@ -249,6 +258,10 @@ def plotCpuTimes():
         plt.close(fig)
 
     pdf.close()
+
+    # if we don't make it here successfully the old pdf will not be corrupted
+    remove(fName2)
+    rename(fName1,fName2)
 
 def enrichChecks():
     """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
