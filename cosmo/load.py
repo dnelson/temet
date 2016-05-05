@@ -13,7 +13,7 @@ from os import mkdir
 
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
-from util.helper import iterable
+from util.helper import iterable, logZeroSafe
 
 def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
@@ -470,6 +470,7 @@ def snapshotSubset(sP, partType, fields,
 
     # make sure fields is not a single element, and don't modify input
     fields = list(iterable(fields))
+    fieldsOrig = list(iterable(fields))
 
     # composite fields (temp, vmag, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
@@ -600,7 +601,8 @@ def snapshotSubset(sP, partType, fields,
       { 'names':['metals_Ne','neon'],                   'field':'GFM_Metals', 'fN':5 },
       { 'names':['metals_Mg','magnesium'],              'field':'GFM_Metals', 'fN':6 },
       { 'names':['metals_Si','silicon'],                'field':'GFM_Metals', 'fN':7 },
-      { 'names':['metals_Fe','iron'],                   'field':'GFM_Metals', 'fN':8 } \
+      { 'names':['metals_Fe','iron'],                   'field':'GFM_Metals', 'fN':8 },
+      { 'names':['metals_tot','metals_total'],          'field':'GFM_Metals', 'fN':9 } \
     ]
 
     for i,field in enumerate(fields):
@@ -634,4 +636,16 @@ def snapshotSubset(sP, partType, fields,
             subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
 
     # load
-    return il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq)
+    r = il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq)
+
+    # optional unit post-processing
+    if isinstance(r, np.ndarray) and len(fieldsOrig) == 1:
+        if r.max() < 20.0:
+            raise Exception('Unexpectedly low max for non-log values, something maybe changed.')
+            
+        if fieldsOrig[0] == 'tracer_maxent':
+            r = sP.units.tracerEntToCGS(r, log=True) # [log cgs] = [log K cm^2]
+        if fieldsOrig[0] == 'tracer_maxtemp':
+            r = logZeroSafe(r) # [log Kelvin]
+
+    return r

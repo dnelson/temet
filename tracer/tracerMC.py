@@ -476,8 +476,6 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
             r[field][m,:] = cosmo.load.snapshotSubset(sP, 'tracer', field, inds=tracerIndsLocal)
 
-            # TODO: might want to do some unit conversions here (maxentr, maxtemp?)
-
         # get parent IDs and then indices by-type
         if len(parFields):
             tracerParIDsLocal = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=tracerIndsLocal)
@@ -745,6 +743,11 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
                 for key in f:
                     r[key] = f[key][()]
 
+
+            if field in ['tracer_maxtemp','tracer_maxent']:
+                if r[field].max() > 20.0:
+                    raise Exception('Manual fix required. Go log this value in the hdf5.')
+                    
             return r
 
     if fullHaloTracers:
