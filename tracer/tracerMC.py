@@ -1,5 +1,5 @@
 """
-util/tracerMC.py
+tracerMC.py
   Helper functions to efficiently work with the Monte Carlo tracers.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
@@ -15,7 +15,6 @@ import cosmo.load
 from util.helper import iterable
 from cosmo.mergertree import mpbSmoothedProperties
 from cosmo.util import periodicDists
-from illustris_python.util import partTypeNum
 
 debug = False # enable expensive debug consistency checks and verbose output
 
@@ -266,7 +265,7 @@ def mapParentIDsToIndsByType(sP, parentIDs):
                 raise Exception('match disagreement wMatched')
 
         r['parentInds'][wMatched]  = parIndsType
-        r['parentTypes'][wMatched] = partTypeNum(ptName) 
+        r['parentTypes'][wMatched] = sP.ptNum(ptName) 
 
         nMatched += parIndsType.size
 
@@ -341,7 +340,7 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
                 debugTracerInds = match(debugTracerIDs, trIDs, uniq=True)
                 debugTracerParIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=debugTracerInds)
                 debugTracerPars = mapParentIDsToIndsByType(sP, debugTracerParIDs)
-                debugwType = np.where( debugTracerPars['parentTypes'] == partTypeNum(parPartType) )[0]
+                debugwType = np.where( debugTracerPars['parentTypes'] == sP.ptNum(parPartType) )[0]
                 debugIndsType = debugTracerPars['parentInds'][debugwType]
                 debugTracerParIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', inds=debugIndsType)
 
@@ -477,34 +476,37 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
             r[field][m,:] = cosmo.load.snapshotSubset(sP, 'tracer', field, inds=tracerIndsLocal)
 
+            # TODO: might want to do some unit conversions here (maxentr, maxtemp?)
+
         # get parent IDs and then indices by-type
-        tracerParIDsLocal = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=tracerIndsLocal)
-        tracerParsLocal = mapParentIDsToIndsByType(sP, tracerParIDsLocal)
+        if len(parFields):
+            tracerParIDsLocal = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=tracerIndsLocal)
+            tracerParsLocal = mapParentIDsToIndsByType(sP, tracerParIDsLocal)
 
-        if debug:
-            # go full circle, calculate the tracer children of these parents, and verify
-            debugTracerParIDs = np.zeros( tracerParsLocal['parentInds'].size, dtype='uint64' )
-            offset = 0
+            if debug:
+                # go full circle, calculate the tracer children of these parents, and verify
+                debugTracerParIDs = np.zeros( tracerParsLocal['parentInds'].size, dtype='uint64' )
+                offset = 0
 
-            for ptName in tracerParsLocal['partTypes']:
-                wType = np.where( tracerParsLocal['parentTypes'] == partTypeNum(ptName) )[0]
-                indsType = tracerParsLocal['parentInds'][wType]
+                for ptName in tracerParsLocal['partTypes']:
+                    wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
+                    indsType = tracerParsLocal['parentInds'][wType]
 
-                if not indsType.size:
-                    continue
+                    if not indsType.size:
+                        continue
 
-                debugTypeIDs = cosmo.load.snapshotSubset(sP, ptName, 'id', inds=indsType)
-                debugTracerParIDs[offset:offset+debugTypeIDs.size] = debugTypeIDs
-                offset += debugTypeIDs.size
+                    debugTypeIDs = cosmo.load.snapshotSubset(sP, ptName, 'id', inds=indsType)
+                    debugTracerParIDs[offset:offset+debugTypeIDs.size] = debugTypeIDs
+                    offset += debugTypeIDs.size
 
-            debugTracerIDs = getTracerChildren(sP, np.array(debugTracerParIDs), inds=False)
+                debugTracerIDs = getTracerChildren(sP, np.array(debugTracerParIDs), inds=False)
 
-            # at any snap other than startSnap, the parents may have additional child tracers in them, 
-            # so at best we verify that our search group is a subset of all current children
-            debugTracerIDsIndMatch,_ = match3(debugTracerIDs,tracerSearchIDs)
-            #if not np.array_equal(np.sort(debugTracerIDs),np.sort(tracerSearchIDs)): # only true at startSnap
-            if not np.array_equal(debugTracerIDs[debugTracerIDsIndMatch],tracerSearchIDs):
-                raise Exception(' tTE: Debug check on tr -> par -> tr self-consistency fail.')
+                # at any snap other than startSnap, the parents may have additional child tracers in them, 
+                # so at best we verify that our search group is a subset of all current children
+                debugTracerIDsIndMatch,_ = match3(debugTracerIDs,tracerSearchIDs)
+                #if not np.array_equal(np.sort(debugTracerIDs),np.sort(tracerSearchIDs)): # only true at startSnap
+                if not np.array_equal(debugTracerIDs[debugTracerIDsIndMatch],tracerSearchIDs):
+                    raise Exception(' tTE: Debug check on tr -> par -> tr self-consistency fail.')
 
         # record parent properties
         for field in parFields:
@@ -525,7 +527,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if debug:
                     print('  '+field+' '+ptName)
 
-                wType = np.where( tracerParsLocal['parentTypes'] == partTypeNum(ptName) )[0]
+                wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
 
                 if not indsType.size:
@@ -777,10 +779,13 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
             # save
             with h5py.File(saveFilename(),'w') as f:
                 # header
-                f['TracerIDs']  = trIDs
-                f['SubhaloID'] = [subhaloID]
+                trVals['TracerIDs'] = trIDs
+                trVals['SubhaloID'] = [subhaloID]
 
                 for key in trVals:
                     f[key] = trVals[key]
 
             print('Saved: [%s]' % saveFilename().split(sP.derivPath)[1])
+
+        if len(fields) == 1:
+            return trVals
