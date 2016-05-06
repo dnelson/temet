@@ -52,11 +52,13 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
 
     # check for existence
     saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_time_%d.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(10.0,sP),snapStep,rVirFac*10)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(10.0,sP),snapStep,rVirFac*100)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             return f['accTimeInterp'][()]
+
+    print('Calculating new accTime for [%s]...' % sP.simName)
 
     # load
     data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, ['rad_rvir'], snapStep)
@@ -163,6 +165,8 @@ def accMode(sP, snapStep=1):
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             return f['accMode'][()]
+
+    print('Calculating new accMode for [%s]...' % sP.simName)
 
     # load accTime, subhalo_id tracks, and MPB history
     mpb  = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
@@ -339,7 +343,7 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     assert isinstance(valName,basestring)
     data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [valName], snapStep)
 
-    assert data[valName].ndim == 1 # need to verify logic herein for ndim==2 case
+    assert data[valName].ndim == 2 # need to verify logic herein for ndim==3 (e.g. pos/vel) case
 
     # map times to data indices
     inds = accTimesToClosestSnaps(data, redshifts, indsNotSnaps=True)
