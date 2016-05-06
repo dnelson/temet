@@ -743,10 +743,6 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
                 for key in f:
                     r[key] = f[key][()]
 
-            if field in ['tracer_maxtemp','tracer_maxent']:
-                if r[field].max() > 20.0:
-                    raise Exception('Manual fix required. Go log this value (or unit fix entr) in the hdf5.')
-
             return r
 
     if fullHaloTracers:
