@@ -19,15 +19,13 @@ ACCMODE_SMOOTH   = 1
 ACCMODE_MERGER   = 2
 ACCMODE_STRIPPED = 3
 
-def zoomDataDriver(sP, fields):
+def zoomDataDriver(sP, fields, snapStep=1):
     """ Run and save data files for tracer evolution in several quantities of interest. """
     from util import simParams
 
     #sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
     #fields = ['tracer_maxtemp','tracer_maxent','rad_rvir','vrad','entr','temp','sfr','subhalo_id']
-
     subhaloID = sP.zoomSubhaloID
-    snapStep  = 1
 
     subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=snapStep)
 
@@ -115,6 +113,41 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
     return accTimeInterp
 
+def accTimesToClosestSnaps(data, acc_time, indsNotSnaps=False):
+    """ Return the nearest snapshot number to each acc_time (which are redshifts) using the 
+    data['redshifts'] and data['snaps'] mapping. By default, return simulation snapshot 
+    number, unless indsNotSnaps==True, in which case return the indices into the first dimension 
+    of data[field] for each tracer of the second dimension. 
+    Note that acc_time can be any array of redshifts (e.g. also extremum times). """
+    z_inds1 = np.searchsorted( data['redshifts'], acc_time )
+
+    ww = np.where(z_inds1 == data['redshifts'].size)
+    z_inds1[ww] = z_inds1[ww] - 1
+
+    z_inds0 = z_inds1 - 1
+
+    z_dist1 = np.abs( acc_time - data['redshifts'][z_inds1] )
+    z_dist0 = np.abs( acc_time - data['redshifts'][z_inds0] )
+
+    if indsNotSnaps:
+        accSnap = z_inds1
+    else:
+        accSnap = data['snaps'][z_inds1]
+
+    with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
+        ww = np.where( z_dist0 < z_dist1 )[0]
+
+    if len(ww):
+        if indsNotSnaps:
+            accSnap[ww] = [z_inds0[ww]]
+        else:
+            accSnap[ww] = data['snaps'][z_inds0[ww]]
+
+    # nan acc_time's (never inside rvir) got assigned to the earliest snapshot, flag them as -1
+    accSnap[np.isnan(acc_time)] = -1
+
+    return accSnap
+
 def accMode(sP, snapStep=1):
     """ Derive an 'accretion mode' categorization for each tracer based on its group membership history. 
     Specifically, separate all tracers into one of [smooth/merger/stripped] defined as:
@@ -140,26 +173,7 @@ def accMode(sP, snapStep=1):
     accMode = np.zeros( acc_time.size, dtype='int8' )
 
     # closest snapshot for each accretion time
-    z_inds1 = np.searchsorted( data['redshifts'], acc_time )
-
-    ww = np.where(z_inds1 == data['redshifts'].size)
-    z_inds1[ww] = z_inds1[ww] - 1
-
-    z_inds0 = z_inds1 - 1
-
-    z_dist1 = np.abs( acc_time - data['redshifts'][z_inds1] )
-    z_dist0 = np.abs( acc_time - data['redshifts'][z_inds0] )
-
-    accSnap = data['snaps'][z_inds1]
-
-    with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
-        ww = np.where( z_dist0 < z_dist1 )[0]
-
-    if len(ww):
-        accSnap[ww] = data['snaps'][z_inds0[ww]]
-
-    # nan acc_time's (never inside rvir) got assigned to the earliest snapshot, flag them as -1
-    accSnap[np.isnan(acc_time)] = -1
+    accSnap = accTimesToClosestSnaps(data, acc_time)
 
     # make a mapping from snapshot number -> mpb[index]
     mpbIndexMap = np.zeros( mpb['SnapNum'].max()+1, dtype='int32' ) - 1
@@ -256,3 +270,162 @@ def accMode(sP, snapStep=1):
 
     print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
     return accMode
+
+def valExtremum(sP, fieldName, snapStep=1, extType='max'):
+    """ Calculate an extremum (e.g. min or max) or other single quantity (e.g. avg) for every 
+    tracer for a given property (e.g. temp). For [gas] values affected by the modified Utherm of 
+    the star-forming eEOS (temp, entr) we exclude times when SFR>0. This is then also consistent 
+    with what is done in the code for tracer_max* recorded values. """
+
+    assert extType in ['min','max']
+    assert isinstance(fieldName,basestring)
+
+    # check for existence
+    saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_%s_%s.hdf5' % \
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(10.0,sP),snapStep,fieldName,extType)
+
+    if isfile(saveFilename):
+        r = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # load
+    data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
+
+    # mask sfr>0 points
+    if fieldName in ['temp','entr']:
+        sfr = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, ['sfr'], snapStep)
+
+        with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
+            ww = np.where( sfr['sfr'] > 0.0 )
+        data[fieldName][ww] = np.nan
+
+    # which functions to use
+    if extType == 'min':
+        fval = np.nanmin
+        fargval = np.nanargmin
+    if extType == 'max':
+        fval = np.nanmax
+        fargval = np.nanargmax
+
+    # calculate extremum value
+    r = {}
+    r['val'] = fval( data[fieldName], axis=0 )
+
+    # calculate the redshift when it occured
+    r['time'] = np.zeros( data['TracerIDs'].size, dtype='float32' )
+    r['time'][:] = np.nan
+
+    ww = np.where( ~np.isnan(r['val']) )
+
+    extInd = fargval( data[fieldName][:,ww], axis=0 )
+    r['time'][ww] = data['redshifts'][extInd]
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        for key in r.keys():
+            f[key] = r[key]
+
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+    return r
+
+def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
+    """ Return some property from the tracer evolution tracks (e.g. rad_rvir, temp, tracer_maxent) 
+    given by valName at the times in the simulation given by redshifts. """
+
+    # load
+    assert isinstance(valName,basestring)
+    data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [valName], snapStep)
+
+    assert data[valName].ndim == 1 # need to verify logic herein for ndim==2 case
+
+    # map times to data indices
+    inds = accTimesToClosestSnaps(data, redshifts, indsNotSnaps=True)
+
+    assert inds.max() < data[valName].shape[0]
+    assert inds.size == data[valName].shape[1]
+
+    # inds gives, for each tracer (second dimension of data[valName]), the index into the first 
+    # dimension of data[valName] that we want to extract. convert this implicit pair into 1d inds
+    inds_dim2 = np.arange(inds.shape[0])
+    inds_1d = np.ravel_multi_index( (inds, inds_dim2), data[valName].shape, mode='clip' )
+
+    # make a view to the contiguous flattened/1d array
+    data_1d = np.ravel( data[valName] )
+
+    # pull out values and flag those which were always invalid as nan
+    trVals = data_1d[ inds_1d ]
+
+    ww = np.where( inds == -1 )[0]
+    if len(ww):
+        if trVals.dtype == 'float32' : trVals[ww] = np.nan
+        if trVals.dtype == 'int32'   : trVals[ww] = -1
+        assert trVals.dtype == 'float32' or trVals.dtype == 'int32'
+
+    if 0: # debug verify
+        for i in np.arange(trVals.size):
+            if np.isnan(trVals[i]):
+                continue
+            assert trVals[i] == data[valName][inds[i],i]
+
+    return trVals
+
+def trValsAtExtremumTimes(sP, valName, extName, extType='max', snapStep=1):
+    """ Wrap trValsAtRedshifts() to specifically give trVals at the redshifts corresponding 
+    to the extremum times corresponding to extName, extType. """
+    ext = valExtremum(sP, extName, snapStep=snapStep, extType=extType)
+    return trValsAtRedshifts(sP, valName, ext['time'], snapStep=snapStep)
+
+def trValsAtAccTimes(sP, valName, rVirFac=1.0, snapStep=1):
+    """ Wrap trValsAtRedshifts() to specifically give trVals at the redshifts corresponding 
+    to the accretion times determined as the first crossing of rVirFac times the virial radius. """
+    acc_time = accTime(sP, snapStep=snapStep, rVirFac=rVirFac)
+    return trValsAtRedshifts(sP, valName, acc_time, snapStep=snapStep)
+
+def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
+    """ Return some halo property from the main progenitor branch (MPB) (e.g. tvir, spin) 
+    given by valName at the times in the simulation given by redshifts. """
+
+    # load
+    assert isinstance(valName,basestring)
+    mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID, extraFields=valName)
+
+    data = {}
+
+    # pull out either smoothed value or raw field straight from trees
+    if valName in mpb['sm'].keys():
+        data['val'] = mpb['sm'][valName]
+    if valName in mpb.keys():
+        data['val'] = mpb[valName]
+
+    assert 'val' in data
+    assert data['val'].shape[0] == mpb['Redshift'].shape[0]
+    assert data['val'].shape[0] == mpb['SnapNum'].shape[0]
+
+    # map times to snapshot numbers
+    data['redshifts'] = mpb['Redshift']
+    data['snaps']     = mpb['SnapNum']
+
+    inds = accTimesToClosestSnaps(data, redshifts, indsNotSnaps=True)
+
+    if data['val'].ndim == 1:
+        return data['val'][inds]
+    if data['val'].ndim == 2:
+        return data['val'][inds,:]
+
+    raise Exception('Should not reach here.')
+
+def mpbValsAtExtremumTimes(sP, valName, extName, extType='max', snapStep=1):
+    """ Wrap mpbValsAtRedshifts() to specifically give mpbVals at the redshifts corresponding 
+    to the extremum times corresponding to extName, extType. """
+    ext = valExtremum(sP, extName, snapStep=snapStep, extType=extType)
+    return mpbValsAtRedshifts(sP, valName, ext['time'], snapStep=snapStep)
+
+def mpbValsAtAccTimes(sP, valName, rVirFac=1.0, snapStep=1):
+    """ Wrap mpbValsAtRedshifts() to specifically give mpbVals at the redshifts corresponding 
+    to the accretion times determined as the first crossing of rVirFac times the virial radius. """
+    acc_time = accTime(sP, snapStep=snapStep, rVirFac=rVirFac)
+    return mpbValsAtRedshifts(sP, valName, acc_time, snapStep=snapStep)
+    

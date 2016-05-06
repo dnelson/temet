@@ -10,11 +10,11 @@ import h5py
 import illustris_python as il
 from scipy.signal import savgol_filter
 from cosmo.util import snapNumToRedshift, correctPeriodicPosBoxWrap
-from util.helper import running_sigmawindow
+from util.helper import running_sigmawindow, iterable
 
 treeName_default = "SubLink_gal"
 
-def loadMPB(sP, id, fields=None, treeName=None):
+def loadMPB(sP, id, fields=None, treeName=None, fieldNamesOnly=False):
     """ Load fields of main-progenitor-branch (MPB) of subhalo id from the given tree. """
     assert sP.snap is not None, "sP.snap required"
 
@@ -25,6 +25,22 @@ def loadMPB(sP, id, fields=None, treeName=None):
         return il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True, treeName=treeName)
     if treeName in ['LHaloTree']:
         raise Exception('Not implemented')
+
+    raise Exception('Unrecognized treeName.')
+
+def loadTreeFieldnames(sP, treeName=None):
+    """ Load names of fields available in a mergertree. """
+    assert sP.snap is not None, "sP.snap required"
+
+    if treeName is None:
+        treeName = treeName_default
+
+    if treeName in ['SubLink','SubLink_gal']:
+        with h5py.File(il.sublink.treePath(sP.simPath, treeName), 'r') as f:
+            return f.keys()
+    if treeName in ['LHaloTree']:
+        with h5py.File(il.lhalotree.treePath(sP.simPath, chunkNum=0), 'r') as f:
+            return f['Tree0'].keys()
 
     raise Exception('Unrecognized treeName.')
 
@@ -40,16 +56,20 @@ def insertMPBGhost(mpb, snapToInsert=None):
     mpb['SubfindID'] = np.insert( mpb['SubfindID'], indAfter, -1 ) # ghost
 
     for key in mpb:
-        if key in ['SnapNum','Group_R_Crit200','Group_M_Crit200']: # [N]
+        if key in ['count','SubfindID']:
+            continue
+
+        if mpb[key].ndim == 1: # [N]
             interpVal = np.mean([mpb[key][indAfter],mpb[key][indAfter-2]])
             mpb[key] = np.insert( mpb[key], indAfter, interpVal )
-        if key in ['SubhaloPos','SubhaloVel']: # [N,3]
+
+        if mpb[key].ndim == 2: # [N,3]
             interpVal = np.mean( np.vstack((mpb[key][indAfter,:],mpb[key][indAfter-2,:])), axis=0)
             mpb[key] = np.insert( mpb[key], indAfter, interpVal, axis=0)
 
     return mpb
 
-def mpbSmoothedProperties(sP, id):
+def mpbSmoothedProperties(sP, id, extraFields=[]):
     """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 
     currently: position, mass (m200_crit), virial radius (r200_crit), virial temperature (derived), 
     velocity (subhalo), and are inside ['sm'] for smoothed versions. Also attach time with snap/redshift.
@@ -58,6 +78,14 @@ def mpbSmoothedProperties(sP, id):
 
     fields = ['SubfindID','SnapNum','SubhaloPos','SubhaloVel','Group_R_Crit200','Group_M_Crit200']
 
+    # any extra fields to be loaded?
+    treeFileFields = loadTreeFieldnames(sP)
+
+    for field in iterable(extraFields):
+        if field not in fields and field in treeFileFields:
+            fields.append(field)
+
+    # load
     mpb = loadMPB(sP, id, fields=fields)
 
     # sims.zooms2/h2_L9: corrupt groups_104 override (insert interpolated snap 104 values for MPB)

@@ -48,7 +48,7 @@ def plotConfig(fieldName):
     takeLog = False
 
     if fieldName == "tracer_maxtemp":
-        label     = "Tracer Tmax [ log K ]"
+        label     = "Tracer Temp Max [ log K ]"
         valMinMax = [4.0,6.5]
 
     if fieldName == "tracer_maxent":
@@ -65,7 +65,7 @@ def plotConfig(fieldName):
 
     if fieldName == "entr":
         label     = "Gas Entropy [ log K cm^2 ]"
-        valMinMax = None #[4.0,6.5]
+        valMinMax = None #[6.0,8.5]
 
     if fieldName == "temp":
         label     = "Gas Temp [ log K ]"
