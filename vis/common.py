@@ -67,8 +67,8 @@ def meanAngMomVector(sP, subhaloID):
     gas['Masses']      = gas['Masses'][w]
     gas['Velocities']  = gas['Velocities'][w,:]
 
-    ang_mom = sP.units.particleSpecAngMomInKpcKmS( gas['Coordinates'], gas['Velocities'], gas['Masses'], 
-                                                   sh['SubhaloPos'], sh['SubhaloVel'] )
+    ang_mom = sP.units.particleAngMomVecInKpcKmS( gas['Coordinates'], gas['Velocities'], gas['Masses'], 
+                                                  sh['SubhaloPos'], sh['SubhaloVel'] )
 
     # calculate mean angular momentum unit 3-vector
     ang_mom_mean = np.mean(ang_mom, axis=0)
