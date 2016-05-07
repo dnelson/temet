@@ -19,6 +19,12 @@ ACCMODE_SMOOTH   = 1
 ACCMODE_MERGER   = 2
 ACCMODE_STRIPPED = 3
 
+# types of extrema which we know how to calculate
+allowedExtTypes = ['min','min_b015','max','max_b015']
+
+# default value: maximum redshift to track tracer properties back to
+maxRedshift = 10.0
+
 def zoomDataDriver(sP, fields, snapStep=1):
     """ Run and save data files for tracer evolution in several quantities of interest. """
     from util import simParams
@@ -52,7 +58,7 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
 
     # check for existence
     saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_time_%d.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(10.0,sP),snapStep,rVirFac*100)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -124,7 +130,7 @@ def accTimesToClosestSnaps(data, acc_time, indsNotSnaps=False):
     z_inds1 = np.searchsorted( data['redshifts'], acc_time )
 
     ww = np.where(z_inds1 == data['redshifts'].size)
-    z_inds1[ww] = z_inds1[ww] - 1
+    z_inds1[ww] -= 1
 
     z_inds0 = z_inds1 - 1
 
@@ -137,13 +143,12 @@ def accTimesToClosestSnaps(data, acc_time, indsNotSnaps=False):
         accSnap = data['snaps'][z_inds1]
 
     with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
-        ww = np.where( z_dist0 < z_dist1 )[0]
+        ww = np.where( z_dist0 < z_dist1 )
 
-    if len(ww):
-        if indsNotSnaps:
-            accSnap[ww] = [z_inds0[ww]]
-        else:
-            accSnap[ww] = data['snaps'][z_inds0[ww]]
+    if indsNotSnaps:
+        accSnap[ww] = [z_inds0[ww]]
+    else:
+        accSnap[ww] = data['snaps'][z_inds0[ww]]
 
     # nan acc_time's (never inside rvir) got assigned to the earliest snapshot, flag them as -1
     accSnap[np.isnan(acc_time)] = -1
@@ -160,7 +165,7 @@ def accMode(sP, snapStep=1):
 
     # check for existence
     saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_mode.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(10.0,sP),snapStep)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -234,9 +239,8 @@ def accMode(sP, snapStep=1):
 
         # wherever trParSubfindIDs_AtAccAndEarlier is -1 (not in any subhalo), overwrite 
         # the local mpbSubfindIDs_AtAccAndEarlier with these same values for the logic below
-        ww = np.where( trParSubfindIDs_AtAccAndEarlier == -1 )[0]
-        if len(ww):
-            mpbSubfindIDs_AtAccAndEarlier[ww] = -1
+        ww = np.where( trParSubfindIDs_AtAccAndEarlier == -1 )
+        mpbSubfindIDs_AtAccAndEarlier[ww] = -1
 
         # debug verify:
         assert trParSubfindIDs_AtAccAndEarlier.size == mpbSubfindIDs_AtAccAndEarlier.size
@@ -254,11 +258,11 @@ def accMode(sP, snapStep=1):
         accMode[i] = ACCMODE_STRIPPED
 
     # stats
-    nNone   = len( np.where(accMode == ACCMODE_NONE)[0] )
-    nBad    = len( np.where(accMode == 0)[0] )
-    nSmooth = len( np.where(accMode == ACCMODE_SMOOTH)[0] )
-    nMerger = len( np.where(accMode == ACCMODE_MERGER)[0] )
-    nStrip  = len( np.where(accMode == ACCMODE_STRIPPED)[0] )
+    nBad    = np.count_nonzero(accMode == 0)
+    nNone   = np.count_nonzero(accMode == ACCMODE_NONE)
+    nSmooth = np.count_nonzero(accMode == ACCMODE_SMOOTH)
+    nMerger = np.count_nonzero(accMode == ACCMODE_MERGER)
+    nStrip  = np.count_nonzero(accMode == ACCMODE_STRIPPED)
 
     assert nBad == 0
     nD = len(str(accMode.size))
@@ -281,12 +285,12 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     the star-forming eEOS (temp, entr) we exclude times when SFR>0. This is then also consistent 
     with what is done in the code for tracer_max* recorded values. """
 
-    assert extType in ['min','max']
+    assert extType in allowedExtTypes
     assert isinstance(fieldName,basestring)
 
     # check for existence
     saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_%s_%s.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(10.0,sP),snapStep,fieldName,extType)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,fieldName,extType)
 
     if isfile(saveFilename):
         r = {}
@@ -298,7 +302,7 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     # load
     data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
 
-    # mask sfr>0 points
+    # mask sfr>0 points (for gas cell properties which are modified by eEOS)
     if fieldName in ['temp','entr']:
         sfr = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, ['sfr'], snapStep)
 
@@ -306,11 +310,21 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
             ww = np.where( sfr['sfr'] > 0.0 )
         data[fieldName][ww] = np.nan
 
+    # mask t>t_acc_015rvir points (only take extremum for time "before" first 0.15rvir crossing)
+    if '_b015' in extType:
+        acc_time = accTime(sP, snapStep=snapStep, rVirFac=0.15)
+        inds = accTimesToClosestSnaps(data, acc_time, indsNotSnaps=True)
+
+        for i in np.arange( inds.size ):
+            if inds[i] == -1:
+                continue
+            data[fieldName][:inds[i],i] = np.nan
+
     # which functions to use
-    if extType == 'min':
+    if 'min' in extType:
         fval = np.nanmin
         fargval = np.nanargmin
-    if extType == 'max':
+    if 'max' in extType:
         fval = np.nanmax
         fargval = np.nanargmax
 
@@ -362,11 +376,11 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     # pull out values and flag those which were always invalid as nan
     trVals = data_1d[ inds_1d ]
 
-    ww = np.where( inds == -1 )[0]
-    if len(ww):
-        if trVals.dtype == 'float32' : trVals[ww] = np.nan
-        if trVals.dtype == 'int32'   : trVals[ww] = -1
-        assert trVals.dtype == 'float32' or trVals.dtype == 'int32'
+    ww = np.where( inds == -1 )
+    
+    if trVals.dtype == 'float32' : trVals[ww] = np.nan
+    if trVals.dtype == 'int32'   : trVals[ww] = -1
+    assert trVals.dtype == 'float32' or trVals.dtype == 'int32'
 
     if 0: # debug verify
         for i in np.arange(trVals.size):
