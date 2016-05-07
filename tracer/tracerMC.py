@@ -569,7 +569,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 # compute
                 if field in ['rad','rad_rvir']:
                     # radial distance from halo center, optionally normalized by rvir (r200crit)
-                    val = periodicDists( haloCenter, data['pos'], sP ) # code units (e.g. ckpc/h)
+                    val = periodicDists(haloCenter, data['pos'], sP) # code units (e.g. ckpc/h)
                     
                     if field == 'rad_rvir':
                         val /= haloVirRad # normalized, unitless
@@ -577,15 +577,15 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if field in ['vrad','vrad_vvir']:
                     # radial velocity relative to halo CM motion [km/s], hubble expansion added in, 
                     # optionally normalized by the vvir (v200) of the halo at this snapshot
-                    val = sP.units.particleRadialVelInKmS( data['pos'], data['vel'], haloCenter, haloVel)
+                    val = sP.units.particleRadialVelInKmS(data['pos'], data['vel'], haloCenter, haloVel)
 
                     if field == 'vrad_vvir':
                         val /= haloVirVel # normalized, unitless
 
                 if field in ['angmom']:
-                    # specific angular momentum in [kpc km/s]
-                    val = sP.units.particleSpecAngMomInKpcKmS( data['pos'], data['vel'], data['mass'], 
-                                                               haloCenter, haloVel)
+                    # magnitude of specific angular momentum in [kpc km/s]
+                    val = sP.units.particleSpecAngMomMagInKpcKmS(data['pos'], data['vel'], data['mass'], 
+                                                                 haloCenter, haloVel)
 
                 if field in ['subhalo_id']:
                     # determine parent subhalo ID                    
@@ -597,7 +597,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
                     # subhalo offset (i.e. first particle) works correctly
                     # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
-                    # subhalo index -after- which the particle should be inserted
+                    # subhalo offset index -after- which the particle should be inserted
                     val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
                     val = val.astype('int32')
 

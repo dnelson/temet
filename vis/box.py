@@ -43,9 +43,10 @@ def renderBox():
     #panels.append( {'run':'feedback', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'temp'} )
     #panels.append( {'run':'feedback', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'coldens'} )
 
-    panels.append( {'run':'realizations/L205n375DM_r023/', 'res':375, 'redshift':0.0, 'axes':[0,1] } )
-    panels.append( {'run':'realizations/L205n375DM_r023/', 'res':375, 'redshift':0.0, 'axes':[0,2] } )
-    panels.append( {'run':'realizations/L205n375DM_r023/', 'res':375, 'redshift':0.0, 'axes':[1,2] } )
+    panels.append( {'run':'L205n375DM_r023', 'res':375, 'axes':[0,1] } )
+    #panels.append( {'run':'L205n375DM_r023', 'res':375, 'axes':[0,2] } )
+    #panels.append( {'run':'L205n375DM_r023', 'res':375, 'axes':[1,2] } )
+    panels.append( {'run':'L205n375DM_r053', 'res':375, 'axes':[0,1] } )
 
     # plot config (common, applied to all panels)
     #run       = 'tracer'   # run name
@@ -67,7 +68,7 @@ def renderBox():
     plotStyle    = 'open'  # open, edged
     rasterPx     = 1200     # each panel will have this number of pixels if making a raster (png) output
                             # but note also it controls the relative size balance of raster/vector (e.g. fonts)
-    saveFilename = 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+    saveFilename = 'renderBox_%s_N%d_%s.pdf' % (panels[0]['run'],len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # finalize panels list (do not modify below)
     for p in panels:

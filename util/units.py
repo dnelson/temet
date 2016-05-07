@@ -7,6 +7,7 @@ from builtins import *
 
 import numpy as np
 from util.helper import logZeroSafe
+from cosmo.util import correctPeriodicDistVecs
 
 class units(object):
     """ Contains static methods which perform various unit conversions.
@@ -200,11 +201,11 @@ class units(object):
 
         return x_phys
 
-    def particleSpecAngMomInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
-        """ Calculate particle specific angular momentum in [kpc km/s] given input arrays of pos,vel,mass 
+    def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
+        """ Calculate particle angular momentum 3-vector in [kpc km/s] given input arrays of pos,vel,mass 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
         # make copies of input arrays
-        gas_mass = sP.units.codeMassToMsun( mass.astype('float32') )
+        gas_mass = self.codeMassToMsun( mass.astype('float32') )
         gas_pos  = pos.astype('float32')
         gas_vel  = vel.astype('float32')
 
@@ -212,7 +213,7 @@ class units(object):
         for i in range(3):
             gas_pos[:,i] -= haloPos[i]
 
-        correctPeriodicDistVecs( gas_pos, sP )
+        correctPeriodicDistVecs( gas_pos, self._sP )
         xyz = self.codeLengthToKpc( gas_pos )
 
         rad = np.sqrt( xyz[:,0]**2.0 + xyz[:,1]**2.0 + xyz[:,2]**2.0 ) # equals np.linalg.norm(xyz,2,axis=1)
@@ -237,16 +238,25 @@ class units(object):
         # calculate angular momentum of each particle, rr x pp
         ang_mom = np.cross(xyz,mom)
 
-        # specific
-        ang_mom /= gas_mass
-
         return ang_mom
+
+    def particleSpecAngMomMagInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
+        """ Wrap particleAngMomVecInKpcKmS() to calculate particle *specific* angular momentum 
+        *magnitude* in [kpc km/s] given input arrays. """
+        ang_mom = self.particleAngMomVecInKpcKmS(pos, vel, mass, haloPos, haloVel)
+
+        # magnitude
+        ang_mom_mag = np.linalg.norm(ang_mom,2,axis=1)
+
+        # specific
+        gas_mass = self.codeMassToMsun( mass.astype('float32') )
+        ang_mom_mag /= gas_mass
+
+        return ang_mom_mag
 
     def particleRadialVelInKmS(self, pos, vel, haloPos, haloVel):
         """ Calculate particle radial velocity in [km/s] (negative=inwards) given input arrays of pos,vel 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
-        from cosmo.util import correctPeriodicDistVecs
-
         # make copies of input arrays
         gas_pos = pos.astype('float32')
         gas_vel = vel.astype('float32')
