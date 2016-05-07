@@ -14,6 +14,8 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.backends.backend_pdf import PdfPages
 import scipy.ndimage as ndimage
 from scipy.signal import savgol_filter
+from os.path import isfile, isdir
+from os import mkdir
 
 from tracer import tracerMC
 from tracer import tracerEvo
@@ -28,7 +30,8 @@ sKo        = 3       # savgol smoothing kernel poly order
 linestyles = ['-',':','--','-.'] # for [L11/L10/L9] or [AllModes/Smooth/Merger/Stripped] 
                                  # when combining into the same panel with one color
 
-modes = {tracerEvo.ACCMODE_SMOOTH   : "Smooth",
+modes = {None                       : "All Modes",
+         tracerEvo.ACCMODE_SMOOTH   : "Smooth",
          tracerEvo.ACCMODE_MERGER   : "Merger",
          tracerEvo.ACCMODE_STRIPPED : "Stripped"}
 
@@ -56,8 +59,6 @@ def addRedshiftAgeImageAxes(ax, sP):
 
 def plotConfig(fieldName, extType=''):
     """ Store some common plot configuration parameters. """
-    print(fieldName + ' ' + extType)
-
     ctName  = "jet"
     takeLog = False
     loadField = fieldName
@@ -110,6 +111,8 @@ def plotConfig(fieldName, extType=''):
 
     if extType in ['min','max']:
         extStr = " [" + extType.capitalize() + "]"
+    if extType in ['min_b015','max_b015']:
+        extStr = " [" + extType.split('_')[0].capitalize() + " Before First 0.15 r/r$_{\\rm vir}$ Crossing]"
     if extType in ['t_acc']:
         extStr = " [ At the Accretion Time ]"
     if '__' in extType:
@@ -129,19 +132,18 @@ def plotEvo2D():
 
     # config
     sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
-    snapStep = 10
 
     fieldNames = ["tracer_maxtemp","rad_rvir","tracer_maxent","vrad","entr","temp","sfr","subhalo_id"]
 
     # load accretion times, accretion modes
-    trAccTimes = tracerEvo.accTime(sP, snapStep)
-    trAccModes = tracerEvo.accMode(sP, snapStep)
+    trAccTimes = tracerEvo.accTime(sP)
+    trAccModes = tracerEvo.accMode(sP)
 
     for fieldName in fieldNames:
         ctName, label, valMinMax, takeLog = plotConfig(fieldName)
 
         # load
-        data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep=snapStep)
+        data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName])
 
         if 1:
             # PLOT 1: overview 2D plot of all tracker tracks
@@ -189,7 +191,7 @@ def plotEvo2D():
 
             # finish
             fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo2D_%s_%s_step%d.pdf' % (sP.simName,fieldName,snapStep))
+            fig.savefig(sP.plotPath+'tracerEvo2D_%s_%s.pdf' % (sP.simName,fieldName))
             plt.close(fig)
 
         if 1:
@@ -241,7 +243,7 @@ def plotEvo2D():
 
             # finish
             fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo2D_accTimeSorted_%s_%s_step%d.pdf' % (sP.simName,fieldName,snapStep))
+            fig.savefig(sP.plotPath+'tracerEvo2D_accTimeSorted_%s_%s.pdf' % (sP.simName,fieldName))
             plt.close(fig)
 
         if 1:
@@ -291,7 +293,7 @@ def plotEvo2D():
 
             # finish
             fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo2D_zoom_%s_%s_step%d.pdf' % (sP.simName,fieldName,snapStep))
+            fig.savefig(sP.plotPath+'tracerEvo2D_zoom_%s_%s.pdf' % (sP.simName,fieldName))
             plt.close(fig)
 
 def plotEvo1D():
@@ -300,18 +302,17 @@ def plotEvo1D():
 
     # config
     sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
-    snapStep = 1
 
     fieldNames = ["tracer_maxtemp","rad_rvir"] # "temp","entr"
 
     # load accretion times
-    trAccTimes = tracerEvo.accTime(sP, snapStep)
+    trAccTimes = tracerEvo.accTime(sP)
 
     for fieldName in fieldNames:
         ctName, label, valMinMax, takeLog = plotConfig(fieldName)
 
         # load
-        data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep=snapStep)
+        data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName])
 
         if 1:
             # PLOT 1: little 1D plot of a few tracer tracks
@@ -319,7 +320,7 @@ def plotEvo1D():
 
             fig = plt.figure( figsize=figsize1 )
             ax = fig.add_subplot(1,1,1)
-            #ax.set_xlim([2.0,10.0])
+            #ax.set_xlim([sP.redshift,tracerEvo.maxRedshift])
             ax.set_xlabel('Redshift')
             ax.set_ylabel(label)
 
@@ -340,100 +341,261 @@ def plotEvo1D():
 
             ax.legend(loc='upper right')
             fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo1D_%s_%s_step%d.pdf' % (sP.simName,fieldName,snapStep))
+            fig.savefig(sP.plotPath+'tracerEvo1D_%s_%s.pdf' % (sP.simName,fieldName))
             plt.close(fig)
+
+def getValHistos(sP, field, extType, accMode=None):
+    """ desc """
+    # load config for this field
+    r = {}
+
+    _, _, valMinMax, takeLog, loadField = plotConfig(field, extType=extType)
+
+    nBins = int( 50 * sP.zoomLevel ) # 100,150,200
+    #nBins = int( 25 * 2**sP.zoomLevel ) # 100,200,400
+    #nBins = int( np.sqrt( data.size ) * 0.25 )
+
+    # check for existence
+    saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s-%s.hdf5' % \
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,field,extType)
+
+    if not isdir(sP.derivPath + '/trValHist'):
+        mkdir(sP.derivPath + '/trValHist')
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            for key1 in f:
+                # metadata
+                if key1 in ['nBins','valMinMax']:
+                    r[key1] = f[key1]
+                    continue
+
+                # x,y pairs for each mode
+                r[key1] = {}
+                for key2 in f[key1]:
+                    r[key1][key2] = f[key1][key2][()]
+        return r
+
+    # load data
+    if accMode is None:
+        accMode = tracerEvo.accMode(sP)
+
+    accTvir = tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
+    accSvir = tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
+
+    if extType in tracerEvo.allowedExtTypes:
+        # the extremum values of field, one per tracer
+        data = tracerEvo.valExtremum(sP, loadField, extType=extType)
+        data = data['val']
+    elif extType in ['t_acc']:
+        # the values of field at the acc time, one per tracer
+        data = tracerEvo.trValsAtAccTimes(sP, loadField, rVirFac=1.0)
+    else:
+        # the values of field at the time of the extremum (min/max) of a second field
+        _, extFieldName, extFieldType = extType.split('__')
+
+        data = tracerEvo.trValsAtExtremumTimes(sP, loadField, extFieldName, extType=extFieldType)
+
+    # normalize?
+    if "_tviracc" in field:
+        data /= accTvir
+    if "_sviracc" in field:
+        data /= accSvir
+
+    # histogram by mode and store in return dict
+    for modeVal,modeName in modes.iteritems():
+        if modeVal is not None:
+            ww = np.where( accMode == modeVal )[0]
+        else:
+            ww = np.arange( accMode.size )
+
+        yy, xx = np.histogram(data[ww], bins=nBins, range=valMinMax, density=True)
+        xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
+        #yf = savgol_filter(yy, sKn, sKo)
+
+        r[modeName] = {}
+        r[modeName]['x'] = xx
+        r[modeName]['y'] = yy
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        f['nBins'] = [nBins]
+        f['valMinMax'] = valMinMax
+
+        for key1 in r:
+            for key2 in r[key1]:
+                f[key1+'/'+key2] = r[key1][key2][()]
+
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+
+    return r
 
 def plotValHistos():
     """ Plot (1D) histograms of extremum values, values at t_acc, or values at the extremum time 
     of another value. """
     from util import simParams
+    # http://matplotlib.1069221.n5.nabble.com/Dark-or-inverted-color-scheme-td22387.html
 
     # config
-    sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
-    snapStep = 1
+    sPs = []
+
+    sPs.append( simParams(res=11, run='zooms2', redshift=2.0, hInd=2) )
+    sPs.append( simParams(res=10, run='zooms2', redshift=2.0, hInd=2) )
+    sPs.append( simParams(res=9, run='zooms2', redshift=2.0, hInd=2) )
 
     # fieldName:compSpec pairs (not relevant: "sfr","subhalo_id")
     #  - fieldName can be any tracked field, optionally normalized
     #  - compSpec can be:
-    #    * min/max (an extType, for the extremum values)
+    #    * min/min_b015/max/max_b015 (an extType, for the extremum values)
     #    * t_acc (for the values of fieldName at the acc time)
     #    * t__second_field__extType (for the values of fieldName at the extType extremum of second_field)
-    fieldNames = {"tracer_maxtemp" : ["max"],
-                  "tracer_maxtemp_tviracc" : ["max"],
+    fieldNames = {"tracer_maxtemp" : ["max","max_b015"],
+                  "tracer_maxtemp_tviracc" : ["max","max_b015"],
                   "tracer_maxent" : ["max"],
                   "temp" : ["max"],
                   "entr" : ["max"],
                   "entr_sviracc" : ["max"],
                   "vrad" : ["max","min"],
-                  "rad_rvir" : ["min","t_acc","t__tracer_maxtemp__max"]}
+                  "rad_rvir" : ["min","t_acc","t__tracer_maxtemp__max","t__tracer_maxtemp__max_b015"]}
 
-    # load global quantities
-    accMode = tracerEvo.accMode(sP, snapStep=snapStep)
-    accTvir = tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
-    accSvir = tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
+    # PLOT 1: split by accretion mode, one sP per plot
+    for sP in sPs:
+
+        # load global quantities for this run (can replace with None once all cached)
+        accMode = tracerEvo.accMode(sP)
+
+        pdf = PdfPages(sP.plotPath + 'valExtremumHistos_ByAccMode_' + sP.simName + '.pdf')
+
+        # loop over fields
+        for field,extTypes in fieldNames.iteritems():
+
+            for extType in extTypes:
+
+                # load config for this field
+                ctName, label, valMinMax, takeLog, _ = plotConfig(field, extType=extType)
+                print('1. %s %s %s' % (sP.simName, field, extType))
+
+                # start figure
+                fig = plt.figure( figsize=figsize1 )
+                ax = fig.add_subplot(1,1,1)
+                ax.set_xlim(valMinMax)
+                ax.set_xlabel(label)
+                ax.set_ylabel('PDF $\int=1$')
+
+                # load data for all modes (cached histograms)
+                vh = getValHistos(sP, field, extType, accMode=accMode)
+
+                # histogram by mode
+                for modeVal,modeName in modes.iteritems():
+                    c = None
+                    if modeName == 'All Modes':
+                        c = 'black'
+
+                    l, = ax.plot(vh[modeName]['x'], vh[modeName]['y'], color=c, label=modeName, lw=lw)
+
+                # finish plot
+                ax.legend(loc='best')
+
+                fig.tight_layout()
+                pdf.savefig()
+                plt.close(fig)
+
+        pdf.close()
+
+    # PLOT 2: split by resolution/sP, one accMode per plot
+    for modeVal,modeName in modes.iteritems():
+        pdf = PdfPages(sP.plotPath + 'valExtremumHistos_ByRes_' + modeName + '.pdf')
+
+        # loop over fields
+        for field,extTypes in fieldNames.iteritems():
+
+            for extType in extTypes:
+
+                # load config for this field
+                ctName, label, valMinMax, takeLog, _ = plotConfig(field, extType=extType)
+                print('2. %s %s %s' % (modeName, field, extType))
+
+                # start figure
+                fig = plt.figure( figsize=figsize1 )
+                ax = fig.add_subplot(1,1,1)
+                ax.set_xlim(valMinMax)
+                ax.set_xlabel(label)
+                ax.set_ylabel('PDF $\int=1$')
+
+                # histogram by res
+                c = 'black'
+
+                for i, sP in enumerate(sPs):
+                    # load data (cached histograms)
+                    vh = getValHistos(sP, field, extType)
+
+                    l, = ax.plot(vh[modeName]['x'], vh[modeName]['y'], 
+                           color=c, label=modeName, lw=lw, linestyle=linestyles[i])
+
+                # finish plot
+                ax.legend(loc='best')
+
+                fig.tight_layout()
+                pdf.savefig()
+                plt.close(fig)
+
+        pdf.close()
+
+    # PLOT 3: split by resolution/sP, all accModes on each plot
+    pdf = PdfPages(sPs[0].plotPath + 'valExtremumHistos_ByRes_nSP' + str(len(sPs)) + '.pdf')
 
     # loop over fields
-    pdf = PdfPages(sP.plotPath + 'valExtremumHistos_' + sP.simName + '.pdf')
-
     for field,extTypes in fieldNames.iteritems():
 
         for extType in extTypes:
 
             # load config for this field
-            ctName, label, valMinMax, takeLog, loadField = plotConfig(field, extType=extType)
+            ctName, label, valMinMax, takeLog, _ = plotConfig(field, extType=extType)
+            print('3. %s %s' % (field, extType))
 
-            # load data
-            data = None
-
-            if extType in ['min','max']:
-                # the extremum values of field, one per tracer
-                data = tracerEvo.valExtremum(sP, loadField, snapStep=snapStep, extType=extType)
-                data = data['val']
-            elif extType in ['t_acc']:
-                # the values of field at the acc time, one per tracer
-                data = tracerEvo.trValsAtAccTimes(sP, loadField, rVirFac=1.0)
-            else:
-                # the values of field at the time of the extremum (min/max) of a second field
-                _, extFieldName, extFieldType = extType.split('__')
-
-                data = tracerEvo.trValsAtExtremumTimes(sP, loadField, extFieldName, extType=extFieldType)
-
-            assert data is not None
-
-            # normalize?
-            if "_tviracc" in field:
-                data /= accTvir
-            if "_sviracc" in field:
-                data /= accSvir
-
-            # start plot
+            # start figure
             fig = plt.figure( figsize=figsize1 )
             ax = fig.add_subplot(1,1,1)
             ax.set_xlim(valMinMax)
             ax.set_xlabel(label)
             ax.set_ylabel('PDF $\int=1$')
 
-            # histogram
-            nBins = int( np.sqrt( data.size ) * 0.25 )
-            yy, xx = np.histogram(data, bins=nBins, range=valMinMax, density=True)
-            xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
-            #yf = savgol_filter(yy, sKn, sKo)
+            colors = []
 
-            l, = ax.plot(xx, yy, label='All Modes', color='black', lw=lw)
+            for i, sP in enumerate(sPs):
 
-            # histogram by mode
-            for modeVal,modeName in modes.iteritems():
-                ww = np.where( accMode == modeVal )[0]
+                # load data for run (cached histograms)
+                vh = getValHistos(sP, field, extType)
 
-                nBins = int( np.sqrt( ww.size ) * 0.25 )
-                yy, xx = np.histogram(data[ww], bins=nBins, range=valMinMax, density=True)
-                xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
-                #yf = savgol_filter(yy, sKn, sKo)
+                # loop over each accMode and plot
+                for j,(modeVal,modeName) in enumerate( modes.iteritems() ):
+                    # on first iteration through sPs, set colors per mode and keep them fixed after
+                    if i == 0:
+                        c = None
+                        if modeName == 'All Modes':
+                            c = 'black'
+                    else:
+                        c = colors[j]
 
-                l, = ax.plot(xx, yy, label=modeName, lw=lw)
+                    # set accMode labels only once
+                    label = ''
+                    if i == 0:
+                        label = modeName
+
+                    l, = ax.plot(vh[modeName]['x'], vh[modeName]['y'], 
+                           color=c, label=label, lw=lw, linestyle=linestyles[i])
+
+                    if i == 0:
+                        colors.append( l.get_color() )
 
             # finish plot
-            ax.legend(loc='best')
+            #ax.legend(loc='best')
+
+            sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=ls) for ls in linestyles]
+            lExtra = [str('L'+str(sP.res)) for sP in sPs]
+
+            handles, labels = ax.get_legend_handles_labels()
+            legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='best')
 
             fig.tight_layout()
             pdf.savefig()
@@ -441,8 +603,7 @@ def plotValHistos():
 
     pdf.close()
 
-    import pdb; pdb.set_trace()
-
+    print('Done.')
 
 # --- old ---
 

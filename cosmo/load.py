@@ -640,7 +640,7 @@ def snapshotSubset(sP, partType, fields,
 
     # optional unit post-processing
     if isinstance(r, np.ndarray) and len(fieldsOrig) == 1:
-        if r.max() < 20.0:
+        if fieldsOrig[0] in ['tracer_maxent','tracer_maxtemp'] and r.max() < 20.0:
             raise Exception('Unexpectedly low max for non-log values, something maybe changed.')
             
         if fieldsOrig[0] == 'tracer_maxent':
