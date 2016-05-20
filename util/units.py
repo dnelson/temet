@@ -240,7 +240,7 @@ class units(object):
 
         return ang_mom
 
-    def particleSpecAngMomMagInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
+    def particleSpecAngMomMagInKpcKmS(self, pos, vel, mass, haloPos, haloVel, log=False):
         """ Wrap particleAngMomVecInKpcKmS() to calculate particle *specific* angular momentum 
         *magnitude* in [kpc km/s] given input arrays. """
         ang_mom = self.particleAngMomVecInKpcKmS(pos, vel, mass, haloPos, haloVel)
@@ -251,6 +251,9 @@ class units(object):
         # specific
         gas_mass = self.codeMassToMsun( mass.astype('float32') )
         ang_mom_mag /= gas_mass
+
+        if log:
+            ang_mom_mag = logZeroSafe(ang_mom_mag)
 
         return ang_mom_mag
 
