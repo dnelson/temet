@@ -27,7 +27,7 @@ figsize1   = (14,8)  # set aspect ratio and relative text/label sizes
 lw         = 2.0     # line width
 sKn        = 5       # savgol smoothing kernel length (1=disabled)
 sKo        = 3       # savgol smoothing kernel poly order
-linestyles = ['-',':','--','-.'] # for [L11/L10/L9] or [AllModes/Smooth/Merger/Stripped] 
+linestyles = ['-','--',':','-.'] # for [L11/L10/L9] or [AllModes/Smooth/Merger/Stripped] 
                                  # when combining into the same panel with one color
 
 modes = {None                       : "All Modes",
@@ -60,22 +60,26 @@ def addRedshiftAgeImageAxes(ax, sP):
 def plotConfig(fieldName, extType=''):
     """ Store some common plot configuration parameters. """
     ctName  = "jet"
-    takeLog = False
     loadField = fieldName
 
     # enumerate possible fields
     if fieldName == "tracer_maxtemp":
         label     = "Tracer Temperature%s [ log K ]"
-        valMinMax = [4.0,7.0]
+        valMinMax = [4.0,7.5]
 
     if fieldName == "tracer_maxtemp_tviracc":
-        label     = "Tracer Temperature%s / Halo T$_{\\rm vir}$ at Accretion Time"
-        valMinMax = [0.5,1.5]
+        label     = "log ( Tracer Temp%s / Halo T$_{\\rm vir}$ at AccTime )"
+        valMinMax = [-2.0,1.5]
         loadField = "tracer_maxtemp"
 
     if fieldName == "tracer_maxent":
         label     = "Tracer Entropy%s [ log K cm^2 ]"
         valMinMax = [5.0,9.0]
+
+    if fieldName == "tracer_maxent_sviracc":
+        label     = "log ( Tracer Entropy%s / Halo S$_{\\rm 200}$ at AccTime )"
+        valMinMax = [-2.0,1.5]
+        loadField = "entr"
 
     if fieldName == "rad_rvir":
         label     = "R / R$_{\\rm vir}$ %s"
@@ -83,20 +87,25 @@ def plotConfig(fieldName, extType=''):
 
     if fieldName == "vrad":
         label     = "Radial Velocity%s [ km / s ]"
-        valMinMax = [-450,450]
+        valMinMax = [-600,600]
 
     if fieldName == "entr":
         label     = "Gas Entropy%s [ log K cm^2 ]"
         valMinMax = [5.0,9.0]
 
     if fieldName == "entr_sviracc":
-        label     = "Gas Entropy%s / Halo S$_{\\rm 200}$ at Accretion Time"
-        valMinMax = [0.5,1.5]
+        label     = "log ( Gas Entropy%s / Halo S$_{\\rm 200}$ at AccTime )"
+        valMinMax = [-2.0,1.5]
         loadField = "entr"
 
     if fieldName == "temp":
         label     = "Gas Temperature%s [ log K ]"
         valMinMax = [4.0,7.0]
+
+    if fieldName == "temp_tviracc":
+        label     = "log ( Gas Temp%s / Halo T$_{\\rm vir}$ at AccTime )"
+        valMinMax = [-2.0,1.5]
+        loadField = "temp"
 
     if fieldName == "sfr":
         label     = "Gas SFR%s [ Msun / yr ]"
@@ -105,6 +114,10 @@ def plotConfig(fieldName, extType=''):
     if fieldName == "subhalo_id":
         label     = "Parent Subhalo ID%s"
         valMinMax = None
+
+    if fieldName == "angmom":
+        label     = "Specific Angular Momentum%s [ log kpc km/s ]"
+        valMinMax = [-3.0,5.0]
 
     # add extStr to denote extremum selection and/or t_* type selections
     extStr = ''
@@ -124,177 +137,217 @@ def plotConfig(fieldName, extType=''):
 
     label = label % extStr
 
-    return ctName, label, valMinMax, takeLog, loadField
+    return ctName, label, valMinMax, loadField
 
-def plotEvo2D():
+def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
+    """ Create and cache various permutations of the full 2D evolution tracks for all tracers. """
+    # load config for this field
+    r = {}
+
+    rasterVerticalSize = 1080 * 2
+    resizeInterpOrder = 1 # 0=nearest, 1=linear, 2=quadratic, 3=cubic, etc
+
+    # check for existence
+    trIndStr = 'all-%d' % rasterVerticalSize
+    if trIndRange is not None:
+        trIndStr = '%g-%d' % (trIndRange[0], trIndRange[1])
+
+    saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s_2d_%s.hdf5' % \
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,field,trIndStr)
+
+    if not isdir(sP.derivPath + '/trValHist'):
+        mkdir(sP.derivPath + '/trValHist')
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            for key1 in f:
+                # various 2d datasets grouped by accMode
+                r[key1] = {}
+                for key2 in f[key1]:
+                    r[key1][key2] = f[key1][key2][()]
+        return r
+
+    # load data
+    if accMode is None:
+        accMode = tracerEvo.accMode(sP)
+    if accTime is None:
+        accTime = tracerEvo.accTime(sP)
+
+    _, _, valMinMax, loadField = plotConfig(field)
+
+    data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [loadField])
+
+    ww = np.where( data[loadField] == 0.0 )
+
+    # normalize?
+    if "_tviracc" in field or "_sviracc" in field:
+        if "_tviracc" in field:
+            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
+        if "_sviracc" in field:
+            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
+        
+        data[loadField] = 10.0**data[loadField]
+
+        for i in range(data['snaps'].size):
+            data[loadField][i,:] /= normVal
+
+        data[loadField] = logZeroSafe( data[loadField] )
+
+    if loadField in ['tracer_maxtemp','tracer_maxent']:
+        # these fields have used 0.0 for missing values (e.g. on eEOS) in the code
+        # and have possibly been transformed into valid/strange values by normalization
+        # here, tag as nan for consistency with e.g. temp/entr of gas cells
+        data[loadField][ww] = np.nan
+
+    # axes ranges and place image
+    x_min = int( data['snaps'].max() )
+    x_max = int( data['snaps'].min() )
+
+    # create 2d block by mode and store in return dict
+    for modeVal,modeName in modes.iteritems():
+        if modeVal is not None:
+            ww = np.where( accMode == modeVal )[0]
+        else:
+            ww = np.arange( accMode.size )
+
+        r[modeName] = {}
+
+        # axes ranges
+        if trIndRange is None:
+            y_min = 0
+            y_max = ww.size - 1
+        else:
+            y_min = int(trIndRange[0]*ww.size) # fraction along trInds axis
+            y_max = y_min + trIndRange[1] - 1
+
+        r[modeName]['extent'] = [x_min, x_max, y_min, y_max]
+
+        # (A) data transform, raw
+        data2d = np.transpose(data[loadField][:,ww])
+
+        # (B) data transform, sorted by t_acc
+        sort_inds_t_acc = np.argsort(accTime[ww])    
+        data2d_sorted = np.zeros_like(data2d)
+        for i in range(data2d.shape[1]):
+            data2d_sorted[:,i] = data2d[sort_inds_t_acc,i]
+
+        # resize tracerInd axis to reasonable raster size, or take small subset
+        if trIndRange is None:
+            zoomFac = rasterVerticalSize / data2d.shape[0]
+
+            data2d = ndimage.zoom( data2d, [zoomFac,1], order=resizeInterpOrder )
+            data2d_sorted = ndimage.zoom( data2d_sorted, [zoomFac,1], order=resizeInterpOrder )
+        else:
+            data2d = data2d[y_min : y_max+1, :]
+            data2d_sorted = data2d_sorted[y_min : y_max+1, :]
+
+        r[modeName]['t2d'] = data2d
+        r[modeName]['t2d_sort_t_acc'] = data2d_sorted
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        for key1 in r:
+            for key2 in r[key1]:
+                f[key1+'/'+key2] = r[key1][key2]
+
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+
+    return r
+
+def plotEvo2D(ii):
     """ Plot various full 2D blocks showing evolution of 'all' tracer tracks vs redshift/radius. """
     from util import simParams
 
     # config
-    sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
+    sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
 
-    fieldNames = ["tracer_maxtemp","rad_rvir","tracer_maxent","vrad","entr","temp","sfr","subhalo_id"]
+    fieldNames = ["tracer_maxtemp_tviracc","temp_tviracc","tracer_maxtemp","temp",
+                  "tracer_maxent","tracer_maxent_sviracc","entr",
+                  "rad_rvir","vrad","angmom"] # dens
 
-    # load accretion times, accretion modes
-    trAccTimes = tracerEvo.accTime(sP)
-    trAccModes = tracerEvo.accMode(sP)
+    trIndRanges = [None, [0.5,1080]]
 
-    for fieldName in fieldNames:
-        ctName, label, valMinMax, takeLog = plotConfig(fieldName)
+    # load accretion times, accretion modes (can change to None after cached)
+    accTime = tracerEvo.accTime(sP)
+    accMode = tracerEvo.accMode(sP)
 
-        # load
-        data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName])
+    for field in [fieldNames[ii]]:
+        ctName, label, valMinMax, _ = plotConfig(field)
 
-        if 1:
-            # PLOT 1: overview 2D plot of all tracker tracks
-            fig = plt.figure( figsize=figsize1 )
-            ax = fig.add_subplot(1,1,1)
+        for trIndRange in trIndRanges:
+            # load
+            evo = getEvo2D(sP, field, trIndRange=trIndRange, accTime=accTime, accMode=accMode)
 
-            ax.set_ylabel('TracerID')
+            # start pdf
+            trIndStr = 'all'
+            if trIndRange is not None:
+                trIndStr = '%g-%d' % (trIndRange[0], trIndRange[1])
 
-            # data transform
-            data2d = np.transpose(data[fieldName].copy())
+            pdf = PdfPages(sP.plotPath + 'evo2D_' + field + '_' + trIndStr + '_' + sP.simName + '.pdf')
 
-            # resize tracerInd axis to reasonable raster size
-            zoomFac = (1080*4) / data2d.shape[0]
-            data2d = ndimage.zoom( data2d, [zoomFac,1], order=1 )
+            # make following plots for each accMode separately
+            for modeVal,modeName in modes.iteritems():
 
-            if takeLog:
-                data2d = logZeroSafe( data2d )
+                # PLOT 1: overview 2D plot of all tracker tracks
+                print('1. %s %s %s %s' % (sP.simName, field, trIndStr, modeName))
 
-                w = np.where(data2d == 0.0)
-                data2d[w] = np.nan # flag missing data
+                fig = plt.figure( figsize=figsize1 )
+                ax = fig.add_subplot(1,1,1)
+                ax.set_title(modeName)
+                ax.set_ylabel('TracerInd')
 
-            # color mapping
-            cmap = loadColorTable(ctName)
+                # color mapping
+                cmap = loadColorTable(ctName)
 
-            # axes ranges and place image
-            x_min = int( data['snaps'].max() )
-            x_max = int( data['snaps'].min() )
-            y_min = 0
-            y_max = data['TracerIDs'].size - 1
+                plt.imshow(evo[modeName]['t2d'], cmap=cmap, extent=evo[modeName]['extent'], 
+                    aspect='auto', origin='lower')
 
-            extent = [x_min, x_max, y_min, y_max]
+                if valMinMax is not None:
+                    plt.clim( valMinMax )
 
-            plt.imshow(data2d, cmap=cmap, extent=extent, aspect='auto', origin='lower')
+                # colobar and axes
+                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
 
-            if valMinMax is not None:
-                plt.clim( valMinMax )
+                cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
+                cb.ax.set_ylabel(label)
 
-            # colobar and axes
-            cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+                addRedshiftAgeImageAxes(ax, sP)
 
-            cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
-            cb.ax.set_ylabel(label)
+                # finish
+                fig.tight_layout()
+                pdf.savefig()
+                plt.close(fig)
 
-            addRedshiftAgeImageAxes(ax, sP)
+                # PLOT 2: overview 2D plot of all tracker tracks, sort by accTime
+                fig = plt.figure( figsize=figsize1 )
+                ax = fig.add_subplot(1,1,1)
+                ax.set_title(modeName)
+                ax.set_ylabel('TracerInd [Sorted by Accretion Time]')
 
-            # finish
-            fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo2D_%s_%s.pdf' % (sP.simName,fieldName))
-            plt.close(fig)
+                # color mapping
+                cmap = loadColorTable(ctName)
 
-        if 1:
-            # PLOT 2: overview 2D plot of all tracker tracks, sort by accTime
-            fig = plt.figure( figsize=figsize1 )
-            ax = fig.add_subplot(1,1,1)
+                plt.imshow(evo[modeName]['t2d_sort_t_acc'], cmap=cmap, extent=evo[modeName]['extent'], 
+                    aspect='auto', origin='lower')
 
-            ax.set_ylabel('TracerID [Sorted by Accretion Time]')
+                if valMinMax is not None:
+                    plt.clim( valMinMax )
 
-            # data transform, sort
-            data2d = np.transpose(data[fieldName].copy())
+                # colobar and axes
+                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
 
-            sort_inds = np.argsort(trAccTimes)
-            data2d = data2d[sort_inds,:]
+                cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
+                cb.ax.set_ylabel(label)
 
-            # resize tracerInd axis to reasonable raster size
-            zoomFac = (1080*4) / data2d.shape[0]
-            data2d = ndimage.zoom( data2d, [zoomFac,1], order=1 )
+                addRedshiftAgeImageAxes(ax, sP)
 
-            if takeLog:
-                data2d = logZeroSafe( data2d )
+                # finish
+                fig.tight_layout()
+                pdf.savefig()
+                plt.close(fig)
 
-                w = np.where(data2d == 0.0)
-                data2d[w] = np.nan # flag missing data
+            pdf.close()
 
-            # color mapping
-            cmap = loadColorTable(ctName)
-
-            # axes ranges and place image
-            x_min = int( data['snaps'].max() )
-            x_max = int( data['snaps'].min() )
-            y_min = 0
-            y_max = data['TracerIDs'].size - 1
-
-            extent = [x_min, x_max, y_min, y_max]
-
-            plt.imshow(data2d, cmap=cmap, extent=extent, aspect='auto', origin='lower')
-
-            if valMinMax is not None:
-                plt.clim( valMinMax )
-
-            # colobar and axes
-            cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-
-            cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
-            cb.ax.set_ylabel(label)
-
-            addRedshiftAgeImageAxes(ax, sP)
-
-            # finish
-            fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo2D_accTimeSorted_%s_%s.pdf' % (sP.simName,fieldName))
-            plt.close(fig)
-
-        if 1:
-            # PLOT 3: zoom view of 2D
-            fig = plt.figure( figsize=figsize1 )
-            ax = fig.add_subplot(1,1,1)
-
-            ax.set_ylabel('TracerID')
-
-            # data transform
-            data2d = np.transpose(data[fieldName].copy())
-
-            startInd = 100000
-            zoomSize = 1080*1
-            data2d = data2d[startInd:startInd+zoomSize,:]
-
-            # resize tracerInd axis to reasonable raster size (unneeded)
-            if takeLog:
-                data2d = logZeroSafe( data2d )
-
-                w = np.where(data2d == 0.0)
-                data2d[w] = np.nan # flag missing data
-
-            # color mapping
-            cmap = loadColorTable(ctName)
-
-            # axes ranges and place image
-            x_min = int( data['snaps'].max() )
-            x_max = int( data['snaps'].min() )
-            y_min = startInd
-            y_max = startInd + zoomSize - 1
-
-            extent = [x_min, x_max, y_min, y_max]
-
-            plt.imshow(data2d, cmap=cmap, extent=extent, aspect='auto', origin='lower')
-
-            if valMinMax is not None:
-                plt.clim( valMinMax )
-
-            # colobar and axes
-            cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-
-            cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
-            cb.ax.set_ylabel(label)
-
-            addRedshiftAgeImageAxes(ax, sP)
-
-            # finish
-            fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo2D_zoom_%s_%s.pdf' % (sP.simName,fieldName))
-            plt.close(fig)
 
 def plotEvo1D():
     """ Plot various 1D views showing evolution of tracer tracks vs redshift/radius. """
@@ -303,53 +356,65 @@ def plotEvo1D():
     # config
     sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
 
-    fieldNames = ["tracer_maxtemp","rad_rvir"] # "temp","entr"
+    fieldNames = ["tracer_maxtemp","temp","tracer_maxent","tracer_maxent","entr",
+                  "rad_rvir","vrad","angmom"] # dens
 
-    # load accretion times
-    trAccTimes = tracerEvo.accTime(sP)
+    # load accretion times and modes for selections
+    #accTIme = tracerEvo.accTime(sP)
+    accMode = tracerEvo.accMode(sP)
+
+    pdf = PdfPages(sP.plotPath+'evo1D_%s_nF%d.pdf' % (sP.simName,len(fieldNames)))
 
     for fieldName in fieldNames:
-        ctName, label, valMinMax, takeLog = plotConfig(fieldName)
+        ctName, label, valMinMax, _ = plotConfig(fieldName)
 
         # load
-        data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName])
+        #evo = getEvo2D(sP, field, trIndRange=trIndRange, accTime=accTime, accMode=accMode)
+        data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName])
+        data2d = np.transpose(data[fieldName].copy())
 
-        if 1:
+        for j,(modeVal,modeName) in enumerate( modes.iteritems() ):
+            print('1. %s %s' % (fieldName, modeName))
+
             # PLOT 1: little 1D plot of a few tracer tracks
-            inds = [0,10,100,1000]
+            inds = [0,10,100,1000,10000]
 
             fig = plt.figure( figsize=figsize1 )
             ax = fig.add_subplot(1,1,1)
+            ax.set_title(modeName)
             #ax.set_xlim([sP.redshift,tracerEvo.maxRedshift])
             ax.set_xlabel('Redshift')
             ax.set_ylabel(label)
 
-            # data transform, resize tracerInd axis to reasonable raster size
-            data2d = np.transpose(data[fieldName].copy())
-
             if valMinMax is not None:
                 ax.set_ylim(valMinMax)
 
-            if takeLog:
-                data2d = logZeroSafe( data2d )
+            # make selection
+            if modeVal is not None:
+                ww = np.where( accMode == modeVal )[0]
+                plotInds = ww[inds]
+            else:
+                plotInds = inds
 
-                w = np.where(data2d == 0.0)
-                data2d[w] = np.nan # flag missing data
+            for i, ind in enumerate(plotInds):
 
-            for ind in inds:
-                ax.plot( data['redshifts'], data2d[ind,:], label='TracerID '+str(ind) )
+                l, = ax.plot( data['redshifts'], data2d[ind,:] )
 
-            ax.legend(loc='upper right')
-            fig.tight_layout()    
-            fig.savefig(sP.plotPath+'tracerEvo1D_%s_%s.pdf' % (sP.simName,fieldName))
+            #ax.legend(loc='upper right')
+
+            # finish
+            fig.tight_layout()
+            pdf.savefig()
             plt.close(fig)
 
+    pdf.close()
+
 def getValHistos(sP, field, extType, accMode=None):
-    """ desc """
+    """ Calculate and cache 1D histograms of field/extType combinations from the full tracer tracks. """
     # load config for this field
     r = {}
 
-    _, _, valMinMax, takeLog, loadField = plotConfig(field, extType=extType)
+    _, _, valMinMax, loadField = plotConfig(field, extType=extType)
 
     nBins = int( 50 * sP.zoomLevel ) # 100,150,200
     #nBins = int( 25 * 2**sP.zoomLevel ) # 100,200,400
@@ -380,9 +445,6 @@ def getValHistos(sP, field, extType, accMode=None):
     if accMode is None:
         accMode = tracerEvo.accMode(sP)
 
-    accTvir = tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
-    accSvir = tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
-
     if extType in tracerEvo.allowedExtTypes:
         # the extremum values of field, one per tracer
         data = tracerEvo.valExtremum(sP, loadField, extType=extType)
@@ -397,10 +459,15 @@ def getValHistos(sP, field, extType, accMode=None):
         data = tracerEvo.trValsAtExtremumTimes(sP, loadField, extFieldName, extType=extFieldType)
 
     # normalize?
-    if "_tviracc" in field:
-        data /= accTvir
-    if "_sviracc" in field:
-        data /= accSvir
+    if "_tviracc" in field or "_sviracc" in field:
+        if "_tviracc" in field:
+            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
+        if "_sviracc" in field:
+            normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'svir', rVirFac=1.0)
+
+        ww = np.where( data == 0.0 ) # e.g. tracer_maxtemp has 0 for missing values
+        data = logZeroSafe( 10.0**data / normVal )
+        data[ww] = np.nan # re-tag as nan
 
     # histogram by mode and store in return dict
     for modeVal,modeName in modes.iteritems():
@@ -450,13 +517,14 @@ def plotValHistos():
     #    * t_acc (for the values of fieldName at the acc time)
     #    * t__second_field__extType (for the values of fieldName at the extType extremum of second_field)
     fieldNames = {"tracer_maxtemp" : ["max","max_b015"],
+                  "temp" : ["max"],
                   "tracer_maxtemp_tviracc" : ["max","max_b015"],
                   "tracer_maxent" : ["max"],
-                  "temp" : ["max"],
                   "entr" : ["max"],
                   "entr_sviracc" : ["max"],
                   "vrad" : ["max","min"],
-                  "rad_rvir" : ["min","t_acc","t__tracer_maxtemp__max","t__tracer_maxtemp__max_b015"]}
+                  "rad_rvir" : ["min","t_acc","t__tracer_maxtemp__max","t__tracer_maxtemp__max_b015"],
+                  "angmom" : ["max","t_acc"]} #dens
 
     # PLOT 1: split by accretion mode, one sP per plot
     for sP in sPs:
@@ -472,7 +540,7 @@ def plotValHistos():
             for extType in extTypes:
 
                 # load config for this field
-                ctName, label, valMinMax, takeLog, _ = plotConfig(field, extType=extType)
+                ctName, label, valMinMax, _ = plotConfig(field, extType=extType)
                 print('1. %s %s %s' % (sP.simName, field, extType))
 
                 # start figure
@@ -512,7 +580,7 @@ def plotValHistos():
             for extType in extTypes:
 
                 # load config for this field
-                ctName, label, valMinMax, takeLog, _ = plotConfig(field, extType=extType)
+                ctName, label, valMinMax, _ = plotConfig(field, extType=extType)
                 print('2. %s %s %s' % (modeName, field, extType))
 
                 # start figure
@@ -530,7 +598,7 @@ def plotValHistos():
                     vh = getValHistos(sP, field, extType)
 
                     l, = ax.plot(vh[modeName]['x'], vh[modeName]['y'], 
-                           color=c, label=modeName, lw=lw, linestyle=linestyles[i])
+                           color=c, label='L'+str(sP.res), lw=lw, linestyle=linestyles[i])
 
                 # finish plot
                 ax.legend(loc='best')
@@ -550,7 +618,7 @@ def plotValHistos():
         for extType in extTypes:
 
             # load config for this field
-            ctName, label, valMinMax, takeLog, _ = plotConfig(field, extType=extType)
+            ctName, label, valMinMax, _ = plotConfig(field, extType=extType)
             print('3. %s %s' % (field, extType))
 
             # start figure

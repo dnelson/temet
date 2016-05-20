@@ -124,16 +124,19 @@ def match2(ar1, ar2):
     return inds1, inds2
 
 def match3(ar1, ar2, firstSorted=False):
-    """ Returns index arrays i1,i2 of the matching elementes between ar1 and ar2. The elements of ar2 need 
-        not be unique. For every matched element of ar2, the return i1 gives the index in ar1 where it can 
-        be found. For every matched element of ar1, the return i2 gives the index in ar2 where it can be 
-        found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves the order of ar2. Therefore, 
-        if all elements of ar2 are in ar1 (e.g. ar1=all TracerIDs in snap, ar2=set of TracerIDs to locate) 
-        then ar2[i2] = ar2. The approach is one sort of ar1 followed by bisection search for each element 
-        of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= O(N_ar1*log(N_ar1)) complexity so 
-        long as N_ar2 << N_ar1. """
+    """ Returns index arrays i1,i2 of the matching elementes between ar1 and ar2. While the elements of ar1 
+        must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1 
+        gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives 
+        the index in ar2 where it can be found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves 
+        the order of ar2. Therefore, if all elements of ar2 are in ar1 (e.g. ar1=all TracerIDs in snap, 
+        ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by 
+        bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= 
+        O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1. """
     import time
     start = time.time()
+
+    if debug:
+        assert np.unique(ar1).size == len(ar1)
 
     if not firstSorted:
         # need a sorted copy of ar1 to run bisection against
@@ -585,7 +588,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if field in ['angmom']:
                     # magnitude of specific angular momentum in [kpc km/s]
                     val = sP.units.particleSpecAngMomMagInKpcKmS(data['pos'], data['vel'], data['mass'], 
-                                                                 haloCenter, haloVel)
+                                                                 haloCenter, haloVel, log=True)
 
                 if field in ['subhalo_id']:
                     # determine parent subhalo ID                    
