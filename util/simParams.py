@@ -86,7 +86,7 @@ class simParams:
     # plotting/vis parameters
     colors = None # color sequence (one per res level)
     marker = None # matplotlib marker (for placing single points for zoom sims)
-    data   = None # cache
+    data   = None # per session memory-based cache
     
     # phyiscal models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
@@ -113,7 +113,7 @@ class simParams:
 
         # IllustrisTNG (L12.5 test boxes)
         if 'L12.5' in run:
-            self.validResLevels = [256,512]
+            self.validResLevels = [128,256,512]
             self.groupOrdered = True
 
             self.gravSoft = 0.0
@@ -142,16 +142,16 @@ class simParams:
             res_L25  = [128, 256, 512]
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
-            res_L205 = [2500]
+            res_L205 = [625, 1250, 2500]
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205
             self.groupOrdered = True
 
-            # note: grav softenings comoving until z=1,: fixed at z=1 value after
+            # note: grav softenings [ckpc/h] are comoving until z=1,: fixed at z=1 value after
             if res in res_L25:  self.gravSoft = 4.0 / (res/128)
             if res in res_L35:  self.gravSoft = 4.64 / (res/270) # todo check
             if res in res_L75:  self.gravSoft = 4.0 / (res/455)
-            if res in res_L205: self.gravSoft = 0.0 # todo
+            if res in res_L205: self.gravSoft = 8.0 / (res/625)
 
             if res in res_L25:  self.targetGasMass = 1.57032e-4 * (8 ** np.log2(512/res))
             if res in res_L35:  self.targetGasMass = 0.0 # todo
@@ -311,7 +311,7 @@ class simParams:
             self.levelMin = 7 # uniform box @ 128
             self.levelMax = 7 # default, replaced later
 
-            if hInd:
+            if hInd is not None:
                 # fillZoomParams for individual halo
                 self.validResLevels = [9,10,11]
                 self.fillZoomParams(res=res,hInd=hInd,variant='gen1')
@@ -328,7 +328,7 @@ class simParams:
             bs = str(round(self.boxSize/1000))
             ds = '_dm' if '_dm' in run else ''
 
-            if hInd:
+            if hInd is not None:
                 self.arepoPath = self.basePath+'sims.zooms/128_'+bs+'Mpc_h'+str(hInd)+'_L'+str(self.levelMax)+ds+'/'
             else:
                 self.arepoPath = self.basePath+'sims.zooms/128_'+bs+'Mpc'+ds+'/'

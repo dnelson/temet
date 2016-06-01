@@ -283,7 +283,7 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, simRedshift=0.0):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf, simRedshift=0.0):
+def blackholeVsStellarMass(sPs, pdf, twiceR=False, simRedshift=0.0):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -291,7 +291,10 @@ def blackholeVsStellarMass(sPs, pdf, simRedshift=0.0):
     
     ax.set_xlim([8.5, 13.0])
     ax.set_ylim([5.5, 11.0])
-    ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
+    if twiceR:
+        ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
+    else:
+        ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
     ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ only centrals ]')
 
     # observational points
@@ -320,14 +323,18 @@ def blackholeVsStellarMass(sPs, pdf, simRedshift=0.0):
         sP.setRedshift(simRedshift)
 
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
-            fieldsSubhalos=['SubhaloMassType','SubhaloMassInHalfRadType'])
+            fieldsSubhalos=['SubhaloMassType','SubhaloMassInHalfRadType','SubhaloMassInRadType'])
 
         # centrals only
         wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
         w = gc['halos']['GroupFirstSub'][wHalo]
 
         # stellar mass definition: would want to mimic bulge mass measurements
-        xx_code = gc['subhalos']['SubhaloMassInHalfRadType'][w,partTypeNum('stars')]
+        if twiceR:
+            xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
+        else:
+            xx_code = gc['subhalos']['SubhaloMassInHalfRadType'][w,partTypeNum('stars')]
+
         xx = sP.units.codeMassToLogMsun( xx_code )
 
         # stellar mass definition(s)
@@ -1254,7 +1261,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0116') )
     #sPs.append( simParams(res=512, run='L25n512_PRVS_0311') )
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
@@ -1263,12 +1270,26 @@ def plots():
     #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
-    sPs.append( simParams(res=256, run='L12.5n256TNG') )
-    sPs.append( simParams(res=512, run='L12.5n512TNG') )
+
+    #sPs.append( simParams(res=128, run='L12.5n128TNG') )
+    #sPs.append( simParams(res=256, run='L12.5n256TNG') )
+    #sPs.append( simParams(res=512, run='L12.5n512TNG') )
+
+    #sPs.append( simParams(res=128, run='tng') )
+    sPs.append( simParams(res=256, run='tng') )
+    #sPs.append( simParams(res=512, run='tng') )
+
+    #sPs.append( simParams(res=256, run='L25n256_NGB_01') )
+    #sPs.append( simParams(res=256, run='L25n256_NGB_08') )
+    #sPs.append( simParams(res=256, run='L25n256_NGB_32') )
+    #sPs.append( simParams(res=256, run='L25n256_NGB_128') )
+    sPs.append( simParams(res=256, run='L25n256TNG_BHNGB_064') )
+    sPs.append( simParams(res=256, run='L25n256TNG_BHNGB_256') )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_L25_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
     stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
@@ -1276,6 +1297,7 @@ def plots():
     sfrdVsRedshift(sPs, pdf, xlog=True)
     sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf)
+    blackholeVsStellarMass(sPs, pdf, twiceR=True)
     galaxySizes(sPs, pdf, vsHaloMass=False)
     galaxySizes(sPs, pdf, vsHaloMass=True)
     stellarMassFunction(sPs, pdf, highMassEnd=False)

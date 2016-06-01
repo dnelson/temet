@@ -124,10 +124,6 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
 
                 name = line[0]
 
-                # how many columns (how old is this file)?
-                if cols == None:
-                    cols = len(line)-1
-
                 # names with a space
                 offset = 0
                 if line[1] in ['vel','zone','surface','search']:
@@ -138,6 +134,15 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
                 # timings
                 if name not in r:
                     r[name] = np.zeros( (maxSize,4), dtype='float32' )
+
+                # how many columns (how old is this file)?
+                if cols == None:
+                    cols = len(line)-1
+                else:
+                    if cols != len(line)-1:
+                        # corrupt line
+                        r[name][step,:] = np.nan
+                        continue
 
                 if cols == 4:
                     r[name][step,0] = float( line[1+offset].strip() ) # diff time
@@ -184,13 +189,22 @@ def plotCpuTimes():
     sPs.append( simParams(res=1820, run='tng') )
     sPs.append( simParams(res=910, run='illustris') )
     sPs.append( simParams(res=910, run='tng') )
-    sPs.append( simParams(res=455, run='illustris') )
-    sPs.append( simParams(res=455, run='tng') )
+    ##sPs.append( simParams(res=455, run='illustris') )
+    ##sPs.append( simParams(res=455, run='tng') )
+
+    sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=1250, run='tng') )
+    sPs.append( simParams(res=625, run='tng') )
+
+    sPs.append( simParams(res=2160, run='tng') )
+    #sPs.append( simParams(res=1080, run='tng') )
+    #sPs.append( simParams(res=540, run='tng') )
 
     # L75n1820TNG cpu.txt error: there is a line:
     # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
     # after Step 6495017
-    plotKeys = ['total','total_log','treegrav','voronoi','blackholes','hydro','gradients','enrich']
+    plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
+                'gradients','enrich','domain','i_o','restart']
 
     # multipage pdf: one plot per value
     #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
@@ -219,11 +233,13 @@ def plotCpuTimes():
             ax.set_ylabel('CPU Percentage [' + plotKey + ']')
 
         keys = ['time','hatb',plotKey]
+        pLabels = []
+        pColors = []
 
         for i,sP in enumerate(sPs):
             # load select datasets from cpu.hdf5
-            if sP.run == 'tng' and sP.res in [910,1820]:
-                hatbMin = 40
+            if sP.run == 'tng' and sP.res in [910,1820,1080,2160,1250,2500]:
+                hatbMin = 41
             else:
                 hatbMin = 0
 
@@ -241,7 +257,24 @@ def plotCpuTimes():
             if ind in [0,2]:
                 yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
 
-            ax.plot(xx,yy,label=sP.simName)
+            l, = ax.plot(xx,yy,label=sP.simName)
+
+            # total time predictions for runs which aren't yet done
+            if plotKey in ['total'] and ax.get_yscale() == 'log' and xx.max() < 0.99:
+                fac_delta = 0.05
+                w = np.where( xx >= xx.max() - fac_delta )
+                xx = xx[w]
+                yy = yy[w]
+
+                yp = np.poly1d( np.polyfit(xx,yy,1) )
+                xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
+                yPredicted = yp(xp)
+                totPredictedMHs = yPredicted.max()
+
+                ax.plot(xp, yPredicted, linestyle=':', color=l.get_color())
+                print(' Predicted total time: %d million CPUhs' % totPredictedMHs)
+                pLabels.append( 'Predict: %3.1f MHs' % totPredictedMHs)
+                pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=':') )
 
         zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
         axTop = ax.twiny()
@@ -252,7 +285,14 @@ def plotCpuTimes():
         axTop.set_xticklabels(zVals)
         axTop.set_xlabel("Redshift")
 
-        ax.legend(loc='upper left')
+        # second legend for predictions
+        if len(pLabels) > 0:
+            legend2 = ax.legend(pColors, pLabels, loc='best')
+            ax.add_artist(legend2)
+
+        # first legend for sim names
+        ax.legend(loc='best')
+
         fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
@@ -262,90 +302,3 @@ def plotCpuTimes():
     # if we don't make it here successfully the old pdf will not be corrupted
     remove(fName2)
     rename(fName1,fName2)
-
-def enrichChecks():
-    """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
-    from cosmo.load import snapshotSubset
-    from util import simParams
-
-    # config
-    sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
-    #sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.0001', redshift=0.0)
-    sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.00001', redshift=0.0)
-
-    nBins = 100 # 60 for 128, 100 for 256
-
-    pdf = PdfPages('enrichChecks_' + sP1.run + '_' + sP2.run + '.pdf')
-
-    # (1) - enrichment counter
-    if 1:
-        ec1 = snapshotSubset(sP1,'stars','GFM_EnrichCount')
-        ec2 = snapshotSubset(sP2,'stars','GFM_EnrichCount')
-
-        fig = plt.figure(figsize=(14,7))
-
-        ax = fig.add_subplot(111)
-
-        ax.set_title('')
-        ax.set_xlabel('Number of Enrichments per Star')
-        ax.set_ylabel('N$_{\\rm stars}$')
-
-        hRange = [ 0, max(ec1.max(),ec2.max()) ]
-        plt.hist(ec1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
-        plt.hist(ec2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
-
-        ax.legend(loc='upper right')
-        fig.tight_layout()    
-        pdf.savefig()
-        plt.close(fig)
-
-    # (2) final stellar masses
-    if 1:
-        mstar1 = snapshotSubset(sP1,'stars','mass')
-        mstar2 = snapshotSubset(sP2,'stars','mass')
-        mstar1 = sP1.units.codeMassToLogMsun(mstar1)
-        mstar2 = sP2.units.codeMassToLogMsun(mstar2)
-
-        fig = plt.figure(figsize=(14,7))
-
-        ax = fig.add_subplot(111)
-
-        ax.set_title('')
-        ax.set_xlabel('Final Stellar Masses [ log M$_{\\rm sun}$ z=0 ]')
-        ax.set_ylabel('N$_{\\rm stars}$')
-
-        hRange = [ min(mstar1.min(),mstar2.min()), max(mstar1.max(),mstar2.max()) ]
-        plt.hist(mstar1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
-        plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
-
-        ax.legend(loc='upper right')
-        fig.tight_layout()    
-        pdf.savefig()
-        plt.close(fig)
-
-    # (3) final gas metallicities
-    if 1:
-        zgas1 = snapshotSubset(sP1,'gas','GFM_Metallicity')
-        zgas2 = snapshotSubset(sP2,'gas','GFM_Metallicity')
-        zgas1 = np.log10(zgas1)
-        zgas2 = np.log10(zgas2)
-
-        fig = plt.figure(figsize=(14,7))
-
-        ax = fig.add_subplot(111)
-        ax.set_yscale('log')
-
-        ax.set_title('')
-        ax.set_xlabel('Final Gas Metallicities [ log code z=0 ]')
-        ax.set_ylabel('N$_{\\rm cells}$')
-
-        hRange = [ min(zgas1.min(),zgas2.min()), max(zgas1.max(),zgas2.max()) ]
-        plt.hist(zgas1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
-        plt.hist(zgas2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
-
-        ax.legend(loc='upper right')
-        fig.tight_layout()    
-        pdf.savefig()
-        plt.close(fig)
-
-    pdf.close()
