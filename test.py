@@ -10,12 +10,325 @@ import h5py
 import glob
 import pdb
 from os import path
+from datetime import datetime
 import matplotlib.pyplot as plt
 
 import cosmo
 from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
+
+def incrementIDsByOne():
+    """ Increment all gas and star IDs by exactly one in one runs. """
+    basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h9_L11/output/'
+
+    snapFiles = glob.glob(basePath+'snapdir_???/*.hdf5')
+
+    for snapFile in snapFiles:
+        # modified time
+        d = datetime.fromtimestamp(path.getmtime(snapFile))
+
+        #if d.year >= 2016:
+        #    print(snapFile, ' SKIP', d.year)
+        #    continue
+
+        print(snapFile,d.year)
+        with h5py.File(snapFile) as f:
+            gas_ids = f['PartType0/ParticleIDs'][()] + 1
+            star_ids = f['PartType4/ParticleIDs'][()] + 1
+            par_ids = f['PartType3/ParentID'][()] + 1
+
+            f['PartType0/ParticleIDs'][()] = gas_ids
+            f['PartType4/ParticleIDs'][()] = star_ids
+            f['PartType3/ParentID'][()] = par_ids
+
+            dm1_ids = f['PartType1/ParticleIDs'][()] + 1
+            dm2_ids = f['PartType2/ParticleIDs'][()] + 1
+            f['PartType1/ParticleIDs'][()] = dm1_ids
+            f['PartType2/ParticleIDs'][()] = dm2_ids
+
+def checkIDsMin():
+    """ check min gas ID """
+    runs = [[8,10], [2,10]]
+
+    for hInd,res in runs:
+        sP = simParams(res=res, run='zooms', snap=0, hInd=hInd)
+        gas_ids = cosmo.load.snapshotSubset(sP, 'gas', 'ids')
+        print(hInd,res,gas_ids.min())
+
+def checkTracerLoad():
+    """ Check new code to load tracers from snapshots. """
+    from tracer.tracerMC import match3
+
+    #basePath = '/n/home07/dnelson/dev.prime/realizations/L25n32_trTest/output/'
+    basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h0_L9/output/'
+
+    fieldsGroups = ['GroupMass','GroupLenType','GroupMassType','GroupNsubs']
+    fieldsSubs   = ['SubhaloMass','SubhaloMassType','SubhaloLenType']
+
+    fields = { 'gas'   : ['Masses','ParticleIDs'],
+               'dm'    : ['Velocities','ParticleIDs'], # Potential in L25n32_trTest only, not sims.zooms
+               'bhs'   : ['Masses','ParticleIDs'], # L25n32_trTest only, not sims.zooms
+               'stars' : ['Masses','ParticleIDs'],
+               'trmc'  : ['TracerID','ParentID'] }
+
+    parTypes = ['gas','stars','bhs']
+
+    # sim specifications
+    class sP_old:
+        snap = 50 #4
+        simPath = basePath
+        run = 'testing'
+        trMCFields = None
+
+    sP_new = sP_old()
+    sP_new.snap = 99 #5 # new version of snap4 moved to fake snap5
+
+    # load group catalogs
+    gc_old = cosmo.load.groupCat(sP_old, fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
+    gc_new = cosmo.load.groupCat(sP_new, fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
+
+    # load snapshots
+    h_new = cosmo.load.snapshotHeader(sP_new)
+    h_old = cosmo.load.snapshotHeader(sP_old)
+    assert (h_new['NumPart'] != h_old['NumPart']).sum() == 0
+
+    snap_old = {}
+    snap_new = {}
+
+    for ptName,fieldList in fields.iteritems():
+        # skip bhs or stars if none exist
+        if h_new['NumPart'][partTypeNum(ptName)] == 0:
+            continue
+
+        snap_old[ptName] = {}
+        snap_new[ptName] = {}
+
+        for key in fieldList:
+            snap_old[ptName][key] = cosmo.load.snapshotSubset(sP_old, ptName, key)
+            snap_new[ptName][key] = cosmo.load.snapshotSubset(sP_new, ptName, key)
+
+    # compare
+    #assert gc_old['halos']['count'] == gc_new['halos']['count']
+    #assert gc_old['subhalos']['count'] == gc_new['subhalos']['count']
+
+    #for key in fieldsGroups:
+    #    assert np.array_equal( gc_old['halos'][key], gc_new['halos'][key] )
+    #for key in fieldsSubs:
+    #    assert np.array_equal( gc_old['subhalos'][key], gc_new['subhalos'][key] )
+
+    # check all particle type properties are same (including that same tracers have same parents)
+    for ptName,fieldList in fields.iteritems():
+        idFieldName = 'ParticleIDs' if ptName != 'trmc' else 'TracerID'
+
+        if ptName not in snap_old:
+            continue
+
+        pt_sort_old = np.argsort( snap_old[ptName][idFieldName] )
+        pt_sort_new = np.argsort( snap_new[ptName][idFieldName] )
+
+        for key in fieldList:
+            assert np.array_equal( snap_old[ptName][key][pt_sort_old],
+                                   snap_new[ptName][key][pt_sort_new] )
+
+    # make offset tables for Groups/Subhalos by hand
+    gc_new_off = {'halos':{}, 'subhalos':{}}
+
+    for tName in parTypes:
+        tNum = partTypeNum(tName)
+        shCount = 0
+
+        gc_new_off['halos'][tName] = np.insert( np.cumsum( gc_new['halos']['GroupLenType'][:,tNum] ), 0, 0)
+        gc_new_off['subhalos'][tName] = np.zeros( gc_new['subhalos']['count'], dtype='int32' )
+
+        for k in range( gc_new['header']['Ngroups_Total'] ):
+            if gc_new['halos']['GroupNsubs'][k] == 0:
+                continue
+
+            gc_new_off['subhalos'][tName][shCount] = gc_new_off['halos'][tName][k]
+
+            shCount += 1
+            for m in np.arange(1, gc_new['halos']['GroupNsubs'][k]):
+                gc_new_off['subhalos'][tName][shCount] = gc_new_off['subhalos'][tName][shCount-1] + \
+                                                         gc_new['subhalos']['SubhaloLenType'][shCount-1,tNum]
+                shCount += 1
+
+    # new content (verify Group and Subhalo counts)
+    gcSets = { 'subhalos':'SubhaloLenType' }#, 'halos':'GroupLenType' }
+
+    for name1,name2 in gcSets.iteritems():
+
+        gc_new_totTr = gc_new[name1][name2][:,3].sum()
+        gc_new_count = 0
+
+        if name1 == 'halos': gcNumTot = gc_new['header']['Ngroups_Total']
+        if name1 == 'subhalos': gcNumTot = gc_new['header']['Nsubgroups_Total']
+        if name1 == 'halos': massName = 'GroupMassType'
+        if name1 == 'subhalos': massName = 'SubhaloMassType'
+
+        for i in range( gcNumTot ):
+            locTrCount = 0
+            savTrCount = gc_new[name1][name2][i,3]
+
+            # get indices and ids for group members (gas/bhs)
+            for tName in parTypes:
+                tNum = partTypeNum(tName)
+
+                inds_type_start = gc_new_off[name1][tName][i]
+                inds_type_end   = inds_type_start + gc_new[name1][name2][i,tNum]
+
+                if tName in snap_new:
+                    ids_type = snap_new[tName]['ParticleIDs'][inds_type_start:inds_type_end]
+
+                    # verify mass
+                    mass_type = snap_new[tName]['Masses'][inds_type_start:inds_type_end]
+                    assert np.abs(mass_type.sum() - gc_new[name1][massName][i,tNum]) < 1e-4
+
+                    if ids_type.size == 0:
+                        continue
+
+                    # crossmatch member gas/stars/bhs to all ParentIDs of tracers
+                    ia, ib = match3( ids_type, snap_new['trmc']['ParentID'] )
+                    if ia is not None:
+                        locTrCount += ia.size
+
+            gc_new_count += locTrCount
+
+            # does the number of re-located children tracers equal the LenType value?
+            print(name1,i,locTrCount,savTrCount)
+            assert locTrCount == savTrCount
+
+        print(name1,gc_new_totTr,gc_new_count)
+        assert gc_new_totTr == gc_new_count
+
+    pdb.set_trace()
+
+def checkLastStarTimeIllustris():
+    """ Plot histogram of LST. """
+    sP = simParams(res=1820, run='illustris', redshift=0.0)
+
+    x = cosmo.load.snapshotSubset(sP, 'tracer', 'tracer_laststartime')
+
+    fig = plt.figure(figsize=(14,7))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Tracer_LastStarTime [Illustris-1 z=0]')
+    ax.set_ylabel('N$_{\\rm tr}$')
+    ax.set_yscale('log')
+
+    hRange = [ x.min()-0.1, x.max()+0.1 ]
+    nBins = 400
+    plt.hist(x, nBins, range=hRange, facecolor='red', alpha=0.8)
+
+    fig.tight_layout()    
+    fig.savefig('tracer_laststartime.pdf')
+    plt.close(fig)
+
+def checkCoolRateNeNhCleanup():
+    """ Check output validity after minor I/O cleanup (May 2016). """
+    sPs = []
+    sPs.append( simParams(res=32, run='L25n32_trTest', redshift=0.0) )
+    sPs.append( simParams(res=32, run='L25n32_trTestMod', redshift=0.0) )
+
+    fields = ['CoolingRate','GFM_CoolingRate','ElectronAbundance','NeutralHydrogenAbundance']
+
+    for field in fields:
+        x0 = cosmo.load.snapshotSubset( sPs[0], 'gas', field )
+        x1 = cosmo.load.snapshotSubset( sPs[1], 'gas', field )
+        print(sPs[0].simName.ljust(18), field, x0.size, x0.min(), x0.max(), x0.mean(), x0[-1])
+        print(sPs[1].simName.ljust(18), field, x1.size, x1.min(), x1.max(), x1.mean(), x1[-1])
+        print(np.array_equal(x0,x1))
+
+        ww = np.where( x0 != x1 )
+        print(x0[ww]-x1[ww])
+        pdb.set_trace()
+
+def enrichChecks():
+    """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
+    from cosmo.load import snapshotSubset
+    from util import simParams
+
+    # config
+    sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
+    #sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.0001', redshift=0.0)
+    sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.00001', redshift=0.0)
+
+    nBins = 100 # 60 for 128, 100 for 256
+
+    pdf = PdfPages('enrichChecks_' + sP1.run + '_' + sP2.run + '.pdf')
+
+    # (1) - enrichment counter
+    if 1:
+        ec1 = snapshotSubset(sP1,'stars','GFM_EnrichCount')
+        ec2 = snapshotSubset(sP2,'stars','GFM_EnrichCount')
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+
+        ax.set_title('')
+        ax.set_xlabel('Number of Enrichments per Star')
+        ax.set_ylabel('N$_{\\rm stars}$')
+
+        hRange = [ 0, max(ec1.max(),ec2.max()) ]
+        plt.hist(ec1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
+        plt.hist(ec2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    # (2) final stellar masses
+    if 1:
+        mstar1 = snapshotSubset(sP1,'stars','mass')
+        mstar2 = snapshotSubset(sP2,'stars','mass')
+        mstar1 = sP1.units.codeMassToLogMsun(mstar1)
+        mstar2 = sP2.units.codeMassToLogMsun(mstar2)
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+
+        ax.set_title('')
+        ax.set_xlabel('Final Stellar Masses [ log M$_{\\rm sun}$ z=0 ]')
+        ax.set_ylabel('N$_{\\rm stars}$')
+
+        hRange = [ min(mstar1.min(),mstar2.min()), max(mstar1.max(),mstar2.max()) ]
+        plt.hist(mstar1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
+        plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    # (3) final gas metallicities
+    if 1:
+        zgas1 = snapshotSubset(sP1,'gas','GFM_Metallicity')
+        zgas2 = snapshotSubset(sP2,'gas','GFM_Metallicity')
+        zgas1 = np.log10(zgas1)
+        zgas2 = np.log10(zgas2)
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+        ax.set_yscale('log')
+
+        ax.set_title('')
+        ax.set_xlabel('Final Gas Metallicities [ log code z=0 ]')
+        ax.set_ylabel('N$_{\\rm cells}$')
+
+        hRange = [ min(zgas1.min(),zgas2.min()), max(zgas1.max(),zgas2.max()) ]
+        plt.hist(zgas1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
+        plt.hist(zgas2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
 
 def redshiftWikiTable():
     """ Output wiki-syntax table of snapshot spacings. """
@@ -99,30 +412,6 @@ def ipIOTest():
 
     pdf.close()
 
-def shockMaxMachNum():
-    """ histogram of shock maxmimum mach numbers from test run. """
-    sP = simParams(res=128, run='shocks', redshift=2.0)
-
-    x = cosmo.load.snapshotSubset(sP, 'tracer', 'shockmaxmach')
-
-    machMax = 100
-
-    fig = plt.figure(figsize=(16,9))
-    ax = fig.add_subplot(111)
-    ax.set_xlim([0,machMax])
-    #ax.set_ylim(yrange)
-    ax.set_yscale('log')
-    #ax.set_xscale('symlog')
-    ax.set_xlabel('Maximum Past ShockMachNumber (at z=0, all gas cells)')
-    ax.set_ylabel('$N_{\\rm gas}$')
-
-    ax.hist(x, machMax+1, range=[0,machMax], label=sP.simName)
-
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig('shocks.pdf')
-    plt.close(fig)
-
 def checkWindPartType():
     fileBase = '/n/home07/dnelson/dev.prime/winds_save_on/output/'
     snapMax = 5
@@ -205,46 +494,6 @@ def checkWindPartType():
         #        raise Exception("fail")
 
     #pdb.set_trace()
-
-def lhaloMissingSnaps1820FP():
-    fileBase = '/n/ghernquist/Illustris/Runs/L75n1820FP/'
-    nChunks = 4096
-    totNumSnaps = 136
-    
-    snapSeen = np.zeros( totNumSnaps, dtype='int32' )
-    
-    # loop over all lhalotree file chunks
-    for i in range(nChunks):
-        filePath = fileBase + 'trees/treedata/trees_sf1_135.' + str(i) + '.hdf5'
-
-        if not path.isfile(filePath):
-            raise Exception("ERROR: Tree file not found.")
-    
-        f = h5py.File(filePath,'r')
-                    
-        if i % 100 == 0:
-            print(filePath)
-        
-        # loop over each tree
-        for j in range(f['Header'].attrs['NtreesPerFile']):
-            # load 'SnapNum' group
-            loc_SnapNum = f['Tree'+str(j)]['SnapNum'][:]
-            
-            # what snapshots are in 'SnapNum' group?
-            unique_snap_nums = np.unique( loc_SnapNum )
-            
-            if np.min(unique_snap_nums < 0) or np.max(unique_snap_nums >= totNumSnaps):
-                raise Exception('error')
-            
-            # save
-            snapSeen[ unique_snap_nums ] += 1
-            
-        f.close()
-    
-    print('snapSeen: ',snapSeen)
-    w = np.where( snapSeen == 0 )
-    print('CHECK: SHOULD BE ZERO: ',len(w[0]))
-    print('MISSING SNAPS: ',w)
 
 def compGalpropSubhaloStellarMetallicity():
     import matplotlib as mpl
