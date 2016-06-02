@@ -12,12 +12,14 @@ import cosmo.load
 from os.path import isfile, isdir
 from os import mkdir
 
-def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
+# --- snapshot configuration & spacing ---
+
+def redshiftToSnapNum(redshifts=None, sP=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
     from util.helper import closest
 
-    if sP is None:
-        raise Exception("Must input sP.")
+    assert sP is not None, "Must input sP."
+
     if redshifts is None:
         redshifts = np.array(sP.redshift)
     else:
@@ -25,8 +27,8 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
 
     nSnaps = 400 # maximum
 
-    sbNum, sbStr1, sbStr2 = cosmo.load.subboxVals(subbox)
-    if subbox is not None:
+    sbNum, sbStr1, sbStr2 = cosmo.load.subboxVals(sP.subbox)
+    if sP.subbox is not None:
         nSnaps *= 10
 
     # load if exists, otherwise create
@@ -90,7 +92,7 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
         zFound, w = closest( r['redshifts'], redshift )
 
         if np.abs(zFound-redshift) > 0.1:
-            print("Warning! Snapshot selected with redshift error = " + str(np.abs(zFound-redshift)))
+            print("Warning! [%s] Snapshot selected with redshift error = %g" % (sP.simName,np.abs(zFound-redshift)))
 
         snaps[i] = w
 
@@ -99,12 +101,17 @@ def redshiftToSnapNum(redshifts=None, sP=None, subbox=None):
 
     return snaps
   
-def validSnapList(sP, maxNum=None):
+def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None):
     """ Return a list of all snapshot numbers which exist. """
     from util.helper import evenlySample
 
+    if minRedshift is None:
+        minRedshift = 0.0 # filter out -1 values indicating missing snaps
+    if maxRedshift is None:
+        maxRedshift = np.finfo('float32').max
+
     redshifts = snapNumToRedshift(sP, all=True)
-    w = np.where(redshifts >= 0.0)[0]
+    w = np.where((redshifts >= minRedshift) & (redshifts < maxRedshift))[0]
 
     if len(w) == 0:
         return None, 0
@@ -113,17 +120,59 @@ def validSnapList(sP, maxNum=None):
     if maxNum is not None:
         w = evenlySample(w, maxNum)
 
-    return w, len(w)
+    return w
 
-def snapNumToRedshift(sP, snap=None, time=False, all=False, subbox=None):
-    """ Convert snapshot number to redshift or time (scale factor). """
-    if not all:
-        if snap is None:
-            snap = sP.snap
-        if sP.snap is None:
-            raise Exception("Input either snap or sP.snap required.")
+def multiRunMatchedSnapList(runList, method='expand', **kwargs):
+    """ For an input runList of dictionaries containing a sP key corresponding to a simParams 
+    for each run, produce a 'matched'/unified set of snapshot numbers, one set per run, with 
+    all the same length, e.g. for comparative analysis at matched shifts, or for rendering 
+    movie frames comparing runs at the same redshift. If method is 'expand', inflate the 
+    snapshot lists of all runs to the size of the maximal (duplicates are then guaranteed). 
+    If method is 'condense', shrink the snapshot lists of all runs to the size of the minimal 
+    (skips are then guaranteed). """
+    assert method in ['expand','condense']
 
-    _, sbStr1, _ = cosmo.load.subboxVals(subbox)
+    snapLists = []
+    numSnaps  = []
+
+    for run in runList:
+        runSnaps = validSnapList(run['sP'], **kwargs)
+        numSnaps.append( len(runSnaps) )
+
+    # let method dictate target size of the matched snapshot lists and 'master' run
+    if method == 'expand':
+        targetSize = np.max(numSnaps)
+        targetRun  = np.argmax(numSnaps)
+
+    if method == 'condense':
+        targetSize = np.min(numSnaps)
+        targetRun  = np.argmin(numSnaps)
+
+    print('Matched snapshot list [%s] to %d snaps of %s.' % (method,targetSize,runList[targetRun]['sP'].simName))
+
+    # choose the closest snapshot to each target redshift in each run
+    targetSnaps = validSnapList(runList[targetRun]['sP'], **kwargs)
+    targetRedshifts = snapNumToRedshift(runList[targetRun]['sP'], snap=targetSnaps)
+
+    for run in runList:
+        runSnaps = redshiftToSnapNum(targetRedshifts, sP=run['sP'])
+        snapLists.append( runSnaps )
+
+    # verify
+    assert targetRedshifts.size == targetSize
+    for snapList in snapLists:
+        assert np.min(snapList) >= 0
+        assert len(snapList) == len(targetRedshifts)
+
+    return snapLists
+
+def snapNumToRedshift(sP, snap=None, time=False, all=False):
+    """ Convert snapshot number(s) to redshift or time (scale factor). """
+    if not all and snap is None:
+        snap = sP.snap
+        assert snap is not None, "Input either snap or sP.snap required."
+
+    _, sbStr1, _ = cosmo.load.subboxVals(sP.subbox)
 
     # load snapshot -> redshift mapping files
     r = {}

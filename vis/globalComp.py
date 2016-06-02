@@ -182,11 +182,11 @@ def sfrAvgVsRedshift(sPs, pdf):
             continue
 
         print('SFRavg: '+sP.simName)
-        snaps, nSnaps = validSnapList(sP, maxNum=maxNumSnaps)
+        snaps = validSnapList(sP, maxNum=maxNumSnaps)
 
-        redshifts = np.zeros(nSnaps)
-        sfrs = np.zeros( (nSnaps, len(plotMassBins), 3), dtype='float32' )
-        stds = np.zeros( (nSnaps, len(plotMassBins), 3), dtype='float32' )
+        redshifts = np.zeros(len(snaps))
+        sfrs = np.zeros( (len(snaps), len(plotMassBins), 3), dtype='float32' )
+        stds = np.zeros( (len(snaps), len(plotMassBins), 3), dtype='float32' )
 
         # loop over all snapshots
         for j, snap in enumerate(snaps):

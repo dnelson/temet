@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
+from functools import partial
 from os.path import isfile, isdir
 from os import mkdir
 
@@ -24,8 +25,11 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
     import datetime
     import getpass
 
-    if sP.snap is None:
-        raise Exception("Must specify sP.snap for snapshotSubset load.")
+    assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
+    assert sP.subbox is None, "No auxCat() for subbox snapshots."
+
+    #if sP.snap is None:
+    #    raise Exception()
     r = {}
 
     # open auxiliary catalog file for this snasphot
@@ -124,8 +128,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
        skipIDs=1 : acknowledge we are working with a STOREIDS type .hdf5 group cat and don't warn
        fields*   : read only a subset fields from the catalog
     """
-    if sP.snap is None:
-        raise Exception("Must specify sP.snap for snapshotSubset load.")
+    assert sP.snap is not None, "Must specify sP.snap for groupCat() load."
+    assert sP.subbox is None, "No groupCat() for subbox snapshots."
 
     # override path function
     il.groupcat.gcPathOrig = il.groupcat.gcPath
@@ -179,10 +183,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
 def groupCatSingle(sP, haloID=None, subhaloID=None):
     """ Return complete group catalog information for one halo or subhalo. """
-    if haloID is not None and subhaloID is not None:
-        raise Exception("Cannot specify both haloID and subhaloID.")
-    if sP.snap is None:
-        raise Exception("Must specify sP.snap for snapshotSubset load.")
+    assert haloID is None or subhaloID is None, "Cannot specify both haloID and subhaloID."
+    assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
+    assert sP.subbox is None, "No groupCatSingle() for subbox snapshots."
         
     gcName = "Subhalo" if subhaloID is not None else "Group"
     gcID = subhaloID if subhaloID is not None else haloID
@@ -256,10 +259,7 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
         raise Exception("No snapshot found.")
 
 def snapNumChunks(basePath, snapNum, subbox=None):
-    """ Find number of file chunks in a snapshot. """
-    import glob
-
-    # check for existence of files inside directory
+    """ Find number of file chunks in a snapshot, by checking for existence of files inside directory. """
     _, sbStr1, _ = subboxVals(subbox)
     path = basePath + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
 
@@ -270,10 +270,10 @@ def snapNumChunks(basePath, snapNum, subbox=None):
 
     return nChunks
 
-def snapshotHeader(sP, subbox=None, fileName=None):
+def snapshotHeader(sP, fileName=None):
     """ Load complete snapshot header. """
     if fileName is None:
-        fileName = snapPath(sP.simPath, sP.snap, subbox=subbox)
+        fileName = snapPath(sP.simPath, sP.snap, subbox=sP.subbox)
 
     with h5py.File(fileName,'r') as f:
         header = dict( f['Header'].attrs.items() )
@@ -285,10 +285,10 @@ def snapshotHeader(sP, subbox=None, fileName=None):
 
     return header
 
-def snapHasField(sP, partType, field, subbox=None, fileName=None):
+def snapHasField(sP, partType, field, fileName=None):
     """ True or False, does snapshot data for partType have field? """
     if fileName is None:
-        fileName = snapPath(sP.simPath, sP.snap, subbox=subbox)
+        fileName = snapPath(sP.simPath, sP.snap, subbox=sP.subbox)
 
     gName = 'PartType' + str(ptNum(partType))
 
@@ -309,7 +309,7 @@ def snapOffsetList(sP):
             with h5py.File(saveFilename,'r') as f:
                 snapOffsets = f['offsets'][()]
     else:
-        nChunks = snapNumChunks(sP.simPath, sP.snap)
+        nChunks = snapNumChunks(sP.simPath, sP.snap, sP.subbox)
         snapOffsets = np.zeros( (sP.nTypes, nChunks), dtype='int64' )
 
         for i in np.arange(1,nChunks+1):
@@ -461,12 +461,12 @@ def snapshotSubset(sP, partType, fields,
     if haloID is not None and subhaloID is not None:
         raise Exception("Cannot specify both haloID and subhaloID.")
     if ((haloID is not None) or (subhaloID is not None)) and not sP.groupOrdered:
-        raise Exception("Not yet implemented (group/halo load in non-groupordered.")
+        raise Exception("Not yet implemented (group/halo load in non-groupordered).")
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
 
     # override path function
-    il.snapshot.snapPath = snapPath
+    il.snapshot.snapPath = partial(snapPath, subbox=sP.subbox)
 
     # make sure fields is not a single element, and don't modify input
     fields = list(iterable(fields))
@@ -487,9 +487,10 @@ def snapshotSubset(sP, partType, fields,
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
             return sP.units.calcEntropyCGS(u,dens,log=True)
 
-        # velmag (from 3d velocity) [km/s comoving]
+        # velmag (from 3d velocity) [physical km/s]
         if field.lower() in ["vmag", "velmag"]:
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
+            vel = sP.units.particleCodeVelocityToKms(vel)
             return np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
 
         # cellsize (from volume) [ckpc/h]

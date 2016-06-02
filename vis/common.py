@@ -17,8 +17,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
 from util.helper import loadColorTable, logZeroSafe
-from cosmo.load import snapshotSubset, groupCat, groupCatSingle
-from cosmo.load import groupCatOffsetListIntoSnap
+from cosmo.load import snapshotSubset, snapshotHeader, snapHasField
+from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.cloudy import cloudyIon
 
 volDensityFields = ['density']
@@ -31,7 +31,12 @@ def getHsmlForPartType(sP, partType, indRange=None):
     # dark matter
     if sP.isPartType(partType, 'dm'):
         print('WARNING: TEMPORARY TODO, use CalcHSML for DM (with caching).')
-        hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+        if not snapHasField(sP, partType, 'SubfindHsml'):
+            print(' No SUBFINDHSML!! Using constant for debug.')
+            numPart = snapshotHeader(sP)['NumPart'][sP.ptNum(partType)]
+            hsml = np.zeros( numPart, dtype='float32' ) + 1.0
+        else:
+            hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         return hsml
 
     # gas
@@ -49,15 +54,15 @@ def getHsmlForPartType(sP, partType, indRange=None):
 
     raise Exception('Unimplemented partType.')
 
-def meanAngMomVector(sP, subhaloID):
+def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
     or the inner stellar component, for rotation and projection into disk face/edge-on views. """
-    # star forming gas
     sh = groupCatSingle(sP, subhaloID=subhaloID)
 
     fields = ['Coordinates','Masses','StarFormationRate','Velocities']
     gas = snapshotSubset(sP, 'gas', fields, subhaloID=subhaloID)
 
+    # star forming gas only
     w = np.where(gas['StarFormationRate'] > 0.0)[0]
 
     if not len(w):
@@ -67,8 +72,12 @@ def meanAngMomVector(sP, subhaloID):
     gas['Masses']      = gas['Masses'][w]
     gas['Velocities']  = gas['Velocities'][w,:]
 
+    # allow center pos/vel to be input (e.g. mpb smoothed values)
+    if shPos is None: shPos = sh['SubhaloPos']
+    if shVel is None: shVel = sh['SubhaloVel']
+
     ang_mom = sP.units.particleAngMomVecInKpcKmS( gas['Coordinates'], gas['Velocities'], gas['Masses'], 
-                                                  sh['SubhaloPos'], sh['SubhaloVel'] )
+                                                  shPos, shVel )
 
     # calculate mean angular momentum unit 3-vector
     ang_mom_mean = np.mean(ang_mom, axis=0)
@@ -161,6 +170,8 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     # unit pre-processing (only need to remove log for means)
     if partField in ['temp','temperature','ent','entr','entropy']:
         quant = 10.0**quant
+    if partField in ['vrad','vrad_vvir']:
+        raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
 
     return mass, quant, normCol
 
@@ -172,7 +183,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField in volDensityFields:
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
-    if partField == 'density':
+    if partField in ['dens','density']:
         grid  = logZeroSafe( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = 'Mean Volume Density [log cm$^{-3}$]'
         config['ctName'] = 'jet'
@@ -212,10 +223,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Entropy [log K cm$^2$]'
         config['ctName'] = 'jet'
 
-    if partField == 'velmag':
-        print('TODO: handle scale factor if this is particle-level data')
+    if partField in ['vmag','velmag']:
         config['label']  = 'Velocity Magnitude [km/s]'
-        config['ctName'] = 'jet'
+        config['ctName'] = 'plasma'
+
+    if partField == 'vrad':
+        config['label']  = 'Radial Velocity [km/s]'
+        config['ctName'] = 'brewer-brownpurple'
+
+    if partField == 'vrad_vvir':
+        config['label']  = 'Radial Velocity / Halo v$_{200}$'
+        config['ctName'] = 'brewer-brownpurple'
 
     # failed to find?
     if 'label' not in config:
@@ -224,7 +242,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     return grid, config
 
 def gridBox(sP, method, partType, partField, nPixels, axes, 
-            boxCenter, boxSizeImg, hsmlFac, rotMatrix, **kwargs):
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
@@ -264,18 +282,21 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
         # rotation? shift points to subhalo center, rotate, and shift back
         if rotMatrix is not None:
-            sh = groupCatSingle(sP, subhaloID=sP.hInd)
+            if rotCenter is None:
+                # use subhalo center at this snapshot
+                sh = groupCatSingle(sP, subhaloID=sP.hInd)
+                rotCenter = sh['SubhaloPos']
 
-            if not sP.isZoom and sP.hInd is None:
-                raise Exception('Rotation in periodic box must be about a halo center.')
+                if not sP.isZoom and sP.hInd is None:
+                    raise Exception('Rotation in periodic box must be about a halo center.')
 
             for i in range(3):
-                pos[:,i] -= sh['SubhaloPos'][i]
+                pos[:,i] -= rotCenter[i]
 
             pos = np.transpose( np.dot(rotMatrix, pos.transpose()) )
 
             for i in range(3):
-                pos[:,i] += sh['SubhaloPos'][i]
+                pos[:,i] += rotCenter[i]
 
         # load: mass/weights, quantity, and normalization required
         mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
@@ -303,16 +324,19 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 def addBoxMarkers(p, ax):
     """ Factor out common annotation/markers to overlay. """
     if 'plotHalos' in p and p['plotHalos'] > 0:
-        # debug plotting N most massive halos
-        gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
+        # plotting N most massive halos
+        h = groupCatHeader(p['sP'])
 
-        for j in range(p['plotHalos']):
-            xPos = gc['halos']['GroupPos'][j,p['axes'][0]]
-            yPos = gc['halos']['GroupPos'][j,p['axes'][1]]
-            rad  = gc['halos']['Group_R_Crit200'][j] * 1.0
+        if h['Ngroups_Total'] > 0:
+            gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
 
-            c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
-            ax.add_artist(c)
+            for j in range(np.min( [p['plotHalos'], h['Ngroups_Total']] )):
+                xPos = gc['halos']['GroupPos'][j,p['axes'][0]]
+                yPos = gc['halos']['GroupPos'][j,p['axes'][1]]
+                rad  = gc['halos']['Group_R_Crit200'][j] * 1.0
+
+                c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+                ax.add_artist(c)
 
     if 'rVirFracs' in p:
         # plot circles for N fractions of the virial radius
