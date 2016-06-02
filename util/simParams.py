@@ -25,10 +25,10 @@ class simParams:
 
     # snapshots
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
-    snap          = None  # convenience for passing between functions
+    snap          = None  # copied/derived from input
+    redshift      = None  # copied/derived from input (always matched to snap)
     run           = ''    # copied from input
-    variant       = ''    # copied from input
-    redshift      = None  # copied from input
+    variant       = ''    # copied from input (to pick any sim with variations beyond run/res/hInd)
     
     # run parameters
     res           = 0     # copied from input
@@ -44,8 +44,9 @@ class simParams:
     nTypes        = 6     # number of particle types
 
     # subboxes
-    subboxCen     = None # subbox0 center
-    subboxSize    = None # subbox0 extent (ckpc/h)
+    subbox        = None  # integer >= 0 if the snapshot corresponds to a subbox snap
+    subboxCen     = None  # list of subbox center coordinate ([x0,y0,z0],[x1,y1,z1],...)
+    subboxSize    = None  # list of subbox extents in code units (ckpc/h)
     
     # zoom runs only
     levelmin       = 0    # power of two minimum level parameter (e.g. MUSIC L7=128, L8=256, L9=512, L10=1024)
@@ -111,32 +112,7 @@ class simParams:
         self.hInd     = hInd
         self.data     = {}
 
-        # IllustrisTNG (L12.5 test boxes)
-        if 'L12.5' in run:
-            self.validResLevels = [128,256,512]
-            self.groupOrdered = True
-
-            self.gravSoft = 0.0
-            self.targetGasMass = 0.0
-            self.boxSize = 12500.0
-
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
-
-            self.trMCPerCell    = 0
-            self.metals         = ['H','He','C','N','O','Ne','Mg','Si','Fe']
-            self.winds          = 3
-            self.BHs            = 3
-
-            self.arepoPath  = self.basePath + 'sims.TNG/' + run + '/'
-            self.savPrefix  = 'IP'
-            self.simName    = run
-            self.saveTag    = 'iP'
-            self.plotPrefix = 'iP'
-
-        # IllustrisTNG (L25 L35 L75 and L205 boxes)
+        # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
         if 'tng' in run or 'prime' in run:
 
             res_L25  = [128, 256, 512]
@@ -169,14 +145,42 @@ class simParams:
             self.omega_b     = 0.0456
             self.HubbleParam = 0.704
 
-            # common: tracers, enrichment/feedback models
-            self.trMCPerCell = 2
-            self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
-            self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
-            self.winds       = 3
-            self.BHs         = 3
+            # subboxes
+            if res in res_L75:
+                self.subboxCen  = [[9000,17000,63000], [37000, 43500, 67500]]
+                self.subboxSize = [7500, 7500]
+            if res in res_L35:
+                self.subboxCen  = 0 # todo
+                self.subboxSize = 0 # todo
+            if res in res_L205:
+                self.subboxCen  = 0 # todo
+                self.subboxSize = 0 # todo
+
+            # tracers
+            if res in res_L75:
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
+                self.trMCPerCell = 2
+            if res in res_L35+res_L205:
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
+                self.trMCPerCell = 1
+            if res in res_L25:
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
+                self.trMCPerCell = 0 # no tracers
+
+            # common: physics models
+            self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+            self.winds  = 3
+            self.BHs    = 3
+
+            # L12.5 test box with resolutions same as L25
+            if variant == 'L12.5':
+                self.gravSoft      /= 2.0
+                self.targetGasMass /= 8.0
+                self.boxSize       /= 2.0
 
             bs = str(int(self.boxSize/1000.0))
+            if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
+
             self.arepoPath  = self.basePath + 'sims.TNG/L' + bs + 'n' + str(res) + 'TNG/'
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + 'TNG'
@@ -466,6 +470,21 @@ class simParams:
         self.simPath   = self.arepoPath + 'output/'
         self.derivPath = self.arepoPath + 'data.files/'
         self.plotPath  = self.basePath + 'plots/'
+
+        # if variant passed in, see if it requests a subbox
+        if self.variant is not None and 'subbox' in self.variant:
+            # intentionally cause exceptions if we don't recognize sbNum
+            try:
+                sbNum  = np.int(self.variant[6:])
+                sbCen  = self.subboxCen[sbNum]
+                sbSize = self.subboxSize[sbNum]
+            except:
+                raise Exception('Input subbox request [%s] not recognized or out of bounds!' % variant)
+
+            # assign subbox number, prevent group ordered snapshot loading and periodic box corrections
+            self.subbox = sbNum
+            self.groupOrdered = False
+            self.boxSize = None
 
         # if redshift passed in, convert to snapshot number and save, and attach units(z)
         self.setRedshift(self.redshift)
