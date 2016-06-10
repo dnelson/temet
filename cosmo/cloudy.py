@@ -15,7 +15,7 @@ from os.path import isfile, isdir, getsize
 from os import mkdir, remove
 
 from cosmo import hydrogen
-from util.helper import closest, iterable
+from util.helper import closest, iterable, logZeroSafe
 from cosmo.load import snapshotSubset, snapHasField
 
 basePath = '/n/home07/dnelson/code/cloudy.run/'
@@ -627,11 +627,11 @@ class cloudyIon():
             metal += sP.units.Z_solar * 0.1 # set fixed metallicity of -1.0 as Simeon used in his tables
             raise Exception('Reconsider.')
 
-        metal_logSolar = np.log10( metal / sP.units.Z_solar ) # log solar
+        metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
         
-        # interpolate for log(abundance)
+        # interpolate for log(abundance) and convert to linear
         ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp)
 
         # total mass of ion i of element X = M_gas * (M_metals/M_gas) * (M_X/M_metals) * (M_Xi/M_X)

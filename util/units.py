@@ -499,15 +499,28 @@ class units(object):
 
         return v200.astype('float32')
 
+    def metallicityInSolar(self, metal, log=False):
+        """ Given a code metallicity (M_Z/M_total), convert to value with respect to solar. """
+        metal_solar = metal.astype('float32') / self._sP.units.Z_solar
+
+        metal_solar[metal_solar < 0] = 0.0 # clip possibly negative Illustris values at zero
+
+        if log:
+            return logZeroSafe(metal_solar)
+        return metal_solar
+
     # --- other ---
 
     def redshiftToAgeFlat(self, z):
         """ Calculate age of the universe [Gyr] at the given redshift (assuming flat cosmology).
             Analytical formula from Peebles, p.317, eq 13.2. """
         redshifts = np.array(z)
+        if redshifts.ndim == 0:
+            redshifts = np.array([z])
+
         w = np.where(redshifts >= 0.0)
 
-        age = np.zeros(redshifts.size, dtype='float32') - 100.0 # negative indicates not se
+        age = np.zeros(redshifts.size, dtype='float32') - 100.0 # negative indicates not set
         
         arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+redshifts[w])**(-3.0/2.0)
         age[w] = 2 * np.arcsinh(arcsinh_arg) / (self._sP.units.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))

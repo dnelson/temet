@@ -30,6 +30,8 @@ def redshiftToSnapNum(redshifts=None, sP=None):
     sbNum, sbStr1, sbStr2 = cosmo.load.subboxVals(sP.subbox)
     if sP.subbox is not None:
         nSnaps *= 10
+        if 'tng' in sP.run:
+            nSnaps = 16000 # maximum of 16,000 subbox snapshots for new TNG runs
 
     # load if exists, otherwise create
     r = {}
@@ -114,7 +116,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None):
     w = np.where((redshifts >= minRedshift) & (redshifts < maxRedshift))[0]
 
     if len(w) == 0:
-        return None, 0
+        return None
 
     # cap at a maximum number of snaps? (evenly spaced)
     if maxNum is not None:
@@ -137,6 +139,10 @@ def multiRunMatchedSnapList(runList, method='expand', **kwargs):
 
     for run in runList:
         runSnaps = validSnapList(run['sP'], **kwargs)
+
+        if runSnaps is None:
+            raise Exception('Run [%s] has no snapshots within requested redshift range.' % run['sP'].simName)
+
         numSnaps.append( len(runSnaps) )
 
     # let method dictate target size of the matched snapshot lists and 'master' run
@@ -162,7 +168,7 @@ def multiRunMatchedSnapList(runList, method='expand', **kwargs):
     assert targetRedshifts.size == targetSize
     for snapList in snapLists:
         assert np.min(snapList) >= 0
-        assert len(snapList) == len(targetRedshifts)
+        assert snapList.size == targetRedshifts.size
 
     return snapLists
 
@@ -207,6 +213,8 @@ def snapNumToAgeFlat(sP, snap=None):
 
 def correctPeriodicDistVecs(vecs, sP):
     """ Enforce periodic B.C. for distance vectors (effectively component by component). """
+    assert sP.subbox is None
+    
     vecs[ np.where(vecs > sP.boxSize*0.5)  ]  -= sP.boxSize
     vecs[ np.where(vecs <= -sP.boxSize*0.5) ] += sP.boxSize
 
@@ -214,6 +222,8 @@ def correctPeriodicPosVecs(vecs, sP):
     """ Enforce periodic B.C. for positions (add boxSize to any negative points, subtract boxSize from any 
         points outside box).
     """
+    assert sP.subbox is None
+
     vecs[ np.where(vecs < 0.0) ]         += sP.boxSize
     vecs[ np.where(vecs >= sP.boxSize) ] -= sP.boxSize
 

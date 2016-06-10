@@ -210,6 +210,9 @@ def groupCatHeader(sP, fileName=None):
     if fileName is None:
         fileName = gcPath(sP.simPath, sP.snap)
 
+    if fileName is None:
+        return {'Ngroups_Total':0,'Nsubgroups_Total':0}
+
     with h5py.File(fileName,'r') as f:
         header = dict( f['Header'].attrs.items() )
 
@@ -504,6 +507,18 @@ def snapshotSubset(sP, partType, fields,
                 vol = mass / dens
                 
             return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+
+        # metallicity in log(solar) units
+        if field.lower() in ["metal_solar","Z_solar"]:
+            metal = snapshotSubset(sP, partType, 'metal', **kwargs) # metal mass / total mass ratio
+            return sP.units.metallicityInSolar(metal,log=False)
+
+        # stellar age in Gyr (convert GFM_StellarFormationTime scalefactor)
+        if field.lower() in ["star_age","stellar_age"]:
+            curUniverseAgeGyr = sP.units.redshiftToAgeFlat(sP.redshift)
+            birthTime = snapshotSubset(sP, partType, 'birthtime', **kwargs)
+            birthRedshift = 1.0/birthTime - 1.0
+            return curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
 
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
