@@ -7,6 +7,8 @@ from builtins import *
 
 import numpy as np
 from datetime import datetime
+from os.path import isfile
+
 from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec
 from cosmo.load import groupCatSingle
 from cosmo.util import validSnapList
@@ -258,6 +260,10 @@ def renderSingleHaloFrames(confName):
 
         # request render and save
         saveFilename = 'renderHaloFrame_%03d.png' % (frameNum)
-        renderMultiPanel(panels, plotStyle, rasterPx, saveFilename)
-
         frameNum += 1
+
+        if isfile(saveFilename):
+            print('SKIP: %s' % saveFilename)
+            continue
+
+        renderMultiPanel(panels, plotStyle, rasterPx, saveFilename)

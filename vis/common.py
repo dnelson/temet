@@ -17,7 +17,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
 from util.helper import loadColorTable, logZeroSafe
-from cosmo.load import snapshotSubset, snapshotHeader, snapHasField
+from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.cloudy import cloudyIon
 
@@ -32,9 +32,9 @@ def getHsmlForPartType(sP, partType, indRange=None):
     if sP.isPartType(partType, 'dm'):
         print('WARNING: TEMPORARY TODO, use CalcHSML for DM (with caching).')
         if not snapHasField(sP, partType, 'SubfindHsml'):
-            print(' No SUBFINDHSML!! Using constant for debug.')
+            print(' No SUBFINDHSML!! Using constant for debug (DM).')
             numPart = snapshotHeader(sP)['NumPart'][sP.ptNum(partType)]
-            hsml = np.zeros( numPart, dtype='float32' ) + 1.0
+            hsml = np.zeros( numPart, dtype='float32' ) + sP.gravSoft * 2.0
         else:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         return hsml
@@ -47,9 +47,14 @@ def getHsmlForPartType(sP, partType, indRange=None):
     # stars
     if sP.isPartType(partType, 'stars'):
         print('WARNING: TEMPORARY TODO, use CalcHSML for stars (with caching).')
-        #hsml = 0.25 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-        #hsml[hsml > 0.1] = 0.1 # can decouple, leads to strageness/interestingness
-        hsml = 0.5 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+        if not snapHasField(sP, partType, 'SubfindHsml'):
+            print(' No SUBFINDHSML!! Using constant for debug (STARS).')
+            numPart = snapshotHeader(sP)['NumPart'][sP.ptNum(partType)]
+            hsml = np.zeros( numPart, dtype='float32' ) + sP.gravSoft * 0.5
+        else:
+            #hsml = 0.25 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+            #hsml[hsml > 0.1] = 0.1 # can decouple, leads to strageness/interestingness
+            hsml = 0.5 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         return hsml
 
     raise Exception('Unimplemented partType.')
@@ -167,9 +172,10 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         # distribute a mass-weighted quantity and calculate mean value grid
         quant = snapshotSubset(sP, partType, partField, indRange=indRange)
 
-    # unit pre-processing (only need to remove log for means)
+    # quantity pre-processing (need to remove log for means)
     if partField in ['temp','temperature','ent','entr','entropy']:
         quant = 10.0**quant
+
     if partField in ['vrad','vrad_vvir']:
         raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
 
@@ -198,14 +204,15 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField == 'coldens':
         grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = 'Total Column Density [log cm$^{-2}$]'
-        config['ctName'] = 'viridis'
+        config['ctName'] = 'cubehelix'
 
     if partField == 'coldens_msunkpc2':
         grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
         config['label']  = 'Total Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]'
 
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'cubehelix'
-        if sP.isPartType(partType,'stars'): config['ctName'] = 'afmhot'
+        if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'viridis'
+        if sP.isPartType(partType,'stars'): config['ctName'] = 'cubehelix'
 
     if partField == 'HI' or ' ' in partField:
         grid = logZeroSafe( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
@@ -214,18 +221,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
 
     # mass-weighted quantities
     if partField in ['temp','temperature']:
-        grid  = logZeroSafe( grid )
+        grid = logZeroSafe( grid )
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'jet'
 
     if partField in ['ent','entr','entropy']:
-        grid  = logZeroSafe( grid )
+        grid = logZeroSafe( grid )
         config['label']  = 'Entropy [log K cm$^2$]'
         config['ctName'] = 'jet'
 
     if partField in ['vmag','velmag']:
         config['label']  = 'Velocity Magnitude [km/s]'
-        config['ctName'] = 'plasma'
+        config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
 
     if partField == 'vrad':
         config['label']  = 'Radial Velocity [km/s]'
@@ -234,6 +241,20 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField == 'vrad_vvir':
         config['label']  = 'Radial Velocity / Halo v$_{200}$'
         config['ctName'] = 'brewer-brownpurple'
+
+    if partField in ['metal','Z']:
+        grid = logZeroSafe( grid )
+        config['label']  = 'Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]'
+        config['ctName'] = 'ocean'
+
+    if partField in ['metal_solar','Z_solar']:
+        grid = logZeroSafe( grid )
+        config['label']  = 'Metallicity [log Z$_{\\rm \odot}$]'
+        config['ctName'] = 'ocean'
+
+    if partField in ['star_age','stellar_age']:
+        config['label']  = 'Stellar Age [Gyr]'
+        config['ctName'] = 'blgrrd_black0'
 
     # failed to find?
     if 'label' not in config:
@@ -249,8 +270,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
          boxSizeImg[0], boxSizeImg[1], boxSizeImg[2], axes[0], axes[1], 
          hsmlFac, str(rotMatrix))).hexdigest()[::4]
 
-    saveFilename = sP.derivPath + 'grids/%s.%d.%s.%s.%s.hdf5' % \
-                   (method, sP.snap, partType, partField.replace(' ','_'), m)
+    _, sbStr, _ = subboxVals(sP.subbox)
+
+    saveFilename = sP.derivPath + 'grids/%s.%s%d.%s.%s.%s.hdf5' % \
+                   (method, sbStr, sP.snap, partType, partField.replace(' ','_'), m)
 
     if not isdir(sP.derivPath + 'grids/'):
         mkdir(sP.derivPath + 'grids/')
@@ -301,9 +324,26 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         # load: mass/weights, quantity, and normalization required
         mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
 
+        # stars requested in run with winds? if so, load SFTime to remove contaminating wind particles
+        wMask = None
+
+        if partType == 'stars' and sP.winds:
+            sftime = snapshotSubset(sP, partType, 'sftime', indRange=indRange)
+            wMask = np.where(sftime > 0.0)[0]
+            assert len(wMask)
+
+            mass = mass[wMask]
+            pos  = pos[wMask,:]
+            if quant is not None:
+                quant = quant[wMask]
+
+        # render
         if method == 'sphMap':
             # particle by particle orthographic splat using standard SPH cubic spline kernel
             hsml = getHsmlForPartType(sP, partType, indRange=indRange) * hsmlFac
+
+            if wMask is not None:
+                hsml = hsml[wMask]
 
             grid = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                            boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, nPixels=nPixels, 
@@ -437,7 +477,11 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
         aspect = nRows/nCols
 
         fig = plt.figure(frameon=False, tight_layout=False)
-        barAreaHeight = 0.1
+
+        if 'cbarSize' in panels[0] and panels[0]['cbarSize'] is not None:
+            barAreaHeight = panels[0]['cbarSize']
+        else:
+            barAreaHeight = 0.1 # 10% of plot height
         
         sizeFac = rasterPx / mpl.rcParams['savefig.dpi']
         fig.set_size_inches(sizeFac*nCols, sizeFac*nRows*(1/(1.0-barAreaHeight)))

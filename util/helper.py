@@ -249,17 +249,42 @@ def loadColorTable(ctName):
           rgb_table : do not load for active plotting, just return table as an array.
     """
     from matplotlib.pyplot import cm
+    from matplotlib.colors import LinearSegmentedColormap
     cmap = None
-    
+
     # matplotlib
     if ctName in cm.cmap_d:
         cmap = cm.get_cmap(ctName)
 
-    # cubehelix
+    # cubehelix (with arbitrary parameters)
     # ...
 
-    # other custom
-    # ...
+    # custom
+    if ctName == 'bluered_black0':
+        # blue->red with a sharp initial start in black
+        cdict = {'red'   : ((0.0,  0.0, 0.0), # x0, r_i(x0), r_f(x0)
+                            (0.01, 1.0, 1.0), # x1, r_i(x1), r_f(x1)
+                            (1.0,  0.0, 0.0)),
+                 'green' : ((0.0,  0.0, 0.0), # xj, g_initial(xj), g_final(xj)
+                            (1.0,  0.0, 0.0)),
+                 'blue'  : ((0.0,  0.0, 0.0),
+                            (0.01, 0.0, 0.0),
+                            (1.0,  1.0, 1.0))}
+        cmap = LinearSegmentedColormap(ctName, cdict)
+
+    if ctName == 'blgrrd_black0':
+        # blue->green->red with a sharp initial start in black
+        cdict = {'red'   : ((0, 0, 0), (0.01, 0.1, 0.1), (0.5, 0.1, 0.1), (1, 1, 1)),
+                 'green' : ((0, 0, 0), (0.2, 0, 0), (0.5, 0.8, 0.8), (0.8, 0, 0), (1, 0, 0)),
+                 'blue'  : ((0, 0, 0), (0.01, 1, 1), (0.5, 0.1, 0.1), (1, 0.1, 0.1))}
+        cmap = LinearSegmentedColormap(ctName, cdict)
+
+    if ctName == 'dmdens':
+        # illustris dark matter density (originally from Mark)
+        cdict = {'red'   : ((0.0, 0.0, 0.0), (0.3,0.0,0.0), (0.6, 0.8, 0.8), (1.0, 1.0, 1.0)),
+                 'green' : ((0.0, 0.0, 0.0), (0.3,0.3,0.3), (0.6, 0.4, 0.4), (1.0, 1.0, 1.0)),
+                 'blue'  : ((0.0, 0.05, 0.05), (0.3,0.5,0.5), (0.6, 0.6, 0.6), (1.0, 1.0, 1.0))}
+        cmap = LinearSegmentedColormap(ctName, cdict)
 
     if cmap is None:
         raise Exception('Unrecognized colormap request ['+ctName+'] or not implemented.')

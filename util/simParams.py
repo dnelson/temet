@@ -44,7 +44,7 @@ class simParams:
     nTypes        = 6     # number of particle types
 
     # subboxes
-    subbox        = None  # integer >= 0 if the snapshot corresponds to a subbox snap
+    subbox        = None  # integer >= 0 if the snapshot of this sP instance corresponds to a subbox snap
     subboxCen     = None  # list of subbox center coordinate ([x0,y0,z0],[x1,y1,z1],...)
     subboxSize    = None  # list of subbox extents in code units (ckpc/h)
     
@@ -153,8 +153,8 @@ class simParams:
                 self.subboxCen  = 0 # todo
                 self.subboxSize = 0 # todo
             if res in res_L205:
-                self.subboxCen  = 0 # todo
-                self.subboxSize = 0 # todo
+                self.subboxCen  = [[44000,49000,148000],[20000,175000,15000],[169000,97900,138000]]
+                self.subboxSize = [15000, 15000, 10000]
 
             # tracers
             if res in res_L75:
@@ -172,6 +172,17 @@ class simParams:
             self.winds  = 3
             self.BHs    = 3
 
+            # DM-only runs:
+            if '_dm' in run:
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
+                self.trMCPerCell = 0 # no tracers
+
+                self.metals = None
+                self.winds  = False
+                self.BHs    = False
+
+                self.targetGasMass = 0.0
+
             # L12.5 test box with resolutions same as L25
             if variant == 'L12.5':
                 self.gravSoft      /= 2.0
@@ -181,9 +192,11 @@ class simParams:
             bs = str(int(self.boxSize/1000.0))
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
-            self.arepoPath  = self.basePath + 'sims.TNG/L' + bs + 'n' + str(res) + 'TNG/'
+            dmStr = '_DM' if '_dm' in run else ''
+
+            self.arepoPath  = self.basePath + 'sims.TNG/L' + bs + 'n' + str(res) + 'TNG' + dmStr + '/'
             self.savPrefix  = 'IP'
-            self.simName    = 'L' + bs + 'n' + str(res) + 'TNG'
+            self.simName    = 'L' + bs + 'n' + str(res) + 'TNG' + dmStr
             self.saveTag    = 'iP'
             self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
@@ -249,6 +262,10 @@ class simParams:
                 if res == 455:  self.targetGasMass = 5.66834e-3
                 if res == 910:  self.targetGasMass = 7.08542e-4
                 if res == 1820: self.targetGasMass = 8.85678e-5
+
+                self.subboxCen  = [[9000,17000,63000],[43100,53600,60800],
+                                   [37000,43500,64500],[64500,51500,39500]]
+                self.subboxSize = [7500,8000,5000,5000]
 
                 self.trMassConst = self.targetGasMass / self.trMCPerCell
 
@@ -326,7 +343,7 @@ class simParams:
             # DM+gas single halo zooms
             if run == 'zooms':
                 self.trMCPerCell = 5
-                self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1] # up to and with WIND_COUNTER (=512, 10/13)
+                self.trMCFields  = [0,1,2,3,4,5,6,7,8,9,-1,-1,-1,-1,-1] # up to and with WIND_COUNTER (=512, 10/13)
                 self.trMassConst = self.targetGasMass / self.trMCPerCell
 
             bs = str(round(self.boxSize/1000))
@@ -342,8 +359,8 @@ class simParams:
             self.saveTag    = 'zH' + str(hInd) + 'L' + str(self.levelMax)
             self.plotPrefix = 'zL' + str(self.levelMax) + ds
 
-        # ZOOMS-2 (testing)
-        if run in ['zooms2']:
+        # ZOOMS-2
+        if run in ['zooms2','zooms2_tng']:
             self.validResLevels = [9,10,11,12]
             self.boxSize        = 20000.0
             self.groupOrdered   = True
@@ -360,17 +377,26 @@ class simParams:
                 raise Exception('Must specify hInd, no sims.zooms2 parent box.')
 
             # fillZoomParams for individual halo
-            self.fillZoomParams(res=res,hInd=hInd,variant='gen2_nofb')
+            self.fillZoomParams(res=res,hInd=hInd,variant='gen2')
 
             self.trMCPerCell = 5
-            self.trMCFields  = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1] # up to and with ENTMAX_TIME (=128, 8/14)
+            self.trMCFields  = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1,-1] # up to and with ENTMAX_TIME (=128, 8/14)
             self.trMassConst = self.targetGasMass / self.trMCPerCell
 
-            bs = str(round(self.boxSize/1000))
+            # TNG model run?
+            if '_tng' in run:
+                self.trMCFields = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1,8] # shock_maxmach added
+                
+                self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
+                self.winds  = 3
+                self.BHs    = 3
 
-            self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+str(self.levelMax)+'/'
+            bs = str(round(self.boxSize/1000))
+            ts = 't' if '_tng' in run else ''
+
+            self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+str(self.levelMax)+ts+'/'
             self.savPrefix  = 'Z2'
-            self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + '_' + 'gen2_nofb'
+            self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + '_' + 'gen2' + ts
             self.saveTag    = 'z2H' + str(hInd) + 'L' + str(self.levelMax)
             self.plotPrefix = 'z2L' + str(self.levelMax)
 
@@ -481,10 +507,10 @@ class simParams:
             except:
                 raise Exception('Input subbox request [%s] not recognized or out of bounds!' % variant)
 
-            # assign subbox number, prevent group ordered snapshot loading and periodic box corrections
+            # assign subbox number, update name, prevent group ordered snapshot loading
             self.subbox = sbNum
+            self.simName += '_sb' + str(sbNum)
             self.groupOrdered = False
-            self.boxSize = None
 
         # if redshift passed in, convert to snapshot number and save, and attach units(z)
         self.setRedshift(self.redshift)
@@ -514,7 +540,7 @@ class simParams:
         if self.levelMax == 9:  self.ids_offset =  10000000
         if self.levelMax == 10: self.ids_offset =  50000000
         if self.levelMax == 11:
-            if variant == 'gen1': self.ids_offset = 500000000
+            if 'gen1' in variant: self.ids_offset = 500000000
             if 'gen2' in variant: self.ids_offset = 200000000
         if self.levelMax == 12: self.ids_offset = 800000000
 
@@ -686,8 +712,19 @@ class simParams:
                 self.colors = colors_maroon
                 self.hIndDisp = 7
 
-        if variant == 'gen2_nofb':
+        if variant == 'gen2':
             self.hIndDisp = hInd
+
+            if hInd == 1:
+                self.targetHaloInd  = 98
+                self.targetHaloPos  = [6994.99, 16954.28, 16613.29]
+                self.targetHaloRvir = 218.0 # ckpc
+                self.targetHaloMass = 11.90 # log msun
+                self.targetRedshift = 2.0
+
+                self.zoomShift = [22,-43,-39]
+                self.rVirFac   = 6.0
+                self.colors    = colors_lime
 
             if hInd == 2:
                 self.targetHaloInd  = 132
