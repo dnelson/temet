@@ -8,6 +8,8 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+
+from datetime import datetime, timedelta
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
 from os import remove, rename
@@ -270,10 +272,15 @@ def plotCpuTimes():
                 xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
                 yPredicted = yp(xp)
                 totPredictedMHs = yPredicted.max()
+                totRunMHs = yy.max()
+
+                remainingRunDays = (totPredictedMHs-totRunMHs) * 1e6 / (cpu['numCPUs'] * 24.0)
+                predictedFinishDate = datetime.now() + timedelta(days=remainingRunDays)
+                predictedFinishStr = predictedFinishDate.strftime('%d %B, %Y')
 
                 ax.plot(xp, yPredicted, linestyle=':', color=l.get_color())
-                print(' Predicted total time: %d million CPUhs' % totPredictedMHs)
-                pLabels.append( 'Predict: %3.1f MHs' % totPredictedMHs)
+                print(' Predicted total time: %d million CPUhs (%s)' % (totPredictedMHs,predictedFinishStr))
+                pLabels.append( 'Predict: %3.1f MHs (Finish: %s)' % (totPredictedMHs,predictedFinishStr))
                 pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=':') )
 
         zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
