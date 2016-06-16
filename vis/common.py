@@ -29,11 +29,13 @@ totSumFields     = ['mass']
 def getHsmlForPartType(sP, partType, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
+
     # dark matter
     if sP.isPartType(partType, 'dm'):
         if not snapHasField(sP, partType, 'SubfindHsml'):
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2)
+            treePrec = 'single' if pos.dtype == np.float32 else 'double'
+            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2, treePrec=treePrec)
         else:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         return hsml
@@ -47,12 +49,15 @@ def getHsmlForPartType(sP, partType, indRange=None):
     if sP.isPartType(partType, 'stars'):
         if not snapHasField(sP, partType, 'SubfindHsml'):
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2)
+            treePrec = 'single' if pos.dtype == np.float32 else 'double'
+            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2, treePrec=treePrec)
         else:
-            # use a maximum size (~px scale?) for stars in outskirts
-            #hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-            #hsml[hsml > 0.25] = 0.25 # can decouple, leads to strageness/interestingness
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+
+        # use a maximum size (~px scale?) for stars in outskirts
+        print(' getHsmlForPartType(): clipping [stars] at a maximum of 0.5x gravSoft.')
+        hsml[hsml > 0.5*sP.gravSoft] = 0.5*sP.gravSoft # can decouple, leads to strageness/interestingness
+
         return hsml
 
     raise Exception('Unimplemented partType.')
@@ -209,7 +214,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Total Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]'
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'viridis'
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
         if sP.isPartType(partType,'stars'): config['ctName'] = 'cubehelix'
 
     if partField == 'HI' or ' ' in partField:
@@ -243,12 +248,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField in ['metal','Z']:
         grid = logZeroSafe( grid )
         config['label']  = 'Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]'
-        config['ctName'] = 'ocean'
+        config['ctName'] = 'gist_earth'
 
     if partField in ['metal_solar','Z_solar']:
         grid = logZeroSafe( grid )
         config['label']  = 'Metallicity [log Z$_{\\rm \odot}$]'
-        config['ctName'] = 'ocean'
+        config['ctName'] = 'gist_earth'
 
     if partField in ['star_age','stellar_age']:
         config['label']  = 'Stellar Age [Gyr]'

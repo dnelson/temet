@@ -189,7 +189,9 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
                 numNodes += 1
                 nFree += 1
 
-                assert numNodes < length.shape[0] # Exceed tree allocated size, need to increase and redo.
+                if numNodes >= length.shape[0]:
+                    # exceeding tree allocated size, need to increase and redo
+                    return -1
 
     # now compute the (sibling,nextnode,next_node) recursively
     last = np.int32(-1)
@@ -369,33 +371,45 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
       nThreads       : do multithreaded calculation (on treefind, while tree construction remains serial)
     """
     # input sanity checks
-    assert pos.ndim == 2 and pos.shape[1] in [3], 'Strange dimensions of pos.'
-    assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
-    assert nDims in [3], 'Invalid ndims specification (3D only).'
-    assert treePrec in ['single','double'], 'Invalid treePrec specification.'
+    treePrecs = ['single','double']
+    treeDims  = [3]
 
-    # tree allocation and construction
+    assert pos.ndim == 2 and pos.shape[1] in treeDims, 'Strange dimensions of pos.'
+    assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
+    assert nDims in treeDims, 'Invalid ndims specification (3D only).'
+    assert treePrec in ['single','double'], 'Invalid treePrec specification.'
+    assert pos.shape[0] >= nNGB-nNGBDev, 'Less particles then requested neighbors.'
+
     treeDtype = 'float32' if treePrec == 'single' else 'float64'
 
     NumPart = pos.shape[0]
-    MaxNodes = np.int(1.1*NumPart) + 1
 
-    assert NumPart >= nNGB-nNGBDev, 'Less particles then requested neighbors.'
-
-    length   = np.zeros( MaxNodes, dtype=treeDtype )     # NODE struct member
-    center   = np.zeros( (3,MaxNodes), dtype=treeDtype ) # NODE struct member
-    suns     = np.zeros( (8,MaxNodes), dtype='int32' )   # NODE.u first union member
-    sibling  = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
-    nextnode = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
-    NextNode = np.zeros( NumPart, dtype='int32' )
-
-    # call JIT compiled kernel
+    # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
     start_time = time.time()
     print(' calcHsml(): starting...')
 
-    numNodes = _constructTree(pos,boxSizeSim,NextNode,length,center,suns,sibling,nextnode)
+    NextNode = np.zeros( NumPart, dtype='int32' )
+
+    for num_iter in range(10):
+        # allocate
+        MaxNodes = np.int( (num_iter+1.1)*NumPart ) + 1
+
+        length   = np.zeros( MaxNodes, dtype=treeDtype )     # NODE struct member
+        center   = np.zeros( (3,MaxNodes), dtype=treeDtype ) # NODE struct member
+        suns     = np.zeros( (8,MaxNodes), dtype='int32' )   # NODE.u first union member
+        sibling  = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+        nextnode = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+
+        # construct: call JIT compiled kernel
+        numNodes = _constructTree(pos,boxSizeSim,NextNode,length,center,suns,sibling,nextnode)
+
+        if numNodes > 0:
+            break
+
+        print(' calcHsml(): increase alloc %g to %g and redo...' % (num_iter+1.1,num_iter+2.1))
 
     build_done_time = time.time()
+    assert numNodes > 0, 'Tree construction failed (try double precision if you used single).'
     print(' calcHsml(): tree construction took [%g] sec.' % (build_done_time-start_time))
 
     if posSearch is None:
