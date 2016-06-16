@@ -13,13 +13,11 @@ from numba import jit, void, int32
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
-#@jit(void(int32,int32,int32,int32,int32[:],int32[:],int32[:],int32[:]))
 @jit(nopython=True, nogil=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     """ Helper routine for calcHsml(), see below. """
-    #print(' _updateNodeRecursive(%d,%d,%d,%d)' % (no,sib,NumPart,last))
-    pp = 0 #np.int32(0)
-    nextsib = 0 #np.int32(0)
+    pp = 0
+    nextsib = 0
 
     if no >= NumPart:
         if last >= 0:
@@ -64,9 +62,7 @@ def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     return last # avoid use of global in numba
 
 @jit(nopython=True, nogil=True)
-def _constructTree(pos,boxSizeSim,next_node, #father_node,
-                   length,center,suns,sibling,nextnode): # Nodes_base
-                   #father,maxsoft,s,mass,bitflags): # Nodes_base unused
+def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode):
     """ Core routine for calcHsml(), see below. """
     subnode = 0
     parent  = -1
@@ -75,8 +71,7 @@ def _constructTree(pos,boxSizeSim,next_node, #father_node,
     # Nodes_base and Nodes are both pointers to the arrays of NODE structs
     # Nodes_base is allocated with size >NumPart, and entries >=NumPart are "internal nodes"
     #  while entries from 0 to NumPart-1 are leafs (actual particles)
-    #  Nodes just points to Nodes_base-NumPart (such that Nodes[NumPart]=Nodes_base[0])
-    #  Nodes[no]=Nodes_base[no-NumPart]
+    #  Nodes just points to Nodes_base-NumPart (such that Nodes[no]=Nodes_base[no-NumPart])
     xyzMin = np.zeros( 3, dtype=np.float32 )
     xyzMax = np.zeros( 3, dtype=np.float32 )
     
@@ -159,7 +154,7 @@ def _constructTree(pos,boxSizeSim,next_node, #father_node,
                 length[ind2] = 0.5 * length[ind1]
                 lenHalf = 0.25 * length[ind1]
 
-                if subnode & 1: # np.bitwise_and(subnode,1)
+                if subnode & 1:
                     center[0,ind2] = center[0,ind1] + lenHalf
                 else:
                     center[0,ind2] = center[0,ind1] - lenHalf
@@ -187,9 +182,6 @@ def _constructTree(pos,boxSizeSim,next_node, #father_node,
                 if pos[no,2] > center[2,ind2]:
                     subnode += 4
 
-                #if length[nFree] < 1.0e-3 * Softening:
-                    # randomize subnode index, or terminate
-
                 suns[subnode,ind2] = no
 
                 no = nFree # resume trying to insert the new particle at the newly created internal node
@@ -199,9 +191,8 @@ def _constructTree(pos,boxSizeSim,next_node, #father_node,
 
                 assert numNodes < length.shape[0] # Exceed tree allocated size, need to increase and redo.
 
-    # now compute the multipole moments recursively
+    # now compute the (sibling,nextnode,next_node) recursively
     last = np.int32(-1)
-    #dummy = np.int32(-1)
 
     last = _updateNodeRecursive(NumPart,-1,NumPart,last,suns,nextnode,next_node,sibling)
 
@@ -235,9 +226,9 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
     while no >= 0:
         if no < NumPart:
             # single particle
-            #print(' single_particle: no=%d to %d' % (no,next_node[no]))
-            p = no
             assert next_node[no] != no # Going into infinite loop.
+
+            p = no
             no = next_node[no]
 
             # box-exclusion along each axis
@@ -266,11 +257,8 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
 
         else:
             # internal node
-            #print(' internal_node: no=%d to %d if discarded or %d if opened' % (no,sibling[no-NumPart],nextnode[no-NumPart]))
-            ind = no-NumPart # struct NODE *this = &Nodes[no];
+            ind = no-NumPart
             no = sibling[ind] # in case the node can be discarded
-
-            #print('  evaluate opening: center [%g %g %g]' % (center[0,ind],center[1,ind],center[2,ind]))
 
             if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
                 continue
@@ -286,8 +274,6 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
                 continue
             if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
                 continue
-
-            #print('  open')
 
             no = nextnode[ind] # we need to open the node
 
@@ -313,8 +299,6 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
         numNgbInH = _treeSearchNumNgb(xyz,h_guess,NumPart,boxSizeSim,pos,
                                       next_node,length,center,sibling,nextnode)
-
-        #print(' iter=%d h=%g nNGB=%g (left=%g right=%g)' % (iter_num,h_guess,numNgbInH,left,right))
 
         # success
         if numNgbInH > (nNGB-nNGBDev) and numNgbInH <= (nNGB+nNGBDev):
@@ -344,14 +328,14 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
             if right > 0.0 and left == 0.0:
                 h_guess /= 1.26
 
-    #print(' found h = %g iter_num = %d' % (h_guess,iter_num))
     return h_guess
 
 @jit(nopython=True, nogil=True)
-def _treeSearchHsmlSet(posSearch,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
+def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
                        next_node,length,center,sibling,nextnode):
     """ Core routine for calcHsml(), see below. """
-    numSearch = posSearch.shape[0]
+    numSearch = ind1 - ind0 + 1
+    NumPart = pos.shape[0]
 
     h_guess = 1.0
     if boxSizeSim > 0.0:
@@ -361,8 +345,7 @@ def _treeSearchHsmlSet(posSearch,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
     for i in range(numSearch):
         # single ball search using octtree, requesting hsml which enclosed nNGB+/-nNGBDev around xyz
-        xyz = posSearch[i,:]
-        #print('[%d] xyz %g %g %g' % (i,xyz[0],xyz[1],xyz[2]))
+        xyz = posSearch[ind0+i,:]
 
         hsml[i] = _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
                                         next_node,length,center,sibling,nextnode)
@@ -372,7 +355,7 @@ def _treeSearchHsmlSet(posSearch,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
     return hsml
 
-def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treePrec='single', nThreads=1):
+def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treePrec='single', nThreads=16):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
@@ -401,49 +384,88 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
 
     length   = np.zeros( MaxNodes, dtype=treeDtype )     # NODE struct member
     center   = np.zeros( (3,MaxNodes), dtype=treeDtype ) # NODE struct member
-    #maxsoft  = np.zeros( MaxNodes, dtype=treeDtype )     # NODE struct member
-    suns     = np.zeros( (8,MaxNodes), dtype='int32' )    # NODE.u first union member
-    #s        = np.zeros( (3,MaxNodes), dtype=treeDtype )  # NODE.u second union member (NODE.u.d struct member)
-    #mass     = np.zeros( MaxNodes, dtype=treeDtype )       # (NODE.u.d struct member)
-    #bitflags = np.zeros( MaxNodes, dtype='uint32' )        # (NODE.u.d struct member)
-    sibling  = np.zeros( MaxNodes, dtype='int32' )         # (NODE.u.d struct member)
-    nextnode = np.zeros( MaxNodes, dtype='int32' )         # (NODE.u.d struct member)
-    #father   = np.zeros( MaxNodes, dtype='int32' )         # (NODE.u.d struct member)
-
-    NextNode   = np.zeros( NumPart, dtype='int32' )
-    #FatherNode = np.zeros( NumPart, dtype='int32' )
+    suns     = np.zeros( (8,MaxNodes), dtype='int32' )   # NODE.u first union member
+    sibling  = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+    nextnode = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+    NextNode = np.zeros( NumPart, dtype='int32' )
 
     # call JIT compiled kernel
     start_time = time.time()
+    print(' calcHsml(): starting...')
 
-    numNodes = _constructTree(pos,boxSizeSim,NextNode, #Father,
-                              length,center,suns,sibling,nextnode) #,father)
-                              #,maxsort,s,mass,bitflags) # unused
+    numNodes = _constructTree(pos,boxSizeSim,NextNode,length,center,suns,sibling,nextnode)
 
     build_done_time = time.time()
-
-    # tree search
-    #print('numNodes: %d (MaxNodes=%d)' % (numNodes,MaxNodes))
-    #for i in range(numNodes):
-    #    print(' [%d] length=%d [%d %d %d %d %d %d %d %d] sibling=%d nextnode=%d' % \
-    #      (i, length[i], suns[0,i], suns[1,i], suns[2,i], suns[3,i], suns[4,i], 
-    #       suns[5,i], suns[6,i], suns[7,i], sibling[i], nextnode[i]))
-
-    #print('NumPart: %d' % (NumPart))
-    #for i in range(NumPart):
-    #    print(' [%d] next_node = %d' % (i,NextNode[i]))
+    print(' calcHsml(): tree construction took [%g] sec.' % (build_done_time-start_time))
 
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
 
-    hsml = _treeSearchHsmlSet(posSearch,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
-                              NextNode,length,center,sibling,nextnode)
+    # single threaded?
+    # ----------------
+    if nThreads == 1:
+        ind0 = 0
+        ind1 = posSearch.shape[0] - 1
 
-    done_time = time.time()
+        hsml = _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
+                                  NextNode,length,center,sibling,nextnode)
 
-    print(' calcHsml(): tree construction took [%g] sec, search took [%g] sec.' % \
-        (build_done_time-start_time, done_time-build_done_time))
+        return hsml
 
+    # else, multithreaded
+    # -------------------
+    class searchThread(threading.Thread):
+        """ Subclass Thread() to provide local storage (hsml) which can be retrieved after 
+            this thread terminates and added to the global return. Note (on Ody2): This algorithm with 
+            the serial overhead of the tree construction has ~55% scaling effeciency to 16 threads (~8x
+            speedup), drops to ~32% effeciency at 32 threads (~10x speedup). """
+        def __init__(self, threadNum, nThreads):
+            super(searchThread, self).__init__()
+
+            # determine local slice (this is a view instead of a copy, even better)
+            searchInds = np.arange(posSearch.shape[0])
+            inds = pSplit(searchInds, nThreads, threadNum)
+
+            self.ind0 = inds[0]
+            self.ind1 = inds[-1]
+
+            # copy other parameters (non-self inputs to _calc() appears to prevent GIL release)
+            self.nNGB       = nNGB
+            self.nNGBDev    = nNGBDev
+            self.boxSizeSim = boxSizeSim
+
+            # create views to other arrays
+            self.posSearch = posSearch
+            self.pos       = pos
+            self.NextNode  = NextNode
+            self.length    = length
+            self.center    = center
+            self.sibling   = sibling
+            self.nextnode  = nextnode
+
+        def run(self):
+            # call JIT compiled kernel (normQuant=False since we handle this later)
+            self.hsml = _treeSearchHsmlSet(self.posSearch,self.ind0,self.ind1,self.nNGB,self.nNGBDev,
+                                           self.boxSizeSim,self.pos,self.NextNode,self.length,
+                                           self.center,self.sibling,self.nextnode)
+
+    # create threads
+    threads = [searchThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
+
+    # allocate master return grids
+    hsml = np.zeros( posSearch.shape[0], dtype=np.float32 )
+
+    # launch each thread, detach, and then wait for each to finish
+    for thread in threads:
+        thread.start()
+        
+    for thread in threads:
+        thread.join()
+
+        # after each has finished, add its result array to the global
+        hsml[thread.ind0 : thread.ind1 + 1] = thread.hsml
+
+    print(' calcHsml(): search took [%g] sec.' % (time.time()-build_done_time))
     return hsml
 
 def benchmark():
@@ -453,20 +475,17 @@ def benchmark():
     from util.simParams import simParams
 
     # config data
-    if 1:
+    if 0:
         # generate random testing data
         class sP:
             boxSize = 100.0
 
-        nPts = 80000
+        nPts = 100000
 
         posDtype = 'float32'
         pos = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype(posDtype)
-        #pos = np.zeros( (nPts,3), dtype=posDtype )
-        #pos[0,:] = [10,20,30]
-        #pos[1,:] = [40,45,10]
 
-    if 0:
+    if 1:
         # load some gas in a box
         sP = simParams(res=128, run='tracer', redshift=0.0)
         pos = snapshotSubset(sP, 'gas', 'pos')
@@ -475,17 +494,54 @@ def benchmark():
     nNGB = 32
     nNGBDev = 1
     treePrec = 'single'
-    nThreads = 1
+    nThreads = 16
+    posSearch = None #pos[0:5000,:]
 
     # warmup (compile)
-    hsml = calcHsml(pos,sP.boxSize,nNGB=nNGB,nNGBDev=nNGBDev,treePrec=treePrec,nThreads=nThreads)
+    hsml = calcHsml(pos,sP.boxSize,posSearch=posSearch,
+                    nNGB=nNGB,nNGBDev=nNGBDev,treePrec=treePrec,nThreads=nThreads)
 
     # calculate and time
     start_time = time.time()
-    nLoops = 2
+    nLoops = 4
 
     for i in np.arange(nLoops):
-        hsml = calcHsml(pos,sP.boxSize,nNGB=nNGB,nNGBDev=nNGBDev,treePrec=treePrec,nThreads=nThreads)
+        hsml = calcHsml(pos,sP.boxSize,posSearch=posSearch,
+                        nNGB=nNGB,nNGBDev=nNGBDev,treePrec=treePrec,nThreads=nThreads)
 
     print('%d estimates of HSMLs took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))
-    print('hsml min %g max %g mean %g' % (np.max(hsml), np.min(hsml), np.mean(hsml)))
+    print('hsml min %g max %g mean %g' % (np.min(hsml), np.max(hsml), np.mean(hsml)))
+
+def checkVsSubfindHsml():
+    """ Compare our result vs SubfindHsml output. """
+    from util import simParams
+    from cosmo.load import snapshotSubset
+    import matplotlib.pyplot as plt
+
+    sP = simParams(res=455,run='tng',redshift=0.0)
+
+    pos = snapshotSubset(sP, 'gas', 'pos')
+    subfind_hsml = snapshotSubset(sP, 'gas', 'SubfindHsml')
+
+    N = 1e6
+    subfind_hsml = subfind_hsml[0:N]
+    pos = pos[0:N,:]
+
+    hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=1)
+
+    # plot
+    fig = plt.figure(figsize=(20,20))
+
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('SubfindHSML')
+    ax.set_ylabel('CalcHsml')
+
+    ax.set_xlim([0,50])
+    ax.set_ylim([0,50])
+
+    ax.scatter(subfind_hsml,hsml)
+    ax.plot([0,45],[0,45],'r')
+
+    fig.tight_layout()    
+    fig.savefig('hsml.png')
+    plt.close(fig)

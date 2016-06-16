@@ -56,21 +56,21 @@ def renderBox():
     #panels.append( {'run':'feedback', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'temp'} )
     #panels.append( {'run':'feedback', 'res':128, 'redshift':2.0, 'partType':'gas', 'partField':'coldens'} )
 
-    panels.append( {'res':1820, 'variant':'subbox0', 'partType':'gas', 'partField':'density'} )
-    panels.append( {'res':1820, 'variant':'subbox1', 'partType':'gas', 'partField':'density'} )
+    #panels.append( {'res':1820, 'variant':'subbox0', 'partType':'gas', 'partField':'density'} )
+    #panels.append( {'res':1820, 'variant':'subbox1', 'partType':'gas', 'partField':'density'} )
 
-    #panels.append( {'res':625, 'partType':'dm', 'partField':'coldens', 'valMinMax':[20.6,22.5]} ) # 19.8, 20.1, 20.5
+    panels.append( {'res':625, 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,9.0]} ) # 19.8, 20.1, 20.5 (end at 22.5)
 
     # plot config (common, applied to all panels)
-    run       = 'illustris' # run name
+    run       = 'tng_dm' # run name
     #res       = 128        # run resolution
     redshift  = 0.0         # run redshift
     #partType  = 'dm'       # which particle type to project
     #partField = 'coldens'  # which quantity/field to project for that particle type
     method    = 'sphMap'    # sphMap, voronoi_const, voronoi_grads, ...
-    nPixels   = 960         # number of pixels per dimension of images when projecting (1400)
+    nPixels   = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac   = 1.0         # [0,1], only in axes, not along projection direction
-    hsmlFac   = 2.5         # multiplier on smoothing lengths for sphMap (0.2)
+    hsmlFac   = 0.2         # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
     relCenPos = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     axes      = [0,1]       # e.g. [0,1] is x,y
     plotHalos = 0           # plot virial circles for the N most massive halos in the box
@@ -79,7 +79,7 @@ def renderBox():
 
     # render config (global)
     plotStyle    = 'edged' # open, edged
-    rasterPx     = 960     # each panel will have this number of pixels if making a raster (png) output
+    rasterPx     = 1400    # each panel will have this number of pixels if making a raster (png) output
                            # but note also it controls the relative size balance of raster/vector (e.g. fonts)
     cbarSize     = 0.0     # 0.0 to disable, None for default
     saveFilename = 'renderBox_N%d_%s.png' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
@@ -123,14 +123,14 @@ def renderBoxFrames(confName):
     #panels.append( {'run':'feedback', 'res':128, 'hsmlFac':0.5, 'partType':'dm',  'partField':'velmag' } )
 
     if confName == 'movie1':
-        panels.append( {'variant':'subbox0', 'partType':'gas',   'partField':'coldens_msunkpc2'} )
-        panels.append( {'variant':'subbox0', 'partType':'dm',    'partField':'coldens_msunkpc2'} )
-        panels.append( {'variant':'subbox0', 'partType':'stars', 'partField':'coldens_msunkpc2'} )
-        panels.append( {'variant':'subbox0', 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
-        panels.append( {'variant':'subbox0', 'partType':'gas',   'partField':'temp'} )
-        panels.append( {'variant':'subbox0', 'partType':'gas',   'partField':'metal_solar'} )
-        panels.append( {'variant':'subbox0', 'partType':'gas',   'partField':'Mg II'} )
-        panels.append( {'variant':'subbox0', 'partType':'gas',   'partField':'O VI'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':0.2, 'partType':'dm',    'partField':'coldens_msunkpc2'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'temp'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'Mg II'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI'} )
 
     if confName == 'movie2':
         panels.append( {'variant':'subbox0', 'partType':'gas', 'partField':'density'} )
@@ -146,7 +146,7 @@ def renderBoxFrames(confName):
     method    = 'sphMap'    # sphMap, voronoi_const, voronoi_grads, ...
     nPixels   = 960         # number of pixels per dimension of images when projecting
     zoomFac   = 0.99        # [0,1], only in axes, not along projection direction
-    hsmlFac   = 2.5         # multiplier on smoothing lengths for sphMap
+    #hsmlFac   = 2.5         # multiplier on smoothing lengths for sphMap
     relCenPos = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     axes      = [0,1]       # e.g. [0,1] is x,y
     plotHalos = 0           # plot virial circles for the N most massive halos in the box
