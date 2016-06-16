@@ -129,7 +129,7 @@ def renderBoxFrames(confName):
         panels.append( {'variant':'subbox0', 'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
         panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'temp'} )
         panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar'} )
-        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'Mg II'} )
+        panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag'} )
         panels.append( {'variant':'subbox0', 'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI'} )
 
     if confName == 'movie2':
