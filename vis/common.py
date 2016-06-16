@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
+from util.treeSearch import calcHsml
 from util.helper import loadColorTable, logZeroSafe
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
@@ -30,11 +31,9 @@ def getHsmlForPartType(sP, partType, indRange=None):
     type, for the full snapshot, optionally restricted to an input indRange. """
     # dark matter
     if sP.isPartType(partType, 'dm'):
-        print('WARNING: TEMPORARY TODO, use CalcHSML for DM (with caching).')
         if not snapHasField(sP, partType, 'SubfindHsml'):
-            print(' No SUBFINDHSML!! Using constant for debug (DM).')
-            numPart = snapshotHeader(sP)['NumPart'][sP.ptNum(partType)]
-            hsml = np.zeros( numPart, dtype='float32' ) + sP.gravSoft * 2.0
+            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2)
         else:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         return hsml
@@ -46,15 +45,14 @@ def getHsmlForPartType(sP, partType, indRange=None):
 
     # stars
     if sP.isPartType(partType, 'stars'):
-        print('WARNING: TEMPORARY TODO, use CalcHSML for stars (with caching).')
         if not snapHasField(sP, partType, 'SubfindHsml'):
-            print(' No SUBFINDHSML!! Using constant for debug (STARS).')
-            numPart = snapshotHeader(sP)['NumPart'][sP.ptNum(partType)]
-            hsml = np.zeros( numPart, dtype='float32' ) + sP.gravSoft * 0.5
+            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2)
         else:
-            #hsml = 0.25 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-            #hsml[hsml > 0.1] = 0.1 # can decouple, leads to strageness/interestingness
-            hsml = 0.5 * snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+            # use a maximum size (~px scale?) for stars in outskirts
+            #hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+            #hsml[hsml > 0.25] = 0.25 # can decouple, leads to strageness/interestingness
+            hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
         return hsml
 
     raise Exception('Unimplemented partType.')
