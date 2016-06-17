@@ -162,6 +162,8 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         ion = cloudyIon(sP, el=element, redshiftInterp=False)
         mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
 
+        mass[mass < 0] = 0.0 # clip -eps values to 0.0
+
     # quantity
     normCol = False
 
@@ -188,30 +190,34 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     """ Perform any final unit conversions on grid output and set field-specific plotting configuration. """
     config = {}
 
+    if sP.isPartType(partType,'dm'):    ptStr = 'DM'
+    if sP.isPartType(partType,'gas'):   ptStr = 'Gas'
+    if sP.isPartType(partType,'stars'): ptStr = 'Stellar'
+
     # volume densities
     if partField in volDensityFields:
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
     if partField in ['dens','density']:
         grid  = logZeroSafe( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
-        config['label']  = 'Mean Volume Density [log cm$^{-3}$]'
+        config['label']  = 'Mean %s Volume Density [log cm$^{-3}$]' % ptStr
         config['ctName'] = 'jet'
 
     # total sum fields
     if partField == 'mass':
         grid  = logZeroSafe( sP.units.codeMassToLogMsun(grid) )
-        config['label']  = 'Total Mass [log M$_{\\rm sun}$]'
+        config['label']  = 'Total %s Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'jet'
 
     # column densities
     if partField == 'coldens':
         grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
-        config['label']  = 'Total Column Density [log cm$^{-2}$]'
+        config['label']  = '%s Column Density [log cm$^{-2}$]' % ptStr
         config['ctName'] = 'cubehelix'
 
     if partField == 'coldens_msunkpc2':
         grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
-        config['label']  = 'Total Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]'
+        config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
@@ -234,25 +240,25 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['ctName'] = 'jet'
 
     if partField in ['vmag','velmag']:
-        config['label']  = 'Velocity Magnitude [km/s]'
+        config['label']  = '%s Velocity Magnitude [km/s]' % ptStr
         config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
 
     if partField == 'vrad':
-        config['label']  = 'Radial Velocity [km/s]'
+        config['label']  = '%s Radial Velocity [km/s]' % ptStr
         config['ctName'] = 'brewer-brownpurple'
 
     if partField == 'vrad_vvir':
-        config['label']  = 'Radial Velocity / Halo v$_{200}$'
+        config['label']  = '%s Radial Velocity / Halo v$_{200}$' % ptStr
         config['ctName'] = 'brewer-brownpurple'
 
     if partField in ['metal','Z']:
         grid = logZeroSafe( grid )
-        config['label']  = 'Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]'
+        config['label']  = '%s Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]' % ptStr
         config['ctName'] = 'gist_earth'
 
     if partField in ['metal_solar','Z_solar']:
         grid = logZeroSafe( grid )
-        config['label']  = 'Metallicity [log Z$_{\\rm \odot}$]'
+        config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
         config['ctName'] = 'gist_earth'
 
     if partField in ['star_age','stellar_age']:
@@ -364,7 +370,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
     return grid, config
 
-def addBoxMarkers(p, ax):
+def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
     if 'plotHalos' in p and p['plotHalos'] > 0:
         # plotting N most massive halos
@@ -396,7 +402,111 @@ def addBoxMarkers(p, ax):
             c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
             ax.add_artist(c)
 
-def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
+    if 'labelZ' in p and p['labelZ']:
+        p0 = plt.Line2D((0,0),(0,0), linestyle='')
+
+        legend = ax.legend([p0], ["z$\,$=$\,$%.2f" % p['sP'].redshift], loc='upper right')
+        legend.get_texts()[0].set_color('white')
+        ax.add_artist(legend)
+
+    if 'labelSim' in p and p['labelSim']:
+        p0 = plt.Line2D((0,0),(0,0), linestyle='')
+
+        legend = ax.legend([p0], [p['sP'].simName], loc='lower right')
+        legend.get_texts()[0].set_color('white')
+
+    if 'labelScale' in p and p['labelScale']:
+        scaleBarLen = (p['extent'][1]-p['extent'][0])*0.15 # 15% of plot width
+        scaleBarLen = 100.0 * round(scaleBarLen/100.0) # round to nearest 100 code units
+
+        unitStrs = ['cpc','ckpc','cMpc','cGpc'] # comoving
+        unitInd = 1 if p['sP'].mpcUnits is False else 2
+
+        scaleBarStr = "%g %s" % (scaleBarLen, unitStrs[unitInd])
+        if scaleBarLen > 900: # use Mpc label
+            scaleBarStr = "%g %s" % (scaleBarLen/1000.0, unitStrs[unitInd+1])
+        if scaleBarLen < 1: # use pc label
+            scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
+
+        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*0.03 # upper left
+        x1 = x0 + p['sP'].units.codeLengthToComovingKpc(scaleBarLen) # actually plot size in ckpc (no h)
+        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*0.03
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*0.06
+
+        ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=2.0, alpha=1.0)
+        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
+                 size='x-large', ha='center', va='center') # same size as legend text
+
+def setAxisColors(ax, color2):
+    """ Factor out common axis color commands. """
+    ax.title.set_color(color2)
+    ax.yaxis.label.set_color(color2)
+    ax.xaxis.label.set_color(color2)
+
+    for s in ['bottom','left','top','right']:
+        ax.spines[s].set_color(color2)
+    for a in ['x','y']:
+        ax.tick_params(axis=a, colors=color2)
+
+def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                       rowHeight, colWidth, bottomNorm, leftNorm):
+    """ Add colorbar(s) with custom positioning and labeling, either below or above panels. """
+    if not conf.colorbars:
+        return
+
+    factor  = 0.80 # bar length, fraction of column width, 1.0=whole
+    height  = 0.04 # colorbar height, fraction of entire figure
+    hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
+    tOffset = 0.15 # padding between top of bar and top of text label (fraction of bar height)
+    lOffset = 0.01 # padding between colorbar edges and end label (frac of bar width)
+
+    height *= heightFac
+
+    if barAreaTop == 0.0:
+        # bottom
+        bottomNormBar = barAreaBottom - height*(hOffset+1.0)
+        textTopY = -tOffset
+        textMidY = 0.5
+    else:
+        # top
+        bottomNormBar = (1.0-barAreaTop) + height*hOffset
+        textTopY = 1.0 + tOffset
+        textMidY = 0.45 # pixel adjust down by 1 hack
+
+    leftNormBar = leftNorm + 0.5*colWidth*(1-factor)   
+    posBar = [leftNormBar, bottomNormBar, colWidth*factor, height]
+
+    # add bounding axis and draw colorbar
+    cax = fig.add_axes(posBar)
+    cax.set_axis_off()
+
+    colorbar = plt.colorbar(cax=cax, orientation='horizontal')
+    colorbar.outline.set_edgecolor(color2)
+
+    # label, centered and below/above
+    cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
+             size='x-large', ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+
+    # tick labels, 5 evenly spaced inside bar
+    valLimits = plt.gci().get_clim()
+
+    colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
+    colorsB = ['white','white','white','black','black']
+
+    formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
+
+    cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
+        color=colorsB[0], size='x-large', ha='left', va='center', transform=cax.transAxes)
+    cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
+        color=colorsB[1], size='x-large', ha='center', va='center', transform=cax.transAxes)
+    cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
+        color=colorsB[2], size='x-large', ha='center', va='center', transform=cax.transAxes)
+    cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
+        color=colorsB[3], size='x-large', ha='center', va='center', transform=cax.transAxes)
+    cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
+        color=colorsB[4], size='x-large', ha='right', va='center', transform=cax.transAxes)
+
+def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
         each of panels, all of which can vary in their configuration. 
       plotStyle    : open, edged
@@ -416,33 +526,37 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
       extent     : (axis0_min,axis0_max,axis1_min,axis1_max) in simulation units
     """
 
-    if plotStyle == 'open':
-        # start plot
-        nRows  = np.floor(np.sqrt(len(panels)))
-        nCols  = len(panels) / nRows
-        aspect = nRows/nCols
+    color1 = 'black' if '_black' in conf.plotStyle else 'white'
+    color2 = 'white' if '_black' in conf.plotStyle else 'black'
 
-        sizeFac = rasterPx / mpl.rcParams['savefig.dpi']
-        fig = plt.figure(figsize=(1.167*sizeFac*nRows/aspect,sizeFac*nRows))
+    # plot sizing and arrangement
+    sizeFac = conf.rasterPx / mpl.rcParams['savefig.dpi']
+    nRows   = np.floor(np.sqrt(len(panels))) # non-integer allowed
+    nCols   = len(panels) / nRows
+    aspect  = nRows/nCols
+
+    if conf.plotStyle in ['open','open_black']:
+        # start plot
+        fig = plt.figure(facecolor=color1)
+
+        widthFacCBs = 1.167 if conf.colorbars else 1.0
+        fig.set_size_inches(widthFacCBs*sizeFac*nRows/aspect, sizeFac*nRows)
 
         # for each panel: paths and render setup
         for i, p in enumerate(panels):
-            sP = p['sP']
-
             # grid projection for image
             grid, config = gridBox(**p)
 
-            # create this panel, and label
+            # create this panel, and label axes and title
             ax = fig.add_subplot(nRows,nCols,i+1)
 
-            idStr = ''
-            if not sP.isZoom and sP.hInd is not None:
-                idStr = ' (id=' + str(sP.hInd) + ')'
-
-            ax.set_title('%s z=%3.1f %s %s%s' % (sP.simName,sP.redshift,p['partType'],p['partField'],idStr))
-
+            sP = p['sP']
+            idStr = ' (id=' + str(sP.hInd) + ')' if not sP.isZoom and sP.hInd is not None else ''
+            ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' [ ckpc/h ]')
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' [ ckpc/h ]')
+
+            setAxisColors(ax, color2)
 
             # rotation? indicate transformation with axis labels
             if p['rotMatrix'] is not None:
@@ -461,77 +575,95 @@ def renderMultiPanel(panels, plotStyle, rasterPx, saveFilename):
             cmap = loadColorTable(config['ctName'])
             
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
+            ax.autoscale(False)
             if 'valMinMax' in p: plt.clim( p['valMinMax'] )
 
-            addBoxMarkers(p, ax)
+            addBoxMarkers(p, conf, ax)
 
             # colobar
-            cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-            cb = plt.colorbar(cax=cax)
-            cb.ax.set_ylabel(config['label'])
+            if conf.colorbars:
+                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+                setAxisColors(cax, color2)
+
+                cb = plt.colorbar(cax=cax)
+                cb.outline.set_edgecolor(color2)
+                cb.ax.set_ylabel(config['label'])
 
         fig.tight_layout()
-        fig.savefig(saveFilename)
+        fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
 
-    if plotStyle == 'edged':
-        # start plot
-        nRows  = np.floor(np.sqrt(len(panels)))
-        nCols  = len(panels) / nRows
-        aspect = nRows/nCols
-
-        fig = plt.figure(frameon=False, tight_layout=False)
-
-        if 'cbarSize' in panels[0] and panels[0]['cbarSize'] is not None:
-            barAreaHeight = panels[0]['cbarSize']
-        else:
-            barAreaHeight = 0.1 # 10% of plot height
+    if conf.plotStyle in ['edged','edged_black']:
+        # colorbar plot area sizing
+        barAreaHeight = np.max([0.035,0.1 / nRows]) if conf.colorbars else 0.0
         
-        sizeFac = rasterPx / mpl.rcParams['savefig.dpi']
-        fig.set_size_inches(sizeFac*nCols, sizeFac*nRows*(1/(1.0-barAreaHeight)))
+        if nRows == 2:
+            # two rows, special case, colors on top and bottom, every panel can be different
+            barAreaTop = 1.0 * barAreaHeight
+            barAreaBottom = 1.0 * barAreaHeight
+        else:
+            # colorbars on the bottom of the plot, one per column (columns should be same field/valMinMax)
+            barAreaTop = 0.0
+            barAreaBottom = barAreaHeight
+
+        if nRows > 2:
+            # verify that each column contains the same field and valMinMax
+            pass
+
+        # start plot
+        fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
+
+        width_in  = sizeFac * np.ceil(nCols)
+        height_in = sizeFac * np.ceil(nRows) * (1/(1.0-barAreaTop-barAreaBottom))
+
+        fig.set_size_inches(width_in, height_in)
 
         # for each panel: paths and render setup
         for i, p in enumerate(panels):
-            sP = p['sP']
-
             # grid projection for image
             grid, config = gridBox(**p)
 
-            # set axes and place image
+            # set axes coordinates and add
             curRow = np.floor(i / nCols)
             curCol = i % nCols
 
-            rowHeight  = (1.0 - barAreaHeight) / nRows
-            colWidth   = 1.0 / nCols
-            bottomNorm  = 1.0 - rowHeight * (curRow+1)
+            rowHeight = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
+            colWidth   = 1.0 / np.ceil(nCols)
+            bottomNorm  = (1.0 - barAreaTop) - rowHeight * (curRow+1)
             leftNorm = colWidth * curCol
 
             pos = [leftNorm, bottomNorm, colWidth, rowHeight]
-            ax = fig.add_axes(pos)
+
+            ax = fig.add_axes(pos, axisbg=color1)
             ax.set_axis_off()
+            setAxisColors(ax, color2)
 
             # color mapping and place image
             cmap = loadColorTable(config['ctName'])
 
-            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
+            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal')
+            ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
             if 'valMinMax' in p: plt.clim( p['valMinMax'] )
 
-            addBoxMarkers(p, ax)
+            addBoxMarkers(p, conf, ax)
 
-            # colobar
-            factor  = 0.95 # bar length, fraction of column width, 1.0=whole
-            height  = 0.04 # colorbar height, fraction of entire figure
-            hOffset = 0.4  # padding between image and start of bar (fraction of height)
+            # colobar(s)
+            heightFac = np.max([1.0/nRows, 0.35])
 
-            leftNormBar   = leftNorm + 0.5*colWidth*(1-factor)
-            bottomNormBar = barAreaHeight - height*hOffset - height
+            if nRows == 2:
+                # both above and below, one per column
+                if curRow == 0:
+                    addCustomColorbars(fig, ax, conf, config, heightFac, 0.0, barAreaTop, color2, 
+                                       rowHeight, colWidth, bottomNorm, leftNorm)
 
-            posBar = [leftNormBar, bottomNormBar, colWidth*factor, height]
+                if curRow == nRows-1:
+                    addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, 0.0, color2, 
+                                       rowHeight, colWidth, bottomNorm, leftNorm)
+            
+            if nRows == 1 or (nRows > 2 and curRow == nRows-1):
+                # only below, one per column
+                addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                                   rowHeight, colWidth, bottomNorm, leftNorm)
 
-            cax = fig.add_axes(posBar)
-            cax.set_axis_off()
-            cb = plt.colorbar(cax=cax, orientation='horizontal')
-            cb.ax.set_ylabel(config['label'])
-
-        fig.savefig(saveFilename)
+        fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
 
     plt.close(fig)

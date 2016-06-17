@@ -357,7 +357,7 @@ def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
 
     return hsml
 
-def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treePrec='single', nThreads=16):
+def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treePrec='single', nThreads=8):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 

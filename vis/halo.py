@@ -131,34 +131,39 @@ def renderSingleHalo():
     #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,9.5]} )
 
     # plot config (common)
-    #hInd       = 7             # zoom halo index
-    #run       = 'illustris'    # run name
-    #res       = 1820           # run resolution
-    #redshift  = 0.0            # run redshift
-    partType  = 'gas'           # which particle type to project
-    #partField = 'temp'         # which quantity/field to project for that particle type
-    #valMinMax = [4.2, 6.5]     # stretch colortable between minimum and maximum field values
-    rVirFracs = [0.15,1.0]      # draw circles at these fractions of a virial radius
-    method    = 'sphMap'        # sphMap, voronoi_const, voronoi_grads, ...
-    nPixels   = [900,900]       # number of pixels for each dimension of images when projecting
-    sizeFac   = 2.5             # size of imaging box around halo center in units of its virial radius
-    hsmlFac   = 2.5             # multiplier on smoothing lengths for sphMap
-    axes      = [1,0]           # e.g. [0,1] is x,y
-    relCoords = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
-    rotation  = None            # 'face-on', 'edge-on', or None
-    mpb       = None            # use None for non-movie/single frame
+    #hInd      = 7             # zoom halo index
+    #run       = 'illustris'   # run name
+    #res       = 1820          # run resolution
+    #redshift  = 0.0           # run redshift
+    partType   = 'gas'         # which particle type to project
+    #partField = 'temp'        # which quantity/field to project for that particle type
+    #valMinMax = [4.2, 6.5]    # stretch colortable between minimum and maximum field values
+    rVirFracs  = [0.15,1.0]    # draw circles at these fractions of a virial radius
+    method     = 'sphMap'      # sphMap, voronoi_const, voronoi_grads, ...
+    nPixels    = [900,900]     # number of pixels for each dimension of images when projecting
+    sizeFac    = 2.5           # size of imaging box around halo center in units of its virial radius
+    hsmlFac    = 2.5           # multiplier on smoothing lengths for sphMap
+    axes       = [1,0]         # e.g. [0,1] is x,y
+    labelZ     = False         # label redshift inside (upper right corner) of panel
+    labelScale = False         # label spatial scale with scalebar (upper left of panel)
+    labelSim   = False         # label simulation name (lower right corner) of panel
+    relCoords  = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
+    rotation   = None          # 'face-on', 'edge-on', or None
+    mpb        = None          # use None for non-movie/single frame
 
     # render config (global)
-    plotStyle    = 'open'  # open, edged
-    rasterPx     = 1200     # each panel will have this number of pixels if making a raster (png) output
-                            # but note also it controls the relative size balance of raster/vector elements
-    saveFilename = 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+    class plotConfig:
+        plotStyle  = 'open'  # open, edged, open_black, edged_black
+        rasterPx   = 1200    # each panel will have this number of pixels if making a raster (png) output
+                             # but it also controls the relative size balance of raster/vector (e.g. fonts)
+        colorbars = True     # include colorbars
+        saveFilename = 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # finalize panels list (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
         for cName,cVal in locals().iteritems():
-            if cName in ['panels','simParams','plotStyle','rasterPx','saveFilename','p']:
+            if cName in ['panels','plotConfig','simParams','p']:
                 continue
             if cName in p:
                 print('Warning: Letting panel specification ['+cName+'] override common value.')
@@ -174,7 +179,7 @@ def renderSingleHalo():
         p['haloVirRad'], p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
     # request render and save
-    renderMultiPanel(panels, plotStyle, rasterPx, saveFilename)
+    renderMultiPanel(panels, plotConfig)
 
 def renderSingleHaloFrames(confName):
     """ Driver: render view(s) of a single halo in one plot, and repeat this frame across all snapshots 
@@ -199,19 +204,22 @@ def renderSingleHaloFrames(confName):
 
     # plot config (common)
     #hInd      = 2               # zoom halo index
-    run       = 'zooms2'        # run name
+    run        = 'zooms2'        # run name
     #res       = 9               # run resolution
-    partType  = 'gas'           # which particle type to project
-    #partField = 'temp'         # which quantity/field to project for that particle type
-    #valMinMax = [4.2, 6.5]     # stretch colortable between minimum and maximum field values
-    rVirFracs = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
-    method    = 'sphMap'        # sphMap, voronoi_const, voronoi_grads, ...
-    nPixels   = [1000,1000]     # number of pixels for each dimension of images when projecting
-    sizeFac   = 3.5            # size of imaging box around halo center in units of its virial radius
-    hsmlFac   = 2.5             # multiplier on smoothing lengths for sphMap
-    axes      = [1,0]           # e.g. [0,1] is x,y
-    relCoords = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
-    rotation  = None            # 'face-on', 'edge-on', or None
+    partType   = 'gas'           # which particle type to project
+    #partField = 'temp'          # which quantity/field to project for that particle type
+    #valMinMax = [4.2, 6.5]      # stretch colortable between minimum and maximum field values
+    rVirFracs  = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
+    method     = 'sphMap'        # sphMap, voronoi_const, voronoi_grads, ...
+    nPixels    = [1000,1000]     # number of pixels for each dimension of images when projecting
+    sizeFac    = 3.5             # size of imaging box around halo center in units of its virial radius
+    hsmlFac    = 2.5             # multiplier on smoothing lengths for sphMap
+    axes       = [1,0]           # e.g. [0,1] is x,y
+    labelZ     = False           # label redshift inside (upper right corner) of panel
+    labelScale = False           # label spatial scale with scalebar (upper left of panel)
+    labelSim   = False           # label simulation name (lower right corner) of panel
+    relCoords  = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
+    rotation   = None            # 'face-on', 'edge-on', or None
 
     # movie config
     treeRedshift = 2.0          # at what redshift does the tree/MPB start (for periodic box, snap of hInd)
@@ -220,15 +228,17 @@ def renderSingleHaloFrames(confName):
     maxNumSnaps  = None         # make at most this many evenly spaced frames, or None for all
 
     # render config (global)
-    plotStyle = 'open'          # open, edged
-    rasterPx  = 1200            # each panel will have this number of pixels if making a raster (png) output
-                                # but note also it controls the relative size balance of raster/vector elements
+    class plotConfig:
+        plotStyle  = 'open' # open, edged, open_black, edged_black
+        rasterPx   = 1200   # each panel will have this number of pixels if making a raster (png) output
+                            # but it also controls the relative size balance of raster/vector (e.g. fonts)
+        colorbars = True    # include colorbars
 
     # load MPB properties for each panel, could be e.g. different runs (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
         for cName,cVal in locals().iteritems():
-            if cName in ['panels','simParams','plotStyle','rasterPx','saveFilename','sP','p']:
+            if cName in ['panels','plotConfig','simParams','sP','p']:
                 continue
             if cName in p:
                 print('Warning: Letting panel specification ['+cName+'] override common value.')
@@ -259,11 +269,11 @@ def renderSingleHaloFrames(confName):
             p['haloVirRad'], p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
         # request render and save
-        saveFilename = 'renderHaloFrame_%03d.png' % (frameNum)
+        plotConfig.saveFilename = 'renderHaloFrame_%03d.png' % (frameNum)
         frameNum += 1
 
-        if isfile(saveFilename):
-            print('SKIP: %s' % saveFilename)
+        if isfile(plotConfig.saveFilename):
+            print('SKIP: %s' % plotConfig.saveFilename)
             continue
 
-        renderMultiPanel(panels, plotStyle, rasterPx, saveFilename)
+        renderMultiPanel(panels, plotConfig)

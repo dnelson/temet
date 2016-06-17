@@ -191,8 +191,8 @@ def pSplit(array, numProcs, curProc):
         return array # no split, return whole job load to caller
 
     # split array into numProcs segments, and return the curProc'th segment
-    splitSize  = np.ceil( len(array) / numProcs )
-    arraySplit = array[curProc*splitSize : (curProc+1)*splitSize ]
+    splitSize  = int(np.ceil( len(array) / numProcs ))
+    arraySplit = array[curProc*splitSize : (curProc+1)*splitSize]
 
     # for last split, make sure it takes any leftovers
     if curProc-1 == numProcs:
@@ -263,14 +263,14 @@ def loadColorTable(ctName):
     if ctName == 'bluered_black0':
         # blue->red with a sharp initial start in black
         cdict = {'red'   : ((0.0,  0.0, 0.0), # x0, r_i(x0), r_f(x0)
-                            (0.01, 1.0, 1.0), # x1, r_i(x1), r_f(x1)
+                            (0.004, 1.0, 1.0), # x1, r_i(x1), r_f(x1)
                             (1.0,  0.0, 0.0)),
                  'green' : ((0.0,  0.0, 0.0), # xj, g_initial(xj), g_final(xj)
-                            (1.0,  0.0, 0.0)),
+                            (1.0,  0.2, 0.1)),
                  'blue'  : ((0.0,  0.0, 0.0),
-                            (0.01, 0.0, 0.0),
+                            (0.004, 0.0, 0.0),
                             (1.0,  1.0, 1.0))}
-        cmap = LinearSegmentedColormap(ctName, cdict)
+        cmap = LinearSegmentedColormap(ctName, cdict, N=512)
 
     if ctName == 'blgrrd_black0':
         # blue->green->red with a sharp initial start in black
