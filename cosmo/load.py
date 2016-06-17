@@ -263,8 +263,8 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
 
 def snapNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a snapshot, by checking for existence of files inside directory. """
-    _, sbStr1, _ = subboxVals(subbox)
-    path = basePath + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
+    _, sbStr1, sbStr2 = subboxVals(subbox)
+    path = basePath + sbStr2 + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
 
     nChunks = len(glob.glob(path))
 
@@ -288,17 +288,21 @@ def snapshotHeader(sP, fileName=None):
 
     return header
 
-def snapHasField(sP, partType, field, fileName=None):
+def snapHasField(sP, partType, field):
     """ True or False, does snapshot data for partType have field? """
-    if fileName is None:
-        fileName = snapPath(sP.simPath, sP.snap, subbox=sP.subbox)
-
     gName = 'PartType' + str(ptNum(partType))
 
-    with h5py.File(fileName,'r') as f:
-        if gName not in f or field not in f[gName]:
-            return False
-        return True
+    # the first chunk could not have the field but it could exist in a later chunk (e.g. sparse file 
+    # contents of subboxes). to definitely return False, we have to check them all, but we can return 
+    # an early True if we find a(ny) chunk containing the field
+    for i in range(snapNumChunks(sP.simPath, sP.snap, subbox=sP.subbox)):
+        fileName = snapPath(sP.simPath, sP.snap, chunkNum=i, subbox=sP.subbox)
+
+        with h5py.File(fileName,'r') as f:
+            if gName in f and field in f[gName]:
+                return True
+
+    return False
 
 def snapOffsetList(sP):
     """ Make the offset table (by type) for the snapshot files, to be able to quickly determine within 
