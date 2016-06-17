@@ -182,15 +182,18 @@ class units(object):
 
         return logZeroSafe(temp_k)
 
+    def codeLengthToComovingKpc(self, x):
+        """ Convert length/distance in code units to comoving kpc. """
+        x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
+        x_phys *= (3.085678e21/self._sP.units.UnitLength_in_cm) # account for non-kpc code lengths
+
+        return x_phys
+
     def codeLengthToKpc(self, x):
         """ Convert length/distance in code units to physical kpc. """
         assert self._sP.redshift is not None
 
-        x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
-        x_phys *= self._sP.units.scalefac # comoving -> physical
-        x_phys *= (3.085678e21/self._sP.units.UnitLength_in_cm) # account for non-kpc code lengths
-
-        return x_phys
+        return self.codeLengthToComovingKpc(x) * self._sP.units.scalefac # comoving -> physical
 
     def particleCodeVelocityToKms(self, x):
         """ Convert velocity field (for cells/particles, not group properties) into km/s. """
