@@ -20,7 +20,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def incrementIDsByOne():
     """ Increment all gas and star IDs by exactly one in one runs. """
-    basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h9_L11/output/'
+    basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h7_L10/output/'
 
     snapFiles = glob.glob(basePath+'snapdir_???/*.hdf5')
 
@@ -49,12 +49,15 @@ def incrementIDsByOne():
 
 def checkIDsMin():
     """ check min gas ID """
-    runs = [[8,10], [2,10]]
+    runs = [[7,9], [7,10], [7,11]]
 
     for hInd,res in runs:
         sP = simParams(res=res, run='zooms', snap=0, hInd=hInd)
-        gas_ids = cosmo.load.snapshotSubset(sP, 'gas', 'ids')
-        print(hInd,res,gas_ids.min())
+
+        for snap in [0]: #cosmo.util.validSnapList(sP):
+            sP.setSnap(snap)
+            gas_ids = cosmo.load.snapshotSubset(sP, 'gas', 'ids')
+            print(hInd,res,gas_ids.min())
 
 def checkTracerLoad():
     """ Check new code to load tracers from snapshots. """

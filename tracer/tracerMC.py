@@ -429,6 +429,11 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
     snaps = np.arange(startSnap,finalSnap+snapStep,snapStep)
     snaps = snaps[snaps >= 0]
+
+    # intersect with valid snapshots (skip missing, etc)
+    validSnaps = cosmo.util.validSnapList(sP)
+    snaps = [snap for snap in snaps if snap in validSnaps]
+
     redshifts = cosmo.util.snapNumToRedshift(sP, snaps)
 
     if debug:
