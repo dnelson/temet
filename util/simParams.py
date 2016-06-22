@@ -140,10 +140,10 @@ class simParams:
             if res in res_L205: self.boxSize = 205000.0
 
             # common: Planck2015 cosmology
-            self.omega_m     = 0.2726
-            self.omega_L     = 0.7274
-            self.omega_b     = 0.0456
-            self.HubbleParam = 0.704
+            self.omega_m     = 0.3089
+            self.omega_L     = 0.6911
+            self.omega_b     = 0.0486
+            self.HubbleParam = 0.6774
 
             # subboxes
             if res in res_L75:
@@ -323,6 +323,10 @@ class simParams:
         if run in ['zooms','zooms_dm']:
             self.boxSize      = 20000.0
             self.groupOrdered = False
+
+            if hInd in [0]:
+                # re-writing, in progress
+                self.groupOrdered = True
 
             self.omega_m     = 0.264
             self.omega_L     = 0.736
@@ -825,8 +829,13 @@ class simParams:
             return 0 # hardcoded for now
 
         if self.run in ['zooms','zooms_dm']:
+            # verified
+            if self.hInd == 0 and self.res in [11]:
+                return 0
+
+            # default hardcoded for now:
             print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
-            return 0 # hardcoded for now
+            return 0
 
         if self.run in ['zooms2']:
             if self.hInd == 2 and self.res in [9,10,11]:

@@ -167,16 +167,15 @@ def debugPlot():
     from cosmo.util import addRedshiftAgeAxes
 
     # config
-    #sP = simParams(res=455, run='tng', redshift=0.0)
-    #sP = simParams(res=512, run='tng', redshift=0.0) 
-    sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
+    #sP = simParams(res=455, run='tng', redshift=0.0) 
+    sP = simParams(res=11, run='zooms', redshift=2.0, hInd=0)
 
     # load
     mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
 
     label = 'savgol n='+str(mpb['sm']['sKn']) + ' o=' + str(mpb['sm']['sKo'])
 
-    if 0:
+    if 1:
         # PLOT 1: position
         fig, axs = plt.subplots(1, 3, figsize=(20,10))
 
@@ -202,7 +201,7 @@ def debugPlot():
         fig.savefig('tree_debug_pos_'+str(sP.res)+'.pdf')
         plt.close(fig)
 
-    if 0:
+    if 1:
         # PLOT 2: vel
         fig, axs = plt.subplots(1, 3, figsize=(20,10))
 
@@ -255,7 +254,7 @@ def debugPlot():
         # mass
         addRedshiftAgeAxes(axs[0,1], sP, xlog=True)
         axs[0,1].set_xlim([1.9,9.0])
-        axs[0,1].set_ylabel('Mass [ log Msun ]')
+        axs[0,1].set_ylabel('Mass [ 10$^{10}$ Msun/h ]')
 
         axs[0,1].plot( mpb['Redshift'], mpb['Group_M_Crit200'], 'o', label='raw' )
 

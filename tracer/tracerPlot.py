@@ -501,7 +501,6 @@ def plotValHistos():
     """ Plot (1D) histograms of extremum values, values at t_acc, or values at the extremum time 
     of another value. """
     from util import simParams
-    # http://matplotlib.1069221.n5.nabble.com/Dark-or-inverted-color-scheme-td22387.html
 
     # config
     sPs = []
