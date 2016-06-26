@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile
 
-from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec
+from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, saveBasePath
 from cosmo.load import groupCatSingle
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
@@ -157,7 +157,7 @@ def renderSingleHalo():
         rasterPx   = 1200    # each panel will have this number of pixels if making a raster (png) output
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
-        saveFilename = 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = saveBasePath + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # finalize panels list (do not modify below)
     for p in panels:
@@ -269,7 +269,7 @@ def renderSingleHaloFrames(confName):
             p['haloVirRad'], p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
         # request render and save
-        plotConfig.saveFilename = 'renderHaloFrame_%03d.png' % (frameNum)
+        plotConfig.saveFilename = saveBasePath + 'renderHaloFrame_%03d.png' % (frameNum)
         frameNum += 1
 
         if isfile(plotConfig.saveFilename):

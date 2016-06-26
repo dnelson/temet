@@ -22,6 +22,10 @@ from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.cloudy import cloudyIon
 
+# all frames output here (current directory if empty string)
+saveBasePath = '/n/home07/dnelson/data3/frames/'
+
+# configure certain behavior types
 volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','HI']
 totSumFields     = ['mass']
@@ -159,7 +163,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         element = partField.split()[0]
         ionNum  = partField.split()[1]
 
-        ion = cloudyIon(sP, el=element, redshiftInterp=False)
+        ion = cloudyIon(sP, el=element, redshiftInterp=True)
         mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
@@ -286,6 +290,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
     if not isdir(sP.derivPath + 'grids/'):
         mkdir(sP.derivPath + 'grids/')
+
+    # no particles of type exist? blank grid return (otherwise die in getHsml and wind removal)
+    if snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] == 0:
+        print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
+        grid = np.zeros( nPixels, dtype='float32' )
+        grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
+        return grid, config
 
     # map
     if isfile(saveFilename):
