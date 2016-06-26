@@ -7,7 +7,7 @@ from builtins import *
 
 import numpy as np
 from datetime import datetime
-from vis.common import renderMultiPanel
+from vis.common import renderMultiPanel, saveBasePath
 from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 
@@ -86,7 +86,8 @@ def renderBox():
         rasterPx   = 1400    # each panel will have this number of pixels if making a raster (png) output
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
-        saveFilename = 'renderBox_N%d_%s.png' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+
+        saveFilename = saveBasePath + 'renderBox_N%d_%s.png' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # finalize panels list (do not modify below)
     for p in panels:
@@ -222,5 +223,5 @@ def renderBoxFrames(confName, curTask=0, numTasks=1):
             #    p['valMinMax'][1] = np.max( [p['sP'].units.redshiftToAgeFlat(p['sP'].redshift), 3.0] )
             
         # request render and save
-        plotConfig.saveFilename = 'renderBoxFrame_%03d.png' % (frameNum)
+        plotConfig.saveFilename = saveBasePath + 'renderBoxFrame_%03d.png' % (frameNum)
         renderMultiPanel(panels, plotConfig)

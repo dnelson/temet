@@ -407,6 +407,11 @@ class cloudyIon():
                          274.0, 310.8, 419.7, 454.0, 490.0, 542.0, 579.0, 619.0, 698.8, 738.0, 1856.0]} \
          ]
 
+    # solar mass fractions (Grevesse+ 2010 Sec 3)
+    solar_X = 0.7380 # M_H / M_tot
+    solar_Y = 0.2485 # M_He / M_tot
+    solar_Z = 0.0134 # M_metals / M_tot (so (M_metals/M_H)_solar = solar_Z/solar_X = 0.0182)
+
     # simple roman numeral mapping
     roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
 
@@ -455,8 +460,8 @@ class cloudyIon():
         # http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.ndimage.interpolation.map_coordinates.html
         # spline_filter()
 
-    def _numDensRatioToMassRatio(self, metal, element):
-        """ Convert metallicity from number density ratio to mass ratio.
+    def _metallicityOH12ToMassRatio(self, metal, element):
+        """ Convert metallicity from number density ratio to mass ratio (unused).
             Metallicity traditionally defined as a number density of oxygen relative to hydrogen, and is 
             given as 12 + log(O/H). To convert to the mass density of oxygen relative to hydrogen (equal to 
             total oxygen mass divided by total hydrogen mass):
@@ -471,6 +476,16 @@ class cloudyIon():
         factor = (M_X/M_H) / (self.sP.units.hydrogen_massfrac * M_H + self.sP.units.helium_massfrac * M_He)
         
         return metal / factor
+
+    def _solarMetalAbundanceMassRatio(self, element):
+        """ Convert solar abundances of the el table above (num dens ratios relative to hydrogen)
+        to mass ratios of the element relative to the total (e.g. should be ~0.25 for helium). """
+        numDensRatio = self.solarAbundance(element)
+
+        M_H = self.atomicMass('Hydrogen')
+        M_X = self.atomicMass(element)
+
+        return numDensRatio * (M_X/M_H) * self.solar_X
 
     def _getElInfo(self, elements, fieldNameToMatch, fieldNameToReturn):
         """ Search el[] structure and return requested information. """
@@ -603,6 +618,9 @@ class cloudyIon():
             locData = self.data[element][ionNum-1,:,:,:]
         else:
             i0 = np.interp( redshift, self.grid['redshift'], np.arange(self.grid['redshift'].size) )
+            if isinstance(i0,float):
+                i0 = np.zeros( i1.shape, dtype='float32' ) + i0 # expand scalar into 1D array
+
             iND = np.vstack( (i0,i1,i2,i3) )
             locData = self.data[element][ionNum-1,:,:,:,:]
 
@@ -613,37 +631,57 @@ class cloudyIon():
 
         return abunds
 
-    def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None):
+    def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
+                               assumeSolarAbunds=False, assumeSolarMetallicity=False):
         """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
-        whole snapshot, optionally restricted to an indRange. """
+        whole snapshot, optionally restricted to an indRange. 
+         aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
+         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. """
+
         # load required gas properties
         dens = snapshotSubset(sP, 'gas', 'dens', indRange=indRange)
         dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
 
-        if snapHasField(sP, 'gas', 'GFM_Metallicity'):
-            metal = snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
+        if assumeSolarMetallicity:
+            metal = np.zeros( dens.size, dtype='float32' ) + self.solar_Z
         else:
-            metal = np.zeros( dens.size, dtype='float32' )
-            metal += sP.units.Z_solar * 0.1 # set fixed metallicity of -1.0 as Simeon used in his tables
-            raise Exception('Reconsider.')
+            assert snapHasField(sP, 'gas', 'GFM_Metallicity')
+            metal = snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
         
         # interpolate for log(abundance) and convert to linear
-        ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp)
+        # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
+        # number density ratio, so long both the numerator and denominator refer to the same 
+        # element (e.g. are relative values, and so \Sum_j f_Xj = 1)
+        ion_fraction = 10.0**self.frac(element, ionNum, dens, metal_logSolar, temp, sP.redshift)
 
-        # total mass of ion i of element X = M_gas * (M_metals/M_gas) * (M_X/M_metals) * (M_Xi/M_X)
-        # where (M_Xi/M_X) is mass_fraction, (M_X/M_metals) can assume solar abundances or take 
-        # directly from the snapshot if one of the 9 tracked GFM elements, and (M_metals/M_gas) is 
-        # the GFM_Metallicity field.
-        solarElemMetal = self.solarAbundance(element)
-        solarElemMassRatio = self._numDensRatioToMassRatio(solarElemMetal, element) # M_X/M_H
-        solarElemMassRatio /= self.sP.units.Z_solar # (M_X/M_H)*(M_H/M_Z) = (M_X/M_H) / Z_solar
-        mass_fraction = metal * solarElemMassRatio * ion_fraction
+        # total mass of ion j of element X is  (where f_Xj is the ionization fraction from CLOUDY)
+        #   M_X = M_gas * (M_metals/M_gas) * (M_X/M_metals) * (M_Xj/M_X)
+        #       = M_gas * GFM_Metallicity * (M_X/M_metals) * f_Xj
+        #       = M_gas * (M_X/M_gas) * f_Xj
+        if assumeSolarAbunds:
+            if assumeSolarMetallicity:
+                # 3rd eqn: for (M_X/M_gas) we can assume -both- solar metallicity and solar abundances
+                metal_mass_fraction = self._solarMetalAbundanceMassRatio(element) # scalar
+            else:
+                # or, 2nd eqn: take GFM_Metallicity from sim and use (M_X/M_metals)_solar
+                metal_mass_fraction = (metal/self.solar_Z) * self._solarMetalAbundanceMassRatio(element)
+        else:
+            # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
+            # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
+            assert snapHasField(sP, 'gas', 'GFM_Metals')
+            assert self.elementNameToSymbol(element) in sP.metals
 
-        return mass_fraction
+            fieldName = "metals_" + self.elementNameToSymbol(element)
+            metal_mass_fraction = snapshotSubset(sP, 'gas', fieldName, indRange=indRange)
+
+            metal_mass_fraction[metal_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+
+        metal_ion_mass_fraction = metal_mass_fraction * ion_fraction
+        return metal_ion_mass_fraction
 
 def plotUVB():
     """ Debug plots of the UVB(nu) as a function of redshift. """

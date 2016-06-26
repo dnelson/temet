@@ -18,46 +18,68 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
-def incrementIDsByOne():
-    """ Increment all gas and star IDs by exactly one in one runs. """
-    basePath = '/n/home07/dnelson/sims.zooms/128_20Mpc_h7_L10/output/'
+def checkIllustrisMetalRatioVsSolar():
+    """ Check corrupted GFM_Metals content vs solar expectation. """
+    from cosmo.cloudy import cloudyIon
+    element = 'O'
+    ionNum = 'VI'
+    sP = simParams(res=910,run='tng',redshift=0.0)
+    nBins = 400
+    indRange = [0,500000]
 
-    snapFiles = glob.glob(basePath+'snapdir_???/*.hdf5')
+    ion = cloudyIon(sP, redshiftInterp=True)
+    metal = cosmo.load.snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
 
-    for snapFile in snapFiles:
-        # modified time
-        d = datetime.fromtimestamp(path.getmtime(snapFile))
+    metal_mass_fraction_1 = (metal/ion.solar_Z) * ion._solarMetalAbundanceMassRatio(element)
+    metal_mass_fraction_2 = 1.0*cosmo.load.snapshotSubset(sP, 'gas', 'metals_'+element, indRange=indRange)
+    metal_mass_fraction_3 = ion._solarMetalAbundanceMassRatio(element)
 
-        #if d.year >= 2016:
-        #    print(snapFile, ' SKIP', d.year)
-        #    continue
+    metal_1b = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange, assumeSolarAbunds=True)
+    metal_2b = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange, assumeSolarAbunds=False)
+    metal_3b = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange, 
+                assumeSolarAbunds=True, assumeSolarMetallicity=True)
 
-        print(snapFile,d.year)
-        with h5py.File(snapFile) as f:
-            gas_ids = f['PartType0/ParticleIDs'][()] + 1
-            star_ids = f['PartType4/ParticleIDs'][()] + 1
-            par_ids = f['PartType3/ParentID'][()] + 1
+    metal_mass_fraction_1 = np.log10(metal_mass_fraction_1)
+    metal_mass_fraction_2 = np.log10(metal_mass_fraction_2)
+    metal_mass_fraction_3 = np.log10(metal_mass_fraction_3)
+    metal_1b = np.log10(metal_1b)
+    metal_2b = np.log10(metal_2b)
+    metal_3b = np.log10(metal_3b)
 
-            f['PartType0/ParticleIDs'][()] = gas_ids
-            f['PartType4/ParticleIDs'][()] = star_ids
-            f['PartType3/ParentID'][()] = par_ids
+    # plot metal mass fractions
+    fig = plt.figure(figsize=(14,7))
+    ax = fig.add_subplot(111)
 
-            dm1_ids = f['PartType1/ParticleIDs'][()] + 1
-            dm2_ids = f['PartType2/ParticleIDs'][()] + 1
-            f['PartType1/ParticleIDs'][()] = dm1_ids
-            f['PartType2/ParticleIDs'][()] = dm2_ids
+    ax.set_xlabel('log metal_mass_fraction')
+    ax.set_ylabel('N$_{\\rm tr}$')
+    ax.set_yscale('log')
 
-def checkIDsMin():
-    """ check min gas ID """
-    runs = [[7,9], [7,10], [7,11]]
+    plt.hist(metal_mass_fraction_1, nBins, facecolor='red', alpha=0.8)
+    plt.hist(metal_mass_fraction_2, nBins, facecolor='green', alpha=0.8)
+    plt.plot([metal_mass_fraction_3,metal_mass_fraction_3], [1e1,1e4], color='blue', alpha=0.8)
 
-    for hInd,res in runs:
-        sP = simParams(res=res, run='zooms', snap=0, hInd=hInd)
+    fig.tight_layout()    
+    fig.savefig('checkIllustrisMetalRatioVsSolar_12.pdf')
+    plt.close(fig)
 
-        for snap in [0]: #cosmo.util.validSnapList(sP):
-            sP.setSnap(snap)
-            gas_ids = cosmo.load.snapshotSubset(sP, 'gas', 'ids')
-            print(hInd,res,gas_ids.min())
+    # plot metal ion mass fractions
+    fig = plt.figure(figsize=(14,7))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('log metal_mass_fraction_in_ion')
+    ax.set_ylabel('N$_{\\rm tr}$')
+    ax.set_yscale('log')
+
+    plt.hist(metal_1b, nBins, facecolor='red', alpha=0.8)
+    plt.hist(metal_2b, nBins, facecolor='green', alpha=0.8)
+    plt.hist(metal_3b, nBins, facecolor='blue', alpha=0.8)
+
+    fig.tight_layout()    
+    fig.savefig('checkIllustrisMetalRatioVsSolar_34.pdf')
+    plt.close(fig)
+
+    import pdb; pdb.set_trace()
+
 
 def checkTracerLoad():
     """ Check new code to load tracers from snapshots. """
@@ -226,25 +248,6 @@ def checkLastStarTimeIllustris():
     fig.tight_layout()    
     fig.savefig('tracer_laststartime.pdf')
     plt.close(fig)
-
-def checkCoolRateNeNhCleanup():
-    """ Check output validity after minor I/O cleanup (May 2016). """
-    sPs = []
-    sPs.append( simParams(res=32, run='L25n32_trTest', redshift=0.0) )
-    sPs.append( simParams(res=32, run='L25n32_trTestMod', redshift=0.0) )
-
-    fields = ['CoolingRate','GFM_CoolingRate','ElectronAbundance','NeutralHydrogenAbundance']
-
-    for field in fields:
-        x0 = cosmo.load.snapshotSubset( sPs[0], 'gas', field )
-        x1 = cosmo.load.snapshotSubset( sPs[1], 'gas', field )
-        print(sPs[0].simName.ljust(18), field, x0.size, x0.min(), x0.max(), x0.mean(), x0[-1])
-        print(sPs[1].simName.ljust(18), field, x1.size, x1.min(), x1.max(), x1.mean(), x1[-1])
-        print(np.array_equal(x0,x1))
-
-        ww = np.where( x0 != x1 )
-        print(x0[ww]-x1[ww])
-        pdb.set_trace()
 
 def enrichChecks():
     """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
