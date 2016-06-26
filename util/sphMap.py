@@ -10,7 +10,7 @@ import threading
 from numba import jit
 from util.helper import pSplit
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _NEAREST(x, BoxHalf, BoxSize):
     """ Periodic wrap distance. 
         #define NEAREST(x) (((x)>BoxHalf)?((x)-BoxSize):(((x)<-BoxHalf)?((x)+BoxSize):(x)))
@@ -26,7 +26,7 @@ def _NEAREST(x, BoxHalf, BoxSize):
         else:
             return x
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _NEAREST_POS(x, BoxSize):
     """ Periodic wrap position. 
         #define NEAREST_POS(x) (((x)>BoxSize)?((x)-BoxSize):(((x)<0)?((x)+BoxSize):(x)))
@@ -42,7 +42,7 @@ def _NEAREST_POS(x, BoxSize):
         else:
             return x
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _getkernel(hinv, r2, C1, C2, C3):
     """ Project spline kernel. """
     u = np.sqrt(r2) * hinv
@@ -52,7 +52,7 @@ def _getkernel(hinv, r2, C1, C2, C3):
     else:
         return C3 * (1.0 - u) * (1.0 - u) * (1.0 - u)
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
                 normQuant,normColDens):
