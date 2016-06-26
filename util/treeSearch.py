@@ -13,7 +13,7 @@ from numba import jit, void, int32
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     """ Helper routine for calcHsml(), see below. """
     pp = 0
@@ -61,7 +61,7 @@ def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
 
     return last # avoid use of global in numba
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode):
     """ Core routine for calcHsml(), see below. """
     subnode = 0
@@ -205,7 +205,7 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
 
     return numNodes
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nextnode):
     """ Helper routine for calcHsml(), see below. """
     boxHalf = 0.5 * boxSizeSim
@@ -281,7 +281,7 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
 
     return numNgbWeightedInH
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
                           next_node,length,center,sibling,nextnode):
     """ Helper routine for calcHsml(), see below. """
@@ -332,7 +332,7 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
     return h_guess
 
-@jit(nopython=True, nogil=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
                        next_node,length,center,sibling,nextnode):
     """ Core routine for calcHsml(), see below. """
