@@ -996,7 +996,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     from util import simParams
 
     # config
-    speciesList = ['nOVI']
+    speciesList = ['nOVI','nOVI_10','nOVI_25','nOVI_solar']
 
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -1038,13 +1038,10 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
         # TODO: remove speciesList
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box/CDDF_'+species])# , reCalculate=True)
+            ac = auxCat(sP, fields=['Box/CDDF_'+species]) #, reCalculate=True)
 
             n_OVI  = ac['Box/CDDF_'+species][0,:]
             fN_OVI = ac['Box/CDDF_'+species][1,:]
-
-            print('n_OVI: ', n_OVI)
-            print('f_OVI: ', fN_OVI)
 
             # plot
             xx = np.log10(n_OVI)
@@ -1261,57 +1258,48 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='illustris') )
-    #sPs.append( simParams(res=512, run='L25n512_PRVS_0116') )
-    #sPs.append( simParams(res=512, run='L25n512_PRVS_0311') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
-    #sPs.append( simParams(res=512, run='L25n512_PRVS_0404') )
 
     #sPs.append( simParams(res=1820, run='tng') )
-    #sPs.append( simParams(res=910, run='illustris') )
-    #sPs.append( simParams(res=455, run='illustris') )
+    sPs.append( simParams(res=910, run='illustris') )
+    sPs.append( simParams(res=455, run='illustris') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=128, run='L12.5n128TNG') )
-    #sPs.append( simParams(res=256, run='L12.5n256TNG') )
-    #sPs.append( simParams(res=512, run='L12.5n512TNG') )
+    #sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=1250, run='tng') )
+    #sPs.append( simParams(res=625, run='tng') )  
 
-    #sPs.append( simParams(res=128, run='tng') )
-    sPs.append( simParams(res=256, run='tng') )
-    #sPs.append( simParams(res=512, run='tng') )
-
-    #sPs.append( simParams(res=256, run='L25n256_NGB_01') )
-    #sPs.append( simParams(res=256, run='L25n256_NGB_08') )
-    #sPs.append( simParams(res=256, run='L25n256_NGB_32') )
-    #sPs.append( simParams(res=256, run='L25n256_NGB_128') )
-    sPs.append( simParams(res=256, run='L25n256TNG_BHNGB_064') )
-    sPs.append( simParams(res=256, run='L25n256TNG_BHNGB_256') )
+    #sPs.append( simParams(res=2160, run='tng') )  
+    #sPs.append( simParams(res=1080, run='tng') )  
+    #sPs.append( simParams(res=540, run='tng') )  
+    #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_L25_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_OVICDDF_b_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
-    stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
-    sfrAvgVsRedshift(sPs, pdf)
-    sfrdVsRedshift(sPs, pdf, xlog=True)
-    sfrdVsRedshift(sPs, pdf, xlog=False)
-    blackholeVsStellarMass(sPs, pdf)
-    blackholeVsStellarMass(sPs, pdf, twiceR=True)
-    galaxySizes(sPs, pdf, vsHaloMass=False)
-    galaxySizes(sPs, pdf, vsHaloMass=True)
-    stellarMassFunction(sPs, pdf, highMassEnd=False)
-    stellarMassFunction(sPs, pdf, highMassEnd=True)
-    massMetallicityStars(sPs, pdf)
-    massMetallicityGas(sPs, pdf, simRedshift=0.0)
-    massMetallicityGas(sPs, pdf, simRedshift=0.7)
-    baryonicFractionsR500Crit(sPs, pdf)
+    #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
+    #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
+    #sfrAvgVsRedshift(sPs, pdf)
+    #sfrdVsRedshift(sPs, pdf, xlog=True)
+    #sfrdVsRedshift(sPs, pdf, xlog=False)
+    #blackholeVsStellarMass(sPs, pdf)
+    #blackholeVsStellarMass(sPs, pdf, twiceR=True)
+    #galaxySizes(sPs, pdf, vsHaloMass=False)
+    #galaxySizes(sPs, pdf, vsHaloMass=True)
+    #stellarMassFunction(sPs, pdf, highMassEnd=False)
+    #stellarMassFunction(sPs, pdf, highMassEnd=True)
+    #massMetallicityStars(sPs, pdf)
+    #massMetallicityGas(sPs, pdf, simRedshift=0.0)
+    #massMetallicityGas(sPs, pdf, simRedshift=0.7)
+    #baryonicFractionsR500Crit(sPs, pdf)
     ##nHIcddf(sPs, pdf)
     ##nHIcddf(sPs, pdf, moment=1)
-    ##nOVIcddf(sPs, pdf)
-    ##nOVIcddf(sPs, pdf, moment=1)
+    nOVIcddf(sPs, pdf)
+    nOVIcddf(sPs, pdf, moment=1)
     ##dlaMetallicityPDF(sPs, pdf)
-    galaxyColorPDF(sPs, pdf)
+    #galaxyColorPDF(sPs, pdf)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)

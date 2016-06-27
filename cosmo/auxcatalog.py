@@ -213,7 +213,7 @@ def wholeBoxColDensGrid(sP, species):
     #from vis.common import getHsmlForPartType, loadMassAndQuantity, gridOutputProcess
 
     hDensSpecies = ['HI','HI_noH2','HI2','HI3']
-    zDensSpecies = ['O VI']
+    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar']
 
     if species not in hDensSpecies + zDensSpecies + ['Z']:
         raise Exception('Not implemented.')
@@ -235,6 +235,10 @@ def wholeBoxColDensGrid(sP, species):
         boxGridSize = 1.0 # test, 50% smaller
     if species == 'HI3':
         boxGridSize = 0.5 # test, x3 smaller
+    if species == 'O VI 10':
+        boxGridSize = 10.0 # test, x2 bigger
+    if species == 'O VI 25':
+        boxGridSize = 2.5 # test, x2 smaller
     # END DEBUG
 
     boxGridDim = round(sP.boxSize / boxGridSize)
@@ -309,8 +313,14 @@ def wholeBoxColDensGrid(sP, species):
             element = species.split()[0]
             ionNum  = species.split()[1]
 
-            ion = cloudyIon(sP, el=element, redshiftInterp=False)
-            mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
+            ion = cloudyIon(sP, el=element, redshiftInterp=True)
+
+            aSA = False
+            if len(species.split()) == 3 and species.split()[2] == 'solar':
+                aSA = True # assume solar abundances
+
+            mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
+                                                                assumeSolarAbunds=aSA)
 
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=True)
@@ -386,10 +396,17 @@ fieldComputeFunctionMapping = \
    'Box/Grid_Z'              : partial(wholeBoxColDensGrid,species='Z'),
 
    'Box/Grid_nOVI'           : partial(wholeBoxColDensGrid,species='O VI'),
+   'Box/Grid_nOVI_10'        : partial(wholeBoxColDensGrid,species='O VI 10'),
+   'Box/Grid_nOVI_25'        : partial(wholeBoxColDensGrid,species='O VI 25'),
+   'Box/Grid_nOVI_solar'     : partial(wholeBoxColDensGrid,species='O VI solar'),
 
    'Box/CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
-   'Box/CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
    'Box/CDDF_nHI2'           : partial(wholeBoxCDDF,species='HI2'),
    'Box/CDDF_nHI3'           : partial(wholeBoxCDDF,species='HI3'),
-   'Box/CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2')
+   'Box/CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
+
+   'Box/CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
+   'Box/CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
+   'Box/CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
+   'Box/CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar')
   }

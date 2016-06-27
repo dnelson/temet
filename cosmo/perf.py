@@ -14,6 +14,139 @@ from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
 from os import remove, rename
 
+def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
+    """ Verify existence, permissions, and HDF5 structure of groups, full snaps, subboxes. """
+    from glob import glob
+    from illustris_python.snapshot import getNumPart
+
+    assert groups or fullSnaps or subboxes
+    assert sP.run in ['tng','tng_dm']
+
+    nTypes = 6
+    nFullSnapsExpected = 100
+    nSubboxesExpected = 2 if sP.boxSize == 75000 else 3
+    nSubboxSnapsExpected = {75000  : {455:2431, 910:4380, 1820:-1}, \
+                            35000  : {270:2331, 540:-1,   1080:-1, 2160:-1}, \
+                            205000 : {625:2050, 1250:-1,  2500:-1}}
+
+    def checkSingleGroup(files):
+        """ Helper (count header and dataset shapes). """
+        nGroups_0 = 0
+        nGroups_1 = 0
+        nSubhalos_0 = 0
+        nSubhalos_1 = 0
+        nGroups_tot = 0
+        nSubhalos_tot = 0
+
+        # verify correct number of chunks
+        assert nGroupFiles == len(files)
+        assert nGroupFiles > 0
+
+        # open each chunk
+        for file in files:
+            with h5py.File(file,'r') as f:
+                nGroups_0   += f['Header'].attrs['Ngroups_ThisFile']
+                nSubhalos_0 += f['Header'].attrs['Nsubgroups_ThisFile']
+
+                if f['Header'].attrs['Ngroups_ThisFile'] > 0:
+                    nGroups_1 += f['Group']['GroupPos'].shape[0]
+                if f['Header'].attrs['Nsubgroups_ThisFile'] > 0:
+                    nSubhalos_1 += f['Subhalo']['SubhaloPos'].shape[0]
+
+                nGroups_tot = f['Header'].attrs['Ngroups_Total']
+                nSubhalos_tot = f['Header'].attrs['Nsubgroups_Total']
+
+        assert nGroups_0 == nGroups_tot
+        assert nGroups_1 == nGroups_tot
+        assert nSubhalos_0 == nSubhalos_tot
+        assert nSubhalos_1 == nSubhalos_tot
+        print(' [%2d] %d %d' % (i,nGroups_tot,nSubhalos_tot))
+
+    def checkSingleSnap(files):
+        """ Helper (common for full and subbox snapshots) (count header and dataset shapes). """
+        nPart_0 = np.zeros( 6, dtype='int64' )
+        nPart_1 = np.zeros( 6, dtype='int64' )
+        nPart_tot = np.zeros( 6, dtype='int64' )
+
+        # verify correct number of chunks
+        assert nSnapFiles == len(files)
+        assert nSnapFiles > 0
+
+        # open each chunk
+        for file in files:
+            with h5py.File(file,'r') as f:
+                for j in range(nTypes):
+                    nPart_0[j] += f['Header'].attrs['NumPart_ThisFile'][j]
+
+                    if f['Header'].attrs['NumPart_ThisFile'][j] > 0:
+                        if j == 3: # trMC
+                            nPart_1[j] += f['PartType'+str(j)]['TracerID'].shape[0]
+                        else: # normal
+                            nPart_1[j] += f['PartType'+str(j)]['Coordinates'].shape[0]
+
+                nPart_tot = getNumPart( dict( f['Header'].attrs.items() ) )
+
+        assert (nPart_0 == nPart_tot).all()
+        assert (nPart_1 == nPart_tot).all()
+        print(' [%2d] %d %d %d %d %d %d' % (i,nPart_tot[0],nPart_tot[1],nPart_tot[2],
+                                              nPart_tot[3],nPart_tot[4],nPart_tot[5]))
+
+    if groups:
+        numDirs = len(glob(sP.simPath + 'groups*'))
+        nGroupFiles = 0
+        print('Checking [%d] group directories...' % numDirs)
+        assert numDirs == nFullSnapsExpected
+
+        for i in range(numDirs):
+            # search for chunks and set number
+            files = glob(sP.simPath + '/groups_%03d/*.hdf5' % i)
+            if nGroupFiles == 0:
+                nGroupFiles = len(files)
+
+            checkSingleGroup(files)
+
+        print('PASS GROUPS.')
+
+    if fullSnaps:
+        numDirs = len(glob(sP.simPath + 'snapdir*'))
+        nSnapFiles = 0
+        print('Checking [%d] fullsnap directories...' % numDirs)
+        assert numDirs == nFullSnapsExpected
+
+        for i in range(numDirs):
+            # search for chunks and set number
+            files = glob(sP.simPath + '/snapdir_%03d/*.hdf5' % i)
+            if nSnapFiles == 0:
+                nSnapFiles = len(files)
+
+            checkSingleSnap(files)
+
+        print('PASS FULL SNAPS.')
+
+    if subboxes:
+        numSubboxes = len(glob(sP.simPath + 'subbox?'))
+        assert numSubboxes == nSubboxesExpected
+        
+        for sbNum in range(numSubboxes):
+            #if sbNum == 0:
+            #    continue # L35n270TNG skip past error in SB0
+
+            numDirs = len(glob(sP.simPath + 'subbox' + str(sbNum) + '/snapdir*'))
+            nSnapFiles = 0
+
+            print(' SUBBOX [%d]: Checking [%d] subbox directories...' % (sbNum,numDirs))
+            assert numDirs == nSubboxSnapsExpected[sP.boxSize][sP.res]
+
+            for i in range(numDirs):
+                # search for chunks and set number
+                files = glob(sP.simPath + '/subbox%d/snapdir_subbox%d_%03d/*.hdf5' % (sbNum,sbNum,i))
+                if nSnapFiles == 0:
+                    nSnapFiles = len(files)
+
+                checkSingleSnap(files)
+
+        print('PASS ALL SUBBOXES.')
+
 def tail(fileName, nLines):
     """ Wrap linux tail command line utility. """
     import subprocess
