@@ -39,7 +39,7 @@ def boxImgSpecs(sP, zoomFac, relCenPos, axes, **kwargs):
 
     return boxSizeImg, boxCenter, extent
 
-def renderBox():
+def renderBox(confNum):
     """ Driver: render views of a full/fraction of a cosmological box, variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
     from util import simParams
@@ -59,12 +59,19 @@ def renderBox():
     #panels.append( {'res':1820, 'variant':'subbox0', 'partType':'gas', 'partField':'density'} )
     #panels.append( {'res':1820, 'variant':'subbox1', 'partType':'gas', 'partField':'density'} )
 
-    panels.append( {'res':625, 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,9.0]} ) # 19.8, 20.1, 20.5 (end at 22.5)
+    if confNum == 0:
+        panels.append( {'res':2160, 'partType':'gas', 'partField':'TimeStep'} )
+    if confNum == 1:
+        panels.append( {'res':2160, 'partType':'gas', 'partField':'TimebinHydro'} )
+    if confNum == 2:
+        panels.append( {'res':2160, 'partType':'dm', 'partField':'TimeStep'} )
+    if confNum == 3:
+        panels.append( {'res':2160, 'partType':'stars', 'partField':'TimeStep'} )
 
     # plot config (common, applied to all panels)
-    run        = 'tng_dm'    # run name
+    run        = 'tng'       # run name
     #res       = 128         # run resolution
-    redshift   = 0.0         # run redshift
+    redshift   = 6.0         # run redshift
     #partType  = 'dm'        # which particle type to project
     #partField = 'coldens'   # which quantity/field to project for that particle type
     method     = 'sphMap'    # sphMap, voronoi_const, voronoi_grads, ...
@@ -87,7 +94,9 @@ def renderBox():
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
 
-        saveFilename = saveBasePath + 'renderBox_N%d_%s.png' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        #saveFilename = saveBasePath + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = saveBasePath + 'renderBox_%s-%s_%s.pdf' % \
+          (panels[0]['partType'],panels[0]['partField'],datetime.now().strftime('%d-%m-%Y'))
 
     # finalize panels list (do not modify below)
     for p in panels:

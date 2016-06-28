@@ -44,6 +44,9 @@ class units(object):
     Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
 
+    # code parameters
+    CourantFac  = 0.3     # typical (used only in load:dt_courant)
+
     # derived constants (code units)
     H0          = None    # km/s/kpc (hubble constant at z=0)
     G           = None    # kpc (km/s)**2 / 1e10 msun
@@ -116,7 +119,7 @@ class units(object):
     # --- unit conversions to/from code units ---
 
     def codeMassToMsun(self, mass):
-        """ Convert mass from code units (10**10 msun/h) to (log msun). """
+        """ Convert mass from code units (10**10 msun/h) to (msun). """
         mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
         
         return mass_msun
