@@ -104,7 +104,7 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
 
     return boxSizeImg, boxCenter, extent, haloVirRad, rotMatrix, rotCenter
 
-def renderSingleHalo():
+def renderSingleHalo(confNum):
     """ Driver: render view(s) of a single halo in one plot, with a variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
     from util import simParams
@@ -116,9 +116,9 @@ def renderSingleHalo():
     #panels.append( {'run':'zooms', 'res':9, 'redshift':2.0, 'partType':'gas', 'partField':'coldens'} )
  
     #panels.append( {'run':'zooms', 'hInd':7,'res':11,'redshift':2.5} )
-    panels.append( {'run':'zooms2','hInd':2,'res':11,'redshift':2.5,'partField':'dens'} )
-    panels.append( {'run':'zooms2','hInd':2,'res':11,'redshift':2.5,'partField':'entr','valMinMax':[6.0,9.0]} )
-    panels.append( {'run':'zooms2','hInd':2,'res':11,'redshift':2.5,'partField':'velmag', 'valMinMax':[100,300]} )
+    #panels.append( {'run':'zooms2','hInd':2,'res':11,'redshift':2.5,'partField':'dens'} )
+    #panels.append( {'run':'zooms2','hInd':2,'res':11,'redshift':2.5,'partField':'entr','valMinMax':[6.0,9.0]} )
+    #panels.append( {'run':'zooms2','hInd':2,'res':11,'redshift':2.5,'partField':'velmag', 'valMinMax':[100,300]} )
 
     #panels.append( {'run':'zooms2','hInd':2,'res':10, 'partField':'O VI',  'valMinMax':[10.0,15.0]} )
     #panels.append( {'run':'zooms2','hInd':2,'res':10, 'partField':'HI',    'valMinMax':[10.0,24.0]} )
@@ -130,17 +130,26 @@ def renderSingleHalo():
     #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'gas',   'partField':'HI', 'valMinMax':[14.0,22.0]} )
     #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,9.5]} )
 
+    if confNum == 0:
+        panels.append( {'hInd':0, 'partType':'gas', 'partField':'TimeStep', 'valMinMax':[-3.6,-5.2]} )
+    if confNum == 1:
+        panels.append( {'hInd':0, 'partType':'gas', 'partField':'TimebinHydro', 'valMinMax':[30,45]} )
+    if confNum == 2:
+        panels.append( {'hInd':0, 'partType':'dm', 'partField':'TimeStep', 'valMinMax':[-3.6,-5.2]} )
+    if confNum == 3:
+        panels.append( {'hInd':0, 'partType':'stars', 'partField':'TimeStep', 'valMinMax':[-3.6,-5.2]} )
+
     # plot config (common)
     #hInd      = 7             # zoom halo index
-    #run       = 'illustris'   # run name
-    #res       = 1820          # run resolution
-    #redshift  = 0.0           # run redshift
-    partType   = 'gas'         # which particle type to project
+    run       = 'tng'          # run name
+    res       = 2160           # run resolution
+    redshift  = 6.0            # run redshift
+    #partType   = 'gas'        # which particle type to project
     #partField = 'temp'        # which quantity/field to project for that particle type
     #valMinMax = [4.2, 6.5]    # stretch colortable between minimum and maximum field values
     rVirFracs  = [0.15,1.0]    # draw circles at these fractions of a virial radius
     method     = 'sphMap'      # sphMap, voronoi_const, voronoi_grads, ...
-    nPixels    = [900,900]     # number of pixels for each dimension of images when projecting
+    nPixels    = [1400,1400]   # number of pixels for each dimension of images when projecting
     sizeFac    = 2.5           # size of imaging box around halo center in units of its virial radius
     hsmlFac    = 2.5           # multiplier on smoothing lengths for sphMap
     axes       = [1,0]         # e.g. [0,1] is x,y
@@ -153,11 +162,13 @@ def renderSingleHalo():
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'open'  # open, edged, open_black, edged_black
-        rasterPx   = 1200    # each panel will have this number of pixels if making a raster (png) output
+        plotStyle  = 'open_black'  # open, edged, open_black, edged_black
+        rasterPx   = 1400    # each panel will have this number of pixels if making a raster (png) output
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
-        saveFilename = saveBasePath + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        #saveFilename = saveBasePath + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = saveBasePath + 'renderHalo_%s-%s_%s.pdf' % \
+          (panels[0]['partType'],panels[0]['partField'],datetime.now().strftime('%d-%m-%Y'))
 
     # finalize panels list (do not modify below)
     for p in panels:

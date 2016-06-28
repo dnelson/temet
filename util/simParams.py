@@ -125,14 +125,14 @@ class simParams:
 
             # note: grav softenings [ckpc/h] are comoving until z=1,: fixed at z=1 value after
             if res in res_L25:  self.gravSoft = 4.0 / (res/128)
-            if res in res_L35:  self.gravSoft = 4.64 / (res/270) # todo check
+            if res in res_L35:  self.gravSoft = 3.12 / (res/270)
             if res in res_L75:  self.gravSoft = 4.0 / (res/455)
             if res in res_L205: self.gravSoft = 8.0 / (res/625)
 
             if res in res_L25:  self.targetGasMass = 1.57032e-4 * (8 ** np.log2(512/res))
-            if res in res_L35:  self.targetGasMass = 0.0 # todo
-            if res in res_L75:  self.targetGasMass = 9.4395e-5 * (8 ** np.log2(1820/res))
-            if res in res_L205: self.targetGasMass = 0.0 # todo
+            if res in res_L35:  self.targetGasMass = 5.73879e-6 * (8 ** np.log2(2160/res))
+            if res in res_L75:  self.targetGasMass = 9.43950e-5 * (8 ** np.log2(1820/res))
+            if res in res_L205: self.targetGasMass = 7.43736e-4 * (8 ** np.log2(2500/res))
 
             if res in res_L25:  self.boxSize = 25000.0
             if res in res_L35:  self.boxSize = 35000.0
@@ -150,8 +150,8 @@ class simParams:
                 self.subboxCen  = [[9000,17000,63000], [37000, 43500, 67500]]
                 self.subboxSize = [7500, 7500]
             if res in res_L35:
-                self.subboxCen  = 0 # todo
-                self.subboxSize = 0 # todo
+                self.subboxCen  = [[26000,10000,26500], [12500,10000,22500], [7300,24500,21500]]
+                self.subboxSize = [4000, 4000, 5000]
             if res in res_L205:
                 self.subboxCen  = [[44000,49000,148000],[20000,175000,15000],[169000,97900,138000]]
                 self.subboxSize = [15000, 15000, 10000]

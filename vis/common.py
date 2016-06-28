@@ -188,6 +188,9 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     if partField in ['vrad','vrad_vvir']:
         raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
 
+    if partField in ['TimebinHydro']: # cast integers to float
+        quant = np.float32(quant)
+
     return mass, quant, normCol
 
 def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
@@ -268,6 +271,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField in ['star_age','stellar_age']:
         config['label']  = 'Stellar Age [Gyr]'
         config['ctName'] = 'blgrrd_black0'
+
+    # debugging
+    if partField in ['TimeStep']:
+        grid = logZeroSafe( grid )
+        config['label']  = 'log (%s TimeStep)' % ptStr
+        config['ctName'] = 'viridis'
+
+    if partField in ['TimebinHydro']:
+        config['label']  = 'TimebinHydro'
+        config['ctName'] = 'viridis'
 
     # failed to find?
     if 'label' not in config:

@@ -14,67 +14,62 @@ from os import mkdir
 
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
-from util.helper import iterable, logZeroSafe
+from util.helper import iterable, logZeroSafe, curRepoVersion
 
 def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now """
     from cosmo import auxcatalog
-    from util.helper import curRepoVersion
     import datetime
     import getpass
 
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
 
-    #if sP.snap is None:
-    #    raise Exception()
     r = {}
-
-    # open auxiliary catalog file for this snasphot
-    auxCatPath = sP.derivPath + 'auxCat/catalog_%03d.hdf5' % sP.snap
 
     if not isdir(sP.derivPath + 'auxCat'):
         mkdir(sP.derivPath + 'auxCat')
 
-    # make a list of fields to calculate, and only open the HDF5 file when actually writing a dataset
-    fieldsTodo = []
+    for field in iterable(fields):
+        if field not in auxcatalog.fieldComputeFunctionMapping:
+            raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
-    with h5py.File(auxCatPath,'a') as f:
-        # loop over all requested fields (prefix 'Group/' or 'Subhalo/' or 'Box/' maps into a HDF5 group)
-        for field in iterable(fields):
-            if field not in auxcatalog.fieldComputeFunctionMapping:
-                raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
+        # check for existence of auxiliary catalog file for this dataset
+        auxCatPath = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (field,sP.snap)
 
-            # checking for existence? (do not calculate right now if missing)
-            if field not in f and searchExists:
-                r[field] = None
-                continue
+        # checking for existence? (do not calculate right now if missing)
+        if not isfile(auxCatPath) and searchExists:
+            r[field] = None
+            continue
 
-            if field in f and not reCalculate:
-                # load pre-computed values
-                r[field] = f[field][...]
+        # load previously computed values
+        if isfile(auxCatPath) and not reCalculate:
+            print('Load existing: ['+field+']')
+
+            with h5py.File(auxCatPath,'r') as f:
+                # load data
+                r[field] = f[field][()]
 
                 # load metadata
                 r[field+'_attrs'] = {}
                 for attr in f[field].attrs:
                     r[field+'_attrs'][attr] = f[field].attrs[attr]
-            else:
-                # computation required? add to request list
-                fieldsTodo.append(field)
 
-    for field in fieldsTodo:
+            continue
+
+        # either does not exist yet, or reCalculate requested
         print('Compute and save: ['+field+']')
         r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP)
 
         # save new dataset (or overwrite existing)
-        with h5py.File(auxCatPath,'a') as f:
-            if field not in f:
-                f.create_dataset(field, data=r[field])
+        with h5py.File(auxCatPath,'w') as f:
+            f.create_dataset(field, data=r[field])
+
+            if not reCalculate:
                 print(' Saved new.')
             else:
-                f[field][...] = r[field]
                 print(' Saved over existing.')
 
             # save metadata and any additional descriptors as attributes
@@ -500,6 +495,13 @@ def snapshotSubset(sP, partType, fields,
             vel = sP.units.particleCodeVelocityToKms(vel)
             return np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
 
+        # Bmag (from vector field) [physical code units]
+        if field.lower() in ["bmag", "bfieldmag"]:
+            b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
+            bsq = b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2]
+            bsq = bsq.astype('float32') / sP.scalefac
+            return np.sqrt( bsq )
+
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:
             # Volume eliminated in newer outputs, calculate as necessary from Mass/Density
@@ -523,6 +525,34 @@ def snapshotSubset(sP, partType, fields,
             birthTime = snapshotSubset(sP, partType, 'birthtime', **kwargs)
             birthRedshift = 1.0/birthTime - 1.0
             return curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
+
+        # sound speed (hydro only version) (code units)
+        # csnd = sqrt(gamma * SphP[p].Pressure / SphP[p].Density)
+        if field.lower() in ['csnd','soundspeed']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
+            pres = (sP.units.gamma-1.0) * dens * u
+            csnd = np.sqrt( sP.units.gamma * pres / dens )
+            
+            return csnd.astype('float32')
+
+        # sound speed (MHD version) (code units)
+        # csnd = sqrt(csnd_hydro * csnd_hydro + (B[0]*B[0]+B[1]*B[1]+B[2]*B[2])/All.Time / SphP[p].Density);
+        if field.lower() in ['csnd_mhd','soundspeed_mhd']:
+            bmag = snapshotSubset(sP, partType, 'bmag', **kwargs)
+            csnd = snapshotSubset(sP, partType, 'csnd', **kwargs)
+            dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+
+            csnd_mhd = np.sqrt( csnd * csnd + (bmag/np.sqrt(4*np.pi))**2.0 / dens ) # sqrt(4pi): Gauss -> Heavyside-Lorentz
+            return csnd_mhd.astype('float32')
+
+        # courant timestep (code units) = cellrad/csnd * All.CourantFac * All.Time
+        if field.lower() in ['dt_courant']:
+            cellrad  = snapshotSubset(sP, partType, 'cellrad', **kwargs)
+            csnd_mhd = snapshotSubset(sP, partType, 'csnd_mhd', **kwargs)
+            dt_courant = cellrad/csnd_mhd * sP.units.CourantFac * sP.scalefac
+
+            return dt_courant.astype('float32')
 
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
