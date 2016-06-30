@@ -207,6 +207,16 @@ class units(object):
 
         return x_phys
 
+    def particleCodeBFieldToGauss(self, b):
+        """ Convert magnetic field 3-vector (for cells) into Gauss, input b is PartType0/MagneticField. """
+        UnitMagneticField_in_cgs = np.float32( np.sqrt(self.UnitPressure_in_cgs) )
+
+        b_gauss = b * self._sP.units.HubbleParam # remove little h factor
+        b_gauss /= self._sP.units.scalefac**2.0 # convert 'comoving' into physical
+
+        b_gauss *= UnitMagneticField_in_cgs # [Gauss] = [g^(1/2) * cm^(-1/2) * s^(-1)]
+        return b_gauss
+
     def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
         """ Calculate particle angular momentum 3-vector in [kpc km/s] given input arrays of pos,vel,mass 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
@@ -317,7 +327,7 @@ class units(object):
             Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
             Return: [10^10 Msun/kpc^2] or 
                     [g/cm^2 if cgs=True] or 
-                    [1/cm^2] if cgs=True and numDens=True] or 
+                    [1/cm^2] if cgs=True and numDens=True, which is in fact [H atoms/cm^2]] or 
                     [Msun/kpc^2 if msunKpc2=True].
         """
         assert self._sP.redshift is not None
@@ -441,12 +451,14 @@ class units(object):
         return entropy
 
     def calcPressureCGS(self, u, dens, log=False):
-        """ Calculate pressure as (gamma-1)*u*rho in cgs units, converting rho from comoving to physical. """
+        """ Calculate pressure as (gamma-1)*u*rho in physical 'cgs' [K/cm^3] units. """
         assert self._sP.redshift is not None
 
         a3inv = 1.0 / self._sP.units.scalefac**3.0
 
-        pressure = u.astype('float32') * ( dens.astype('float32') * a3inv )
+        dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2.0 # remove all little h factors
+
+        pressure = u.astype('float32') * ( dens_phys.astype('float32') * a3inv )
         pressure *= (self._sP.units.gamma-1.0)
 
         # convert to CGS = 1 barye (ba) = 1 dyn/cm^2 = 0.1 Pa = 0.1 N/m^2 = 0.1 kg/m/s^2
@@ -456,6 +468,33 @@ class units(object):
         if log:
             pressure = logZeroSafe(pressure)
         return pressure
+
+    def calcMagneticPressureCGS(self, b, log=False):
+        """ Calculate magnetic pressure as B^2/8/pi in physical 'cgs' [K/cm^3] units. """
+
+        # input b is PartType0/MagneticField 3-vector (code units)
+        b = self.particleCodeBFieldToGauss(b) # to physical Gauss
+
+        # magnetic pressure P_B in CGS units of [dyn/cm^2]
+        P_B = (b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2]) / (8*np.pi) 
+
+        P_B /= self._sP.units.boltzmann # divide by boltzmann's constant -> [K/cm^3]
+
+        if log:
+            P_B = logZeroSafe(P_B)
+        return P_B
+
+    def calcSoundSpeedKmS(self, u, dens, log=False):
+        """ Calculate sound speed as sqrt(gamma*Pressure/Density) in physical km/s. """
+        pres = (self._sP.units.gamma-1.0) * dens * u
+        csnd = np.sqrt( self._sP.units.gamma * pres / dens ) # code units, all scalefac and h cancel
+        csnd = csnd.astype('float32')
+
+        csnd *= (1.0e5/self._sP.units.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+
+        if log:
+            csnd = logZeroSafe(csnd)
+        return csnd
 
     def codeDensToCritRatio(self, rho, baryon=None, log=False):
         """ Normalize code density by the critical (total/baryonic) density at some redshift. """

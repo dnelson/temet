@@ -495,12 +495,12 @@ def snapshotSubset(sP, partType, fields,
             vel = sP.units.particleCodeVelocityToKms(vel)
             return np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
 
-        # Bmag (from vector field) [physical code units]
+        # Bmag (from vector field) [physical Gauss]
         if field.lower() in ["bmag", "bfieldmag"]:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
-            bsq = b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2]
-            bsq = bsq.astype('float32') / sP.scalefac
-            return np.sqrt( bsq )
+            b = sP.units.particleCodeBFieldToGauss(b)
+            bmag = np.sqrt( b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2] )
+            return bmag
 
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:
@@ -526,33 +526,32 @@ def snapshotSubset(sP, partType, fields,
             birthRedshift = 1.0/birthTime - 1.0
             return curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
 
-        # sound speed (hydro only version) (code units)
-        # csnd = sqrt(gamma * SphP[p].Pressure / SphP[p].Density)
+        # sound speed (hydro only version) [physical km/s]
         if field.lower() in ['csnd','soundspeed']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
-            pres = (sP.units.gamma-1.0) * dens * u
-            csnd = np.sqrt( sP.units.gamma * pres / dens )
-            
-            return csnd.astype('float32')
+            return sP.units.calcSoundSpeedKmS(u,dens)
 
-        # sound speed (MHD version) (code units)
-        # csnd = sqrt(csnd_hydro * csnd_hydro + (B[0]*B[0]+B[1]*B[1]+B[2]*B[2])/All.Time / SphP[p].Density);
-        if field.lower() in ['csnd_mhd','soundspeed_mhd']:
-            bmag = snapshotSubset(sP, partType, 'bmag', **kwargs)
-            csnd = snapshotSubset(sP, partType, 'csnd', **kwargs)
-            dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+        # pressure_ratio (linear ratio of magnetic to gas pressure)
+        if field.lower() in ['pres_ratio','pressure_ratio']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
+            b    = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
 
-            csnd_mhd = np.sqrt( csnd * csnd + (bmag/np.sqrt(4*np.pi))**2.0 / dens ) # sqrt(4pi): Gauss -> Heavyside-Lorentz
-            return csnd_mhd.astype('float32')
+            P_gas = sP.units.calcPressureCGS(u, dens)
+            P_B   = sP.units.calcMagneticPressureCGS(b)
+            return P_B/P_gas
 
-        # courant timestep (code units) = cellrad/csnd * All.CourantFac * All.Time
-        if field.lower() in ['dt_courant']:
-            cellrad  = snapshotSubset(sP, partType, 'cellrad', **kwargs)
-            csnd_mhd = snapshotSubset(sP, partType, 'csnd_mhd', **kwargs)
-            dt_courant = cellrad/csnd_mhd * sP.units.CourantFac * sP.scalefac
+        # gas pressure [log K/cm^3]
+        if field.lower() in ['gas_pres','gas_pressure','p_gas']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
+            return sP.units.calcPressureCGS(u, dens, log=True)
 
-            return dt_courant.astype('float32')
+        # magnetic prssure [log K/cm^3]
+        if field.lower() in ['mag_pres','magnetic_pressure','p_b','p_magnetic']:
+            b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
+            return sP.units.calcMagneticPressureCGS(b, log=True)
 
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
@@ -569,6 +568,7 @@ def snapshotSubset(sP, partType, fields,
                  [['metals'], 'GFM_Metals'],
                  [['u'], 'InternalEnergy'],
                  [['machnum'], 'MachNumber'],
+                 [['b','bfield'], 'MagneticField'],
                  [['mass'], 'Masses'],
                  [['nh'], 'NeutralHydrogenAbundance'],
                  [['numtr'], 'NumTracers'],
