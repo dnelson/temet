@@ -21,6 +21,7 @@ from util.helper import loadColorTable, logZeroSafe
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.cloudy import cloudyIon
+from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
 saveBasePath = '/n/home07/dnelson/data3/frames/'
@@ -59,7 +60,7 @@ def getHsmlForPartType(sP, partType, indRange=None):
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
 
         # use a maximum size (~px scale?) for stars in outskirts
-        print(' getHsmlForPartType(): clipping [stars] at a maximum of 0.5x gravSoft.')
+        #print(' getHsmlForPartType(): clipping [stars] at a maximum of 0.5x gravSoft.')
         hsml[hsml > 0.5*sP.gravSoft] = 0.5*sP.gravSoft # can decouple, leads to strageness/interestingness
 
         return hsml
@@ -182,7 +183,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         quant = snapshotSubset(sP, partType, partField, indRange=indRange)
 
     # quantity pre-processing (need to remove log for means)
-    if partField in ['temp','temperature','ent','entr','entropy']:
+    if partField in ['temp','temperature','ent','entr','entropy','P_gas','P_B']:
         quant = 10.0**quant
 
     if partField in ['vrad','vrad_vvir']:
@@ -235,7 +236,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
 
-    # mass-weighted quantities
+    # gas: mass-weighted quantities
     if partField in ['temp','temperature']:
         grid = logZeroSafe( grid )
         config['label']  = 'Temperature [log K]'
@@ -246,6 +247,34 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Entropy [log K cm$^2$]'
         config['ctName'] = 'jet'
 
+    # gas: pressures
+    if partField in ['P_gas']:
+        grid = logZeroSafe( grid )
+        config['label']  = 'Gas Pressure [log K cm$^{-3}$]'
+        config['ctName'] = 'viridis'
+
+    if partField in ['P_B']:
+        grid = logZeroSafe( grid )
+        config['label']  = 'Magnetic Pressure [log K cm$^{-3}$]'
+        config['ctName'] = 'viridis'
+
+    if partField in ['pressure_ratio']:
+        grid = logZeroSafe( grid )
+        config['label']  = 'Pressure Ratio [log P$_{\\rm B}$ / P$_{\\rm gas}$]'
+        config['ctName'] = 'Spectral' # RdYlBu, Spectral
+
+    # metallicities
+    if partField in ['metal','Z']:
+        grid = logZeroSafe( grid )
+        config['label']  = '%s Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]' % ptStr
+        config['ctName'] = 'gist_earth'
+
+    if partField in ['metal_solar','Z_solar']:
+        grid = logZeroSafe( grid )
+        config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
+        config['ctName'] = 'gist_earth'
+
+    # velocities
     if partField in ['vmag','velmag']:
         config['label']  = '%s Velocity Magnitude [km/s]' % ptStr
         config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
@@ -258,16 +287,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = '%s Radial Velocity / Halo v$_{200}$' % ptStr
         config['ctName'] = 'brewer-brownpurple'
 
-    if partField in ['metal','Z']:
-        grid = logZeroSafe( grid )
-        config['label']  = '%s Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]' % ptStr
-        config['ctName'] = 'gist_earth'
-
-    if partField in ['metal_solar','Z_solar']:
-        grid = logZeroSafe( grid )
-        config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
-        config['ctName'] = 'gist_earth'
-
+    # stars
     if partField in ['star_age','stellar_age']:
         config['label']  = 'Stellar Age [Gyr]'
         config['ctName'] = 'blgrrd_black0'
@@ -276,7 +296,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField in ['TimeStep']:
         grid = logZeroSafe( grid )
         config['label']  = 'log (%s TimeStep)' % ptStr
-        config['ctName'] = 'viridis'
+        config['ctName'] = 'viridis_r'
 
     if partField in ['TimebinHydro']:
         config['label']  = 'TimebinHydro'
@@ -305,7 +325,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         mkdir(sP.derivPath + 'grids/')
 
     # no particles of type exist? blank grid return (otherwise die in getHsml and wind removal)
-    if snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] == 0:
+    h = snapshotHeader(sP)
+
+    if h['NumPart'][sP.ptNum(partType)] == 0:
         print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros( nPixels, dtype='float32' )
         grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
@@ -315,7 +337,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     if isfile(saveFilename):
         # load if already made
         with h5py.File(saveFilename,'r') as f:
-            grid = f['grid'][...]
+            grid_master = f['grid'][...]
         print('Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
     else:
         # will we use a complete load or a subset particle load?
@@ -333,66 +355,95 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
             indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
 
-        # load: 3D positions
-        pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+        # if indRange is still None (full snapshot load), we will proceed chunked
+        grid_dens  = np.zeros( nPixels, dtype='float32' )
+        grid_quant = np.zeros( nPixels, dtype='float32' )
+        nChunks = 1
 
-        # rotation? shift points to subhalo center, rotate, and shift back
-        if rotMatrix is not None:
-            if rotCenter is None:
-                # use subhalo center at this snapshot
-                sh = groupCatSingle(sP, subhaloID=sP.hInd)
-                rotCenter = sh['SubhaloPos']
+        if indRange is None:
+            nChunks = int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0) #int(sP.res/10.0)
+            chunkSize = int(h['NumPart'][partTypeNum(partType)] / nChunks)
+            print(' gridBox(): proceeding with [%d] chunks...' % nChunks)
 
-                if not sP.isZoom and sP.hInd is None:
-                    raise Exception('Rotation in periodic box must be about a halo center.')
+        for chunkNum in np.arange(nChunks):
+            # only if nChunks>1 do we here modify indRange
+            if nChunks > 1:
+                # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
+                indRange = [chunkNum*chunkSize, (chunkNum+1)*chunkSize-1]
+                if chunkNum == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum(partType)]-1
+                print('  [%2d] %9d - %d' % (chunkNum,indRange[0],indRange[1]))
 
-            for i in range(3):
-                pos[:,i] -= rotCenter[i]
+            # load: 3D positions
+            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
 
-            pos = np.transpose( np.dot(rotMatrix, pos.transpose()) )
+            # rotation? shift points to subhalo center, rotate, and shift back
+            if rotMatrix is not None:
+                if rotCenter is None:
+                    # use subhalo center at this snapshot
+                    sh = groupCatSingle(sP, subhaloID=sP.hInd)
+                    rotCenter = sh['SubhaloPos']
 
-            for i in range(3):
-                pos[:,i] += rotCenter[i]
+                    if not sP.isZoom and sP.hInd is None:
+                        raise Exception('Rotation in periodic box must be about a halo center.')
 
-        # load: mass/weights, quantity, and normalization required
-        mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
+                for i in range(3):
+                    pos[:,i] -= rotCenter[i]
 
-        # stars requested in run with winds? if so, load SFTime to remove contaminating wind particles
-        wMask = None
+                pos = np.transpose( np.dot(rotMatrix, pos.transpose()) )
 
-        if partType == 'stars' and sP.winds:
-            sftime = snapshotSubset(sP, partType, 'sftime', indRange=indRange)
-            wMask = np.where(sftime > 0.0)[0]
-            assert len(wMask)
+                for i in range(3):
+                    pos[:,i] += rotCenter[i]
 
-            mass = mass[wMask]
-            pos  = pos[wMask,:]
-            if quant is not None:
-                quant = quant[wMask]
+            # load: mass/weights, quantity, and normalization required
+            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
 
-        # render
-        if method == 'sphMap':
-            # particle by particle orthographic splat using standard SPH cubic spline kernel
-            hsml = getHsmlForPartType(sP, partType, indRange=indRange) * hsmlFac
+            # stars requested in run with winds? if so, load SFTime to remove contaminating wind particles
+            wMask = None
 
-            if wMask is not None:
-                hsml = hsml[wMask]
+            if partType == 'stars' and sP.winds:
+                sftime = snapshotSubset(sP, partType, 'sftime', indRange=indRange)
+                wMask = np.where(sftime > 0.0)[0]
+                assert len(wMask)
 
-            grid = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
-                           boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, nPixels=nPixels, 
-                           colDens=normCol )
-        else:
-            raise Exception('Not implemented.')
+                mass = mass[wMask]
+                pos  = pos[wMask,:]
+                if quant is not None:
+                    quant = quant[wMask]
+
+            # render
+            if method == 'sphMap':
+                # particle by particle orthographic splat using standard SPH cubic spline kernel
+                hsml = getHsmlForPartType(sP, partType, indRange=indRange) * hsmlFac
+
+                if wMask is not None:
+                    hsml = hsml[wMask]
+
+                grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
+                                         boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, 
+                                         nPixels=nPixels, colDens=normCol, multi=True )
+
+                grid_dens  += grid_d
+                grid_quant += grid_q
+            else:
+                raise Exception('Not implemented.')
+
+        # normalize quantity
+        grid_master = grid_dens
+
+        if quant is not None:
+            w = np.where(grid_dens > 0.0)
+            grid_quant[w] /= grid_dens[w]
+            grid_master = grid_quant
 
         # save
         with h5py.File(saveFilename,'w') as f:
-            f['grid'] = grid
+            f['grid'] = grid_master
         print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     # handle units and come up with units label
-    grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
+    grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg)
 
-    return grid, config
+    return grid_master, config
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """

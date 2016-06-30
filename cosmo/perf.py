@@ -128,8 +128,8 @@ def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
         assert numSubboxes == nSubboxesExpected
         
         for sbNum in range(numSubboxes):
-            #if sbNum == 0:
-            #    continue # L35n270TNG skip past error in SB0
+            if sbNum == 0 or sbNum == 2:
+                continue # L205n625TNG skip SB0/SB2
 
             numDirs = len(glob(sP.simPath + 'subbox' + str(sbNum) + '/snapdir*'))
             nSnapFiles = 0
@@ -145,6 +145,7 @@ def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
 
                 checkSingleSnap(files)
 
+            print('PASS SUBBOX [%d].' % sbNum)
         print('PASS ALL SUBBOXES.')
 
 def tail(fileName, nLines):

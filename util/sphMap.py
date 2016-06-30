@@ -55,7 +55,7 @@ def _getkernel(hinv, r2, C1, C2, C3):
 @jit(nopython=True, nogil=True, cache=True)
 def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
-                normQuant,normColDens):
+                normColDens):
     """ Core routine for sphMap(), see below. """
     # init
     NumPart = pos.shape[0]
@@ -176,11 +176,11 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 
     # normalize mass weighted quantity
     # this only works for all-at-once calcs, otherwise maps need first to be collected, then divided
-    if normQuant:
-        for i in range(nPixels[0]):
-            for j in range(nPixels[1]):
-                if dens_out[i, j] > 0:
-                    quant_out[i, j] /= dens_out[i, j]
+    #if normQuant:
+    #    for i in range(nPixels[0]):
+    #        for j in range(nPixels[1]):
+    #            if dens_out[i, j] > 0:
+    #                quant_out[i, j] /= dens_out[i, j]
 
     # for total column density, normalize by the pixel area, e.g. [10^10 Msun/h] -> [10^10 Msun * h / ckpc^2]
     if normColDens:
@@ -189,7 +189,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     # void return
 
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, 
-           colDens=False, nThreads=16):
+           colDens=False, nThreads=16, multi=False):
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
         quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
         returned, optionally converted to a column density map if colDens=True. If quant is specified, 
@@ -214,6 +214,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       ndims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
       colDens        : if True, normalize each grid value by its area (default=False)
       nThreads       : do multithreaded calculation (mem required=nThreads times more)
+      multi          : if True, return the tuple (dens,quant) instead of selecting one, under the 
+                       assumption that we are using sphMap() in a chunked mode and have to normalize later
     """
     # input sanity checks
     if len(boxSizeImg) != 3 or not isinstance(boxSizeSim,(float)) or len(boxCen) != 3:
@@ -267,9 +269,15 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         # call JIT compiled kernel (normQuant=True since we do only one computation)
         _calcSphMap(pos,hsml,mass,quant,rDens,rQuant,
                     boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
-                    True,colDens)
+                    colDens)
+
+        if multi:
+            return (rDens.T, rQuant.T)
 
         if quant.size > 1:
+            w = np.where(rDens > 0.0)
+            rQuant[w] /= rDens[w]
+
             return rQuant.T
         return rDens.T
 
@@ -309,7 +317,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             # call JIT compiled kernel (normQuant=False since we handle this later)
             _calcSphMap(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,
                         self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
-                        False,self.colDens)
+                        self.colDens)
 
     # create threads
     threads = [mapThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
@@ -330,11 +338,15 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         rDens += thread.rDens
 
     # finalize and return
+    if multi:
+        return (rDens.T, rQuant.T)
+
     if quant.size > 1:
         w = np.where(rDens > 0.0)
         rQuant[w] /= rDens[w]
 
         return rQuant.T
+
     return rDens.T
 
 def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, colDens=False, nThreads=16):
