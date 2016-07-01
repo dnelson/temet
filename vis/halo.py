@@ -124,11 +124,14 @@ def renderSingleHalo(confNum):
     #panels.append( {'run':'zooms2','hInd':2,'res':10, 'partField':'HI',    'valMinMax':[10.0,24.0]} )
     #panels.append( {'run':'zooms2','hInd':2,'res':10, 'partField':'C IV',  'valMinMax':[10.0,17.0]} )
 
-    # sizeFac = 10^2.8 * 0.7 * 2 (match to pm2.0 for Guinevere)
-    #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'gas',   'partField':'temp'} )
-    #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'gas',   'partField':'coldens_msunkpc2'} )
-    #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'gas',   'partField':'HI', 'valMinMax':[14.0,22.0]} )
-    #panels.append( {'hInd':350671, 'sizeFac':-140.0, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,9.5]} )
+    if confNum == 4:
+        # sizeFac = 10^2.8 * 0.7 * 2 (match to pm2.0 for Guinevere)
+        hInd = 350671
+        #sizeFac = -140.0
+        panels.append( {'run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'HI', 'valMinMax':[14.0,21.0]} )
+        panels.append( {'run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'velmag', 'valMinMax':[400,900]} )
+        panels.append( {'method':'sphMap_global','run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.5]} )
+        panels.append( {'run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'Si III', 'valMinMax':[14.0,21.0]} )
 
     if confNum == 0:
         panels.append( {'hInd':0, 'partType':'gas', 'partField':'TimeStep', 'valMinMax':[-3.6,-5.2]} )
@@ -147,10 +150,10 @@ def renderSingleHalo(confNum):
     #partType   = 'gas'        # which particle type to project
     #partField = 'temp'        # which quantity/field to project for that particle type
     #valMinMax = [4.2, 6.5]    # stretch colortable between minimum and maximum field values
-    rVirFracs  = [0.15,1.0]    # draw circles at these fractions of a virial radius
+    rVirFracs  = [1.0]         # draw circles at these fractions of a virial radius
     method     = 'sphMap'      # sphMap, voronoi_const, voronoi_grads, ...
     nPixels    = [1400,1400]   # number of pixels for each dimension of images when projecting
-    sizeFac    = 2.5           # size of imaging box around halo center in units of its virial radius
+    sizeFac    = 2.5           # side length of imaging box around halo center in units of its virial radius
     hsmlFac    = 2.5           # multiplier on smoothing lengths for sphMap
     axes       = [1,0]         # e.g. [0,1] is x,y
     labelZ     = False         # label redshift inside (upper right corner) of panel
@@ -162,7 +165,7 @@ def renderSingleHalo(confNum):
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'open_black'  # open, edged, open_black, edged_black
+        plotStyle  = 'open'  # open, edged, open_black, edged_black
         rasterPx   = 1400    # each panel will have this number of pixels if making a raster (png) output
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
