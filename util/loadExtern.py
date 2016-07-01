@@ -814,20 +814,78 @@ def guo2016(O3O2=False):
 
     return r
 
-def danforth2014():
-    """ Load observational data (OVI CDDF low-redshift) from Danforth+ (2014). """
-    path = ''
+def thomChen2008():
+    """ OVI CDDF (0.12 < z < 0.5) from Thom & Chen (2008), extracted from Figure 5 panel (a). """
+    r = {'log_NOVI'          : np.array([14.311, 13.731, 13.483]),
+         'log_NOVI_errRight' : np.array([0.60, 0.13, 0.13]),
+         'log_NOVI_errLeft'  : np.array([0.38, 0.10, 0.12]),
+         'log_fOVI'          : np.array([-14.720, -13.146, -12.893]),
+         'log_fOVI_err'      : np.array([0.188, 0.149, 0.149]),
+         'label'             : 'Thom+ (2008) STIS 0.12 < z < 0.5'}
 
-    # columns: 
-    #data = np.loadtxt(path)
+    return r
 
-    #r = {'log_NOVI'         : data[:,0],
-    #     'log_fOVI'         : data[:,7],
-    #     'log_fOVI_errUp'   : data[:,8],
-    #     'log_fOVI_errDown' : data[:,9],
-    #     'label'           : 'Danforth+ (2014) COS 0.1<z<0.73'}
+def tripp2008():
+    """ OVI CDDF (z < 0.5) from Tripp+ (2008), extracted from Figure 11. """
+    tot_N = 91.0
+    log_NOVI = np.array([13.2, 13.4, 13.6, 13.8, 14.0, 14.2, 14.4, 14.6, 14.8])
+    dNdz     = np.array([2.81, 4.96, 5.15, 5.84, 1.94, 2.28, 1.00, 0.34, 0.04])
 
-    r = {}
+    # estimate a rough errorbar, assume dz constant among bins
+    dN = dNdz/dNdz.sum() * tot_N
+    ss = np.sqrt(dN+1) + 1.0 # Eqn 10, Gehrels 1986, as in Table 4 Tripp+ (2008)
+
+    cddf = dNdz/10.0**log_NOVI
+
+    r = {'log_NOVI'         : log_NOVI,
+         'log_NOVI_err'     : 0.1, # dex
+         'log_fOVI'         : np.log10(cddf),
+         'log_fOVI_err'     : np.log10( (dNdz+ss)/10.0**log_NOVI ) - np.log10(cddf),
+         'label'            : 'Tripp+ (2008) STIS/FUSE z < 0.5' }
+
+    return r
+
+def danforth2008():
+    """ OVI CDDF (z < 0.4) from Danforth+ (2008), extracted from Figure 5 top-right panel. """
+    log_NOVI     = np.array([13.0,  13.2,  13.4,  13.6,  13.8,  14.0,  14.2,  14.4,  14.6,  14.8])
+    dNdz         = np.array([5.575, 4.474, 4.597, 3.705, 2.695, 1.809, 1.440, 1.009, 0.406, 0.271])
+    dNdz_errUp   = np.array([3.373, 2.055, 1.692, 1.280, 1.065, 0.886, 0.775, 0.665, 0.505, 0.461])
+    dNdz_errDown = np.array([2.265, 1.483, 1.274, 0.985, 0.769, 0.609, 0.529, 0.437, 0.264, 0.197])
+    cddf         = dNdz/10.0**log_NOVI
+
+    r = {'log_NOVI'         : log_NOVI,
+         'log_NOVI_err'     : 0.1, # dex
+         'log_fOVI'         : np.log10(cddf),
+         'log_fOVI_errUp'   : np.log10( (dNdz+dNdz_errUp)/10.0**log_NOVI ) - np.log10(cddf),
+         'log_fOVI_errDown' : np.log10(cddf) - np.log10( (dNdz-dNdz_errDown)/10.0**log_NOVI ),
+         'label'            : 'Danforth+ (2008) STIS/FUSE z < 0.4' }
+
+    return r
+
+def danforth2016():
+    """ Load observational data (OVI CDDF low-redshift) from Danforth+ (2015), Table 5. """
+    dlog_N = 0.2 # dex
+    log_N  = np.array([12.9, 13.1, 13.3, 13.5, 13.7,  13.9,  14.1,  14.3,  14.5,  14.7,  14.9 ])
+    N_OVI  = np.array([2,    6,    17,   40,   62,    69,    47,    24,    10,    2,     1    ])
+    dz_OVI = np.array([0.24, 0.91, 4.13, 9.16, 12.65, 13.81, 14.13, 14.36, 14.43, 14.46, 14.48])
+
+    d2N_dlogNdz   = np.array([42,  33, 21, 22, 25, 25, 17, 8.4, 3.5, 0.69, 0.35])
+    d2N_dlogNdz_p = np.array([150, 78, 33, 7,  4,  3,  3,  2.1, 1.5, 0.91, 0.79])
+    d2N_dlogNdz_m = np.array([37,  25, 9,  5,  3,  3,  2,  1.7, 1.1, 0.45, 0.29])
+
+    d2N_dNdz   = d2N_dlogNdz * dlog_N / 10.0**log_N
+    d2N_dNdz_p = (d2N_dlogNdz+d2N_dlogNdz_p) * dlog_N / 10.0**log_N
+    d2N_dNdz_m = (d2N_dlogNdz-d2N_dlogNdz_m) * dlog_N / 10.0**log_N
+
+    print('Danforth15() still wrong, need unit adjustment to y-axis.')
+
+    r = {'log_NOVI'         : log_N,
+         'log_NOVI_err'     : 0.5 * dlog_N,
+         'log_fOVI'         : np.log10(d2N_dNdz),
+         'log_fOVI_errUp'   : np.log10(d2N_dNdz_p) - np.log10(d2N_dNdz),
+         'log_fOVI_errDown' : np.log10(d2N_dNdz) - np.log10(d2N_dNdz_m),
+         'label'            : 'Danforth+ (2016) COS 0.1<z<0.73'}
+
     return r
 
 def sfrTxt(sP):
