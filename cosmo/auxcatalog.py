@@ -15,12 +15,12 @@ from cosmo.util import correctPeriodicDistVecs
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
-# Group/*: parameters for computations done over each FoF halo
+# Group_*: parameters for computations done over each FoF halo
 minNumPartGroup = 100 # only consider halos above a minimum total number of particles? (0=disabled)
 
-# Subhalo/*: parameters for computations done over each Subfind subhalo
+# Subhalo_*: parameters for computations done over each Subfind subhalo
 
-# Box/*: parameters for whole box (halo-independent) computations
+# Box_*: parameters for whole box (halo-independent) computations
 boxGridSizeHI     = 1.5 # code units, e.g. ckpc/h
 boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
@@ -372,11 +372,22 @@ def wholeBoxCDDF(sP, species):
     desc  += "Return has shape [2,nBins] where the first slice gives n [cm^-2], the second fN [cm^-2]."
     select = "Binning min: [%g] max: [%g] size: [%g]." % (binMinMax[0], binMinMax[1], binSize)
 
-    # load
-    ac = auxCat(sP, fields=['Box/Grid_n'+species])
+    # modify?
+    if species == 'OVI_Ntest':
+        ac = auxCat(sP, fields=['Box_Grid_nOVI'])
+        # take out log, convert from [H atoms/cm^2] to [O atoms/cm^2]
+        ac['Box_Grid_nOVI'] = 10.0**ac['Box_Grid_nOVI']
+        ac['Box_Grid_nOVI'] /= 16.0
+        ac['Box_Grid_nOVI'] = np.log10( ac['Box_Grid_nOVI'] )
 
-    # calculate
-    fN, n = calculateCDDF(ac['Box/Grid_n'+species], binMinMax[0], binMinMax[1], binSize, sP)
+        fN, n = calculateCDDF(ac['Box_Grid_nOVI'], binMinMax[0], binMinMax[1], binSize, sP)
+
+    else:
+        # load
+        ac = auxCat(sP, fields=['Box_Grid_n'+species])
+
+        # calculate
+        fN, n = calculateCDDF(ac['Box_Grid_n'+species], binMinMax[0], binMinMax[1], binSize, sP)
 
     rr = np.vstack( (n,fN) )
     attrs = {'Description' : desc.encode('ascii'), 
@@ -387,26 +398,27 @@ def wholeBoxCDDF(sP, species):
 # this dictionary contains a mapping between all auxCatalog fields and their generating functions, 
 # where the first sP input is stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
-  {'Group/Mass_Crit500_Type' : partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
+  {'Group_Mass_Crit500_Type' : partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
 
-   'Box/Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
-   'Box/Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),
-   'Box/Grid_nHI3'           : partial(wholeBoxColDensGrid,species='HI3'),
-   'Box/Grid_nHI_noH2'       : partial(wholeBoxColDensGrid,species='HI_noH2'),
-   'Box/Grid_Z'              : partial(wholeBoxColDensGrid,species='Z'),
+   'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
+   'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),
+   'Box_Grid_nHI3'           : partial(wholeBoxColDensGrid,species='HI3'),
+   'Box_Grid_nHI_noH2'       : partial(wholeBoxColDensGrid,species='HI_noH2'),
+   'Box_Grid_Z'              : partial(wholeBoxColDensGrid,species='Z'),
 
-   'Box/Grid_nOVI'           : partial(wholeBoxColDensGrid,species='O VI'),
-   'Box/Grid_nOVI_10'        : partial(wholeBoxColDensGrid,species='O VI 10'),
-   'Box/Grid_nOVI_25'        : partial(wholeBoxColDensGrid,species='O VI 25'),
-   'Box/Grid_nOVI_solar'     : partial(wholeBoxColDensGrid,species='O VI solar'),
+   'Box_Grid_nOVI'           : partial(wholeBoxColDensGrid,species='O VI'),
+   'Box_Grid_nOVI_10'        : partial(wholeBoxColDensGrid,species='O VI 10'),
+   'Box_Grid_nOVI_25'        : partial(wholeBoxColDensGrid,species='O VI 25'),
+   'Box_Grid_nOVI_solar'     : partial(wholeBoxColDensGrid,species='O VI solar'),
 
-   'Box/CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
-   'Box/CDDF_nHI2'           : partial(wholeBoxCDDF,species='HI2'),
-   'Box/CDDF_nHI3'           : partial(wholeBoxCDDF,species='HI3'),
-   'Box/CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
+   'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
+   'Box_CDDF_nHI2'           : partial(wholeBoxCDDF,species='HI2'),
+   'Box_CDDF_nHI3'           : partial(wholeBoxCDDF,species='HI3'),
+   'Box_CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
 
-   'Box/CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
-   'Box/CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
-   'Box/CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
-   'Box/CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar')
+   'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
+   'Box_CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
+   'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
+   'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar'),
+   'Box_CDDF_nOVI_Ntest'     : partial(wholeBoxCDDF,species='OVI_Ntest')
   }

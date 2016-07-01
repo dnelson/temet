@@ -168,7 +168,7 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, atomic=False, molecul
     if gas['GFM_Metals'].ndim != 1:
         raise Exception('Please load just "metals_H" into GFM_Metals to avoid ambiguity.')
 
-    # total hydrogen mass (alternatively, multiple by sP.units.hydrogen_massfrac=0.76)
+    # total hydrogen mass (alternatively, just multiply by sP.units.hydrogen_massfrac=0.76)
     massH = gas['Masses'] * gas['GFM_Metals']
 
     # which fraction to apply?

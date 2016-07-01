@@ -18,6 +18,28 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def moveAuxCats():
+    """ Move auxCat/* datasets into separate files for new organization system. """
+    cats = glob.glob('catalog_*.hdf5')
+
+    for cat in cats:
+        snapNum = int(cat.split('_')[1].split('.hdf5')[0])
+
+        with h5py.File(cat,'r') as f:
+            groups = f.keys()
+
+            for n1 in groups:
+                for n2 in f[n1].keys():
+                    newGroupName = "%s_%s" % (n1,n2)
+                    newFilename = "%s_%s_%03d.hdf5" % (n1,n2,snapNum)
+                    print('[%03d] Writing new group: [%s] to file: [%s]' % (snapNum,newGroupName,newFilename))
+
+                    with h5py.File(newFilename,'w') as fNew:
+                        fNew.create_dataset(newGroupName, data=f[n1][n2][()])
+
+                        for attr in f[n1][n2].attrs:
+                            fNew[newGroupName].attrs[attr] = f[n1][n2].attrs[attr]
+
 def checkIllustrisMetalRatioVsSolar():
     """ Check corrupted GFM_Metals content vs solar expectation. """
     from cosmo.cloudy import cloudyIon

@@ -779,6 +779,8 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     markers   = ['o','D','s']  # gas, stars, baryons
     fracTypes = ['gas','stars','baryons']
 
+    field = 'Group_Mass_Crit500_Type'
+
     # plot setup
     fig = plt.figure(figsize=(16,9))
     ax = fig.add_subplot(111)
@@ -817,35 +819,35 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
         sP.setRedshift(simRedshift)
 
         if sP.isZoom:
-            ac = auxCat(sP, fields=['Group/Mass_Crit500_Type'])
-            ac['Group/Mass_Crit500_Type'] = ac['Group/Mass_Crit500_Type'][sP.zoomSubhaloID,:]
+            ac = auxCat(sP, fields=[field])
+            ac[field] = ac[field][sP.zoomSubhaloID,:]
 
             # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
-            xx_code = np.sum( ac['Group/Mass_Crit500_Type'] )
+            xx_code = np.sum( ac[field] )
             xx = sP.units.codeMassToLogMsun( xx_code )
 
             for i, fracType in enumerate(fracTypes):
                 if fracType == 'gas':
-                    val = ac['Group/Mass_Crit500_Type'][1]
+                    val = ac[field][1]
                 if fracType == 'stars':
-                    val = ac['Group/Mass_Crit500_Type'][2]
+                    val = ac[field][2]
                 if fracType == 'baryons':
-                    val = ac['Group/Mass_Crit500_Type'][1] + ac['Group/Mass_Crit500_Type'][2]
+                    val = ac[field][1] + ac[field][2]
 
                 yy = val / xx_code # fraction with respect to total
                 ax.plot(xx,yy,markers[i],color=colors[0])
         else:
-            ac = auxCat(sP, fields=['Group/Mass_Crit500_Type'])
+            ac = auxCat(sP, fields=[field])
 
             # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
-            xx_code = np.sum( ac['Group/Mass_Crit500_Type'], axis=1 )
+            xx_code = np.sum( ac[field], axis=1 )
 
             # handle NaNs
             ww = np.isnan(xx_code)
             xx_code[ww] = 1e-10
             xx_code[xx_code == 0.0] = 1e-10
-            ac['Group/Mass_Crit500_Type'][ww,0] = 1e-10
-            ac['Group/Mass_Crit500_Type'][ww,1:2] = 0.0
+            ac[field][ww,0] = 1e-10
+            ac[field][ww,1:2] = 0.0
 
             xx = sP.units.codeMassToLogMsun( xx_code )
 
@@ -854,11 +856,11 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                     
             for i, fracType in enumerate(fracTypes):
                 if fracType == 'gas':
-                    val = ac['Group/Mass_Crit500_Type'][:,1]
+                    val = ac[field][:,1]
                 if fracType == 'stars':
-                    val = ac['Group/Mass_Crit500_Type'][:,2]
+                    val = ac[field][:,2]
                 if fracType == 'baryons':
-                    val = ac['Group/Mass_Crit500_Type'][:,1] + ac['Group/Mass_Crit500_Type'][:,2]
+                    val = ac[field][:,1] + ac[field][:,2]
 
                 yy = val / xx_code # fraction with respect to total
 
@@ -963,10 +965,10 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
         # once including H2 modeling, once without
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box/CDDF_'+species])
+            ac = auxCat(sP, fields=['Box_CDDF_'+species])
 
-            n_HI  = ac['Box/CDDF_'+species][0,:]
-            fN_HI = ac['Box/CDDF_'+species][1,:]
+            n_HI  = ac['Box_CDDF_'+species][0,:]
+            fN_HI = ac['Box_CDDF_'+species][1,:]
 
             # plot
             xx = np.log10(n_HI)
@@ -996,7 +998,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     from util import simParams
 
     # config
-    speciesList = ['nOVI','nOVI_10','nOVI_25','nOVI_solar']
+    speciesList = ['nOVI','nOVI_solar','nOVI_Ntest'] #,'nOVI_10','nOVI_25'] #,'nOVI_Ntest'
 
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -1006,24 +1008,40 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     ax.set_xlabel('log N$_{\\rm OVI}$ [ cm$^{-2}$ ]')
 
     if moment == 0:
-        ax.set_ylim([-18, -11])
+        ax.set_ylim([-17, -11])
         ax.set_ylabel('CDDF$_{0}$:  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
     if moment == 1:
-        ax.set_ylim([-4, 0]) # TODO
+        ax.set_ylim([-0.5, 1.5])
         ax.set_ylabel('CDDF$_{1}$:  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
 
     # observational points
-    d14 = danforth2014()
+    d16  = danforth2016()
+    d08  = danforth2008()
+    tc08 = thomChen2008()
+    t08  = tripp2008()
 
-    #if moment == 1:
-    #    d14['log_fOVI'] = np.log10( 10.0**d14['log_fOVI'] * 10.0**d14['log_NOVI'] )
+    if moment == 1:
+        d16['log_fOVI']  = np.log10( 10.0**d16['log_fOVI'] * 10.0**d16['log_NOVI'] )
+        d08['log_fOVI']  = np.log10( 10.0**d08['log_fOVI'] * 10.0**d08['log_NOVI'] )
+        tc08['log_fOVI'] = np.log10( 10.0**tc08['log_fOVI'] * 10.0**tc08['log_NOVI'] )
+        t08['log_fOVI']  = np.log10( 10.0**t08['log_fOVI'] * 10.0**t08['log_NOVI'] )
 
-    #l1,_,_ = ax.errorbar(d14['log_NOVI'], d14['log_fOVI'], yerr=[d14['log_fOVI_errDown'],d14['log_fOVI_errUp']],
-    #           xerr=d14['log_NOVI_xerr'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
+    l1,_,_ = ax.errorbar(d16['log_NOVI'], d16['log_fOVI'], yerr=[d16['log_fOVI_errDown'],d16['log_fOVI_errUp']],
+               xerr=d16['log_NOVI_err'], color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, fmt='s')
 
-    #labels = [d14['label']]
-    #legend1 = ax.legend([l1], labels, loc='lower left')
-    #ax.add_artist(legend1)
+    l2,_,_ = ax.errorbar(d08['log_NOVI'], d08['log_fOVI'], yerr=[d08['log_fOVI_errDown'],d08['log_fOVI_errUp']],
+               xerr=d08['log_NOVI_err'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
+
+    l3,_,_ =  ax.errorbar(tc08['log_NOVI'], tc08['log_fOVI'], yerr=tc08['log_fOVI_err'],
+               xerr=[tc08['log_NOVI_errLeft'],tc08['log_NOVI_errRight']], 
+               color='#cccccc', ecolor='#cccccc', alpha=0.9, capsize=0.0, fmt='s')
+
+    l4,_,_ =  ax.errorbar(t08['log_NOVI'], t08['log_fOVI'], yerr=t08['log_fOVI_err'],
+               xerr=t08['log_NOVI_err'], color='#aaaaaa', ecolor='#aaaaaa', alpha=0.9, capsize=0.0, fmt='o')
+
+    labels = [d16['label'],d08['label'],tc08['label'],t08['label']]
+    legend1 = ax.legend([l1,l2,l3,l4], labels, loc='lower left')
+    ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
@@ -1035,13 +1053,12 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
 
         c = ax._get_lines.prop_cycler.next()['color']
 
-        # TODO: remove speciesList
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box/CDDF_'+species]) #, reCalculate=True)
+            ac = auxCat(sP, fields=['Box_CDDF_'+species]) #, reCalculate=True)
 
-            n_OVI  = ac['Box/CDDF_'+species][0,:]
-            fN_OVI = ac['Box/CDDF_'+species][1,:]
+            n_OVI  = ac['Box_CDDF_'+species][0,:]
+            fN_OVI = ac['Box_CDDF_'+species][1,:]
 
             # plot
             xx = np.log10(n_OVI)
@@ -1108,15 +1125,15 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
             # once including H2 modeling, once without
             for i, species in enumerate(speciesList):
                 # load pre-computed Z PDF
-                ac = auxCat(sP, fields=['Box/Grid_'+species,'Box/Grid_Z'])
-                ww = np.where(ac['Box/Grid_'+species] > log_nHI_limitDLA)
+                ac = auxCat(sP, fields=['Box_Grid_'+species,'Box_Grid_Z'])
+                ww = np.where(ac['Box_Grid_'+species] > log_nHI_limitDLA)
 
-                #ac = auxCat(sP, fields=['Box/CDDF_'+species])
-                #n_HI  = ac['Box/CDDF_'+species][0,:]
-                #fN_HI = ac['Box/CDDF_'+species][1,:]
+                #ac = auxCat(sP, fields=['Box_CDDF_'+species])
+                #n_HI  = ac['Box_CDDF_'+species][0,:]
+                #fN_HI = ac['Box_CDDF_'+species][1,:]
 
                 # plot (xx in log(Z/Zsolar) already)
-                yy, xx = np.histogram(ac['Box/Grid_Z'][ww], bins=log_Z_nBins, range=log_Z_range, density=True)
+                yy, xx = np.histogram(ac['Box_Grid_Z'][ww], bins=log_Z_nBins, range=log_Z_range, density=True)
 
                 xx = xx[:-1] + 0.5*(log_Z_range[1]-log_Z_range[0])/log_Z_nBins
 
@@ -1258,14 +1275,14 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
 
     #sPs.append( simParams(res=1820, run='tng') )
-    sPs.append( simParams(res=910, run='illustris') )
-    sPs.append( simParams(res=455, run='illustris') )
-    #sPs.append( simParams(res=910, run='tng') )
-    #sPs.append( simParams(res=455, run='tng') )
+    #sPs.append( simParams(res=910, run='illustris') )
+    #sPs.append( simParams(res=455, run='illustris') )
+    sPs.append( simParams(res=910, run='tng') )
+    sPs.append( simParams(res=455, run='tng') )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
