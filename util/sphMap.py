@@ -223,7 +223,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     if len(nPixels) != 2 or len(axes) != 2:
         raise Exception('Strange size of imaging input(s).')
 
-    if pos.ndim != 2 or (pos.shape[1] != 3 and pos.shape[1] != 2):
+    if pos.ndim != 2 or (pos.shape[1] != 3 and pos.shape[1] != 2) or pos.shape[0] <= 1:
         raise Exception('Strange dimensions of pos.')
     if hsml.ndim != 1 or (mass.ndim != 1 and mass.size > 1) or (quant is not None and quant.ndim != 1):
         raise Exception('Strange dimensions of hsml/mass/quant.')

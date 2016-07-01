@@ -327,11 +327,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     # no particles of type exist? blank grid return (otherwise die in getHsml and wind removal)
     h = snapshotHeader(sP)
 
-    if h['NumPart'][sP.ptNum(partType)] == 0:
+    def emptyReturn():
         print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros( nPixels, dtype='float32' )
         grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
         return grid, config
+
+    if h['NumPart'][sP.ptNum(partType)] == 0:
+        return emptyReturn()
 
     # map
     if isfile(saveFilename):
@@ -344,7 +347,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         indRange = None
 
         # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
-        if not sP.isZoom and sP.hInd is not None:
+        if not sP.isZoom and sP.hInd is not None and '_global' not in method:
             sh = groupCatSingle(sP, subhaloID=sP.hInd)
 
             if not sP.groupOrdered:
@@ -360,10 +363,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         grid_quant = np.zeros( nPixels, dtype='float32' )
         nChunks = 1
 
-        if indRange is None:
-            nChunks = int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0) #int(sP.res/10.0)
+        if indRange is None and sP.subbox is None:
+            nChunks = np.max( [1, int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0)] )
             chunkSize = int(h['NumPart'][partTypeNum(partType)] / nChunks)
-            print(' gridBox(): proceeding with [%d] chunks...' % nChunks)
+            print(' gridBox(): proceeding for (%s %s) with [%d] chunks...' % (partType,partField,nChunks))
 
         for chunkNum in np.arange(nChunks):
             # only if nChunks>1 do we here modify indRange
@@ -371,7 +374,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                 # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
                 indRange = [chunkNum*chunkSize, (chunkNum+1)*chunkSize-1]
                 if chunkNum == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum(partType)]-1
-                print('  [%2d] %9d - %d' % (chunkNum,indRange[0],indRange[1]))
+                print('  [%2d] %11d - %d' % (chunkNum,indRange[0],indRange[1]))
 
             # load: 3D positions
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
@@ -403,7 +406,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             if partType == 'stars' and sP.winds:
                 sftime = snapshotSubset(sP, partType, 'sftime', indRange=indRange)
                 wMask = np.where(sftime > 0.0)[0]
-                assert len(wMask)
+                if len(wMask) == 0:
+                    return emptyReturn()
 
                 mass = mass[wMask]
                 pos  = pos[wMask,:]
@@ -411,7 +415,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     quant = quant[wMask]
 
             # render
-            if method == 'sphMap':
+            if method in ['sphMap','sphMap_global']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
                 hsml = getHsmlForPartType(sP, partType, indRange=indRange) * hsmlFac
 
