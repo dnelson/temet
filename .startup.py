@@ -9,6 +9,7 @@ import illustris_python as il
 # dnelson
 import vis
 import cosmo
+import plot
 import tracer
 import util
 from util import simParams
