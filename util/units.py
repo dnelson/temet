@@ -136,7 +136,7 @@ class units(object):
             meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
 
         # mass to msun
-        mass_msun = mass.astype('float32') * self._sP.units.UnitMass_in_g / self._sP.units.Msun_in_g
+        mass_msun = mass.astype('float32') * self.UnitMass_in_g / self.Msun_in_g
 
         little_h = 1.0 # do not multiply by h since mass_msun is already over h
 
@@ -171,7 +171,7 @@ class units(object):
 
         Delta_c = 18*np.pi**2 + 82*(omega_m_z-1.0) - 39*(omega_m_z-1.0)**2.0
 
-        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*self._sP.units.HubbleParam)**(2.0/3.0) * \
+        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*self.HubbleParam)**(2.0/3.0) * \
                         (self._sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
                         (1.0 + self._sP.redshift)/10.0 # K
              
@@ -181,14 +181,14 @@ class units(object):
 
     def codeTempToLogK(self, temp):
         """ Convert temperature in code units (e.g. tracer temp output) to log Kelvin. """
-        temp_k = temp.astype('float32') * self._sP.units.UnitTemp_in_cgs
+        temp_k = temp.astype('float32') * self.UnitTemp_in_cgs
 
         return logZeroSafe(temp_k)
 
     def codeLengthToComovingKpc(self, x):
         """ Convert length/distance in code units to comoving kpc. """
         x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
-        x_phys *= (3.085678e21/self._sP.units.UnitLength_in_cm) # account for non-kpc code lengths
+        x_phys *= (3.085678e21/self.UnitLength_in_cm) # account for non-kpc code lengths
 
         return x_phys
 
@@ -196,14 +196,32 @@ class units(object):
         """ Convert length/distance in code units to physical kpc. """
         assert self._sP.redshift is not None
 
-        return self.codeLengthToComovingKpc(x) * self._sP.units.scalefac # comoving -> physical
+        return self.codeLengthToComovingKpc(x) * self.scalefac # comoving -> physical
 
     def particleCodeVelocityToKms(self, x):
         """ Convert velocity field (for cells/particles, not group properties) into km/s. """
         assert self._sP.redshift is not None
 
-        x_phys = np.array(x, dtype='float32') * np.sqrt(self._sP.units.scalefac)
-        x_phys *= (1.0e5/self._sP.units.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+        x_phys = np.array(x, dtype='float32') * np.sqrt(self.scalefac)
+        x_phys *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+
+        return x_phys
+
+    def groupCodeVelocityToKms(self, x):
+        """ Convert velocity vector (for groups, not subhalos nor particles) into km/s. """
+        assert self._sP.redshift is not None
+
+        x_phys = np.array(x, dtype='float32') / self.scalefac
+        x_phys *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+
+        return x_phys
+
+    def subhaloCodeVelocityToKms(self, x):
+        """ Convert velocity vector (for subhalos, not groups nor particles) into km/s. """
+        assert self._sP.redshift is not None
+
+        x_phys = np.array(x, dtype='float32')
+        x_phys *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
 
         return x_phys
 
@@ -211,8 +229,8 @@ class units(object):
         """ Convert magnetic field 3-vector (for cells) into Gauss, input b is PartType0/MagneticField. """
         UnitMagneticField_in_cgs = np.float32( np.sqrt(self.UnitPressure_in_cgs) )
 
-        b_gauss = b * self._sP.units.HubbleParam # remove little h factor
-        b_gauss /= self._sP.units.scalefac**2.0 # convert 'comoving' into physical
+        b_gauss = b * self.HubbleParam # remove little h factor
+        b_gauss /= self.scalefac**2.0 # convert 'comoving' into physical
 
         b_gauss *= UnitMagneticField_in_cgs # [Gauss] = [g^(1/2) * cm^(-1/2) * s^(-1)]
         return b_gauss
@@ -314,12 +332,12 @@ class units(object):
         if numDens and not cgs:
             raise Exception('Odd choice.')
 
-        dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2 / self._sP.units.scalefac**3
+        dens_phys = dens.astype('float32') * self.HubbleParam**2 / self.scalefac**3
 
         if cgs:
-            dens_phys *= self._sP.units.UnitDensity_in_cgs
+            dens_phys *= self.UnitDensity_in_cgs
         if numDens:
-            dens_phys /= self._sP.units.mass_proton
+            dens_phys /= self.mass_proton
         return dens_phys
 
     def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False):
@@ -337,16 +355,16 @@ class units(object):
             raise Exception("Invalid combination.")
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
-        colDensPhys = colDens.astype('float32') * self._sP.units.HubbleParam / self._sP.units.scalefac**2.0
+        colDensPhys = colDens.astype('float32') * self.HubbleParam / self.scalefac**2.0
 
         if cgs:
-            UnitColumnDensity_in_cgs = self._sP.units.UnitMass_in_g / self._sP.units.UnitLength_in_cm**2.0
+            UnitColumnDensity_in_cgs = self.UnitMass_in_g / self.UnitLength_in_cm**2.0
             colDensPhys *= UnitColumnDensity_in_cgs # g/cm^2
         if numDens:
-            colDensPhys /= self._sP.units.mass_proton # 1/cm^2
+            colDensPhys /= self.mass_proton # 1/cm^2
         if msunKpc2:
-            colDensPhys *= (self._sP.units.UnitMass_in_g/self._sP.units.Msun_in_g) # remove 10^10 factor
-            colDensPhys *= (3.085678e21/self._sP.units.UnitLength_in_cm)**2.0 # account for non-kpc units
+            colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g) # remove 10^10 factor
+            colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys
 
@@ -355,8 +373,8 @@ class units(object):
             neutral hydrogen, optionally in cgs units. This is total neutral, so includes both atomic 
             and molecular phases. If nh0=None, then return instead total hydrogen density. """
         dens_phys = self.codeDensToPhys(dens, cgs=cgs, numDens=numDens)
-        dens_phys *= self._sP.units.hydrogen_massfrac # hydrogen mass density (code or cgs units)
-        # note: hydrogen number density = dens_phys / self._sP.units.proton_mass
+        dens_phys *= self.hydrogen_massfrac # hydrogen mass density (code or cgs units)
+        # note: hydrogen number density = dens_phys / self.proton_mass
 
         if nh0 is not None:
             dens_phys *= nh0 # neutral hydrogen mass density (code or cgs units)
@@ -367,16 +385,16 @@ class units(object):
     def UToTemp(self, u, nelec, log=False):
         """ Convert (U,Ne) pair in code units to temperature in Kelvin. """
         # hydrogen mass fraction default
-        hmassfrac = self._sP.units.hydrogen_massfrac
+        hmassfrac = self.hydrogen_massfrac
 
         # calculate mean molecular weight
         meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float32')) 
-        meanmolwt *= self._sP.units.mass_proton
+        meanmolwt *= self.mass_proton
 
         # calculate temperature (K)
         temp = u.astype('float32')
-        temp *= (self._sP.units.gamma-1.0) / self._sP.units.boltzmann * \
-                self._sP.units.UnitEnergy_in_cgs / self._sP.units.UnitMass_in_g * meanmolwt
+        temp *= (self.gamma-1.0) / self.boltzmann * \
+                self.UnitEnergy_in_cgs / self.UnitMass_in_g * meanmolwt
 
         if log:
             temp = logZeroSafe(temp)
@@ -387,12 +405,12 @@ class units(object):
         if np.max(temp) <= 10.0:
             raise Exception("Error: input temp probably in log, check.")
 
-        meanmolwt = 0.6 * self._sP.units.mass_proton # ionized, T > 10^4 K
+        meanmolwt = 0.6 * self.mass_proton # ionized, T > 10^4 K
 
         # temp = (gamma-1.0) * u / units.boltzmann * units.UnitEnergy_in_cgs / units.UnitMass_in_g * meanmolwt
         u = temp.astype('float32')
-        u *= self._sP.units.boltzmann * self._sP.units.UnitMass_in_g / \
-            (self._sP.units.UnitEnergy_in_cgs * meanmolwt * (self._sP.units.gamma-1.0))
+        u *= self.boltzmann * self.UnitMass_in_g / \
+            (self.UnitEnergy_in_cgs * meanmolwt * (self.gamma-1.0))
 
         if log:
             u = logZeroSafe(u)
@@ -401,8 +419,8 @@ class units(object):
     def coolingRateToCGS(self, coolrate):
         """ Convert code units (du/dt) to erg/s/g (cgs). """
         coolrate_cgs = coolrate.astype('float32')
-        coolrate_cgs *= self._sP.units.UnitEnergy_in_cgs * self._sP.units.UnitTime_in_s**(-1.0) * \
-                       self._sP.units.UnitMass_in_g**(-1.0) * self._sP.units.HubbleParam
+        coolrate_cgs *= self.UnitEnergy_in_cgs * self.UnitTime_in_s**(-1.0) * \
+                       self.UnitMass_in_g**(-1.0) * self.HubbleParam
 
         return coolrate_cgs
 
@@ -410,7 +428,7 @@ class units(object):
         """ Fix cosmological/unit system in TRACER_MC[MaxEnt], output in cgs [K cm^2]. """
         assert self._sP.redshift is not None
 
-        a3inv = 1.0 / self._sP.units.scalefac**3.0
+        a3inv = 1.0 / self.scalefac**3.0
 
         # Note: dens=dens*a3inv but in the tracers only converted in dens^gamma not in the pressure
         # have to make this adjustment in loading tracers
@@ -419,10 +437,10 @@ class units(object):
 
         # fix Pressure
         ent_cgs = ent.astype('float32')
-        ent_cgs *= a3inv * self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
+        ent_cgs *= a3inv * self.UnitPressure_in_cgs / self.boltzmann
 
         # fix Density
-        ent_cgs /= (self._sP.units.UnitDensity_in_cgs / self._sP.units.mass_proton)**self._sP.units.gamma
+        ent_cgs /= (self.UnitDensity_in_cgs / self.mass_proton)**self.gamma
 
         if log:
             ent_cgs = logZeroSafe(ent_cgs)
@@ -432,19 +450,19 @@ class units(object):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. """
         assert self._sP.redshift is not None
 
-        a3inv = 1.0 / self._sP.units.scalefac**3.0
+        a3inv = 1.0 / self.scalefac**3.0
 
         # cosmological and unit system conversions
-        dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2.0 # remove all little h factors
+        dens_phys = dens.astype('float32') * self.HubbleParam**2.0 # remove all little h factors
 
         # pressure in [K/cm^3]
         pressure = u.astype('float32')
-        pressure *= (self._sP.units.gamma-1.0) * dens_phys * a3inv * \
-                   self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
+        pressure *= (self.gamma-1.0) * dens_phys * a3inv * \
+                   self.UnitPressure_in_cgs / self.boltzmann
 
         # entropy in [K cm^2]
-        dens_fac = self._sP.units.UnitDensity_in_cgs/self._sP.units.mass_proton*a3inv
-        entropy  = pressure / (dens_phys * dens_fac)**self._sP.units.gamma
+        dens_fac = self.UnitDensity_in_cgs/self.mass_proton*a3inv
+        entropy  = pressure / (dens_phys * dens_fac)**self.gamma
       
         if log:
             entropy = logZeroSafe(entropy)
@@ -454,16 +472,16 @@ class units(object):
         """ Calculate pressure as (gamma-1)*u*rho in physical 'cgs' [K/cm^3] units. """
         assert self._sP.redshift is not None
 
-        a3inv = 1.0 / self._sP.units.scalefac**3.0
+        a3inv = 1.0 / self.scalefac**3.0
 
-        dens_phys = dens.astype('float32') * self._sP.units.HubbleParam**2.0 # remove all little h factors
+        dens_phys = dens.astype('float32') * self.HubbleParam**2.0 # remove all little h factors
 
         pressure = u.astype('float32') * ( dens_phys.astype('float32') * a3inv )
-        pressure *= (self._sP.units.gamma-1.0)
+        pressure *= (self.gamma-1.0)
 
         # convert to CGS = 1 barye (ba) = 1 dyn/cm^2 = 0.1 Pa = 0.1 N/m^2 = 0.1 kg/m/s^2
         # and divide by boltzmann's constant -> [K/cm^3]
-        pressure *= self._sP.units.UnitPressure_in_cgs / self._sP.units.boltzmann
+        pressure *= self.UnitPressure_in_cgs / self.boltzmann
 
         if log:
             pressure = logZeroSafe(pressure)
@@ -478,7 +496,7 @@ class units(object):
         # magnetic pressure P_B in CGS units of [dyn/cm^2]
         P_B = (b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2]) / (8*np.pi) 
 
-        P_B /= self._sP.units.boltzmann # divide by boltzmann's constant -> [K/cm^3]
+        P_B /= self.boltzmann # divide by boltzmann's constant -> [K/cm^3]
 
         if log:
             P_B = logZeroSafe(P_B)
@@ -486,11 +504,11 @@ class units(object):
 
     def calcSoundSpeedKmS(self, u, dens, log=False):
         """ Calculate sound speed as sqrt(gamma*Pressure/Density) in physical km/s. """
-        pres = (self._sP.units.gamma-1.0) * dens * u
-        csnd = np.sqrt( self._sP.units.gamma * pres / dens ) # code units, all scalefac and h cancel
+        pres = (self.gamma-1.0) * dens * u
+        csnd = np.sqrt( self.gamma * pres / dens ) # code units, all scalefac and h cancel
         csnd = csnd.astype('float32')
 
-        csnd *= (1.0e5/self._sP.units.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+        csnd *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
 
         if log:
             csnd = logZeroSafe(csnd)
@@ -502,7 +520,7 @@ class units(object):
         if baryon is None:
             raise Exception("Specify baryon True or False, note... change of behavior.")
 
-        rho_crit = self._sP.units.rhoCrit_z
+        rho_crit = self.rhoCrit_z
         if baryon:
             rho_crit *= self._sP.omega_b
 
@@ -518,7 +536,7 @@ class units(object):
         if baryon is None:
             raise Exception("Specify baryon True or False, note... change of behavior.")
 
-        code_dens = ratioToCrit.astype('float32') * self._sP.units.rhoCrit_z
+        code_dens = ratioToCrit.astype('float32') * self.rhoCrit_z
 
         if baryon:
             code_dens *= self._sP.omega_b
@@ -536,7 +554,7 @@ class units(object):
         return s200.astype('float32')
 
     def codeMassToVirVel(self, mass):
-        """ Given a total halo mass, return a virial velocity (V200) in physical [km/s]. """
+        """ Given a total halo mass [in code units], return a virial velocity (V200) in physical [km/s]. """
         assert self._sP.redshift is not None
 
         r200 = ( self.G * mass / 100.0 / self.H_z**2.0 )**(1.0/3.0)
@@ -544,9 +562,15 @@ class units(object):
 
         return v200.astype('float32')
 
+    def codeM200R200ToV200InKmS(self, m200, r200):
+        """ Given a (M200,R200) pair of a FoF group, compute V200 in physical [km/s]. """
+        v200 = np.sqrt( self.G * m200 / r200 )
+        v200 *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+        return v200
+
     def metallicityInSolar(self, metal, log=False):
         """ Given a code metallicity (M_Z/M_total), convert to value with respect to solar. """
-        metal_solar = metal.astype('float32') / self._sP.units.Z_solar
+        metal_solar = metal.astype('float32') / self.Z_solar
 
         metal_solar[metal_solar < 0] = 0.0 # clip possibly negative Illustris values at zero
 
@@ -568,7 +592,7 @@ class units(object):
         age = np.zeros(redshifts.size, dtype='float32') - 100.0 # negative indicates not set
         
         arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+redshifts[w])**(-3.0/2.0)
-        age[w] = 2 * np.arcsinh(arcsinh_arg) / (self._sP.units.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
+        age[w] = 2 * np.arcsinh(arcsinh_arg) / (self.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
         age[w] *= 3.085678e+19 / 3.15567e+7 / 1e9 # Gyr
 
         if len(age) == 1:
@@ -582,7 +606,7 @@ class units(object):
 
         z = np.zeros(len(age), dtype='float32')
 
-        sinh_arg = (self._sP.units.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
+        sinh_arg = (self.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
         sinh_arg *= 3.15567e+7 * 1e9 * age[w] / 2.0 / 3.085678e+19
 
         z = np.sinh(sinh_arg) / np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m )
