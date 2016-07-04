@@ -62,19 +62,16 @@ def renderBox(confNum):
     #panels.append( {'res':1820, 'variant':'subbox1', 'partType':'gas', 'partField':'density'} )
 
     if confNum == 0:
-        panels.append( {'res':2160, 'hsmlFac':2.0, 'partType':'gas', 'partField':'TimeStep'} )
+        #panels.append( {'res':2160, 'hsmlFac':2.0, 'partType':'gas', 'partField':'TimeStep'} )
+        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_B'} )
+        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_gas'} )
     if confNum == 1:
-        panels.append( {'res':2160, 'hsmlFac':0.4, 'partType':'dm', 'partField':'TimeStep'} )
+        #panels.append( {'res':2160, 'hsmlFac':0.4, 'partType':'dm', 'partField':'TimeStep'} )
+        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'pressure_ratio'} )
     if confNum == 2:
         panels.append( {'res':2160, 'hsmlFac':2.0, 'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-4.0,2.0]} )
     if confNum == 3:
-        panels.append( {'res':2160, 'hsmlFac':1.5, 'partType':'stars', 'partField':'TimeStep', 'valMinMax':[-4.0,-1.0]} )
-    if confNum == 4:
-        panels.append( {'res':270, 'hsmlFac':1.5, 'partType':'gas', 'partField':'P_gas'} )
-    if confNum == 5:
-        panels.append( {'res':270, 'hsmlFac':1.5, 'partType':'gas', 'partField':'P_B'} )
-    if confNum == 6:
-        panels.append( {'res':270, 'hsmlFac':1.5, 'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-4.0,2.0]} )
+        panels.append( {'res':2160, 'hsmlFac':1.5, 'partType':'dm', 'partField':'TimeStep'} )
 
     # plot config (common, applied to all panels)
     run        = 'tng'       # run name
@@ -245,5 +242,5 @@ def renderBoxFrames(confName, curTask=0, numTasks=1):
         if isfile(plotConfig.saveFilename):
             print('SKIP: ' + plotConfig.saveFilename)
             continue
-            
+
         renderMultiPanel(panels, plotConfig)

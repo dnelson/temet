@@ -129,8 +129,8 @@ def renderSingleHalo(confNum):
         hInd = 350671
         #sizeFac = -140.0
         panels.append( {'run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'HI', 'valMinMax':[14.0,21.0]} )
-        panels.append( {'run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'velmag', 'valMinMax':[400,900]} )
-        panels.append( {'method':'sphMap_global','run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.5]} )
+        panels.append( {'method':'sphMap_global','run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'velmag', 'valMinMax':[400,900]} )
+        panels.append( {'method':'sphMap_global','run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.0,0.5]} )
         panels.append( {'run':'illustris', 'res':1820, 'redshift':0.0, 'partType':'gas', 'partField':'Si III', 'valMinMax':[14.0,21.0]} )
 
     if confNum == 0:
