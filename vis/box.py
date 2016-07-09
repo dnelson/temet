@@ -60,18 +60,14 @@ def renderBox(confNum):
 
     #panels.append( {'res':1820, 'variant':'subbox0', 'partType':'gas', 'partField':'density'} )
     #panels.append( {'res':1820, 'variant':'subbox1', 'partType':'gas', 'partField':'density'} )
-
+    
     if confNum == 0:
-        #panels.append( {'res':2160, 'hsmlFac':2.0, 'partType':'gas', 'partField':'TimeStep'} )
         panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_B'} )
         panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_gas'} )
     if confNum == 1:
-        #panels.append( {'res':2160, 'hsmlFac':0.4, 'partType':'dm', 'partField':'TimeStep'} )
         panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'pressure_ratio'} )
     if confNum == 2:
-        panels.append( {'res':2160, 'hsmlFac':2.0, 'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-4.0,2.0]} )
-    if confNum == 3:
-        panels.append( {'res':2160, 'hsmlFac':1.5, 'partType':'dm', 'partField':'TimeStep'} )
+        panels.append( {'res':910, 'run':'tng_dm', 'redshift':4.0, 'partType':'dm', 'partField':'coldens_msunkpc2'} )
 
     # plot config (common, applied to all panels)
     run        = 'tng'       # run name
@@ -82,7 +78,7 @@ def renderBox(confNum):
     method     = 'sphMap'    # sphMap, voronoi_const, voronoi_grads, ...
     nPixels    = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac    = 1.0         # [0,1], only in axes, not along projection direction
-    #hsmlFac    = 1.5        # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
+    hsmlFac    = 1.0         # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
     relCenPos  = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     axes       = [0,1]       # e.g. [0,1] is x,y
     labelZ     = False       # label redshift inside (upper right corner) of panel
