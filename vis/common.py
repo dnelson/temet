@@ -8,7 +8,7 @@ from builtins import *
 import numpy as np
 import hashlib
 import h5py
-from os.path import isfile, isdir
+from os.path import isfile, isdir, expanduser
 from os import mkdir
 
 import matplotlib as mpl
@@ -24,7 +24,7 @@ from cosmo.cloudy import cloudyIon
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
-saveBasePath = '/n/home07/dnelson/data3/frames/'
+saveBasePath = expanduser("~") + '/plots/'
 
 # configure certain behavior types
 volDensityFields = ['density']

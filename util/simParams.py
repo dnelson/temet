@@ -6,13 +6,12 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+from os import path
 from util.units import units
 from cosmo.util import redshiftToSnapNum, snapNumToRedshift
 from illustris_python.util import partTypeNum
 
 class simParams:
-    basePath = '/n/home07/dnelson/'
-
     # paths and names
     simPath     = ''    # root path to simulation snapshots and group catalogs
     arepoPath   = ''    # root path to Arepo and param.txt for e.g. projections/fof
@@ -96,6 +95,8 @@ class simParams:
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None):
         """ Fill parameters based on inputs. """
+        self.basePath = path.expanduser("~") + '/'
+
         # general validation
         if not run:
             raise Exception("Must specify run.")
