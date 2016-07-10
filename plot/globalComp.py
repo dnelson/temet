@@ -237,7 +237,7 @@ def sfrAvgVsRedshift(sPs, pdf):
     pdf.savefig()
     plt.close(fig)
 
-def sfrdVsRedshift(sPs, pdf, xlog=True, simRedshift=0.0):
+def sfrdVsRedshift(sPs, pdf, xlog=True):
     """ Star formation rate density of the universe, vs redshift, vs observational points. """
     # plot setup
     fig = plt.figure(figsize=(16,9))
@@ -270,8 +270,6 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, simRedshift=0.0):
 
         # load sfr.txt file
         print('SFRD: '+sP.simName)
-        sP.setRedshift(simRedshift)
-
         s = sfrTxt(sP)
 
         ax.plot(s['redshift'], s['sfrd'], '-', lw=2.5, label=sP.simName)
@@ -1177,11 +1175,7 @@ def galaxyColorPDF(sPs, pdf, simRedshift=0.0):
                  # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
 
     # load observational points
-
-    #select stellarMass,u_mag,g_mag,r_mag,i_mag,z_mag
-    # from Guo2010a..MRII
-    # where snapnum=63
-    # and stellarMass between 10.0 and 20.0
+    # TODO
 
     # loop over each mass bin
     for i, stellarMassBin in enumerate(stellarMassBins):
@@ -1275,14 +1269,14 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
 
-    #sPs.append( simParams(res=1820, run='tng') )
-    #sPs.append( simParams(res=910, run='illustris') )
+    sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
     sPs.append( simParams(res=910, run='tng') )
-    sPs.append( simParams(res=455, run='tng') )
+    #sPs.append( simParams(res=455, run='tng') )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -1294,29 +1288,31 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_OVICDDF_b_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_c_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True)
-    #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True)
-    #sfrAvgVsRedshift(sPs, pdf)
-    #sfrdVsRedshift(sPs, pdf, xlog=True)
-    #sfrdVsRedshift(sPs, pdf, xlog=False)
-    #blackholeVsStellarMass(sPs, pdf)
-    #blackholeVsStellarMass(sPs, pdf, twiceR=True)
-    #galaxySizes(sPs, pdf, vsHaloMass=False)
-    #galaxySizes(sPs, pdf, vsHaloMass=True)
-    #stellarMassFunction(sPs, pdf, highMassEnd=False)
-    #stellarMassFunction(sPs, pdf, highMassEnd=True)
-    #massMetallicityStars(sPs, pdf)
+    zZero = 0.3 # change to plot simulations at z>0 against z=0 observational data
+
+    stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
+    stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True, simRedshift=zZero)
+    ###sfrAvgVsRedshift(sPs, pdf)
+    sfrdVsRedshift(sPs, pdf, xlog=True)
+    sfrdVsRedshift(sPs, pdf, xlog=False)
+    blackholeVsStellarMass(sPs, pdf, simRedshift=zZero)
+    blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
+    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero)
+    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
+    stellarMassFunction(sPs, pdf, highMassEnd=False, simRedshift=zZero)
+    stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
+    massMetallicityStars(sPs, pdf, simRedshift=zZero)
     #massMetallicityGas(sPs, pdf, simRedshift=0.0)
     #massMetallicityGas(sPs, pdf, simRedshift=0.7)
-    #baryonicFractionsR500Crit(sPs, pdf)
-    ##nHIcddf(sPs, pdf)
-    ##nHIcddf(sPs, pdf, moment=1)
-    nOVIcddf(sPs, pdf)
-    nOVIcddf(sPs, pdf, moment=1)
-    ##dlaMetallicityPDF(sPs, pdf)
-    #galaxyColorPDF(sPs, pdf)
+    baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
+    ##nHIcddf(sPs, pdf) # z=3
+    ##nHIcddf(sPs, pdf, moment=1) # z=3
+    #nOVIcddf(sPs, pdf) # z=0.2
+    #nOVIcddf(sPs, pdf, moment=1) # z=0.2
+    ##dlaMetallicityPDF(sPs, pdf) # z=3
+    galaxyColorPDF(sPs, pdf, simRedshift=zZero)
 
     # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
