@@ -195,7 +195,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
             maxStepSaved = f['step'][()].max()
             maxTimeAvail, maxStepAvail, _ = getCpuTxtLastTimestep(filePath)
 
-            if maxTimeAvail > maxTimeSaved*1.02:
+            if maxTimeAvail > maxTimeSaved*1.001:
                 # recalc for new data
                 print('recalc [%f to %f] [%d to %d] %s' % \
                        (maxTimeSaved,maxTimeAvail,maxStepSaved,maxStepAvail,basePath))
@@ -381,8 +381,8 @@ def plotCpuTimes():
 
             cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
 
-            # include only full timesteps
-            w = np.where( cpu['hatb'] >= cpu['hatb'].max()-4 )
+            # include only bigish timesteps
+            w = np.where( cpu['hatb'] >= cpu['hatb'].max()-6 )
 
             print( sP.simName+' ['+str(plotKey)+']: '+str(len(w[0]))+'  max_time: '+str(cpu['time'].max()) )
 
@@ -396,8 +396,24 @@ def plotCpuTimes():
             l, = ax.plot(xx,yy,label=sP.simName)
 
             # total time predictions for runs which aren't yet done
-            if plotKey in ['total'] and ax.get_yscale() == 'log' and xx.max() < 0.99:
-                fac_delta = 0.05
+            if plotKey in ['total'] and xx.max() < 0.99: #ax.get_yscale() == 'log' and 
+                ax.set_ylim([1e-2,60])
+
+                fac_delta = 0.02
+                xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
+
+                # plot variance band
+                w0 = np.where( xx >= xx.max() - fac_delta*2 )
+                yp0 = np.poly1d( np.polyfit(xx[w0],yy[w0],1) )
+                yPredicted0 = yp0(xp)
+
+                w1 = np.where( xx >= xx.max() - fac_delta*0.2 )
+                yp1 = np.poly1d( np.polyfit(xx[w1],yy[w1],1) )
+                yPredicted1 = yp1(xp)
+
+                ax.fill_between(xp, yPredicted0, yPredicted1, color=l.get_color(), alpha=0.1)
+
+                # plot best line
                 w = np.where( xx >= xx.max() - fac_delta )
                 xx = xx[w]
                 yy = yy[w]
@@ -405,15 +421,17 @@ def plotCpuTimes():
                 yp = np.poly1d( np.polyfit(xx,yy,1) )
                 xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
                 yPredicted = yp(xp)
+
+                ax.plot(xp, yPredicted, linestyle=':', color=l.get_color())
+
+                # estimate finish date
                 totPredictedMHs = yPredicted.max()
                 totRunMHs = yy.max()
-
                 remainingRunDays = (totPredictedMHs-totRunMHs) * 1e6 / (cpu['numCPUs'] * 24.0)
                 predictedFinishDate = datetime.now() + timedelta(days=remainingRunDays)
                 predictedFinishStr = predictedFinishDate.strftime('%d %B, %Y')
 
-                ax.plot(xp, yPredicted, linestyle=':', color=l.get_color())
-                print(' Predicted total time: %d million CPUhs (%s)' % (totPredictedMHs,predictedFinishStr))
+                print(' Predicted total time: %.1f million CPUhs (%s)' % (totPredictedMHs,predictedFinishStr))
                 pLabels.append( 'Predict: %3.1f MHs (Finish: %s)' % (totPredictedMHs,predictedFinishStr))
                 pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=':') )
 
@@ -428,7 +446,9 @@ def plotCpuTimes():
 
         # second legend for predictions
         if len(pLabels) > 0:
-            legend2 = ax.legend(pColors, pLabels, loc='best')
+            loc = 'upper right'
+            if ax.get_yscale() == 'log': loc = 'lower left'
+            legend2 = ax.legend(pColors, pLabels, loc=loc)
             ax.add_artist(legend2)
 
         # first legend for sim names
