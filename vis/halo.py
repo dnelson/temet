@@ -10,7 +10,7 @@ from datetime import datetime
 from os.path import isfile
 
 from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, saveBasePath
-from cosmo.load import groupCatSingle
+from cosmo.load import groupCat, groupCatSingle
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
 
@@ -104,7 +104,7 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
 
     return boxSizeImg, boxCenter, extent, haloVirRad, rotMatrix, rotCenter
 
-def renderSingleHalo(confNum):
+def renderSingleHalo(confNum,haloNum=None,run=None):
     """ Driver: render view(s) of a single halo in one plot, with a variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
     from util import simParams
@@ -141,19 +141,130 @@ def renderSingleHalo(confNum):
         panels.append( {'hInd':0, 'partType':'dm', 'partField':'TimeStep', 'valMinMax':[-3.6,-5.2]} )
     if confNum == 3:
         panels.append( {'hInd':0, 'partType':'stars', 'partField':'TimeStep', 'valMinMax':[-3.6,-5.2]} )
+    if confNum == 5:
+        panels.append( {'method':'sphMap_global','hInd':0, 'partType':'gas', 'partField':'P_B'} )
+        panels.append( {'method':'sphMap_global','hInd':0, 'partType':'gas', 'partField':'P_gas'} )
+        panels.append( {'method':'sphMap_global','hInd':0, 'partType':'gas', 'partField':'pressure_ratio'} )
+    if confNum == 6:
+        # loop over centrals in mass bins
+        massBins = [[13.5,13.8],[13.0,13.1],[12.5,12.6],[12.0,12.1],[11.5,11.6],[11.0,11.1]]
+        numPerBin = 40
+        assert haloNum is not None and haloNum < numPerBin*len(massBins)
+
+        res = 1820
+        redshift = 0.5
+        run = 'tng'
+        sizeFac = -120.0 # 120 ckpc/h
+
+        sP = simParams(res=res, run=run, redshift=redshift)
+        gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupFirstSub'])
+        haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
+
+        for massBin in massBins:
+            w = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
+            print(massBin,len(w))
+
+        myMassBinInd = int(np.floor(float(haloNum)/numPerBin))
+        myMassBin = massBins[ myMassBinInd ]
+        wMassBin  = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
+
+        gasMM = [5.5,8.0]
+        if myMassBinInd >= 4:
+            sizeFac = -60.0
+            gasMM = [6.5,8.0]
+
+        haloInd = haloNum - myMassBinInd*numPerBin
+        if haloInd >= len(wMassBin):
+            print('Task past bin size, quitting.')
+            return
+
+        hID = gc['halos']['GroupFirstSub'][wMassBin[haloInd]]
+        print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f] ind [%d of %d]...' % \
+            (haloNum,wMassBin[haloInd],hID,myMassBin[0],myMassBin[1],haloInd,len(wMassBin)))
+
+        panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,8.8], 'labelHalo':True} )
+        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+        panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,8.8], 'labelScale':True} )
+        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+
+    if confNum == 7:
+        # combined plot of centrals in mass bins
+        massBins = [[13.5,13.8],[13.0,13.1],[12.5,12.6],[12.0,12.1],[11.5,11.6],[11.0,11.1]]
+        numPerBin = 36 #just so we have 6x6 #40
+        assert haloNum is not None and haloNum < numPerBin*len(massBins) and panelNum is not None
+
+        res = 1820
+        redshift = 0.5
+        run = 'tng'
+        sizeFac = -120.0 # 120 ckpc/h
+
+        sP = simParams(res=res, run=run, redshift=redshift)
+        gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupFirstSub'])
+        haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
+
+        myMassBinInd = haloNum
+        myMassBin = massBins[ myMassBinInd ]
+        wMassBin  = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
+        wMassBin = wMassBin[0:numPerBin]
+
+        gasMM = [5.5,8.0]
+        if myMassBinInd >= 4:
+            sizeFac = -60.0
+            gasMM = [6.5,8.0]
+
+        hIDs = gc['halos']['GroupFirstSub'][wMassBin]
+
+        for hID in hIDs:
+            print('[%d] Render subhalo [%d] from massBin [%.1f %.1f]...' % (haloNum,hID,myMassBin[0],myMassBin[1]))
+
+            if panelNum == 0:
+                panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,8.8]} )
+            if panelNum == 1:
+                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+            if panelNum == 2: 
+                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+            if panelNum == 3: 
+                panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,8.8]} )
+            if panelNum == 4: 
+                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+            if panelNum == 5: 
+                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+            if panelNum == 6: 
+                panels.append( {'hInd':hID, 'hsmlFac':1.0, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.2,8.8]} )
+            if panelNum == 7: 
+                panels.append( {'hInd':hID, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+
+    if confNum == 8:
+        assert haloNum is not None and run is not None
+        redshift = 0.5
+
+        sP = simParams(res=1820,run=run,redshift=redshift)
+        gr = groupCatSingle(sP, haloID=haloNum)
+        hID = gr['GroupFirstSub']
+
+        #panels.append( {'hInd':hID, 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', \
+        #                'run':run, 'labelHalo':True, 'labelScale':True, 'valMinMax':[6.5,9.0]} )
+        #panels.append( {'hInd':hID, 'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens_msunkpc2', \
+        #                'run':run, 'labelHalo':True, 'labelScale':True, 'valMinMax':[6.5,10.0]} )
+        #panels.append( {'hInd':hID, 'hsmlFac':1.0, 'partType':'stars', 'partField':'coldens_msunkpc2', \
+        #                'run':run, 'labelHalo':True, 'labelScale':True, 'valMinMax':[6.5,10.0]} )   
+        panels.append( {'hInd':hID, 'hsmlFac':1.0, 'partType':'gas', 'partField':'bmag', \
+                        'run':run, 'labelHalo':True, 'labelScale':True} )   
 
     # plot config (common)
     #hInd      = 7             # zoom halo index
-    run       = 'tng'          # run name
-    res       = 2160           # run resolution
-    redshift  = 6.0            # run redshift
+    #run       = 'illustris'   # run name
+    res       = 1820           # run resolution
+    #redshift  = 0.3           # run redshift
     #partType   = 'gas'        # which particle type to project
     #partField = 'temp'        # which quantity/field to project for that particle type
     #valMinMax = [4.2, 6.5]    # stretch colortable between minimum and maximum field values
     rVirFracs  = [1.0]         # draw circles at these fractions of a virial radius
-    method     = 'sphMap'      # sphMap, voronoi_const, voronoi_grads, ...
-    nPixels    = [1400,1400]   # number of pixels for each dimension of images when projecting
-    sizeFac    = 2.5           # side length of imaging box around halo center in units of its virial radius
+    method     = 'sphMap'      # sphMap, sphMap_global, voronoi_const, voronoi_grads, ...
+    nPixels    = [3840,3840]   # [1400,1400] number of pixels for each dimension of images when projecting
+    sizeFac    = 0.2           # side length of imaging box around halo center in units of its virial radius
     hsmlFac    = 2.5           # multiplier on smoothing lengths for sphMap
     axes       = [1,0]         # e.g. [0,1] is x,y
     labelZ     = False         # label redshift inside (upper right corner) of panel
@@ -165,13 +276,19 @@ def renderSingleHalo(confNum):
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'open'  # open, edged, open_black, edged_black
+        plotStyle  = 'open_black'  # open, edged, open_black, edged_black
         rasterPx   = 1400    # each panel will have this number of pixels if making a raster (png) output
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
         #saveFilename = saveBasePath + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
-        saveFilename = saveBasePath + 'renderHalo_%s-%s_%s.pdf' % \
-          (panels[0]['partType'],panels[0]['partField'],datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = '/n/home07/dnelson/' + 'fof-%d_%s_z%.1f_%s_rvir02.pdf' % \
+          (haloNum,sP.simName,redshift,panels[0]['partType'])
+        #saveFilename = '/n/home07/dnelson/renderHalo_%s-%d_bin%d_halo%d_hID-%d_shID-%d.pdf' % (sP.simName,sP.snap,myMassBinInd,haloNum,haloInd,hID)
+        #saveFilename = '/n/home07/dnelson/renderHalo_%s-%d_bin%d_panel%s.pdf' % (sP.simName,sP.snap,myMassBinInd,panelNum)
+
+    #if isfile(plotConfig.saveFilename):
+    #    print('SKIP: %s' % plotConfig.saveFilename)
+    #    return
 
     # finalize panels list (do not modify below)
     for p in panels:
@@ -194,6 +311,13 @@ def renderSingleHalo(confNum):
 
     # request render and save
     renderMultiPanel(panels, plotConfig)
+
+def driverTemp2(run):
+    """ desc """
+    from util.helper import pSplit
+
+    for i in range(5):
+        renderSingleHalo(8,haloNum=i,run=run)
 
 def renderSingleHaloFrames(confName):
     """ Driver: render view(s) of a single halo in one plot, and repeat this frame across all snapshots 

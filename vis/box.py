@@ -60,19 +60,20 @@ def renderBox(confNum):
 
     #panels.append( {'res':1820, 'variant':'subbox0', 'partType':'gas', 'partField':'density'} )
     #panels.append( {'res':1820, 'variant':'subbox1', 'partType':'gas', 'partField':'density'} )
-    
+
     if confNum == 0:
-        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_B'} )
-        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_gas'} )
+        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_B', 'valMinMax':[-5,7]} )
+        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'P_gas', 'valMinMax':[-5,7]} )
     if confNum == 1:
         panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':2.0, 'partType':'gas', 'partField':'pressure_ratio'} )
+        panels.append( {'res':1820, 'redshift':0.5,'hsmlFac':0.5, 'partType':'dm', 'partField':'coldens_msunkpc2'} )
     if confNum == 2:
-        panels.append( {'res':910, 'run':'tng_dm', 'redshift':4.0, 'partType':'dm', 'partField':'coldens_msunkpc2'} )
+        panels.append( {'res':910, 'run':'tng', 'redshift':4.0, 'partType':'dm', 'partField':'coldens_msunkpc2'} )
 
     # plot config (common, applied to all panels)
     run        = 'tng'       # run name
     #res       = 128         # run resolution
-    redshift   = 6.0         # run redshift
+    #redshift   = 6.0        # run redshift
     #partType  = 'dm'        # which particle type to project
     #partField = 'coldens'   # which quantity/field to project for that particle type
     method     = 'sphMap'    # sphMap, voronoi_const, voronoi_grads, ...
@@ -84,7 +85,7 @@ def renderBox(confNum):
     labelZ     = False       # label redshift inside (upper right corner) of panel
     labelScale = False       # label spatial scale with scalebar (upper left of panel)
     labelSim   = False       # label simulation name (lower right corner) of panel
-    plotHalos  = 0           # plot virial circles for the N most massive halos in the box
+    plotHalos  = 20          # plot virial circles for the N most massive halos in the box
     rotMatrix  = None        # rotation matrix
     rotCenter  = None        # rotation center
 
@@ -96,8 +97,8 @@ def renderBox(confNum):
         colorbars = True     # include colorbars
 
         #saveFilename = saveBasePath + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
-        saveFilename = saveBasePath + 'renderBox_%s-%s_%s.pdf' % \
-          (panels[0]['partType'],panels[0]['partField'],datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = saveBasePath + 'renderBox_%s_%s_%s-%s.pdf' % \
+          (run,panels[0]['res'],panels[0]['partType'],panels[0]['partField'])
 
     # finalize panels list (do not modify below)
     for p in panels:
