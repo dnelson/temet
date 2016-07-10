@@ -6,6 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+import h5py
 from util.helper import evenlySample
 from os.path import isfile
 
@@ -890,11 +891,21 @@ def danforth2016():
 
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
+    from os.path import isfile
     nPts = 2000
 
-    # cached?
+    # cached? in sP object or on disk?
     if 'sfrd' in sP.data:
         return sP.data['sfrd']
+
+    saveFilename = sP.derivPath + 'sfrtxt_1.00.hdf5'
+    if isfile(saveFilename):
+        print(' Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
+        r = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
 
     # Illustris txt-files directories and Illustris-1 curie/supermuc split
     path = sP.simPath + 'sfr.txt'
@@ -917,6 +928,13 @@ def sfrTxt(sP):
 
     r['redshift'] = 1.0/r['scaleFac'] - 1.0
     r['sfrd']     = r['totSfrRate'] / sP.boxSizeCubicMpc
+
+    # save
+    saveFilename = sP.derivPath + 'sfrtxt_%.2f.hdf5' % r['scaleFac'].max()
+    with h5py.File(saveFilename,'w') as f:
+        for key in r:
+            f[key] = r[key]
+    print(' Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     sP.data['sfrd'] = r # attach to sP as cache
 
