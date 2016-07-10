@@ -578,6 +578,17 @@ class units(object):
             return logZeroSafe(metal_solar)
         return metal_solar
 
+    def codeTimeStepToYears(self, TimeStep, Gyr=False):
+        """ Convert a TimeStep/TimeStepHydro/TimeStepGrav (e.g. an integer times All.Timebase_interval) 
+        for a comoving run to a physical time in years. """
+        dtime = TimeStep / (np.sqrt(self.H2_z_fact) * self.H0_h1_s)
+        dtime /= self.HubbleParam
+        dtime /= self.s_in_yr
+
+        if Gyr: dtime /= 1e9
+
+        return dtime
+
     # --- other ---
 
     def redshiftToAgeFlat(self, z):
