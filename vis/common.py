@@ -17,9 +17,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
-from util.helper import loadColorTable, logZeroSafe
+from util.helper import loadColorTable, logZeroMin
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
+from cosmo.util import periodicDists
 from cosmo.cloudy import cloudyIon
 from illustris_python.util import partTypeNum
 
@@ -59,9 +60,10 @@ def getHsmlForPartType(sP, partType, indRange=None):
         else:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
 
-        # use a maximum size (~px scale?) for stars in outskirts
-        #print(' getHsmlForPartType(): clipping [stars] at a maximum of 0.5x gravSoft.')
-        hsml[hsml > 0.5*sP.gravSoft] = 0.5*sP.gravSoft # can decouple, leads to strageness/interestingness
+        # use a minimum/maximum size (~px scale?) for stars in outskirts
+        #print(' getHsmlForPartType(): clipping [stars] at a min of 0.05x gravSoft, max of 0.5x gravSoft.')
+        hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
+        hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness/interestingness
 
         return hsml
 
@@ -72,22 +74,34 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     or the inner stellar component, for rotation and projection into disk face/edge-on views. """
     sh = groupCatSingle(sP, subhaloID=subhaloID)
 
+    # allow center pos/vel to be input (e.g. mpb smoothed values)
+    if shPos is None: shPos = sh['SubhaloPos']
+    if shVel is None: shVel = sh['SubhaloVel']
+
     fields = ['Coordinates','Masses','StarFormationRate','Velocities']
     gas = snapshotSubset(sP, 'gas', fields, subhaloID=subhaloID)
 
     # star forming gas only
     w = np.where(gas['StarFormationRate'] > 0.0)[0]
 
-    if not len(w):
-        raise Exception('No star-forming gas.')
+    if len(w) == 0:
+        # return default vector
+        print('meanAngMomVector(): No star-forming gas, returning [1,0,0].')
+        return np.array([1.0,0.0,0.0], dtype='float32')
 
-    gas['Coordinates'] = gas['Coordinates'][w,:]
+        # or try to switch to stars
+        print('meanAngMomVector(): No star-forming gas, switching to stars.')
+        fields.remove('StarFormationRate')
+        gas = snapshotSubset(sP, 'stars', fields, subhaloID=subhaloID)
+
+        rad = periodicDists(shPos, gas['Coordinates'], sP)
+
+        w = np.where(rad <= sh['SubhaloHalfmassRadType'][sP.ptNum('stars')])
+
+    # make restriction
+    gas['Coordinates'] = np.squeeze( gas['Coordinates'][w,:] )
     gas['Masses']      = gas['Masses'][w]
-    gas['Velocities']  = gas['Velocities'][w,:]
-
-    # allow center pos/vel to be input (e.g. mpb smoothed values)
-    if shPos is None: shPos = sh['SubhaloPos']
-    if shVel is None: shVel = sh['SubhaloVel']
+    gas['Velocities']  = np.squeeze( gas['Velocities'][w,:] )
 
     ang_mom = sP.units.particleAngMomVecInKpcKmS( gas['Coordinates'], gas['Velocities'], gas['Masses'], 
                                                   shPos, shVel )
@@ -207,24 +221,24 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
     if partField in ['dens','density']:
-        grid  = logZeroSafe( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
+        grid  = logZeroMin( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = 'Mean %s Volume Density [log cm$^{-3}$]' % ptStr
         config['ctName'] = 'jet'
 
     # total sum fields
     if partField == 'mass':
-        grid  = logZeroSafe( sP.units.codeMassToLogMsun(grid) )
+        grid  = logZeroMin( sP.units.codeMassToLogMsun(grid) )
         config['label']  = 'Total %s Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'jet'
 
     # column densities
     if partField == 'coldens':
-        grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
+        grid  = logZeroMin( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = '%s Column Density [log cm$^{-2}$]' % ptStr
         config['ctName'] = 'cubehelix'
 
     if partField == 'coldens_msunkpc2':
-        grid  = logZeroSafe( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
+        grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
         config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
@@ -232,45 +246,52 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         if sP.isPartType(partType,'stars'): config['ctName'] = 'cubehelix'
 
     if partField == 'HI' or ' ' in partField:
-        grid = logZeroSafe( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
+        grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'jet'
 
     if partField in ['ent','entr','entropy']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = 'Entropy [log K cm$^2$]'
         config['ctName'] = 'jet'
 
+    if partField in ['bmag']:
+        grid = logZeroMin( grid )
+        config['label']  = 'Mean Magnetic Field Magnitude [log G]'
+        config['ctName'] = 'jet'
+
+    # todo: sqrt(magnetic energy / volume)
+
     # gas: pressures
     if partField in ['P_gas']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = 'Gas Pressure [log K cm$^{-3}$]'
         config['ctName'] = 'viridis'
 
     if partField in ['P_B']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = 'Magnetic Pressure [log K cm$^{-3}$]'
         config['ctName'] = 'viridis'
 
     if partField in ['pressure_ratio']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = 'Pressure Ratio [log P$_{\\rm B}$ / P$_{\\rm gas}$]'
-        config['ctName'] = 'Spectral' # RdYlBu, Spectral
+        config['ctName'] = 'Spectral_r' # RdYlBu, Spectral
 
     # metallicities
     if partField in ['metal','Z']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = '%s Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]' % ptStr
         config['ctName'] = 'gist_earth'
 
     if partField in ['metal_solar','Z_solar']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
         config['ctName'] = 'gist_earth'
 
@@ -294,7 +315,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
 
     # debugging
     if partField in ['TimeStep']:
-        grid = logZeroSafe( grid )
+        grid = logZeroMin( grid )
         config['label']  = 'log (%s TimeStep)' % ptStr
         config['ctName'] = 'viridis_r'
 
@@ -349,6 +370,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
         if not sP.isZoom and sP.hInd is not None and '_global' not in method:
             sh = groupCatSingle(sP, subhaloID=sP.hInd)
+            gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
 
             if not sP.groupOrdered:
                 raise Exception('Want to do a group-ordered load but cannot.')
@@ -356,7 +378,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             # calculate indRange
             pt = sP.ptNum(partType)
             startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
-            indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
+            indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
 
         # if indRange is still None (full snapshot load), we will proceed chunked
         grid_dens  = np.zeros( nPixels, dtype='float32' )
@@ -496,7 +518,11 @@ def addBoxMarkers(p, conf, ax):
 
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.15 # 15% of plot width
-        scaleBarLen = 100.0 * round(scaleBarLen/100.0) # round to nearest 100 code units
+        scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units
+
+        # if scale bar is more than 50% of width, reduce by 10x
+        if scaleBarLen >= 0.5 * (p['extent'][1]-p['extent'][0]):
+            scaleBarLen /= 10.0
 
         unitStrs = ['cpc','ckpc','cMpc','cGpc'] # comoving
         unitInd = 1 if p['sP'].mpcUnits is False else 2
@@ -515,6 +541,23 @@ def addBoxMarkers(p, conf, ax):
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=2.0, alpha=1.0)
         ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
                  size='x-large', ha='center', va='center') # same size as legend text
+
+    if 'labelHalo' in p and p['labelHalo']:
+        subhalo = groupCatSingle(p['sP'], subhaloID=p['hInd'])
+        halo = groupCatSingle(p['sP'], haloID=subhalo['SubhaloGrNr'])
+
+        haloMass = p['sP'].units.codeMassToLogMsun(halo['Group_M_Crit200'])
+        stellarMass = p['sP'].units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][p['sP'].ptNum('stars')])
+
+        str1 = "log M$_{\\rm halo}$ = %.1f" % haloMass
+        str2 = "log M$_{\\rm star}$ = %.1f" % stellarMass
+
+        p0 = plt.Line2D((0,0),(0,0), linestyle='')
+        p1 = plt.Line2D((0,0),(0,0), linestyle='')
+
+        legend = ax.legend([p0,p1], [str1,str2], fontsize='xx-large', loc='upper right')
+        legend.get_texts()[0].set_color('white')
+        legend.get_texts()[1].set_color('white')
 
 def setAxisColors(ax, color2):
     """ Factor out common axis color commands. """
