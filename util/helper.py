@@ -47,6 +47,12 @@ def logZeroSafe(x, zeroVal=1.0):
 
     return np.log10(x)
 
+def logZeroMin(x):
+    """ Take log of input variable, setting zeros to 100 times less than the minimum. """
+    w = np.where(x > 0.0)
+    minVal = x[w].min() if len(w[0]) > 0 else 1.0
+    return logZeroSafe(x, minVal*0.01)
+
 def iterable(x):
     """ Protect against non-list/non-tuple (e.g. scalar or single string) value of x, to guarantee that 
         a for loop can iterate over this object correctly. """

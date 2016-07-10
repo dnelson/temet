@@ -553,6 +553,12 @@ def snapshotSubset(sP, partType, fields,
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             return sP.units.calcMagneticPressureCGS(b, log=True)
 
+        # total pressure, magnetic plus gas [log K/cm^3]
+        if field.lower() in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:
+            P_B = 10.0**snapshotSubset(sP, partType, 'P_B', **kwargs)
+            P_gas = 10.0**snapshotSubset(sP, partType, 'P_gas', **kwargs)
+            return np.log10( P_B + P_gas )
+
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
 
