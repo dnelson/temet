@@ -389,6 +389,8 @@ class simParams:
             self.trMassConst = self.targetGasMass / self.trMCPerCell
 
             # TNG model run?
+            self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+
             if '_tng' in run:
                 self.trMCFields = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1,8] # shock_maxmach added
                 

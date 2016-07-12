@@ -39,7 +39,7 @@ def logZeroSafe(x, zeroVal=1.0):
     """ Take log of input variable or array, keeping zeros at zero. """
     if not isinstance(x, (int,long,float)) and x.ndim: # array
         # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
-        w = np.where(x == 0.0)
+        w = np.where(x <= 0.0)
         x[w] = zeroVal
     else: # scalar
         if x == 0.0:
@@ -250,7 +250,7 @@ def getIDIndexMap(ids):
 
 # --- vis ---
 
-def loadColorTable(ctName):
+def loadColorTable(ctName, valMinMax=None):
     """ Load a custom or built-in color table.
           rgb_table : do not load for active plotting, just return table as an array.
     """
@@ -291,6 +291,34 @@ def loadColorTable(ctName):
                  'green' : ((0.0, 0.0, 0.0), (0.3,0.3,0.3), (0.6, 0.4, 0.4), (1.0, 1.0, 1.0)),
                  'blue'  : ((0.0, 0.05, 0.05), (0.3,0.5,0.5), (0.6, 0.6, 0.6), (1.0, 1.0, 1.0))}
         cmap = LinearSegmentedColormap(ctName, cdict)
+
+    if ctName == 'HI_segmented':
+        # discontinuous colormap for column densities, split at 10^20 and 10^19 cm^(-3)
+        assert valMinMax is not None # need for placing discontinuities at correct physical locations
+        valCut1 = 19.0
+        valCut2 = 20.0
+
+        fCut1 = (valCut1-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
+        fCut2 = (valCut2-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
+
+        color1 = np.array([114,158,206]) / 255.0 # tableau10_medium[0] (blue)
+        color2 = np.array([103,191,92]) / 255.0 # tableau10_medium[2] (green)
+        color3 = np.array([255,158,74]) / 255.0 # tabluea10_medium[1] (orange) or e.g. white
+        cFac = 0.2 # compress start of each segment to 20% of its original intensity (e.g. towards black)
+
+        cdict = {'red'  :  ((0.0, 0.0, 0.0), 
+                            (fCut1, color1[0], color2[0]*cFac), 
+                            (fCut2, color2[0], color3[0]*cFac), 
+                            (1.0,   color3[0], color3[0])),
+                 'green':  ((0.0, 0.0, 0.0), 
+                            (fCut1, color1[1], color2[1]*cFac), 
+                            (fCut2, color2[1], color3[1]*cFac), 
+                            (1.0,   color3[1], color3[1])),
+                 'blue' :  ((0.0, 0.0, 0.0), 
+                            (fCut1, color1[2], color2[2]*cFac), 
+                            (fCut2, color2[2], color3[2]*cFac), 
+                            (1.0,   color3[2], color3[2])) }
+        cmap = LinearSegmentedColormap(ctName, cdict, N=512)
 
     if cmap is None:
         raise Exception('Unrecognized colormap request ['+ctName+'] or not implemented.')
