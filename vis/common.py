@@ -195,7 +195,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         # distribute mass and calculate column/volume density grid
         quant = None
 
-        if partField in volDensityFields+colDensityFields:
+        if partField in volDensityFields+colDensityFields or ' ' in partField:
             normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
