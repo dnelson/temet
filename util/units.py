@@ -340,18 +340,19 @@ class units(object):
             dens_phys /= self.mass_proton
         return dens_phys
 
-    def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False):
+    def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, msunKpc2Sq=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
             Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
             Return: [10^10 Msun/kpc^2] or 
                     [g/cm^2 if cgs=True] or 
                     [1/cm^2] if cgs=True and numDens=True, which is in fact [H atoms/cm^2]] or 
-                    [Msun/kpc^2 if msunKpc2=True].
+                    [Msun/kpc^2 if msunKpc2=True] or 
+                    [Msun^2/kpc^4 if msunKpc2=True].
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
-        if msunKpc2 and (numDens or cgs):
+        if (msunKpc2 or msunKpc2Sq) and (numDens or cgs):
             raise Exception("Invalid combination.")
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
@@ -364,6 +365,9 @@ class units(object):
             colDensPhys /= self.mass_proton # 1/cm^2
         if msunKpc2:
             colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g) # remove 10^10 factor
+            colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
+        if msunKpc2Sq:
+            colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g)**2.0 # remove 10^10 factor
             colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys

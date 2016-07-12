@@ -25,12 +25,13 @@ from cosmo.cloudy import cloudyIon
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
-saveBasePath = expanduser("~") + '/plots/'
+#saveBasePath = expanduser("~") + '/plots/'
+saveBasePath = expanduser("~") + '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
-colDensityFields = ['coldens','coldens_msunkpc2','HI']
-totSumFields     = ['mass']
+colDensityFields = ['coldens','coldens_msunkpc2','coldens2_msunkpc2','HI','HI_segmented']
+totSumFields     = ['mass','mass2']
 
 def getHsmlForPartType(sP, partType, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
@@ -162,7 +163,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         mass = sP.dmParticleMass
 
     # neutral hydrogen mass model
-    if partField == 'HI':
+    if partField in ['HI','HI_segmented']:
         nh0_frac = snapshotSubset(sP, partType, 'NeutralHydrogenAbundance', indRange=indRange)
 
         # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
@@ -182,6 +183,10 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
+
+    # squared mass? (e.g. DM annihilation)
+    if partField in ['mass2','coldens2_msunkpc2']:
+        mass *= mass
 
     # quantity
     normCol = False
@@ -231,24 +236,38 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Total %s Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'jet'
 
+    if partField == 'mass2':
+        grid  = logZeroMin( sP.units.codeMassToLogMsun(grid) )
+        config['label']  = 'Total %s Mass SQ [who knows]' % ptStr
+        config['ctName'] = 'jet'
+
     # column densities
     if partField == 'coldens':
         grid  = logZeroMin( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
         config['label']  = '%s Column Density [log cm$^{-2}$]' % ptStr
         config['ctName'] = 'cubehelix'
 
-    if partField == 'coldens_msunkpc2':
-        grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
-        config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
+    if partField in ['coldens_msunkpc2','coldens2_msunkpc2']:
+        if partField == 'coldens_msunkpc2':
+            grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
+            config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
+
+        if partField == 'coldens2_msunkpc2':
+            grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2Sq=True ) )
+            config['label']  = '%s Column$^2$ Density [log M$^2$$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
         if sP.isPartType(partType,'stars'): config['ctName'] = 'cubehelix'
 
-    if partField == 'HI' or ' ' in partField:
+    if partField in ['HI','HI_segmented'] or ' ' in partField:
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
+
+    if partField == 'HI_segmented':
+        config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
+        config['ctName'] = 'HI_segmented'
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature']:
@@ -380,12 +399,16 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
             indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
 
-        # if indRange is still None (full snapshot load), we will proceed chunked
+        # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
+        # a full tree construction to calculate hsml values
         grid_dens  = np.zeros( nPixels, dtype='float32' )
         grid_quant = np.zeros( nPixels, dtype='float32' )
         nChunks = 1
 
-        if indRange is None and sP.subbox is None:
+        disableChunkLoad = (sP.isPartType(partType,'stars') or sP.isPartType(partType,'dm')) \
+                           and not snapHasField(sP, partType, 'SubfindHsml')
+
+        if indRange is None and sP.subbox is None and not disableChunkLoad:
             nChunks = np.max( [1, int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0)] )
             chunkSize = int(h['NumPart'][partTypeNum(partType)] / nChunks)
             print(' gridBox(): proceeding for (%s %s) with [%d] chunks...' % (partType,partField,nChunks))
@@ -488,7 +511,7 @@ def addBoxMarkers(p, conf, ax):
                 c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
                 ax.add_artist(c)
 
-    if 'rVirFracs' in p:
+    if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius
         xPos = p['boxCenter'][0]
         yPos = p['boxCenter'][1]
@@ -543,6 +566,15 @@ def addBoxMarkers(p, conf, ax):
                  size='x-large', ha='center', va='center') # same size as legend text
 
     if 'labelHalo' in p and p['labelHalo']:
+        assert p['sP'].hInd is not None
+
+        if not p['sP'].isZoom:
+            # periodic box: write properties of the hInd we are centered on
+            subhaloID = p['hInd']
+        else:
+            # zoom run: write properties of zoomTargetHalo
+            subhaloID = p['sP'].zoomSubhaloID
+
         subhalo = groupCatSingle(p['sP'], subhaloID=p['hInd'])
         halo = groupCatSingle(p['sP'], haloID=subhalo['SubhaloGrNr'])
 
@@ -555,7 +587,7 @@ def addBoxMarkers(p, conf, ax):
         p0 = plt.Line2D((0,0),(0,0), linestyle='')
         p1 = plt.Line2D((0,0),(0,0), linestyle='')
 
-        legend = ax.legend([p0,p1], [str1,str2], fontsize='xx-large', loc='upper right')
+        legend = ax.legend([p0,p1], [str1,str2], fontsize='xx-large', loc='lower right')
         legend.get_texts()[0].set_color('white')
         legend.get_texts()[1].set_color('white')
 
@@ -631,9 +663,11 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
 def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
         each of panels, all of which can vary in their configuration. 
-      plotStyle    : open, edged
+    Global plot configuration options:
+      plotStyle    : open (show axes), edged (no axes), open_black, edged_black
       rasterPx     : each panel will have this number of pixels if making a raster (png) output, 
                      but note also it controls the relative size balance of raster/vector (e.g. fonts)
+      colorbars    : True or False
       saveFilename : output file name (extension determines type e.g. pdf or png)
 
     Each panel in panels must be a dictionary containing the following keys:
@@ -647,14 +681,15 @@ def renderMultiPanel(panels, conf):
       boxCenter  : (x,y,z) coordinates of the imaging box center in simulation units
       extent     : (axis0_min,axis0_max,axis1_min,axis1_max) in simulation units
     """
+    assert conf.plotStyle in ['open','open_black','edged','edged_black']
 
     color1 = 'black' if '_black' in conf.plotStyle else 'white'
     color2 = 'white' if '_black' in conf.plotStyle else 'black'
 
     # plot sizing and arrangement
     sizeFac = conf.rasterPx / mpl.rcParams['savefig.dpi']
-    nRows   = np.floor(np.sqrt(len(panels))) # non-integer allowed
-    nCols   = len(panels) / nRows
+    nRows   = np.floor(np.sqrt(len(panels)))
+    nCols   = np.ceil(len(panels) / nRows)
     aspect  = nRows/nCols
 
     if conf.plotStyle in ['open','open_black']:
@@ -694,7 +729,8 @@ def renderMultiPanel(panels, conf):
                 ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz  [ ckpc/h ]' % (new_2[0], new_2[1], new_2[2]))
 
             # color mapping and place image
-            cmap = loadColorTable(config['ctName'])
+            vMM = p['valMinMax'] if 'valMinMax' in p else None
+            cmap = loadColorTable(config['ctName'], valMinMax=vMM)
             
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
             ax.autoscale(False)
@@ -712,13 +748,32 @@ def renderMultiPanel(panels, conf):
                 cb.ax.set_ylabel(config['label'])
 
         fig.tight_layout()
+        if nRows == 1 and nCols == 3: plt.subplots_adjust(top=0.97,bottom=0.06) # fix degenerate case
+
         fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
 
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         barAreaHeight = np.max([0.035,0.1 / nRows]) if conf.colorbars else 0.0
         
-        if nRows == 2:
+        # check uniqueness of panel (partType,partField,valMinMax)'s
+        pPartTypes   = set()
+        pPartFields  = set()
+        pValMinMaxes = set()
+
+        for p in panels:
+            pPartTypes.add(p['partType'])
+            pPartFields.add(p['partField'])
+            pValMinMaxes.add(str(p['valMinMax']))
+
+        # if all panels in the entire figure are the same, we will do 1 single colorbar
+        oneGlobalColorbar = False
+
+        if len(pPartTypes) == 1 and len(pPartFields) == 1 and len(pValMinMaxes):
+            if None not in pValMinMaxes:
+                oneGlobalColorbar = True
+
+        if nRows == 2 and not oneGlobalColorbar:
             # two rows, special case, colors on top and bottom, every panel can be different
             barAreaTop = 1.0 * barAreaHeight
             barAreaBottom = 1.0 * barAreaHeight
@@ -760,7 +815,8 @@ def renderMultiPanel(panels, conf):
             setAxisColors(ax, color2)
 
             # color mapping and place image
-            cmap = loadColorTable(config['ctName'])
+            vMM = p['valMinMax'] if 'valMinMax' in p else None
+            cmap = loadColorTable(config['ctName'], valMinMax=vMM)
 
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal')
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
@@ -770,6 +826,9 @@ def renderMultiPanel(panels, conf):
 
             # colobar(s)
             heightFac = np.max([1.0/nRows, 0.35])
+
+            if oneGlobalColorbar:
+                continue
 
             if nRows == 2:
                 # both above and below, one per column
@@ -785,6 +844,11 @@ def renderMultiPanel(panels, conf):
                 # only below, one per column
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, colWidth, bottomNorm, leftNorm)
+
+        # global colorbar?
+        if oneGlobalColorbar:
+            addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                               rowHeight, 0.4, bottomNorm, 0.3)
 
         fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
 
