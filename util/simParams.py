@@ -270,7 +270,7 @@ class simParams:
 
                 self.trMassConst = self.targetGasMass / self.trMCPerCell
 
-                self.arepoPath  = self.basePath + 'sims.illustris/'+str(res)+'_'+bs+'Mpc_FP/'
+                self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'FP/'
                 self.savPrefix  = 'I'
                 self.saveTag    = 'il'
                 self.plotPrefix = 'il'
@@ -281,7 +281,7 @@ class simParams:
                 if res == 1820: self.simName = 'Illustris-1'
 
             if run == 'illustris_dm': # DM-only
-                self.arepoPath  = self.basePath + 'sims.illustris/'+str(res)+'_'+bs+'Mpc_DM/'
+                self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'DM/'
                 self.savPrefix  = 'IDM'
                 self.simName    = 'ILLUSTRIS_DM'
                 self.saveTag    = 'ilDM'
