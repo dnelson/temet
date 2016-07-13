@@ -1,0 +1,59 @@
+# This package contains data in electronic form from the paper
+#
+# "A New Calculation of the Ionizing Background Spectrum 
+# and the Effects of HeII Reionization" (arXiv:0901.4554)
+#
+# by C.-A. Faucher-Giguere, A. Lidz, M. Zaldarriaga, & L. Hernquist 
+#
+#
+# December 2011 update:
+#
+# - Corrected normalization inconsistency between individual spectra and 
+#  TREECOOL file (by a factor of 0.9).
+# - TREECOOL and spectrum files now smoothly truncated at z~10 in order to 
+#   produce a redshift of reionization consistent with the WMAP-7 electron
+#   scattering optical depth.
+#
+# Data updated June 2011:
+# 
+# - Same ionization source prescription as in '09 paper and in good 
+#   agreement at overlapping redshifts. 
+# - Now extends to z=15 and nu=4,096 Ry, with better convergence properties 
+#   at high z.
+# - More realistic (larger) LyC break, assuming 10% escape fraction of 
+#   ionizing photons from star-forming galaxies and a factor of 4 break
+#   intrinsic to the stars. Results in higher spectrum at wavelengths
+#   longward of 912 A.
+#
+# Note: Because the mean free path of HeII ionizing photons becomes
+#       extremely short just above 4 Ry at z>~4, as quasars become rare,
+#       the spectra are not well converged in this regime. 
+#
+#       This may affect ionization corrections that depend on the value of
+#       the spectrum there. This is however in the regime where HeII 
+#       reionization is not complete in this model, and where the spectrum 
+#       in the HeII ionizing range should not be trusted in any case.
+#
+#       The absolute values of the HeII photoionization and photoheating rates
+#       are very small in this regime, and so this should not have a significant
+#       impact on hydro simulations run with the TREECOOL file provided.
+#
+#
+# - TREECOOL_fg_dec11.dat: Photoionization rates and photoheating rates in 
+#                           table that can be directly used with the GADGET
+#                           (http://www.mpa-garching.mpg.de/gadget/)
+#                           hydrodynamics code. Simply replace the file 
+#                           TREECOOL in your installation to use our model.
+#
+#                           The columns are:
+# 
+# log(1+z), Gamma_HI, Gamma_HeI, Gamma_HeII,  Qdot_HI, Qdot_HeI, Qdot_HeII, 
+# where 'Gamma' is the photoionization rate and 'Qdot' is the photoheating rate. 
+# The Gamma's are in units of s^-1, and the Qdot's are in units of erg s^-1.
+#
+# - fg_uvb_dec11_z_*.dat: Full UV background spectrum at redshift *.
+#
+# For more and/or updated information, visit the ionizing background 
+# resources web site at http://www.cfa.harvard.edu/~cgiguere/uvbkg.html
+#
+# or email Claude-Andre Faucher-Giguere at cgiguere@berkeley.edu.

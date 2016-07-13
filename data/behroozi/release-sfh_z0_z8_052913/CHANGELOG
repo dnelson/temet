@@ -1,0 +1,11 @@
+5/29/13:
+Corrections to how error bars and medians were calculated for individual star formation histories.  (Previously, error bars were done as the densest 68% in linear space; now done as the densest 68% in log space).
+
+4/8/13:
+Corrections due to revised stellar mass loss formula (see updated version on the arXiv).
+
+12/21/12: Updated based on latest SSFR and cosmic SFR constraints (collected over the period from 2006-2012).  Stellar masses at z>5 corrected for nebular emission lines.  Now includes star formation efficiencies.
+
+10/17/12: Added relative stellar mass histories.
+
+9/11/12: Initial public release.
