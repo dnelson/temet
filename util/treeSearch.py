@@ -182,6 +182,13 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
                 if pos[no,2] > center[2,ind2]:
                     subnode += 4
 
+                if(length[ind2] < 1e-4):
+                    # may have particles at identical locations, in which case randomize the subnode 
+                    # index to put the particle into a different leaf (happens well below the 
+                    # gravitational softening scale)
+                    subnode = np.int(np.random.rand())
+                    subnode = max(subnode,7)
+
                 suns[subnode,ind2] = no
 
                 no = nFree # resume trying to insert the new particle at the newly created internal node
@@ -409,7 +416,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
         print(' calcHsml(): increase alloc %g to %g and redo...' % (num_iter+1.1,num_iter+2.1))
 
     build_done_time = time.time()
-    assert numNodes > 0, 'Tree construction failed (try double precision if you used single).'
+    assert numNodes > 0, 'Tree construction failed.'
     print(' calcHsml(): tree construction took [%g] sec.' % (build_done_time-start_time))
 
     if posSearch is None:
@@ -559,3 +566,4 @@ def checkVsSubfindHsml():
     fig.tight_layout()    
     fig.savefig('hsml.png')
     plt.close(fig)
+

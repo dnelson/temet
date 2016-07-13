@@ -163,8 +163,8 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     zStart     = 0.3 # start plotting at this snapshot
     nSnapsBack = 12   # one panel per snapshot, back in time
 
-    hInd       = 0
-    run        = 'illustris'
+    #hInd       = 0
+    run        = 'tng'
     res        = 1820
     rVirFracs  = None #[0.05]
     method     = 'sphMap'
@@ -183,26 +183,31 @@ def tngCluster_center_timeSeriesPanels(conf=0):
         partType   = 'stars'
         partField  = 'coldens_msunkpc2'
         valMinMax  = [6.5,10.0]
+        hsmlFac    = 1.0
     if conf == 2:
+        partType   = 'gas'
+        partField  = 'metal_solar'
+        valMinMax  = [0.0,0.7]
+    if conf == 3:
+        partType   = 'dm'
+        partField  = 'coldens2_msunkpc2'
+        valMinMax  = [15.0,16.0]
+        hsmlFac    = 1.0
+    if conf == 4:
         partType   = 'gas'
         partField  = 'pressure_ratio'
         valMinMax  = [-2.0,1.0]
-    if conf == 3:
-        partType   = 'gas'
-        partField  = 'metal_solar'
-        valMinMax  = [-0.5,0.5]
-    if conf == 4:
-        partType   = 'dm'
-        partField  = 'coldens2_msunkpc2'
-        valMinMax  = [12.0,15.0]
 
     # configure panels
     sP = simParams(res=res, run=run, redshift=zStart)
     for i in range(nSnapsBack):
-        halo = groupCatSingle(sP, subhaloID=hInd)
-        print(sP.snap, sP.redshift, halo['SubhaloPos'])
+        hIndLoc = 0
+        if run == 'tng' and i < 2: hIndLoc = 1
 
-        panels.append( {'redshift':snapNumToRedshift(sP)} )
+        halo = groupCatSingle(sP, haloID=hIndLoc)
+        print(sP.snap, sP.redshift, hIndLoc, halo['GroupFirstSub'], halo['GroupPos'])
+
+        panels.append( {'hInd':halo['GroupFirstSub'], 'redshift':snapNumToRedshift(sP)} )
         sP.setSnap(sP.snap-1)
 
     panels[0]['labelScale'] = True
@@ -212,8 +217,8 @@ def tngCluster_center_timeSeriesPanels(conf=0):
         plotStyle    = 'edged_black'
         colorbars    = True
         rasterPx     = 960
-        saveFilename = saveBasePath + 'timePanels_%s_hInd-%d_%s-%s_z%.1f_n%d.pdf' % \
-                       (sP.simName,hInd,partType,partField,zStart,nSnapsBack)
+        saveFilename = saveBasePath + 'timePanels_%s_hInd-0_%s-%s_z%.1f_n%d.pdf' % \
+                       (sP.simName,partType,partField,zStart,nSnapsBack)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 

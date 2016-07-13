@@ -56,7 +56,7 @@ def getHsmlForPartType(sP, partType, indRange=None):
     if sP.isPartType(partType, 'stars'):
         if not snapHasField(sP, partType, 'SubfindHsml'):
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            treePrec = 'single' if pos.dtype == np.float32 else 'double'
+            treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
             hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2, treePrec=treePrec)
         else:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
