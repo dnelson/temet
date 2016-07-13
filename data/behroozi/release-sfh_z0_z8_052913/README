@@ -1,0 +1,34 @@
+All data from Behroozi, Wechsler, & Conroy 2013a (http://arxiv.org/abs/1207.6105) and 2013b ((http://arxiv.org/abs/1209.3013); please cite these papers if you use these results.
+
+Assumptions: 
+Stellar Masses: Chabrier IMF, BC03 SPS model, Blanton et al. dust model (i.e., kcorrect).
+Cosmology: Omega_m = 0.27, ns = 0.95, Omega_b = 0.046, sigma_8 = 0.82, h = 0.7.
+
+Units:
+Stellar masses: Msun
+Halo Masses: Msun
+Star Formation Rates: Msun/yr
+
+DATA:
+smmr/*
+Stellar mass to halo mass relations for central halos.  Filenames contain redshift information.  For files labelled "smmr_then," the halo mass column is the present-day halo mass; for files labelled just "smmr", the halo mass column is the halo mass at the specified redshift.  Columns are: Log10(Halo Mass), Log10(Stellar Mass / Halo Mass), Err_Up (dex), and Err_Down (dex).
+
+sm/sm_hist_rel_*.dat
+Stellar mass histories; i.e., stellar mass in the most massive progenitor relative to the stellar mass at the present day as a function of halo mass and scale factor.  Halo masses are given in the filenames, and refer to a 0.2 dex bin in halo mass.  (I.e., sm_hist_rel_11.0.dat is for halos from 10^11 Msun to 10^11.2 Msun).  Columns are: Scale factor, SM(z)/SM(z=0), Err_Up, Err_Down (all linear units).
+
+sfe/sfe.dat
+Star formation efficiencies (SFR / Baryon Accretion Rate) as a function of halo mass and redshift. The columns are: (1+z), Log10(Halo Mass), Log10(SFR).  (See Behroozi et al. 2013b).
+
+sfr/sfr_corrected_*.dat
+Average star formation rates as a function of halo mass and scale factor.  Halo masses are given in the filenames, and refer to a 0.2 dex bin in halo mass.  (I.e., sfr_corrected_11.0.dat is for halos from 10^11 Msun to 10^11.2 Msun).  Columns are: Scale factor, SFR, Err_Up, Err_Down (all linear units).
+
+sfr/sfr_release.dat
+Used to make the pretty SFR plot in Behroozi et al. 2012.  The first three columns are the only relevant ones: (1+z), Log10(Halo Mass), Log10(SFR).
+
+sfh/*
+Analogous to sfr/*, except for star formation histories at the present day (i.e., the historical star formation rates which would have been necessary to produce the current population of stars).  Star formation histories at higher redshifts are effectively equivalent to truncating these histories at the desired redshift.  (Note, however, that the halo mass in all files in this directory is the halo mass at the present day).
+
+sfh_individual/*
+Same as sfh/sfh_z0.1_corrected_*, except the error bars encompass the distribution of individual galaxy paths, instead of just the error on the mean path.
+
+Many more outputs are available; please contact Peter Behroozi (behroozi at stanford dot edu) if you have a specific request.

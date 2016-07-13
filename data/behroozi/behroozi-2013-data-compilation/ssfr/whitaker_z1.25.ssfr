@@ -1,0 +1,7 @@
+#zlow: 1.25
+#zhigh: 1.25
+#ref: Whitaker+ 2012 http://arxiv.org/abs/1205.0547
+#type: ssfr
+10 -8.8 0.3 0.3
+10.5 -9 0.3 0.3
+11 -9.2 0.3 0.3

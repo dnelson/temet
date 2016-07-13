@@ -8,15 +8,17 @@ from builtins import *
 import numpy as np
 import h5py
 from util.helper import evenlySample
-from os.path import isfile
+from os.path import isfile, expanduser
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
+
+dataBasePath = expanduser("~") + '/python/data/'
 
 def behrooziSMHM(sP, logHaloMass=None):
     """ Load from data files: Behroozi+ (2013) abundance matching, stellar mass / halo mass relation. """
     from scipy import interpolate
 
-    basePath = '/n/home07/dnelson/obs/behroozi/release-sfh_z0_z8_052913/smmr/'
+    basePath = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/smmr/'
     fileName = 'c_smmr_z0.10_red_all_smf_m1p1s1_bolshoi_fullcosmos_ms.dat'
 
     # columns: log10(halo_mass), log10(stellar_mass/halo_mass), err_up (dex), err_down (dex)
@@ -51,8 +53,8 @@ def behrooziSFRAvgs():
     from scipy.signal import savgol_filter
 
     haloMassBins = np.linspace(10.0,15.0,26) # 0.2 spacing #[11.0,12.0,3.0,14.0,15.0]
-    #basePath  = '/n/home07/dnelson/obs/behroozi/release-sfh_z0_z8_052913/sfr/' # from website
-    basePath  = '/n/home07/dnelson/obs/behroozi/analysis/' # private communication
+    #basePath  = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/sfr/' # from website
+    basePath  = dataBasePath + 'behroozi/analysis/' # private communication
     fileNames = ['sfr_corrected_'+str(haloMass)+'.dat' for haloMass in haloMassBins]
 
     # filenames have halo mass at z=0 in log msun (e.g. 11.0 is halos from 11.0 to 11.2)
@@ -78,7 +80,7 @@ def behrooziSFRAvgs():
 def behrooziObsSFRD():
     """ Load observational data point compilation of SFRD(z) from Behroozi+ (2013). """
 
-    basePath = '/n/home07/dnelson/obs/behroozi/behroozi-2013-data-compilation/'
+    basePath = dataBasePath + 'behroozi/behroozi-2013-data-compilation/'
     fileName = 'csfrs_new.dat'
 
     # Columns: redshift, Log10(CSFR) (Msun/yr/Mpc^3), Err+ (dex), Err- (dex)
@@ -261,7 +263,7 @@ def mcconnellMa2013():
     """ Best fit black hole / stellar bulge mass relations from McConnell & Ma (2013). """
     # load data file (blackhole.berkeley.edu)
     r = {}
-    path = '/n/home07/dnelson/obs/mcconnell/current_ascii.txt'
+    path = dataBasePath + 'mcconnell/current_ascii.txt'
 
     # Columns: galName, dist, MBH [Msun], MBH lower (68%), MBH upper (68%), method, sigma [km/s]
     #          sigma lower, sigma upper, log(LV/Lsun), error in log(LV/Lsun), log(L3.6/Lsun),
@@ -317,7 +319,7 @@ def mcconnellMa2013():
 
 def baldry2012SizeMass():
     """ Load observational data points from Baldry+ (2012). """
-    path = '/n/home07/dnelson/obs/baldry/size-mass.txt'
+    path = dataBasePath + 'baldry/size-mass.txt'
 
     def logPcToKpc(x):
         return 10.0**x / 1000.0
@@ -378,7 +380,7 @@ def shen2003SizeMass():
 
 def baldry2008SMF():
     """ Load observational data points from Baldry+ (2008). """
-    path = '/n/home07/dnelson/obs/baldry/gsmf-BGD08.txt'
+    path = dataBasePath + 'baldry/gsmf-BGD08.txt'
 
     # Columns: log stellar mass (bin center), Ngal, ndens (/Mpc^3/dex), Poisson error, min n, max n
     data = np.loadtxt(path)
@@ -396,7 +398,7 @@ def baldry2008SMF():
 
 def baldry2012SMF():
     """ Load observational data points from Baldry+ (2012). """
-    path = '/n/home07/dnelson/obs/baldry/gsmf-B12.txt'
+    path = dataBasePath + 'baldry/gsmf-B12.txt'
 
     # Columns: log mass, bin width, num dens, error, number in sample
     # number density is per dex per 10^3 Mpc^3, assuming H0=70 km/s/Mpc
@@ -446,7 +448,7 @@ def liWhite2009SMF(little_h=0.704):
 def bernardi2013SMF():
     """ Load observational data points from Bernardi+ (2013). """
     models = ['Ser','SerExp','Ser_Simard','cmodel']
-    paths = ['/n/home07/dnelson/obs/bernardi/MsF_' + m + '.dat' for m in models]
+    paths = [dataBasePath + 'bernardi/MsF_' + m + '.dat' for m in models]
 
     # Columns: stellar mass (log msun), num dens (all), err, num dens (Ell), err, num dens (S0), err, 
     #          num dens (Sab), err, num dens (Scd), err
@@ -465,7 +467,7 @@ def bernardi2013SMF():
 
 def gallazzi2005(sP):
     """ Load observational data points (M-Z and ages) from Gallazzi+ (2005). """
-    path = '/n/home07/dnelson/obs/gallazzi/table2.txt'
+    path = dataBasePath + 'gallazzi/table2.txt'
 
     # columns: log(Mstar/Msun), log(Z/Zun) [P50, P16, P84], log(tr/yr) [P50, P16, P84]
     # rescale metallicities from old Z_solar=0.02 to present GS10 (0.0127) value
@@ -484,7 +486,7 @@ def gallazzi2005(sP):
 
 def woo2008(sP):
     """ Load observational data points (M-Z of local group dwarfs) from Woo+ (2008). """
-    path = '/n/home07/dnelson/obs/woo/table1.txt'
+    path = dataBasePath + 'woo/table1.txt'
 
     # columns: Name, log(Mstar/Msun), log(Z) where log(Z/0.019)=[Fe/H]
     # note: using instead Z_solar = 0.019 below would convert to [Fe/H] instead of Z/Z_solar
@@ -501,7 +503,7 @@ def woo2008(sP):
 
 def kirby2013():
     """ Load observational data points (M-Z of local group dwarfs) from Kirby+ (2013). """
-    path = '/n/home07/dnelson/obs/kirby/2013_table4.txt'
+    path = dataBasePath + 'kirby/2013_table4.txt'
 
     # columns: Name, Num, Lv, Lv_err, log(Mstar/Msun), err, <[Fe/H]>, err, sigma, err, 
     #          median, mad, IQR, skewness, err, kurtosis, err
@@ -546,7 +548,7 @@ def zafar2013():
 
 def noterdaeme2012():
     """ Load observational data points (HI absorption, f_HI(N)) from Noterdaeme+ (2012), DLA range. """
-    path = '/n/home07/dnelson/obs/noterdaeme/noterdaeme2012.txt'
+    path = dataBasePath + 'noterdaeme/noterdaeme2012.txt'
 
     # columns: log_N(Hi)_low log_N(Hi)_high log_f(NHI,chi) log_f(NHI,chi)_corr sigma(log_f(NHI,chi))
     data = np.loadtxt(path)
@@ -570,7 +572,7 @@ def noterdaeme2009():
     log_fHI = k_g * (log_NHI/N_g)**alpha_g * np.exp(-log_NHI/N_g)
 
     # we have the raw points instead from Fig 11 (priv comm)
-    path = '/n/home07/dnelson/obs/noterdaeme/fhix.dat'
+    path = dataBasePath + 'noterdaeme/fhix.dat'
     data = np.loadtxt(path)
 
     r = {'log_NHI'      : np.array( [np.mean([data[i,0],-data[i,1]]) for i in range(len(data))]),
@@ -584,7 +586,7 @@ def noterdaeme2009():
 def kim2013cddf():
     """ Load observational data points (HI absorption, f_HI(N)) from Kim+ (2013), Lya forest range. """
     # Table A.3 http://adsabs.harvard.edu/abs/2013A%26A...552A..77K
-    path = '/n/home07/dnelson/obs/kim/kim2013_A3.txt'
+    path = dataBasePath + 'kim/kim2013_A3.txt'
 
     # columns: log_NH [f +f -f]   [f +f -f]   [f +f -f]
     #                 [z=1.9-3.2] [z=1.9-2.4] [z=2.4-3.2]
@@ -627,8 +629,8 @@ def rafelski2012(sP, redshiftRange=[2.5, 3.5]):
     """ Load observational data (DLA metallicities) from Rafelski+ (2012). z>1.5. """
     # Tables 2 and 3 from online data
     # http://vizier.cfa.harvard.edu/viz-bin/VizieR-3?-source=J/ApJ/755/89/table3
-    path1 = '/n/home07/dnelson/obs/rafelski/raf2012_table2.txt'
-    path2 = '/n/home07/dnelson/obs/rafelski/raf2012_table3.txt'
+    path1 = dataBasePath + 'rafelski/raf2012_table2.txt'
+    path2 = dataBasePath + 'rafelski/raf2012_table3.txt'
 
     data1 = np.genfromtxt(path1, dtype=None)
     data2 = np.genfromtxt(path2, dtype=None)
@@ -678,7 +680,7 @@ def zahid2012(pp04=False, redshift=0):
     if redshift not in [0,1,2]:
         raise Exception('Bad redshift')
 
-    path = '/n/home07/dnelson/obs/zahid/z2012_table1_z%d.txt' % redshift
+    path = dataBasePath + 'zahid/z2012_table1_z%d.txt' % redshift
     # columns: log_Mstar_solar, log_OHn12, log_OHn12_err, E_BV, E_BV_err, SFR, SFR_err
     data = np.loadtxt(path)
 
@@ -766,7 +768,7 @@ def zahid2014(pp04=False, redshift=0.08):
 
 def tremonti2004():
     """ Load observational data (gas MZR) from Tremonti+ (2004). """
-    path = '/n/home07/dnelson/obs/tremonti/t2004_table3.txt'
+    path = dataBasePath + 'tremonti/t2004_table3.txt'
     # columns: log_Mstar_solar, p2.5, p16, p50, p84, p97.5
     #          where p values are percentiles for 12+log(O/H) in bins of 0.1 dex, so p50 is the median
     data = np.loadtxt(path)

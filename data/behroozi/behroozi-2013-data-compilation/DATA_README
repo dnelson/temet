@@ -1,0 +1,15 @@
+All data sources listed in Behroozi et al. 2013 (http://arxiv.org/abs/1207.6105).
+
+Cosmic Star Formation Rates: csfrs_new.dat
+Columns: redshift, Log10(CSFR) (Msun/yr/Mpc^3), Err+ (dex), Err- (dex)
+
+Specific Star Formation Rates: ssfr/*.ssfr
+Columns: Log10(stellar mass) (Msun), Log10(SSFR) (1/yr), Err+ (dex), Err- (dex)
+
+Stellar Mass functions: smf_ms/*.smf
+Columns: Log10(stellar mass) (Msun), Log10(ND) (1/Mpc^3/dex), Err+ (dex), Err- (dex)
+*OR*
+Columns: Log10(stellar mass) (Msun), ND (1/Mpc^3/dex), Err+ , Err-
+In the latter case, the data files are marked with "#errors: linear".
+
+Assumptions: Chabrier (2003) IMF, BC03 SPS models, Blanton & Roweis (kcorrect) dust modeling.
