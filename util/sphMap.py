@@ -84,10 +84,10 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 
     if pixelSizeX < pixelSizeY:
         hsmlMin = 1.001 * pixelSizeX * 0.5
-        hsmlMax = pixelSizeX * 50.0
+        hsmlMax = pixelSizeX * 500.0
     else:
         hsmlMin = 1.001 * pixelSizeY * 0.5
-        hsmlMax = pixelSizeY * 50.0
+        hsmlMax = pixelSizeY * 500.0
 
     # loop over all particles (Note: np.arange() seems to have a huge penalty here instead of range())
     for k in range(NumPart):
@@ -114,7 +114,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
            np.abs( _NEAREST(p1-boxCen[1],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[1]+h:
            continue
 
-        # position relative to box (x,y) minimum
+        # position relative to box (x,y) center
         pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
         pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
 
@@ -125,7 +125,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         nx = np.floor(h / pixelSizeX + 1)
         ny = np.floor(h / pixelSizeY + 1)
 
-        # coordinates of pixel center of particle
+        # coordinates of pixel center of pixel containing the particle
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
 

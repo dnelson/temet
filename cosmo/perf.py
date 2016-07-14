@@ -27,7 +27,7 @@ def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
     nSubboxesExpected = 2 if sP.boxSize == 75000 else 3
     nSubboxSnapsExpected = {75000  : {455:2431, 910:4380, 1820:-1}, \
                             35000  : {270:2331, 540:-1,   1080:-1, 2160:-1}, \
-                            205000 : {625:2050, 1250:-1,  2500:-1}}
+                            205000 : {625:2050, 1250:3045,  2500:-1}}
 
     def checkSingleGroup(files):
         """ Helper (count header and dataset shapes). """
@@ -128,9 +128,6 @@ def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
         assert numSubboxes == nSubboxesExpected
         
         for sbNum in range(numSubboxes):
-            if sbNum == 0 or sbNum == 2:
-                continue # L205n625TNG skip SB0/SB2
-
             numDirs = len(glob(sP.simPath + 'subbox' + str(sbNum) + '/snapdir*'))
             nSnapFiles = 0
 
