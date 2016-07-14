@@ -37,36 +37,52 @@ def getHsmlForPartType(sP, partType, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
 
-    # dark matter
-    if sP.isPartType(partType, 'dm'):
-        if not snapHasField(sP, partType, 'SubfindHsml'):
-            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            treePrec = 'single' if pos.dtype == np.float32 else 'double'
-            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2, treePrec=treePrec)
-        else:
-            hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-        return hsml
+    _, sbStr, _ = subboxVals(sP.subbox)
+    irStr = '' if indRange is None else '.%d-%d' % (indRange[0],indRange[1])
+    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s.hdf5' % \
+                   (sbStr, sP.snap, partType, irStr)
 
-    # gas
-    if sP.isPartType(partType, 'gas'):
-        hsml = snapshotSubset(sP, partType, 'cellrad', indRange=indRange)
-        return hsml
+    if not isdir(sP.derivPath + 'hsml/'):
+        mkdir(sP.derivPath + 'hsml/')
 
-    # stars
-    if sP.isPartType(partType, 'stars'):
-        if not snapHasField(sP, partType, 'SubfindHsml'):
+    # cache?
+    useCache = sP.isPartType(partType, 'stars') or \
+              (sP.isPartType(partType, 'dm') and not snapHasField(sP, partType, 'SubfindHsml'))
+
+    if useCache and isfile(saveFilename):
+        # load if already made
+        with h5py.File(saveFilename,'r') as f:
+            hsml = f['hsml'][()]
+        print(' loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
+
+    else:
+        # dark matter
+        if sP.isPartType(partType, 'dm'):
+            if not snapHasField(sP, partType, 'SubfindHsml'):
+                pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+                treePrec = 'single' if pos.dtype == np.float32 else 'double'
+                hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=4, treePrec=treePrec)
+            else:
+                hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+
+        # gas
+        if sP.isPartType(partType, 'gas'):
+            hsml = snapshotSubset(sP, partType, 'cellrad', indRange=indRange)
+
+        # stars
+        if sP.isPartType(partType, 'stars'):
+            # SubfindHsml is a density estimator of the local DM, don't genreally use for stars
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
             treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
             hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2, treePrec=treePrec)
-        else:
-            hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
 
-        # use a minimum/maximum size (~px scale?) for stars in outskirts
-        #print(' getHsmlForPartType(): clipping [stars] at a min of 0.05x gravSoft, max of 0.5x gravSoft.')
-        hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
-        hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness/interestingness
+        # save
+        if useCache:
+            with h5py.File(saveFilename,'w') as f:
+                f['hsml'] = hsml
+            print(' saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
-        return hsml
+    return hsml
 
     raise Exception('Unimplemented partType.')
 
@@ -258,7 +274,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
-        if sP.isPartType(partType,'stars'): config['ctName'] = 'cubehelix'
+        if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' #'cubehelix'
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
@@ -349,7 +365,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     return grid, config
 
 def gridBox(sP, method, partType, partField, nPixels, axes, 
-            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, **kwargs):
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate=True, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
@@ -358,11 +374,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
     _, sbStr, _ = subboxVals(sP.subbox)
 
-    saveFilename = sP.derivPath + 'grids/%s.%s%d.%s.%s.%s.hdf5' % \
-                   (method, sbStr, sP.snap, partType, partField.replace(' ','_'), m)
+    saveFilename = sP.derivPath + 'grids/%s/%s.%s%d.%s.%s.%s.hdf5' % \
+                   (sbStr.replace("_","/"), method, sbStr, sP.snap, partType, partField.replace(' ','_'), m)
 
     if not isdir(sP.derivPath + 'grids/'):
         mkdir(sP.derivPath + 'grids/')
+    if not isdir(sP.derivPath + 'grids/%s' % sbStr.replace("_","/")):
+        mkdir(sP.derivPath + 'grids/%s' % sbStr.replace("_","/"))
 
     # no particles of type exist? blank grid return (otherwise die in getHsml and wind removal)
     h = snapshotHeader(sP)
@@ -377,7 +395,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         return emptyReturn()
 
     # map
-    if isfile(saveFilename):
+    if not forceRecalculate and isfile(saveFilename):
         # load if already made
         with h5py.File(saveFilename,'r') as f:
             grid_master = f['grid'][...]
@@ -462,10 +480,23 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             # render
             if method in ['sphMap','sphMap_global']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
-                hsml = getHsmlForPartType(sP, partType, indRange=indRange) * hsmlFac
+                hsml = getHsmlForPartType(sP, partType, indRange=indRange)
+                hsml *= hsmlFac
 
                 if wMask is not None:
                     hsml = hsml[wMask]
+
+                if sP.isPartType(partType, 'stars'):
+                    # use a minimum/maximum size for stars in outskirts
+                    #hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
+                    #hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness
+                    # adaptively clip in proportion to pixel scale of image, depending on ~pixel number
+                    pxScale = np.max(boxSizeImg[axes] / nPixels)
+                    #clipAboveNumPx = 30.0*(np.max(nPixels)/1920)
+                    #clipAboveToPx  = np.max([3.0, 6.0-2*1920/np.max(nPixels)])
+                    #hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
+                    clipPx  = np.max([3.0, 6.0/(1920/np.max(nPixels))])
+                    hsml[hsml > clipPx*pxScale] = clipPx*pxScale
 
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                                          boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, 

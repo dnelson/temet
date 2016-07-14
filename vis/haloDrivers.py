@@ -103,26 +103,34 @@ def boxHalo_MultiQuant():
     #panels.append( {'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens2_msunkpc2', 'valMinMax':[12.0,14.0]} )
     #panels.append( {'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
 
-    panels.append( {'nPixels':[500,500],'partType':'gas', 'partField':'O VI', 'valMinMax':[14.0,17.0]} )
-    panels.append( {'nPixels':[960,960],'partType':'gas', 'partField':'O VI', 'valMinMax':[14.0,17.0]} )
-    panels.append( {'nPixels':[1920,1920],'partType':'gas', 'partField':'O VI', 'valMinMax':[14.0,17.0]} )
+    #panels.append( {'rotation':'edge-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
+    #panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    #panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    #panels.append( {'rotation':'face-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
+    #panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    #panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+
+    panels.append( {'hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.4]} )
+    panels.append( {'hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
+    panels.append( {'hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
+
 
     hInd       = 362540
     run        = 'illustris'
     res        = 1820
     redshift   = 0.0
-    rVirFracs  = [1.0]
+    rVirFracs  = [1.0] # None
     method     = 'sphMap'
     #nPixels    = [1920,1920]
-    sizeFac    = 2.5
+    sizeFac    = 2.5 #-50.0
     hsmlFac    = 2.5
-    axes       = [1,0]
+    #axes       = [1,2]
     rotation   = None
 
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = saveBasePath + 'box_%s_%d_z%.1f_shID-%d_multiQuant.pdf' % (run,res,redshift,hInd)
+        saveFilename = saveBasePath + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,hInd,sizeFac)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -164,7 +172,7 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     nSnapsBack = 12   # one panel per snapshot, back in time
 
     #hInd       = 0
-    run        = 'tng'
+    run        = 'illustris'
     res        = 1820
     rVirFracs  = None #[0.05]
     method     = 'sphMap'
@@ -187,7 +195,7 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     if conf == 2:
         partType   = 'gas'
         partField  = 'metal_solar'
-        valMinMax  = [0.0,0.7]
+        valMinMax  = [-0.5,0.5]
     if conf == 3:
         partType   = 'dm'
         partField  = 'coldens2_msunkpc2'

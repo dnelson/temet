@@ -61,19 +61,22 @@ def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
     res       = 1820
     nPixels   = 960
     axes      = [0,1] # x,y
+    redshift  = 0.0
 
     class plotConfig:
         plotStyle    = 'edged_black'
         rasterPx     = 960
         colorbars    = True
         saveFileBase = 'Illustris-1-4sb-gasDens'
+        saveFilename = 'out.png'
 
         # movie config
         minZ      = 0.0
         maxZ      = 4.0
         maxNSnaps = 30
 
-    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+    renderBox(panels, plotConfig, locals())
+    #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
 def tng_boxPressureComp():
     """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
