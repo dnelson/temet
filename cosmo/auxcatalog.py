@@ -219,7 +219,7 @@ def wholeBoxColDensGrid(sP, species):
         raise Exception('Not implemented.')
 
     # config
-    nChunks = 20    # split loading into how many pieces
+    nChunks = 50    # split loading into how many pieces
     axes    = [0,1] # x,y projection
     
     # info
@@ -342,10 +342,13 @@ def wholeBoxColDensGrid(sP, species):
             rZ += rZi
 
     # finalize
-    #rr, _ = gridOutputProcess(sP, r, species, None)
     if species in hDensSpecies+zDensSpecies:
-        # column density: convert units from [code column density, above] to [atoms/cm^2] and take log
+        # column density: convert units from [code column density, above] to [H atoms/cm^2] and take log
         rr = sP.units.codeColDensToPhys(r, cgs=True, numDens=True)
+
+        ion = cosmo.cloudy.cloudyIon(None)
+        rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
+
         rr = np.log10(rr)
 
     if species == 'Z':
@@ -372,22 +375,11 @@ def wholeBoxCDDF(sP, species):
     desc  += "Return has shape [2,nBins] where the first slice gives n [cm^-2], the second fN [cm^-2]."
     select = "Binning min: [%g] max: [%g] size: [%g]." % (binMinMax[0], binMinMax[1], binSize)
 
-    # modify?
-    if species == 'OVI_Ntest':
-        ac = auxCat(sP, fields=['Box_Grid_nOVI'])
-        # take out log, convert from [H atoms/cm^2] to [O atoms/cm^2]
-        ac['Box_Grid_nOVI'] = 10.0**ac['Box_Grid_nOVI']
-        ac['Box_Grid_nOVI'] /= 16.0
-        ac['Box_Grid_nOVI'] = np.log10( ac['Box_Grid_nOVI'] )
+    # load
+    ac = auxCat(sP, fields=['Box_Grid_n'+species])
 
-        fN, n = calculateCDDF(ac['Box_Grid_nOVI'], binMinMax[0], binMinMax[1], binSize, sP)
-
-    else:
-        # load
-        ac = auxCat(sP, fields=['Box_Grid_n'+species])
-
-        # calculate
-        fN, n = calculateCDDF(ac['Box_Grid_n'+species], binMinMax[0], binMinMax[1], binSize, sP)
+    # calculate
+    fN, n = calculateCDDF(ac['Box_Grid_n'+species], binMinMax[0], binMinMax[1], binSize, sP)
 
     rr = np.vstack( (n,fN) )
     attrs = {'Description' : desc.encode('ascii'), 
@@ -419,6 +411,5 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
    'Box_CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
    'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
-   'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar'),
-   'Box_CDDF_nOVI_Ntest'     : partial(wholeBoxCDDF,species='OVI_Ntest')
+   'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar')
   }

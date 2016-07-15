@@ -277,6 +277,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' #'cubehelix'
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
+        if ' ' in partField:
+            ion = cosmo.cloudy.cloudyIon(None)
+            grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
+
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'

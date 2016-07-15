@@ -417,6 +417,8 @@ class cloudyIon():
 
     def __init__(self, sP, el=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
+        if sP is None: return # instantiate only for misc methods
+
         self.sP = sP
 
         self.data    = {}
