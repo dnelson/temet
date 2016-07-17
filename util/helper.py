@@ -337,9 +337,10 @@ def curRepoVersion():
     """ Return a hash of the current state of the mercurial python repo. """
     import subprocess
     from os import getcwd, chdir
+    from os.path import expanduser
 
     oldCwd = getcwd()
-    chdir('/n/home07/dnelson/python/')
+    chdir(expanduser("~") + '/python/')
     repoRevStr = subprocess.check_output(["hg", "id"]).strip()
     chdir(oldCwd)
 

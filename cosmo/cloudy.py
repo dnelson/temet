@@ -22,7 +22,7 @@ basePath = expanduser("~") + '/code/cloudy.run/'
 
 def loadFG11UVB(redshifts=None):
     """ Load the Faucher-Giguerre (2011) UVB at one or more redshifts and convert to CLOUDY units. """
-    basePath = '/n/home07/dnelson/obs/faucher.giguere/UVB_tables/'
+    basePath = expanduser("~") + '/data/faucher.giguere/UVB_tables/'
 
     # make sure fields is not a single element
     if isinstance(redshifts, (int,long,float)):
