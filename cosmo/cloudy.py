@@ -11,14 +11,14 @@ import glob
 import subprocess
 
 from functools import partial
-from os.path import isfile, isdir, getsize
+from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
 
 from cosmo import hydrogen
 from util.helper import closest, iterable, logZeroSafe
 from cosmo.load import snapshotSubset, snapHasField
 
-basePath = '/n/home07/dnelson/code/cloudy.run/'
+basePath = expanduser("~") + '/code/cloudy.run/'
 
 def loadFG11UVB(redshifts=None):
     """ Load the Faucher-Giguerre (2011) UVB at one or more redshifts and convert to CLOUDY units. """
