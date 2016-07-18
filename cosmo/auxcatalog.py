@@ -346,8 +346,9 @@ def wholeBoxColDensGrid(sP, species):
         # column density: convert units from [code column density, above] to [H atoms/cm^2] and take log
         rr = sP.units.codeColDensToPhys(r, cgs=True, numDens=True)
 
-        ion = cosmo.cloudy.cloudyIon(None)
-        rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
+        if species in zDensSpecies:
+            ion = cosmo.cloudy.cloudyIon(None)
+            rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
         rr = np.log10(rr)
 
