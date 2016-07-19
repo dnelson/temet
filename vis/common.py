@@ -14,6 +14,7 @@ from os import mkdir
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.ndimage import gaussian_filter
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
@@ -32,6 +33,7 @@ saveBasePath = expanduser("~") + '/Dropbox/odyssey/'
 volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens2_msunkpc2','HI','HI_segmented']
 totSumFields     = ['mass','mass2']
+velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 
 def getHsmlForPartType(sP, partType, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
@@ -204,18 +206,26 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     if partField in ['mass2','coldens2_msunkpc2']:
         mass *= mass
 
-    # quantity
+    # quantity relies on a non-trivial computation / load of another quantity
+    partFieldLoad = partField
+
+    if partField in ['vrad','vrad_vvir']:
+        partFieldLoad = 'vel'
+    if partField in velLOSFieldNames:
+        partFieldLoad = 'vel'
+
+    # quantity and column density normalization
     normCol = False
 
-    if partField in volDensityFields+colDensityFields+totSumFields or ' ' in partField:
+    if partFieldLoad in volDensityFields+colDensityFields+totSumFields or ' ' in partFieldLoad:
         # distribute mass and calculate column/volume density grid
         quant = None
 
-        if partField in volDensityFields+colDensityFields or ' ' in partField:
+        if partFieldLoad in volDensityFields+colDensityFields or ' ' in partFieldLoad:
             normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
-        quant = snapshotSubset(sP, partType, partField, indRange=indRange)
+        quant = snapshotSubset(sP, partType, partFieldLoad, indRange=indRange)
 
     # quantity pre-processing (need to remove log for means)
     if partField in ['temp','temperature','ent','entr','entropy','P_gas','P_B']:
@@ -223,6 +233,9 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     if partField in ['vrad','vrad_vvir']:
         raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
+
+    if partField in velLOSFieldNames:
+        quant = sP.units.particleCodeVelocityToKms(quant) # could add hubble expansion
 
     if partField in ['TimebinHydro']: # cast integers to float
         quant = np.float32(quant)
@@ -334,10 +347,14 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
         config['ctName'] = 'gist_earth'
 
-    # velocities
+    # velocities (mass-weighted)
     if partField in ['vmag','velmag']:
         config['label']  = '%s Velocity Magnitude [km/s]' % ptStr
         config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
+
+    if partField in velLOSFieldNames:
+        config['label']  = '%s Line of Sight Velocity [km/s]' % ptStr
+        config['ctName'] = 'RdBu_r' # bwr, coolwarm, RdBu_r
 
     if partField == 'vrad':
         config['label']  = '%s Radial Velocity [km/s]' % ptStr
@@ -369,7 +386,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     return grid, config
 
 def gridBox(sP, method, partType, partField, nPixels, axes, 
-            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate=True, **kwargs):
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, 
+            forceRecalculate=False, smoothFWHM=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
@@ -467,6 +485,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             # load: mass/weights, quantity, and normalization required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
 
+            # rotation? handle for view dependent quantities (e.g. velLOS)
+            if partField in velLOSFieldNames:
+                if rotMatrix is not None:
+                    quant = np.transpose( np.dot(rotMatrix, quant.transpose()) )
+                quant = quant[:,3-axes[0]-axes[1]]
+
+            assert quant is None or quant.ndim == 1 # must be scalar
+
             # stars requested in run with winds? if so, load SFTime to remove contaminating wind particles
             wMask = None
 
@@ -526,6 +552,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
     # handle units and come up with units label
     grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg)
+
+    # smooth down to some resolution by convolving with a Gaussian?
+    if smoothFWHM is not None:
+        # fwhm -> 1 sigma, and physical kpc -> pixels (can differ in x,y)
+        sigma_xy = (smoothFWHM / 2.3548) / (boxSizeImg[axes] / nPixels) 
+        print('fwhm: ',smoothFWHM,sigma_xy)
+        grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
 
     return grid_master, config
 
