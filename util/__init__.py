@@ -1,3 +1,4 @@
+from . import gfmExternalFiles
 from . import helper
 from . import loadExtern
 from simParams import simParams
