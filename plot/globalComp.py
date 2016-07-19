@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
+from scipy.stats import gaussian_kde
 
 from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroSafe
@@ -1149,33 +1150,75 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     pdf.savefig()
     plt.close(fig)
 
-def galaxyColorPDF(sPs, pdf, simRedshift=0.0):
+def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
     from util import simParams
 
     # config
-    bands = ['u','i']
     stellarMassBins = ( [9.0,9.5],   [9.5,10.0],  [10.0,10.5], 
                         [10.5,11.0], [11.0,11.5], [11.5,12.0] )
     nRows = 2
     nCols = 3
     iLeg  = 4 # which panel to place simNames legend in
 
-    # plot setup
-    mag_range = [0.5,3.5]
-    fig = plt.figure(figsize=(16*1.5,9*1.5))
-    axes = []
+    loopInds = range(1) # total only
+    if splitCenSat: loopInds = range(3)
 
-    if bands[0] != 'u' or bands[1] != 'i':
+    if ''.join(bands) not in ['ui','gr','ri','iz']:
         raise Exception('Not implemented')
 
-    cind1 = 0 # U
-    cind2 = 6 # i
-    cFac  = 0.79 # U is in Vega, i is in AB, and U_AB = U_Vega + 0.79 
-                 # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
+    gfmBands = ['U','B','V','K','g','r','i','z']
+
+    if bands[0] == 'u' and bands[1] == 'i':
+        mag_range = [0.5,4.0]
+
+        def stellarPhotToSDSSColor(photVector):
+            # U is in Vega, i is in AB, and U_AB = U_Vega + 0.79 
+            # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
+            # http://classic.sdss.org/dr7/algorithms/sdssUBVRITransform.html (Lupton2005)
+            #print('Possible conversion from U to u missing, see second link.')
+            u_sdss = photVector[:,4] + (-1.0/0.2906) * (photVector[:,2] - photVector[:,4] - 0.0885)
+            return u_sdss - photVector[:,6] + 0.79
+        
+    if bands[0] == 'g' and bands[1] == 'r':
+        mag_range = [0.0,1.5]
+
+        def stellarPhotToSDSSColor(photVector): # g,r in sdss AB magnitudes
+            return photVector[:,4] - photVector[:,5] + 0.0
+
+    if bands[0] == 'r' and bands[1] == 'i':
+        mag_range = [0.0,0.6]
+
+        def stellarPhotToSDSSColor(photVector): # r,i in sdss AB magnitudes
+            return photVector[:,5] - photVector[:,6] + 0.0
+
+    if bands[0] == 'i' and bands[1] == 'z':
+        mag_range = [0.0,0.6]
+
+        def stellarPhotToSDSSColor(photVector): # i,z in sdss AB magnitudes
+            return photVector[:,6] - photVector[:,7] + 0.0
+
+    # TODO: BC00 dust correction
+    # m_out - m_in = -2.5 log(e^-tau) = 1.086 * tau
 
     # load observational points
-    # TODO
+    sdss = loadSDSSData()
+
+    #sdss_color = sdss['cModelAbsMag_'+bands[0]] - sdss['cModelAbsMag_'+bands[1]]
+    sdss_color = sdss[bands[0]] - sdss[bands[1]]
+    sdss_Mstar = sdss['logMass']
+
+    w = np.where( (sdss_color >= mag_range[0]) & (sdss_color <= mag_range[1]) )
+    sdss_color = sdss_color[w]
+    sdss_Mstar = sdss_Mstar[w]
+
+    # TODO: K-correction
+    # absolute_M = apparent_m - C - K
+    # color u-i = M_u-M_i = m_u - C - K_u - m_i + C + K_i = (m_u-m_i) + (K_i-K_u)
+
+    # start plot
+    fig = plt.figure(figsize=(16*1.5,9*1.5))
+    axes = []
 
     # loop over each mass bin
     for i, stellarMassBin in enumerate(stellarMassBins):
@@ -1186,12 +1229,15 @@ def galaxyColorPDF(sPs, pdf, simRedshift=0.0):
         
         ax.set_xlim(mag_range)
         ax.set_xlabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
-        #ax.set_ylim([0.0,3.0])
-        ax.set_ylabel('PDF [no dust corr, cen+sat]')
+        if splitCenSat:
+            ax.set_ylabel('PDF [no dust corr]')
+        else:
+            ax.set_ylabel('PDF [no dust corr, cen+sat]')
 
         # add stellar mass bin legend
         sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,marker='',linestyle=linestyles[0])]
         lExtra = ['%.1f < M$_{\\rm \star}$ < %.1f' % (stellarMassBin[0],stellarMassBin[1])]
+        # TODO: be explicit about Mstar definition in label
 
         legend1 = ax.legend(sExtra, lExtra, loc='upper right')
         ax.add_artist(legend1)
@@ -1201,14 +1247,17 @@ def galaxyColorPDF(sPs, pdf, simRedshift=0.0):
         if sP.isZoom:
             continue
 
-        print('Color PDF: '+sP.simName)
+        print('Color PDF [%s]: %s' % ('-'.join(bands),sP.simName))
         sP.setRedshift(simRedshift)
 
         c = ax._get_lines.prop_cycler.next()['color']
 
-        # fullbox:
+        # load fullbox stellar masses and colors
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
                           fieldsSubhalos=['SubhaloMassInRadType','SubhaloStellarPhotometrics'])
+
+        gc_masses = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassInRadType'][:,4] )
+        gc_colors = stellarPhotToSDSSColor( gc['subhalos']['SubhaloStellarPhotometrics'] )
 
         # galaxy selection
         wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
@@ -1217,38 +1266,164 @@ def galaxyColorPDF(sPs, pdf, simRedshift=0.0):
         w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
 
         # selection:
-        for j in range(1): #disabled, all only
+        normFacs = np.zeros( len(stellarMassBins) )
+        binSize  = np.zeros( len(stellarMassBins) )
+        nBins    = np.zeros( len(stellarMassBins), dtype='int32' )
+
+        for j in loopInds:
             if j == 0: w = w2
             if j == 1: w = w1
             if j == 2: w = w3
 
             # galaxy mass definition and color
-            stellar_mass = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassInRadType'][w,4] )
-            galaxy_color = gc['subhalos']['SubhaloStellarPhotometrics'][w,cind1] - \
-                           gc['subhalos']['SubhaloStellarPhotometrics'][w,cind2] + cFac
-            
+            stellar_mass = gc_masses[w]
+            galaxy_color = gc_colors[w]
+
             # loop over each mass bin
             for i, stellarMassBin in enumerate(stellarMassBins):
-                wBin = np.where((stellar_mass >= stellarMassBin[0]) & (stellar_mass < stellarMassBin[1]))
+                wBin = np.where( (stellar_mass >= stellarMassBin[0]) & (stellar_mass < stellarMassBin[1]) & \
+                                 (galaxy_color >= mag_range[0]) & (galaxy_color < mag_range[1]) )
 
-                nBins = np.max( [16, np.floor( np.sqrt( len(wBin[0] ))) * 1.2] ) # adaptive
-                #print(sP.simName,i,nBins)
+                label = sP.simName if i == iLeg and j == 0 and splitCenSat else ''
+                alpha = 1.0 if j == 0 else 0.7
+                if not splitCenSat: alpha = 0.1
 
-                yy, xx = np.histogram(galaxy_color[wBin], bins=nBins, range=mag_range, density=True)
-                xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins
+                # sim histogram
+                if j == 0:
+                    # set normalization (such that integral of PDF is one) based on 'all galaxies'
+                    nBins[i] = np.max( [16, np.int( np.sqrt( len(wBin[0] )) * 1.4)] ) # adaptive
+                    binSize[i] = (mag_range[1]-mag_range[0]) / nBins[i]
+                    normFacs[i] = 1.0 / (binSize[i] * len(wBin[0]))
 
-                label = sP.simName if i == iLeg and j == 0 else ''
-                alpha = 1.0 if j == 0 else 0.4
-                l, = axes[i].plot(xx, yy, linestyles[j], color=c, label=label, alpha=alpha, lw=3.0)
+                yy, xx = np.histogram(galaxy_color[wBin], bins=nBins[i], range=mag_range)
+                yy2 = yy.astype('float32') * normFacs[i]
+                xx = xx[:-1] + 0.5*binSize[i]
+
+                axes[i].plot(xx, yy2, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
+
+                # sim kde
+                if not splitCenSat:
+                    xx = np.linspace(mag_range[0], mag_range[1], 200)
+                    bw_scotthalf = galaxy_color[wBin].size**(-1.0/(galaxy_color.ndim+4.0)) * 0.5
+                    kde1 = gaussian_kde(galaxy_color[wBin], bw_method='scott') # scott, silvermann, or scalar
+
+                    label = sP.simName if i == iLeg and j == 0 else ''
+                    axes[i].plot(xx, kde1(xx), linestyles[j], label=label, color=c, alpha=1.0, lw=3.0)
+
+                # obs histogram
+                wObs = np.where((sdss_Mstar >= stellarMassBin[0]) & (sdss_Mstar < stellarMassBin[1]))
+                yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
+                xx = xx[:-1] + 0.5*binSize[i]
+
+                axes[i].plot(xx, yy, '-', color='#333333', alpha=alpha, lw=3.0)
+
+                # obs kde
+                xx = np.linspace(mag_range[0], mag_range[1], 200)
+                kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
+                axes[i].plot(xx, kde2(xx), '-', color='#333333', alpha=1.0, lw=3.0)
+
+    # legend (simulations) (obs)
+    handles, labels = axes[iLeg].get_legend_handles_labels()
+    legend2 = axes[iLeg].legend(handles, labels, loc='upper left')
+
+    handlesO = [plt.Line2D( (0,1),(0,0),color='#333333',lw=3.0,marker='',linestyle='-')]
+    labelsO  = ['SDSS z<0.1'] #\nmodelMag+Kcorr\nFSPSGranWideDust']
+    legendO = axes[iLeg-1].legend(handlesO, labelsO, loc='upper left')
+
+    # legend (central/satellite split)
+    if splitCenSat:
+        sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+        lExtra = ['all galaxies','centrals','satellites']
+
+        handles, labels = axes[iLeg+1].get_legend_handles_labels()
+        legend3 = axes[iLeg+1].legend(handles+sExtra, labels+lExtra, loc='upper left')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
+def stellarAges(sPs, pdf, simRedshift=0.0):
+    """ Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25). """
+    # config
+    markers   = ['o','D','s']  # gas, stars, baryons
+    fracTypes = ['gas','stars','baryons']
+
+    field = 'Group_Mass_Crit500_Type'
+
+    # plot setup
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([11.0, 15.0])
+    ax.set_ylim([0,0.25])
+    ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ < r$_{\\rm 500c}$ ]')
+    ax.set_ylabel('Gas/Star/Baryon Fraction [ M / M$_{\\rm 500c}$ ]')
+
+    # observational points
+    g = giodini2009(sPs[0])
+
+    l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
+                         fmt=markers[0]+linestyles[0])
+    l2,_,_ = ax.errorbar(g['m500_logMsun'], g['fStars500'], yerr=g['fStars500Err'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
+                         fmt=markers[1]+linestyles[1])
+    l3,_,_ = ax.errorbar(g['m500_logMsun'], g['fBaryon500'], yerr=g['fBaryon500Err'],
+                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
+                         fmt=markers[2]+linestyles[2])
+
+    legend1 = ax.legend([l1,l2,l3], [g['label']+' f$_{\\rm gas}$',
+                                     g['label']+' f$_{\\rm stars}$',
+                                     g['label']+' f$_{\\rm baryons}$'], loc='upper left')
+    ax.add_artist(legend1)
+
+    # universal baryon fraction line
+    OmegaU = sPs[0].omega_b / sPs[0].omega_m
+    ax.plot( [14.75,15.0], [OmegaU,OmegaU], '--', color='#444444', alpha=0.4)
+    ax.text( 14.79, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.4)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        print('MMStars: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
+        if sP.isZoom:
+            continue
+
+        ac = auxCat(sP, fields=[field])
+
+        # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
+        xx_code = np.sum( ac[field], axis=1 )
+
+        # handle NaNs
+        ww = np.isnan(xx_code)
+        xx_code[ww] = 1e-10
+        xx_code[xx_code == 0.0] = 1e-10
+        ac[field][ww,0] = 1e-10
+        ac[field][ww,1:2] = 0.0
+
+        xx = sP.units.codeMassToLogMsun( xx_code )
+
+        # metallicity measured within what radius?
+        c = ax._get_lines.prop_cycler.next()['color']
+                
+        for i, fracType in enumerate(fracTypes):
+            if fracType == 'gas':
+                val = ac[field][:,1]
+            if fracType == 'stars':
+                val = ac[field][:,2]
+            if fracType == 'baryons':
+                val = ac[field][:,1] + ac[field][:,2]
+
+            yy = val / xx_code # fraction with respect to total
+
+            xm, ym, sm = running_median(xx,yy,binSize=binSize)
+            ym2 = savgol_filter(ym,sKn,sKo)
+
+            label = sP.simName if i==0 else ''
+            ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
 
     # legend
-    #sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    #lExtra = ['all galaxies','centrals only','satellites only']
-    sExtra = []
-    lExtra = []
-
-    handles, labels = axes[iLeg].get_legend_handles_labels()
-    legend2 = axes[iLeg].legend(handles+sExtra, labels+lExtra, loc='upper left')
 
     fig.tight_layout()
     pdf.savefig()
@@ -1269,14 +1444,14 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
 
-    sPs.append( simParams(res=1820, run='tng') )
-    sPs.append( simParams(res=910, run='illustris') )
-    sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=910, run='illustris') )
+    #sPs.append( simParams(res=455, run='illustris') )
     sPs.append( simParams(res=910, run='tng') )
-    sPs.append( simParams(res=455, run='tng') )
+    #sPs.append( simParams(res=455, run='tng') )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -1288,9 +1463,9 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_hi_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_colors_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    zZero = 0.3 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.0 #0.3 # change to plot simulations at z>0 against z=0 observational data
 
     #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True, simRedshift=zZero)
@@ -1307,14 +1482,18 @@ def plots():
     #massMetallicityGas(sPs, pdf, simRedshift=0.0)
     #massMetallicityGas(sPs, pdf, simRedshift=0.7)
     #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
-    nHIcddf(sPs, pdf) # z=3
+    #nHIcddf(sPs, pdf) # z=3
     ##nHIcddf(sPs, pdf, moment=1) # z=3
     #nOVIcddf(sPs, pdf) # z=0.2
     #nOVIcddf(sPs, pdf, moment=1) # z=0.2
-    dlaMetallicityPDF(sPs, pdf) # z=3
-    #galaxyColorPDF(sPs, pdf, simRedshift=zZero)
+    #dlaMetallicityPDF(sPs, pdf) # z=3
+    galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
+    #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=True, simRedshift=zZero)
+    galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
+    galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
+    galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
+    #stellarAges(sPs, pdf, simRedshift=zZero)
 
-    # todo: stellar ages vs Mstar (Vog 14b Fig 25), luminosity or mass weighted?
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

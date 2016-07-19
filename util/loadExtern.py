@@ -891,6 +891,52 @@ def danforth2016():
 
     return r
 
+def loadSDSSData():
+    """ Load some CSV->HDF5 files dumped from the SkyServer. """
+    #SELECT
+    #   p.objid,
+    #   p.u,p.g,p.r,p.i,p.z,
+    #   s.z as redshift,
+    #   gran.cModelAbsMag_u,
+    #   gran.cModelAbsMag_g,
+    #   gran.cModelAbsMag_r,
+    #   gran.cModelAbsMag_i,
+    #   gran.cModelAbsMag_z,
+    #   wisc1.mstellar_median,
+    #   wisc2.mstellar_median,
+    #   gran.logMass,
+    #   port1.logMass,
+    #   port2.logMass
+    #FROM PhotoObj AS p
+    #   JOIN SpecObj AS s ON s.specobjid = p.specobjid
+    #   JOIN stellarMassPCAWiscBC03 AS wisc1 ON wisc1.specobjid = p.specobjid
+    #   JOIN stellarMassPCAWiscM11 AS wisc2 ON wisc2.specobjid = p.specobjid
+    #   JOIN stellarMassFSPSGranWideDust AS gran ON gran.specobjid = p.specobjid
+    #   JOIN stellarMassStarFormingPort AS port1 ON port1.specobjid = p.specobjid
+    #   JOIN stellarMassPassivePort AS port2 ON port2.specobjid = p.specobjid
+    #WHERE
+    #   s.z BETWEEN 0.0 and 0.1 # and so on to 0.5
+    path = expanduser("~") + '/obs/sdss_z-0.0_0.1'
+
+    r = {}
+
+    # load HDF5
+    if isfile(path+'.hdf5'):
+        with h5py.File(path+'.hdf5','r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # convert CSV to HDF5
+    data = np.genfromtxt(path+'.csv',comments='#',delimiter=',',skip_header=1,names=True)
+
+    with h5py.File(path+'.hdf5','w') as f:
+        for key in data.dtype.names:
+            f[key] = data[key]
+    print('Saved: [%s.hdf5]' % path)
+
+    return r
+
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
     from os.path import isfile
