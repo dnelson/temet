@@ -18,6 +18,34 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def plotDifferentUPassbands():
+    """ Buser's U filter from BC03 vs. Johnson UX filter from Bessel+ 98. """
+    Buser_lambda = np.linspace(305, 420, 24) #nm
+    Buser_f      = [0.0, 0.012, 0.077, 0.135, 0.204, 0.282, 0.385, 0.493, 0.6, # 345nm
+                    0.705, 0.82, 0.90, 0.959, 0.993, 1.0, # 375nm
+                    0.975, 0.85, 0.645, 0.4, 0.223, 0.125, 0.057, 0.005, 0.0] # 420nm
+
+    Johnson_lambda = np.linspace(300, 420, 25)
+    Johnson_f      = [0.0, 0.016, 0.068, 0.167, 0.287, 0.423, 0.560, 0.673, 0.772, 0.841, # 345nm
+                      0.905, 0.943, 0.981, 0.993, 1.0, # 370nm
+                      0.989, 0.916, 0.804, 0.625, 0.423, 0.238, 0.114, 0.051, 0.019, 0.0] # 420nm
+
+    fig = plt.figure(figsize=(14,7))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Wavelength [nm]')
+    ax.set_ylabel('Transmittance')
+
+    ax.plot(Buser_lambda, Buser_f, label='Buser U')
+    ax.plot(Johnson_lambda, Johnson_f, label='Johnson U')
+
+    ax.legend()
+
+    fig.tight_layout()    
+    fig.savefig('filters_U.pdf')
+    plt.close(fig)
+
+
 def checkIllustrisMetalRatioVsSolar():
     """ Check corrupted GFM_Metals content vs solar expectation. """
     from cosmo.cloudy import cloudyIon

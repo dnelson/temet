@@ -154,11 +154,11 @@ def tail(fileName, nLines):
 def getCpuTxtLastTimestep(filePath):
     """ Parse cpu.txt for last timestep number and number of CPUs/tasks. """
     # hardcode Illustris-1 finalized data and complicated txt-files
-    if filePath == '/n/home07/dnelson/sims.illustris/1820_75Mpc_FP/output/cpu.txt':
+    if filePath == '/n/home07/dnelson/sims.illustris/L75n1820FP/output/cpu.txt':
         return 1.0, 912915, 8192
-    if filePath == '/n/home07/dnelson/sims.illustris/910_75Mpc_FP/output/cpu.txt':
+    if filePath == '/n/home07/dnelson/sims.illustris/L75n910FP/output/cpu.txt':
         return 1.0, 876580, 4096
-    if filePath == '/n/home07/dnelson/sims.illustris/455_75Mpc_FP/output/cpu.txt':
+    if filePath == '/n/home07/dnelson/sims.illustris/L75n455FP/output/cpu.txt':
         return 1.0, 268961, 128
 
     lines = tail(filePath, 100)

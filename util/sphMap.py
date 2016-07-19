@@ -349,7 +349,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
     return rDens.T
 
-def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, colDens=False, nThreads=16):
+def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, colDens=False, nThreads=8):
     """ Wrap sphMap() specialized to projecting an entire cosmological/periodic box. Specifically, 
         (ndims,boxSizeSim,boxSizeImg,boxCen) are derived from sP, and nPixels should be input 
         as a single scalar which is then assumed to be square. """
