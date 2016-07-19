@@ -95,25 +95,65 @@ def loopInputSerial():
     for i in range(numPages):
         multiHalosPagedOneQuantity(i)
 
+def boxHalo_HI():
+    """ Single halo HI plots (col dens, line of sight velocity) with smoothing. """
+    panels = []
+
+    vmm_col = [13.5,21.5] # 1/cm^3
+    vmm_vel = [-300,300] # km/s
+
+    panels.append( {'smoothFWHM':None, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'smoothFWHM':None, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    panels.append( {'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    panels.append( {'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+
+    #panels.append( {'rotation':None, 'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'rotation':'edge-on', 'smoothFWHM':6.0, partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'rotation':'face-on', 'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'rotation':None, 'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'rotation':'edge-on', 'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'rotation':'face-on', 'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+
+    hInd       = 362540
+    run        = 'illustris'
+    partType   = 'gas'
+    res        = 1820
+    redshift   = 0.0
+    rVirFracs  = [1.0] # None
+    method     = 'sphMap'
+    nPixels    = [1920,1920]
+    sizeFac    = 2.5
+    hsmlFac    = 2.5
+    axes       = [0,1]
+    rotation   = None
+
+    class plotConfig:
+        plotStyle    = 'open'
+        colorbars    = True
+        saveFilename = saveBasePath + 'boxHI_%s_%d_z%.1f_shID-%d_smoothing.pdf' % \
+                       (run,res,redshift,hInd)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def boxHalo_MultiQuant():
     """ Diagnostic plot, a few quantities of a halo from a periodic box. """
     panels = []
 
     #panels.append( {'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,7.5]} )
-    #panels.append( {'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens2_msunkpc2', 'valMinMax':[12.0,14.0]} )
-    #panels.append( {'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
+    #panels.append( {'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens2_msunkpc2', 'valMinMax':[12.0,14.0]} 
 
-    #panels.append( {'rotation':'edge-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
-    #panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
-    #panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
-    #panels.append( {'rotation':'face-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
-    #panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
-    #panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'edge-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
+    panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'face-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
+    panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
 
-    panels.append( {'hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.4]} )
-    panels.append( {'hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
-    panels.append( {'hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
-
+    #panels.append( {'hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.4]} )
+    #panels.append( {'hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
+    #panels.append( {'hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
 
     hInd       = 362540
     run        = 'illustris'
@@ -123,9 +163,9 @@ def boxHalo_MultiQuant():
     method     = 'sphMap'
     #nPixels    = [1920,1920]
     sizeFac    = 2.5 #-50.0
-    hsmlFac    = 2.5
+    #hsmlFac    = 2.5
     #axes       = [1,2]
-    rotation   = None
+    #rotation   = None
 
     class plotConfig:
         plotStyle    = 'open_black'
