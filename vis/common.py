@@ -31,7 +31,7 @@ saveBasePath = expanduser("~") + '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
-colDensityFields = ['coldens','coldens_msunkpc2','coldens2_msunkpc2','HI','HI_segmented']
+colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented']
 totSumFields     = ['mass','mass2']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 
@@ -101,29 +101,27 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     gas = snapshotSubset(sP, 'gas', fields, subhaloID=subhaloID)
 
     # star forming gas only
-    w = np.where(gas['StarFormationRate'] > 0.0)[0]
+    wGas = np.where(gas['StarFormationRate'] > 0.0)[0]
 
-    if len(w) == 0:
-        # return default vector
-        print('meanAngMomVector(): No star-forming gas, returning [1,0,0].')
+    # add stars within 1 times the stellar half mass radius
+    fields.remove('StarFormationRate')
+    stars = snapshotSubset(sP, 'stars', fields, subhaloID=subhaloID)
+
+    rad = periodicDists(shPos, stars['Coordinates'], sP)
+
+    wStars = np.where(rad <= sh['SubhaloHalfmassRadType'][sP.ptNum('stars')])[0]
+
+    # return default vector in case of total failure
+    if len(wGas) + len(wStars) == 0:
+        print('meanAngMomVector(): No star-forming gas or stars in radius, returning [1,0,0].')
         return np.array([1.0,0.0,0.0], dtype='float32')
 
-        # or try to switch to stars
-        print('meanAngMomVector(): No star-forming gas, switching to stars.')
-        fields.remove('StarFormationRate')
-        gas = snapshotSubset(sP, 'stars', fields, subhaloID=subhaloID)
+    # combine gas and stars with restrictions (no gas or no stars is ok)
+    pos  = np.vstack( (gas['Coordinates'][wGas,:], stars['Coordinates'][wStars,:]) )
+    mass = np.hstack( (gas['Masses'][wGas], stars['Masses'][wStars]) )
+    vel  = np.vstack( (gas['Velocities'][wGas,:], stars['Velocities'][wStars,:]) )
 
-        rad = periodicDists(shPos, gas['Coordinates'], sP)
-
-        w = np.where(rad <= sh['SubhaloHalfmassRadType'][sP.ptNum('stars')])
-
-    # make restriction
-    gas['Coordinates'] = np.squeeze( gas['Coordinates'][w,:] )
-    gas['Masses']      = gas['Masses'][w]
-    gas['Velocities']  = np.squeeze( gas['Velocities'][w,:] )
-
-    ang_mom = sP.units.particleAngMomVecInKpcKmS( gas['Coordinates'], gas['Velocities'], gas['Masses'], 
-                                                  shPos, shVel )
+    ang_mom = sP.units.particleAngMomVecInKpcKmS( pos, vel, mass, shPos, shVel )
 
     # calculate mean angular momentum unit 3-vector
     ang_mom_mean = np.mean(ang_mom, axis=0)
@@ -151,7 +149,7 @@ def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
     # R * (x,y,z)_unrotated == (x,y,z)_rotated
     R = I + v_x + v_x**2 * (1-c/s**2.0)
 
-    return R
+    return R.astype('float32')
 
 def rotationMatrixFromAngleDirection(angle, direction):
     """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
@@ -170,7 +168,7 @@ def rotationMatrixFromAngleDirection(angle, direction):
                     [direction[2], 0.0, -direction[0]], 
                     [-direction[1], direction[0], 0.0]] )
 
-    return R
+    return R.astype('float32')
 
 def loadMassAndQuantity(sP, partType, partField, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
@@ -201,10 +199,6 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
-
-    # squared mass? (e.g. DM annihilation)
-    if partField in ['mass2','coldens2_msunkpc2']:
-        mass *= mass
 
     # quantity relies on a non-trivial computation / load of another quantity
     partFieldLoad = partField
@@ -276,14 +270,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = '%s Column Density [log cm$^{-2}$]' % ptStr
         config['ctName'] = 'cubehelix'
 
-    if partField in ['coldens_msunkpc2','coldens2_msunkpc2']:
+    if partField in ['coldens_msunkpc2']:
         if partField == 'coldens_msunkpc2':
             grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
-
-        if partField == 'coldens2_msunkpc2':
-            grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2Sq=True ) )
-            config['label']  = '%s Column$^2$ Density [log M$^2$$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
@@ -291,7 +281,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         if ' ' in partField:
-            ion = cosmo.cloudy.cloudyIon(None)
+            ion = cloudyIon(None)
             grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
@@ -487,9 +477,19 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
             # rotation? handle for view dependent quantities (e.g. velLOS)
             if partField in velLOSFieldNames:
-                if rotMatrix is not None:
+                # first compensate for subhalo CM motion (if this is a halo plot)
+                if sP.isZoom or sP.hInd is not None:
+                    sh = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.hInd)
+                    for i in range(3):
+                        # SubhaloVel already peculiar, quant converted already in loadMassAndQuantity()
+                        quant[:,i] -= sh['SubhaloVel'][i] 
+
+                # slice corresponding to (optionally rotated) LOS component
+                if rotMatrix is None:
+                    quant = quant[:,3-axes[0]-axes[1]]
+                else:
                     quant = np.transpose( np.dot(rotMatrix, quant.transpose()) )
-                quant = quant[:,3-axes[0]-axes[1]]
+                    quant = np.squeeze( np.array(quant[:,2]) )
 
             assert quant is None or quant.ndim == 1 # must be scalar
 
@@ -552,6 +552,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
     # handle units and come up with units label
     grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg)
+
+    # temporary: something a bit peculiar here, request an entirely different grid and 
+    # clip the line of sight to zero (or nan) where log(n_HI)<18.5 cm^(-2)
+    if partField in velLOSFieldNames:
+        grid_nHI, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, 
+                           boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
+
+        grid_master[grid_nHI < 18.5] = 0.0
 
     # smooth down to some resolution by convolving with a Gaussian?
     if smoothFWHM is not None:

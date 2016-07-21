@@ -251,6 +251,7 @@ class units(object):
         xyz = self.codeLengthToKpc( gas_pos )
 
         rad = np.sqrt( xyz[:,0]**2.0 + xyz[:,1]**2.0 + xyz[:,2]**2.0 ) # equals np.linalg.norm(xyz,2,axis=1)
+        rad[rad == 0.0] = 1e-5
 
         # calculate momentum, correcting velocities for subhalo CM motion and hubble flow (Msun km/s)
         gas_vel = self.particleCodeVelocityToKms( gas_vel )

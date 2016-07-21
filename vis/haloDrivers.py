@@ -99,22 +99,33 @@ def boxHalo_HI():
     """ Single halo HI plots (col dens, line of sight velocity) with smoothing. """
     panels = []
 
-    vmm_col = [13.5,21.5] # 1/cm^3
+    vmm_col = [13.5,21.5] # 1/cm^2
     vmm_vel = [-300,300] # km/s
 
-    panels.append( {'smoothFWHM':None, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'smoothFWHM':None, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    panels.append( {'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    panels.append( {'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    # smoothing
+    #panels.append( {'smoothFWHM':None, 'partField':'HI_segmented', 'valMinMax':vmm_col, 'labelScale':True} )
+    #panels.append( {'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'smoothFWHM':None, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #axes = [0,1]
 
-    #panels.append( {'rotation':None, 'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    #panels.append( {'rotation':'edge-on', 'smoothFWHM':6.0, partField':'HI_segmented', 'valMinMax':vmm_col} )
-    #panels.append( {'rotation':'face-on', 'smoothFWHM':6.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    #panels.append( {'rotation':None, 'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    #panels.append( {'rotation':'edge-on', 'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    #panels.append( {'rotation':'face-on', 'smoothFWHM':6.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    # rotations
+    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col, 'labelScale':True} )
+    #panels.append( {'rotation':'edge-on', 'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'rotation':'face-on', 'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'rotation':'edge-on', 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'rotation':'face-on', 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+
+    # proposed
+    panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col, 'labelScale':True} )
+    panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'Si II', 'valMinMax':[12.0,17.0]} )
+    panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'N V', 'valMinMax':[12.5,14.5]} )
+    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'Si IV', 'valMinMax':[12.5,15.0]} )
+    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'C II', 'valMinMax':[12.5,15.0]} )
 
     hInd       = 362540
     run        = 'illustris'
@@ -126,13 +137,12 @@ def boxHalo_HI():
     nPixels    = [1920,1920]
     sizeFac    = 2.5
     hsmlFac    = 2.5
-    axes       = [0,1]
     rotation   = None
 
     class plotConfig:
         plotStyle    = 'open'
         colorbars    = True
-        saveFilename = saveBasePath + 'boxHI_%s_%d_z%.1f_shID-%d_smoothing.pdf' % \
+        saveFilename = saveBasePath + 'boxHI_%s_%d_z%.1f_shID-%d_proposed2.pdf' % \
                        (run,res,redshift,hInd)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
