@@ -1161,6 +1161,8 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
     nCols = 3
     iLeg  = 4 # which panel to place simNames legend in
 
+    obs_color = '#333333'
+
     loopInds = range(1) # total only
     if splitCenSat: loopInds = range(3)
 
@@ -1170,18 +1172,18 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
     gfmBands = ['U','B','V','K','g','r','i','z']
 
     if bands[0] == 'u' and bands[1] == 'i':
-        mag_range = [0.5,4.0]
+        mag_range = [0.0,4.5]
 
         def stellarPhotToSDSSColor(photVector):
             # U is in Vega, i is in AB, and U_AB = U_Vega + 0.79 
             # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
-            # http://classic.sdss.org/dr7/algorithms/sdssUBVRITransform.html (Lupton2005)
-            #print('Possible conversion from U to u missing, see second link.')
+            # assume Buser U = Johnson U filter (close-ish), and use Lupton2005 transformation
+            # http://classic.sdss.org/dr7/algorithms/sdssUBVRITransform.html
             u_sdss = photVector[:,4] + (-1.0/0.2906) * (photVector[:,2] - photVector[:,4] - 0.0885)
             return u_sdss - photVector[:,6] + 0.79
         
     if bands[0] == 'g' and bands[1] == 'r':
-        mag_range = [0.0,1.5]
+        mag_range = [-0.2,1.2]
 
         def stellarPhotToSDSSColor(photVector): # g,r in sdss AB magnitudes
             return photVector[:,4] - photVector[:,5] + 0.0
@@ -1204,17 +1206,42 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
     # load observational points
     sdss = loadSDSSData()
 
-    #sdss_color = sdss['cModelAbsMag_'+bands[0]] - sdss['cModelAbsMag_'+bands[1]]
-    sdss_color = sdss[bands[0]] - sdss[bands[1]]
-    sdss_Mstar = sdss['logMass']
+    dustCorrection = None
+    eCorrect = True
+    kCorrect = True
 
+    # extinction correction
+    if not eCorrect:
+        for key in sdss.keys():
+            if 'extinction_' in key:
+                sdss[key] *= 0.0
+
+    sdss_color = (sdss[bands[0]]-sdss['extinction_'+bands[0]]) - \
+                 (sdss[bands[1]]-sdss['extinction_'+bands[1]])
+    sdss_Mstar = sdss['logMass_gran1']
+
+    # K-correction (absolute_M = apparent_m - C - K) (color A-B = m_A-C-K_A-m_B+C+K_B=m_A-m_B+K_B-K_A)
+    from cosmo.kCorr import kCorrections, coeff
+
+    if kCorrect:
+        kCorrs = {}
+
+        for band in bands:
+            availCorrections = [key.split('_')[1] for key in coeff.keys() if band+'_' in key]
+            useCor = availCorrections[0]
+            print('Calculating K-corr for [%s] band using [%s-%s] color.' % (band,useCor[0],useCor[1]))
+
+            cor_color = (sdss[useCor[0]]-sdss['extinction_'+useCor[0]]) - \
+                        (sdss[useCor[1]]-sdss['extinction_'+useCor[1]])
+
+            kCorrs[band] = kCorrections(band, sdss['redshift'], useCor, cor_color)
+
+        sdss_color += (kCorrs[bands[1]] - kCorrs[bands[0]])
+
+    # restrict colors to mag_range, as done for sims, for correct normalization
     w = np.where( (sdss_color >= mag_range[0]) & (sdss_color <= mag_range[1]) )
     sdss_color = sdss_color[w]
     sdss_Mstar = sdss_Mstar[w]
-
-    # TODO: K-correction
-    # absolute_M = apparent_m - C - K
-    # color u-i = M_u-M_i = m_u - C - K_u - m_i + C + K_i = (m_u-m_i) + (K_i-K_u)
 
     # start plot
     fig = plt.figure(figsize=(16*1.5,9*1.5))
@@ -1227,17 +1254,17 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
         ax = fig.add_subplot(nRows,nCols,i+1)
         axes.append(ax)
         
+        obsMagStr = 'obs=modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
+        dustStr   = dustCorrection if dustCorrection is not None else 'no'
+        cenSatStr = '' if splitCenSat else ', cen+sat'
+
         ax.set_xlim(mag_range)
-        ax.set_xlabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
-        if splitCenSat:
-            ax.set_ylabel('PDF [no dust corr]')
-        else:
-            ax.set_ylabel('PDF [no dust corr, cen+sat]')
+        ax.set_xlabel('(%s-%s) color [ mag ] [ %s ]' % (bands[0],bands[1],obsMagStr))
+        ax.set_ylabel('PDF [%s dust corr%s]' % (dustStr,cenSatStr))
 
         # add stellar mass bin legend
         sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,marker='',linestyle=linestyles[0])]
-        lExtra = ['%.1f < M$_{\\rm \star}$ < %.1f' % (stellarMassBin[0],stellarMassBin[1])]
-        # TODO: be explicit about Mstar definition in label
+        lExtra = ['%.1f < M$_{\\rm \star}(<r_{\star,1/2})$ < %.1f' % (stellarMassBin[0],stellarMassBin[1])]
 
         legend1 = ax.legend(sExtra, lExtra, loc='upper right')
         ax.add_artist(legend1)
@@ -1309,25 +1336,27 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
 
                     label = sP.simName if i == iLeg and j == 0 else ''
                     axes[i].plot(xx, kde1(xx), linestyles[j], label=label, color=c, alpha=1.0, lw=3.0)
+                    axes[i].fill_between(xx, 0.0, kde1(xx), color=c, alpha=0.1, interpolate=True)
 
                 # obs histogram
                 wObs = np.where((sdss_Mstar >= stellarMassBin[0]) & (sdss_Mstar < stellarMassBin[1]))
                 yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
                 xx = xx[:-1] + 0.5*binSize[i]
 
-                axes[i].plot(xx, yy, '-', color='#333333', alpha=alpha, lw=3.0)
+                axes[i].plot(xx, yy, '-', color=obs_color, alpha=alpha, lw=3.0)
 
                 # obs kde
                 xx = np.linspace(mag_range[0], mag_range[1], 200)
                 kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
-                axes[i].plot(xx, kde2(xx), '-', color='#333333', alpha=1.0, lw=3.0)
+                axes[i].plot(xx, kde2(xx), '-', color=obs_color, alpha=1.0, lw=3.0)
+                axes[i].fill_between(xx, 0.0, kde2(xx), facecolor=obs_color, alpha=0.1, interpolate=True)
 
     # legend (simulations) (obs)
     handles, labels = axes[iLeg].get_legend_handles_labels()
     legend2 = axes[iLeg].legend(handles, labels, loc='upper left')
 
-    handlesO = [plt.Line2D( (0,1),(0,0),color='#333333',lw=3.0,marker='',linestyle='-')]
-    labelsO  = ['SDSS z<0.1'] #\nmodelMag+Kcorr\nFSPSGranWideDust']
+    handlesO = [plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
+    labelsO  = ['SDSS z<0.1'] #\nmodelMag-E+K\nFSPSGranWideDust']
     legendO = axes[iLeg-1].legend(handlesO, labelsO, loc='upper left')
 
     # legend (central/satellite split)
@@ -1444,13 +1473,13 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
 
     #sPs.append( simParams(res=1820, run='tng') )
-    #sPs.append( simParams(res=910, run='illustris') )
-    #sPs.append( simParams(res=455, run='illustris') )
-    sPs.append( simParams(res=910, run='tng') )
+    sPs.append( simParams(res=910, run='illustris') )
+    sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
     #sPs.append( simParams(res=2500, run='tng') )
@@ -1484,14 +1513,14 @@ def plots():
     #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
     #nHIcddf(sPs, pdf) # z=3
     ##nHIcddf(sPs, pdf, moment=1) # z=3
-    #nOVIcddf(sPs, pdf) # z=0.2
+    nOVIcddf(sPs, pdf) # z=0.2
     #nOVIcddf(sPs, pdf, moment=1) # z=0.2
     #dlaMetallicityPDF(sPs, pdf) # z=3
-    galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
+    #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=True, simRedshift=zZero)
-    galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
-    galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
-    galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
+    #galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
+    #galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
+    #galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
     #stellarAges(sPs, pdf, simRedshift=zZero)
 
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
