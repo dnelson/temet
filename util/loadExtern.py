@@ -891,39 +891,45 @@ def danforth2016():
 
     return r
 
-def loadSDSSData():
+def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
     #   p.objid,
     #   p.u,p.g,p.r,p.i,p.z,
+    #   p.extinction_u,p.extinction_g,p.extinction_r,p.extinction_i,p.extinction_z,
     #   s.z as redshift,
     #   gran.cModelAbsMag_u,
     #   gran.cModelAbsMag_g,
     #   gran.cModelAbsMag_r,
     #   gran.cModelAbsMag_i,
     #   gran.cModelAbsMag_z,
-    #   wisc1.mstellar_median,
-    #   wisc2.mstellar_median,
-    #   gran.logMass,
-    #   port1.logMass,
-    #   port2.logMass
+    #   wisc1.mstellar_median as logMass_wisc1,
+    #   wisc2.mstellar_median as logMass_wisc2,
+    #   gran1.logMass as logMass_gran1,
+    #   gran2.logMass as logMass_gran2,
+    #   port1.logMass as logMass_port1,
+    #   port2.logMass as logMass_port2
     #FROM PhotoObj AS p
     #   JOIN SpecObj AS s ON s.specobjid = p.specobjid
     #   JOIN stellarMassPCAWiscBC03 AS wisc1 ON wisc1.specobjid = p.specobjid
     #   JOIN stellarMassPCAWiscM11 AS wisc2 ON wisc2.specobjid = p.specobjid
-    #   JOIN stellarMassFSPSGranWideDust AS gran ON gran.specobjid = p.specobjid
+    #   JOIN stellarMassFSPSGranWideDust AS gran1 ON gran1.specobjid = p.specobjid
+    #   JOIN stellarMassFSPSGranEarlyDust AS gran2 ON gran2.specobjid = p.specobjid
     #   JOIN stellarMassStarFormingPort AS port1 ON port1.specobjid = p.specobjid
     #   JOIN stellarMassPassivePort AS port2 ON port2.specobjid = p.specobjid
     #WHERE
-    #   s.z BETWEEN 0.0 and 0.1 # and so on to 0.5
-    path = expanduser("~") + '/obs/sdss_z-0.0_0.1'
+    #   s.z BETWEEN 0.0 and 0.1 # and so on
+    assert redshiftBounds == [0.0,0.1]
+    path = expanduser("~") + '/obs/sdss_z0.0-0.1'
 
     r = {}
 
     # load HDF5
     if isfile(path+'.hdf5'):
         with h5py.File(path+'.hdf5','r') as f:
-            for key in f:
+            if loadFields is None:
+                loadFields = f.keys()
+            for key in loadFields:
                 r[key] = f[key][()]
         return r
 
@@ -935,7 +941,7 @@ def loadSDSSData():
             f[key] = data[key]
     print('Saved: [%s.hdf5]' % path)
 
-    return r
+    return data
 
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
