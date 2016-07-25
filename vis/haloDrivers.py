@@ -118,14 +118,17 @@ def boxHalo_HI():
     #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
     #panels.append( {'rotation':'edge-on', 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
     #panels.append( {'rotation':'face-on', 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #sizeFac = 2.5
 
     # proposed
-    panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'HI_segmented', 'valMinMax':vmm_col, 'labelScale':True} )
-    panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'Si II', 'valMinMax':[12.0,17.0]} )
-    panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'N V', 'valMinMax':[12.5,14.5]} )
-    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'Si IV', 'valMinMax':[12.5,15.0]} )
-    #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'C II', 'valMinMax':[12.5,15.0]} )
+    panels.append( {'rotation':None, 'sizeFac':2.5, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':'edge-on', 'sizeFac':-120.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':'face-on', 'sizeFac':-120.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':None, 'sizeFac':2.5, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':'edge-on', 'sizeFac':-120.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    panels.append( {'rotation':'face-on', 'sizeFac':-120.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    #smoothFWHM = 2.0
+    labelScale = True
 
     hInd       = 362540
     run        = 'illustris'
@@ -134,15 +137,15 @@ def boxHalo_HI():
     redshift   = 0.0
     rVirFracs  = [1.0] # None
     method     = 'sphMap'
-    nPixels    = [1920,1920]
-    sizeFac    = 2.5
-    hsmlFac    = 2.5
+    nPixels    = [960,960]
+    hsmlFac    = 3.0
     rotation   = None
 
     class plotConfig:
         plotStyle    = 'open'
         colorbars    = True
-        saveFilename = saveBasePath + 'boxHI_%s_%d_z%.1f_shID-%d_proposed2.pdf' % \
+        rasterPx     = 960
+        saveFilename = saveBasePath + 'fig5b_%s_%d_z%.1f_shID-%d.pdf' % \
                        (run,res,redshift,hInd)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
