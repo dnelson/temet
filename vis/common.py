@@ -26,8 +26,8 @@ from cosmo.cloudy import cloudyIon
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
-#saveBasePath = expanduser("~") + '/plots/'
-saveBasePath = expanduser("~") + '/Dropbox/odyssey/'
+saveBasePath = expanduser("~") + '/data3/frames/'
+#saveBasePath = expanduser("~") + '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
@@ -233,6 +233,10 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     if partField in ['TimebinHydro']: # cast integers to float
         quant = np.float32(quant)
+
+    # protect against scalar/0-dimensional (e.g. single particle) arrays
+    if quant is not None and quant.size == 1 and quant.ndim == 0:
+        quant = np.array([quant])
 
     return mass, quant, normCol
 
@@ -554,12 +558,12 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg)
 
     # temporary: something a bit peculiar here, request an entirely different grid and 
-    # clip the line of sight to zero (or nan) where log(n_HI)<18.5 cm^(-2)
+    # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
     if partField in velLOSFieldNames:
         grid_nHI, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, 
                            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
 
-        grid_master[grid_nHI < 18.5] = 0.0
+        grid_master[grid_nHI < 19.0] = np.nan
 
     # smooth down to some resolution by convolving with a Gaussian?
     if smoothFWHM is not None:
@@ -807,7 +811,10 @@ def renderMultiPanel(panels, conf):
             # color mapping and place image
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             cmap = loadColorTable(config['ctName'], valMinMax=vMM)
-            
+           
+            #cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
+            #grid = np.ma.array(grid, mask=np.isnan(grid))
+
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
             ax.autoscale(False)
             if 'valMinMax' in p: plt.clim( p['valMinMax'] )
