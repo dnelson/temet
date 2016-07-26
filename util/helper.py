@@ -42,7 +42,7 @@ def logZeroSafe(x, zeroVal=1.0):
         w = np.where(x <= 0.0)
         x[w] = zeroVal
     else: # scalar
-        if x == 0.0:
+        if x <= 0.0:
             x = zeroVal
 
     return np.log10(x)

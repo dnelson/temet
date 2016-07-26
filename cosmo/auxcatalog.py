@@ -7,7 +7,6 @@ from builtins import *
 
 import numpy as np
 import cosmo.load
-import pdb
 from functools import partial
 
 from illustris_python.util import partTypeNum
@@ -197,6 +196,76 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
 
     attrs = {'Description' : desc.encode('ascii'), 
              'Selection'   : select.encode('ascii')}
+
+    return r, attrs
+
+def subhaloStellarPhot(sP, iso=None, imf=None, dust=None):
+    """ Compute the total band-magnitudes, per subhalo, under the given assumption of 
+    an iso(chrone) model, imf model, and dust model. """
+    from cosmo.stellarPop import sps
+
+    # which bands? for now, to change, just recompute from scratch
+    bands = ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
+    bands += ['wfc_acs_f606w']
+    bands += ['des_y']
+    bands += ['jwst_f150w']
+
+    nBands = len(bands)
+
+    # initialize a stellar population interpolator
+    pop = sps(sP, iso, imf, dust)
+
+    # prepare catalog metadata
+    desc   = "Stellar photometrics (light emission) totals by subhalo, in multiple rest-frame bands."
+    select = "All Subfind subhalos."
+
+    # load group information
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType'])
+    gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+    # allocate return, NaN indicates not computed (no star particles)
+    nSubsTot = gc['header']['Nsubgroups_Total']
+
+    r = np.zeros( (nSubsTot, nBands), dtype='float32' )
+    r.fill(np.nan)
+
+    print(' Total # Subhalos: %d, processing all [%s] subhalos in [%d] bands...' % (nSubsTot,nSubsTot,nBands))
+
+    # global load of all stars in snapshot
+    stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['initialmass','sftime','metallicity'])
+
+    # loop over all requested bands
+    for bandNum, band in enumerate(bands):
+        print('  %02d/%02d [%s]' % (bandNum+1,len(bands),band))
+
+        # request magnitudes in this band for all stars
+        mags = pop.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
+                                             stars['GFM_Metallicity'], 
+                                             stars['GFM_InitialMass'], retFullPt4Size=True)
+
+        # loop over halos
+        for i in range(nSubsTot):
+            if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
+                print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
+
+            # slice starting/ending indices for stars local to this FoF
+            i0 = gc['subhalos']['SubhaloOffsetType'][i,sP.ptNum('stars')]
+            i1 = i0 + gc['subhalos']['SubhaloLenType'][i,sP.ptNum('stars')]
+
+            if i1 == i0:
+                continue # zero length of this type
+            
+            magsLocal = mags[i0:i1] # wind particles have NaN
+
+            # convert to luminosities, sum together, convert back to a magnitude in this band
+            totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
+
+            if totalLum > 0.0:
+                r[i,bandNum] = -2.5 * np.log10( totalLum )
+
+    attrs = {'Description' : desc.encode('ascii'), 
+             'Selection'   : select.encode('ascii'),
+             'bands'       : [b.encode('ascii') for b in bands]}
 
     return r, attrs
 
@@ -392,6 +461,19 @@ def wholeBoxCDDF(sP, species):
 # where the first sP input is stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
   {'Group_Mass_Crit500_Type' : partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
+
+   'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none'),
+   'Subhalo_StellarPhot_p07c_bc00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='bc00'),
+   'Subhalo_StellarPhot_p07k_nodust'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='kroupa', dust='none'),
+   'Subhalo_StellarPhot_p07k_bc00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='kroupa', dust='bc00'),
+   'Subhalo_StellarPhot_p07s_nodust'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='salpeter', dust='none'),
+   'Subhalo_StellarPhot_p07s_bc00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='salpeter', dust='bc00'),
 
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
    'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),

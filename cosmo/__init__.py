@@ -5,4 +5,5 @@ from . import kCorr
 from . import load
 from . import mergertree
 from . import perf
+from . import stellarPop
 from . import util

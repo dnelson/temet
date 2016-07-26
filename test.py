@@ -18,6 +18,71 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def compareOldNewMags():
+    """ Compare stellar_photometrics and my new sdss subhalo mags, and BuserUconverted vs sdss_u. """
+    sP = simParams(res=910, run='illustris', redshift=0.0)
+    from cosmo.stellarPop import stellarPhotToSDSSColor
+
+    bands = ['i','z']
+
+    # snapshot magnitudes/colors
+    gcColorLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
+    snap_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
+
+    # auxcat magnitudes/colors
+    acKey = 'Subhalo_StellarPhot_p07c_nodust'
+    acColorLoad = cosmo.load.auxCat(sP, fields=[acKey])
+
+    acBands = acColorLoad[acKey+'_attrs']['bands']
+    i0 = np.where(acBands == 'sdss_'+bands[0])[0][0]
+    i1 = np.where(acBands == 'sdss_'+bands[1])[0][0]
+    auxcat_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
+
+    # plot colors
+    fig = plt.figure(figsize=(16,16))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Snapshot Color')
+    ax.set_ylabel('AuxCat Color')
+
+    ax.scatter(snap_colors, auxcat_colors, marker='.', s=1)
+
+    ax.plot([-1,5],[-1,5],'-',color='orange')
+
+    fig.tight_layout()    
+    fig.savefig('colors_%s.png' % ''.join(bands))
+    plt.close(fig)
+
+    # magnitudes
+    gfmBands = ['U','B','V','K','g','r','i','z']
+
+    if bands[0] == 'u':
+        snap_mags = gcColorLoad['subhalos'][:,4] + (-1.0/0.2906) * \
+                    (gcColorLoad['subhalos'][:,2] - gcColorLoad['subhalos'][:,4] - 0.0885)
+    elif bands[0] == 'g':
+        snap_mags = gcColorLoad['subhalos'][:,4]
+    elif bands[0] == 'i':
+        snap_mags = gcColorLoad['subhalos'][:,6]
+    elif bands[0] == 'r':
+        snap_mags = gcColorLoad['subhalos'][:,5]
+
+    auxcat_mags = acColorLoad[acKey][:,i0]
+
+    # plot
+    fig = plt.figure(figsize=(16,16))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Snapshot Mag')
+    ax.set_ylabel('AuxCat Mag')
+
+    ax.scatter(snap_mags, auxcat_mags, marker='.', s=1)
+
+    ax.plot([-22,-12],[-22,-12],'-',color='orange')
+
+    fig.tight_layout()    
+    fig.savefig('mags_%s.png' % bands[0])
+    plt.close(fig)
+
 def plotDifferentUPassbands():
     """ Buser's U filter from BC03 vs. Johnson UX filter from Bessel+ 98. """
     Buser_lambda = np.linspace(305, 420, 24) #nm
