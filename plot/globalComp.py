@@ -15,6 +15,7 @@ from util.helper import running_median, running_histogram, logZeroSafe
 from illustris_python.util import partTypeNum
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.util import addRedshiftAgeAxes, validSnapList
+from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors
 
 # global configuration
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
@@ -809,12 +810,12 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
 
     # universal baryon fraction line
     OmegaU = sPs[0].omega_b / sPs[0].omega_m
-    ax.plot( [14.75,15.0], [OmegaU,OmegaU], '--', color='#444444', alpha=0.4)
-    ax.text( 14.79, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.4)
+    ax.plot( [11.0,15.0], [OmegaU,OmegaU], ':', lw=1.0, color='#444444', alpha=0.2)
+    ax.text( 12.5, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.2)
 
     # loop over each fullbox run
     for sP in sPs:
-        print('MMStars: '+sP.simName)
+        print('Fracs500Crit: '+sP.simName)
         sP.setRedshift(simRedshift)
 
         if sP.isZoom:
@@ -873,22 +874,28 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                 #    ax.fill_between(xm[:-1], ym2[:-1]-sm[:-1], ym2[:-1]+sm[:-1], 
                 #                    color=c, interpolate=True, alpha=0.3)
 
-    # second legend
+    # zoom legend
     # setup the 'iClusters' line with 3 different symbols simultaneously
     # todo: http://nbviewer.jupyter.org/gist/leejjoon/5603703
-    p0 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[0],linestyle='')
-    p1 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[1],linestyle='')
-    p2 = plt.Line2D( (0,1),(0,1),color=colors[0],lw=3.0,marker=markers[2],linestyle='')
-    sExtra = [(p0,p1,p2)]
-    lExtra = ['iClusters']
+    #p0 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[0],linestyle='')
+    #p1 = plt.Line2D( (0,1),(0,0),color=colors[0],lw=3.0,marker=markers[1],linestyle='')
+    #p2 = plt.Line2D( (0,1),(0,1),color=colors[0],lw=3.0,marker=markers[2],linestyle='')
+    #sExtra = [(p0,p1,p2)]
+    #lExtra = ['iClusters']
 
-    # f_labels
-    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    lExtra += ['f$_{\\rm '+t+'}$' for t in fracTypes]
+    # f_labels legend
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra = ['f$_{\\rm '+t+'}$' for t in fracTypes]
 
-    # render
+    legend3 = ax.legend(sExtra, lExtra, loc='lower right')
+    ax.add_artist(legend3)
+
+    # sim legend
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
+    lExtra = ['[ sims z=%3.1f ]' % simRedshift]
+
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right', numpoints=1)
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
 
     fig.tight_layout()
     pdf.savefig()
@@ -911,10 +918,10 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
 
     if moment == 0:
         ax.set_ylim([-27, -18])
-        ax.set_ylabel('CDDF$_{0}$:  log f(N$_{\\rm HI}$)  [ cm$^{2}$ ]')
+        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm HI}$)  [ cm$^{2}$ ]')
     if moment == 1:
         ax.set_ylim([-4, 0])
-        ax.set_ylabel('CDDF$_{1}$:  log N$_{\\rm HI}$ f(N$_{\\rm HI}$)')
+        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm HI}$ f(N$_{\\rm HI}$)')
 
     # observational points
     z13 = zafar2013()
@@ -977,12 +984,19 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
             if moment == 1:
                 yy = logZeroSafe(fN_HI*n_HI, zeroVal=np.nan)
 
-            label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
+            label = sP.simName if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
-    # second legend
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    lExtra = [str(s) for s in speciesList]
+    # variations legend
+    #legend3 = ax.legend(sExtra, lExtra, loc='lower right')
+    #ax.add_artist(legend3)
+
+    # sim legend
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,alpha=0.0,marker='')]
+    lExtra = ['[ sims z=%3.1f ]' % simRedshift]
+
+    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra += [str(s) for s in speciesList]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -1008,10 +1022,10 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
 
     if moment == 0:
         ax.set_ylim([-17, -11])
-        ax.set_ylabel('CDDF$_{0}$:  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
+        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
     if moment == 1:
         ax.set_ylim([-0.5, 1.5])
-        ax.set_ylabel('CDDF$_{1}$:  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
+        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
 
     # observational points
     d16  = danforth2016()
@@ -1052,27 +1066,49 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
 
         c = ax._get_lines.prop_cycler.next()['color']
 
+        # pre-computed CDDF: first species for sizes
+        ac = auxCat(sP, fields=['Box_CDDF_'+speciesList[0]])
+        n_OVI  = ac['Box_CDDF_'+speciesList[0]][0,:]
+        fN_OVI = ac['Box_CDDF_'+speciesList[0]][1,:]
+
+        # pre-computed CDDF: allocate for max/min bounds of our variations
+        fN_OVI_min = fN_OVI * 0.0 + np.inf
+        fN_OVI_max = fN_OVI * 0.0
+
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box_CDDF_'+species]) #, reCalculate=True)
+            ac = auxCat(sP, fields=['Box_CDDF_'+species])
 
-            n_OVI  = ac['Box_CDDF_'+species][0,:]
+            assert np.array_equal(ac['Box_CDDF_'+species][0,:], n_OVI) # require same x-pts
             fN_OVI = ac['Box_CDDF_'+species][1,:]
 
-            # plot
-            xx = np.log10(n_OVI)
+            fN_OVI_min = np.nanmin(np.vstack( (fN_OVI_min, fN_OVI) ), axis=0)
+            fN_OVI_max = np.nanmax(np.vstack( (fN_OVI_max, fN_OVI) ), axis=0)
 
-            if moment == 0:
-                yy = logZeroSafe(fN_OVI, zeroVal=np.nan)
-            if moment == 1:
-                yy = logZeroSafe(fN_OVI*n_OVI, zeroVal=np.nan)
+        # plot 'uncertainty' band
+        xx = np.log10(n_OVI)
 
-            label = sP.simName+' z=%3.1f' % sP.redshift if i == 0 else ''
-            ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
+        if moment == 0:
+            yy_min = logZeroSafe(fN_OVI_min, zeroVal=np.nan)
+            yy_max = logZeroSafe(fN_OVI_max, zeroVal=np.nan)
+            yy = logZeroSafe( 0.5*(fN_OVI_min+fN_OVI_max), zeroVal=np.nan )
+        if moment == 1:
+            yy_min = logZeroSafe(fN_OVI_min*n_OVI, zeroVal=np.nan)
+            yy_max = logZeroSafe(fN_OVI_max*n_OVI, zeroVal=np.nan)
+            yy = logZeroSafe( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI), zeroVal=np.nan )
 
-    # second legend
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    lExtra = [str(s) for s in speciesList]
+        ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.2, interpolate=True)
+
+        # plot middle line
+        label = sP.simName
+        ax.plot(xx, yy, '-', lw=3.0, color=c, label=label)
+
+    # legend
+    sExtra = [] #[plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra = [] #[str(s) for s in speciesList]
+
+    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
+    lExtra += ['[ sims z=%3.1f ]' % simRedshift]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -1153,7 +1189,7 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
 def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
     from util import simParams
-
+    
     # config
     stellarMassBins = ( [9.0,9.5],   [9.5,10.0],  [10.0,10.5], 
                         [10.5,11.0], [11.0,11.5], [11.5,12.0] )
@@ -1163,82 +1199,22 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
 
     obs_color = '#333333'
 
-    loopInds = range(1) # total only
-    if splitCenSat: loopInds = range(3)
-
-    if ''.join(bands) not in ['ui','gr','ri','iz']:
-        raise Exception('Not implemented')
-
-    gfmBands = ['U','B','V','K','g','r','i','z']
-
     if bands[0] == 'u' and bands[1] == 'i':
         mag_range = [0.0,4.5]
-
-        def stellarPhotToSDSSColor(photVector):
-            # U is in Vega, i is in AB, and U_AB = U_Vega + 0.79 
-            # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
-            # assume Buser U = Johnson U filter (close-ish), and use Lupton2005 transformation
-            # http://classic.sdss.org/dr7/algorithms/sdssUBVRITransform.html
-            u_sdss = photVector[:,4] + (-1.0/0.2906) * (photVector[:,2] - photVector[:,4] - 0.0885)
-            return u_sdss - photVector[:,6] + 0.79
-        
     if bands[0] == 'g' and bands[1] == 'r':
         mag_range = [-0.2,1.2]
-
-        def stellarPhotToSDSSColor(photVector): # g,r in sdss AB magnitudes
-            return photVector[:,4] - photVector[:,5] + 0.0
-
     if bands[0] == 'r' and bands[1] == 'i':
         mag_range = [0.0,0.6]
-
-        def stellarPhotToSDSSColor(photVector): # r,i in sdss AB magnitudes
-            return photVector[:,5] - photVector[:,6] + 0.0
-
     if bands[0] == 'i' and bands[1] == 'z':
         mag_range = [0.0,0.6]
 
-        def stellarPhotToSDSSColor(photVector): # i,z in sdss AB magnitudes
-            return photVector[:,6] - photVector[:,7] + 0.0
+    simColorsModel = 'p07c_bc00dust' # snap, p07c_nodust, p07c_bc00dust
+    eCorrect = True # True, False
+    kCorrect = True # True, False
 
-    # TODO: BC00 dust correction
-    # m_out - m_in = -2.5 log(e^-tau) = 1.086 * tau
+    # load observational points, restrict colors to mag_range as done for sims (for correct normalization)
+    sdss_color, sdss_Mstar = calcSDSSColors(bands, eCorrect=eCorrect, kCorrect=kCorrect)
 
-    # load observational points
-    sdss = loadSDSSData()
-
-    dustCorrection = None
-    eCorrect = True
-    kCorrect = True
-
-    # extinction correction
-    if not eCorrect:
-        for key in sdss.keys():
-            if 'extinction_' in key:
-                sdss[key] *= 0.0
-
-    sdss_color = (sdss[bands[0]]-sdss['extinction_'+bands[0]]) - \
-                 (sdss[bands[1]]-sdss['extinction_'+bands[1]])
-    sdss_Mstar = sdss['logMass_gran1']
-
-    # K-correction (absolute_M = apparent_m - C - K) (color A-B = m_A-C-K_A-m_B+C+K_B=m_A-m_B+K_B-K_A)
-    from cosmo.kCorr import kCorrections, coeff
-
-    if kCorrect:
-        kCorrs = {}
-
-        for band in bands:
-            availCorrections = [key.split('_')[1] for key in coeff.keys() if band+'_' in key]
-            useCor = availCorrections[0]
-            print('Calculating K-corr for [%s] band using [%s-%s] color.' % (band,useCor[0],useCor[1]))
-
-            cor_color = (sdss[useCor[0]]-sdss['extinction_'+useCor[0]]) - \
-                        (sdss[useCor[1]]-sdss['extinction_'+useCor[1]])
-
-            kCorrs[band] = kCorrections(band, sdss['redshift'], useCor, cor_color)
-
-        sdss_color += (kCorrs[bands[1]] - kCorrs[bands[0]])
-
-    # restrict colors to mag_range, as done for sims, for correct normalization
     w = np.where( (sdss_color >= mag_range[0]) & (sdss_color <= mag_range[1]) )
     sdss_color = sdss_color[w]
     sdss_Mstar = sdss_Mstar[w]
@@ -1255,12 +1231,11 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
         axes.append(ax)
         
         obsMagStr = 'obs=modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
-        dustStr   = dustCorrection if dustCorrection is not None else 'no'
         cenSatStr = '' if splitCenSat else ', cen+sat'
 
         ax.set_xlim(mag_range)
         ax.set_xlabel('(%s-%s) color [ mag ] [ %s ]' % (bands[0],bands[1],obsMagStr))
-        ax.set_ylabel('PDF [%s dust corr%s]' % (dustStr,cenSatStr))
+        ax.set_ylabel('PDF [ sim=%s%s ]' % (simColorsModel,cenSatStr))
 
         # add stellar mass bin legend
         sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,marker='',linestyle=linestyles[0])]
@@ -1274,28 +1249,44 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
         if sP.isZoom:
             continue
 
-        print('Color PDF [%s]: %s' % ('-'.join(bands),sP.simName))
+        print('Color PDF [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
         sP.setRedshift(simRedshift)
 
         c = ax._get_lines.prop_cycler.next()['color']
 
-        # load fullbox stellar masses and colors
+        # load fullbox stellar masses
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
-                          fieldsSubhalos=['SubhaloMassInRadType','SubhaloStellarPhotometrics'])
+                          fieldsSubhalos=['SubhaloMassInRadType'])
 
-        gc_masses = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassInRadType'][:,4] )
-        gc_colors = stellarPhotToSDSSColor( gc['subhalos']['SubhaloStellarPhotometrics'] )
+        gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
+        
+        # load simulation colors
+        if simColorsModel == 'snap':
+            gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
+            gc_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
+        else:
+            acKey = 'Subhalo_StellarPhot_' + simColorsModel
+            acColorLoad = auxCat(sP, fields=[acKey])
+
+            # auxatPhotToSDSSColor():
+            acBands = list(acColorLoad[acKey+'_attrs']['bands'])
+            i0 = acBands.index('sdss_'+bands[0])
+            i1 = acBands.index('sdss_'+bands[1])
+            gc_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
 
         # galaxy selection
         wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
         w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
-        w2 = np.arange(gc['subhalos']['count']) # centrals + satellites
+        w2 = np.arange(gc['subhalos'].shape[0]) # centrals + satellites
         w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
 
         # selection:
         normFacs = np.zeros( len(stellarMassBins) )
         binSize  = np.zeros( len(stellarMassBins) )
         nBins    = np.zeros( len(stellarMassBins), dtype='int32' )
+
+        loopInds = range(1) # total only
+        if splitCenSat: loopInds = range(3)
 
         for j in loopInds:
             if j == 0: w = w2
@@ -1305,6 +1296,10 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
             # galaxy mass definition and color
             stellar_mass = gc_masses[w]
             galaxy_color = gc_colors[w]
+
+            wNotNan = np.isfinite(galaxy_color) # filter out subhalos with e.g. no stars
+            galaxy_color = galaxy_color[wNotNan]
+            stellar_mass = stellar_mass[wNotNan]
 
             # loop over each mass bin
             for i, stellarMassBin in enumerate(stellarMassBins):
@@ -1356,7 +1351,7 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
     legend2 = axes[iLeg].legend(handles, labels, loc='upper left')
 
     handlesO = [plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
-    labelsO  = ['SDSS z<0.1'] #\nmodelMag-E+K\nFSPSGranWideDust']
+    labelsO  = ['SDSS DR12 z<0.1\nfspsGranWideDust']
     legendO = axes[iLeg-1].legend(handlesO, labelsO, loc='upper left')
 
     # legend (central/satellite split)
@@ -1373,10 +1368,6 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
 
 def stellarAges(sPs, pdf, simRedshift=0.0):
     """ Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25). """
-    # config
-    markers   = ['o','D','s']  # gas, stars, baryons
-    fracTypes = ['gas','stars','baryons']
-
     field = 'Group_Mass_Crit500_Type'
 
     # plot setup
@@ -1386,25 +1377,14 @@ def stellarAges(sPs, pdf, simRedshift=0.0):
     ax.set_xlim([11.0, 15.0])
     ax.set_ylim([0,0.25])
     ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ < r$_{\\rm 500c}$ ]')
-    ax.set_ylabel('Gas/Star/Baryon Fraction [ M / M$_{\\rm 500c}$ ]')
+    ax.set_ylabel('Z-band Weighted Mean Stellar Age [ Gyr ]')
 
     # observational points
-    g = giodini2009(sPs[0])
+    # TODO
 
-    l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
-                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
-                         fmt=markers[0]+linestyles[0])
-    l2,_,_ = ax.errorbar(g['m500_logMsun'], g['fStars500'], yerr=g['fStars500Err'],
-                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
-                         fmt=markers[1]+linestyles[1])
-    l3,_,_ = ax.errorbar(g['m500_logMsun'], g['fBaryon500'], yerr=g['fBaryon500Err'],
-                         color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
-                         fmt=markers[2]+linestyles[2])
-
-    legend1 = ax.legend([l1,l2,l3], [g['label']+' f$_{\\rm gas}$',
-                                     g['label']+' f$_{\\rm stars}$',
-                                     g['label']+' f$_{\\rm baryons}$'], loc='upper left')
-    ax.add_artist(legend1)
+    #legend1 = ax.legend([l1,l2], [g['label']+' f$_{\\rm gas}$',
+    #                              g['label']+' f$_{\\rm stars}$',loc='upper left'])
+    #ax.add_artist(legend1)
 
     # universal baryon fraction line
     OmegaU = sPs[0].omega_b / sPs[0].omega_m
@@ -1453,7 +1433,6 @@ def stellarAges(sPs, pdf, simRedshift=0.0):
             ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
 
     # legend
-
     fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
@@ -1473,14 +1452,14 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='illustris') )
-    #sPs.append( simParams(res=512, run='cosmo0_v6') )
-
     #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=910, run='tng') )
+    sPs.append( simParams(res=455, run='tng') )
+
+    sPs.append( simParams(res=1820, run='illustris') )
     sPs.append( simParams(res=910, run='illustris') )
     sPs.append( simParams(res=455, run='illustris') )
-    #sPs.append( simParams(res=910, run='tng') )
-    #sPs.append( simParams(res=455, run='tng') )
+    #sPs.append( simParams(res=512, run='cosmo0_v6') )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -1492,9 +1471,9 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_colors_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_test3_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    zZero = 0.0 #0.3 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True, simRedshift=zZero)
@@ -1512,13 +1491,13 @@ def plots():
     #massMetallicityGas(sPs, pdf, simRedshift=0.7)
     #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
     #nHIcddf(sPs, pdf) # z=3
-    ##nHIcddf(sPs, pdf, moment=1) # z=3
-    nOVIcddf(sPs, pdf) # z=0.2
+    #nHIcddf(sPs, pdf, moment=1) # z=3
+    #nOVIcddf(sPs, pdf) # z=0.2
     #nOVIcddf(sPs, pdf, moment=1) # z=0.2
     #dlaMetallicityPDF(sPs, pdf) # z=3
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=True, simRedshift=zZero)
-    #galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
+    galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
     #stellarAges(sPs, pdf, simRedshift=zZero)
@@ -1526,7 +1505,7 @@ def plots():
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
-    # todo: SFR main sequence (Schaye Fig 11)
+    # todo: SFR main sequence (Schaye Fig 11) (sSFR vs Mstar colored by Sersic index, e.g. Wuyts)
     # todo: active/passive fraction vs Mstar (Schaye Fig 11)
 
     # with additional modeling:

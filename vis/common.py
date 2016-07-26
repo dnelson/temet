@@ -407,7 +407,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
         return grid, config
 
-    if h['NumPart'][sP.ptNum(partType)] == 0:
+    if h['NumPart'][sP.ptNum(partType)] <= 2:
         return emptyReturn()
 
     # map
@@ -503,7 +503,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             if partType == 'stars' and sP.winds:
                 sftime = snapshotSubset(sP, partType, 'sftime', indRange=indRange)
                 wMask = np.where(sftime > 0.0)[0]
-                if len(wMask) == 0:
+                if len(wMask) <= 2 and nChunks == 1:
                     return emptyReturn()
 
                 mass = mass[wMask]

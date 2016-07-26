@@ -46,8 +46,7 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
 
         # load previously computed values
         if isfile(auxCatPath) and not reCalculate:
-            print('Load existing: ['+field+']')
-
+            #print('Load existing: ['+field+']')
             with h5py.File(auxCatPath,'r') as f:
                 # load data
                 r[field] = f[field][()]
@@ -62,6 +61,7 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
         # either does not exist yet, or reCalculate requested
         print('Compute and save: ['+field+']')
         r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP)
+        r[field+'_attrs'] = attrs
 
         # save new dataset (or overwrite existing)
         with h5py.File(auxCatPath,'w') as f:
@@ -570,7 +570,7 @@ def snapshotSubset(sP, partType, fields,
                  [['agnrad','gfm_agnrad'], 'GFM_AGNRadiation'],
                  [['coolrate','gfm_coolrate'], 'GFM_CoolingRate'],
                  [['winddmveldisp'], 'GFM_WindDMVelDisp'],
-                 [['metal','Z','gfm_metal'], 'GFM_Metallicity'],
+                 [['metal','Z','gfm_metal','metallicity'], 'GFM_Metallicity'],
                  [['metals'], 'GFM_Metals'],
                  [['u'], 'InternalEnergy'],
                  [['machnum'], 'MachNumber'],
@@ -585,7 +585,7 @@ def snapshotSubset(sP, partType, fields,
                  [['vel'], 'Velocities'],
                  [['vol'], 'Volume'],
                  # stars only:
-                 [['initialmass','ini_mass'], 'GFM_InitialMass'],
+                 [['initialmass','ini_mass','mass_ini'], 'GFM_InitialMass'],
                  [['stellarformationtime','sftime','birthtime'], 'GFM_StellarFormationTime'],
                  [['stellarphotometrics','stellarphot','sphot'], 'GFM_StellarPhotometrics'],
                  # blackholes only:

@@ -880,8 +880,6 @@ def danforth2016():
     d2N_dNdz_p = (d2N_dlogNdz+d2N_dlogNdz_p) * dlog_N / 10.0**log_N
     d2N_dNdz_m = (d2N_dlogNdz-d2N_dlogNdz_m) * dlog_N / 10.0**log_N
 
-    print('Danforth15() still wrong, need unit adjustment to y-axis.')
-
     r = {'log_NOVI'         : log_N,
          'log_NOVI_err'     : 0.5 * dlog_N,
          'log_fOVI'         : np.log10(d2N_dNdz),
