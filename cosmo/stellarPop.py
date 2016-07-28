@@ -8,7 +8,6 @@ from builtins import *
 import numpy as np
 import cosmo.load
 import h5py
-import fsps
 
 from os.path import isfile, expanduser
 from util.loadExtern import loadSDSSData
@@ -87,10 +86,10 @@ class sps():
     isoTracks  = ['padova07'] # basti,geneva,mist,parsec (cannot easily dynamically change at present)
     dustModels = ['none','bc00']
 
-    bands = fsps.find_filter('') # do them all (138)
-
     def __init__(self, sP, iso, imf, dustModel, order=3):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
+        import fsps
+
         assert iso in self.isoTracks
         assert imf in self.imfTypes.keys()
         assert dustModel in self.dustModels
@@ -98,6 +97,7 @@ class sps():
         self.sP    = sP
         self.data  = {}
         self.order = order # bicubic interpolation by default (1 = bilinear)
+        self.bands = fsps.find_filter('') # do them all (138)
 
         saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d.hdf5' % (iso,imf,dustModel,len(self.bands))
 
@@ -118,6 +118,8 @@ class sps():
 
     def computePhotTable(self, iso, imf, dustModel, saveFilename):
         """ Compute a new photometrics table for the given (iso,imf,dustModel) using fsps. """
+        import fsps
+
         if dustModel == 'none':
             dust_type   = 0
             dust1       = 0.0
