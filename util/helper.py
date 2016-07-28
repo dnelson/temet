@@ -197,11 +197,11 @@ def pSplit(array, numProcs, curProc):
         return array # no split, return whole job load to caller
 
     # split array into numProcs segments, and return the curProc'th segment
-    splitSize  = int(np.ceil( len(array) / numProcs ))
+    splitSize  = int(np.floor( len(array) / numProcs ))
     arraySplit = array[curProc*splitSize : (curProc+1)*splitSize]
 
     # for last split, make sure it takes any leftovers
-    if curProc-1 == numProcs:
+    if curProc == numProcs-1:
         arraySplit = array[curProc*splitSize:]
 
     return arraySplit
