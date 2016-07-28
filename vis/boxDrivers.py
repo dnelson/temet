@@ -26,7 +26,7 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1400]} )
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
-    run     = 'illustris'
+    run     = 'tng' #'illustris'
     variant = 'subbox0'
     res     = 1820
     method  = 'sphMap'

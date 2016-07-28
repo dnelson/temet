@@ -385,7 +385,11 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
     assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
     assert nDims in treeDims, 'Invalid ndims specification (3D only).'
     assert treePrec in ['single','double'], 'Invalid treePrec specification.'
-    assert pos.shape[0] >= nNGB-nNGBDev, 'Less particles then requested neighbors.'
+
+    # handle small inputs
+    if pos.shape[0] < nNGB-nNGBDev:
+        nNGBDev = nNGB - pos.shape[0] + 1
+        print('WARNING: Less particles than requested neighbors. Increasing nNGBDev to [%d]!' % nNGBDev)
 
     treeDtype = 'float32' if treePrec == 'single' else 'float64'
 
@@ -421,6 +425,10 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
 
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
+
+    if posSearch.shape[0] < nThreads:
+        nThreads = 1
+        print('WARNING: Less particles than requested threads. Just running in serial.') 
 
     # single threaded?
     # ----------------
