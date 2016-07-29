@@ -76,15 +76,15 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True):
 
         saveFilename = saveBasePath + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
-    # skip if final output render file already exists?
-    if skipExisting and isfile(plotConfig.saveFilename):
-        print('SKIP: %s' % plotConfig.saveFilename)
-        return
-
     # add plotConfig defaults
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
         if not hasattr(plotConfig,var):
             setattr(plotConfig,var,getattr(plotConfigDefaults,var))
+
+    # skip if final output render file already exists?
+    if skipExisting and isfile(plotConfig.saveFilename):
+        print('SKIP: %s' % plotConfig.saveFilename)
+        return
 
     # finalize panels list (do not modify below)
     for p in panels:

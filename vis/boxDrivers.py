@@ -17,9 +17,9 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox. """
     panels = []
 
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.0,7.2], 'labelScale':True} )
-    panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.5]} )
-    panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.4,8.2]} )
+    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True} )
+    panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+    panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2]} )
     panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
@@ -40,7 +40,7 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
 
         # movie config
         minZ      = 0.0
-        maxZ      = 128.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
         maxNSnaps = None
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
