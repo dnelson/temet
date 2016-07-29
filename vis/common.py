@@ -561,9 +561,18 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
     if partField in velLOSFieldNames:
         grid_nHI, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, 
-                           boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
+                              boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
 
         grid_master[grid_nHI < 19.0] = np.nan
+
+    # temporary: similar, truncate stellar_age projection at a stellar colum density of 
+    # ~log(3.2) [msun/kpc^2] equal to the bottom of the color scale for the illustris/tng sb0 box renders
+    if partField == 'stellar_age':
+        grid_stellarColDens, _ = gridBox(sP, method, 'stars', 'coldens_msunkpc2', nPixels, axes, 
+                                         boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter)
+
+        w = np.where(grid_stellarColDens < 3.0)
+        grid_master[w] = 0.0 # black
 
     # smooth down to some resolution by convolving with a Gaussian?
     if smoothFWHM is not None:
@@ -607,11 +616,15 @@ def addBoxMarkers(p, conf, ax):
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
-        p0 = plt.Line2D((0,0),(0,0), linestyle='')
+        if p['sP'].redshift >= 10.0:
+            zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
+        else:
+            zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
 
-        legend = ax.legend([p0], ["z$\,$=$\,$%.2f" % p['sP'].redshift], loc='upper right')
-        legend.get_texts()[0].set_color('white')
-        ax.add_artist(legend)
+        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*0.12 # upper right
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*0.04
+        ax.text( xt, yt, zStr, color='white', alpha=1.0, 
+                 size='x-large', ha='left', va='center') # same size as legend text
 
     if 'labelSim' in p and p['labelSim']:
         p0 = plt.Line2D((0,0),(0,0), linestyle='')
