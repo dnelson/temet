@@ -26,7 +26,7 @@ def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
     nFullSnapsExpected = 100
     nSubboxesExpected = 2 if sP.boxSize == 75000 else 3
     nSubboxSnapsExpected = {75000  : {455:2431, 910:4380, 1820:-1}, \
-                            35000  : {270:2331, 540:-1,   1080:-1, 2160:-1}, \
+                            35000  : {270:2333, 540:-1,   1080:-1, 2160:-1}, \
                             205000 : {625:2050, 1250:3045,  2500:-1}}
 
     def checkSingleGroup(files):

@@ -323,11 +323,7 @@ class simParams:
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
             self.boxSize      = 20000.0
-            self.groupOrdered = False
-
-            if hInd in [0]:
-                # re-writing, in progress
-                self.groupOrdered = True
+            self.groupOrdered = True # re-written
 
             self.omega_m     = 0.264
             self.omega_L     = 0.736
