@@ -26,8 +26,7 @@ from cosmo.cloudy import cloudyIon
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
-saveBasePath = expanduser("~") + '/data3/frames/'
-#saveBasePath = expanduser("~") + '/Dropbox/odyssey/'
+savePathDefault = expanduser("~") + '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
@@ -621,8 +620,8 @@ def addBoxMarkers(p, conf, ax):
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
 
-        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*0.12 # upper right
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*0.04
+        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.12 * 960.0/conf.rasterPx) # upper right
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.04 * 960.0/conf.rasterPx)
         ax.text( xt, yt, zStr, color='white', alpha=1.0, 
                  size='x-large', ha='left', va='center') # same size as legend text
 
@@ -633,12 +632,17 @@ def addBoxMarkers(p, conf, ax):
         legend.get_texts()[0].set_color('white')
 
     if 'labelScale' in p and p['labelScale']:
-        scaleBarLen = (p['extent'][1]-p['extent'][0])*0.15 # 15% of plot width
-        scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units
+        scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
+        scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
+        scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units (kpc)
 
         # if scale bar is more than 50% of width, reduce by 10x
         if scaleBarLen >= 0.5 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen /= 10.0
+
+        # if scale bar is more than 1 Mpc, round to nearest 1 Mpc
+        if scaleBarLen >= 1000.0:
+            scaleBarLen = 1000.0 * np.round(scaleBarLen/1000.0)
 
         unitStrs = ['cpc','ckpc','cMpc','cGpc'] # comoving
         unitInd = 1 if p['sP'].mpcUnits is False else 2
@@ -649,10 +653,10 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 
-        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*0.03 # upper left
-        x1 = x0 + p['sP'].units.codeLengthToComovingKpc(scaleBarLen) # actually plot size in ckpc (no h)
-        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*0.03
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*0.06
+        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(0.03 * 960.0/conf.rasterPx) # upper left
+        x1 = x0 + (scaleBarLen * p['sP'].HubbleParam) # actually plot size in code units (e.g. ckpc/h)
+        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.03 * 960.0/conf.rasterPx)
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.06 * 960.0/conf.rasterPx)
 
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=2.0, alpha=1.0)
         ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
@@ -921,10 +925,10 @@ def renderMultiPanel(panels, conf):
             addBoxMarkers(p, conf, ax)
 
             # colobar(s)
-            heightFac = np.max([1.0/nRows, 0.35])
-
             if oneGlobalColorbar:
                 continue
+
+            heightFac = np.max([1.0/nRows, 0.35])
 
             if nRows == 2:
                 # both above and below, one per column
@@ -941,8 +945,11 @@ def renderMultiPanel(panels, conf):
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, colWidth, bottomNorm, leftNorm)
 
-        # global colorbar?
+        # one global colorbar? centered at bottom
         if oneGlobalColorbar:
+            heightFac = np.max([1.0/nRows, 0.35])
+            if nRows == 1: heightFac *= 0.5 # reduce
+
             addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
                                rowHeight, 0.4, bottomNorm, 0.3)
 

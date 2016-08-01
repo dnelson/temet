@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile
 
-from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, saveBasePath
+from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, savePathDefault
 from cosmo.load import groupCatSingle
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
@@ -210,6 +210,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
                             # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True    # include colorbars
 
+        savePath = savePathDefault
         saveFileBase = 'renderHaloFrame' # filename base upon which frame numbers are appended
 
         # movie config
@@ -263,7 +264,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
             p['haloVirRad'], p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
         # request render and save
-        plotConfig.saveFilename = saveBasePath + plotConfig.saveFileBase + '_%03d.png' % (frameNum)
+        plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + '_%03d.png' % (frameNum)
         frameNum += 1
 
         if skipExisting and isfile(plotConfig.saveFilename):

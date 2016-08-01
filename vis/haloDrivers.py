@@ -8,7 +8,7 @@ from builtins import *
 import numpy as np
 from datetime import datetime
 
-from vis.common import saveBasePath
+from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
 from util.helper import pSplit
 from cosmo.load import groupCat, groupCatSingle
@@ -44,7 +44,7 @@ def oneHaloPressureCompAndRatios(fofHaloID=0):
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = saveBasePath + 'presComp_%s_%d_z%.1f_halo-%d.pdf' % (run,res,redshift,fofHaloID)
+        saveFilename = savePathDefault + 'presComp_%s_%d_z%.1f_halo-%d.pdf' % (run,res,redshift,fofHaloID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 

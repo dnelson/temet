@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile
 
-from vis.common import renderMultiPanel, saveBasePath
+from vis.common import renderMultiPanel, savePathDefault
 from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 from util import simParams
@@ -74,7 +74,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True):
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True     # include colorbars
 
-        saveFilename = saveBasePath + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = savePathDefault + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # add plotConfig defaults
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
@@ -145,6 +145,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
                                # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True       # include colorbars
 
+        savePath     = savePathDefault
         saveFileBase = 'renderBoxFrame' # filename base upon which frame numbers are appended
 
         # movie config
@@ -211,7 +212,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
             #    p['valMinMax'][1] = np.max( [p['sP'].units.redshiftToAgeFlat(p['sP'].redshift), 3.0] )
             
         # request render and save
-        plotConfig.saveFilename = saveBasePath + plotConfig.saveFileBase + '_%03d.png' % (frameNum)
+        plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + '_%03d.png' % (frameNum)
 
         if skipExisting and isfile(plotConfig.saveFilename):
             print('SKIP: ' + plotConfig.saveFilename)
