@@ -8,7 +8,7 @@ from builtins import *
 import numpy as np
 from datetime import datetime
 
-from vis.common import saveBasePath
+from vis.common import savePathDefault
 from vis.box import renderBox, renderBoxFrames
 from util.helper import pSplit
 from util import simParams
@@ -34,8 +34,42 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
+        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 960
+        colorbars = True
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
+        maxNSnaps = None
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
+    """ Render a movie comparing Illustris-1 and L75n1820TNG subbox0, one quantity side by side. """
+    panels = []
+
+    panels.append( {'run':'illustris', 'labelScale':True, 'labelSim':True} )
+    panels.append( {'run':'tng', 'labelZ':True, 'labelSim':True} )
+
+    if conf == 1:
+        hsmlFac = 2.5
+        partType = 'gas'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [4.2,7.2]
+
+    zoomFac = 0.99 # avoid edge effects
+    variant = 'subbox0'
+    res     = 1820
+    method  = 'sphMap'
+    nPixels = 1920
+    axes    = [0,1] # x,y
+
+    class plotConfig:
+        savePath  = '/home/extdylan/data/frames/comp_gasdens_sb0/'
+        plotStyle = 'edged_black'
+        rasterPx  = 1920
         colorbars = True
 
         # movie config
@@ -105,7 +139,7 @@ def tng_boxPressureComp():
         colorbars  = True
 
         sP = simParams(res=res, run=run, redshift=redshift)
-        saveFilename = saveBasePath + 'boxPressureComp_%s_z%.1f.pdf' % (sP.simName, redshift)
+        saveFilename = savePathDefault + 'boxPressureComp_%s_z%.1f.pdf' % (sP.simName, redshift)
 
     renderBox(panels, plotConfig, locals())
 
@@ -140,6 +174,6 @@ def zoom_gasColDens_3res_or_3quant():
         colorbars  = True
 
         Lstr = '-'.join([str(p['res']) for p in panels])
-        saveFilename = saveBasePath + '%s_FullBoxGasColDens_h%dL%s.pdf' % (run,hInd,Lstr)
+        saveFilename = savePathDefault + '%s_FullBoxGasColDens_h%dL%s.pdf' % (run,hInd,Lstr)
 
     renderBox(panels, plotConfig, locals())
