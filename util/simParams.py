@@ -840,6 +840,10 @@ class simParams:
             if self.hInd == 2 and self.res in [9,10,11]:
                 return 0 # verified
 
+            # default hardcoded for now:
+            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
+            return 0
+
         raise Exception('Unhandled.')
     
     @property
