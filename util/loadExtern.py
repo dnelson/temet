@@ -465,6 +465,25 @@ def bernardi2013SMF():
 
     return r
 
+def dsouza2015SMF():
+    """ Load observational data points from D'Souza+ (2015) Fig 7. """
+    path = dataBasePath + 'dsouza/ds2015_fig7.txt'
+
+    data = np.loadtxt(path,delimiter=',')
+
+    little_h = 0.72
+
+    Mstar  = 10.0**data[:,0] / little_h**2.0
+    valMid = 10.0**(data[:,1]) * little_h**3.0
+    valUp  = 10.0**((data[:,1]+data[:,2])) * little_h**3.0
+
+    r = {'stellarMass' : np.log10(Mstar),
+          'numDens'    : valMid,
+          'error'      : valUp - valMid,
+          'label'      : 'D\'Souza+ (2015) SDSS z~0.1'}
+
+    return r
+
 def gallazzi2005(sP):
     """ Load observational data points (M-Z and ages) from Gallazzi+ (2005). """
     path = dataBasePath + 'gallazzi/table2.txt'

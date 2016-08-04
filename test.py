@@ -18,6 +18,272 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def stellarMasses30Kpc():
+    """ Check 30pkpc stellar masses. """
+    sP = simParams(res=1820, run='tng', redshift=0.1)
+
+    acField = 'Subhalo_Mass_30pkpc_Stars'
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType','SubhaloMassInRadType'])
+    ac = cosmo.load.auxCat(sP, fields=[acField])
+
+    subh_rhalf_stars = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')]
+    subh_rhalf_stars = sP.units.codeLengthToKpc( subh_rhalf_stars )
+    subh_mass_stars  = gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')]
+    subh_mass_stars  = sP.units.codeMassToLogMsun( subh_mass_stars )
+
+    ac_mass_stars = sP.units.codeMassToLogMsun( ac[acField] )
+
+    # fig 1
+    figsize = (16,9)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Subhalo Stellar Mass Within 2r1/2 [ log Msun ]')
+    ax.set_ylabel('Subhalo Stellar 2*HalfmassRad [ log Kpc ]')
+
+    data_x = subh_mass_stars
+    data_y = np.log10( 2.0*subh_rhalf_stars )
+
+    ax.scatter(data_x,data_y,marker='.',s=2,alpha=0.7)
+    ax.plot([8.0,12.0], np.log10([30.0,30.0]), color='orange')
+
+    fig.tight_layout()
+    fig.savefig('mstar_size.png')
+
+    # fig 2
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Subhalo Stellar Mass Within 2r1/2 [ log Msun ]')
+    ax.set_ylabel('AuxCat Stellar Mass Within 30 [ log Msun ]')
+
+    data_x = subh_mass_stars
+    data_y = ac_mass_stars
+
+    ax.scatter(data_x,data_y,marker='.',s=2,alpha=0.7)
+    ax.plot([8.0,12.0], [8.0,12.0], color='orange')
+
+    fig.tight_layout()
+    fig.savefig('mstar_masses.png')
+
+    import pdb; pdb.set_trace()
+
+def tngClumpsDiagnostic():
+    """ Looking for criteria to select 'clumps' in TNG runs. """
+    sP = simParams(res=1820, run='tng', redshift=0.2)
+
+    fieldsSubhalos = ['SubhaloHalfmassRadType','SubhaloHalfmassRad','SubhaloMassType',
+                      'SubhaloSFR','SubhaloGrNr','SubhaloMass']
+    fieldsHalos    = ['GroupFirstSub','Group_M_Crit200']
+
+    # load
+    gc = cosmo.load.groupCat(sP, fieldsHalos=fieldsHalos, fieldsSubhalos=fieldsSubhalos)
+    print('Load done3.')
+
+    # conversions
+    subh_mass_dm  = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][:,1] )
+    subh_mass_gas = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][:,0] )
+    subh_mass_pt4 = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][:,4] )
+    subh_mass     = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMass'] )
+
+    subh_size_dm  = sP.units.codeLengthToComovingKpc( gc['subhalos']['SubhaloHalfmassRadType'][:,1] )
+    subh_size_gas = sP.units.codeLengthToComovingKpc( gc['subhalos']['SubhaloHalfmassRadType'][:,0] )
+    subh_size_pt4 = sP.units.codeLengthToComovingKpc( gc['subhalos']['SubhaloHalfmassRadType'][:,4] )
+    subh_size     = sP.units.codeLengthToComovingKpc( gc['subhalos']['SubhaloHalfmassRad'] )
+
+    # selections
+    #wHalo = np.where(gc['halos']['GroupFirstSub'] >= 0)
+    #w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
+    #w2 = np.arange(gc['subhalos']['SubhaloGrNr'].size) # centrals + satellites
+    #w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+
+    # plot config
+    nBins = 100
+    alpha = 0.9
+    lw = 2.0
+
+    size_range_log = [-2.0,3.0]
+    binSize = (size_range_log[1]-size_range_log[0])/nBins
+
+    massfrac_range_log = [-4.0,0.5]
+    binSizeFrac = (massfrac_range_log[1]-massfrac_range_log[0])/nBins
+
+    dens = False
+    massBins = [ [6.0,8.0], [8.0,9.0], [9.0,10.0], [10.0,11.0], [11.0,12.0], [12.0,14.0] ] # log Mstar
+    figsize = (16,11)
+
+    # plot 1D histo: sizes of different partTypes
+    if 0:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo HalfmassRad [ log cKpc ]')
+        ax.set_ylabel('N')
+        ax.set_yscale('log')
+
+        yy, xx = np.histogram(np.log10(subh_size), bins=nBins, range=size_range_log, density=dens)
+        ax.plot(xx[:-1]+0.5*binSize, yy, '-', color='red', alpha=alpha, lw=lw, label='all')
+
+        yy, xx = np.histogram(np.log10(subh_size_dm), bins=nBins, range=size_range_log, density=dens)
+        ax.plot(xx[:-1]+0.5*binSize, yy, '-', color='green', alpha=alpha, lw=lw, label='dm')
+
+        yy, xx = np.histogram(np.log10(subh_size_pt4), bins=nBins, range=size_range_log, density=dens)
+        ax.plot(xx[:-1]+0.5*binSize, yy, '-', color='blue', alpha=alpha, lw=lw, label='pt4')
+
+        yy, xx = np.histogram(np.log10(subh_size_gas), bins=nBins, range=size_range_log, density=dens)
+        ax.plot(xx[:-1]+0.5*binSize, yy, '-', color='purple', alpha=alpha, lw=lw, label='gas')
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('clumps_size_all.pdf')
+        plt.close(fig)
+
+    # plot 1D histo: pt4 sizes in mass bins
+    if 0:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo HalfmassRad PT4 [ log cKpc ]')
+        ax.set_ylabel('N')
+        ax.set_yscale('log')
+
+        for massBin in massBins:
+            wMassBin = np.where( (subh_mass >= massBin[0]) & (subh_mass < massBin[1]) )
+
+            data = np.log10( subh_size_pt4[wMassBin] )
+            yy, xx = np.histogram(data, bins=nBins, range=size_range_log, density=dens)
+
+            label = 'log Mstar [%d - %d]' % (massBin[0],massBin[1])
+            ax.plot(xx[:-1]+0.5*binSize, yy, '-', alpha=alpha, lw=lw, label=label)
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('clumps_size_massbins.pdf')
+        plt.close(fig)
+
+    # plot 1D histo: mass ratios (gas/tot), (pt4/tot) in mass bins
+    if 0:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo (Gas Mass/Total Mass) [ log ]')
+        ax.set_ylabel('N')
+        ax.set_yscale('log')
+
+        for massBin in massBins:
+            wMassBin = np.where( (subh_mass >= massBin[0]) & (subh_mass < massBin[1]) )
+
+            data = np.log10( 10.0**subh_mass_gas[wMassBin] / 10.0**subh_mass[wMassBin] )
+            yy, xx = np.histogram(data, bins=nBins, range=massfrac_range_log, density=dens)
+
+            label = 'log Mstar [%d - %d]' % (massBin[0],massBin[1])
+            ax.plot(xx[:-1]+0.5*binSizeFrac, yy, '-', alpha=alpha, lw=lw, label=label)
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('massfracs_gas_tot_massbins.pdf')
+        plt.close(fig)
+
+    if 0:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo (PT4 Mass/Total Mass) [ log ]')
+        ax.set_ylabel('N')
+        ax.set_yscale('log')
+
+        for massBin in massBins:
+            wMassBin = np.where( (subh_mass >= massBin[0]) & (subh_mass < massBin[1]) )
+
+            data = np.log10( 10.0**subh_mass_pt4[wMassBin] / 10.0**subh_mass[wMassBin] )
+            yy, xx = np.histogram(data, bins=nBins, range=massfrac_range_log, density=dens)
+
+            label = 'log Mstar [%d - %d]' % (massBin[0],massBin[1])
+            ax.plot(xx[:-1]+0.5*binSizeFrac, yy, '-', alpha=alpha, lw=lw, label=label)
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('massfracs_pt4_tot_massbins.pdf')
+        plt.close(fig)
+
+    # plot 2D histos: mass fraction vs size
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo (PT4 Mass/Total Mass) [ log ]')
+        ax.set_ylabel('Subhalo (PT4 HalfmassRad) [ log cKpc ]')
+
+        #ax.set_ylim(size_range_log)
+
+        for massBin in massBins:
+            c = ax._get_lines.prop_cycler.next()['color']
+            wMassBin = np.where( (subh_mass >= massBin[0]) & (subh_mass < massBin[1]) )
+
+            data_x = np.log10( 10.0**subh_mass_pt4[wMassBin] / 10.0**subh_mass[wMassBin] )
+            data_y = np.log10( subh_size_pt4[wMassBin] )
+            #yy, xx = np.histogram(data, bins=nBins, range=massfrac_range_log, density=dens)
+
+            label = 'log Mstar [%d - %d]' % (massBin[0],massBin[1])
+            ax.scatter(data_x,data_y,marker='.',s=2,c=c,alpha=0.7,label=label)
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('2d_pt4massfrac_pt4size.png')
+
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo (PT4 Mass/Total Mass) [ log ]')
+        ax.set_ylabel('Subhalo (PT4 HalfmassRad) [ log cKpc ]')
+
+        ax.set_xlim([-0.5,0.1])
+
+        for massBin in massBins:
+            c = ax._get_lines.prop_cycler.next()['color']
+            wMassBin = np.where( (subh_mass >= massBin[0]) & (subh_mass < massBin[1]) )
+
+            data_x = np.log10( 10.0**subh_mass_pt4[wMassBin] / 10.0**subh_mass[wMassBin] )
+            data_y = np.log10( subh_size_pt4[wMassBin] )
+            #yy, xx = np.histogram(data, bins=nBins, range=massfrac_range_log, density=dens)
+
+            label = 'log Mstar [%d - %d]' % (massBin[0],massBin[1])
+            ax.scatter(data_x,data_y,marker='.',s=5,c=c,alpha=0.7,label=label)
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('2d_pt4massfrac_pt4size_narrow.png')
+        plt.close(fig)
+
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Subhalo (Gas Mass/Total Mass) [ log ]')
+        ax.set_ylabel('Subhalo (PT4 HalfmassRad) [ log cKpc ]')
+
+        #ax.set_ylim(size_range_log)
+
+        for massBin in massBins:
+            c = ax._get_lines.prop_cycler.next()['color']
+            wMassBin = np.where( (subh_mass >= massBin[0]) & (subh_mass < massBin[1]) )
+
+            data_x = np.log10( 10.0**subh_mass_gas[wMassBin] / 10.0**subh_mass[wMassBin] )
+            data_y = np.log10( subh_size_pt4[wMassBin] )
+            #yy, xx = np.histogram(data, bins=nBins, range=massfrac_range_log, density=dens)
+
+            label = 'log Mstar [%d - %d]' % (massBin[0],massBin[1])
+            ax.scatter(data_x,data_y,marker='.',s=2,c=c,alpha=0.7,label=label)
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('2d_gasmassfrac_pt4size.png')
+        plt.close(fig)
+
+    import pdb; pdb.set_trace()
+
+
 def compareOldNewMags():
     """ Compare stellar_photometrics and my new sdss subhalo mags, and BuserUconverted vs sdss_u. """
     sP = simParams(res=910, run='illustris', redshift=0.0)

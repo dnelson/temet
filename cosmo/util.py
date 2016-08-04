@@ -291,6 +291,18 @@ def periodicDists(pt, vecs, sP, chebyshev=False):
 
     return dists
 
+def periodicDistsSq(pt, vecs, sP):
+    """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt. """
+    xDist = vecs[:,0] - pt[0]
+    yDist = vecs[:,1] - pt[1]
+    zDist = vecs[:,2] - pt[2]
+
+    correctPeriodicDistVecs(xDist, sP)
+    correctPeriodicDistVecs(yDist, sP)
+    correctPeriodicDistVecs(zDist, sP)
+
+    return xDist*xDist + yDist*yDist + zDist*zDist
+
 def periodicPairwiseDists(pts, sP):
     """ Calculate pairwise distances between all 3D points, correctly taking into account periodic B.C. """
     nPts = pts.shape[0]

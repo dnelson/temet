@@ -10,7 +10,7 @@ import cosmo.load
 from functools import partial
 
 from illustris_python.util import partTypeNum
-from cosmo.util import correctPeriodicDistVecs
+from cosmo.util import periodicDistsSq
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -64,20 +64,8 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
     wProcess = np.where(gc['halos']['GroupLen'] >= minNumPartGroup)[0]
     r[wProcess,:] = 0.0
 
-    # square radii, and use custom distance function
+    # square radii, and use sq distance function
     gc['halos'][rad] = gc['halos'][rad] * gc['halos'][rad]
-
-    def periodicDistsSq(pt, vecs, sP):
-        """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt. """
-        xDist = vecs[:,0] - pt[0]
-        yDist = vecs[:,1] - pt[1]
-        zDist = vecs[:,2] - pt[2]
-
-        correctPeriodicDistVecs(xDist, sP)
-        correctPeriodicDistVecs(yDist, sP)
-        correctPeriodicDistVecs(zDist, sP)
-
-        return xDist*xDist + yDist*yDist + zDist*zDist
 
     if method == 'A':
         # loop over all halos
@@ -199,6 +187,92 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
 
     return r, attrs
 
+def subhaloRadialSum(sP, ptType, ptProperty, rad):
+    """ Compute total/sum of a particle property (e.g. mass) for those particles of a given type enclosed 
+        within a fixed radius (input as a scalar, in physical kpc, or as a string specifying a particular 
+        model for a variable cut radius). Restricted to subhalo particles only.
+    """
+    assert ptType == 'stars' # otherwise generalize wind cut
+
+    # config
+    ptLoadType = sP.ptNum(ptType)
+
+    desc   = "Quantity [%s] enclosed within a radius of [%s] for [%s]." % (ptProperty,rad,ptType)
+    desc  +=" (only subhalo particles included). "
+    select = "All Subhalos."
+
+    # load group information
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
+    gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+    # allocate return (0=gas+wind, 1=dm, 2=stars-wind), NaN indicates not computed
+    nSubsTot = gc['header']['Nsubgroups_Total']
+
+    r = np.zeros( nSubsTot, dtype='float32' )
+
+    # info
+    print(' Total # Subhalos: %d, processing all [%s] subhalos with [%s] rad...' % (nSubsTot,nSubsTot,rad))
+
+    # determine radial restriction for each subhalo
+    if isinstance(rad, float):
+        # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
+        rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
+        radSq = np.zeros( nSubsTot, dtype='float32' ) 
+        radSq += rad_pkpc * rad_pkpc
+    else:
+        assert rad in ['p10','30h']
+        if rad == 'p10':
+            # load group m200_crit values
+            gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+            parentM200 = gcLoad['halos'][gcLoad['subhalos']]
+
+            # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
+            r_cut = 27.3 * (parentM200/1e5)**(0.29) / sP.HubbleParam
+            radSq = r_cut * r_cut
+        if rad == '30h':
+            # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
+            rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
+
+            gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+            twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+
+            ww = np.where(twiceStellarRHalf > rad_pkpc)
+            twiceStellarRHalf[ww] = rad_pkpc
+            radSq = twiceStellarRHalf**2.0
+
+    assert radSq.size == nSubsTot
+
+    # global load of all particles of [ptType] in snapshot
+    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=['pos', 'sftime', ptProperty])
+    assert particles[ptProperty].ndim == 1
+
+    # loop over subhalos
+    for i in range(nSubsTot):
+        if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
+            print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
+
+        # slice starting/ending indices for stars local to this FoF
+        i0 = gc['subhalos']['SubhaloOffsetType'][i,ptLoadType]
+        i1 = i0 + gc['subhalos']['SubhaloLenType'][i,ptLoadType]
+
+        if i1 == i0:
+            continue # zero length of this type
+
+        # use squared radii and sq distance function
+        rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][i,:], particles['Coordinates'][i0:i1,:], sP )
+        #wWind  = np.where( (rr <= radSq[i]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
+        wStars = np.where( (rr <= radSq[i]) & (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
+
+        r[i] = np.sum( particles[ptProperty][i0:i1][wStars] )
+
+    attrs = {'Description' : desc.encode('ascii'),
+             'Selection'   : select.encode('ascii'),
+             'ptType'      : ptType.encode('ascii'),
+             'ptProperty'  : ptProperty.encode('ascii'),
+             'rad'         : rad}
+
+    return r, attrs
+
 def subhaloStellarPhot(sP, iso=None, imf=None, dust=None):
     """ Compute the total band-magnitudes, per subhalo, under the given assumption of 
     an iso(chrone) model, imf model, and dust model. """
@@ -243,7 +317,7 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None):
                                              stars['GFM_Metallicity'], 
                                              stars['GFM_InitialMass'], retFullPt4Size=True)
 
-        # loop over halos
+        # loop over subhalos
         for i in range(nSubsTot):
             if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
@@ -460,7 +534,15 @@ def wholeBoxCDDF(sP, species):
 # this dictionary contains a mapping between all auxCatalog fields and their generating functions, 
 # where the first sP input is stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
-  {'Group_Mass_Crit500_Type' : partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
+  {'Group_Mass_Crit500_Type' : \
+     partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
+
+   'Subhalo_Mass_30pkpc_Stars' : \
+     partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad=30.0),
+   'Subhalo_Mass_min_30pkpc_2rhalf_Stars' : \
+     partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad='30h'),
+   'Subhalo_Mass_puchwein10_Stars': \
+     partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad='p10'),
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),
