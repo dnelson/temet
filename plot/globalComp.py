@@ -21,13 +21,14 @@ from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, calcMstarCo
 # global configuration
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
 sKo     = 3   # savgol smoothing kernel poly order
-binSize = 0.2 # dex in stellar/halo mass for median lines
-figsize = (16,9)
+binSize = 0.2 # dex in stellar mass/halo mass for median lines
+figsize = (8,6) # (16,9)
+clean   = False # make visually clean plots with less information
 
 linestyles = ['-',':','--','-.']       # typically for analysis variations per run
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
 
-def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, simRedshift=0.0):
+def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, simRedshift=0.0):
     """ Stellar mass / halo mass relation, full boxes and zoom points vs. abundance matching lines. """
     # plot setup
     xrange = [10.0, 15.0]
@@ -60,12 +61,16 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, simRedshift=0.
 
     # first legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = [plt.Line2D( (0,1), (0,0), color=colors[0], lw=3.0, marker='', linestyle=linestyles[0]),
-              plt.Line2D( (0,1), (0,0), color=colors[1], lw=3.0, marker='', linestyle=linestyles[1]),
-              plt.Line2D( (0,1), (0,0), color=colors[2], lw=3.0, marker='', linestyle=linestyles[2])]
-    lExtra = [r'$M_\star^{\rm tot}$',
-              r'$M_\star^{< 2r_{1/2}}$', 
-              r'$M_\star^{< r_{1/2}}$']
+    sExtra = []
+    lExtra = []
+
+    if 0:
+        sExtra = [plt.Line2D( (0,1), (0,0), color=colors[0], lw=3.0, marker='', linestyle=linestyles[0]),
+                  plt.Line2D( (0,1), (0,0), color=colors[1], lw=3.0, marker='', linestyle=linestyles[1]),
+                  plt.Line2D( (0,1), (0,0), color=colors[2], lw=3.0, marker='', linestyle=linestyles[2])]
+        lExtra = [r'$M_\star^{\rm tot}$',
+                  r'$M_\star^{< 2r_{1/2}}$', 
+                  r'$M_\star^{< r_{1/2}}$']
 
     legend1 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
     plt.gca().add_artist(legend1)
@@ -112,17 +117,30 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, simRedshift=0.
             # stellar mass definition(s)
             c = ax._get_lines.prop_cycler.next()['color']
 
+            if use30kpc:
+                # load auxcat
+                field = 'Subhalo_Mass_30pkpc_Stars'
+                ac = auxCat(sP, fields=[field])
+
+                yy = ac[field][w] / xx_code / (sP.omega_b/sP.omega_m)
+                xm, ym, sm = running_median(xx,yy,binSize=binSize)
+                ym2 = savgol_filter(ym,sKn,sKo)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], color=c, lw=3.0, label=sP.simName)
+                lines.append(l)
+
             if allMassTypes:
                 yy = gc['subhalos']['SubhaloMassType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
                 l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], color=c, lw=3.0)
 
-            yy = gc['subhalos']['SubhaloMassInRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
-            xm, ym, sm = running_median(xx,yy,binSize=binSize)
-            ym2 = savgol_filter(ym,sKn,sKo)
-            l, = ax.plot(xm[:-1], ym2[:-1], linestyles[1], lw=3.0, color=c, label=sP.simName)
-            lines.append(l)
+            if not use30kpc or allMassTypes:
+                # primary (in 2rhalf_stars)
+                yy = gc['subhalos']['SubhaloMassInRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
+                xm, ym, sm = running_median(xx,yy,binSize=binSize)
+                ym2 = savgol_filter(ym,sKn,sKo)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[1], lw=3.0, color=c, label=sP.simName)
+                lines.append(l)
 
             if allMassTypes:
                 yy = gc['subhalos']['SubhaloMassInHalfRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
@@ -365,11 +383,12 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
 
     if vsHaloMass:
         ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
-        ax.set_xlim([10,14.5])   
+        ax.set_xlim([9,14.5])
+        ax.set_ylim([1.0,8e2])
     else:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
         #ax.set_xlim( behrooziSMHM(sPs[0], logHaloMass=np.array(ax.get_xlim())) )
-        ax.set_xlim([7,12.5])
+        ax.set_xlim([7,12.0])
 
     # observational points
     if not vsHaloMass:
@@ -394,7 +413,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
         legend1 = ax.legend([l1,l2,l3,l4], 
                             [b['red']['label'], b['blue']['label'], 
                              s['early']['label'], s['late']['label']], 
-                            loc='upper left')
+                            loc='lower right')
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -426,21 +445,37 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
         yy_stars = gc['subhalos']['SubhaloHalfmassRadType'][w,partTypeNum('stars')]
         yy_stars = sP.units.codeLengthToKpc( yy_stars )
 
-        xm, ym_gas, sm_gas     = running_median(xx,yy_gas,binSize=binSize)
-        xm, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize)
+        # if plotting vs halo mass, restrict our attention to those galaxies with sizes (e.g. nonzero 
+        # number of either gas cells or start particles)
+        if vsHaloMass:
+            ww = np.where( (yy_gas > 0.0) & (yy_stars > 0.0) )
+            yy_gas = yy_gas[ww]
+            yy_stars = yy_stars[ww]
+            xx = xx[ww]
 
-        ym_gas   = savgol_filter(ym_gas,sKn,sKo)
-        ym_stars = savgol_filter(ym_stars,sKn,sKo)
-        sm_gas   = savgol_filter(sm_gas,sKn,sKo)
-        sm_stars = savgol_filter(sm_stars,sKn,sKo)
+        xm_gas, ym_gas, sm_gas       = running_median(xx,yy_gas,binSize=binSize,skipZeros=True)
+        xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize,skipZeros=True)
 
-        l, = ax.plot(xm[:-1], ym_stars[:-1], linestyles[0], lw=3.0, label=sP.simName)
-        l, = ax.plot(xm[:-1], ym_gas[:-1], linestyles[1], color=l.get_color(), lw=3.0)
+        ww_gas   = np.where(ym_gas > 0.0)
+        ww_stars = np.where(ym_stars > 0.0)
 
-        if sP.run == 'illustris':
-            y_down = np.array(ym_stars[:-1]) - sm_stars[:-1]
-            y_up   = np.array(ym_stars[:-1]) + sm_stars[:-1]
-            ax.fill_between(xm[:-1], y_down, y_up, 
+        #import pdb; pdb.set_trace()
+
+        ym_gas   = savgol_filter(ym_gas[ww_gas],sKn,sKo)
+        ym_stars = savgol_filter(ym_stars[ww_stars],sKn,sKo)
+        sm_gas   = savgol_filter(sm_gas[ww_gas],sKn,sKo)
+        sm_stars = savgol_filter(sm_stars[ww_stars],sKn,sKo)
+
+        xm_gas = xm_gas[ww_gas]
+        xm_stars = xm_stars[ww_stars]
+
+        l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=sP.simName)
+        l, = ax.plot(xm_gas[1:-1], ym_gas[1:-1], linestyles[1], color=l.get_color(), lw=3.0)
+
+        if sP.simName == sPs[0].simName:
+            y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
+            y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
+            ax.fill_between(xm_stars[1:-1], y_down, y_up, 
                             color=l.get_color(), interpolate=True, alpha=0.3)
 
     # second legeng
@@ -450,14 +485,14 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
     lExtra = [r'stars',
               r'gas']
 
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
     fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
 def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, 
-                        use30=False, use30H=False, useP10=False, simRedshift=0.0):
+                        use30kpc=False, use30H=False, useP10=False, simRedshift=0.0):
     """ Stellar mass function (number density of galaxies) at redshift zero. """
     # config
     mts = ['SubhaloMassInRadType','SubhaloMassInHalfRadType','SubhaloMassType']
@@ -486,7 +521,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
         ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ] [ centrals & satellites ]')
     ax.set_yscale('log')
 
-    if use30:
+    if use30kpc:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 30 pkpc ]')
     if use30H:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < min(2r$_{\star,1/2}$,30 pkpc) ]')
@@ -574,7 +609,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
                 continue
 
             # temporary Mstar selection
-            if use30:
+            if use30kpc:
                 field = 'Subhalo_Mass_30pkpc_Stars'
                 ac = auxCat(sP, fields=[field])
                 xx = sP.units.codeMassToLogMsun(ac[field][w])
@@ -586,16 +621,16 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
                 field = 'Subhalo_Mass_puchwein10_Stars'
                 ac = auxCat(sP, fields=[field])
                 xx = sP.units.codeMassToLogMsun(ac[field][w])
-            if not use30 and not useP10 and not use30H:
+            if not use30kpc and not useP10 and not use30H:
                 xx = gc['subhalos'][mt][w,partTypeNum('stars')]
                 xx = sP.units.codeMassToLogMsun(xx)
 
-            xm, ym = running_histogram(xx, binSize=binSize, normFac=sP.boxSizeCubicMpc*binSize)
-            ym = savgol_filter(ym,sKn,sKo)
+            xm, ym_i = running_histogram(xx, binSize=binSize, normFac=sP.boxSizeCubicMpc*binSize, skipZeros=True)
+            ym = savgol_filter(ym_i,sKn,sKo)
 
             label = sP.simName if count == 0 else ''
             color = l.get_color() if count > 0 else None
-            l, = ax.plot(xm[:-1], ym[:-1], linestyles[count], color=color, lw=3.0, label=label)
+            l, = ax.plot(xm[1:-1], ym[1:-1], linestyles[count], color=color, lw=3.0, label=label)
 
             count += 1
 
@@ -637,7 +672,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0):
     w = woo2008(sPs[0])
     k = kirby2013()
 
-    l1, = ax.plot(g['stellarMass'], g['Zstars'], '-', color='#333333')
+    l1, = ax.plot(g['stellarMass'], g['Zstars'], '-', color='#333333',lw=2.0,alpha=0.7)
     ax.fill_between(g['stellarMass'], g['ZstarsDown'], g['ZstarsUp'], 
                     color='#333333', interpolate=True, alpha=0.3)
 
@@ -690,11 +725,11 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0):
                 # with respect to this plot (sim,Gal,Woo all shift up, but I think Kirby is good as is)
                 yy = logZeroSafe( gc['subhalos'][metalField][w] / sP.units.Z_solar )
 
-                xm, ym, sm = running_median(xx,yy,binSize=binSize)
+                xm, ym, sm = running_median(xx,yy,binSize=binSize,skipZeros=True)
                 ym2 = savgol_filter(ym,sKn,sKo)
 
                 label = sP.simName if i==0 else ''
-                ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
+                ax.plot(xm[1:-1], ym2[1:-1], linestyles[i], color=c, lw=3.0, label=label)
 
     # second legeng
     handles, labels = ax.get_legend_handles_labels()
@@ -1088,6 +1123,8 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     if moment == 0:
         ax.set_ylim([-17, -11])
         ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
+        if clean:
+            ax.set_ylabel('log f(N$_{\\rm OVI}$) [ cm$^{2}$ ]')
     if moment == 1:
         ax.set_ylim([-0.5, 1.5])
         ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
@@ -1117,9 +1154,10 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     l4,_,_ =  ax.errorbar(t08['log_NOVI'], t08['log_fOVI'], yerr=t08['log_fOVI_err'],
                xerr=t08['log_NOVI_err'], color='#aaaaaa', ecolor='#aaaaaa', alpha=0.9, capsize=0.0, fmt='o')
 
-    labels = [d16['label'],d08['label'],tc08['label'],t08['label']]
-    legend1 = ax.legend([l1,l2,l3,l4], labels, loc='lower left')
-    ax.add_artist(legend1)
+    if not clean:
+        labels = [d16['label'],d08['label'],tc08['label'],t08['label']]
+        legend1 = ax.legend([l1,l2,l3,l4], labels, loc='lower left')
+        ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
@@ -1172,8 +1210,9 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     sExtra = [] #[plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
     lExtra = [] #[str(s) for s in speciesList]
 
-    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
-    lExtra += ['[ sims z=%3.1f ]' % simRedshift]
+    if not clean:
+        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
+        lExtra += ['[ sims z=%3.1f ]' % simRedshift]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -1364,17 +1403,35 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
                 wBin = np.where( (stellar_mass >= stellarMassBin[0]) & (stellar_mass < stellarMassBin[1]) & \
                                  (galaxy_color >= mag_range[0]) & (galaxy_color < mag_range[1]) )
 
-                label = sP.simName if i == iLeg and j == 0 and splitCenSat else ''
-                alpha = 1.0 if j == 0 else 0.7
-                if not splitCenSat: alpha = 0.1
-
-                # sim histogram
                 if j == 0:
                     # set normalization (such that integral of PDF is one) based on 'all galaxies'
                     nBins[i] = np.max( [16, np.int( np.sqrt( len(wBin[0] )) * 1.4)] ) # adaptive
                     binSize[i] = (mag_range[1]-mag_range[0]) / nBins[i]
                     normFacs[i] = 1.0 / (binSize[i] * len(wBin[0]))
 
+                # plot panel config
+                label = sP.simName if i == iLeg and j == 0 and splitCenSat else ''
+                alpha = 1.0 if j == 0 else 0.7
+                if not splitCenSat: alpha = 0.1
+
+                # obs histogram
+                wObs = np.where((sdss_Mstar >= stellarMassBin[0]) & (sdss_Mstar < stellarMassBin[1]))
+                yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
+                xx = xx[:-1] + 0.5*binSize[i]
+
+                axes[i].plot(xx, yy, '-', color=obs_color, alpha=alpha, lw=3.0)
+
+                # obs kde
+                xx = np.linspace(mag_range[0], mag_range[1], 200)
+                kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
+                axes[i].plot(xx, kde2(xx), '-', color=obs_color, alpha=1.0, lw=3.0)
+                axes[i].fill_between(xx, 0.0, kde2(xx), facecolor=obs_color, alpha=0.1, interpolate=True)\
+
+                if len(wBin[0]) <= 1:
+                    print(' skip sim kde no data: ',sP.simName,i)
+                    continue
+
+                # sim histogram
                 yy, xx = np.histogram(galaxy_color[wBin], bins=nBins[i], range=mag_range)
                 yy2 = yy.astype('float32') * normFacs[i]
                 xx = xx[:-1] + 0.5*binSize[i]
@@ -1390,19 +1447,6 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
                     label = sP.simName if i == iLeg and j == 0 else ''
                     axes[i].plot(xx, kde1(xx), linestyles[j], label=label, color=c, alpha=1.0, lw=3.0)
                     axes[i].fill_between(xx, 0.0, kde1(xx), color=c, alpha=0.1, interpolate=True)
-
-                # obs histogram
-                wObs = np.where((sdss_Mstar >= stellarMassBin[0]) & (sdss_Mstar < stellarMassBin[1]))
-                yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
-                xx = xx[:-1] + 0.5*binSize[i]
-
-                axes[i].plot(xx, yy, '-', color=obs_color, alpha=alpha, lw=3.0)
-
-                # obs kde
-                xx = np.linspace(mag_range[0], mag_range[1], 200)
-                kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
-                axes[i].plot(xx, kde2(xx), '-', color=obs_color, alpha=1.0, lw=3.0)
-                axes[i].fill_between(xx, 0.0, kde2(xx), facecolor=obs_color, alpha=0.1, interpolate=True)
 
     # legend (simulations) (obs)
     handles, labels = axes[iLeg].get_legend_handles_labels()
@@ -1466,6 +1510,9 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
             simIndsBin = np.where((sim_1dhist >= binMin) & (sim_1dhist < binMax))
 
             nWantedToMatchObs = np.int32(obsMstarHist[k] * sim_1dhist.size)
+
+            if len(simIndsBin[0]) == 0 and nWantedToMatchObs > 0:
+                continue # failure in small boxes to have massive halos, or low res to have small halos
 
             #print(k,'sim size: ',simIndsBin[0].size,'wanted: ',nWantedToMatchObs)
             indsToAdd = np.random.choice(simIndsBin[0], size=nWantedToMatchObs, replace=True)
@@ -1679,6 +1726,68 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
     pdf.savefig()
     plt.close(fig)
 
+def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
+    """ Velocity function (galaxy counts as a function of v_circ/v_max). """
+    binSizeLogKms = 0.03
+
+    # plot setup
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([50,350])
+    ax.set_ylim([1e-3,3e-1])
+    ax.set_xlabel('v$_{\\rm circ}$ [ km/s ] [ sim = v$_{\\rm max}$ ]')
+
+    if centralsOnly:
+        ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ] [ only centrals ]')
+    else:
+        ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ] [ centrals & satellites ]')
+    ax.set_yscale('log')
+
+    # observational points
+    b16 = bekeraite16VF()
+
+    l1,_,_ = ax.errorbar(b16['v_circ'], b16['numDens'], yerr=b16['numDens_err'], 
+               color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='s')
+
+    legend1 = ax.legend([l1], [b16['label']], loc='upper right')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        print('VF: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
+        if sP.isZoom:
+            continue
+
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloVmax'])
+
+        # centrals only?
+        if centralsOnly:
+            wHalo = np.where((gc['halos'] >= 0))
+            w = gc['halos'][wHalo]
+        else:
+            w = np.arange(gc['subhalos'].size)
+
+        # histogram in log(v) and plot in linear(v)
+        xx = np.log10(gc['subhalos'][w])
+        normFac = sP.boxSizeCubicMpc*binSizeLogKms
+
+        xm_i, ym_i = running_histogram(xx, binSize=binSizeLogKms, normFac=normFac, skipZeros=True)
+        xm = 10.0**xm_i
+        ym = savgol_filter(ym_i,sKn,sKo)
+
+        l, = ax.plot(xm[1:-1], ym[1:-1], linestyles[0], lw=3.0, label=sP.simName)
+
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles, labels, loc='lower left')
+
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
 def stellarAges(sPs, pdf, simRedshift=0.0):
     """ Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25). """
     field = 'Group_Mass_Crit500_Type'
@@ -1772,7 +1881,15 @@ def plots():
     sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
+
     #sPs.append( simParams(res=512, run='cosmo0_v6') )
+    #sPs.append( simParams(res=512, run='tng') )
+    #sPs.append( simParams(res=256, run='tng') )
+    #sPs.append( simParams(res=256, run='tng', variant='wmap') )
+
+    #for i in range(1,11):
+    #    variant = 'r%03d' % i
+    #    sPs.append( simParams(res=256, run='tng', variant=variant) )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -1784,12 +1901,12 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_4_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_testing_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
-    zZero = 0.1 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
-    #stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
-    #stellarMassHaloMass(sPs, pdf, ylog=True, allMassTypes=True, simRedshift=zZero)
+    #stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
+    #stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
     ###sfrAvgVsRedshift(sPs, pdf)
     #sfrdVsRedshift(sPs, pdf, xlog=True)
     #sfrdVsRedshift(sPs, pdf, xlog=False)
@@ -1797,29 +1914,29 @@ def plots():
     #blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     #galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero)
     #galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
-
-    stellarMassFunction(sPs, pdf, highMassEnd=False, useP10=True, simRedshift=zZero)
-    stellarMassFunction(sPs, pdf, highMassEnd=False, use30=True, simRedshift=zZero)
-    stellarMassFunction(sPs, pdf, highMassEnd=False, use30H=True, simRedshift=zZero)
-    stellarMassFunction(sPs, pdf, highMassEnd=False, simRedshift=zZero)
-
+    #stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     #stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
     #massMetallicityStars(sPs, pdf, simRedshift=zZero)
     #massMetallicityGas(sPs, pdf, simRedshift=0.0)
     #massMetallicityGas(sPs, pdf, simRedshift=0.7)
     #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
+
     #nHIcddf(sPs, pdf) # z=3
     #nHIcddf(sPs, pdf, moment=1) # z=3
-    #nOVIcddf(sPs, pdf) # z=0.2
+    nOVIcddf(sPs, pdf) # z=0.2
     #nOVIcddf(sPs, pdf, moment=1) # z=0.2
     #dlaMetallicityPDF(sPs, pdf) # z=3
+
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=True, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=True, simRedshift=zZero)
-    #alaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
+    #galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
     #galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero)
+
+    #velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=zZero)
+    #velocityFunction(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     #stellarAges(sPs, pdf, simRedshift=zZero)
 
     # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
@@ -1831,7 +1948,7 @@ def plots():
     # with additional modeling:
     # todo: M_HI vs Mstar (Vog 14a Fig 3)
     # todo: R_HI vs Mstar
-    # todo: metal CDDF (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon) (Suresh 2015 Fig 11 Oxygen)
+    # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon)
     # todo: Omega_X(z) (e.g. Bird? Fig ?)
     # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)
     # todo: X-ray (e.g. Schaye Fig 16)

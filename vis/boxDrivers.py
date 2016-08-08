@@ -13,6 +13,46 @@ from vis.box import renderBox, renderBoxFrames
 from util.helper import pSplit
 from util import simParams
 
+def realizations(conf=1):
+    """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
+    panels = []
+
+    for i in range(1,11):
+        variant = 'r%03d' % i
+        panels.append( {'variant':variant} )
+
+    if conf == 1:
+        partType   = 'dm'
+        partField  = 'coldens_msunkpc2'
+        valMinMax  = [5.0,8.5]
+
+    if conf == 2:
+        partType   = 'gas'
+        partField  = 'coldens_msunkpc2'
+        valMinMax  = [4.2,7.2]
+
+    run        = 'tng'
+    res        = 256
+    redshift   = 0.0
+    hsmlFac    = 0.5
+    nPixels    = 960
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = True
+    plotHalos  = 10
+
+    # render config (global)
+    class plotConfig:
+        plotStyle  = 'open_black'
+        rasterPx   = 960
+        colorbars  = True
+
+        sP = simParams(res=res, run=run, redshift=redshift)
+        saveFilename = savePathDefault + 'realizations_gas_%s_z%.1f.pdf' % (sP.simName, redshift)
+
+    renderBox(panels, plotConfig, locals())
+
 def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox. """
     panels = []
