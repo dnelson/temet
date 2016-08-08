@@ -80,12 +80,16 @@ def reportMemory():
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None):
+def running_median(X, Y, nBins=100, binSize=None, skipZeros=False):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
-    if binSize is not None:
-        nBins = round( (X.max()-X.min()) / binSize )
+    minVal = X.min()
+    if skipZeros:
+        minVal = X[X > 0.0].min()
 
-    bins = np.linspace(X.min(),X.max(), nBins)
+    if binSize is not None:
+        nBins = round( (X.max()-minVal) / binSize )
+
+    bins = np.linspace(minVal,X.max(), nBins)
     delta = bins[1]-bins[0]
 
     running_median = []
@@ -101,7 +105,7 @@ def running_median(X, Y, nBins=100, binSize=None):
             running_std.append( np.std(Y[w]) )
             bin_centers.append( np.nanmedian(X[w]) )
 
-    return bin_centers, running_median, running_std
+    return np.array(bin_centers), np.array(running_median), np.array(running_std)
 
 def running_sigmawindow(X, Y, windowSize=None):
     """ Create an local/adaptive estimate of the stddev of a (x,y) point set using a sliding 
@@ -125,12 +129,16 @@ def running_sigmawindow(X, Y, windowSize=None):
 
     return running_std
 
-def running_histogram(X, nBins=100, binSize=None, normFac=None):
+def running_histogram(X, nBins=100, binSize=None, normFac=None, skipZeros=False):
     """ Create a adaptive histogram of a (x) point set using some number of bins. """
-    if binSize is not None:
-        nBins = round( (X.max()-X.min()) / binSize )
+    minVal = X.min()
+    if skipZeros:
+        minVal = X[X > 0.0].min()
 
-    bins = np.linspace(X.min(),X.max(), nBins)
+    if binSize is not None:
+        nBins = round( (X.max()-minVal) / binSize )
+
+    bins = np.linspace(minVal,X.max(), nBins)
     delta = bins[1]-bins[0]
 
     running_h   = []
@@ -147,7 +155,7 @@ def running_histogram(X, nBins=100, binSize=None, normFac=None):
     if normFac is not None:
         running_h /= normFac
 
-    return bin_centers, running_h
+    return np.array(bin_centers), np.array(running_h)
 
 def replicateVar(childCounts, subsetInds=None):
     """ Given a number of children for each parent, replicate the parent indices for each child.

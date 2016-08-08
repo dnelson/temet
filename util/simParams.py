@@ -190,14 +190,31 @@ class simParams:
                 self.targetGasMass /= 8.0
                 self.boxSize       /= 2.0
 
+            # sims.TNG_method variations
+            runStr = 'TNG'
+            mStr   = ''
+
+            if variant is not None and 'r0' in variant:
+                # r001 through r010 IC realizations, L25n256 boxes
+                mStr   = '_method'
+                runStr = 'FP_TNG_' + variant
+
+            # other variants
+            if variant == 'wmap':
+                runStr = 'TNG_WMAP'
+                self.omega_m     = 0.2726
+                self.omega_L     = 0.7274
+                self.omega_b     = 0.0456
+                self.HubbleParam = 0.704
+
             bs = str(int(self.boxSize/1000.0))
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
             dmStr = '_DM' if '_dm' in run else ''
 
-            self.arepoPath  = self.basePath + 'sims.TNG/L' + bs + 'n' + str(res) + 'TNG' + dmStr + '/'
+            self.arepoPath  = self.basePath + 'sims.TNG'+mStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
             self.savPrefix  = 'IP'
-            self.simName    = 'L' + bs + 'n' + str(res) + 'TNG' + dmStr
+            self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.saveTag    = 'iP'
             self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
@@ -758,14 +775,14 @@ class simParams:
         self.redshift = redshift
         if self.redshift is not None:
             self.snap = redshiftToSnapNum(sP=self)
-            self.units = units(sP=self)
+        self.units = units(sP=self)
 
     def setSnap(self, snap=None):
         """ Update sP based on new snapshot. """
         self.snap = snap
         if self.snap is not None:
             self.redshift = snapNumToRedshift(sP=self)
-            self.units = units(sP=self)
+        self.units = units(sP=self)
 
     def matchedSubhaloID(self, hID=None):
         """ Return a subhalo index (into the group catalog) for this simulation given a unique, 
@@ -840,6 +857,11 @@ class simParams:
             if self.hInd == 2 and self.res in [9,10,11]:
                 return 0 # verified
 
+            # default hardcoded for now:
+            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
+            return 0
+
+        if self.run in ['zooms2_tng']:
             # default hardcoded for now:
             print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0

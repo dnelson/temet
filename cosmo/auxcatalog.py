@@ -351,9 +351,9 @@ def wholeBoxColDensGrid(sP, species):
         the requested species (e.g. HI, CIV) in all gas cells onto the grid.
     """
     from cosmo import hydrogen
+    from cosmo.load import snapshotHeader
     from util.sphMap import sphMapWholeBox
     from cosmo.cloudy import cloudyIon
-    #from vis.common import getHsmlForPartType, loadMassAndQuantity, gridOutputProcess
 
     hDensSpecies = ['HI','HI_noH2','HI2','HI3']
     zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar']
@@ -362,7 +362,9 @@ def wholeBoxColDensGrid(sP, species):
         raise Exception('Not implemented.')
 
     # config
-    nChunks = 50    # split loading into how many pieces
+    h = snapshotHeader(sP)
+
+    nChunks = np.max( [4, int(h['NumPart'][sP.ptNum('gas')]**(1.0/3.0) / 10.0)] )
     axes    = [0,1] # x,y projection
     
     # info

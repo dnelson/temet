@@ -908,6 +908,19 @@ def danforth2016():
 
     return r
 
+def bekeraite16VF():
+    """ Load observational data points from Bekeraite+ (2016) Fig 3 extracted. """
+    path = dataBasePath + 'bekeraite/b16.txt'
+
+    data = np.loadtxt(path,delimiter=',')
+
+    r = {'v_circ'      : data[:,0],
+         'numDens'     : 1e-3 * data[:,1],
+         'numDens_err' : 1e-3 * data[:,2],
+         'label'       : 'Bekeraite+ (2016) HIPASS+CALIFA z < 0.05'}
+
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT

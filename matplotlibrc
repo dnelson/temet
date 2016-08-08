@@ -211,10 +211,13 @@ axes.axisbelow      : False   # whether axis gridlines and ticks are below
 #axes.prop_cycle    : cycler('color', 'bgrcmyk')
 axes.prop_cycle     : cycler('color',['1F77B4','FF7F0E','2CA02C','D62728','9467BD','8C564B','E377C2','7F7F7F','BCBD22','17BECF']) # tableau10
 
+#axes.prop_cycle     : cycler('color',['1F77B4','111111','FF7F0E','2CA02C','D62728','9467BD','8C564B','E377C2','7F7F7F','BCBD22','17BECF','FFBB78','98DF8A','FF9896','C5B0D5']) # "tableau12" + black
+
 # tableau10_light: "#AEC7E8", "#FFBB78", "#98DF8A", "#FF9896", "#C5B0D5", "#C49C94",
 #              "#F7B6D2", "#C7C7C7", "#DBDB8D", "#9EDAE5"
 # tableau10_medium: "#729ECE", "#FF9E4A", "#67BF5C", "#ED665D", "#AD8BC9", "#A8786E",
 #              "#ED97CA", "#A2A2A2", "#CDCC5D", "#6DCCDA"
+# tableau20: 1f77b4, aec7e8, ff7f0e, ffbb78, 2ca02c, 98df8a, d62728, ff9896, 9467bd, c5b0d5, 8c564b, c49c94, e377c2, f7b6d2, 7f7f7f, c7c7c7, bcbd22, dbdb8d, 17becf, 9edae5
 
                                             # color cycle for plot lines
                                             # as list of string colorspecs:
