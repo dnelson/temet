@@ -171,10 +171,10 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         # override HDF5 datatypes if needed
         if isinstance(r['halos'],dict) and 'GroupFirstSub' in r['halos']:
             r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32') # unsigned -> signed
-        if isinstance(fieldsHalos,basestring) and fieldsHalos == 'GroupFirstSub':
-            r['halos'] = r['halos'].astype('int32') # unsigned -> signed
-        if isinstance(fieldsHalos,list) and fieldsHalos[0] == 'GroupFirstSub':
-            r['halos'] = r['halos'].astype('int32') # unsigned -> signed
+        else:
+            if iterable(fieldsHalos)[0] == 'GroupFirstSub':
+                assert len(iterable(fieldsHalos)) == 1
+                r['halos'] = r['halos'].astype('int32') # unsigned -> signed
 
     return r
 
