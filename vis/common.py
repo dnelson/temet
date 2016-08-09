@@ -206,6 +206,8 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         partFieldLoad = 'vel'
     if partField in velLOSFieldNames:
         partFieldLoad = 'vel'
+    if partField in ['bmag_uG']:
+        partFieldLoad = 'bmag'
 
     # quantity and column density normalization
     normCol = False
@@ -309,7 +311,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField in ['bmag']:
         grid = logZeroMin( grid )
         config['label']  = 'Mean Magnetic Field Magnitude [log G]'
-        config['ctName'] = 'jet'
+        config['ctName'] = 'Spectral_r'
+
+    if partField in ['bmag_uG']:
+        grid = logZeroMin( grid * 1e6 )
+        config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
+        config['ctName'] = 'Spectral_r'
 
     # todo: sqrt(magnetic energy / volume)
 
