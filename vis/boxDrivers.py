@@ -60,7 +60,8 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True} )
     panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
     panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2]} )
-    panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
+    #panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
+    panels.append( {'hsmlFac':2.5, 'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1400]} )
@@ -74,7 +75,7 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
+        savePath = '/home/extdylan/data/frames/%s_bmag_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 960
         colorbars = True
@@ -110,6 +111,39 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
         savePath  = '/home/extdylan/data/frames/comp_gasdens_sb0/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
+        colorbars = True
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
+        maxNSnaps = None
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def Illustris_vs_TNG_subbox0_4x2_movie(curTask=0, numTasks=1):
+    """ Render a movie comparing Illustris-1 (top) and L75n1820TNG subbox0 (bottom), 4 quantities per row. """
+    panels = []
+
+    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True, 'labelSim':True} )
+    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+    panels.append( {'run':'illustris', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2]} )
+
+    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelSim':True} )
+    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+    panels.append( {'run':'tng', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2], 'labelZ':True} )
+
+    variant = 'subbox0'
+    res     = 1820
+    method  = 'sphMap'
+    nPixels = 960
+    axes    = [0,1] # x,y
+
+    class plotConfig:
+        savePath  = '/home/extdylan/data/frames/comp_4x2_sb0/'
+        plotStyle = 'edged_black'
+        rasterPx  = 960
         colorbars = True
 
         # movie config
