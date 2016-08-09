@@ -833,10 +833,14 @@ class simParams:
         return 1.0/(1.0+self.redshift)
     
     @property
-    def boxSizeCubicMpc(self):
+    def boxSizeCubicPhysicalMpc(self):
         if self.redshift != 0.0:
             print("Warning: Make sure you mean it (smaller physical boxsize at z>0).")
         return (self.units.codeLengthToKpc(self.boxSize)/1000.0)**3
+
+    @property
+    def boxSizeCubicComovingMpc(self):
+        return (self.units.codeLengthToComovingKpc(self.boxSize)/1000.0)**3
     
     @property
     def zoomSubhaloID(self):

@@ -7,8 +7,11 @@ from builtins import *
 
 import numpy as np
 import h5py
+import glob
 from util.helper import evenlySample
 from os.path import isfile, expanduser
+from scipy import interpolate
+from scipy.signal import savgol_filter
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
@@ -16,8 +19,6 @@ dataBasePath = expanduser("~") + '/python/data/'
 
 def behrooziSMHM(sP, logHaloMass=None):
     """ Load from data files: Behroozi+ (2013) abundance matching, stellar mass / halo mass relation. """
-    from scipy import interpolate
-
     basePath = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/smmr/'
     fileName = 'c_smmr_z0.10_red_all_smf_m1p1s1_bolshoi_fullcosmos_ms.dat'
 
@@ -50,8 +51,6 @@ def behrooziSMHM(sP, logHaloMass=None):
 
 def behrooziSFRAvgs():
     """ Load from data files: Behroozi+ (2013) average SFR histories in halo mass bins. """
-    from scipy.signal import savgol_filter
-
     haloMassBins = np.linspace(10.0,15.0,26) # 0.2 spacing #[11.0,12.0,3.0,14.0,15.0]
     #basePath  = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/sfr/' # from website
     basePath  = dataBasePath + 'behroozi/analysis/' # private communication
@@ -79,7 +78,6 @@ def behrooziSFRAvgs():
 
 def behrooziObsSFRD():
     """ Load observational data point compilation of SFRD(z) from Behroozi+ (2013). """
-
     basePath = dataBasePath + 'behroozi/behroozi-2013-data-compilation/'
     fileName = 'csfrs_new.dat'
 
@@ -975,18 +973,18 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
 
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """
-    from os.path import isfile
     nPts = 2000
 
     # cached? in sP object or on disk?
     if 'sfrd' in sP.data:
         return sP.data['sfrd']
 
-    saveFilename = sP.derivPath + 'sfrtxt_1.00.hdf5'
-    if isfile(saveFilename):
-        print(' Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
+    saveFilenames = sorted(glob.glob(sP.derivPath + 'sfrtxt_*.hdf5'))
+
+    if len(saveFilenames):
+        print(' Loaded: [%s]' % saveFilenames[-1].split(sP.derivPath)[1])
         r = {}
-        with h5py.File(saveFilename,'r') as f:
+        with h5py.File(saveFilenames[-1],'r') as f:
             for key in f:
                 r[key] = f[key][()]
         return r
@@ -1011,7 +1009,7 @@ def sfrTxt(sP):
           'cumMassStars'      : evenlySample(data[:,5],nPts,logSpace=True) }
 
     r['redshift'] = 1.0/r['scaleFac'] - 1.0
-    r['sfrd']     = r['totSfrRate'] / sP.boxSizeCubicMpc
+    r['sfrd']     = r['totSfrRate'] / sP.boxSizeCubicComovingMpc # a constant cMpc^3 (equals pMpc^3 at z=0)
 
     # save
     saveFilename = sP.derivPath + 'sfrtxt_%.2f.hdf5' % r['scaleFac'].max()
