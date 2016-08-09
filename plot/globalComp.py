@@ -22,7 +22,7 @@ from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, calcMstarCo
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
 sKo     = 3   # savgol smoothing kernel poly order
 binSize = 0.2 # dex in stellar mass/halo mass for median lines
-figsize = (8,6) # (16,9)
+figsize = (16,9) # (16,9) (8,6)
 clean   = False # make visually clean plots with less information
 
 linestyles = ['-',':','--','-.']       # typically for analysis variations per run
@@ -296,7 +296,7 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
 
         ax.plot(s['redshift'], s['sfrd'], '-', lw=2.5, label=sP.simName)
 
-    # second legeng
+    # second legend
     legend2 = ax.legend(loc='lower left')
 
     fig.tight_layout()
@@ -364,7 +364,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, simRedshift=0.0):
         ym2 = savgol_filter(ym,sKn,sKo)
         l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
 
-    # second legeng
+    # second legend
     legend2 = ax.legend(loc='lower right')
 
     fig.tight_layout()
@@ -478,7 +478,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
             ax.fill_between(xm_stars[1:-1], y_down, y_up, 
                             color=l.get_color(), interpolate=True, alpha=0.3)
 
-    # second legeng
+    # second legend
     handles, labels = ax.get_legend_handles_labels()
     sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[0]),
               plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[1])]
@@ -625,7 +625,8 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
                 xx = gc['subhalos'][mt][w,partTypeNum('stars')]
                 xx = sP.units.codeMassToLogMsun(xx)
 
-            xm, ym_i = running_histogram(xx, binSize=binSize, normFac=sP.boxSizeCubicMpc*binSize, skipZeros=True)
+            normFac = sP.boxSizeCubicPhysicalMpc * binSize
+            xm, ym_i = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
             ym = savgol_filter(ym_i,sKn,sKo)
 
             label = sP.simName if count == 0 else ''
@@ -634,7 +635,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
 
             count += 1
 
-    # second legeng
+    # second legend
     handles, labels = ax.get_legend_handles_labels()
     if highMassEnd:
         sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[2]),
@@ -731,7 +732,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0):
                 label = sP.simName if i==0 else ''
                 ax.plot(xm[1:-1], ym2[1:-1], linestyles[i], color=c, lw=3.0, label=label)
 
-    # second legeng
+    # second legend
     handles, labels = ax.get_legend_handles_labels()
     sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
               plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1]),
@@ -859,7 +860,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
                 ax.fill_between(xm[:-1], ym2[:-1]-sm2[:-1], ym2[:-1]+sm2[:-1], 
                 color=c, interpolate=True, alpha=0.3)
 
-    # second legeng
+    # second legend
     handles, labels = ax.get_legend_handles_labels()
     sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
               plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1])]
@@ -1772,7 +1773,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
 
         # histogram in log(v) and plot in linear(v)
         xx = np.log10(gc['subhalos'][w])
-        normFac = sP.boxSizeCubicMpc*binSizeLogKms
+        normFac = sP.boxSizeCubicPhysicalMpc*binSizeLogKms
 
         xm_i, ym_i = running_histogram(xx, binSize=binSizeLogKms, normFac=normFac, skipZeros=True)
         xm = 10.0**xm_i
@@ -1875,10 +1876,10 @@ def plots():
 
     # add runs: fullboxes
     sPs.append( simParams(res=1820, run='tng') )
-    #sPs.append( simParams(res=910, run='tng') )
-    #sPs.append( simParams(res=455, run='tng') )
+    sPs.append( simParams(res=910, run='tng') )
+    sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1901,7 +1902,7 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_testing_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_testing1_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
@@ -1914,18 +1915,18 @@ def plots():
     #blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     #galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero)
     #galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
-    #stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
+    stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     #stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
     #massMetallicityStars(sPs, pdf, simRedshift=zZero)
     #massMetallicityGas(sPs, pdf, simRedshift=0.0)
     #massMetallicityGas(sPs, pdf, simRedshift=0.7)
-    #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
+    baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    #nHIcddf(sPs, pdf) # z=3
-    #nHIcddf(sPs, pdf, moment=1) # z=3
+    nHIcddf(sPs, pdf) # z=3
+    nHIcddf(sPs, pdf, moment=1) # z=3
     nOVIcddf(sPs, pdf) # z=0.2
-    #nOVIcddf(sPs, pdf, moment=1) # z=0.2
-    #dlaMetallicityPDF(sPs, pdf) # z=3
+    nOVIcddf(sPs, pdf, moment=1) # z=0.2
+    dlaMetallicityPDF(sPs, pdf) # z=3
 
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
     #galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=True, simRedshift=zZero)
