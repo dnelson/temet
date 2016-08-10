@@ -168,13 +168,14 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                     r['halos'][field] = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=field)
             il.groupcat.gcPath = gcPath # restore
 
-        # override HDF5 datatypes if needed
-        if isinstance(r['halos'],dict) and 'GroupFirstSub' in r['halos']:
-            r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32') # unsigned -> signed
+        # override HDF5 datatypes if needed (GroupFirstSub unsigned -> signed for -1 entries)
+        if isinstance(r['halos'],dict):
+            if 'GroupFirstSub' in r['halos']:
+                r['halos']['GroupFirstSub'] = r['halos']['GroupFirstSub'].astype('int32')
         else:
             if iterable(fieldsHalos)[0] == 'GroupFirstSub':
                 assert len(iterable(fieldsHalos)) == 1
-                r['halos'] = r['halos'].astype('int32') # unsigned -> signed
+                r['halos'] = r['halos'].astype('int32')
 
     return r
 
