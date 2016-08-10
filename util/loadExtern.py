@@ -494,10 +494,25 @@ def gallazzi2005(sP):
           'Zstars'       : np.log10(10.0**data[:,1] * 0.02 / sP.units.Z_solar),
           'ZstarsDown'   : np.log10(10.0**data[:,2] * 0.02 / sP.units.Z_solar),
           'ZstarsUp'     : np.log10(10.0**data[:,3] * 0.02 / sP.units.Z_solar),
-          'ageStars'     : data[:,4],
-          'ageStarsDown' : data[:,5],
-          'ageStarsUp'   : data[:,6],
+          'ageStars'     : 10.0**(data[:,4] - 9.0), # log yr -> Gyr
+          'ageStarsDown' : 10.0**(data[:,5] - 9.0),
+          'ageStarsUp'   : 10.0**(data[:,6] - 9.0),
           'label'        : 'Gallazzi+ (2005) SDSS z<0.2' }
+
+    return r
+
+def bernardi10():
+    """ Load observational data points (stellar ages) from Bernardi+ (2010). """
+    path = dataBasePath + 'bernardi/b10_fig10.txt'
+
+    # columns: Mstar (log10 Msun), Age (Gyr), Age_up (Gyr), Age_down (Gyr)
+    data = np.loadtxt(path, delimiter=',')
+
+    r = { 'stellarMass'  : data[:,0], 
+          'ageStars'     : data[:,1],
+          'ageStarsUp'   : data[:,2],
+          'ageStarsDown' : data[:,3],
+          'label'        : 'Bernardi+ (2010) SDSS, HB09 Early-Types' }
 
     return r
 

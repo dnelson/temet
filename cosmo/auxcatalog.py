@@ -187,7 +187,7 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
 
     return r, attrs
 
-def subhaloRadialSum(sP, ptType, ptProperty, rad):
+def subhaloRadialSum(sP, ptType, ptProperty, rad, weighting=None):
     """ Compute total/sum of a particle property (e.g. mass) for those particles of a given type enclosed 
         within a fixed radius (input as a scalar, in physical kpc, or as a string specifying a particular 
         model for a variable cut radius). Restricted to subhalo particles only.
@@ -198,6 +198,7 @@ def subhaloRadialSum(sP, ptType, ptProperty, rad):
     ptLoadType = sP.ptNum(ptType)
 
     desc   = "Quantity [%s] enclosed within a radius of [%s] for [%s]." % (ptProperty,rad,ptType)
+    if weighting is not None: desc += " (weighting = %s). " % weighting
     desc  +=" (only subhalo particles included). "
     select = "All Subhalos."
 
@@ -205,13 +206,17 @@ def subhaloRadialSum(sP, ptType, ptProperty, rad):
     gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
     gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
 
-    # allocate return (0=gas+wind, 1=dm, 2=stars-wind), NaN indicates not computed
+    # allocate return, NaN indicates not computed except for mass where 0 will do
     nSubsTot = gc['header']['Nsubgroups_Total']
 
     r = np.zeros( nSubsTot, dtype='float32' )
 
+    if ptProperty not in ['mass','Masses']:
+        r.fill(np.nan)
+
     # info
-    print(' Total # Subhalos: %d, processing all [%s] subhalos with [%s] rad...' % (nSubsTot,nSubsTot,rad))
+    print(' Total # Subhalos: %d, processing all [%s] subhalos with [%s] rad and [%s] weighting...' % \
+        (nSubsTot,nSubsTot,rad,weighting))
 
     # determine radial restriction for each subhalo
     if isinstance(rad, float):
@@ -219,32 +224,74 @@ def subhaloRadialSum(sP, ptType, ptProperty, rad):
         rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
         radSq = np.zeros( nSubsTot, dtype='float32' ) 
         radSq += rad_pkpc * rad_pkpc
-    else:
-        assert rad in ['p10','30h']
-        if rad == 'p10':
-            # load group m200_crit values
-            gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
-            parentM200 = gcLoad['halos'][gcLoad['subhalos']]
+    elif rad is None:
+        # no radial restriction (all particles in subhalo)
+        radSq = np.zeros( nSubsTot, dtype='float32' )
+        radSq += sP.boxSize**2.0
+    elif rad == 'p10':
+        # load group m200_crit values
+        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        parentM200 = gcLoad['halos'][gcLoad['subhalos']]
 
-            # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
-            r_cut = 27.3 * (parentM200/1e5)**(0.29) / sP.HubbleParam
-            radSq = r_cut * r_cut
-        if rad == '30h':
-            # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
-            rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
+        # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
+        r_cut = 27.3 * (parentM200/1e5)**(0.29) / sP.HubbleParam
+        radSq = r_cut * r_cut
+    elif rad == '30h':
+        # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
+        rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
 
-            gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-            twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
 
-            ww = np.where(twiceStellarRHalf > rad_pkpc)
-            twiceStellarRHalf[ww] = rad_pkpc
-            radSq = twiceStellarRHalf**2.0
+        ww = np.where(twiceStellarRHalf > rad_pkpc)
+        twiceStellarRHalf[ww] = rad_pkpc
+        radSq = twiceStellarRHalf**2.0
 
     assert radSq.size == nSubsTot
 
     # global load of all particles of [ptType] in snapshot
-    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=['pos', 'sftime', ptProperty])
+    fieldsLoad = ['pos', 'sftime']
+
+    if ptProperty not in ['stellar_age']:
+        fieldsLoad.append(ptProperty)
+        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad)
+    else:
+        # snapshotSubset() cannot current load both custom and pre-existing fields
+        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad)
+        particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty])
+
     assert particles[ptProperty].ndim == 1
+
+    # load weights
+    if weighting is None:
+        particles['weights'] = np.zeros( particles[ptProperty].size, dtype='float32' )
+        particles['weights'] += 1.0 # uniform
+    else:
+        assert weighting == 'mass' or 'bandLum' in weighting
+
+        if weighting == 'mass':
+            # use particle masses (linear) as weights
+            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields='Masses')
+
+        if 'bandLum' in weighting:
+            # prepare sps interpolator
+            from cosmo.stellarPop import sps
+            pop = sps(sP, 'padova07', 'chabrier', 'bc00')
+
+            # load additional fields, snapshot wide
+            fieldsLoadMag = ['initialmass','metallicity']
+            magsLoad = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoadMag)
+
+            # request magnitudes in this band
+            band = weighting.split("-")[1]
+            mags = pop.mags_code_units(sP, band, particles['GFM_StellarFormationTime'], 
+                                     magsLoad['GFM_Metallicity'], 
+                                     magsLoad['GFM_InitialMass'], retFullPt4Size=True)
+
+            # use the (linear) luminosity in this band as the weight
+            particles['weights'] = np.power(10.0, -0.4 * mags)
+
+    assert particles['weights'].ndim == 1 and particles['weights'].size == particles[ptProperty].size
 
     # loop over subhalos
     for i in range(nSubsTot):
@@ -263,13 +310,20 @@ def subhaloRadialSum(sP, ptType, ptProperty, rad):
         #wWind  = np.where( (rr <= radSq[i]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
         wStars = np.where( (rr <= radSq[i]) & (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
 
-        r[i] = np.sum( particles[ptProperty][i0:i1][wStars] )
+        if len(wStars[0]) == 0:
+            continue # zero length of actual stars
+
+        loc_val = particles[ptProperty][i0:i1][wStars]
+        loc_wt  = particles['weights'][i0:i1][wStars]
+
+        r[i] = np.average( loc_val , weights=loc_wt )
 
     attrs = {'Description' : desc.encode('ascii'),
              'Selection'   : select.encode('ascii'),
              'ptType'      : ptType.encode('ascii'),
              'ptProperty'  : ptProperty.encode('ascii'),
-             'rad'         : rad}
+             'rad'         : str(rad).encode('ascii'),
+             'weighting'   : str(weighting).encode('ascii')}
 
     return r, attrs
 
@@ -545,6 +599,13 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad='30h'),
    'Subhalo_Mass_puchwein10_Stars': \
      partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad='p10'),
+
+   'Subhalo_StellarAge_NoRadCut_MassWt'       : \
+     partial(subhaloRadialSum,ptType='stars',ptProperty='stellar_age',rad=None,weighting='mass'),
+   'Subhalo_StellarAge_NoRadCut_rBandLumWt' : \
+     partial(subhaloRadialSum,ptType='stars',ptProperty='stellar_age',rad=None,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarAge_4pkpc_rBandLumWt'    : \
+     partial(subhaloRadialSum,ptType='stars',ptProperty='stellar_age',rad=4.0,weighting='bandLum-sdss_r'),
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),
