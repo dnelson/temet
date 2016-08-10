@@ -153,6 +153,7 @@ def mosterSMHM(sP):
             return 2.0 * N_z / ( (mass/M1_z)**(-beta_z) + (mass/M1_z)**(gamma_z) )
 
         # envelopes: sample and return max or min
+        np.random.seed(424242)
         nPts = 500
 
         log_M1_z = np.random.normal(M10,M10s,nPts) + np.random.normal(M11,M11s,nPts)*zFac

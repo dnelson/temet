@@ -187,12 +187,14 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
 
     return r, attrs
 
-def subhaloRadialSum(sP, ptType, ptProperty, rad, weighting=None):
-    """ Compute total/sum of a particle property (e.g. mass) for those particles of a given type enclosed 
-        within a fixed radius (input as a scalar, in physical kpc, or as a string specifying a particular 
-        model for a variable cut radius). Restricted to subhalo particles only.
+def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
+    """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
+        for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
+        kpc, or as a string specifying a particular model for a variable cut radius). 
+        Restricted to subhalo particles only.
     """
     assert ptType == 'stars' # otherwise generalize wind cut
+    assert op in ['sum','mean']
 
     # config
     ptLoadType = sP.ptNum(ptType)
@@ -268,6 +270,7 @@ def subhaloRadialSum(sP, ptType, ptProperty, rad, weighting=None):
         particles['weights'] += 1.0 # uniform
     else:
         assert weighting == 'mass' or 'bandLum' in weighting
+        assert op not in ['sum'] # meaningless
 
         if weighting == 'mass':
             # use particle masses (linear) as weights
@@ -316,7 +319,8 @@ def subhaloRadialSum(sP, ptType, ptProperty, rad, weighting=None):
         loc_val = particles[ptProperty][i0:i1][wStars]
         loc_wt  = particles['weights'][i0:i1][wStars]
 
-        r[i] = np.average( loc_val , weights=loc_wt )
+        if op == 'sum': r[i] = np.sum( loc_val )
+        if op == 'mean': r[i] = np.average( loc_val , weights=loc_wt )
 
     attrs = {'Description' : desc.encode('ascii'),
              'Selection'   : select.encode('ascii'),
@@ -594,18 +598,18 @@ fieldComputeFunctionMapping = \
      partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
 
    'Subhalo_Mass_30pkpc_Stars' : \
-     partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad=30.0),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
    'Subhalo_Mass_min_30pkpc_2rhalf_Stars' : \
-     partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad='30h'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='30h'),
    'Subhalo_Mass_puchwein10_Stars': \
-     partial(subhaloRadialSum,ptType='stars',ptProperty='Masses',rad='p10'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='p10'),
 
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
-     partial(subhaloRadialSum,ptType='stars',ptProperty='stellar_age',rad=None,weighting='mass'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
    'Subhalo_StellarAge_NoRadCut_rBandLumWt' : \
-     partial(subhaloRadialSum,ptType='stars',ptProperty='stellar_age',rad=None,weighting='bandLum-sdss_r'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='bandLum-sdss_r'),
    'Subhalo_StellarAge_4pkpc_rBandLumWt'    : \
-     partial(subhaloRadialSum,ptType='stars',ptProperty='stellar_age',rad=4.0,weighting='bandLum-sdss_r'),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),
