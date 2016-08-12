@@ -15,21 +15,21 @@ from cosmo.load import groupCat, groupCatSingle
 from cosmo.util import snapNumToRedshift, redshiftToSnapNum
 from util import simParams
 
-def oneHaloPressureCompAndRatios(fofHaloID=0):
+def oneHaloPressureCompAndRatios(shID=0):
     """ In 3x1 panels compare gas and magnetic pressures and their ratio. """
     panels = []
 
-    panels.append( {'hInd':fofHaloID, 'partField':'P_B', 'valMinMax':[1.0,9.0]} )
-    panels.append( {'hInd':fofHaloID, 'partField':'P_gas', 'valMinMax':[1.0,9.0]} )
-    panels.append( {'hInd':fofHaloID, 'partField':'pressure_ratio', 'valMinMax':[-4.0,0.0]} )
+    panels.append( {'hInd':shID, 'partField':'P_B', 'valMinMax':[1.0,9.0]} )
+    panels.append( {'hInd':shID, 'partField':'P_gas', 'valMinMax':[1.0,9.0]} )
+    panels.append( {'hInd':shID, 'partField':'pressure_ratio', 'valMinMax':[-4.0,0.0]} )
 
     run        = 'tng'
-    res        = 2160
-    redshift   = 6.0
+    res        = 1820
+    redshift   = 0.0
     partType   = 'gas'
     rVirFracs  = [1.0]
     method     = 'sphMap'
-    nPixels    = [3840,3840]
+    nPixels    = [960,960]
     sizeFac    = 2.5
     hsmlFac    = 2.5
     axes       = [1,0]
@@ -42,9 +42,47 @@ def oneHaloPressureCompAndRatios(fofHaloID=0):
     mpb        = None
 
     class plotConfig:
-        plotStyle    = 'open_black'
+        plotStyle    = 'open'
+        rasterPx     = 960
         colorbars    = True
-        saveFilename = savePathDefault + 'presComp_%s_%d_z%.1f_halo-%d.pdf' % (run,res,redshift,fofHaloID)
+        saveFilename = './gasPressureComp_%s_%d_z%.1f_subhalo-%d.pdf' % (run,res,redshift,shID)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def oneHaloGaussProposal():
+    """ Render single halo with B field streamlines for Gauss proposal (MHD figure). """
+    shID = 4
+    panels = []
+
+    #panels.append( {'hInd':shID, 'partField':'bmag_uG', 'valMinMax':[-2.0,1.0]} )
+    panels.append( {'hInd':shID, 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,7.2]} )
+    #panels.append( {'hInd':shID, 'partField':'bfield_x', 'valMinMax':[-1e-2,1e-2]} )
+    #panels.append( {'hInd':shID, 'partField':'bfield_y', 'valMinMax':[-1e-2,1e-2]} )
+
+    run        = 'tng'
+    res        = 1820
+    redshift   = 0.0
+    partType   = 'gas'
+    rVirFracs  = [1.0]
+    method     = 'sphMap'
+    nPixels    = [960,960]
+    sizeFac    = 0.3 # central object
+    vecOverlay = True # experimental B field streamlines
+    hsmlFac    = 2.5
+    axes       = [1,0]
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    labelHalo  = False
+    relCoords  = True
+    rotation   = None
+    mpb        = None
+
+    class plotConfig:
+        plotStyle    = 'open'
+        rasterPx     = 960
+        colorbars    = True
+        saveFilename = './gasDens_%s_%d_z%.1f_sh-%d.pdf' % (run,res,redshift,shID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -84,7 +122,7 @@ def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = saveBasePath + 'sample_%s_page-%d-of-%d_%s_%d.pdf' % \
+        saveFilename = savePathDefault + 'sample_%s_page-%d-of-%d_%s_%d.pdf' % \
                        (partField,curPageNum,numPages,run,res)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
@@ -145,7 +183,7 @@ def boxHalo_HI():
         plotStyle    = 'open'
         colorbars    = True
         rasterPx     = 960
-        saveFilename = saveBasePath + 'fig5b_%s_%d_z%.1f_shID-%d.pdf' % \
+        saveFilename = savePathDefault + 'fig5b_%s_%d_z%.1f_shID-%d.pdf' % \
                        (run,res,redshift,hInd)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -183,7 +221,7 @@ def boxHalo_MultiQuant():
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = saveBasePath + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,hInd,sizeFac)
+        saveFilename = savePathDefault + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,hInd,sizeFac)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -213,7 +251,7 @@ def zoomHalo_z2_MultiQuant():
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = saveBasePath + '%s_h%dL%d_z%.1f_multiQuant.pdf' % (run,hInd,res,redshift)
+        saveFilename = savePathDefault + '%s_h%dL%d_z%.1f_multiQuant.pdf' % (run,hInd,res,redshift)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -278,7 +316,7 @@ def tngCluster_center_timeSeriesPanels(conf=0):
         plotStyle    = 'edged_black'
         colorbars    = True
         rasterPx     = 960
-        saveFilename = saveBasePath + 'timePanels_%s_hInd-0_%s-%s_z%.1f_n%d.pdf' % \
+        saveFilename = savePathDefault + 'timePanels_%s_hInd-0_%s-%s_z%.1f_n%d.pdf' % \
                        (sP.simName,partType,partField,zStart,nSnapsBack)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -336,7 +374,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(conf,haloOrMassBinNum=None):
         panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
         panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
 
-        plotConfig.saveFilename = saveBasePath + 'renderHalo_%s-%d_bin%d_halo%d_hID-%d_shID-%d.pdf' % \
+        plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_halo%d_hID-%d_shID-%d.pdf' % \
                                   (sP.simName,sP.snap,binInd,haloNum,haloInd,hID)
 
     if conf == 'halos_combined':
@@ -365,7 +403,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(conf,haloOrMassBinNum=None):
             if panelNum == 7: 
                 panels.append( {'hInd':hID, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
-        plotConfig.saveFilename = saveBasePath + 'renderHalo_%s-%d_bin%d_%s-%s.pdf' % \
+        plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_%s-%s.pdf' % \
                                   (sP.simName,sP.snap,binInd,panels[0]['partType'],panels[0]['partField'])
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

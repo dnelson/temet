@@ -264,11 +264,6 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Total %s Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'jet'
 
-    if partField == 'mass2':
-        grid  = logZeroMin( sP.units.codeMassToLogMsun(grid) )
-        config['label']  = 'Total %s Mass SQ [who knows]' % ptStr
-        config['ctName'] = 'jet'
-
     # column densities
     if partField == 'coldens':
         grid  = logZeroMin( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
@@ -282,7 +277,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
-        if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' #'cubehelix'
+        if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         if ' ' in partField:
@@ -310,7 +305,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
 
     if partField in ['bmag']:
         grid = logZeroMin( grid )
-        config['label']  = 'Mean Magnetic Field Magnitude [log G]'
+        config['label']  = 'Magnetic Field Magnitude [log G]'
         config['ctName'] = 'Spectral_r'
 
     if partField in ['bmag_uG']:
@@ -318,7 +313,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
 
-    # todo: sqrt(magnetic energy / volume)
+    if partField in ['bfield_x','bfield_y','bfield_z']:
+        grid = sP.units.particleCodeBFieldToGauss(grid) * 1e6 # linear micro-Gauss
+        dirStr = partField.split("_")[1].lower()
+        config['label']  = 'B$_{\\rm %s}$ [$\mu$G]' % dirStr
+        config['ctName'] = 'PuOr' # is brewer-purpleorange
 
     # gas: pressures
     if partField in ['P_gas']:
@@ -695,6 +694,72 @@ def addBoxMarkers(p, conf, ax):
         legend.get_texts()[0].set_color('white')
         legend.get_texts()[1].set_color('white')
 
+def addVectorFieldOverlay(p, conf, ax):
+    """ Experimental quiver/streamline overlay for vector field data. Work in progress. """
+    if 'vecOverlay' not in p:
+        return
+
+    assert p['rotMatrix'] is None # otherwise need to handle like los-vel
+
+    field_pt = 'gas'
+    field_x = 'bfield_' + ['x','y','z'][p['axes'][0]]
+    field_y = 'bfield_' + ['x','y','z'][p['axes'][1]]
+    field_color = 'bmag'
+    nPixels = [40,40]
+    qStride = 2 # total number of ticks per axis is nPixels[i]/qStride
+    smoothFWHM = None
+
+    # compress vector grids along third direction to more thin slice
+    boxSizeImg = np.array(p['boxSizeImg'])
+    boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(5.0) # 5 pkpc
+
+    # load two grids of vector length in plot-x and plot-y directions
+    grid_x, _ = gridBox(p['sP'], p['method'], field_pt, field_x, nPixels, p['axes'],
+                        p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'], 
+                        smoothFWHM=smoothFWHM)
+
+    grid_y, _ = gridBox(p['sP'], p['method'], field_pt, field_y, nPixels, p['axes'],
+                        p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'],
+                        smoothFWHM=smoothFWHM)
+
+    # load a grid of any quantity to use to color map the strokes
+    grid_c, conf_c = gridBox(p['sP'], p['method'], field_pt, field_color, nPixels, p['axes'],
+                             p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'],
+                             smoothFWHM=smoothFWHM)
+
+    # create a unit vector at the position of each pixel
+    grid_mag = np.sqrt(grid_x**2.0 + grid_y**2.0)
+    grid_x /= grid_mag
+    grid_y /= grid_mag
+
+    # create arrow starting (tail) positions
+    pxScale = p['boxSizeImg'][p['axes']] / p['nPixels']
+    xx = np.linspace( p['extent'][0] + pxScale[0]/2, p['extent'][1] - pxScale[0]/2, nPixels[0] )
+    yy = np.linspace( p['extent'][2] + pxScale[1]/2, p['extent'][3] - pxScale[1]/2, nPixels[1] )
+
+    # (A) plot white quivers
+    #q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride], 
+    #              color='white', angles='xy', pivot='mid')
+
+    # (B) plot colored quivers
+    #q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride],
+    #              grid_c[::qStride,::qStride], angles='xy', pivot='mid')
+    #ax.quiverkey(q, 1.1, 1.05, 10.0, 'label', labelpos='E', labelsep=0.1,  coordinates='figure')
+
+    # (C) plot white streamlines, uniform thickness
+    #ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=None, color='white')
+
+    # (D) plot white streamlines, thickness scaled by color quantity
+    maxSize = 4.0
+    minSize = 0.5
+    grid_c2 = 10.0**grid_c * 1e12 # [log G] -> [linear pG]
+    grid_s = (maxSize - minSize)/(grid_c2.max() - grid_c2.min()) * (grid_c2 - grid_c2.min()) + minSize
+    #ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=grid_s, color='white')
+
+    # (E) plot colored streamlines, uniform thickness
+    ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=grid_s, color=grid_c, cmap='afmhot')
+    #import pdb; pdb.set_trace()
+
 def setAxisColors(ax, color2):
     """ Factor out common axis color commands. """
     ax.title.set_color(color2)
@@ -845,6 +910,8 @@ def renderMultiPanel(panels, conf):
 
             addBoxMarkers(p, conf, ax)
 
+            addVectorFieldOverlay(p, conf, ax)
+
             # colobar
             if conf.colorbars:
                 cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
@@ -930,6 +997,8 @@ def renderMultiPanel(panels, conf):
             if 'valMinMax' in p: plt.clim( p['valMinMax'] )
 
             addBoxMarkers(p, conf, ax)
+
+            addVectorFieldOverlay(p, conf, ax)
 
             # colobar(s)
             if oneGlobalColorbar:
