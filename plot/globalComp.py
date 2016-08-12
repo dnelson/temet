@@ -22,7 +22,7 @@ from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, calcMstarCo
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
 sKo     = 3   # savgol smoothing kernel poly order
 binSize = 0.2 # dex in stellar mass/halo mass for median lines
-figsize = (16,9) # (16,9) (8,6)
+figsize = (16,9) # (16,9) (8,6) (smf:10.6,7.0)
 clean   = False # make visually clean plots with less information
 
 linestyles = ['-',':','--','-.']       # typically for analysis variations per run
@@ -368,7 +368,7 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf, twiceR=False, simRedshift=0.0):
+def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, simRedshift=0.0):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     # plot setup
     fig = plt.figure(figsize=figsize)
@@ -376,28 +376,33 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, simRedshift=0.0):
     
     ax.set_xlim([8.5, 13.0])
     ax.set_ylim([5.5, 11.0])
+
+    ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ tot, only centrals ]')
+    ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
     if twiceR:
         ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
-    else:
-        ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
-    ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ only centrals ]')
+    if vsHaloMass:
+        ax.set_xlabel('M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
+        ax.set_xlim([9,14.5])
+        ax.set_ylim([5.5, 11.0])
 
     # observational points
-    k = kormendyHo2013()
-    m = mcconnellMa2013()
+    if not vsHaloMass:
+        k = kormendyHo2013()
+        m = mcconnellMa2013()
 
-    l3,_,_ = ax.errorbar(m['pts']['M_bulge'], m['pts']['M_BH'], 
-                         yerr=[m['pts']['M_BH_down'],m['pts']['M_BH_up']],
-                         color='#bbbbbb', ecolor='#dddddd', alpha=0.9, capsize=0.0, fmt='D')
+        l3,_,_ = ax.errorbar(m['pts']['M_bulge'], m['pts']['M_BH'], 
+                             yerr=[m['pts']['M_BH_down'],m['pts']['M_BH_up']],
+                             color='#bbbbbb', ecolor='#dddddd', alpha=0.9, capsize=0.0, fmt='D')
 
-    l2, = ax.plot(m['M_bulge'], m['M_BH'], '-', color='#999999')
-    ax.fill_between(m['M_bulge'], m['errorDown'], m['errorUp'], color='#999999', interpolate=True, alpha=0.3)
+        l2, = ax.plot(m['M_bulge'], m['M_BH'], '-', color='#999999')
+        ax.fill_between(m['M_bulge'], m['errorDown'], m['errorUp'], color='#999999', interpolate=True, alpha=0.3)
 
-    l1, = ax.plot(k['M_bulge'], k['M_BH'], '-', color='#333333')
-    ax.fill_between(k['M_bulge'], k['errorDown'], k['errorUp'], color='#333333', interpolate=True, alpha=0.3)
+        l1, = ax.plot(k['M_bulge'], k['M_BH'], '-', color='#333333')
+        ax.fill_between(k['M_bulge'], k['errorDown'], k['errorUp'], color='#333333', interpolate=True, alpha=0.3)
 
-    legend1 = ax.legend([l1,l2,l3], [k['label'], m['label'], m['pts']['label']], loc='upper left')
-    ax.add_artist(legend1)
+        legend1 = ax.legend([l1,l2,l3], [k['label'], m['label'], m['pts']['label']], loc='upper left')
+        ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
@@ -415,19 +420,30 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, simRedshift=0.0):
         w = gc['halos']['GroupFirstSub'][wHalo]
 
         # stellar mass definition: would want to mimic bulge mass measurements
+        if not twiceR and not vsHaloMass:
+            xx_code = gc['subhalos']['SubhaloMassInHalfRadType'][w,partTypeNum('stars')]
         if twiceR:
             xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
-        else:
-            xx_code = gc['subhalos']['SubhaloMassInHalfRadType'][w,partTypeNum('stars')]
+        if vsHaloMass:
+            xx_code = gc['halos']['Group_M_Crit200'][wHalo]
 
         xx = sP.units.codeMassToLogMsun( xx_code )
 
-        # stellar mass definition(s)
+        # 'total' black hole mass in this subhalo, exclude those with no BHs
+        # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 
+        # are effectively taking the sum of all their BH masses (better than mean, but max probably best)
         yy = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')] )
+        ww = np.where(yy > 0.0)
 
-        xm, ym, sm = running_median(xx,yy,binSize=binSize)
+        xm, ym, sm = running_median(xx[ww],yy[ww],binSize=binSize,skipZeros=True)
         ym2 = savgol_filter(ym,sKn,sKo)
+        sm2 = savgol_filter(sm,sKn,sKo)
         l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
+
+        if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
+            y_down = np.array(ym2[:-1]) - sm2[:-1]
+            y_up   = np.array(ym2[:-1]) + sm2[:-1]
+            ax.fill_between(xm[:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.2)
 
     # second legend
     legend2 = ax.legend(loc='lower right')
@@ -568,6 +584,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
     
     ax.set_ylim([5e-6,2e-1])
     ax.set_xlim([7,12.5])
+    if clean: ax.set_xlim([5,12.5])
 
     if highMassEnd:
         #ax.set_ylim([1e-7,2e-2])
@@ -583,9 +600,11 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
     else:
         ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ] [ centrals & satellites ]')
     ax.set_yscale('log')
+    if clean: ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ]')
 
     if use30kpc:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 30 pkpc ]')
+        if clean: ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]')
     if use30H:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < min(2r$_{\star,1/2}$,30 pkpc) ]')
     if useP10:
@@ -607,9 +626,10 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
     l4,_,_ = ax.errorbar(d15['stellarMass'], d15['numDens'], yerr=d15['error'],
                          color='#222222', ecolor='#222222', alpha=0.9, capsize=0.0, fmt='s')
 
-    legend1 = ax.legend([l1,l2,l3,l4], 
-        [b08['label'], b12['label'], b13['SerExp']['label'], d15['label']], loc='upper right')
-    ax.add_artist(legend1)
+    if not clean:
+        legend1 = ax.legend([l1,l2,l3,l4], 
+            [b08['label'], b12['label'], b13['SerExp']['label'], d15['label']], loc='upper right')
+        ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
@@ -694,7 +714,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
 
             label = sP.simName if count == 0 else ''
             color = l.get_color() if count > 0 else None
-            l, = ax.plot(xm[1:-1], ym[1:-1], linestyles[count], color=color, lw=3.0, label=label)
+            l, = ax.plot(xm[1:], ym[1:], linestyles[count], color=color, lw=3.0, label=label)
 
             count += 1
 
@@ -1032,7 +1052,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                 ym2 = savgol_filter(ym,sKn,sKo)
 
                 label = sP.simName if i==0 else ''
-                ax.plot(xm[:-1], ym2[:-1], linestyles[i], color=c, lw=3.0, label=label)
+                ax.plot(xm[:], ym2[:], linestyles[i], color=c, lw=3.0, label=label)
 
                 #if fracType == 'gas':
                 #    ax.fill_between(xm[:-1], ym2[:-1]-sm[:-1], ym2[:-1]+sm[:-1], 
@@ -1545,11 +1565,6 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
     eCorrect = True # True, False
     kCorrect = True # True, False
 
-    # start plot
-    fig = plt.figure(figsize=(figsize[0]*1.5,figsize[1]*1.5))
-    axes  = []
-    axes2 = []
-
     def _bandMagRange(bands):
         """ Hard-code some band dependent magnitude ranges. """
         if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
@@ -1586,209 +1601,220 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
 
         return simInds[0:numAdded]
 
-    # loop over each requested color
-    obs1DHistos = {}
-
-    for i, bands in enumerate(bandCombos):
-        print('Color 2D PDFs [%s-%s]: obs' % (bands[0],bands[1]))
-
-        # panel setup
-        ax = fig.add_subplot(2,len(bandCombos)/2,i+1)
-        axes.append(ax)
-        mag_range = _bandMagRange(bands)
-        
-        #obsMagStr = 'modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
-        #cenSatStr = '' if splitCenSat else ', cen+sat'
-        #titleStr = '[ obs=%s, sim=%s%s ]' % (obsMagStr,simColorsModel,cenSatStr)
-        #ax.set_title(titleStr)
-
-        ax.set_xlim(Mstar_range)
-        ax.set_ylim(mag_range)
-        ax.set_xlabel('M$_{\\rm \star}(<2r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]')
-        ax.set_ylabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
-
-        # load observational points, restrict colors to mag_range as done for sims (for correct normalization)
-        sdss_color, sdss_Mstar = calcSDSSColors(bands, eCorrect=eCorrect, kCorrect=kCorrect)
-
-        w = np.where( (sdss_color >= mag_range[0]) & (sdss_color <= mag_range[1]) & \
-                      (sdss_Mstar >= Mstar_range[0]) & (sdss_Mstar <= Mstar_range[1]) )
-
-        sdss_color = sdss_color[w]
-        sdss_Mstar = sdss_Mstar[w]
-
-        # config
-        extent = [Mstar_range[0],Mstar_range[1],mag_range[0],mag_range[1]]
-        cLevels = [0.2,0.5,0.75,0.98]
-        cAlphas = [0.05,0.2,0.5,1.0]
-        nKDE1D  = 200
-        nBins1D = 100
-        nBinsDS = 40 # discrete re-sampling
-        nBins2D = [50,100]
-
-        # (A) create kde of observations
-        xx, yy, kde_obs = calcMstarColor2dKDE(bands, sdss_Mstar, sdss_color, Mstar_range, mag_range)
-
-        for k in range(kde_obs.shape[0]):
-            kde_obs[k,:] /= kde_obs[k,:].max() # by column normalization
-
-        for k, cLevel in enumerate(cLevels):
-            ax.contour(xx, yy, kde_obs, [cLevel], 
-                       colors=[obs_color], alpha=cAlphas[k], linewidths=3.0, extent=extent)
-
-        # (B) hist approach
-        #cc, xBins, yBins = np.histogram2d(sdss_Mstar, sdss_color, bins=nBins2D, range=[Mstar_range,mag_range])
-        #for k in range(c.shape[0]):
-        #    cc[k,:] /= cc[k,:].max() # by column normalization
-        #ax.contour(xBins[:-1], yBins[:-1], cc.T, cLevels, extent=extent)
-
-        # vertical 1D histogram on the right side
-        ax2 = make_axes_locatable(ax).append_axes('right', size='20%', pad=0.1)
-        axes2.append(ax2)
-
-        yy, xx = np.histogram(sdss_color, bins=nBins1D, range=mag_range, density=True)
-        xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins1D
-        ax2.plot(yy, xx, '-', color=obs_color, alpha=0.2, lw=3.0)
-
-        obs1DHistos[''.join(bands)], _ = np.histogram(sdss_Mstar, bins=nBinsDS, range=Mstar_range)
-
-        # obs 1D kde
-        xx = np.linspace(mag_range[0], mag_range[1], nKDE1D)
-        kde2 = gaussian_kde(sdss_color, bw_method='scott')
-        ax2.plot(kde2(xx), xx, '-', color=obs_color, alpha=0.9, lw=3.0, label='SDSS z<0.1')
-        ax2.fill_betweenx(xx, 0.0, kde2(xx), facecolor=obs_color, alpha=0.05)
-
-        ax2.set_ylim(mag_range)
-        ax2.get_xaxis().set_ticks([])
-        ax2.get_yaxis().set_ticks([])
-
-    # loop over each fullbox run
-    spColors = []
-
-    for sP in sPs:
-        if sP.isZoom:
-            continue
-
-        print('Color 2D PDFs [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
-        sP.setRedshift(simRedshift)
-
-        c = ax._get_lines.prop_cycler.next()['color']
-        spColors.append(c)
-
-        # load fullbox stellar masses and photometrics
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
-                          fieldsSubhalos=['SubhaloMassInRadType'])
-
-        gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
-        
-        # load simulation colors
-        if simColorsModel == 'snap':
-            gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
-        else:
-            acKey = 'Subhalo_StellarPhot_' + simColorsModel
-            acColorLoad = auxCat(sP, fields=[acKey])
-
-        # galaxy selection
-        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
-        w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
-        w2 = np.arange(gc['subhalos'].shape[0]) # centrals + satellites
-        w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
-
-        # selection:
-        normFacs = np.zeros( len(bandCombos) )
-        binSize  = np.zeros( len(bandCombos) )
-        nBins    = np.zeros( len(bandCombos), dtype='int32' )
+    # create an entire plot PER run, only one 2D sim contour set each
+    for sP_target in sPs:
+        # start plot
+        fig = plt.figure(figsize=(figsize[0]*1.5,figsize[1]*1.5))
+        axes  = []
+        axes2 = []
 
         # loop over each requested color
+        obs1DHistos = {}
+
         for i, bands in enumerate(bandCombos):
+            print('Color 2D PDFs [%s-%s]: obs' % (bands[0],bands[1]))
 
-            # calculate simulation colors
-            if simColorsModel == 'snap':
-                gc_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
-            else:
-                # auxcatPhotToSDSSColor():
-                acBands = list(acColorLoad[acKey+'_attrs']['bands'])
-                i0 = acBands.index('sdss_'+bands[0])
-                i1 = acBands.index('sdss_'+bands[1])
-                gc_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
-
-            # config for this band
+            # panel setup
+            ax = fig.add_subplot(2,len(bandCombos)/2,i+1)
+            axes.append(ax)
             mag_range = _bandMagRange(bands)
+            
+            #obsMagStr = 'modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
+            #cenSatStr = '' if splitCenSat else ', cen+sat'
+            #titleStr = '[ obs=%s, sim=%s%s ]' % (obsMagStr,simColorsModel,cenSatStr)
+            #ax.set_title(titleStr)
+
+            ax.set_xlim(Mstar_range)
+            ax.set_ylim(mag_range)
+            ax.set_xlabel('M$_{\\rm \star}(<2r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]')
+            ax.set_ylabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
+
+            # load observational points, restrict colors to mag_range as done for sims (for correct normalization)
+            sdss_color, sdss_Mstar = calcSDSSColors(bands, eCorrect=eCorrect, kCorrect=kCorrect)
+
+            w = np.where( (sdss_color >= mag_range[0]) & (sdss_color <= mag_range[1]) & \
+                          (sdss_Mstar >= Mstar_range[0]) & (sdss_Mstar <= Mstar_range[1]) )
+
+            sdss_color = sdss_color[w]
+            sdss_Mstar = sdss_Mstar[w]
+
+            # config
             extent = [Mstar_range[0],Mstar_range[1],mag_range[0],mag_range[1]]
+            cLevels = [0.2,0.5,0.75,0.98]
+            cAlphas = [0.05,0.2,0.5,1.0]
+            nKDE1D  = 200
+            nBins1D = 100
+            nBinsDS = 40 # discrete re-sampling
+            nBins2D = [50,100]
 
-            loopInds = range(1) # total only
-            if splitCenSat: loopInds = range(3)
+            # (A) create kde of observations
+            xx, yy, kde_obs = calcMstarColor2dKDE(bands, sdss_Mstar, sdss_color, Mstar_range, mag_range)
 
-            for j in loopInds:
-                if j == 0: w = w2
-                if j == 1: w = w1
-                if j == 2: w = w3
+            for k in range(kde_obs.shape[0]):
+                kde_obs[k,:] /= kde_obs[k,:].max() # by column normalization
 
-                # galaxy mass definition and color
-                stellar_mass = gc_masses[w]
-                galaxy_color = gc_colors[w]
+            for k, cLevel in enumerate(cLevels):
+                ax.contour(xx, yy, kde_obs, [cLevel], 
+                           colors=[obs_color], alpha=cAlphas[k], linewidths=3.0, extent=extent)
 
-                wNotNan = np.isfinite(galaxy_color) # filter out subhalos with e.g. no stars
-                galaxy_color = galaxy_color[wNotNan]
-                stellar_mass = stellar_mass[wNotNan]
+            # (B) hist approach
+            #cc, xBins, yBins = np.histogram2d(sdss_Mstar, sdss_color, bins=nBins2D, range=[Mstar_range,mag_range])
+            #for k in range(c.shape[0]):
+            #    cc[k,:] /= cc[k,:].max() # by column normalization
+            #ax.contour(xBins[:-1], yBins[:-1], cc.T, cLevels, extent=extent)
 
-                # select in bounds
-                wBin = np.where( (stellar_mass >= Mstar_range[0]) & (stellar_mass < Mstar_range[1]) & \
-                                 (galaxy_color >= mag_range[0]) & (galaxy_color < mag_range[1]) )
+            # vertical 1D histogram on the right side
+            ax2 = make_axes_locatable(ax).append_axes('right', size='20%', pad=0.1)
+            axes2.append(ax2)
 
-                # (A) sim 2D kde approach
-                xx, yy, kde_sim = calcMstarColor2dKDE(bands, stellar_mass[wBin], galaxy_color[wBin], 
-                                                      Mstar_range, mag_range, sP=sP)
+            yy, xx = np.histogram(sdss_color, bins=nBins1D, range=mag_range, density=True)
+            xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins1D
+            ax2.plot(yy, xx, '-', color=obs_color, alpha=0.2, lw=3.0)
 
-                for k in range(kde_sim.shape[0]):
-                    kde_sim[k,:] /= kde_sim[k,:].max() # by column normalization
+            obs1DHistos[''.join(bands)], _ = np.histogram(sdss_Mstar, bins=nBinsDS, range=Mstar_range)
 
-                for k, cLevel in enumerate(cLevels):
-                    axes[i].contour(xx, yy, kde_sim, [cLevel], 
-                                   colors=[c], alpha=cAlphas[k], linewidths=3.0, extent=extent)
+            # obs 1D kde
+            xx = np.linspace(mag_range[0], mag_range[1], nKDE1D)
+            kde2 = gaussian_kde(sdss_color, bw_method='scott')
+            ax2.plot(kde2(xx), xx, '-', color=obs_color, alpha=0.9, lw=3.0, label='SDSS z<0.1')
+            ax2.fill_betweenx(xx, 0.0, kde2(xx), facecolor=obs_color, alpha=0.05)
 
-                # (B) sim 2D histogram approach
-                #cc, xBins, yBins = np.histogram2d(stellar_mass[wBin], galaxy_color[wBin], bins=nBins2D, \
-                #                                 range=[Mstar_range,mag_range])
-                #for k in range(cc.shape[0]):
-                #    cc[k,:] /= cc[k,:].max() # by column normalization
-                #for k, cLevel in enumerate(cLevels):
-                #    axes[i].contour(xBins[:-1], yBins[:-1], cc.T, [cLevel], 
-                #               colors=[c], alpha=cAlphas[k], linewidths=3.0, extent=extent)
+            ax2.set_ylim(mag_range)
+            ax2.get_xaxis().set_ticks([])
+            ax2.get_yaxis().set_ticks([])
 
-                # 1d: resample simulated Mstar distribution to roughly matched SDSS Mstar distribution
-                binInds = _discreteReSampleMatched(obs1DHistos[''.join(bands)], stellar_mass[wBin], nBinsDS)
-                simInds = wBin[0][binInds]
+        # loop over each fullbox run
+        spColors = []
 
-                # sim 1D histogram on the side
-                #yy, xx = np.histogram(galaxy_color[simInds], bins=nBins1D, range=mag_range, density=True)
-                #xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins1D
-                #axes2[i].plot(yy, xx, '-', color=c, alpha=0.2, lw=3.0)
+        for sP in sPs:
+            if sP.isZoom:
+                continue
 
-                # sim 1D KDE on the side
-                xx = np.linspace(mag_range[0], mag_range[1], nKDE1D)
-                kde = gaussian_kde(galaxy_color[simInds], bw_method='scott')
+            print('Color 2D PDFs [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
+            sP.setRedshift(simRedshift)
 
-                label = sP.simName if j == 0 else ''
-                axes2[i].plot(kde(xx), xx, '-', color=c, alpha=1.0, lw=3.0, label=label)
-                axes2[i].fill_betweenx(xx, 0.0, kde(xx), facecolor=c, alpha=0.1)
+            c = ax._get_lines.prop_cycler.next()['color']
+            spColors.append(c)
 
-    # legend (simulations) (obs)
-    hExtra = []#[plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
-    lExtra = []#['SDSS z<0.1']
+            # load fullbox stellar masses and photometrics
+            gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
+                              fieldsSubhalos=['SubhaloMassInRadType'])
 
-    handles, labels = axes2[0].get_legend_handles_labels()
-    legend = axes[0].legend(handles+hExtra, labels+lExtra, loc='upper left')
+            gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
+            
+            # load simulation colors
+            if simColorsModel == 'snap':
+                gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
+            else:
+                acKey = 'Subhalo_StellarPhot_' + simColorsModel
+                acColorLoad = auxCat(sP, fields=[acKey])
 
-    # legend (central/satellite split)
-    if splitCenSat:
-        sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-        lExtra = ['all galaxies','centrals','satellites']
+            # galaxy selection
+            wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
+            w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
+            w2 = np.arange(gc['subhalos'].shape[0]) # centrals + satellites
+            w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
 
-        legend2 = axes[1].legend(sExtra, lExtra, loc='upper left')
+            # selection:
+            normFacs = np.zeros( len(bandCombos) )
+            binSize  = np.zeros( len(bandCombos) )
+            nBins    = np.zeros( len(bandCombos), dtype='int32' )
 
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
+            # loop over each requested color
+            for i, bands in enumerate(bandCombos):
+
+                # calculate simulation colors
+                if simColorsModel == 'snap':
+                    gc_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
+                else:
+                    # auxcatPhotToSDSSColor():
+                    acBands = list(acColorLoad[acKey+'_attrs']['bands'])
+                    i0 = acBands.index('sdss_'+bands[0])
+                    i1 = acBands.index('sdss_'+bands[1])
+                    gc_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
+
+                # config for this band
+                mag_range = _bandMagRange(bands)
+                extent = [Mstar_range[0],Mstar_range[1],mag_range[0],mag_range[1]]
+
+                loopInds = range(1) # total only
+                if splitCenSat: loopInds = range(3)
+
+                for j in loopInds:
+                    if j == 0: w = w2
+                    if j == 1: w = w1
+                    if j == 2: w = w3
+
+                    # galaxy mass definition and color
+                    stellar_mass = gc_masses[w]
+                    galaxy_color = gc_colors[w]
+
+                    wNotNan = np.isfinite(galaxy_color) # filter out subhalos with e.g. no stars
+                    galaxy_color = galaxy_color[wNotNan]
+                    stellar_mass = stellar_mass[wNotNan]
+
+                    # select in bounds
+                    wBin = np.where( (stellar_mass >= Mstar_range[0]) & (stellar_mass < Mstar_range[1]) & \
+                                     (galaxy_color >= mag_range[0]) & (galaxy_color < mag_range[1]) )
+
+                    # 1d: resample simulated Mstar distribution to roughly matched SDSS Mstar distribution
+                    binInds = _discreteReSampleMatched(obs1DHistos[''.join(bands)], stellar_mass[wBin], nBinsDS)
+                    simInds = wBin[0][binInds]
+
+                    # sim 1D histogram on the side
+                    #yy, xx = np.histogram(galaxy_color[simInds], bins=nBins1D, range=mag_range, density=True)
+                    #xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins1D
+                    #axes2[i].plot(yy, xx, '-', color=c, alpha=0.2, lw=3.0)
+
+                    # sim 1D KDE on the side
+                    xx = np.linspace(mag_range[0], mag_range[1], nKDE1D)
+                    kde = gaussian_kde(galaxy_color[simInds], bw_method='scott')
+
+                    label = sP.simName if j == 0 else ''
+                    axes2[i].plot(kde(xx), xx, '-', color=c, alpha=1.0, lw=3.0, label=label)
+                    axes2[i].fill_betweenx(xx, 0.0, kde(xx), facecolor=c, alpha=0.1)
+
+                    # (only one 2D contour set per plot)
+                    if sP != sP_target:
+                        continue
+
+                    # (A) sim 2D kde approach
+                    xx, yy, kde_sim = calcMstarColor2dKDE(bands, stellar_mass[wBin], galaxy_color[wBin], 
+                                                          Mstar_range, mag_range, sP=sP)
+
+                    for k in range(kde_sim.shape[0]):
+                        kde_sim[k,:] /= kde_sim[k,:].max() # by column normalization
+
+                    for k, cLevel in enumerate(cLevels):
+                        axes[i].contour(xx, yy, kde_sim, [cLevel], 
+                                       colors=[c], alpha=cAlphas[k], linewidths=3.0, extent=extent)
+
+                    # (B) sim 2D histogram approach
+                    #cc, xBins, yBins = np.histogram2d(stellar_mass[wBin], galaxy_color[wBin], bins=nBins2D, \
+                    #                                 range=[Mstar_range,mag_range])
+                    #for k in range(cc.shape[0]):
+                    #    cc[k,:] /= cc[k,:].max() # by column normalization
+                    #for k, cLevel in enumerate(cLevels):
+                    #    axes[i].contour(xBins[:-1], yBins[:-1], cc.T, [cLevel], 
+                    #               colors=[c], alpha=cAlphas[k], linewidths=3.0, extent=extent)
+
+        # legend (simulations) (obs)
+        hExtra = []#[plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
+        lExtra = []#['SDSS z<0.1']
+
+        handles, labels = axes2[0].get_legend_handles_labels()
+        legend = axes[0].legend(handles+hExtra, labels+lExtra, loc='upper left')
+
+        # legend (central/satellite split)
+        if splitCenSat:
+            sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+            lExtra = ['all galaxies','centrals','satellites']
+
+            legend2 = axes[1].legend(sExtra, lExtra, loc='upper left')
+
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
 
 def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     """ Velocity function (galaxy counts as a function of v_circ/v_max). """
@@ -1970,8 +1996,7 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='wmap') )
 
     #for i in range(1,11):
-    #    variant = 'r%03d' % i
-    #    sPs.append( simParams(res=256, run='tng', variant=variant) )
+    #    sPs.append( simParams(res=256, run='tng', variant='r%03d' % i) )
 
     #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -1983,7 +2008,7 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )  
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_L75n1820_TNGvsFP_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_test_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
@@ -1995,6 +2020,7 @@ def plots():
     sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
+    blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
@@ -2005,9 +2031,9 @@ def plots():
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
     nHIcddf(sPs, pdf) # z=3
-    nHIcddf(sPs, pdf, moment=1) # z=3
+    nHIcddf(sPs, pdf, moment=1)
     nOVIcddf(sPs, pdf) # z=0.2
-    nOVIcddf(sPs, pdf, moment=1) # z=0.2
+    nOVIcddf(sPs, pdf, moment=1)
     dlaMetallicityPDF(sPs, pdf) # z=3
 
     galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
@@ -2015,8 +2041,7 @@ def plots():
     galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
     galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
     galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
-    for sP in sPs:
-        galaxyColor2DPDFs([sP], pdf, simRedshift=zZero)
+    galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero)
 
     velocityFunction(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=False, simRedshift=zZero)
@@ -2027,11 +2052,12 @@ def plots():
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
     # todo: SFR main sequence (Schaye Fig 11) (sSFR vs Mstar colored by Sersic index, e.g. Wuyts)
     # todo: active/passive fraction vs Mstar (Schaye Fig 11) (or red/blue Vog Fig ?)
+    # todo: SFRD decomposed into contribution by halo mass bin (Genel Fig ?)
 
     # with additional modeling:
     # todo: M_HI vs Mstar (Vog 14a Fig 3)
     # todo: R_HI vs Mstar
-    # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon)
+    # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon) (HI z=0.1 Gurvich2016)
     # todo: Omega_X(z) (e.g. Bird? Fig ?)
     # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)
     # todo: X-ray (e.g. Schaye Fig 16)
