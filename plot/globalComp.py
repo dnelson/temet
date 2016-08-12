@@ -368,7 +368,7 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, simRedshift=0.0):
+def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMasses=False, simRedshift=0.0):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     # plot setup
     fig = plt.figure(figsize=figsize)
@@ -378,13 +378,16 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, simRedshift
     ax.set_ylim([5.5, 11.0])
 
     ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ tot, only centrals ]')
+    if actualBHMasses:
+        ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ actual, only centrals ]')
+
     ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
     if twiceR:
         ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
     if vsHaloMass:
         ax.set_xlabel('M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
         ax.set_xlim([9,14.5])
-        ax.set_ylim([5.5, 11.0])
+        ax.set_ylim([5.0, 11.0])
 
     # observational points
     if not vsHaloMass:
@@ -412,8 +415,11 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, simRedshift
         print('BHMass: '+sP.simName)
         sP.setRedshift(simRedshift)
 
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
-            fieldsSubhalos=['SubhaloMassType','SubhaloMassInHalfRadType','SubhaloMassInRadType'])
+        fieldsSubhalos = ['SubhaloBHMass','SubhaloMassType']
+        if not twiceR and not vsHaloMass: fieldsSubhalos.append('SubhaloMassInHalfRadType')
+        if twiceR: fieldsSubhalos.append('SubhaloMassInRadType')
+
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=fieldsSubhalos)
 
         # centrals only
         wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
@@ -432,7 +438,14 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, simRedshift
         # 'total' black hole mass in this subhalo, exclude those with no BHs
         # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 
         # are effectively taking the sum of all their BH masses (better than mean, but max probably best)
-        yy = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')] )
+        if actualBHMasses:
+            # "actual" BH masses, excluding gas reservoir
+            yy = gc['subhalos']['SubhaloBHMass'][w]
+        else:
+            # dynamical (particle masses)
+            yy = gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')]
+
+        yy = sP.units.codeMassToLogMsun(yy)
         ww = np.where(yy > 0.0)
 
         xm, ym, sm = running_median(xx[ww],yy[ww],binSize=binSize,skipZeros=True)
@@ -2020,7 +2033,7 @@ def plots():
     sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
-    blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
+    blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, actualBHMasses=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
