@@ -139,7 +139,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
                              # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars  = True    # include colorbars
 
-        saveFilename = saveBasePath + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
+        saveFilename = savePathDefault + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # skip if final output render file already exists?
     if skipExisting and isfile(plotConfig.saveFilename):
