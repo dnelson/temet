@@ -11,14 +11,14 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime, timedelta
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile
+from os.path import isfile, isdir
+from os import mkdir
 from os import remove, rename
+from glob import glob
+from illustris_python.snapshot import getNumPart
 
 def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
     """ Verify existence, permissions, and HDF5 structure of groups, full snaps, subboxes. """
-    from glob import glob
-    from illustris_python.snapshot import getNumPart
-
     assert groups or fullSnaps or subboxes
     assert sP.run in ['tng','tng_dm']
 
@@ -174,7 +174,6 @@ def getCpuTxtLastTimestep(filePath):
 def loadCpuTxt(basePath, keys=None, hatbMin=0):
     """ Load and parse Arepo cpu.txt, save into hdf5 format. If hatbMin>0, then save only timesteps 
     with active time bin above this value. """
-
     filePath = basePath + 'output/cpu.txt'
     saveFilename = basePath + 'data.files/cpu.hdf5'
 
@@ -304,6 +303,8 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
                 r[key] = r[key][w,:]
 
         # write into hdf5
+        if not isdir(basePath + 'data.files'):
+            mkdir(basePath + 'data.files')
         with h5py.File(saveFilename,'w') as f:
             for key in r.keys():
                 f[key] = r[key]
@@ -460,3 +461,233 @@ def plotCpuTimes():
     # if we don't make it here successfully the old pdf will not be corrupted
     remove(fName2)
     rename(fName1,fName2)
+
+def scalingPlots():
+    """ Construct strong (fixed problem size) and weak (Npart scales w/ Ncores) scaling plots 
+         based on the Hazel Hen tests. """
+
+    # config
+    basePath = '/n/home07/dnelson/sims.TNG_method/scaling/'
+    plotKeys = ['total','domain','voronoi','treegrav','pm_grav','hydro']
+    dtInd    = 0 # index for column which is the differential time per step
+    timestep = 2 # start at the second first timestep
+    tsMean   = 20 # number of timesteps to average over
+
+    def _addTopAxisStrong(ax, nCores):
+        """ add a second x-axis on top with the exact core numbers. """
+        ax.xaxis.set_ticks_position('bottom')
+        axTop = ax.twiny()
+        axTop.set_xlim(ax.get_xlim())
+        axTop.set_xscale(ax.get_xscale())
+        axTop.set_xticks(nCores)
+        axTop.set_xticklabels(nCores)
+        axTop.minorticks_off()
+
+    def _addTopAxisWeak(ax, nCores, boxSizes, nPartsCubeRoot):
+        """ add a second x-axis on top with the 'problem size'. """
+        ax.xaxis.set_ticks_position('bottom')
+        axTop = ax.twiny()
+        axTop.set_xlim(ax.get_xlim())
+        axTop.set_xscale(ax.get_xscale())
+        axTop.set_xticks(nCores)
+        axTop.set_xticklabels(['2$\\times$'+str(nPart)+'${^3}$' for nPart in nPartsCubeRoot])
+        #axTop.minorticks_off()
+        axTop.tick_params(which='minor',length=0)
+        axTop.set_xlabel('Weak Scaling: Problem Size [Number of Particles]')
+        axTop.xaxis.labelpad = 35
+
+    def _loadHelper(runs, plotKeys):
+        # allocate
+        nCores = np.zeros( len(runs), dtype='int32' )
+        data = {}
+        for plotKey in plotKeys + ['total_sub']:
+            data[plotKey] = np.zeros( len(runs), dtype='float32' )
+        for key in ['boxSize','nPartCubeRoot']:
+            data[key] = np.zeros( len(runs), dtype='int32' )
+
+        # loop over each run
+        for i, runPath in enumerate(runs):
+            # load
+            cpu = loadCpuTxt(runPath+'/')
+            nSteps = cpu['step'].size
+            print(runPath,nSteps)
+
+            # verify we are looking at high-z (ICs) scaling runs
+            tsInd = np.where(cpu['step'] == timestep)[0]
+            assert cpu['step'][0] == 1
+            assert len(tsInd) == 1
+
+            # add to save struct
+            nCores[i] = cpu['numCPUs']
+
+            for plotKey in plotKeys:
+                loc_data = np.squeeze(cpu[plotKey])
+                data[plotKey][i] = np.mean( loc_data[tsInd[0]:tsInd[0]+tsMean,dtInd] )
+
+            # extract boxsizes and particle counts from path string
+            runName = runPath.split("/")[-1].split("_")[0]
+            data['boxSize'][i] = int(runName.split("L")[1].split("n")[0])
+            data['nPartCubeRoot'][i] = int(runName.split("n")[1])
+
+            # derive a 'total' which is only the sum of the plotKeys (e.g. disregard i/o scaling)
+            data['total_sub'][i] = np.sum([data[plotKey][i] for plotKey in plotKeys if plotKey != 'total'])
+
+        # sort based on nCores
+        inds = nCores.argsort()
+        nCores = nCores[inds]
+        for key in data.keys():
+            assert len(nCores) == len(data[key])
+            data[key] = data[key][inds]
+
+        return nCores, data
+
+    pdf = PdfPages('scaling_tests.pdf')
+
+    # strong
+    for runSeries in ['L75n910','L75n1820']:
+        # loop over runs
+        runs = glob(basePath + runSeries + '_*')
+        nCores, data = _loadHelper(runs, plotKeys)
+
+        # (A) start plot, 'timestep [sec]' vs Ncore   
+        fig = plt.figure(figsize=(16,9))
+        ax = fig.add_subplot(111)
+        #ax.set_xlim([nCores.min()*0.8,nCores.max()*1.2])
+        ax.set_xlim([1e3,1e5])
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        ax.set_xlabel('N$_{\\rm cores}$')
+        ax.set_ylabel('Time per Step [sec]')
+
+        # add each plotKey
+        for plotKey in plotKeys:
+            ax.plot(nCores,data[plotKey],marker='s',lw=2.0,label=plotKey)
+
+            # add ideal scaling dotted line for each
+            xx_max = 8.5e4
+            xx = [nCores.min() * 0.9, xx_max]
+            yy = [data[plotKey][0] / 0.9, data[plotKey][0] / (xx_max / nCores.min())]
+
+            ax.plot(xx,yy,':',color='#666666',alpha=0.8)
+
+        # legend and finish plot
+        ax.text(0.98,0.97,'Strong Scaling [Problem: %s]' % runSeries,transform=ax.transAxes,
+                size='x-large', horizontalalignment='right',verticalalignment='top')
+        ax.legend(loc='lower left')
+
+        _addTopAxisStrong(ax, nCores)
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+        # (B) start plot, 'efficiency' vs Ncore
+        fig = plt.figure(figsize=(16,9))
+        ax = fig.add_subplot(111)
+        ax.set_xscale('log')
+        ax.set_xlim([1e3,1e5])
+        ax.set_ylim([0.0,1.1])
+
+        ax.set_xlabel('N$_{\\rm cores}$')
+        ax.set_ylabel('Efficiency [t$_{\\rm 0}$ / t$_{\\rm step}$ * (N$_{\\rm 0}$ / N$_{\\rm core}$)]')
+
+        # add each plotKey
+        for plotKey in plotKeys:
+            eff = data[plotKey][0] / data[plotKey] * (nCores[0] / nCores)
+            ax.plot(nCores,eff,marker='s',lw=2.0,label=plotKey)
+
+            # add ideal scaling dotted line for each
+            xx1 = [nCores.min(), xx_max]
+            yy1 = [1.0,1.0]
+            ax.plot(xx1,yy1,':',color='#666666',alpha=0.8)
+
+        # legend and finish plot
+        ax.text(0.98,0.97,'Strong Scaling [Problem: %s]' % runSeries,transform=ax.transAxes,
+                size='x-large', horizontalalignment='right',verticalalignment='top')
+        ax.legend(loc='lower left')
+
+        _addTopAxisStrong(ax, nCores)
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+    # weak
+    runSeries = 'tL*_ics'
+
+    runs = glob(basePath + runSeries + '_*')
+    nCores, data = _loadHelper(runs, plotKeys)
+
+    # (A) start plot, 'timestep [sec]' vs Ncore   
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    ax.set_xlabel('N$_{\\rm cores}$')
+    ax.set_ylabel('Time per Step [sec]')
+
+    # add each plotKey
+    for plotKey in plotKeys:
+        ax.plot(nCores,data[plotKey],marker='s',lw=2.0,label=plotKey)
+
+        # add ideal scaling dotted line for each
+        xx = [nCores.min() * 1.1, xx_max]
+        yy = [data[plotKey][0], data[plotKey][0]]
+
+        ax.plot(xx,yy,':',color='#666666',alpha=0.8)
+
+    # add core count labels above total points, and boxsize labels under particle counts
+    for i in range(len(nCores)):
+        xx = nCores[i]
+        yy = ax.get_ylim()[0] * 1.38
+        ax.text(xx,yy,str(nCores[i]),size='large',horizontalalignment='center',verticalalignment='top')
+
+        yy = ax.get_ylim()[1] * 1.88
+        label = 'L%s' % data['boxSize'][i]
+        ax.text(xx,yy,label,size='large',horizontalalignment='center',verticalalignment='top')
+
+    # legend and finish plot
+    ax.legend(loc='upper left')
+    _addTopAxisWeak(ax, nCores, data['boxSize'], data['nPartCubeRoot'])
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
+    # (B) start plot, 'efficiency' vs Ncore
+    fig = plt.figure(figsize=(16,9))
+    ax = fig.add_subplot(111)
+    ax.set_xscale('log')
+    ax.set_ylim([0.0,1.1])
+
+    ax.set_xlabel('N$_{\\rm cores}$')
+    ax.set_ylabel('Efficiency [t$_{\\rm 0}$ / t$_{\\rm step}$]')
+
+    # add each plotKey
+    for plotKey in plotKeys:
+        eff = data[plotKey][0] / data[plotKey]
+        ax.plot(nCores,eff,marker='s',lw=2.0,label=plotKey)
+
+        # add ideal scaling dotted line for each
+        xx = [nCores.min() * 0.9, xx_max]
+        yy = [1.0, 1.0]
+
+        ax.plot(xx,yy,':',color='#666666',alpha=0.8)
+
+    # add core count labels above total points
+    for i in range(len(nCores)):
+        xx = nCores[i]
+        yy = ax.get_ylim()[0] + 0.05
+        ax.text(xx,yy,str(nCores[i]),size='large',horizontalalignment='center',verticalalignment='top')
+
+        yy = ax.get_ylim()[1] + 0.1
+        label = 'L%s' % data['boxSize'][i]
+        ax.text(xx,yy,label,size='large',horizontalalignment='center',verticalalignment='top')
+
+    # legend and finish plot
+    ax.legend(loc='lower left')
+    _addTopAxisWeak(ax, nCores, data['boxSize'], data['nPartCubeRoot'])
+    fig.tight_layout()
+    pdf.savefig()
+    plt.close(fig)
+
+    pdf.close()
