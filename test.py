@@ -79,7 +79,7 @@ def compareOldNewMags():
 
     ax.plot([-22,-12],[-22,-12],'-',color='orange')
 
-    fig.tight_layout()    
+    fig.tight_layout()  
     fig.savefig('mags_%s.png' % bands[0])
     plt.close(fig)
 

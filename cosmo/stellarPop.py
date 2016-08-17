@@ -126,7 +126,7 @@ class sps():
     isoTracks  = ['padova07'] # basti,geneva,mist,parsec (cannot easily dynamically change at present)
     dustModels = ['none','bc00']
 
-    def __init__(self, sP, iso, imf, dustModel, order=3):
+    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='bc00', order=3):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
         import fsps
 
@@ -311,3 +311,39 @@ class sps():
             return r
 
         return stellarMags
+
+    def calcStellarLuminosities(self, sP, band, indRange=None):
+        """ Compute (linear) luminosities in the given band, using either snapshot-stored values or 
+        on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
+        returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). """
+        assert isinstance(band, basestring)
+
+        if 'snap_' in band:
+            # direct load snapshot saved stellar photometrics
+            fields = ['sftime','phot_'+band.split("snap_")[1]]
+
+            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=fields, indRange=indRange)
+
+            wWind = np.where( stars['GFM_StellarFormationTime'] < 0.0 )
+            stars['GFM_StellarPhotometrics'][wWind] = np.nan
+
+            mags = stars['GFM_StellarPhotometrics']
+        else:
+            # load age,Z,mass_ini, use FSPS on the fly
+            assert band in self.bands
+            fields = ['initialmass','sftime','metallicity']
+
+            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=fields, indRange=indRange)
+
+            mags = self.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
+                                        stars['GFM_Metallicity'], stars['GFM_InitialMass'], 
+                                        retFullPt4Size=True)
+
+        # convert to luminosities
+        lums = np.zeros( mags.size, dtype='float32' )
+        lums.fill(np.nan)
+
+        ww = np.isfinite(mags)
+        lums[ww] = np.power(10.0, -0.4 * mags[ww])
+        
+        return lums

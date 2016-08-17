@@ -86,6 +86,75 @@ def oneHaloGaussProposal():
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
+def resSeriesGaussProposal(fofInputID=12, resInput=256):
+    """ Render a 3x2 panel resolution series for Gauss proposal (MW/structural fig). """
+    panels = []
+
+    run = 'tng'
+    variant = 'L12.5'
+    fofHaloIDs = [fofInputID]
+    resLevels  = [resInput]
+
+    #run = 'illustris'
+    #fofHaloIDs = [196] # subhalo ID 283832
+    #resLevels = [1820]
+
+    valMinMaxG  = [6.0,8.2]
+    valMinMaxS  = [6.0,9.0]
+
+    redshift   = 0.0
+    rVirFracs  = None
+    method     = 'sphMap'
+    nPixels    = [960,960]
+    sizeFac    = -80.0 #0.3 # central object
+    axes       = [1,0]
+    labelZ     = False
+    labelScale = True
+    labelSim   = False
+    labelHalo  = False
+    relCoords  = True
+    mpb        = None
+
+    for fofHaloID, resLevel in zip(fofHaloIDs,resLevels):
+        # get subhalo ID
+        sP = simParams(res=resLevel, run=run, redshift=redshift, variant=variant)
+        h = groupCatSingle(sP, haloID=fofHaloID)
+        shID = h['GroupFirstSub']
+        print('subhalo ID: ',shID)
+
+        # append some panels
+        pF = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+
+        #panels.append( {'partType':'stars', 'hsmlFac':0.5, \
+        #                'partField':pF, 'res':resLevel, 'hInd':shID, sizeFac:-50.0} )
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'face-on', \
+                        'partField':pF, 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
+        panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
+                        'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'edge-on', 'nPixels':[960,320], \
+                        'partField':pF, 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
+        panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', 'nPixels':[960,320], \
+                        'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+        #panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
+        #                'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+
+    class plotConfig:
+        plotStyle    = 'open'
+        rasterPx     = 960
+        colorbars    = True
+        haloStr      = '-'.join([str(r) for r in fofHaloIDs])
+        resStr       = '-'.join([str(r) for r in resLevels])
+        saveFilename = './resSeriesGauss_%s_%s_%s.pdf' % (run,haloStr,resStr)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def helperLoop():
+    for i in range(20):
+        resSeriesGaussProposal(i,resInput=256)
+    for i in range(20):
+        resSeriesGaussProposal(i,resInput=512)
+
 def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     """ Split over several pages, plot many panels, one per halo, showing a single quantity. """
     panels = []
