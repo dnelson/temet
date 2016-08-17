@@ -168,7 +168,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
             p[cName] = cVal
 
         # add simParams info
-        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'], hInd=p['hInd'])
+        v = p['variant'] if 'variant' in p else None
+        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'], hInd=p['hInd'], variant=v)
 
         # add imaging config for single halo view
         p['boxSizeImg'], p['boxCenter'], p['extent'], \
@@ -241,7 +242,9 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
             p[cName] = cVal
 
         # load MPB once per panel
-        sP = simParams(res=p['res'], run=p['run'], hInd=p['hInd'], redshift=plotConfig.treeRedshift)
+        v = p['variant'] if 'variant' in p else None
+        sP = simParams(res=p['res'], run=p['run'], hInd=p['hInd'], 
+                       redshift=plotConfig.treeRedshift, variant=v)
 
         p['shID'] = sP.zoomSubhaloID if sP.isZoom else sP.hInd # direct input of subhalo ID for periodic box
         p['mpb'] = mpbSmoothedProperties(sP, p['shID'])

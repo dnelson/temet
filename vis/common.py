@@ -23,6 +23,7 @@ from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.util import periodicDists
 from cosmo.cloudy import cloudyIon
+from cosmo.stellarPop import sps
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
@@ -34,7 +35,7 @@ colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented']
 totSumFields     = ['mass','mass2']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 
-def getHsmlForPartType(sP, partType, indRange=None):
+def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
 
@@ -62,7 +63,8 @@ def getHsmlForPartType(sP, partType, indRange=None):
             if not snapHasField(sP, partType, 'SubfindHsml'):
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'
-                hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=4, treePrec=treePrec)
+                nNGBDev = int( np.sqrt(nNGB)/2 )
+                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
             else:
                 hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
 
@@ -75,7 +77,8 @@ def getHsmlForPartType(sP, partType, indRange=None):
             # SubfindHsml is a density estimator of the local DM, don't genreally use for stars
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
             treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
-            hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=2, treePrec=treePrec)
+            nNGBDev = int( np.sqrt(nNGB)/4 )
+            hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
 
         # save
         if useCache:
@@ -86,6 +89,43 @@ def getHsmlForPartType(sP, partType, indRange=None):
     return hsml
 
     raise Exception('Unimplemented partType.')
+
+def clipStellarHSMLs(hsml, sP, pxScale, nPixels):
+    """ Clip input stellar HSMLs/sizes to minimum/maximum values. Work in progress. """
+
+    # use a minimum/maximum size for stars in outskirts
+    if 0:
+        # constant based on numerical resolution
+        hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
+        hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness
+
+    # adaptively clip in proportion to pixel scale of image, depending on ~pixel number
+    if 1:
+        # adaptive technique 2
+        clipAboveNumPx = 30.0*(np.max(nPixels)/1920)
+        clipAboveToPx  = np.max([5.0, 6.0-2*1920/np.max(nPixels)]) # was 3.0 not 5.0 before composite tests
+        hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
+
+        print(' [m2] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
+            (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
+    if 0:
+        # adaptive technique 1 (preferred)
+        minClipVal = 4.0 # was 3.0 before composite tests
+
+        #if 'sdss_g' in partField:
+        #    minClipVal = 20.0
+        #    print(' set minClipVal from 3 to 20 for Blue-channel')
+
+        clipAboveNumPx = np.max([minClipVal, minClipVal*2/(1920/np.max(nPixels))])
+        clipAboveToPx = clipAboveNumPx # coupled
+        hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
+
+        print(' [m1] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
+            (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
+
+    #print(' hsml clip DISABLED!')
+
+    return hsml
 
 def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
@@ -99,16 +139,26 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     fields = ['Coordinates','Masses','StarFormationRate','Velocities']
     gas = snapshotSubset(sP, 'gas', fields, subhaloID=subhaloID)
 
-    # star forming gas only
-    wGas = np.where(gas['StarFormationRate'] > 0.0)[0]
+    # star forming gas only within a radial restriction
+    wGas = []
 
-    # add stars within 1 times the stellar half mass radius
+    if gas['count']:
+        rad = periodicDists(shPos, gas['Coordinates'], sP)
+        wGas = np.where( (rad <= 1.0*sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]) & \
+                         (gas['StarFormationRate'] > 0.0) )[0]
+
+    # add (actual) stars within 1 times the stellar half mass radius
+    wStars = []
+
     fields.remove('StarFormationRate')
+    fields.append('GFM_StellarFormationTime')
     stars = snapshotSubset(sP, 'stars', fields, subhaloID=subhaloID)
 
-    rad = periodicDists(shPos, stars['Coordinates'], sP)
+    if stars['count']:
+        rad = periodicDists(shPos, stars['Coordinates'], sP)
 
-    wStars = np.where(rad <= sh['SubhaloHalfmassRadType'][sP.ptNum('stars')])[0]
+        wStars = np.where( (rad <= 1.0*sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]) & \
+                           (stars['GFM_StellarFormationTime'] >= 0.0) )[0]
 
     # return default vector in case of total failure
     if len(wGas) + len(wStars) == 0:
@@ -169,6 +219,219 @@ def rotationMatrixFromAngleDirection(angle, direction):
 
     return R.astype('float32')
 
+def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxSizeImg, 
+                               hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM):
+    """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
+    assert len(bands) == 3
+
+    print('Generating stellar composite with bands: [%s %s %s]' % (bands[0],bands[1],bands[2]))
+
+    band0_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[0], nPixels, axes, boxCenter, 
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
+    band1_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[1], nPixels, axes, boxCenter, 
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
+    band2_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[2], nPixels, axes, boxCenter, 
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
+    band2b_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-sdss_g', nPixels, axes, boxCenter, 
+                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
+
+    ww = np.where(band0_grid_mag < 99) # these left at zero
+    band0_grid = band0_grid_mag.astype('float32') * 0.0
+    band0_grid[ww] = np.power(10.0, -0.4 * band0_grid_mag[ww])
+
+    ww = np.where(band1_grid_mag < 99)
+    band1_grid = band1_grid_mag.astype('float32') * 0.0
+    band1_grid[ww] = np.power(10.0, -0.4 * band1_grid_mag[ww])
+
+    ww = np.where(band2_grid_mag < 99)
+    band2_grid = band2_grid_mag.astype('float32') * 0.0
+    band2_grid[ww] = np.power(10.0, -0.4 * band2_grid_mag[ww])
+
+    ww = np.where(band2b_grid_mag < 99)
+    band2b_grid = band2b_grid_mag.astype('float32') * 0.0
+    band2b_grid[ww] = np.power(10.0, -0.4 * band2b_grid_mag[ww])
+
+    grid_master = np.zeros( (nPixels[1], nPixels[0], 3), dtype='float32' )
+    grid_master_u = np.zeros( (nPixels[1], nPixels[0], 3), dtype='uint8' )
+
+    if 0:
+        #fac0 = 1.1 # i (red channel)
+        #fac1 = 1.0 # r (green channel)
+        #fac2 = 1.3 # g (blue channel)
+        lupton_alpha = 0.5
+        lupton_Q = 0.5
+        scale_min = 1.0 # units of linear luminosity
+
+        # make RGB array using arcsinh scaling following Lupton
+        #band0_grid *= fac0
+        #band1_grid *= fac1
+        #band2_grid *= fac2
+
+        inten = (band0_grid + band1_grid + band2_grid) / 3.0
+        val = np.arcsinh( lupton_alpha * lupton_Q * (inten - scale_min) ) / lupton_Q
+
+        ww = np.where(inten < scale_min)[0]
+        print(' clipping %d of %d' % (len(ww),inten.size))
+
+        inten[inten < scale_min] = 1e100 # since we divide by inten below, this sets the grid here to zero
+
+        grid_master[:,:,0] = band0_grid * val / inten
+        grid_master[:,:,1] = band1_grid * val / inten
+        grid_master[:,:,2] = band2_grid * val / inten
+
+        # rescale and clip
+        #max_rgbval = np.amax(grid_master, axis=2)
+        #min_rgbval = np.amin(grid_master, axis=2)
+
+        ######ww_max = np.where(max_rgbval > 1.0)
+        #####ww_min = np.where((min_rgbval < 0.0) | (inten < 0.0))
+        #ww_max = max_rgbval > 1.0
+        #ww_min = min_rgbval < 0.0
+
+        for i in range(3): # rescale each channel individually to one (must reach white)
+            maxVal = np.max( grid_master[:,:,i] )
+            print('channel [%d] max = %g' % (i,maxVal))
+            grid_master[:,:,i] /= maxVal
+        #    #grid_master[ww_max,i] = grid_master[ww_max,i] / max_rgbval[ww_max]
+        #    #grid_master[ww_min,i] = 0.0
+
+        #grid_master /= grid_master.max()
+
+    if 0:
+        #fac = (1/res)**2 * (pxScale)**2 (maybe)
+        dranges = {'snap_K' : [400, 80000], # red
+                   'snap_B' : [20, 13000], # green
+                   'snap_U' : [13, 20000], # blue
+                   \
+                   '2mass_ks' : [40, 8000], # red
+                   'b' : [2, 3300], # green
+                   'u' : [1, 1500], # blue
+                   \
+                   'wfc_acs_f814w' : [60, 8000], # red
+                   'wfc_acs_f606w' : [20, 50000], # green
+                   'wfc_acs_f475w' : [3, 20000], # blue
+                   \
+                   'jwst_f070w' : [400, 30000], # red
+                   'jwst_f115w' : [200, 85000], # green
+                   'jwst_f200w': [100, 75000], # blue
+                   \
+                   'sdss_z' : [100, 50000], # red
+                   'sdss_i' : [30, 5000], # red
+                   'sdss_r' : [2, 6000], # green
+                   'sdss_g' : [1, 7000], # blue
+                   'sdss_u' : [5, 15000]} # blue
+
+        for i in range(3):
+            drange = dranges[bands[i]]
+            drange = np.array(drange) * 1.0 #fac
+            drange_log = np.log10( drange )
+
+            if i == 0: grid_loc = band0_grid
+            if i == 1: grid_loc = band1_grid
+            if i == 2: grid_loc = band2_grid
+
+            print(' ',i,bands[i],drange,grid_loc.mean(),grid_loc.min(),grid_loc.max())
+
+            grid_log = np.log10( np.clip( grid_loc, drange[0], drange[1] ) )
+            grid_stretch = (grid_log - drange_log[0]) / (drange_log[1]-drange_log[0])
+
+            grid_master[:,:,i] = grid_stretch
+            #import pdb; pdb.set_trace()
+    if 1:
+        pxArea = (boxSizeImg[axes[1]] / nPixels[0]) * (boxSizeImg[axes[0]] / nPixels[1])
+        pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
+        resFac = 1.0 #(512.0/sP.res)**2.0
+
+        minValLog = 3.3
+        minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
+
+        maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w
+        maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
+        print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
+
+        for i in range(3):
+            if i == 0: grid_loc = band0_grid
+            if i == 1: grid_loc = band1_grid
+            if i == 2: grid_loc = band2_grid + 0.5*band2b_grid
+            if i == 2: print(' extra blue channel added float')
+
+            ww = np.where(grid_loc == 0.0)
+            grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
+            grid_log = np.log10( grid_loc )
+
+            #grid_log = np.clip( grid_log, minValLog, grid_log.max() )
+            #grid_stretch = (grid_log - minValLog) / (grid_log.max()-minValLog)
+            grid_log = np.clip( grid_log, minValLog, maxValLog[i] )
+            grid_stretch = (grid_log - minValLog) / (maxValLog[i]-minValLog)
+
+            grid_master[:,:,i] = grid_stretch
+            grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
+
+            #print(' grid: ',i,grid_stretch.min(),grid_stretch.max(),grid_master_u[:,:,i].min(),grid_master_u[:,:,i].max())
+
+        # add in extra blue channel
+        if 0:
+            print(' extra blue channel added int')
+            grid_loc = band2b_grid
+            ww = np.where(grid_loc == 0.0)
+            grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
+            grid_log = np.log10( grid_loc )
+            minValLog = grid_log.max()-3
+            grid_log = np.clip( grid_log, minValLog, grid_log.max() )
+            grid_stretch = (grid_log - minValLog) / (grid_log.max()-minValLog)
+            grid_master_u[:,:,2] = np.float32(grid_master_u[:,:,2]) + grid_stretch * 255.0
+            grid_master_u[:,:,2] = np.uint8( np.clip( grid_master_u[:,:,2], 0, 255 ) )
+
+        # saturation adjust
+        if 0:
+            satVal = 1.5 # 0.0 -> b&w, 0.5 -> reduce color saturation by half, 1.0 -> unchanged
+            R = grid_master_u[:,:,0]
+            G = grid_master_u[:,:,1]
+            B = grid_master_u[:,:,2]
+            P = np.sqrt( R*R*0.299 + G*G*0.587 + B*B*0.144 ) # standard luminance weights
+
+            ww = np.where((B > 150))
+            #grid_master_u[:,:,0] = np.uint8(np.clip( P + (R-P)*satVal, 0, 255 ))
+            #grid_master_u[:,:,1] = np.uint8(np.clip( P + (G-P)*satVal, 0, 255 ))
+            B[ww] = np.uint8(np.clip( P[ww] + (B[ww]-P[ww])*satVal, 0, 255 ))
+            grid_master_u[:,:,2] = B
+            print(' adjusted saturation')
+
+        # contrast adjust
+        if 0:
+            C = 5.0
+            F = 259*(C+255) / (255*(259-C))
+            for i in range(3):
+                new_i = F * (np.float32(grid_master_u[:,:,i]) - 128) + 128
+                grid_master_u[:,:,i] = np.uint8( np.clip( new_i, 0, 255 ) )
+            print(' adjusted contrast ',F)
+
+    # DEBUG: dump 16 bit tiff without clipping
+    if 0:
+        im = np.zeros( (nPixels[0], nPixels[1], 3), dtype='uint16' )
+
+        for i in range(3):
+            if i == 0: grid_loc = band0_grid
+            if i == 1: grid_loc = band1_grid
+            if i == 2: grid_loc = band2_grid
+            
+            ww = np.where(grid_loc == 0.0)
+            grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
+            grid_loc = np.log10( grid_loc )
+
+            # rescale log(lum) into [0,65535]
+            mVal = np.uint16(65535)
+            grid_out = (grid_loc - grid_loc.min()) / (grid_loc.max()-grid_loc.min()) * mVal
+            im[:,:,i] = grid_out
+            print(' tiff: ',i,grid_loc.min(),grid_loc.max())
+
+        import skimage.io
+        skimage.io.imsave('out_%s.tif' % '-'.join(bands), im, plugin='tifffile')
+    # END DEBUG
+
+    config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands)}
+    return grid_master_u, config
+
 def loadMassAndQuantity(sP, partType, partField, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
@@ -199,6 +462,14 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
+    # single stellar band, replace mass array with linear luminosity of each star particle
+    if 'stellarBand-' in partField:
+        bands = partField.split("-")[1:]
+        assert len(bands) == 1
+
+        pop = sps(sP)
+        mass = pop.calcStellarLuminosities(sP, bands[0], indRange=indRange)
+
     # quantity relies on a non-trivial computation / load of another quantity
     partFieldLoad = partField
 
@@ -212,7 +483,8 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     # quantity and column density normalization
     normCol = False
 
-    if partFieldLoad in volDensityFields+colDensityFields+totSumFields or ' ' in partFieldLoad:
+    if partFieldLoad in volDensityFields+colDensityFields+totSumFields or \
+      ' ' in partFieldLoad or 'stellarBand-' in partFieldLoad:
         # distribute mass and calculate column/volume density grid
         quant = None
 
@@ -368,6 +640,21 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'Stellar Age [Gyr]'
         config['ctName'] = 'blgrrd_black0'
 
+    if 'stellarBand-' in partField:
+        # convert linear luminosities back to magnitudes
+        ww = np.where(grid == 0.0)
+        w2 = np.where(grid > 0.0)
+        grid[w2] = -2.5 * np.log10( grid[w2] )
+        grid[ww] = 99.0
+
+        bandName = partField.split("stellarBand-")[1]
+        config['label'] = 'Stellar %s Luminosity [mag]' % bandName
+        config['ctName'] = 'gray_r'
+
+    if 'stellarComp-' in partField:
+        print('todo')
+        import pdb; pdb.set_trace()
+
     # debugging
     if partField in ['TimeStep']:
         grid = logZeroMin( grid )
@@ -415,6 +702,12 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     if h['NumPart'][sP.ptNum(partType)] <= 2:
         return emptyReturn()
 
+    # generate a 3-band composite stellar image from 3 bands
+    if 'stellarComp-' in partField:
+        bands = partField.split("-")[1:]        
+        return stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxSizeImg, 
+                                          hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
+
     # map
     if not forceRecalculate and isfile(saveFilename):
         # load if already made
@@ -440,8 +733,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
         # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
         # a full tree construction to calculate hsml values
-        grid_dens  = np.zeros( nPixels, dtype='float32' )
-        grid_quant = np.zeros( nPixels, dtype='float32' )
+        grid_dens  = np.zeros( nPixels[::-1], dtype='float32' )
+        grid_quant = np.zeros( nPixels[::-1], dtype='float32' )
         nChunks = 1
 
         disableChunkLoad = (sP.isPartType(partType,'stars') or sP.isPartType(partType,'dm')) \
@@ -519,23 +812,21 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             # render
             if method in ['sphMap','sphMap_global']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
-                hsml = getHsmlForPartType(sP, partType, indRange=indRange)
-                hsml *= hsmlFac
+                if 'stellarBand-' in partField:
+                    hsml = getHsmlForPartType(sP, partType, nNGB=16, indRange=indRange)
+                    hsmlFac = sP.res/512.0 # match sizes roughly to 512 sizes
+                    hsml *= hsmlFac
+                    print(' debugging stellarBand getHsml() with nNGB=16 and hsmlFac/res.')
+                else:
+                    hsml = getHsmlForPartType(sP, partType, indRange=indRange)
+                    hsml *= hsmlFac
 
                 if wMask is not None:
                     hsml = hsml[wMask]
 
                 if sP.isPartType(partType, 'stars'):
-                    # use a minimum/maximum size for stars in outskirts
-                    #hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
-                    #hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness
-                    # adaptively clip in proportion to pixel scale of image, depending on ~pixel number
                     pxScale = np.max(boxSizeImg[axes] / nPixels)
-                    #clipAboveNumPx = 30.0*(np.max(nPixels)/1920)
-                    #clipAboveToPx  = np.max([3.0, 6.0-2*1920/np.max(nPixels)])
-                    #hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
-                    clipPx  = np.max([3.0, 6.0/(1920/np.max(nPixels))])
-                    hsml[hsml > clipPx*pxScale] = clipPx*pxScale
+                    hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels)
 
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                                          boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, 
@@ -543,6 +834,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
                 grid_dens  += grid_d
                 grid_quant += grid_q
+
             else:
                 raise Exception('Not implemented.')
 
@@ -570,7 +862,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
         grid_master[grid_nHI < 19.0] = np.nan
 
-    # temporary: similar, truncate stellar_age projection at a stellar colum density of 
+    # temporary: similar, truncate stellar_age projection at a stellar column density of 
     # ~log(3.2) [msun/kpc^2] equal to the bottom of the color scale for the illustris/tng sb0 box renders
     if partField == 'stellar_age':
         grid_stellarColDens, _ = gridBox(sP, method, 'stars', 'coldens_msunkpc2', nPixels, axes, 
@@ -906,7 +1198,8 @@ def renderMultiPanel(panels, conf):
 
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
             ax.autoscale(False)
-            if 'valMinMax' in p: plt.clim( p['valMinMax'] )
+            if 'valMinMax' in p and cmap is not None:
+                plt.clim( p['valMinMax'] )
 
             addBoxMarkers(p, conf, ax)
 
@@ -994,7 +1287,8 @@ def renderMultiPanel(panels, conf):
 
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal')
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
-            if 'valMinMax' in p: plt.clim( p['valMinMax'] )
+            if 'valMinMax' in p and cmap is not None:
+                plt.clim( p['valMinMax'] )
 
             addBoxMarkers(p, conf, ax)
 

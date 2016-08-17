@@ -262,6 +262,8 @@ def loadColorTable(ctName, valMinMax=None):
     """ Load a custom or built-in color table.
           rgb_table : do not load for active plotting, just return table as an array.
     """
+    if ctName is None: return None
+    
     from matplotlib.pyplot import cm
     from matplotlib.colors import LinearSegmentedColormap
     cmap = None
