@@ -12,11 +12,13 @@ from os.path import isfile, isdir
 from os import mkdir
 
 import cosmo.load
-from util.helper import iterable
+from util.helper import iterable, nUnique
 from cosmo.mergertree import mpbSmoothedProperties
 from cosmo.util import periodicDists
 
 debug = False # enable expensive debug consistency checks and verbose output
+
+defParPartTypes = ['gas','stars','bhs']
 
 def match(ar1, ar2, uniq=False):
     """ My version of numpy.in1d with invert=False. Return is a ndarray of indices into ar1, 
@@ -124,7 +126,7 @@ def match2(ar1, ar2):
     return inds1, inds2
 
 def match3(ar1, ar2, firstSorted=False):
-    """ Returns index arrays i1,i2 of the matching elementes between ar1 and ar2. While the elements of ar1 
+    """ Returns index arrays i1,i2 of the matching elements between ar1 and ar2. While the elements of ar1 
         must be unique, the elements of ar2 need not be. For every matched element of ar2, the return i1 
         gives the index in ar1 where it can be found. For every matched element of ar1, the return i2 gives 
         the index in ar2 where it can be found. Therefore, ar1[i1] = ar2[i2]. The order of ar2[i2] preserves 
@@ -221,7 +223,7 @@ def mapParentIDsToIndsByType(sP, parentIDs):
         print(' mapParentIDsToIndsByType: parentIDs has ['+str(parentIDs.size)+\
               '] unique ['+str(parentIDsUniq.size)+']')
 
-    r = { 'partTypes'   : ['gas','stars','bhs'],
+    r = { 'partTypes'   : defParPartTypes,
           'parentInds'  : np.zeros( parentIDs.size, dtype='int64' ),
           'parentTypes' : np.zeros( parentIDs.size, dtype='int16' ) - 1 } # start at -1
 
@@ -238,7 +240,7 @@ def mapParentIDsToIndsByType(sP, parentIDs):
         if debug:
             print(' mapParentIDsToIndsByType: '+ptName+' searching ['+str(parIDsType.size)+'] ids...')
 
-        # crossmatch the two unique ID lists and request the match indices into both
+        # crossmatch the two ID lists and request the match indices into both
         parIndsType, wMatched = match3(parIDsType, parentIDs)
 
         if parIndsType is None:
@@ -274,12 +276,32 @@ def mapParentIDsToIndsByType(sP, parentIDs):
 
     # verify that we found all parents
     if r['parentTypes'].min() < 0 or nMatched != parentIDs.size:
-        raise Exception('Failed to locate all requested parents through their IDs.')
+        if nMatched > parentIDs.size:
+            print('WARNING: DUPLICATE ID BETWEEN PARTICLE TYPES DETECTED! (zooms2_tng failure, proceeding...)')
+        else:
+            raise Exception('Failed to locate all requested parents through their IDs.')
 
     return r
 
+def concatTracersByType(trIDsByParType, parPartTypes):
+    """ Collapse trIDsByParType dictionary into 1D tracer ID/index list. """
+    totNumTracers = np.array([trIDsByParType[k].size for k in trIDsByParType.keys()]).sum()
+    trIDsAllTypes = np.zeros( totNumTracers, dtype=trIDsByParType.values()[0].dtype )
+
+    offset = 0
+
+    for parPartType in parPartTypes:
+        # no particles of this type in the snapshot
+        if parPartType not in trIDsByParType:
+            continue
+
+        trIDsAllTypes[offset : offset + trIDsByParType[parPartType].size] = trIDsByParType[parPartType]
+        offset += trIDsByParType[parPartType].size
+
+    return trIDsAllTypes
+
 def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None, 
-                          parPartTypes=['gas','stars','bhs'], concatTypes=True,
+                          parPartTypes=defParPartTypes, concatTypes=True,
                           ParentID=None, ParentIDSortInds=None):
     """ For a given haloID or subhaloID, return all the child tracers of parents in that object (their 
         IDs or their global indices in the snap), by default for parents of all particle types, 
@@ -297,9 +319,6 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
             for key in f.keys():
                 trIDsByParType[key] = f[key][()]
     else:
-        # calculate now
-        trIDsByParType = {}
-
         # consider each parent type
         for parPartType in parPartTypes:
             # load IDs of this type in the requested object
@@ -372,20 +391,92 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
 
     # concatenate child tracer IDs disregarding type?
     if concatTypes:
-        totNumTracers = np.array([trIDsByParType[k].size for k in trIDsByParType.keys()]).sum()
-        trIDsAllTypes = np.zeros( totNumTracers, dtype=trIDsByParType.values()[0].dtype )
+        return concatTracersByType(trIDsByParType, parPartTypes)
 
-        offset = 0
+    return trIDsByParType
 
-        for parPartType in parPartTypes:
-            # no particles of this type in the snapshot
-            if parPartType not in trIDsByParType:
-                continue
+def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTypes=defParPartTypes,
+                         concatTypes=True, ParentID=None, ParentIDSortInds=None):
+    """ For all subhalos or halos in a snapshot, return all the child tracers of parents in that object 
+        (their IDs or their global indices in the snap), by default for parents of all particle types, 
+        optionally restricted to input particle type(s). """
+    trIDsByParType = {}
 
-            trIDsAllTypes[offset : offset + trIDsByParType[parPartType].size] = trIDsByParType[parPartType]
-            offset += trIDsByParType[parPartType].size
+    assert halos == True or subhalos == True # pick one
 
-        return trIDsAllTypes
+    # consider each parent type
+    for parPartType in parPartTypes:
+        # determine index range of particles of this type
+        ptNum = sP.ptNum(parPartType)
+
+        inds = None
+        indRange = None
+
+        if halos:
+            # in FoFs (contiguous at the start of each snap)
+            gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])
+            haloOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+
+            nPartTotInHalosThisType = np.sum(gc['halos'][:,ptNum])
+            indRange = [0,nPartTotInHalosThisType-1]
+
+            if debug:
+                offset = 0
+                indsDebug = np.zeros( nPartTotInHalosThisType, dtype='int64' ) - 1
+
+                for i in range(gc['header']['Ngroups_Total']):
+                    # slice starting/ending indices for stars local to this FoF
+                    i0 = haloOffsetType[i,ptNum]
+                    i1 = i0 + gc['halos'][i,ptNum]
+
+                    if i1 == i0:
+                        continue # zero length of this type
+
+                    indsDebug[offset:offset+(i1-i0)] = np.arange(i0,i1)
+                    offset += (i1-i0)
+
+                assert np.array_equal( indsDebug, np.arange(indRange[0],indRange[1]+1) )
+                assert np.min(indsDebug) >= 0
+                assert nUnique(indsDebug) == indsDebug.size
+                assert indsDebug[0] == 0 and indsDebug[-1] == indsDebug.size-1
+
+        if subhalos:
+            # in subhalos (make non-contiguous index list)
+            gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])
+            subhaloOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+            nPartTotInSubhalosThisType = np.sum(gc['subhalos'][:,ptNum])
+            inds = np.zeros( nPartTotInSubhalosThisType, dtype='int64' )
+            offset = 0
+
+            for i in range(gc['header']['Nsubgroups_Total']):
+                # slice starting/ending indices for stars local to this FoF
+                i0 = subhaloOffsetType[i,ptNum]
+                i1 = i0 + gc['subhalos'][i,ptNum]
+
+                if i1 == i0:
+                    continue # zero length of this type
+                
+                inds[offset:offset+(i1-i0)] = np.arange(i0,i1)
+                offset += (i1-i0)
+
+        # load global IDs of this type
+        parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', inds=inds, indRange=indRange)
+
+        # no particles of this type in the snapshot
+        if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
+            continue
+
+        # crossmatch
+        trIDs = getTracerChildren(sP, parIDsType, inds=inds, 
+                                  ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+
+        # save
+        trIDsByParType[parPartType] = trIDs
+
+    # concatenate child tracer IDs disregarding type?
+    if concatTypes:
+        return concatTracersByType(trIDsByParType, parPartTypes)
 
     return trIDsByParType
 
@@ -430,8 +521,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     snaps = np.arange(startSnap,finalSnap+snapStep,snapStep)
     snaps = snaps[snaps >= 0]
 
-    # intersect with valid snapshots (skip missing, etc)
-    validSnaps = cosmo.util.validSnapList(sP)
+    # intersect with valid snapshots (skip missing, etc) with tracers (e.g. skip mini's in L75TNG)
+    validSnaps = cosmo.util.validSnapList(sP, reqTr=True)
     snaps = [snap for snap in snaps if snap in validSnaps]
 
     redshifts = cosmo.util.snapNumToRedshift(sP, snaps)
@@ -673,9 +764,8 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
     trCounts = np.zeros( subhaloIDs.size, dtype='uint32' )
 
     for i, subhaloID in enumerate(subhaloIDs):
-        shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
-
         if debug:
+            shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
             print('['+str(i).zfill(3)+'] subhaloID = '+str(subhaloID) + \
                   '  LenType: '+' '.join([str(l) for l in shDetails['SubhaloLenType']]))
 
@@ -795,3 +885,134 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
 
         if len(fields) == 1:
             return trVals
+
+def globalTracerLength(sP, halos=False, subhalos=False):
+    """ Return a 1D array of the number of tracers per halo or subhalo, for all in the snapshot, in 
+    direct analogy to LenType in the group catalogs. Compute the offsets as well. """
+    assert halos is True or subhalos is True # pick one
+
+    # load and sort the parent IDs of all tracers in this snapshot
+    ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+    ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
+    ParentID = ParentID[ParentIDSortInds]
+
+    # allocate counts
+    h = cosmo.load.groupCatHeader(sP)
+    if halos: nObjs = h['Ngroups_Total']
+    if subhalos: nObjs = h['Nsubgroups_Total']
+
+    trCounts = {}
+    for pt in defParPartTypes+['total']:
+        trCounts[pt] = np.zeros( nObjs, dtype='int32' )
+
+    # load offsets
+    if halos:
+        gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+        objOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+
+    if subhalos:
+        gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
+        objOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+    # consider each parent type
+    for parPartType in defParPartTypes:
+        # load IDs of this type in the requested object
+        print(parPartType)
+
+        ptNum = sP.ptNum(parPartType)
+        parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id')
+
+        # no particles of this type in the snapshot
+        if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
+            continue
+
+        # loop over each halo/subhalo, calculate lengths
+        for i in np.arange(nObjs):
+            if i % int(nObjs/10) == 0 and i <= nObjs:
+                print(' %4.1f%%' % (float(i+1)*100.0/nObjs))
+
+            # get parent IDs of this type local to this halo/subhalo
+            i0 = objOffsetType[i,ptNum]
+            i1 = i0 + gc[i,ptNum]
+
+            if i1 == i0:
+                continue # zero length of this type
+            
+            parIDsTypeLocal = parIDsType[i0:i1]
+
+            # crossmatch
+            trIDs = getTracerChildren(sP, parIDsTypeLocal, inds=True, 
+                                      ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+
+            # save counts
+            trCounts[parPartType][i] = len(trIDs)
+            trCounts['total'][i] += len(trIDs)
+
+    # build offsets
+    trOffsets = {}
+    for key in trCounts.keys():
+        trOffsets[key] = np.zeros( nObjs, dtype='int64' )
+
+        trOffsets[key][1:] = np.cumsum( trCounts[key] )[:-1]
+
+    return trCounts, trOffsets
+
+def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
+    """ For all tracers in all FoFs at the simulation endtime, record time evolution tracks of one 
+    field for all snapshots (which contain tracers). """
+    assert halos is True or subhalos is True # pick one
+
+    if not isdir(sP.derivPath + '/trTimeEvo'):
+        mkdir(sP.derivPath + '/trTimeEvo')
+
+    if halos: selectStr = 'groups'
+    if subhalos: selectStr = 'subhalos'
+
+    saveFilename = sP.derivPath + '/trTimeEvo/tr_all_%s_%d_%s.hdf5' % (selectStr,sP.snap,field)
+
+    # single load requested? do now and return
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            r = {}
+            for key in f:
+                r[key] = f[key][()]
+
+        return r
+
+    # get child tracers of all particle types in all FoFs
+    trIDs = globalTracerChildren(sP, halos=halos, subhalos=subhalos)
+
+    # mpb?
+    # todo!
+
+    # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
+    print('Computing: [%s]' % saveFilename.split(sP.derivPath)[1])
+
+    if field == 'meta':
+        # save the metadata (ordered tracer IDs, lengths/offsets of tracers by group/subhalo)
+        trVals = {}
+
+        # save the tracer IDs in the order we are saving the tracks
+        trVals['TracerIDs'] = trIDs
+
+        # compute lengths/offsets
+        trCounts, trOffsets = globalTracerLength(sP, halos=halos, subhalos=subhalos)
+
+        for key in trCounts:
+            trVals['TracerLength_'+key] = trCounts[key]
+            trVals['TracerOffset_'+key] = trOffsets[key]
+
+    else:
+        if 'tracer_' in field: # trField
+            trVals = tracersTimeEvo(sP, trIDs, [field], [])
+        else: # parField
+            trVals = tracersTimeEvo(sP, trIDs, [], [field])
+
+    # save tracks
+    with h5py.File(saveFilename,'w') as f:
+        for key in trVals:
+            f[key] = trVals[key]
+
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+
+    return trVals

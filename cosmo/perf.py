@@ -462,16 +462,19 @@ def plotCpuTimes():
     remove(fName2)
     rename(fName1,fName2)
 
-def scalingPlots():
+def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
     """ Construct strong (fixed problem size) and weak (Npart scales w/ Ncores) scaling plots 
          based on the Hazel Hen tests. """
 
     # config
-    basePath = '/n/home07/dnelson/sims.TNG_method/scaling/'
+    basePath = '/n/home07/dnelson/sims.TNG_method/%s/' % seriesName
     plotKeys = ['total','domain','voronoi','treegrav','pm_grav','hydro']
     dtInd    = 0 # index for column which is the differential time per step
-    timestep = 2 # start at the second first timestep
-    tsMean   = 20 # number of timesteps to average over
+    timestep = 2 # start at the second timestep (first shows strange startup numbers)
+    tsMean   = 10 # number of timesteps to average over
+    figsize  = (9.6,6.8) # (16,9)
+
+    pdf = PdfPages(seriesName + '.pdf')
 
     def _addTopAxisStrong(ax, nCores):
         """ add a second x-axis on top with the exact core numbers. """
@@ -491,8 +494,8 @@ def scalingPlots():
         axTop.set_xscale(ax.get_xscale())
         axTop.set_xticks(nCores)
         axTop.set_xticklabels(['2$\\times$'+str(nPart)+'${^3}$' for nPart in nPartsCubeRoot])
-        #axTop.minorticks_off()
-        axTop.tick_params(which='minor',length=0)
+        #axTop.minorticks_off() # doesn't work
+        #axTop.tick_params(which='minor',length=0) # works, but corrupts PDFs somewhat
         axTop.set_xlabel('Weak Scaling: Problem Size [Number of Particles]')
         axTop.xaxis.labelpad = 35
 
@@ -541,16 +544,19 @@ def scalingPlots():
 
         return nCores, data
 
-    pdf = PdfPages('scaling_tests.pdf')
-
     # strong
+    # ------
     for runSeries in ['L75n910','L75n1820']:
         # loop over runs
         runs = glob(basePath + runSeries + '_*')
         nCores, data = _loadHelper(runs, plotKeys)
 
+        # print some totals for latex table
+        for i in range(len(nCores)):
+            print('%6d & %6.1f & %6.2f' % (nCores[i], data['total'][i], data['total'][0]/data['total'][i]) )
+
         # (A) start plot, 'timestep [sec]' vs Ncore   
-        fig = plt.figure(figsize=(16,9))
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         #ax.set_xlim([nCores.min()*0.8,nCores.max()*1.2])
         ax.set_xlim([1e3,1e5])
@@ -582,7 +588,7 @@ def scalingPlots():
         plt.close(fig)
 
         # (B) start plot, 'efficiency' vs Ncore
-        fig = plt.figure(figsize=(16,9))
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         ax.set_xscale('log')
         ax.set_xlim([1e3,1e5])
@@ -612,13 +618,18 @@ def scalingPlots():
         plt.close(fig)
 
     # weak
+    # ----
     runSeries = 'tL*_ics'
 
     runs = glob(basePath + runSeries + '_*')
     nCores, data = _loadHelper(runs, plotKeys)
 
+    # print some totals for latex table
+    for i in range(len(nCores)):
+        print('%6d & %6.1f & %6.2f' % (nCores[i], data['total'][i], data['total'][1]/data['total'][i]) )
+
     # (A) start plot, 'timestep [sec]' vs Ncore   
-    fig = plt.figure(figsize=(16,9))
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     ax.set_xscale('log')
     ax.set_yscale('log')
@@ -630,8 +641,8 @@ def scalingPlots():
     for plotKey in plotKeys:
         ax.plot(nCores,data[plotKey],marker='s',lw=2.0,label=plotKey)
 
-        # add ideal scaling dotted line for each
-        xx = [nCores.min() * 1.1, xx_max]
+        # add ideal scaling dotted line
+        xx = [nCores.min() * 0.6, xx_max]
         yy = [data[plotKey][0], data[plotKey][0]]
 
         ax.plot(xx,yy,':',color='#666666',alpha=0.8)
@@ -639,10 +650,10 @@ def scalingPlots():
     # add core count labels above total points, and boxsize labels under particle counts
     for i in range(len(nCores)):
         xx = nCores[i]
-        yy = ax.get_ylim()[0] * 1.38
+        yy = ax.get_ylim()[0] * 1.38 #1.7
         ax.text(xx,yy,str(nCores[i]),size='large',horizontalalignment='center',verticalalignment='top')
 
-        yy = ax.get_ylim()[1] * 1.88
+        yy = ax.get_ylim()[1] * 1.88 #2.5
         label = 'L%s' % data['boxSize'][i]
         ax.text(xx,yy,label,size='large',horizontalalignment='center',verticalalignment='top')
 
@@ -654,7 +665,7 @@ def scalingPlots():
     plt.close(fig)
 
     # (B) start plot, 'efficiency' vs Ncore
-    fig = plt.figure(figsize=(16,9))
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     ax.set_xscale('log')
     ax.set_ylim([0.0,1.1])
@@ -667,19 +678,18 @@ def scalingPlots():
         eff = data[plotKey][0] / data[plotKey]
         ax.plot(nCores,eff,marker='s',lw=2.0,label=plotKey)
 
-        # add ideal scaling dotted line for each
-        xx = [nCores.min() * 0.9, xx_max]
-        yy = [1.0, 1.0]
-
-        ax.plot(xx,yy,':',color='#666666',alpha=0.8)
+    # add ideal scaling dotted line
+    xx = [nCores.min() * 0.6, xx_max]
+    yy = [1.0, 1.0]
+    ax.plot(xx,yy,':',color='#666666',alpha=0.8)
 
     # add core count labels above total points
     for i in range(len(nCores)):
         xx = nCores[i]
-        yy = ax.get_ylim()[0] + 0.05
+        yy = ax.get_ylim()[0] + 0.05 # 0.08
         ax.text(xx,yy,str(nCores[i]),size='large',horizontalalignment='center',verticalalignment='top')
 
-        yy = ax.get_ylim()[1] + 0.1
+        yy = ax.get_ylim()[1] + 0.1 # 0.15
         label = 'L%s' % data['boxSize'][i]
         ax.text(xx,yy,label,size='large',horizontalalignment='center',verticalalignment='top')
 
