@@ -103,7 +103,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 
     return snaps
   
-def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None):
+def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=False):
     """ Return a list of all snapshot numbers which exist. """
     from util.helper import evenlySample
 
@@ -117,6 +117,19 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None):
 
     if len(w) == 0:
         return None
+
+    # require existence of trMC information? have to check now
+    if reqTr:
+        snaps = w
+        w = []
+
+        for snap in snaps:
+            fileName = cosmo.load.snapPath(sP.simPath, snap, checkExists=True)
+            with h5py.File(fileName,'r') as f:
+                if 'PartType'+str(sP.ptNum('tracer')) in f:
+                    w.append(snap)
+
+        w = np.array(w)
 
     # cap at a maximum number of snaps? (evenly spaced)
     if maxNum is not None:

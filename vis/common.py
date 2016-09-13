@@ -101,7 +101,7 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels):
 
     # adaptively clip in proportion to pixel scale of image, depending on ~pixel number
     if 1:
-        # adaptive technique 2
+        # adaptive technique 2 (used for Gauss proposal stellar composite figure)
         clipAboveNumPx = 30.0*(np.max(nPixels)/1920)
         clipAboveToPx  = np.max([5.0, 6.0-2*1920/np.max(nPixels)]) # was 3.0 not 5.0 before composite tests
         hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
@@ -109,7 +109,7 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels):
         print(' [m2] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
             (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
     if 0:
-        # adaptive technique 1 (preferred)
+        # adaptive technique 1 (preferred) (used for TNG subbox movies)
         minClipVal = 4.0 # was 3.0 before composite tests
 
         #if 'sdss_g' in partField:

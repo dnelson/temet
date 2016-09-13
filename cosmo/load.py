@@ -255,9 +255,9 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
             return fileName
 
     if checkExists:
-        return '-1'
-    else:
-        raise Exception("No snapshot found.")
+        return None
+
+    raise Exception("No snapshot found.")
 
 def snapNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a snapshot, by checking for existence of files inside directory. """
