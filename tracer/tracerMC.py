@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
+import time
 from os.path import isfile, isdir
 from os import mkdir
 
@@ -26,7 +27,6 @@ def match(ar1, ar2, uniq=False):
         snapshot, and ar2=some IDs to search for, where ar2 could be e.g. ParentID from the 
         tracers, in which case they are generally not unique (multiple tracers can exist in the 
         same parent). """
-    import time
     start = time.time()
 
     # flatten both arrays (behavior for the first array could be different)
@@ -80,7 +80,6 @@ def match2(ar1, ar2):
         used to e.g. crossmatch between two TracerID sets from different snapshots, or between some 
         ParentIDs and ParticleIDs of other particle types. The approach is a concatenated mergesort 
         of ar1,ar2 combined, therefore O( (N_ar1+N_ar2)*log(N_ar1+N_ar2) ) complexity. """
-    import time
     start = time.time()
 
     # flatten both arrays (behavior for the first array could be different)
@@ -134,10 +133,8 @@ def match3(ar1, ar2, firstSorted=False):
         ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by 
         bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= 
         O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1. """
-    import time
-    start = time.time()
-
     if debug:
+        start = time.time()
         assert np.unique(ar1).size == len(ar1)
 
     if not firstSorted:
@@ -180,11 +177,14 @@ def getTracerChildren(sP, parentSearchIDs, inds=False, ParentID=None, ParentIDSo
               ' max: '+str(parentSearchIDs.max()))
 
     # ID crossmatch: find matching elements
-    # trInds,_ = match3(ParentID,parentSearchIDs) is not appropraite here: we have possibly multiple 
+    # trInds,_ = match3(ParentID,parentSearchIDs) is not appropriate here: we have possibly multiple 
     # matches inside ParentID for each element of parentSearchIDs. Instead, we can do 
     # _,trInds = match3(parentSearchIDs,ParentID) and get all the indices of ParentID which are found 
     # anywhere inside parentSearchIDs
     _,trInds = match3(parentSearchIDs, ParentID)
+
+    if trInds is None:
+        return None # no children
     
     if debug:
         # old method: keep for debugging
@@ -276,15 +276,13 @@ def mapParentIDsToIndsByType(sP, parentIDs):
 
     # verify that we found all parents
     if r['parentTypes'].min() < 0 or nMatched != parentIDs.size:
-        if nMatched > parentIDs.size:
-            print('WARNING: DUPLICATE ID BETWEEN PARTICLE TYPES DETECTED! (zooms2_tng failure, proceeding...)')
-        else:
-            raise Exception('Failed to locate all requested parents through their IDs.')
+        raise Exception('Failed to locate all requested parents through their IDs.')
 
     return r
 
 def concatTracersByType(trIDsByParType, parPartTypes):
-    """ Collapse trIDsByParType dictionary into 1D tracer ID/index list. """
+    """ Collapse trIDsByParType dictionary into 1D tracer ID/index list. Ordering preserved according 
+    to the order of parPartTypes. """
     totNumTracers = np.array([trIDsByParType[k].size for k in trIDsByParType.keys()]).sum()
     trIDsAllTypes = np.zeros( totNumTracers, dtype=trIDsByParType.values()[0].dtype )
 
@@ -404,6 +402,14 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
 
     assert halos == True or subhalos == True # pick one
 
+    if ParentID is None:
+        assert ParentIDSortInds is None # both should be None, or both should be not None
+
+        # load and sort the parent IDs of all tracers in this snapshot
+        ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+        ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
+        ParentID = ParentID[ParentIDSortInds]
+
     # consider each parent type
     for parPartType in parPartTypes:
         # determine index range of particles of this type
@@ -467,11 +473,19 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
             continue
 
-        # crossmatch
-        trIDs = getTracerChildren(sP, parIDsType, inds=inds, 
-                                  ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+        # ID crossmatch: find matching elements, where trInds gives the indices list of all child tracers 
+        # in all the parIDsType parents. But, they are ordered according to ParentID, therefore also 
+        # capture parInds and sort them, then rearrange trInds according to the sort of parInds
+        parInds,trInds = match3(parIDsType, ParentID)
+        parIndsSortInds = np.argsort(parInds, kind='mergesort')
 
-        # save
+        # dealing with a pre-sorted ParentID, so take the inverse of our locate indices
+        trInds = ParentIDSortInds[trInds]
+
+        # convert indices to IDs and save into dict
+        trIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID', inds=trInds)
+        trIDs = trIDs[parIndsSortInds] # make order consistent with parIDsType
+
         trIDsByParType[parPartType] = trIDs
 
     # concatenate child tracer IDs disregarding type?
@@ -795,7 +809,7 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         f = h5py.File(outFilePath,'w')
 
         # header
-        f['TracerIDs']  = trSearchIDs[offset : offset + trCounts[i]]
+        f['TracerIDs'] = trSearchIDs[offset : offset + trCounts[i]]
         f['SubhaloID'] = [subhaloID]
 
         for key in tracerProps.keys():
@@ -901,9 +915,12 @@ def globalTracerLength(sP, halos=False, subhalos=False):
     if halos: nObjs = h['Ngroups_Total']
     if subhalos: nObjs = h['Nsubgroups_Total']
 
-    trCounts = {}
-    for pt in defParPartTypes+['total']:
-        trCounts[pt] = np.zeros( nObjs, dtype='int32' )
+    trCounts  = {}
+    trOffsets = {}
+
+    for pt in defParPartTypes:
+        trCounts[pt]  = np.zeros( nObjs, dtype='int32' )
+        trOffsets[pt] = np.zeros( nObjs, dtype='int64' )
 
     # load offsets
     if halos:
@@ -945,15 +962,15 @@ def globalTracerLength(sP, halos=False, subhalos=False):
                                       ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
 
             # save counts
-            trCounts[parPartType][i] = len(trIDs)
-            trCounts['total'][i] += len(trIDs)
+            if trIDs is not None:
+                trCounts[parPartType][i] = len(trIDs)
 
     # build offsets
-    trOffsets = {}
-    for key in trCounts.keys():
-        trOffsets[key] = np.zeros( nObjs, dtype='int64' )
-
-        trOffsets[key][1:] = np.cumsum( trCounts[key] )[:-1]
+    trOffsets['gas'][1:]   = np.cumsum( trCounts['gas'] )[:-1] # gas are first, obj by obj
+    trOffsets['stars'][1:] = np.cumsum( trCounts['stars'] )[:-1] # stars/pt4 are next
+    trOffsets['bhs'][1:]   = np.cumsum( trCounts['bhs'] )[:-1] # bhs are last
+    trOffsets['stars'] += np.sum( trCounts['gas'] )
+    trOffsets['bhs']   += np.sum( trCounts['gas'] ) + np.sum( trCounts['stars'] )
 
     return trCounts, trOffsets
 
