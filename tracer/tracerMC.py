@@ -229,16 +229,12 @@ def mapParentIDsToIndsByType(sP, parentIDs):
 
     nMatched = 0
 
-    for ptName in r['partTypes']:
+    for ptName in r['partTypes'][::-1]:
         parIDsType = cosmo.load.snapshotSubset(sP, ptName, 'id')
 
         # no particles of this type in the snapshot
-        if isinstance(parIDsType,dict):
-            if parIDsType['count'] == 0:
-                continue
-
-        if debug:
-            print(' mapParentIDsToIndsByType: '+ptName+' searching ['+str(parIDsType.size)+'] ids...')
+        if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
+            continue
 
         # crossmatch the two ID lists and request the match indices into both
         parIndsType, wMatched = match3(parIDsType, parentIDs)
@@ -247,6 +243,10 @@ def mapParentIDsToIndsByType(sP, parentIDs):
             continue # parentIDs contain none of this particle type
 
         if debug:
+            print(' mapParentIDsToIndsByType: %s searching [%d] ids (%d unique), [%s] matches.' % \
+              (ptName,parIDsType.size,nUnique(parIDsType),wMatched.size))
+        if debug:
+
             # old method, keep as debug check
             parIndsTypeUniq, wMatchedUniq = match2(parIDsType, parentIDsUniq)
 
@@ -270,13 +270,22 @@ def mapParentIDsToIndsByType(sP, parentIDs):
                 raise Exception('match disagreement wMatched')
 
         r['parentInds'][wMatched]  = parIndsType
-        r['parentTypes'][wMatched] = sP.ptNum(ptName) 
+        r['parentTypes'][wMatched] = sP.ptNum(ptName)
 
         nMatched += parIndsType.size
 
     # verify that we found all parents
-    if r['parentTypes'].min() < 0 or nMatched != parentIDs.size:
+    if r['parentTypes'].min() < 0 or nMatched < parentIDs.size:
         raise Exception('Failed to locate all requested parents through their IDs.')
+    if nMatched != parentIDs.size and not sP.winds:
+        raise Exception('We have located more than 1 parent per search ID, inconsistency.')
+    if nMatched != parentIDs.size and sP.winds:
+        assert nMatched > parentIDs.size
+        nOver = nMatched - parentIDs.size
+        # we do not know here actually which parent these tracers belong to, because spawned winds 
+        # in GFM do not change their ID from the progenitor gas cell. the ordering of defParPartTypes 
+        # will then assign the reversed(last)==the first (e.g. the prog gas cell) as the parent
+        print(' WARNING: More than 1 parent located for [%d] tracers (GFM.wind ID == prog cell).' % nOver)
 
     return r
 
@@ -341,19 +350,21 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
                 # (A) (we use this as a check, but could instead use it as a given and then avoid this PT 
                 # loop, as well as the outer loop over subhalos, with a concat->locate->split approach, since 
                 # we would then know ahead of time the number of tracers in each type/subhalo)
-                numTr = cosmo.load.snapshotSubset(sP, parPartType, 'numtr', haloID=haloID, subhaloID=subhaloID)
-                if numTr.sum() != trIDs.size:
-                    raise Exception('Tracer number count mismatch.')
+                if cosmo.load.snapHasField(sP, 'tracer', 'NumTracers'):
+                    numTr = cosmo.load.snapshotSubset(sP, parPartType, 'numtr', 
+                                                      haloID=haloID, subhaloID=subhaloID)
+                    if numTr.sum() != trIDs.size:
+                        raise Exception('Tracer number count mismatch.')
 
-                # (B): consider duplicates and consistency
-                wParMoreThanOneTracer = np.where(numTr > 1)[0]
-                wParZeroTracers = np.where(numTr == 0)[0]
-                totalDupeTracers = int((numTr[wParMoreThanOneTracer]-1).sum())
+                    # (B): consider duplicates and consistency
+                    wParMoreThanOneTracer = np.where(numTr > 1)[0]
+                    wParZeroTracers = np.where(numTr == 0)[0]
+                    totalDupeTracers = int((numTr[wParMoreThanOneTracer]-1).sum())
 
-                expectedNumChildTracers = parIDsType.size + totalDupeTracers - len(wParZeroTracers)
+                    expectedNumChildTracers = parIDsType.size + totalDupeTracers - len(wParZeroTracers)
 
-                if expectedNumChildTracers != trIDs.size:
-                    raise Exception('Inconsistency in tracer counts.')
+                    if expectedNumChildTracers != trIDs.size:
+                        raise Exception('Inconsistency in tracer counts.')
 
                 # (C): verify self consistency of par -> tr -> par
                 debugTracerIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')

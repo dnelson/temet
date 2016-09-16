@@ -69,7 +69,7 @@ def insertMPBGhost(mpb, snapToInsert=None):
 
     return mpb
 
-def mpbSmoothedProperties(sP, id, extraFields=[]):
+def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=[]):
     """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 
     currently: position, mass (m200_crit), virial radius (r200_crit), virial temperature (derived), 
     velocity (subhalo), and are inside ['sm'] for smoothed versions. Also attach time with snap/redshift.
@@ -87,6 +87,15 @@ def mpbSmoothedProperties(sP, id, extraFields=[]):
 
     # load
     mpb = loadMPB(sP, id, fields=fields)
+
+    # fill any missing snapshots with ghost entries? (e.g. actual trees can skip a snapshot when 
+    # locating a descendant but we may need a continuous position for all snapshots)
+    if fillSkippedEntries:
+        for snap in np.arange( mpb['SnapNum'].min(), mpb['SnapNum'].max() ):
+            if snap in mpb['SnapNum']:
+                continue
+            mpb = insertMPBGhost(mpb, snapToInsert=snap)
+            print(' mpb inserted [%d] ghost' % snap)
 
     # sims.zooms2/h2_L9: corrupt groups_104 override (insert interpolated snap 104 values for MPB)
     if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 2:
