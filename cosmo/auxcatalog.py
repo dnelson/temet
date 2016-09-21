@@ -193,14 +193,26 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only.
     """
-    assert ptType == 'stars' # otherwise generalize wind cut
     assert op in ['sum','mean']
+
+    # determine ptRestriction
+    ptRestriction = None
+
+    if ptType == 'stars':
+        ptRestriction = 'real_stars'
+
+    if ptProperty == 'mass_sfrgt0':
+        ptRestriction = 'sfr_gt0'
+        ptProperty = 'mass'
 
     # config
     ptLoadType = sP.ptNum(ptType)
 
     desc   = "Quantity [%s] enclosed within a radius of [%s] for [%s]." % (ptProperty,rad,ptType)
-    if weighting is not None: desc += " (weighting = %s). " % weighting
+    if ptRestriction is not None:
+        desc += " (restriction = %s). " % ptRestriction
+    if weighting is not None:
+        desc += " (weighting = %s). " % weighting
     desc  +=" (only subhalo particles included). "
     select = "All Subhalos."
 
@@ -217,8 +229,8 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
         r.fill(np.nan)
 
     # info
-    print(' Total # Subhalos: %d, processing all [%s] subhalos with [%s] rad and [%s] weighting...' % \
-        (nSubsTot,nSubsTot,rad,weighting))
+    print(' ' + desc)
+    print(' Total # Subhalos: %d, processing all [%s] subhalos...' % (nSubsTot,nSubsTot))
 
     # determine radial restriction for each subhalo
     if isinstance(rad, float):
@@ -252,15 +264,17 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
     assert radSq.size == nSubsTot
 
     # global load of all particles of [ptType] in snapshot
-    fieldsLoad = ['pos', 'sftime']
+    fieldsLoad = []
 
-    if ptProperty not in ['stellar_age']:
-        fieldsLoad.append(ptProperty)
-        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad)
-    else:
-        # snapshotSubset() cannot current load both custom and pre-existing fields
-        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad)
-        particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty])
+    if rad is not None:
+        fieldsLoad.append('pos')
+    if ptRestriction == 'real_stars':
+        fieldsLoad.append('sftime')
+    if ptRestriction == 'sfr_gt0':
+        fieldsLoad.append('sfr')
+
+    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False)
+    particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty])
 
     assert particles[ptProperty].ndim == 1
 
@@ -309,15 +323,25 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
             continue # zero length of this type
 
         # use squared radii and sq distance function
-        rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][i,:], particles['Coordinates'][i0:i1,:], sP )
-        #wWind  = np.where( (rr <= radSq[i]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
-        wStars = np.where( (rr <= radSq[i]) & (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
+        validMask = np.ones( i1-i0, dtype=np.bool )
 
-        if len(wStars[0]) == 0:
-            continue # zero length of actual stars
+        if rad is not None:
+            rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][i,:], particles['Coordinates'][i0:i1,:], sP )
+            validMask &= (rr <= radSq[i])
 
-        loc_val = particles[ptProperty][i0:i1][wStars]
-        loc_wt  = particles['weights'][i0:i1][wStars]
+        if ptRestriction == 'real_stars':
+            validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
+
+        if ptRestriction == 'sfr_gt0':
+            validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
+
+        wValid = np.where(validMask)
+
+        if len(wValid[0]) == 0:
+            continue # zero length of particles satisfying radial cut and restriction
+
+        loc_val = particles[ptProperty][i0:i1][wValid]
+        loc_wt  = particles['weights'][i0:i1][wValid]
 
         if op == 'sum': r[i] = np.sum( loc_val )
         if op == 'mean': r[i] = np.average( loc_val , weights=loc_wt )
@@ -603,6 +627,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='30h'),
    'Subhalo_Mass_puchwein10_Stars': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='p10'),
+   'Subhalo_Mass_SFingGas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass_sfrgt0',op='sum',rad=None),
 
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
