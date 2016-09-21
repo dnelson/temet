@@ -406,7 +406,7 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
 
 def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTypes=defParPartTypes,
                          concatTypes=True, ParentID=None, ParentIDSortInds=None):
-    """ For all subhalos or halos in a snapshot, return all the child tracers of parents in that object 
+    """ For all subhalos or halos in a snapshot, return all the child tracers of parents in those objects 
         (their IDs or their global indices in the snap), by default for parents of all particle types, 
         optionally restricted to input particle type(s). """
     trIDsByParType = {}
@@ -911,15 +911,31 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
         if len(fields) == 1:
             return trVals
 
-def globalTracerLength(sP, halos=False, subhalos=False):
+def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True):
     """ Return a 1D array of the number of tracers per halo or subhalo, for all in the snapshot, in 
     direct analogy to LenType in the group catalogs. Compute the offsets as well. """
     assert halos is True or subhalos is True # pick one
 
     # load and sort the parent IDs of all tracers in this snapshot
     ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
-    ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
-    ParentID = ParentID[ParentIDSortInds]
+
+    if histoMethod:
+        # if the IDs of parents are dense enough, use a histogram counting approach
+        ParentID_min = ParentID.min()
+        ParentID_max = ParentID.max()
+        assert ParentID_max - ParentID_min <= 20e9 # up to 8*20GB memory allocation
+
+        # offset ParentIDs by their minimum, cast into signed type, then histogram
+        ParentID -= ParentID_min
+        assert ParentID.max() < np.iinfo('int64').max
+        ParentID = ParentID.astype('int64', casting='unsafe')
+        ParentHisto = np.bincount(ParentID)
+        assert ParentHisto.max() < np.iinfo('int32').max
+        ParentHisto = ParentHisto.astype('int32', casting='unsafe')
+    else:
+        # otherwise do a pre-sort and we will later do many bisection searches
+        ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
+        ParentID = ParentID[ParentIDSortInds]
 
     # allocate counts
     h = cosmo.load.groupCatHeader(sP)
@@ -954,6 +970,9 @@ def globalTracerLength(sP, halos=False, subhalos=False):
         if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
             continue
 
+        if histoMethod:
+            parIDsType -= ParentID_min # offset
+
         # loop over each halo/subhalo, calculate lengths
         for i in np.arange(nObjs):
             if i % int(nObjs/10) == 0 and i <= nObjs:
@@ -968,13 +987,21 @@ def globalTracerLength(sP, halos=False, subhalos=False):
             
             parIDsTypeLocal = parIDsType[i0:i1]
 
-            # crossmatch
-            trIDs = getTracerChildren(sP, parIDsTypeLocal, inds=True, 
-                                      ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+            if histoMethod:
+                # truncate any ParentID's which exceed ParentHisto bounds (by definition have 0 tracers)
+                parIDsTypeLocal = parIDsTypeLocal[(parIDsTypeLocal >= 0) & \
+                                                  (parIDsTypeLocal < ParentHisto.size)]
 
-            # save counts
-            if trIDs is not None:
-                trCounts[parPartType][i] = len(trIDs)
+                # sum histogram entries of offset parIDsType
+                trCounts[parPartType][i] = ParentHisto[parIDsTypeLocal].sum()
+            else:
+                # crossmatch
+                trIDs = getTracerChildren(sP, parIDsTypeLocal, inds=True, 
+                                          ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+
+                # save counts
+                if trIDs is not None:
+                    trCounts[parPartType][i] = len(trIDs)
 
     # build offsets
     trOffsets['gas'][1:]   = np.cumsum( trCounts['gas'] )[:-1] # gas are first, obj by obj
