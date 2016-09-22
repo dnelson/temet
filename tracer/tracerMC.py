@@ -332,9 +332,8 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
             parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', haloID=haloID, subhaloID=subhaloID)
 
             # no particles of this type in the snapshot
-            if isinstance(parIDsType,dict):
-                if parIDsType['count'] == 0:
-                    continue
+            if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
+                continue
 
             if debug:
                 print(' subhaloTracerChildren: '+parPartType+' '+str(len(parIDsType)))
@@ -515,15 +514,15 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     # config
     gas_only_fields = ['temp','sfr','entr']   # tag with NaN for values not in gas parents at some snap
     n_3d_fields     = ['pos','vel']           # store [N,3] vector instead of [N] vector
-    d_int32_fields  = ['tracer_windcounter',  # use int32 dtype to store, otherwise default to float32
-                       'subhalo_id']
+    d_int_fields    = {'subhalo_id':'int32',  # use int dtype to store, otherwise default to float32
+                       'tracer_windcounter':'int16',
+                       'parent_indextype':'int64'}
                        
     halo_rel_fields = {'rad'        : ['pos'], # require mpb as fields are relative to halo properties
                        'rad_rvir'   : ['pos'], # (in which case the mapping is the snapshot quantities needed)
                        'vrad'       : ['pos','vel'], 
                        'vrad_vvir'  : ['pos','vel'],
-                       'angmom'     : ['pos','vel','mass'],
-                       'subhalo_id' : []}
+                       'angmom'     : ['pos','vel','mass']}
 
     # create inverse sort indices for tracerSearchIDs
     sortIndsSearch = np.argsort(tracerSearchIDs)
@@ -562,7 +561,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     for field in parFields+trFields:
         # hardcode some dtypes and dimensionality for now
         dtype = 'float32'
-        if field in d_int32_fields: dtype = 'int32'
+        if field in d_int_fields.keys(): dtype = d_int_fields[field]
 
         if field in n_3d_fields:
             r[field] = np.zeros( (len(snaps),tracerSearchIDs.size,3), dtype=dtype )
@@ -660,56 +659,12 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     r[field][m,wType] = np.nan
                     continue
 
-                if field not in halo_rel_fields:
-                    # load parent property
-                    data = cosmo.load.snapshotSubset(sP, ptName, field, inds=indsType)
-
-                    # save directly (by dimension) if not calculating further
-                    if data.ndim == 1:
-                        r[field][m,wType] = data
-                    else:
-                        r[field][m,wType,:] = data
-
+                # specialized properties
+                if field in ['parent_indextype']:
+                    # encode the snapshot index of the parent (by type) as well as its type in an int64
+                    # as parent_indextype = type*1e11 + index
+                    r[field][m,wType] = data = sP.ptNum(ptName)*1e11 + indsType
                     continue
-
-                # field is relative to halo properties? extract halo values at this snapshot
-                if mpb is None:
-                    raise Exception('Error, mpb track required as inputs.')
-
-                mpbInd = np.where( mpb['SnapNum'] == snap )[0]
-                if len(mpbInd) == 0:
-                    raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
-
-                haloCenter = mpb['sm']['pos'][mpbInd[0],:]
-                haloVel    = mpb['sm']['vel'][mpbInd[0],:]
-                haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
-                haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
-
-                # load required raw fields(s) from the snapshot
-                data = {}
-                for fName in halo_rel_fields[field]:
-                    data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
-
-                # compute
-                if field in ['rad','rad_rvir']:
-                    # radial distance from halo center, optionally normalized by rvir (r200crit)
-                    val = periodicDists(haloCenter, data['pos'], sP) # code units (e.g. ckpc/h)
-                    
-                    if field == 'rad_rvir':
-                        val /= haloVirRad # normalized, unitless
-
-                if field in ['vrad','vrad_vvir']:
-                    # radial velocity relative to halo CM motion [km/s], hubble expansion added in, 
-                    # optionally normalized by the vvir (v200) of the halo at this snapshot
-                    val = sP.units.particleRadialVelInKmS(data['pos'], data['vel'], haloCenter, haloVel)
-
-                    if field == 'vrad_vvir':
-                        val /= haloVirVel # normalized, unitless
-
-                if field in ['angmom']:
-                    # magnitude of specific angular momentum in [kpc km/s]
-                    val = sP.units.particleSpecAngMomMagInKpcKmS(data['pos'], data['vel'], data['mass'], 
-                                                                 haloCenter, haloVel, log=True)
 
                 if field in ['subhalo_id']:
                     # determine parent subhalo ID                    
@@ -764,6 +719,58 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                             ind1, ind2 = match3(ParIDsToMatch, tracerParIDsShouldBeOutsideAllSubhalos)
 
                             assert ind1 is None and ind2 is None
+
+                # general properties
+                if field not in halo_rel_fields:
+                    # load parent property
+                    data = cosmo.load.snapshotSubset(sP, ptName, field, inds=indsType)
+
+                    # save directly (by dimension) if not calculating further
+                    if data.ndim == 1:
+                        r[field][m,wType] = data
+                    else:
+                        r[field][m,wType,:] = data
+
+                    continue
+
+                # field is relative to halo properties? extract halo values at this snapshot
+                if mpb is None:
+                    raise Exception('Error, mpb track required as inputs.')
+
+                mpbInd = np.where( mpb['SnapNum'] == snap )[0]
+                if len(mpbInd) == 0:
+                    raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
+
+                haloCenter = mpb['sm']['pos'][mpbInd[0],:]
+                haloVel    = mpb['sm']['vel'][mpbInd[0],:]
+                haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
+                haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
+
+                # load required raw fields(s) from the snapshot
+                data = {}
+                for fName in halo_rel_fields[field]:
+                    data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
+
+                # compute
+                if field in ['rad','rad_rvir']:
+                    # radial distance from halo center, optionally normalized by rvir (r200crit)
+                    val = periodicDists(haloCenter, data['pos'], sP) # code units (e.g. ckpc/h)
+                    
+                    if field == 'rad_rvir':
+                        val /= haloVirRad # normalized, unitless
+
+                if field in ['vrad','vrad_vvir']:
+                    # radial velocity relative to halo CM motion [km/s], hubble expansion added in, 
+                    # optionally normalized by the vvir (v200) of the halo at this snapshot
+                    val = sP.units.particleRadialVelInKmS(data['pos'], data['vel'], haloCenter, haloVel)
+
+                    if field == 'vrad_vvir':
+                        val /= haloVirVel # normalized, unitless
+
+                if field in ['angmom']:
+                    # magnitude of specific angular momentum in [kpc km/s]
+                    val = sP.units.particleSpecAngMomMagInKpcKmS(data['pos'], data['vel'], data['mass'], 
+                                                                 haloCenter, haloVel, log=True)
 
                 if val.ndim != 1:
                     raise Exception('Unexpected.')
@@ -911,10 +918,11 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
         if len(fields) == 1:
             return trVals
 
-def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True):
+def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTracerOffsets=None):
     """ Return a 1D array of the number of tracers per halo or subhalo, for all in the snapshot, in 
     direct analogy to LenType in the group catalogs. Compute the offsets as well. """
     assert halos is True or subhalos is True # pick one
+    if subhalos is True: assert haloTracerOffsets is not None # required for subhalo-based offsets
 
     # load and sort the parent IDs of all tracers in this snapshot
     ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
@@ -956,6 +964,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True):
 
     if subhalos:
         gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
+        groupNsubs = cosmo.load.groupCat(sP, fieldsHalos=['GroupNsubs'])['halos']
         objOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
 
     # consider each parent type
@@ -1004,11 +1013,30 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True):
                     trCounts[parPartType][i] = len(trIDs)
 
     # build offsets
-    trOffsets['gas'][1:]   = np.cumsum( trCounts['gas'] )[:-1] # gas are first, obj by obj
-    trOffsets['stars'][1:] = np.cumsum( trCounts['stars'] )[:-1] # stars/pt4 are next
-    trOffsets['bhs'][1:]   = np.cumsum( trCounts['bhs'] )[:-1] # bhs are last
-    trOffsets['stars'] += np.sum( trCounts['gas'] )
-    trOffsets['bhs']   += np.sum( trCounts['gas'] ) + np.sum( trCounts['stars'] )
+    if halos:
+        trOffsets['gas'][1:]   = np.cumsum( trCounts['gas'] )[:-1] # gas are first, obj by obj
+        trOffsets['stars'][1:] = np.cumsum( trCounts['stars'] )[:-1] # stars/pt4 are next
+        trOffsets['bhs'][1:]   = np.cumsum( trCounts['bhs'] )[:-1] # bhs are last
+        trOffsets['stars'] += np.sum( trCounts['gas'] )
+        trOffsets['bhs']   += np.sum( trCounts['gas'] ) + np.sum( trCounts['stars'] )
+
+    if subhalos:
+        # need to handle relative to halo offsets to account for inner fuzz
+        for pt in ['gas','stars','bhs']:
+            shCount = 0
+
+            for i in np.arange(h['Ngroups_Total']):
+                if groupNsubs[i] == 0:
+                    continue
+
+                # handle GroupFirstSub
+                trOffsets[pt][shCount] = haloTracerOffsets[pt][i]
+                shCount += 1
+
+                # handle all secondary subhalos
+                for j in np.arange(1, groupNsubs[i]):
+                    trOffsets[pt][shCount] = trOffsets[pt][shCount-1] + trCounts[pt][shCount-1]
+                    shCount += 1
 
     return trCounts, trOffsets
 
@@ -1017,21 +1045,27 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
     field for all snapshots (which contain tracers). """
     assert halos is True or subhalos is True # pick one
 
-    if not isdir(sP.derivPath + '/trTimeEvo'):
-        mkdir(sP.derivPath + '/trTimeEvo')
+    savePath = sP.simPath + '/../postprocessing/tracer_tracks/'
+    if not isdir(savePath):
+        mkdir(savePath)
 
     if halos: selectStr = 'groups'
     if subhalos: selectStr = 'subhalos'
 
-    saveFilename = sP.derivPath + '/trTimeEvo/tr_all_%s_%d_%s.hdf5' % (selectStr,sP.snap,field)
+    saveFilename = savePath + 'tr_all_%s_%d_%s.hdf5' % (selectStr,sP.snap,field)
 
     # single load requested? do now and return
     if isfile(saveFilename):
+        r = {}
         with h5py.File(saveFilename,'r') as f:
-            r = {}
-            for key in f:
-                r[key] = f[key][()]
-
+            for k1 in f:
+                if isinstance(f[k1], h5py.Dataset):
+                    r[k1] = f[k1][()]
+                    continue
+                # handle meta: nested Halo/TracerLength/gas type structure
+                for k2 in f[k1]:
+                    for k3 in f[k1][k2]:
+                        r[k1+'_'+k2+'_'+k3] = f[k1][k2][k3][()]
         return r
 
     # get child tracers of all particle types in all FoFs
@@ -1044,18 +1078,32 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
     print('Computing: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     if field == 'meta':
-        # save the metadata (ordered tracer IDs, lengths/offsets of tracers by group/subhalo)
+        # save the metadata (ordered tracer/parent IDs, lengths/offsets of tracers by group/subhalo)
         trVals = {}
 
         # save the tracer IDs in the order we are saving the tracks
         trVals['TracerIDs'] = trIDs
 
-        # compute lengths/offsets
-        trCounts, trOffsets = globalTracerLength(sP, halos=halos, subhalos=subhalos)
+        # save the parent IDs of these tracers in the same order
+        TracerID = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
+        trInds,_ = match3(TracerID,trIDs)
+        assert trInds.size == trIDs.size
+
+        trVals['ParentIDs'] = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=trInds)
+
+        # compute lengths/offsets by halo
+        trCounts, trOffsets = globalTracerLength(sP, halos=True)
 
         for key in trCounts:
-            trVals['TracerLength_'+key] = trCounts[key]
-            trVals['TracerOffset_'+key] = trOffsets[key]
+            trVals['Halo/TracerLength/'+key] = trCounts[key]
+            trVals['Halo/TracerOffset/'+key] = trOffsets[key]
+
+        # compute lengths/offsets by halo
+        trCounts, trOffsets = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets)
+
+        for key in trCounts:
+            trVals['Subhalo/TracerLength/'+key] = trCounts[key]
+            trVals['Subhalo/TracerOffset/'+key] = trOffsets[key]
 
     else:
         if 'tracer_' in field: # trField
@@ -1071,3 +1119,49 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
     print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     return trVals
+
+def checkTracerMeta(sP):
+    """ Verify globalAllTracersTimeEvo() ordering. """
+    nRandom = 100
+    ptTypes = ['gas','stars','bhs']
+
+    # load
+    meta = globalAllTracersTimeEvo(sP, 'meta', halos=True)
+    h = cosmo.load.groupCatHeader(sP)
+    
+    # load and sort the parent IDs of all tracers in this snapshot
+    ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+    ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
+    ParentID = ParentID[ParentIDSortInds]
+
+    # for nRandom halos and nRandom subhalos, verify child tracers are correct
+    for i in range(nRandom):
+        haloID = np.random.randint(0,h['Ngroups_Total'])
+        subhaloID = np.random.randint(0,h['Nsubgroups_Total'])
+        print(i,haloID,subhaloID)
+
+        # get actual children
+        trIDs_halo_check = subhaloTracerChildren(sP, haloID=haloID, concatTypes=False,
+                                            ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+        trIDs_subhalo_check = subhaloTracerChildren(sP, subhaloID=subhaloID, concatTypes=False,
+                                            ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+
+        # loop over types
+        for pt in ptTypes:
+            if pt not in trIDs_halo_check: trIDs_halo_check[pt] = np.array([]) # empty
+            if pt not in trIDs_subhalo_check: trIDs_subhalo_check[pt] = np.array([]) # empty
+            print(' %s %d %d' % (pt,trIDs_halo_check[pt].size,trIDs_subhalo_check[pt].size))
+
+            # halo
+            i0 = meta['Halo_TracerOffset_'+pt][haloID]
+            i1 = meta['Halo_TracerLength_'+pt][haloID] + i0
+            trIDs_halo_pt = meta['TracerIDs'][i0:i1]
+
+            assert np.array_equal(np.sort(trIDs_halo_pt),np.sort(trIDs_halo_check[pt]))
+
+            # subhalo
+            i0 = meta['Subhalo_TracerOffset_'+pt][subhaloID]
+            i1 = meta['Subhalo_TracerLength_'+pt][subhaloID] + i0
+            trIDs_subhalo_pt = meta['TracerIDs'][i0:i1]
+
+            assert np.array_equal(np.sort(trIDs_subhalo_pt),np.sort(trIDs_subhalo_check[pt]))
