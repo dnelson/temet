@@ -256,7 +256,7 @@ def depletionVsDynamicalTimescale():
 
     # config
     figsize = (14,9)
-    sP = simParams(res=1820,run='tng',redshift=0.0)
+    sP = simParams(res=1820,run='illustris',redshift=0.0)
 
     gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], 
                       fieldsSubhalos=['SubhaloHalfmassRadType','SubhaloVmax','SubhaloSFR'])
@@ -370,4 +370,42 @@ def depletionVsDynamicalTimescale():
 
         fig.tight_layout()
         fig.savefig('tdyn_vs_tdep_%s_b.pdf' % sP.simName)
+        plt.close(fig)
+
+    # (C) t_dep vs m_star
+    if 1:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_title(title)
+        ax.set_xlim(mStarMinMax)
+        ax.set_ylim(tDepMinMax)
+        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
+        ax.set_ylabel('t$_{\\rm dep}$ [ Gyr ]')
+
+        # 2d histo
+        zz, xc, yc = np.histogram2d(m_star, t_dep, bins=[nBinsX, nBinsY], 
+                                    range=[mStarMinMax,tDepMinMax], normed=True)
+        zz = np.transpose(zz)
+        zz = np.log10(zz)
+
+        cmap = loadColorTable('viridis')
+        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
+                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
+
+        # median
+        xm, ym, sm = running_median(m_star,t_dep,binSize=binSizeMed*10)
+        ym2 = savgol_filter(ym,3,2)
+        sm2 = savgol_filter(sm,3,2)
+        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
+        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
+        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
+
+        # colorbar and save
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(cax=cax)
+        cb.ax.set_ylabel('Number of Galaxies [ log ]')
+
+        fig.tight_layout()
+        fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
         plt.close(fig)

@@ -18,6 +18,77 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def publicScriptsUpdate():
+    """ Test updates to public scripts for TNG changes. """
+    import illustris_python as il
+    basePaths = ['sims.illustris/L75n910FP/output/',
+                 'sims.TNG/L75n910TNG/output/']
+
+    snapNum = 99
+
+    for basePath in basePaths:
+        print(basePath)
+
+        print(' groups')
+        subhalos = il.groupcat.loadSubhalos(basePath,snapNum,fields=['SubhaloMass','SubhaloSFRinRad'])
+        GroupFirstSub = il.groupcat.loadHalos(basePath,snapNum,fields=['GroupFirstSub'])
+        ss1 = il.groupcat.loadSingle(basePath,snapNum,haloID=123)
+        ss2 = il.groupcat.loadSingle(basePath,snapNum,subhaloID=1234)
+        hh = il.groupcat.loadHeader(basePath,snapNum)
+
+        print(' snap')
+        gas_mass = il.snapshot.loadSubset(basePath,snapNum,'gas',fields=['Masses'])
+        dm_ids1 = il.snapshot.loadHalo(basePath,snapNum,123,'dm',fields=['ParticleIDs'])
+        assert dm_ids1.size == ss1['GroupLenType'][1]
+        dm_ids2 = il.snapshot.loadSubhalo(basePath,snapNum,1234,'dm',fields=['ParticleIDs'])
+        assert dm_ids2.size == ss2['SubhaloLenType'][1]
+
+        print(' trees')
+        tree1 = il.sublink.loadTree(basePath,snapNum,1234,fields=['SubhaloMassType'],onlyMPB=True)
+        tree2 = il.lhalotree.loadTree(basePath,snapNum,1234,fields=['SubhaloMassType'],onlyMPB=True)
+        assert tree1[0,:].sum() == ss2['SubhaloMassType'].sum()
+        assert tree2[0,:].sum() == ss2['SubhaloMassType'].sum()
+
+def richardCutout():
+    """ test """
+    import requests
+
+    def get(path, params=None):
+        # make HTTP GET request to path
+        headers = {"api-key":"109e327dfdd77de692d65c833f0a9483"}
+        r = requests.get(path, params=params, headers=headers)
+
+        print(r.url)
+
+        # raise exception if response code is not HTTP SUCCESS (200)
+        r.raise_for_status()
+
+        try:
+            if r.headers['content-type'] == 'application/json':
+               return r.json() # parse json responses automatically
+        except:
+            pass
+
+        if 'content-disposition' in r.headers:
+            filename = r.headers['content-disposition'].split("filename=")[1]
+            with open(filename, 'wb') as f:
+                f.write(r.content)
+            print('Saved: %s' % filename)
+            return filename # return the filename string
+
+        return r
+
+    def construct_url(subhaloid,snapid):
+        return "http://www.illustris-project.org/api/Illustris-1/snapshots/"+str(snapid)+"/subhalos/"+str(subhaloid)+"/"
+
+    # go
+    subhaloid=364375
+    snapid=116
+
+    sub_prog_url = construct_url(subhaloid,snapid)
+    cutout_request = {'stars':'ParticleIDs'}
+    cutout = get(sub_prog_url+"cutout.hdf5", cutout_request)
+
 def compareOldNewMags():
     """ Compare stellar_photometrics and my new sdss subhalo mags, and BuserUconverted vs sdss_u. """
     sP = simParams(res=910, run='illustris', redshift=0.0)

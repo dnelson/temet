@@ -689,6 +689,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     if len(ww):
                         val[ww] = -1
 
+                    r[field][m,wType] = val
+
                     if debug:
                         # for tracers we identified in subhalos, verify parents directly
                         for i in range(indsType.size):
@@ -719,6 +721,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                             ind1, ind2 = match3(ParIDsToMatch, tracerParIDsShouldBeOutsideAllSubhalos)
 
                             assert ind1 is None and ind2 is None
+                    continue
 
                 # general properties
                 if field not in halo_rel_fields:
@@ -738,6 +741,11 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     raise Exception('Error, mpb track required as inputs.')
 
                 mpbInd = np.where( mpb['SnapNum'] == snap )[0]
+
+                # sims.zooms2/h1_L9: temporary override to get to z=10
+                if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 1 and snap < 70:
+                    mpbInd  = np.where( mpb['SnapNum'] == 70 )[0]
+                # end temporary
                 if len(mpbInd) == 0:
                     raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
 
@@ -1075,7 +1083,7 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
     # todo!
 
     # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
-    print('Computing: [%s]' % saveFilename.split(sP.derivPath)[1])
+    print('Computing: [%s]' % saveFilename.split(savePath)[1])
 
     if field == 'meta':
         # save the metadata (ordered tracer/parent IDs, lengths/offsets of tracers by group/subhalo)
@@ -1116,7 +1124,7 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
         for key in trVals:
             f[key] = trVals[key]
 
-    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+    print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
     return trVals
 
@@ -1148,8 +1156,11 @@ def checkTracerMeta(sP):
 
         # loop over types
         for pt in ptTypes:
-            if pt not in trIDs_halo_check: trIDs_halo_check[pt] = np.array([]) # empty
-            if pt not in trIDs_subhalo_check: trIDs_subhalo_check[pt] = np.array([]) # empty
+            # handle empty cases consistently
+            if pt not in trIDs_halo_check: trIDs_halo_check[pt] = np.array([])
+            if pt not in trIDs_subhalo_check: trIDs_subhalo_check[pt] = np.array([])
+            if trIDs_halo_check[pt] is None: trIDs_halo_check[pt] = np.array([])
+            if trIDs_subhalo_check[pt] is None: trIDs_subhalo_check[pt] = np.array([])
             print(' %s %d %d' % (pt,trIDs_halo_check[pt].size,trIDs_subhalo_check[pt].size))
 
             # halo
