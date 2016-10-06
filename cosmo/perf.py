@@ -128,8 +128,6 @@ def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
         assert numSubboxes == nSubboxesExpected
         
         for sbNum in range(numSubboxes):
-            #if sbNum != 2:
-            #    continue # L35n540 temp
             numDirs = len(glob(sP.simPath + 'subbox' + str(sbNum) + '/snapdir*'))
             nSnapFiles = 0
 
