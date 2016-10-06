@@ -255,7 +255,10 @@ class units(object):
 
         # calculate position, relative to subhalo center (pkpc)
         for i in range(3):
-            gas_pos[:,i] -= haloPos[i]
+            if haloPos.size == 3: # scalar
+                gas_pos[:,i] -= haloPos[i]
+            else:
+                gas_pos[:,i] -= haloPos[:,i]
 
         correctPeriodicDistVecs( gas_pos, self._sP )
         xyz = self.codeLengthToKpc( gas_pos )
@@ -267,7 +270,11 @@ class units(object):
         gas_vel = self.particleCodeVelocityToKms( gas_vel )
 
         for i in range(3):
-            gas_vel[:,i] -= haloVel[i] # SubhaloVel already peculiar, no scalefactor needed
+            # SubhaloVel already peculiar, no scalefactor needed
+            if haloVel.size == 3: # scalar
+                gas_vel[:,i] -= haloVel[i]
+            else:
+                gas_vel[:,i] -= haloVel[:,i]
 
         v_H = self.H_z * rad # Hubble expansion velocity magnitude (km/s) at each position
 
@@ -311,7 +318,10 @@ class units(object):
 
         # calculate position, relative to subhalo center (pkpc)
         for i in range(3):
-            gas_pos[:,i] -= haloPos[i]
+            if haloPos.size == 3: # scalar
+                gas_pos[:,i] -= haloPos[i]
+            else:
+                gas_pos[:,i] -= haloPos[:,i]
 
         correctPeriodicDistVecs( gas_pos, self._sP )
 
@@ -322,7 +332,11 @@ class units(object):
         gas_vel = self.particleCodeVelocityToKms( gas_vel )
 
         for i in range(3):
-            gas_vel[:,i] -= haloVel[i] # SubhaloVel already peculiar, no scalefactor needed
+            # SubhaloVel already peculiar, no scalefactor needed
+            if haloVel.size == 3: # scalar
+                gas_vel[:,i] -= haloVel[i]
+            else:
+                gas_vel[:,i] -= haloVel[:,i]
 
         # correct velocities for hubble flow (neglect mass growth term)
         vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
