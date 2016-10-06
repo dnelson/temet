@@ -219,14 +219,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
     # load group information
     gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
     gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
-
-    # allocate return, NaN indicates not computed except for mass where 0 will do
     nSubsTot = gc['header']['Nsubgroups_Total']
-
-    r = np.zeros( nSubsTot, dtype='float32' )
-
-    if ptProperty not in ['mass','Masses']:
-        r.fill(np.nan)
 
     # info
     print(' ' + desc)
@@ -276,11 +269,18 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
     particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False)
     particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty])
 
-    assert particles[ptProperty].ndim == 1
+    # allocate, NaN indicates not computed except for mass where 0 will do
+    if particles[ptProperty].ndim == 1:
+        r = np.zeros( nSubsTot, dtype='float32' )
+    else:
+        r = np.zeros( (nSubsTot,particles[ptProperty].shape[1]), dtype='float32' )
+
+    if ptProperty not in ['mass','Masses']:
+        r.fill(np.nan)
 
     # load weights
     if weighting is None:
-        particles['weights'] = np.zeros( particles[ptProperty].size, dtype='float32' )
+        particles['weights'] = np.zeros( particles[ptProperty].shape[0], dtype='float32' )
         particles['weights'] += 1.0 # uniform
     else:
         assert weighting == 'mass' or 'bandLum' in weighting
@@ -308,7 +308,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
             # use the (linear) luminosity in this band as the weight
             particles['weights'] = np.power(10.0, -0.4 * mags)
 
-    assert particles['weights'].ndim == 1 and particles['weights'].size == particles[ptProperty].size
+    assert particles['weights'].ndim == 1 and particles['weights'].size == particles[ptProperty].shape[0]
 
     # loop over subhalos
     for i in range(nSubsTot):
@@ -340,11 +340,21 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
         if len(wValid[0]) == 0:
             continue # zero length of particles satisfying radial cut and restriction
 
-        loc_val = particles[ptProperty][i0:i1][wValid]
-        loc_wt  = particles['weights'][i0:i1][wValid]
+        if particles[ptProperty].ndim == 1:
+            # scalar
+            loc_val = particles[ptProperty][i0:i1][wValid]
+            loc_wt  = particles['weights'][i0:i1][wValid]
 
-        if op == 'sum': r[i] = np.sum( loc_val )
-        if op == 'mean': r[i] = np.average( loc_val , weights=loc_wt )
+            if op == 'sum': r[i] = np.sum( loc_val )
+            if op == 'mean': r[i] = np.average( loc_val , weights=loc_wt )
+        else:
+            # vector (e.g. pos, vel, Bfield)
+            for j in range(particles[ptProperty].shape[1]):
+                loc_val = particles[ptProperty][i0:i1,j][wValid]
+                loc_wt  = particles['weights'][i0:i1][wValid]
+
+                if op == 'sum': r[i,j] = np.sum( loc_val )
+                if op == 'mean': r[i,j] = np.average( loc_val , weights=loc_wt )
 
     attrs = {'Description' : desc.encode('ascii'),
              'Selection'   : select.encode('ascii'),
@@ -636,6 +646,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='bandLum-sdss_r'),
    'Subhalo_StellarAge_4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
+
+   'Subhalo_StellarMeanVel' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
+
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),

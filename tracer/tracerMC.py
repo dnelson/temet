@@ -15,11 +15,27 @@ from os import mkdir
 import cosmo.load
 from util.helper import iterable, nUnique
 from cosmo.mergertree import mpbSmoothedProperties
-from cosmo.util import periodicDists
+from cosmo.util import periodicDists, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
 debug = False # enable expensive debug consistency checks and verbose output
 
-defParPartTypes = ['gas','stars','bhs']
+# global configuration for tracer calculations
+defParPartTypes = ['gas','stars','bhs']   # all possible tracer parent types (ordering important)
+
+# helper information for recording different parent properties
+gas_only_fields = ['temp','sfr','entr']   # tag with NaN for values not in gas parents at some snap
+n_3d_fields     = ['pos','vel']           # store [N,3] vector instead of [N] vector
+d_int_fields    = {'subhalo_id':'int32',  # use int dtype to store, otherwise default to float32
+                   'halo_id':'int32',
+                   'tracer_windcounter':'int16',
+                   'parent_indextype':'int64'}
+                   
+# require MPB(s) as fields are relative to halo properties (mapping gives the snapshot quantities needed)
+halo_rel_fields = {'rad'        : ['pos'],
+                   'rad_rvir'   : ['pos'],
+                   'vrad'       : ['pos','vel'], 
+                   'vrad_vvir'  : ['pos','vel'],
+                   'angmom'     : ['pos','vel','mass']}
 
 def match(ar1, ar2, uniq=False):
     """ My version of numpy.in1d with invert=False. Return is a ndarray of indices into ar1, 
@@ -283,8 +299,8 @@ def mapParentIDsToIndsByType(sP, parentIDs):
         assert nMatched > parentIDs.size
         nOver = nMatched - parentIDs.size
         # we do not know here actually which parent these tracers belong to, because spawned winds 
-        # in GFM do not change their ID from the progenitor gas cell. the ordering of defParPartTypes 
-        # will then assign the reversed(last)==the first (e.g. the prog gas cell) as the parent
+        # in some bugged GFM commits do not change their ID from the progenitor gas cell. the ordering of 
+        # defParPartTypes will then assign the reversed(last)==the first (e.g. the prog gas cell) as the parent
         print(' WARNING: More than 1 parent located for [%d] tracers (GFM.wind ID == prog cell).' % nOver)
 
     return r
@@ -504,32 +520,8 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
 
     return trIDsByParType
 
-def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None):
-    """ For a given set of tracerIDs at sP.redshift, walk through snapshots either forwards or backwards 
-        until reaching toRedshift. At each snapshot, re-locate the tracers and record trFields as a 
-        time sequence (from fluid_properties). Then, locate their parents at each snapshot and record 
-        parFields (from valid snapshot fields). For gas fields (e.g. temp), if the tracer is in a parent of 
-        a different type at that snapshot, record NaN. If the tracer is in a BH, set Velocity=0 as a flag. """
-
-    # config
-    gas_only_fields = ['temp','sfr','entr']   # tag with NaN for values not in gas parents at some snap
-    n_3d_fields     = ['pos','vel']           # store [N,3] vector instead of [N] vector
-    d_int_fields    = {'subhalo_id':'int32',  # use int dtype to store, otherwise default to float32
-                       'tracer_windcounter':'int16',
-                       'parent_indextype':'int64'}
-                       
-    halo_rel_fields = {'rad'        : ['pos'], # require mpb as fields are relative to halo properties
-                       'rad_rvir'   : ['pos'], # (in which case the mapping is the snapshot quantities needed)
-                       'vrad'       : ['pos','vel'], 
-                       'vrad_vvir'  : ['pos','vel'],
-                       'angmom'     : ['pos','vel','mass']}
-
-    # create inverse sort indices for tracerSearchIDs
-    sortIndsSearch = np.argsort(tracerSearchIDs)
-    revIndsSearch = np.zeros_like( sortIndsSearch )
-    revIndsSearch[sortIndsSearch] = np.arange(sortIndsSearch.size)
-
-    # snapshot config
+def getEvoSnapList(sP, toRedshift=None, snapStep=1):
+    """ Helper for below. """
     startSnap = sP.snap
 
     if toRedshift is not None:
@@ -553,6 +545,24 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
     if debug:
         print('tracersTimeEvo: ['+str(startSnap)+'] to ['+str(finalSnap)+'] step = '+str(snapStep))
+
+    return snaps, redshifts
+
+def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None):
+    """ For a given set of tracerIDs at sP.redshift, walk through snapshots either forwards or backwards 
+        until reaching toRedshift. At each snapshot, re-locate the tracers and record trFields as a 
+        time sequence (from fluid_properties). Then, locate their parents at each snapshot and record 
+        parFields (from valid snapshot fields). For gas fields (e.g. temp), if the tracer is in a parent of 
+        a different type at that snapshot, record NaN. If the tracer is in a BH, set Velocity=0 as a flag. """
+
+    # create inverse sort indices for tracerSearchIDs
+    sortIndsSearch = np.argsort(tracerSearchIDs)
+    revIndsSearch = np.zeros_like( sortIndsSearch )
+    revIndsSearch[sortIndsSearch] = np.arange(sortIndsSearch.size)
+
+    # snapshot config
+    snaps, redshifts = getEvoSnapList(sP, toRedshift, snapStep)
+    startSnap = sP.snap
 
     # allocate return struct
     r = { 'snaps'     : snaps, 
@@ -640,8 +650,25 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     r[field][m,:] = np.zeros( tracerSearchIDs.size, dtype='int32' ) - 1
                     continue
 
-                gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])
-                gcOffsets = cosmo.load.groupCatOffsetListIntoSnap(sP)
+                SubhaloLenType = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
+                SnapOffsetsSubhalo = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+            if field == 'halo_id':
+                GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+                SnapOffsetsGroup = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'] 
+
+            if field in halo_rel_fields and not sP.isZoom:
+                # for global catalogs (tracers spanning many/all halos) we have pre-computed the 
+                # subhalo ID tracks of the MPB of each halo at the final snapshot, here load the 
+                # group catalog halo properties at this snapshot and later use the mapping to 
+                # assign a halo center, vel, virrad, and virvel for each tracer
+                fieldsSH = ['SubhaloPos','SubhaloVel','SubhaloGrNr']
+                fieldsH = ['Group_R_Crit200','Group_M_Crit200']
+
+                gcHalo = cosmo.load.groupCat(sP, fieldsSubhalos=fieldsSH, fieldsHalos=fieldsH)
+
+                ac = cosmo.load.auxCat(sP, 'Subhalo_StellarMeanVel')
+                Subhalo_StellarMeanVel = sP.units.particleCodeVelocityToKms(ac['Subhalo_StellarMeanVel'])
 
             # load parent cells/particles by type
             for ptName in tracerParsLocal['partTypes']:
@@ -667,60 +694,15 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     continue
 
                 if field in ['subhalo_id']:
-                    # determine parent subhalo ID                    
-                    gcLenType = gc['subhalos'][:,sP.ptNum(ptName)]
-                    gcOffsetsType = gcOffsets['snapOffsetsSubhalo'][:,sP.ptNum(ptName)][:-1]
+                    # determine parent subhalo ID
+                    r[field][m,wType] = inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, 
+                                          SubhaloLenType, SnapOffsetsSubhalo, debug=debug)
+                    continue
 
-                    # val gives the indices of gcOffsetsType such that, if each indsType was inserted 
-                    # into gcOffsetsType just -before- its index, the order of gcOffsetsType is unchanged
-                    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
-                    # subhalo offset (i.e. first particle) works correctly
-                    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
-                    # subhalo offset index -after- which the particle should be inserted
-                    val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
-                    val = val.astype('int32')
-
-                    # search and flag all tracers with parents whose indices exceed the length of the 
-                    # subhalo they have been assigned to, e.g. either in fof fuzz, in subhalos with 
-                    # no particles of this type, or not in any subhalo at the end of the file
-                    gcOffsetsMax = gcOffsetsType + gcLenType - 1
-                    ww = np.where( indsType > gcOffsetsMax[val] )[0]
-
-                    if len(ww):
-                        val[ww] = -1
-
-                    r[field][m,wType] = val
-
-                    if debug:
-                        # for tracers we identified in subhalos, verify parents directly
-                        for i in range(indsType.size):
-                            if val[i] < 0:
-                                continue
-                            assert indsType[i] >= gcOffsetsType[val[i]]
-                            assert indsType[i] < gcOffsetsType[val[i]]+gcLenType[val[i]]
-                            assert gcLenType[val[i]] != 0
-
-                        # for tracers we identified in no subhalos, load particle IDs of this type 
-                        # from all subhalos at this snapshot, then tracerParIDsLocal[wType[noPar]] matched 
-                        # to allIDsOfThisTypeInSubhalos should be empty
-                        wwNoPar = np.where( val < 0 )[0]
-
-                        if len(wwNoPar) > 0:
-                            ParIDsToMatch = np.zeros( gcLenType.sum(), dtype=tracerParIDsLocal.dtype )
-                            offset = 0
-
-                            for i in range(gcLenType.size):
-                                if gcLenType[i] == 0:
-                                    continue
-
-                                loadIDs = cosmo.load.snapshotSubset(sP, ptName, 'ids', subhaloID=i)
-                                ParIDsToMatch[ offset : offset+gcLenType[i] ] = loadIDs
-                                offset += gcLenType[i]
-
-                            tracerParIDsShouldBeOutsideAllSubhalos = tracerParIDsLocal[wType[wwNoPar]]
-                            ind1, ind2 = match3(ParIDsToMatch, tracerParIDsShouldBeOutsideAllSubhalos)
-
-                            assert ind1 is None and ind2 is None
+                if field in ['halo_id']:
+                    # determine parent subhalo ID
+                    r[field][m,wType] = inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
+                                          GroupLenType, SnapOffsetsGroup, debug=debug)
                     continue
 
                 # general properties
@@ -740,26 +722,49 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if mpb is None:
                     raise Exception('Error, mpb track required as inputs.')
 
-                mpbInd = np.where( mpb['SnapNum'] == snap )[0]
+                if sP.isZoom:
+                    # for zoom runs, we use the smoothed, single MPB track of the target for all particles
+                    mpbInd = np.where( mpb['SnapNum'] == snap )[0]
 
-                # sims.zooms2/h1_L9: temporary override to get to z=10
-                if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 1 and snap < 70:
-                    mpbInd  = np.where( mpb['SnapNum'] == 70 )[0]
-                # end temporary
-                if len(mpbInd) == 0:
-                    raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
+                    if len(mpbInd) == 0:
+                        raise Exception('Error, snap ['+str(snap)+'] not found in mpb.')
 
-                haloCenter = mpb['sm']['pos'][mpbInd[0],:]
-                haloVel    = mpb['sm']['vel'][mpbInd[0],:]
-                haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
-                haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
+                    haloCenter = mpb['sm']['pos'][mpbInd[0],:]
+                    haloVel    = mpb['sm']['vel'][mpbInd[0],:]
+                    haloVirRad = mpb['sm']['rvir'][mpbInd[0]]
+                    haloVirVel = mpb['sm']['vvir'][mpbInd[0]]
+                else:
+                    # for global catalogs (tracers spanning many/all halos) map groupcat values at 
+                    # this snapshot into one [halo pos,vel,virrad,virvel] per tracer
+
+                    # get subhalo ID targets at this snapshot (subhaloIDs_target contains -1 values)
+                    subhaloID_trackIndexByTr = mpb['subhalo_evo_index'][wType]
+                    subhaloIDs_target = mpb['subhalo_ids_evo'][m,subhaloID_trackIndexByTr]
+
+                    # assumed in m indexing above, e.g. we called getEvoSnapList(sP) with no args in the driver
+                    assert toRedshift is None and snapStep == 1 
+
+                    # map (N,3) per-subhalo quantities
+                    haloCenter = np.zeros( (indsType.size,3), dtype='float32' )
+                    haloVel    = np.zeros( (indsType.size,3), dtype='float32' )
+
+                    for i in range(3):
+                        haloCenter[:,i] = gcHalo['subhalos']['SubhaloPos'][subhaloIDs_target,i]
+                        haloVel[:,i] = Subhalo_StellarMeanVel[subhaloIDs_target,i]
+
+                    # map (N) quantities, which happen to be per-halo
+                    haloIDs_target = gcHalo['subhalos']['SubhaloGrNr'][subhaloIDs_target]
+
+                    haloVirRad = gcHalo['halos']['Group_R_Crit200'][haloIDs_target]
+                    haloVirVel = gcHalo['halos']['Group_M_Crit200'][haloIDs_target]
+                    haloVirVel = sP.units.codeMassToVirVel(haloVirVel)
 
                 # load required raw fields(s) from the snapshot
                 data = {}
                 for fName in halo_rel_fields[field]:
                     data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
 
-                # compute
+                # compute (the 4 halo properties can be scalar or arrays of the same size of indsType)
                 if field in ['rad','rad_rvir']:
                     # radial distance from halo center, optionally normalized by rvir (r200crit)
                     val = periodicDists(haloCenter, data['pos'], sP) # code units (e.g. ckpc/h)
@@ -783,7 +788,14 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if val.ndim != 1:
                     raise Exception('Unexpected.')
 
+                # save
                 r[field][m,wType] = val
+
+                # handle untracked halos at this snapshot which are marked by -1 (fill with NaN)
+                if not sP.isZoom:
+                    ww = np.where(subhaloIDs_target < 0)[0]
+                    if len(ww):
+                        r[field][m,wType[ww]] = np.nan
 
     sP.setSnap(startSnap)
     return r
@@ -1048,7 +1060,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
 
     return trCounts, trOffsets
 
-def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
+def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False):
     """ For all tracers in all FoFs at the simulation endtime, record time evolution tracks of one 
     field for all snapshots (which contain tracers). """
     assert halos is True or subhalos is True # pick one
@@ -1079,8 +1091,57 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
     # get child tracers of all particle types in all FoFs
     trIDs = globalTracerChildren(sP, halos=halos, subhalos=subhalos)
 
-    # mpb?
-    # todo!
+    # mpb? are we calculating parent properties which are relative to [evolving] halo properties?
+    mpb = None
+
+    if field in halo_rel_fields:
+        mpb = {}
+
+        # where do we start each tree? all tracers in a given FoF are assigned to follow the MPB
+        # of the central subhalo of that FoF at sP.snap! e.g. tracers in satellites at sP.snap 
+        # will derive a rad/rad_rvir corresponding to the ~distance of the satellite from the halo center
+        print('Identifying central subhalo IDs for all [%d] tracers at snap [%d]...' % (trIDs.size,sP.snap))
+
+        trVals = tracersTimeEvo(sP, trIDs, [], ['halo_id'], toRedshift=sP.redshift) 
+        trVals['halo_id'] = np.squeeze(trVals['halo_id']) # single snap
+
+        # map the FoF IDs at z=0 into subhalo_ids with GroupFirstSub
+        GroupFirstSub = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
+        trVals['subhalo_id'] = GroupFirstSub[trVals['halo_id']]
+
+        # debug: how many FoF's have GroupFirstSub==-1 already at z=0 (these by definition will be 
+        # filled entirely with NaN for halo_rel_fields, how much space wasted?)
+        ww = np.where(trVals['subhalo_id'] == -1)[0]
+        print(' note: [%d] of [%d] tracers are in FoFs with no central subhalo' % (ww.size,trIDs.size))
+
+        # reduce to a unique subset
+        uniqSubhaloIDs = np.unique(trVals['subhalo_id'])
+        print('Finding [%d] unique subhalo MPB tracks, of [%d] total...' % (uniqSubhaloIDs.size,trIDs.size))
+
+        # allocate, -1 indicates untracked at that snapshot
+        evoSnaps, _ = getEvoSnapList(sP)
+        mpb['subhalo_ids_evo'] = np.zeros( (len(evoSnaps),uniqSubhaloIDs.size), dtype='int32' ) - 1
+
+        # load MPBs of all subhalos
+        mpbs = cosmo.mergertree.loadMPBs(sP, uniqSubhaloIDs, 
+                 fields=['SnapNum','SubfindID'], treeName='SubLink')
+
+        for i, id in enumerate(uniqSubhaloIDs):
+            # untracked?
+            if id == -1: continue # parent fof of tracer has no central subhalo at sP.snap
+            if id not in mpbs: continue # central subhalo not in tree at sP.snap
+
+            # crossmatch MPB snapshots we have with target snaps, and save subhalo IDs
+            w1, w2 = match3(mpbs[id]['SnapNum'], evoSnaps)
+
+            mpb['subhalo_ids_evo'][w2,i] = mpbs[id]['SubfindID'][w1]
+
+        # save a mapping between the subhalo IDs of each tracer here at sP.snap and the unique 
+        # subhalo tracks we have saved in subhalo_ids_evo
+        wUniq, _ = match3(uniqSubhaloIDs, trVals['subhalo_id'])
+        mpb['subhalo_evo_index'] = wUniq
+
+        assert wUniq.size == trIDs.size == trVals['subhalo_id'].size == trVals['halo_id'].size
 
     # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
     print('Computing: [%s]' % saveFilename.split(savePath)[1])
@@ -1115,9 +1176,9 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
 
     else:
         if 'tracer_' in field: # trField
-            trVals = tracersTimeEvo(sP, trIDs, [field], [])
+            trVals = tracersTimeEvo(sP, trIDs, [field], [], mpb=mpb)
         else: # parField
-            trVals = tracersTimeEvo(sP, trIDs, [], [field])
+            trVals = tracersTimeEvo(sP, trIDs, [], [field], mpb=mpb)
 
     # save tracks
     with h5py.File(saveFilename,'w') as f:
@@ -1131,6 +1192,7 @@ def globalAllTracersTimeEvo(sP, field, halos=False, subhalos=False):
 def checkTracerMeta(sP):
     """ Verify globalAllTracersTimeEvo() ordering. """
     nRandom = 100
+    nIndiv = 5
     ptTypes = ['gas','stars','bhs']
 
     # load
@@ -1138,9 +1200,10 @@ def checkTracerMeta(sP):
     h = cosmo.load.groupCatHeader(sP)
     
     # load and sort the parent IDs of all tracers in this snapshot
-    ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
-    ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
-    ParentID = ParentID[ParentIDSortInds]
+    ParentIDorig = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+    TracerID = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
+    ParentIDSortInds = np.argsort(ParentIDorig, kind='mergesort')
+    ParentID = ParentIDorig[ParentIDSortInds]
 
     # for nRandom halos and nRandom subhalos, verify child tracers are correct
     for i in range(nRandom):
@@ -1176,3 +1239,23 @@ def checkTracerMeta(sP):
             trIDs_subhalo_pt = meta['TracerIDs'][i0:i1]
 
             assert np.array_equal(np.sort(trIDs_subhalo_pt),np.sort(trIDs_subhalo_check[pt]))
+
+            # check first five individual parents ordered children
+            subhalo_pt_ids = cosmo.load.snapshotSubset(sP, pt, 'id', subhaloID=subhaloID)
+            if isinstance(subhalo_pt_ids,dict) and subhalo_pt_ids['count'] == 0:
+                continue
+
+            children_ids = []
+
+            for j in range(nIndiv):
+                if j >= subhalo_pt_ids.size:
+                    continue
+                ww = np.where(ParentIDorig == subhalo_pt_ids[j])[0]
+                if not len(ww):
+                    continue
+                children_ids.append( TracerID[ww] )
+
+            children_ids = np.array(children_ids)
+            if children_ids.size:
+                children_ids = np.hstack(children_ids)
+                assert np.array_equal(children_ids, trIDs_subhalo_pt[0:children_ids.size])

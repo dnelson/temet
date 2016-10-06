@@ -14,26 +14,111 @@ from util.helper import running_sigmawindow, iterable
 
 treeName_default = "SubLink_gal"
 
-def loadMPB(sP, id, fields=None, treeName=None, fieldNamesOnly=False):
+def loadMPB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False):
     """ Load fields of main-progenitor-branch (MPB) of subhalo id from the given tree. """
     assert sP.snap is not None, "sP.snap required"
-
-    if treeName is None:
-        treeName = treeName_default
 
     if treeName in ['SubLink','SubLink_gal']:
         return il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True, treeName=treeName)
     if treeName in ['LHaloTree']:
-        raise Exception('Not implemented')
+        return il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMPB=True)
 
     raise Exception('Unrecognized treeName.')
 
-def loadTreeFieldnames(sP, treeName=None):
+def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=False):
+    """ Load multiple MPBs at once (e.g. all of them), optimized for speed. 
+    Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary). 
+      Return: a dictionary whose keys are subhalo IDs, and the contents of each dict value is another 
+      dictionary of identical stucture to the return of loadMPB().
+    """
+    
+    # (Step 0) prep
+    basePath = sP.simPath
+    snapNum  = sP.snap
+
+    from os.path import isfile
+    from glob import glob
+    assert isfile(il.groupcat.offsetPath(basePath,snapNum)) # otherwise need to generalize offset loading
+    assert treeName in ['SubLink','SubLink_gal'] # otherwise need to generalize tree loading
+
+    # make sure fields is not a single element
+    if isinstance(fields, basestring):
+        fields = [fields]
+
+    # create quick offset table for rows in the SubLink files
+    # if you are loading thousands or millions of sub-trees, you may wish to cache this offsets array
+    numTreeFiles = len(glob(il.sublink.treePath(basePath,treeName,'*')))
+    offsets = np.zeros( numTreeFiles, dtype='int64' )
+
+    for i in range(numTreeFiles-1):
+        with h5py.File(il.sublink.treePath(basePath,treeName,i),'r') as f:
+            offsets[i+1] = offsets[i] + f['SubhaloID'].shape[0]
+
+    result = {}
+
+    # (Step 1) treeOffsets()
+    offsetFile = il.groupcat.offsetPath(basePath,snapNum)
+    prefix = 'Subhalo/' + treeName + '/'
+
+    with h5py.File(offsetFile,'r') as f:
+        groupFileOffsets = f['FileOffsets/Subhalo'][()]
+
+        # load all merger tree offsets
+        RowNums     = f[prefix+'RowNum'][()]
+        LastProgIDs = f[prefix+'LastProgenitorID'][()]
+        SubhaloIDs  = f[prefix+'SubhaloID'][()]
+
+    # now subhalos one at a time (one tree file opening and len(fields)+1 reads for each)
+    for i, id in enumerate(ids):
+        if i % int(ids.size/10) == 0 and i <= ids.size:
+            print(' %4.1f%%' % (float(i+1)*100.0/ids.size))
+
+        if id == -1: continue # skip requests for e.g. fof halos which had no central subhalo
+
+        # calculate target groups file chunk which contains this id
+        groupFileOffsetsLoc = int(id) - groupFileOffsets
+        fileNum = np.max( np.where(groupFileOffsetsLoc >= 0) )
+        groupOffset = groupFileOffsetsLoc[fileNum]
+
+        # (Step 2) loadTree()
+        RowNum = RowNums[groupOffset]
+        LastProgID = LastProgIDs[groupOffset]
+        SubhaloID  = SubhaloIDs[groupOffset]
+
+        if RowNum == -1:
+            print('   warning, subhalo [%d] at snapNum [%d] not in tree.' % (id,snapNum))
+            continue
+
+        rowStart = RowNum
+        rowEnd   = RowNum + (LastProgID - SubhaloID)
+        nRows    = rowEnd - rowStart + 1
+    
+        # find the tree file chunk containing this row
+        rowOffsets = rowStart - offsets
+
+        fileNum = np.max(np.where( rowOffsets >= 0 ))
+        fileOff = rowOffsets[fileNum]
+    
+        # load only main progenitor branch: get MainLeafProgenitorID now
+        with h5py.File(il.sublink.treePath(basePath,treeName,fileNum),'r') as f:
+            MainLeafProgenitorID = f['MainLeafProgenitorID'][fileOff]
+            
+            # re-calculate nRows
+            rowEnd = RowNum + (MainLeafProgenitorID - SubhaloID)
+            nRows  = rowEnd - rowStart + 1
+        
+            # read
+            result[id] = {'count':nRows}
+         
+            # loop over each requested field and read, no error checking
+            for field in fields:
+                result[id][field] = f[field][fileOff:fileOff+nRows]
+           
+    return result
+
+def loadTreeFieldnames(sP, treeName=treeName_default):
     """ Load names of fields available in a mergertree. """
     assert sP.snap is not None, "sP.snap required"
-
-    if treeName is None:
-        treeName = treeName_default
 
     if treeName in ['SubLink','SubLink_gal']:
         with h5py.File(il.sublink.treePath(sP.simPath, treeName), 'r') as f:

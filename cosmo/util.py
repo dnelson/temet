@@ -376,6 +376,83 @@ def gasMassesFromIDs(search_ids, sP):
 
     return masses
 
+def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, 
+                                      SubhaloLenType=None, SnapOffsetsSubhalo=None, debug=False):
+    """ For a particle type ptName and snapshot indices for that type indsType, compute the 
+        subhalo ID to which each particle index belongs. Optional: SubhaloLenType (from groupcat) 
+        and SnapOffsetsSubhalo (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
+    """
+    if SubhaloLenType is None:
+        SubhaloLenType = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
+    if SnapOffsetsSubhalo is None:
+        SnapOffsetsSubhalo = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+    gcLenType = SubhaloLenType[:,sP.ptNum(ptName)]
+    gcOffsetsType = SnapOffsetsSubhalo[:,sP.ptNum(ptName)][:-1]
+
+    # val gives the indices of gcOffsetsType such that, if each indsType was inserted 
+    # into gcOffsetsType just -before- its index, the order of gcOffsetsType is unchanged
+    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
+    # subhalo offset (i.e. first particle) works correctly
+    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
+    # subhalo offset index -after- which the particle should be inserted
+    val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
+    val = val.astype('int32')
+
+    # search and flag all tracers with parents whose indices exceed the length of the 
+    # subhalo they have been assigned to, e.g. either in fof fuzz, in subhalos with 
+    # no particles of this type, or not in any subhalo at the end of the file
+    gcOffsetsMax = gcOffsetsType + gcLenType - 1
+    ww = np.where( indsType > gcOffsetsMax[val] )[0]
+
+    if len(ww):
+        val[ww] = -1
+
+    if debug:        
+        # for tracers we identified in subhalos, verify parents directly
+        for i in range(indsType.size):
+            if val[i] < 0:
+                continue
+            assert indsType[i] >= gcOffsetsType[val[i]]
+            assert indsType[i] < gcOffsetsType[val[i]]+gcLenType[val[i]]
+            assert gcLenType[val[i]] != 0
+
+    return val
+
+def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
+                                   GroupLenType=None, SnapOffsetsGroup=None, debug=False):
+    """ For a particle type ptName and snapshot indices for that type indsType, compute the 
+        halo/fof ID to which each particle index belongs. Optional: GroupLenType (from groupcat) 
+        and SnapOffsetsGroup (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
+    """
+    if GroupLenType is None:
+        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+    if SnapOffsetsGroup is None:
+        SnapOffsetsGroup = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+
+    gcLenType = GroupLenType[:,sP.ptNum(ptName)]
+    gcOffsetsType = SnapOffsetsGroup[:,sP.ptNum(ptName)][:-1]
+
+    # val gives the indices of gcOffsetsType such that, if each indsType was inserted 
+    # into gcOffsetsType just -before- its index, the order of gcOffsetsType is unchanged
+    # note 1: (gcOffsetsType-1) so that the case of the particle index equaling the 
+    # subhalo offset (i.e. first particle) works correctly
+    # note 2: np.ss()-1 to shift to the previous subhalo, since we want to know the 
+    # subhalo offset index -after- which the particle should be inserted
+    val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
+    val = val.astype('int32')
+
+    if debug:
+        # verify directly
+        for i in range(indsType.size):
+            if val[i] < 0:
+                continue
+            assert indsType[i] >= gcOffsetsType[val[i]]
+            assert indsType[i] < gcOffsetsType[val[i]]+gcLenType[val[i]]
+            assert gcLenType[val[i]] != 0
+
+    return val
+
 # --- plotting ---
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
