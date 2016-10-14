@@ -15,8 +15,8 @@ from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroSafe
 from illustris_python.util import partTypeNum
 from cosmo.load import groupCat, groupCatSingle, auxCat
-from cosmo.util import addRedshiftAgeAxes, validSnapList, periodicDists
-from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
+from cosmo.util import addRedshiftAgeAxes, validSnapList, periodicDists, cenSatSubhaloIndices
+from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE, loadSimGalColors
 
 # global configuration
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
@@ -1448,30 +1448,14 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
         c = ax._get_lines.prop_cycler.next()['color']
 
         # load fullbox stellar masses
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
-                          fieldsSubhalos=['SubhaloMassInRadType'])
-
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
         gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
         
         # load simulation colors
-        if simColorsModel == 'snap':
-            gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
-            gc_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
-        else:
-            acKey = 'Subhalo_StellarPhot_' + simColorsModel
-            acColorLoad = auxCat(sP, fields=[acKey])
-
-            # auxcatPhotToSDSSColor():
-            acBands = list(acColorLoad[acKey+'_attrs']['bands'])
-            i0 = acBands.index('sdss_'+bands[0])
-            i1 = acBands.index('sdss_'+bands[1])
-            gc_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
+        gc_colors = loadSimGalColors(sP, simColorsModel, bands=bands)
 
         # galaxy selection
-        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
-        w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
-        w2 = np.arange(gc['subhalos'].shape[0]) # centrals + satellites
-        w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+        w1, w2, w3 = cenSatSubhaloIndices(sP)
 
         # selection:
         normFacs = np.zeros( len(stellarMassBins) )
@@ -1568,6 +1552,7 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
 def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
     """ 2D contours of galaxy colors/Mstar plane, multiple bands. """
     from util import simParams
+    from plot.galaxyColor import _bandMagRange
     
     # config
     obs_color = '#000000'
@@ -1575,16 +1560,8 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
     bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
 
     simColorsModel = 'p07c_bc00dust' # snap, p07c_nodust, p07c_bc00dust
-    eCorrect = True # True, False
-    kCorrect = True # True, False
-
-    def _bandMagRange(bands):
-        """ Hard-code some band dependent magnitude ranges. """
-        if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
-        if bands[0] == 'g' and bands[1] == 'r': mag_range = [0.0,1.0]
-        if bands[0] == 'r' and bands[1] == 'i': mag_range = [0.0,0.6]
-        if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
-        return mag_range
+    eCorrect = True # True, False (for sdss points)
+    kCorrect = True # True, False (for sdss points)
 
     def _discreteReSampleMatched(obs_1dhist, sim_1dhist, nBinsDS):
         """ Apply a quasi inverse transform sampling method to draw a Mstar distribution
@@ -1710,23 +1687,14 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
             spColors.append(c)
 
             # load fullbox stellar masses and photometrics
-            gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
-                              fieldsSubhalos=['SubhaloMassInRadType'])
-
+            gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
             gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
             
             # load simulation colors
-            if simColorsModel == 'snap':
-                gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
-            else:
-                acKey = 'Subhalo_StellarPhot_' + simColorsModel
-                acColorLoad = auxCat(sP, fields=[acKey])
+            colorData = loadSimGalColors(sP, simColorsModel)
 
             # galaxy selection
-            wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
-            w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
-            w2 = np.arange(gc['subhalos'].shape[0]) # centrals + satellites
-            w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+            w1, w2, w3 = cenSatSubhaloIndices(sP)
 
             # selection:
             normFacs = np.zeros( len(bandCombos) )
@@ -1737,14 +1705,7 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
             for i, bands in enumerate(bandCombos):
 
                 # calculate simulation colors
-                if simColorsModel == 'snap':
-                    gc_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
-                else:
-                    # auxcatPhotToSDSSColor():
-                    acBands = list(acColorLoad[acKey+'_attrs']['bands'])
-                    i0 = acBands.index('sdss_'+bands[0])
-                    i1 = acBands.index('sdss_'+bands[1])
-                    gc_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
+                gc_colors = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=bands)
 
                 # config for this band
                 mag_range = _bandMagRange(bands)
@@ -1754,9 +1715,9 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
                 if splitCenSat: loopInds = range(3)
 
                 for j in loopInds:
-                    if j == 0: w = w2
-                    if j == 1: w = w1
-                    if j == 2: w = w3
+                    if j == 0: w = w2 # all
+                    if j == 1: w = w1 # only cen
+                    if j == 2: w = w3 # only sat
 
                     # galaxy mass definition and color
                     stellar_mass = gc_masses[w]

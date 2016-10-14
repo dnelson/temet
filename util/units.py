@@ -255,7 +255,7 @@ class units(object):
 
         # calculate position, relative to subhalo center (pkpc)
         for i in range(3):
-            if haloPos.size == 3: # scalar
+            if haloPos.ndim == 1: # scalar
                 gas_pos[:,i] -= haloPos[i]
             else:
                 gas_pos[:,i] -= haloPos[:,i]
@@ -271,7 +271,7 @@ class units(object):
 
         for i in range(3):
             # SubhaloVel already peculiar, no scalefactor needed
-            if haloVel.size == 3: # scalar
+            if haloVel.ndim == 1: # scalar
                 gas_vel[:,i] -= haloVel[i]
             else:
                 gas_vel[:,i] -= haloVel[:,i]
@@ -318,7 +318,7 @@ class units(object):
 
         # calculate position, relative to subhalo center (pkpc)
         for i in range(3):
-            if haloPos.size == 3: # scalar
+            if haloPos.ndim == 1: # scalar
                 gas_pos[:,i] -= haloPos[i]
             else:
                 gas_pos[:,i] -= haloPos[:,i]
@@ -333,7 +333,7 @@ class units(object):
 
         for i in range(3):
             # SubhaloVel already peculiar, no scalefactor needed
-            if haloVel.size == 3: # scalar
+            if haloVel.ndim == 1: # scalar
                 gas_vel[:,i] -= haloVel[i]
             else:
                 gas_vel[:,i] -= haloVel[:,i]
@@ -604,7 +604,7 @@ class units(object):
         metal_solar[metal_solar < 0] = 0.0 # clip possibly negative Illustris values at zero
 
         if log:
-            return logZeroSafe(metal_solar)
+            return np.log10(metal_solar)
         return metal_solar
 
     def codeTimeStepToYears(self, TimeStep, Gyr=False):

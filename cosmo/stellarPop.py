@@ -12,34 +12,69 @@ import h5py
 from os.path import isfile, expanduser
 from util.loadExtern import loadSDSSData
 from cosmo.kCorr import kCorrections, coeff
-from util.helper import logZeroSafe, logZeroMin
+from cosmo.load import groupCat, auxCat
+from util.helper import logZeroMin
 
-gfmBands = ['U','B','V','K','g','r','i','z'] # unused
+# currently same for all sims, otherwise move into sP:
+gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
+            'g':4, 'r':5, 'i':6, 'z':7}
+
+def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None):
+    """ Load band-magnitudes either from snapshot photometrics or from auxCat SPS modeling, 
+    and convert to a color if bands is passed in, otherwise return loaded data. If loaded 
+    data is passed in with bands, do then magnitude computation without re-loading."""
+    if colorData is None:
+        # load
+        if simColorsModel == 'snap':
+            colorData = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
+        else:
+            acKey = 'Subhalo_StellarPhot_' + simColorsModel
+            colorData = auxCat(sP, fields=[acKey])
+
+    # early exit with full data?
+    if bands is None:
+        return colorData
+
+    # compute colors
+    if simColorsModel == 'snap':
+        gc_colors = stellarPhotToSDSSColor( colorData['subhalos'], bands )
+    else:
+        # auxcatPhotToSDSSColor():
+        acBands = list(colorData[acKey+'_attrs']['bands'])
+        i0 = acBands.index('sdss_'+bands[0])
+        i1 = acBands.index('sdss_'+bands[1])
+        gc_colors = colorData[acKey][:,i0] - colorData[acKey][:,i1]
+
+    return gc_colors
 
 def stellarPhotToSDSSColor(photVector, bands):
     """ Convert the GFM_StellarPhotometrics[] or SubhaloStellarPhotometrics[] vector into a 
     specified color, by choosing the right elements and handling any necessary conversions. """
     colorName = ''.join(bands)
 
+    # dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i
+    ii = gfmBands
+
     if colorName == 'ui':
-        # U is in Vega, i is in AB, and U_AB = U_Vega + 0.79 
+        # UBVK are in Vega, i is in AB, and U_AB = U_Vega + 0.79, V_AB = V_Vega + 0.02
         # http://www.astronomy.ohio-state.edu/~martini/usefuldata.html
-        # assume Buser U = Johnson U filter (close-ish), and use Lupton2005 transformation
+        # assume Buser V = Johnson V filter (close-ish), and use Lupton2005 transformation
         # http://classic.sdss.org/dr7/algorithms/sdssUBVRITransform.html
-        u_sdss = photVector[:,4] + (-1.0/0.2906) * (photVector[:,2] - photVector[:,4] - 0.0885)
-        return u_sdss - photVector[:,6] + 0.79
+        u_sdss_AB = photVector[:,ii['g']] + (-1.0/0.2906) * \
+                    (photVector[:,ii['V']]+0.02 - photVector[:,ii['g']] - 0.0885)
+        return u_sdss_AB - photVector[:,ii['z']]
 
     if colorName == 'gr':
-        return photVector[:,4] - photVector[:,5] + 0.0 # g,r in sdss AB magnitudes
+        return photVector[:,ii['g']] - photVector[:,ii['r']] + 0.0 # g,r in sdss AB magnitudes
 
     if colorName == 'ri':
-        return photVector[:,5] - photVector[:,6] + 0.0 # r,i in sdss AB magnitudes
+        return photVector[:,ii['r']] - photVector[:,ii['i']] + 0.0 # r,i in sdss AB magnitudes
 
     if colorName == 'iz':
-        return photVector[:,6] - photVector[:,7] + 0.0 # i,z in sdss AB magnitudes
+        return photVector[:,ii['i']] - photVector[:,ii['z']] + 0.0 # i,z in sdss AB magnitudes
 
     if colorName == 'gz':
-        return photVector[:,4] - photVector[:,7] + 0.0 # g,z in sdss AB magnitudes
+        return photVector[:,ii['g']] - photVector[:,ii['z']] + 0.0 # g,z in sdss AB magnitudes
 
     raise Exception('Band combination not implemented.')
 
