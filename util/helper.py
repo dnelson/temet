@@ -6,6 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+import matplotlib.pyplot as plt
 import collections
 
 # --- utility functions ---
@@ -36,7 +37,7 @@ def evenlySample(sequence, num, logSpace=False):
     return sequence[inds.astype('int32')]
 
 def logZeroSafe(x, zeroVal=1.0):
-    """ Take log of input variable or array, keeping zeros at zero. """
+    """ Take log10 of input variable or array, keeping zeros at some value. """
     if not isinstance(x, (int,long,float)) and x.ndim: # array
         # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
         w = np.where(x <= 0.0)
@@ -48,10 +49,17 @@ def logZeroSafe(x, zeroVal=1.0):
     return np.log10(x)
 
 def logZeroMin(x):
-    """ Take log of input variable, setting zeros to 100 times less than the minimum. """
+    """ Take log10 of input variable, setting zeros to 100 times less than the minimum. """
     w = np.where(x > 0.0)
     minVal = x[w].min() if len(w[0]) > 0 else 1.0
     return logZeroSafe(x, minVal*0.01)
+
+def logZeroNaN(x):
+    """ Take log10, setting zeros to NaN silently and leaving NaN as NaN (same as the default 
+    behavior, but suppress warnings). """
+    r = x.copy()
+    r[~np.isfinite(r)] = 0.0
+    return logZeroSafe(r, np.nan)
 
 def iterable(x):
     """ Protect against non-list/non-tuple (e.g. scalar or single string) value of x, to guarantee that 
@@ -80,7 +88,7 @@ def reportMemory():
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None, skipZeros=False):
+def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     minVal = X.min()
     if skipZeros:
@@ -95,17 +103,32 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False):
     running_median = []
     running_std    = []
     bin_centers    = []
+    if percs is not None: running_percs = [[] for p in percs]
 
     for i, bin in enumerate(bins):
         binMax = bin + delta
         w = np.where((X >= bin) & (X < binMax))
 
+        # non-empty bin
         if len(w[0]):
             running_median.append( np.nanmedian(Y[w]) )
             running_std.append( np.std(Y[w]) )
             bin_centers.append( np.nanmedian(X[w]) )
 
-    return np.array(bin_centers), np.array(running_median), np.array(running_std)
+            # compute percentiles also?
+            if percs is not None:
+                for j, perc in enumerate(percs):
+                    running_percs[j].append( np.percentile(Y[w], perc,interpolation='linear') )
+
+    bin_centers = np.array(bin_centers)
+    running_median = np.array(running_median)
+    running_std = np.array(running_std)
+
+    if percs is not None:
+        running_percs = np.array(running_percs)
+        return bin_centers, running_median, running_std, running_percs
+
+    return bin_centers, running_median, running_std
 
 def running_sigmawindow(X, Y, windowSize=None):
     """ Create an local/adaptive estimate of the stddev of a (x,y) point set using a sliding 
@@ -340,6 +363,16 @@ def sampleColorTable(ctName, num, bounds=None):
     from matplotlib.pyplot import cm
     cmap = cm.get_cmap(ctName)
     return cmap( np.linspace(0,1,num) )
+
+def contourf(*args, **kwargs):
+    """ Wrap matplotlib.contourf() for a graphical fix in PDF output. """
+    cnt = plt.contourf(*args, **kwargs)
+
+    for c in cnt.collections:
+        c.set_edgecolor("face")
+        c.set_linewidth(0.1) # must be nonzero to fix sub-pixel AA issue
+
+    return cnt
 
 # --- I/O ---
 

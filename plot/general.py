@@ -7,7 +7,6 @@ from builtins import *
 
 import numpy as np
 import h5py
-import pdb
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter

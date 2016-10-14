@@ -15,7 +15,7 @@ from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
 
 from cosmo import hydrogen
-from util.helper import closest, iterable, logZeroSafe
+from util.helper import closest, iterable, logZeroSafe, contourf
 from cosmo.load import snapshotSubset, snapHasField
 
 basePath = expanduser("~") + '/code/cloudy.run/'
@@ -766,12 +766,7 @@ def plotUVB():
     #plt.imshow(z, extent=[x.min(),x.max(),y.min(),y.max()], origin='lower', interpolation='nearest')
 
     #plt.contour(XX, YY, z, 40, lw=1.0, linestyles='solid')
-    cnt = plt.contourf(XX, YY, z, 40)
-    #plt.contourf(XX, YY, z, 40) # twice to fix sub-pixel AA issue
-
-    for c in cnt.collections:
-        c.set_edgecolor("face")
-        c.set_linewidth(0.1) # must be nonzero to fix sub-pixel AA issue
+    contourf(XX, YY, z, 40)
 
     cb = plt.colorbar()
     cb.ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
@@ -898,12 +893,7 @@ def plotIonAbundances(res='lg'):
                 z = np.clip(z, abund_range[0], abund_range[1])
 
                 # contour plot
-                cnt = plt.contourf(XX, YY, z, 40)
-
-                for c in cnt.collections:
-                    c.set_edgecolor("face")
-                    c.set_linewidth(0.1) # must be nonzero to fix sub-pixel AA issue
-
+                contourf(XX, YY, z, 40)
                 cb = plt.colorbar()
                 cb.ax.set_ylabel('log Abundance Fraction')
 

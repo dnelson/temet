@@ -453,6 +453,35 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
 
     return val
 
+def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
+    """ Return a tuple of three sets of indices into the group catalog for subhalos: 
+      centrals only, centrals & satellites together, and satellites only. """
+    if sP is None:
+        assert 'halos' in gc
+        assert 'GroupFirstSub' in gc['halos'] and 'Group_M_Crit200' in gc['halos']
+
+    if gc is None:
+        # load what we need
+        assert sP is not None
+        gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
+
+    nSubhalos = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+
+    # halos with a primary subhalo
+    wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
+
+    # indices
+    w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
+    w2 = np.arange(nSubhalos) # centrals + satellites
+    w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+
+    if cenSatSelect is None:
+        return w1, w2, w3
+
+    if cenSatSelect == 'cen': return w1
+    if cenSatSelect == 'sat': return w3
+    if cenSatSelect == 'all': return w2
+
 # --- plotting ---
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):

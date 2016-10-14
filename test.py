@@ -18,6 +18,83 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def domeTestData():
+    """ Write out test data files for planetarium vendors. """
+    sP = simParams(res=1820,run='illustris',redshift=0.0)
+    shFields = ['SubhaloPos','SubhaloVel','SubhaloMass','SubhaloSFR']
+
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=shFields)
+
+    def _writeAttrs(f):
+        # header
+        h = f.create_group('Header')
+        h.attrs['SimulationName'] = sP.simName
+        h.attrs['SimulationRedshift'] = sP.redshift
+        h.attrs['SimulationBoxSize'] = sP.boxSize
+        h.attrs['SimulationRef'] = 'http://www.illustris-project.org/api/' + sP.simName
+        h.attrs['CreatedBy'] = 'Dylan Nelson'
+        h.attrs['CreatedOn'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # XDMF equivalent type metadata
+        h.attrs['field_pos_x'] = '/SubhaloPos[:,0]'
+        h.attrs['field_pos_y'] = '/SubhaloPos[:,1]'
+        h.attrs['field_pos_z'] = '/SubhaloPos[:,2]'
+        h.attrs['field_vel_x'] = '/SubhaloVel[:,0]'
+        h.attrs['field_vel_y'] = '/SubhaloVel[:,1]'
+        h.attrs['field_vel_z'] = '/SubhaloVel[:,2]'
+
+        h.attrs['field_color_avail'] = '/SubhaloMass,/SubhaloSFR'
+        h.attrs['field_color_default'] = '/SubhaloMass'
+        h.attrs['field_color_default_min'] = 0.01
+        h.attrs['field_color_default_max'] = 1000.0
+        h.attrs['field_color_default_func'] = 'log'
+
+        # dataset attributes
+        f['SubhaloPos'].attrs['Description'] = 'Galaxy Position'
+        f['SubhaloVel'].attrs['Description'] = 'Galaxy Velocity'
+        f['SubhaloMass'].attrs['Description'] = 'Galaxy Total Mass'
+        f['SubhaloSFR'].attrs['Description'] = 'Galaxy Star Formation Rate'
+
+        f['SubhaloPos'].attrs['Units']  = 'ckpc/h'
+        f['SubhaloVel'].attrs['Units']  = 'km/s'
+        f['SubhaloMass'].attrs['Units'] = '10^10 Msun/h'
+        f['SubhaloSFR'].attrs['Units']  = 'Msun/yr'
+
+    def _writeFile(fileName, gc, shFields):
+        f = h5py.File(fileName,'w')
+
+        for key in shFields:
+            f[key] = gc['subhalos'][key]
+            f[key].attrs['Min'] = gc['subhalos'][key].min()
+            f[key].attrs['Max'] = gc['subhalos'][key].max()
+            f[key].attrs['Mean'] = gc['subhalos'][key].mean()
+
+        _writeAttrs(f)
+        f.close()
+
+    # "10 million points" (all subhalos)
+    if 1:
+        fileName = "domeTestData_4million_%s_z%d.hdf5" % (sP.simName,sP.redshift)
+        _writeFile(fileName, gc, shFields)
+
+    # "1 million points" (10^9 halo mass cut)
+    gcNew = {}
+    gcNew['subhalos'] = {}
+
+    w = np.where(sP.units.codeMassToLogMsun(gc['subhalos']['SubhaloMass']) >= 9.0)
+    for key in shFields:
+        if gc['subhalos'][key].ndim == 1:
+            gcNew['subhalos'][key] = gc['subhalos'][key][w]
+        else:
+            gcNew['subhalos'][key] = np.zeros( (len(w[0]),gc['subhalos'][key].shape[1]), 
+                                            dtype=gc['subhalos'][key].dtype )
+            for i in range(gc['subhalos'][key].shape[1]):
+                gcNew['subhalos'][key][:,i] = gc['subhalos'][key][w,i]
+
+    if 1:
+        fileName = "domeTestData_1million_%s_z%d.hdf5" % (sP.simName,sP.redshift)
+        _writeFile(fileName, gcNew, shFields)
+
 def publicScriptsUpdate():
     """ Test updates to public scripts for TNG changes. """
     import illustris_python as il
