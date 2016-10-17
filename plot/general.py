@@ -13,9 +13,132 @@ from scipy.signal import savgol_filter
 
 import illustris_python as il
 from util import simParams
-from util.helper import loadColorTable, running_median
+from util.helper import loadColorTable, running_median, logZeroSafe
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.util import periodicDists
+
+def simSubhaloQuantity(sP, quant, clean=False):
+    """ Return a 1D vector of size Nsubhalos, one quantity per subhalo as specified by the string 
+    cQuant, wrapping any special loading or processing. Also return an appropriate label and range. """
+    label = None
+
+    # todo: generalize log, aperture
+
+    if quant in ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2']:
+        # variations
+        if 'mstar' in quant:
+            partName = 'star'
+            partLabel = '\star'
+            minMax = [9.0, 12.0]
+        if 'mgas' in quant:
+            partName = 'gas'
+            partLabel = 'gas'
+            minMax = [8.0, 11.0]
+        if '1' in quant:
+            fieldName = 'SubhaloMassInHalfRadType'
+            radStr = '1'
+        if '2' in quant:
+            fieldName = 'SubhaloMassInRadType'
+            radStr = '2'
+
+        # stellar/gas mass (within 1 or 2 r1/2stars), optionally already returned in log
+        gc = groupCat(sP, fieldsSubhalos=[fieldName])
+        vals = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum(partName)] )
+
+        logStr = ''
+        if '_log' in quant:
+            vals = logZeroSafe(vals)
+            logStr = 'log '
+
+        label = 'M$_{\\rm \star}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
+        if clean: label = 'M$_{\\rm '+partLabel+'}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+
+    if quant == 'ssfr':
+        # specific star formation rate (SFR and Mstar both within 2r1/2stars)
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
+        mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+
+        # fix mstar=0 values such that vals_raw is zero, which is then specially colored
+        w = np.where(mstar == 0.0)[0]
+        if len(w):
+            mstar[w] = 1.0
+            gc['subhalos']['SubhaloSFRinRad'][w] = 0.0
+
+        vals = gc['subhalos']['SubhaloSFRinRad'] / mstar
+        #vals[vals == 0.0] = vals[vals > 0.0].min() * 1.0 # set SFR=0 values
+
+        label = 'log sSFR [ M$_\odot$ / yr ]'
+        if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
+
+        minMax = [-9.0, -12.0]
+
+    if quant == 'Z_stars':
+        # mass-weighted mean stellar metallicity (within 2r1/2stars)
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloStarMetallicity'])
+        vals = sP.units.metallicityInSolar(gc['subhalos'])
+
+        label = 'log ( Z$_{\\rm stars}$ / Z$_{\odot}$ )'
+        if not clean: label += ' (<2r$_{\star,1/2}$)'
+        minMax = [-1.0, 0.5]
+
+    if quant == 'Z_gas':
+        # mass-weighted mean gas metallicity (within 2r1/2stars)
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloGasMetallicity'])
+        vals = sP.units.metallicityInSolar(gc['subhalos'])
+
+        label = 'log ( Z$_{\\rm gas}$ / Z$_{\odot}$ )'
+        minMax = [-1.0, 0.5]
+
+    if quant == 'size_gas':
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        vals = sP.units.codeLengthToKpc( gc['subhalos'][:,sP.ptNum('gas')] )
+
+        label = 'r$_{\\rm gas,1/2}$ [ log kpc ]'
+        minMax = [1.0, 2.8]
+
+    if quant == 'size_stars':
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        vals = sP.units.codeLengthToKpc( gc['subhalos'][:,sP.ptNum('stars')] )
+
+        label = 'r$_{\\rm \star,1/2}$ [ log kpc ]'
+        minMax = [0.1, 1.6]
+
+    if quant in ['fgas1','fgas2']:
+        # gas fraction (Mgas and Mstar both within 2r1/2stars)
+        if quant == 'fgas1': fieldName = 'SubhaloMassInHalfRadType'
+        if quant == 'fgas2': fieldName = 'SubhaloMassInRadType'
+
+        gc = groupCat(sP, fieldsSubhalos=[fieldName])
+        mstar = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+        mgas = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum('gas')] )
+
+        # fix mstar=0 values such that vals_raw is zero, which is then specially colored
+        w = np.where(mstar == 0.0)[0]
+        if len(w):
+            mstar[w] = 1.0
+            mgas[w] = 0.0
+
+        vals = mgas / mstar
+
+        label = 'log f$_{\\rm gas}$'
+        if not clean:
+            if quant == 'fgas1': label += ' (M$_{\\rm gas}$ / M$_{\\rm \star}$, <1r$_{\star,1/2})$'
+            if quant == 'fgas2': label += ' (M$_{\\rm gas}$ / M$_{\\rm \star}$, <2r$_{\star,1/2})$'
+        minMax = [-3.5,0.0]
+
+    if quant in ['stellarage']:
+        ageType = '4pkpc_rBandLumWt'
+        fieldName = 'Subhalo_StellarAge_' + ageType
+
+        ac = auxCat(sP, fields=[fieldName])
+
+        vals = ac[fieldName]
+        label = 'log t$_{\\rm age,stars}$'
+        if not clean: label += ' [%s]' % ageType
+        minMax = [0.0,1.0]
+
+    assert label is not None
+    return vals, label, minMax
 
 def plotPhaseSpace2D(yAxis):
     """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box. """
