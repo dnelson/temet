@@ -26,93 +26,93 @@ def loadMPB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
     raise Exception('Unrecognized treeName.')
 
 def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=False):
-    """ Load multiple MPBs at once (e.g. all of them), optimized for speed. 
+    """ Load multiple MPBs at once (e.g. all of them), optimized for speed, with a full tree load (high mem).
     Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary). 
       Return: a dictionary whose keys are subhalo IDs, and the contents of each dict value is another 
       dictionary of identical stucture to the return of loadMPB().
     """
-    
-    # (Step 0) prep
-    basePath = sP.simPath
-    snapNum  = sP.snap
-
-    from os.path import isfile
     from glob import glob
-    assert isfile(il.groupcat.offsetPath(basePath,snapNum)) # otherwise need to generalize offset loading
     assert treeName in ['SubLink','SubLink_gal'] # otherwise need to generalize tree loading
 
     # make sure fields is not a single element
     if isinstance(fields, basestring):
         fields = [fields]
 
-    # create quick offset table for rows in the SubLink files
-    # if you are loading thousands or millions of sub-trees, you may wish to cache this offsets array
-    numTreeFiles = len(glob(il.sublink.treePath(basePath,treeName,'*')))
-    offsets = np.zeros( numTreeFiles, dtype='int64' )
+    # find full tree data sizes and attributes
+    numTreeFiles = len(glob(il.sublink.treePath(sP.simPath,treeName,'*')))
 
-    for i in range(numTreeFiles-1):
-        with h5py.File(il.sublink.treePath(basePath,treeName,i),'r') as f:
-            offsets[i+1] = offsets[i] + f['SubhaloID'].shape[0]
+    lengths = {}
+    dtypes = {}
+    seconddims = {}
+
+    for field in fields+['MainLeafProgenitorID']:
+        lengths[field] = 0
+        seconddims[field] = 0
+
+    for i in range(numTreeFiles):
+        with h5py.File(il.sublink.treePath(sP.simPath,treeName,i),'r') as f:
+            for field in fields+['MainLeafProgenitorID']:
+                dtypes[field] = f[field].dtype
+                lengths[field] += f[field].shape[0]
+                if len(f[field].shape) > 1:
+                    seconddims[field] = f[field].shape[1]
+
+    # allocate for a full load
+    fulltree = {}
+
+    for field in fields+['MainLeafProgenitorID']:
+        if seconddims[field] == 0: 
+            fulltree[field] = np.zeros( lengths[field], dtype=dtypes[field] )
+        else:
+            fulltree[field] = np.zeros( (lengths[field],seconddims[field]), dtype=dtypes[field] )
+
+    # load full tree
+    offset = 0
+
+    for i in range(numTreeFiles):
+        with h5py.File(il.sublink.treePath(sP.simPath,treeName,i),'r') as f:
+            for field in fields+['MainLeafProgenitorID']:
+                if seconddims[field] == 0:
+                    fulltree[field][offset : offset + f[field].shape[0]] = f[field][()]
+                else:
+                    fulltree[field][offset : offset + f[field].shape[0],:] = f[field][()]
+            offset += f[field].shape[0]
 
     result = {}
 
     # (Step 1) treeOffsets()
-    offsetFile = il.groupcat.offsetPath(basePath,snapNum)
+    offsetFile = il.groupcat.offsetPath(sP.simPath,sP.snap)
     prefix = 'Subhalo/' + treeName + '/'
 
     with h5py.File(offsetFile,'r') as f:
-        groupFileOffsets = f['FileOffsets/Subhalo'][()]
-
         # load all merger tree offsets
         RowNums     = f[prefix+'RowNum'][()]
-        LastProgIDs = f[prefix+'LastProgenitorID'][()]
         SubhaloIDs  = f[prefix+'SubhaloID'][()]
 
-    # now subhalos one at a time (one tree file opening and len(fields)+1 reads for each)
+    # now subhalos one at a time (memory operations only)
     for i, id in enumerate(ids):
-        if i % int(ids.size/10) == 0 and i <= ids.size:
-            print(' %4.1f%%' % (float(i+1)*100.0/ids.size))
-
-        if id == -1: continue # skip requests for e.g. fof halos which had no central subhalo
-
-        # calculate target groups file chunk which contains this id
-        groupFileOffsetsLoc = int(id) - groupFileOffsets
-        fileNum = np.max( np.where(groupFileOffsetsLoc >= 0) )
-        groupOffset = groupFileOffsetsLoc[fileNum]
+        if id == -1:
+            continue # skip requests for e.g. fof halos which had no central subhalo
 
         # (Step 2) loadTree()
-        RowNum = RowNums[groupOffset]
-        LastProgID = LastProgIDs[groupOffset]
-        SubhaloID  = SubhaloIDs[groupOffset]
+        RowNum = RowNums[id]
+        SubhaloID  = SubhaloIDs[id]
+        MainLeafProgenitorID = fulltree['MainLeafProgenitorID'][RowNum]
 
         if RowNum == -1:
-            print('   warning, subhalo [%d] at snapNum [%d] not in tree.' % (id,snapNum))
             continue
 
+        # load only main progenitor branch
         rowStart = RowNum
-        rowEnd   = RowNum + (LastProgID - SubhaloID)
+        rowEnd   = RowNum + (MainLeafProgenitorID - SubhaloID)
         nRows    = rowEnd - rowStart + 1
     
-        # find the tree file chunk containing this row
-        rowOffsets = rowStart - offsets
-
-        fileNum = np.max(np.where( rowOffsets >= 0 ))
-        fileOff = rowOffsets[fileNum]
-    
-        # load only main progenitor branch: get MainLeafProgenitorID now
-        with h5py.File(il.sublink.treePath(basePath,treeName,fileNum),'r') as f:
-            MainLeafProgenitorID = f['MainLeafProgenitorID'][fileOff]
-            
-            # re-calculate nRows
-            rowEnd = RowNum + (MainLeafProgenitorID - SubhaloID)
-            nRows  = rowEnd - rowStart + 1
-        
-            # read
-            result[id] = {'count':nRows}
-         
-            # loop over each requested field and read, no error checking
-            for field in fields:
-                result[id][field] = f[field][fileOff:fileOff+nRows]
+        # init dict
+        result[id] = {'count':nRows}
+     
+        # loop over each requested field and copy, no error checking
+        for field in fields:
+            result[id][field] = fulltree[field][RowNum:RowNum+nRows]
            
     return result
 

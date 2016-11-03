@@ -56,7 +56,7 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     if bands == ['i','z']: mag_range = [0.0,0.4]
 
     # x-axis: load fullbox galaxy properties and set plot options
-    sim_xvals, xlabel, xMinMax = simSubhaloQuantity(sP, xQuant, clean)
+    sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
     if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
 
     # y-axis: load/calculate simulation colors
@@ -77,7 +77,7 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
         clabel = 'log N$_{\\rm gal}$'
         cMinMax = [0.0,2.0]
     else:
-        sim_cvals, clabel, cMinMax = simSubhaloQuantity(sP, cQuant, clean)
+        sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
 
     # central/satellite selection?
     wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -126,7 +126,9 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
         cc[nn.T < minCount] = np.nan
 
     # for now: log on density and all color quantities
-    cc2d = logZeroNaN(cc)
+    cc2d = cc
+    if cQuant is None or cLog is True:
+        cc2d = logZeroNaN(cc)
 
     # normalize and color map
     norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
@@ -191,30 +193,50 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
 
 def plots():
     """ Driver. """
-    pdf = PdfPages('galaxyColor_2dhistos.pdf')
     sP = simParams(res=1820, run='tng', redshift=0.0)
+
+    # debug:
+    #pdf = PdfPages('galaxyColor_2dhistos.pdf')
+    #bands = ['g','r']
+    #xQuant = 'mstar2_log'
+    #cs = 'median'
+    #css = 'cen'
+    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='ssfr', cStatistic=cs)
+    #pdf.close()
+    #import pdb; pdb.set_trace()
 
     # plots
     #for cs in ['median','mean']:
-    #    for css in ['cen','sat','all']:
-    bands = ['g','r']
-    xQuant = 'mstar2_log'
-    cs = 'median'
-    css = 'cen'
+    for css in ['cen','sat','all']:
+        bands = ['g','r']
+        xQuant = 'mstar2_log'
+        cs = 'median'
+        #css = 'cen'
 
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=None)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='ssfr', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='Z_stars', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='Z_gas', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='size_stars', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='size_gas', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fgas1', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas2', cStatistic=cs)
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas1', cStatistic=cs)
-    histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='stellarage', cStatistic=cs)
+        pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s.pdf' % (''.join(bands),xQuant,cs,css))
 
-    #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant=None)
-    #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant='mstar2', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=None)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='ssfr', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='Z_stars', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='Z_gas', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='size_stars', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='size_gas', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fgas1', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas2', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas1', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='stellarage', cStatistic=cs)
 
-    pdf.close()
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_mm5', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_ma5', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_poly7', cStatistic=cs)
+
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_all_eps07o', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_all_eps07m', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07o', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07m', cStatistic=cs)
+
+        #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant=None)
+        #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
+
+        pdf.close()
