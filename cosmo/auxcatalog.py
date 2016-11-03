@@ -10,7 +10,7 @@ import cosmo.load
 from functools import partial
 
 from illustris_python.util import partTypeNum
-from cosmo.util import periodicDistsSq
+from cosmo.util import periodicDistsSq, snapNumToRedshift
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -435,6 +435,127 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None):
 
     return r, attrs
 
+def mergerTreeQuant(sP, treeName, quant, smoothing=None):
+    """ For every subhalo, compute an assembly/related quantity using a merger tree. """
+    from scipy.signal import medfilt
+    assert quant in ['zForm']
+
+    def _ma(X, windowSize):
+        """ Running mean. Endpoints are copied unmodified in bwhalf region. """
+        r = np.zeros( X.size, dtype=X.dtype )
+        bwhalf = int(windowSize/2.0)
+
+        cumsum = np.cumsum(np.insert(X, 0, 0)) 
+        r[bwhalf:-bwhalf] = (cumsum[windowSize:] - cumsum[:-windowSize]) / windowSize
+        r[0:bwhalf] = X[0:bwhalf]
+        r[-bwhalf:] = X[-bwhalf:]
+        return r
+
+    def _mm(X, windowSize):
+        """ Running median. """
+        return medfilt(X, windowSize)
+
+    # process smoothing request [method,windowSize,windowVal,order]
+    assert len(smoothing) == 3
+    assert smoothing[2] == 'snap' # todo: e.g. Gyr, scalefac
+
+    # prepare catalog metadata
+    desc   = "Merger tree quantity (%s) using smoothing [%s]." % (quant,'_'.join([str(s) for s in smoothing]))
+    select = "All Subfind subhalos."
+
+    # load snapshot and subhalo information
+    redshifts = snapNumToRedshift(sP, all=True)
+
+    gcH = cosmo.load.groupCatHeader(sP)
+    nSubsTot = gcH['Nsubgroups_Total']
+
+    ids = np.arange(nSubsTot)
+
+    # allocate return, NaN indicates not computed (e.g. not in tree at sP.snap)
+    r = np.zeros( nSubsTot, dtype='float32' )
+    r.fill(np.nan)
+
+    # load all trees at once
+    fields = ['SnapNum']
+
+    if quant == 'zForm':
+        fields.append('SubhaloMass')
+
+    mpbs = cosmo.mergertree.loadMPBs(sP, ids, fields=fields, treeName=treeName)
+
+    # loop over subhalos
+    for i in range(nSubsTot):
+        if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
+            print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
+
+        if i not in mpbs:
+            continue # subhalo ID i not in tree at sP.snap
+
+        # todo: could generalize here into generic reduction operations over a given tree field
+        # e.g. 'max', 'min', 'mean' of 'SubhaloSFR', 'SubhaloGasMetallicity', ... in addition to 
+        # more specialized calculations such as formation time
+        loc_vals = mpbs[i]['SubhaloMass']
+        loc_snap = mpbs[i]['SnapNum']
+
+        if loc_snap.size < smoothing[1]+1:
+            continue
+
+        # smoothing
+        if smoothing[0] == 'mm': # moving median window of size N snapshots
+            loc_vals2 = _mm(loc_vals, windowSize=smoothing[1])
+
+        if smoothing[0] == 'ma': # moving average window of size N snapshots
+            loc_vals2 = _ma(loc_vals, windowSize=smoothing[1])
+
+        if smoothing[0] == 'poly': # polynomial fit of Nth order
+            coeffs = np.polyfit(loc_snap, loc_vals, smoothing[1])
+            loc_vals2 = np.polyval(coeffs, loc_snap) # resample to original X-pts
+
+        assert loc_vals2.shape == loc_vals.shape
+
+        # where does half of max of [smoothed] total mass occur?
+        halfMaxVal = loc_vals2.max() * 0.5
+
+        #if smoothing[0] == 'poly': # root find on the polynomial coefficients (not so simple)
+        #coeffs[-1] -= halfMaxVal # shift such that we find the M=halfMaxVal not M=0 roots
+        #roots = np.polynomial.polynomial.polyroots(coeffs[::-1]) # there are many
+
+        w = np.where(loc_vals2 >= halfMaxVal)[0]
+        assert len(w) # by definition
+
+        # linearly interpolate between snapshots
+        snap0 = loc_snap[w].min()
+        ind0 = w.max() # lowest snapshot where mass exceeds halfMaxVal
+        ind1 = ind0 + 1 # lower snapshot (earlier in time)
+
+        assert snap0 == loc_snap[ind0]
+
+        if ind0 == loc_vals.size-1:
+            # only at first tree entry
+            z_form = redshifts[loc_snap[ind0]]
+        else:
+            assert ind0 >= 0 and ind0 < loc_vals.size-1
+            assert ind1 > 0 and ind1 <= loc_vals.size-1
+
+            z0 = redshifts[loc_snap[ind0]]
+            z1 = redshifts[loc_snap[ind1]]
+            m0 = loc_vals2[ind0]
+            m1 = loc_vals2[ind1]
+
+            assert m0 >= halfMaxVal and m1 <= halfMaxVal
+
+            # linear interpolation, find redshift where mass=halfMaxVal
+            z_form = (halfMaxVal-m0)/(m1-m0) * (z1-z0) + z0
+            assert z_form >= z0 and z_form <= z1
+
+        assert z_form >= 0.0
+        r[i] = z_form
+
+    attrs = {'Description' : desc.encode('ascii'), 
+             'Selection'   : select.encode('ascii')}
+
+    return r, attrs
+
 def wholeBoxColDensGrid(sP, species):
     """ Compute a 2D grid of gas column densities [cm^-2] covering the entire simulation box. For 
         example to derive the neutral hydrogen CDDF. The grid has dimensions of boxGridDim x boxGridDim 
@@ -683,5 +804,12 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
    'Box_CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
    'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
-   'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar')
+   'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar'),
+
+   'Subhalo_SubLink_zForm_mm5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
+                                         smoothing=['mm',5,'snap']),
+   'Subhalo_SubLink_zForm_ma5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
+                                         smoothing=['ma',5,'snap']),
+   'Subhalo_SubLink_zForm_poly7' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
+                                         smoothing=['poly',7,'snap'])
   }
