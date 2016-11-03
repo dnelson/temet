@@ -14,7 +14,7 @@ from scipy.signal import savgol_filter
 import illustris_python as il
 from util import simParams
 from util.helper import loadColorTable, running_median, logZeroSafe
-from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
+from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 
 def simSubhaloQuantity(sP, quant, clean=False):
@@ -22,7 +22,8 @@ def simSubhaloQuantity(sP, quant, clean=False):
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range. """
     label = None
 
-    # todo: generalize log, aperture
+    # todo: generalize log, aperture selection
+    takeLog = True
 
     if quant in ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2']:
         # variations
@@ -70,7 +71,7 @@ def simSubhaloQuantity(sP, quant, clean=False):
         label = 'log sSFR [ M$_\odot$ / yr ]'
         if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
 
-        minMax = [-9.0, -12.0]
+        minMax = [-12.0, -9.0]
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
@@ -137,8 +138,49 @@ def simSubhaloQuantity(sP, quant, clean=False):
         if not clean: label += ' [%s]' % ageType
         minMax = [0.0,1.0]
 
+    if quant in ['zform_mm5','zform_ma5','zform_poly7']:
+        zFormType = quant.split("_")[1]
+        fieldName = 'Subhalo_SubLink_zForm_' + zFormType
+        ac = auxCat(sP, fields=[fieldName])
+
+        vals = ac[fieldName]
+        label = 'z$_{\\rm form,halo}$'
+        if not clean: label += ' [%s]' % zFormType
+        minMax = [0.0,3.0]
+        takeLog = False
+
+    if quant in ['fcirc_all_eps07o','fcirc_all_eps07m','fcirc_10re_eps07o','fcirc_10re_eps07m']:
+        # load data from ./postprocessing/circularities/ catalog of Shy
+        basePath = sP.simPath + '/../postprocessing/circularities/circularities_aligned_'
+        if '_all' in quant: selStr = 'allstars'
+        if '_10re' in quant: selStr = '10Re'
+        filePath = basePath + selStr + '_L75n1820TNG%03d.hdf5' % sP.snap
+
+        label = 'Disk Fraction'
+        if '_eps07o' in quant:
+            dName = 'CircAbove07Frac'
+            label += ' $f(\epsilon > 0.7)$'
+        if '_eps07m' in quant:
+            dName = 'CircAbove07MinusBelowNeg07Frac'
+            label += ' $f(\epsilon > 0.7) - f(\epsilon < -0.7)$'
+
+        with h5py.File(filePath,'r') as f:
+            done = np.squeeze( f['done'][()] )
+            vals = np.squeeze( f[dName][()] )
+
+        # for unprocessed subgroups, replace values with NaN
+        print(' [%s] keeping only %d of %d non-NaN (done==1)' % (quant,len(np.where(done==1)[0]),vals.size))
+        vals[done == 0] = np.nan
+
+        # verify dimensions
+        assert groupCatHeader(sP)['Nsubgroups_Total'] == vals.size == vals.shape[0]
+
+        if not clean: label += ' [%s, shy]' % selStr
+        minMax = [0.0,0.6]
+        takeLog = False
+
     assert label is not None
-    return vals, label, minMax
+    return vals, label, minMax, takeLog
 
 def plotPhaseSpace2D(yAxis):
     """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box. """
