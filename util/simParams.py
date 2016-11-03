@@ -69,19 +69,9 @@ class simParams:
     trMCFields   = None # which TRACER_MC_STORE_WHAT fields did we save, and in what indices
     trVelPerCell = 0    # starting number of velocity tracers per cell
 
-    # analysis parameters (paper.gasaccretion, paper.feedback)
-    radcut_rvir   = 0.15 # galcat = fraction of rvir as maximum for gal/stars, minimum for gmem (zero to disable)
-    radcut_out    = 1.5  # galcat = fraction of rvir as maximum for gmem
-    galcut_T      = 6.0  # galcat = temp coefficient for (rho,temp) galaxy cut
-    galcut_rho    = 0.25 # galcat = dens coefficient for (rho,temp) galaxy cut
-    radIndHaloAcc = 0    # 1.0 rvir crossing for halo accretion
-    radIndGalAcc  = 4    # 0.15 rvir crossing for galaxy accretion (or entering rho,temp definition)
-    atIndMode     = -1   # use first 1.0 rvir crossing to determine mode
-    accRateInd    = -2   # use first 0.15 rvir crossing to determine new accretion rates
-    accRateModel  = 0    # explore different ways to measure net/inflow/outflow rates
-    rVirFacs      = [1.0,0.75,0.5,0.25,0.15,0.05,0.01] # use these fractions of the virial radius
-    TcutVals      = [5.3,5.5,5.7] # log(K) for constant threshold comparisons
-    TvirVals      = [1.0,0.8,0.4] # T/Tvir coefficients for variable threshold comparisons
+    # control analysis
+    haloInd    = None # request analysis of a specific FoF halo?
+    subhaloInd = None # request analysis of a specific Subfind subhalo?
 
     # plotting/vis parameters
     colors = None # color sequence (one per res level)
@@ -93,7 +83,8 @@ class simParams:
     BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=PrimeTests Models, 3=FinalTNG Model)
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=PrimeTests Models, 3=FinalTNG Model)
 
-    def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None):
+    def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
+                       haloInd=None, subhaloInd=None):
         """ Fill parameters based on inputs. """
         self.basePath = path.expanduser("~") + '/'
 
@@ -102,16 +93,26 @@ class simParams:
             raise Exception("Must specify run.")
         if res and not isinstance(res, (int,long)):
             raise Exception("Res should be numeric.")
+        if hInd is not None and not isinstance(hInd, (int,long)):
+            raise Exception("hInd should be numeric.")
         if redshift and snap:
             print("Warning: simParams: both redshift and snap specified.")
+        if haloInd is not None and subhaloInd is not None:
+            raise Exception("Cannot specify both haloInd and subhaloInd.")
 
+        # pick run and snapshot
         self.run      = run
         self.variant  = variant
         self.res      = res
         self.redshift = redshift
         self.snap     = snap
         self.hInd     = hInd
-        self.data     = {}
+
+        # pick analysis parameters
+        self.haloInd    = haloInd
+        self.subhaloInd = subhaloInd
+
+        self.data = {}
 
         # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
         if 'tng' in run or 'prime' in run:
@@ -444,7 +445,6 @@ class simParams:
             self.metals       = ['H','He','C','N','O','Ne','Mg','Si','Fe']
             self.winds        = 1
             self.BHs          = 1
-            self.accRateModel = 4 # 0,2,3,4
 
             if res == 128: self.targetGasMass = 4.76446157e-03
             if res == 256: self.targetGasMass = 5.95556796e-04
@@ -482,8 +482,6 @@ class simParams:
 
             self.trVelPerCell = 1
             self.trMCPerCell  = 10
-            
-            self.accRateModel = 4 # 0,2,3,4
 
             if res in [128,256]:
                 # even older code version than tracer.512, indices specified manually in Config.sh

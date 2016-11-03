@@ -152,8 +152,17 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
     if trIndRange is not None:
         trIndStr = '%g-%d' % (trIndRange[0], trIndRange[1])
 
-    saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s_2d_%s.hdf5' % \
+    if sP.isZoom:
+        saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s_2d_%s.hdf5' % \
           (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,field,trIndStr)
+    else:
+        boxOrHaloStr = 'box'
+        if sP.haloInd is not None: boxOrHaloStr = 'halo-%d' % sP.haloInd
+        if sP.subhaloInd is not None: boxOrHaloStr = 'subhalo-%d' % sP.subhaloInd
+        assert sP.haloInd is None and sP.subhaloInd is None # todo
+
+        saveFilename = sP.derivPath + '/trValHist/%s_2d_%s_snap_%d-%d-%d_%s.hdf5' % \
+          (field,boxOrHaloStr,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,trIndStr)
 
     if not isdir(sP.derivPath + '/trValHist'):
         mkdir(sP.derivPath + '/trValHist')
@@ -175,7 +184,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     _, _, valMinMax, loadField = plotConfig(field)
 
-    data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [loadField])
+    data = tracersTimeEvo(sP, loadField)
 
     ww = np.where( data[loadField] == 0.0 )
 
@@ -259,11 +268,13 @@ def plotEvo2D(ii):
     from util import simParams
 
     # config
-    sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
+    #sP = simParams(res=11, run='zooms2', redshift=2.0, hInd=2)
+    #fieldNames = ["tracer_maxtemp_tviracc","temp_tviracc","tracer_maxtemp","temp",
+    #              "tracer_maxent","tracer_maxent_sviracc","entr",
+    #              "rad_rvir","vrad","angmom"] # dens
 
-    fieldNames = ["tracer_maxtemp_tviracc","temp_tviracc","tracer_maxtemp","temp",
-                  "tracer_maxent","tracer_maxent_sviracc","entr",
-                  "rad_rvir","vrad","angmom"] # dens
+    sP = simParams(res=455, run='tng', redshift=0.0)
+    fieldNames = ['rad_rvir','angmom','subhalo_id','temp']
 
     trIndRanges = [None, [0.5,1080]]
 
@@ -360,7 +371,7 @@ def plotEvo1D():
                   "rad_rvir","vrad","angmom"] # dens
 
     # load accretion times and modes for selections
-    #accTIme = tracerEvo.accTime(sP)
+    #accTime = tracerEvo.accTime(sP)
     accMode = tracerEvo.accMode(sP)
 
     pdf = PdfPages(sP.plotPath+'evo1D_%s_nF%d.pdf' % (sP.simName,len(fieldNames)))
