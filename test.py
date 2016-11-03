@@ -18,6 +18,57 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def testOffsets():
+    basePath = '/n/home07/dnelson/sims.TNG/L75n455TNG/output/'
+    snapNum = 99
+    sP = simParams(res=455,run='tng',redshift=0.0)
+
+    import illustris_python as il
+    from cosmo.util import periodicDists
+
+    massBin = [0.8e12,1.2e12]
+    shFields = ['SubhaloMass','SubhaloPos','SubhaloLenType','SubhaloGrNr']
+    hFields = ['GroupMass','GroupPos','GroupLenType','GroupFirstSub']
+
+    subhalos = il.groupcat.loadSubhalos(basePath,snapNum,fields=shFields)
+    halos = il.groupcat.loadHalos(basePath,snapNum,fields=hFields)
+    header = il.groupcat.loadHeader(basePath,snapNum)
+
+    halomass = subhalos['SubhaloMass'] * header['HubbleParam'] * 1e10 # NOTE WRONG
+
+    ww = np.where( (halomass > massBin[0]) & (halomass < massBin[1]) )[0]
+
+    for id in ww:
+        if 1:
+            # subhalo
+            dm = il.snapshot.loadSubhalo(basePath,snapNum,id,'dm',['Coordinates'])
+            stars = il.snapshot.loadSubhalo(basePath,snapNum,id,'stars',['Coordinates'])
+
+            dists = periodicDists(subhalos['SubhaloPos'][id,:], dm, sP)
+            print('[%d] dm mindist: %g maxdist: %g' % (id,dists.min(), dists.max()))            
+            assert dists.min() <= 2.0
+
+            dists = periodicDists(subhalos['SubhaloPos'][id,:], stars, sP)
+            print('[%d] st mindist: %g maxdist: %g' % (id,dists.min(), dists.max()))            
+            assert dists.min() <= 2.0
+
+        if 0:
+            # halo
+            haloID = subhalos['SubhaloGrNr'][id]
+
+            dm = il.snapshot.loadHalo(basePath,snapNum,haloID,'dm',['Coordinates'])
+            #stars = il.snapshot.loadHalo(basePath,snapNum,haloID,'stars',['Coordinates'])
+
+            dists = periodicDists(halos['GroupPos'][haloID,:], dm, sP)
+            print('mindist: %g maxdist: %g' % (dists.min(), dists.max()))
+            assert dists.min() <= 1.0
+
+        #for i in range(3):
+        #    print('coord [%d]' % i, dm[:,i].min(), dm[:,i].max() )
+
+    import pdb; pdb.set_trace()
+
+
 def domeTestData():
     """ Write out test data files for planetarium vendors. """
     sP = simParams(res=1820,run='illustris',redshift=0.0)

@@ -14,7 +14,7 @@ from os import mkdir
 
 import cosmo.load
 from util.helper import iterable, nUnique
-from cosmo.mergertree import mpbSmoothedProperties
+from cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
 from cosmo.util import periodicDists, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
 debug = False # enable expensive debug consistency checks and verbose output
@@ -1060,6 +1060,75 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
 
     return trCounts, trOffsets
 
+def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=False, extraFields=[]):
+    """ Load all MPBs of a global tracer set and create a mapping between unique MPBs and tracers. """
+    assert halos is True or subhalos is True # pick one
+
+    treeName = 'SubLink'
+
+    if trIDs is None: # lazy load
+        trIDs = globalTracerChildren(sP, halos=halos, subhalos=subhalos)
+
+    mpb = {}
+
+    # where do we start each tree? all tracers in a given FoF are assigned to follow the MPB
+    # of the central subhalo of that FoF at sP.snap! e.g. tracers in satellites at sP.snap 
+    # will derive a rad/rad_rvir corresponding to the ~distance of the satellite from the halo center
+    print('Identifying central subhalo IDs for all [%d] tracers at snap [%d]...' % (trIDs.size,sP.snap))
+
+    trVals = tracersTimeEvo(sP, trIDs, [], ['halo_id'], toRedshift=sP.redshift) 
+    trVals['halo_id'] = np.squeeze(trVals['halo_id']) # single snap
+
+    # map the FoF IDs at z=0 into subhalo_ids with GroupFirstSub
+    GroupFirstSub = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
+    trVals['subhalo_id'] = GroupFirstSub[trVals['halo_id']]
+
+    # debug: how many FoF's have GroupFirstSub==-1 already at z=0 (these by definition will be 
+    # filled entirely with NaN for halo_rel_fields, how much space wasted?)
+    ww = np.where(trVals['subhalo_id'] == -1)[0]
+    print(' note: [%d] of [%d] tracers are in FoFs with no central subhalo' % (ww.size,trIDs.size))
+
+    # reduce to a unique subset
+    uniqSubhaloIDs = np.unique(trVals['subhalo_id'])
+    print('Finding [%d] unique subhalo MPB tracks, of [%d] total...' % (uniqSubhaloIDs.size,trIDs.size))
+
+    # allocate, -1 indicates untracked at that snapshot
+    evoSnaps, _ = getEvoSnapList(sP)
+    mpb['subhalo_ids_evo'] = np.zeros( (len(evoSnaps),uniqSubhaloIDs.size), dtype='int32' ) - 1
+
+    # load MPBs of all subhalos
+    treeFileFields = loadTreeFieldnames(sP, treeName=treeName)
+    fields = ['SnapNum','SubfindID']
+
+    for field in iterable(extraFields):
+        if field not in fields and field in treeFileFields:
+            fields.append(field)
+
+    mpbs = cosmo.mergertree.loadMPBs(sP, uniqSubhaloIDs, fields=fields, treeName=treeName)
+
+    for i, id in enumerate(uniqSubhaloIDs):
+        # untracked?
+        if id == -1: continue # parent fof of tracer has no central subhalo at sP.snap
+        if id not in mpbs: continue # central subhalo not in tree at sP.snap
+
+        # crossmatch MPB snapshots we have with target snaps, and save subhalo IDs
+        w1, w2 = match3(mpbs[id]['SnapNum'], evoSnaps)
+
+        mpb['subhalo_ids_evo'][w2,i] = mpbs[id]['SubfindID'][w1]
+
+    # save a mapping between the subhalo IDs of each tracer here at sP.snap and the unique 
+    # subhalo tracks we have saved in subhalo_ids_evo
+    wUniq, _ = match3(uniqSubhaloIDs, trVals['subhalo_id'])
+    mpb['subhalo_evo_index'] = wUniq
+
+    assert wUniq.size == trIDs.size == trVals['subhalo_id'].size == trVals['halo_id'].size
+
+    if retMPBs: # attach to return
+        mpb['mpbs'] = mpbs
+        mpb['subhalo_id'] = trVals['subhalo_id'] # indices into mpb['mpbs'] for each tracer
+
+    return mpb
+
 def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False):
     """ For all tracers in all FoFs at the simulation endtime, record time evolution tracks of one 
     field for all snapshots (which contain tracers). """
@@ -1095,53 +1164,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False):
     mpb = None
 
     if field in halo_rel_fields:
-        mpb = {}
-
-        # where do we start each tree? all tracers in a given FoF are assigned to follow the MPB
-        # of the central subhalo of that FoF at sP.snap! e.g. tracers in satellites at sP.snap 
-        # will derive a rad/rad_rvir corresponding to the ~distance of the satellite from the halo center
-        print('Identifying central subhalo IDs for all [%d] tracers at snap [%d]...' % (trIDs.size,sP.snap))
-
-        trVals = tracersTimeEvo(sP, trIDs, [], ['halo_id'], toRedshift=sP.redshift) 
-        trVals['halo_id'] = np.squeeze(trVals['halo_id']) # single snap
-
-        # map the FoF IDs at z=0 into subhalo_ids with GroupFirstSub
-        GroupFirstSub = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
-        trVals['subhalo_id'] = GroupFirstSub[trVals['halo_id']]
-
-        # debug: how many FoF's have GroupFirstSub==-1 already at z=0 (these by definition will be 
-        # filled entirely with NaN for halo_rel_fields, how much space wasted?)
-        ww = np.where(trVals['subhalo_id'] == -1)[0]
-        print(' note: [%d] of [%d] tracers are in FoFs with no central subhalo' % (ww.size,trIDs.size))
-
-        # reduce to a unique subset
-        uniqSubhaloIDs = np.unique(trVals['subhalo_id'])
-        print('Finding [%d] unique subhalo MPB tracks, of [%d] total...' % (uniqSubhaloIDs.size,trIDs.size))
-
-        # allocate, -1 indicates untracked at that snapshot
-        evoSnaps, _ = getEvoSnapList(sP)
-        mpb['subhalo_ids_evo'] = np.zeros( (len(evoSnaps),uniqSubhaloIDs.size), dtype='int32' ) - 1
-
-        # load MPBs of all subhalos
-        mpbs = cosmo.mergertree.loadMPBs(sP, uniqSubhaloIDs, 
-                 fields=['SnapNum','SubfindID'], treeName='SubLink')
-
-        for i, id in enumerate(uniqSubhaloIDs):
-            # untracked?
-            if id == -1: continue # parent fof of tracer has no central subhalo at sP.snap
-            if id not in mpbs: continue # central subhalo not in tree at sP.snap
-
-            # crossmatch MPB snapshots we have with target snaps, and save subhalo IDs
-            w1, w2 = match3(mpbs[id]['SnapNum'], evoSnaps)
-
-            mpb['subhalo_ids_evo'][w2,i] = mpbs[id]['SubfindID'][w1]
-
-        # save a mapping between the subhalo IDs of each tracer here at sP.snap and the unique 
-        # subhalo tracks we have saved in subhalo_ids_evo
-        wUniq, _ = match3(uniqSubhaloIDs, trVals['subhalo_id'])
-        mpb['subhalo_evo_index'] = wUniq
-
-        assert wUniq.size == trIDs.size == trVals['subhalo_id'].size == trVals['halo_id'].size
+        mpb = globalTracerMPBMap(sP, halos=halos, subhalos=subhalos, trIDs=trIDs)
 
     # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
     print('Computing: [%s]' % saveFilename.split(savePath)[1])

@@ -7,9 +7,10 @@ from builtins import *
 
 import h5py
 import numpy as np
-from os.path import isfile
+from os.path import isfile, isdir
+from os import mkdir
 
-from tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo
+from tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, globalAllTracersTimeEvo, globalTracerMPBMap
 from cosmo.mergertree import mpbSmoothedProperties
 from cosmo.util import redshiftToSnapNum
 
@@ -51,14 +52,29 @@ def guinevereData():
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
 
+def tracersTimeEvo(sP, fieldName, snapStep=None):
+    """ Wrapper to handle zoom vs. box load. """
+    if sP.isZoom:
+        assert snapStep is not None
+        return subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
+    else:
+        return globalAllTracersTimeEvo(sP, fieldName)
+
 def accTime(sP, snapStep=1, rVirFac=1.0):
     """ Calculate accretion time for each tracer (and cache), as the earliest (highest redshift) crossing 
     of the virial radius of the MPB halo. Uses the 'rad_rvir' field. 
     Argument: rVirFac = what fraction of the virial radius denotes the accretion time? """
 
     # check for existence
-    saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_time_%d.hdf5' % \
+    if sP.isZoom:
+        saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_time_%d.hdf5' % \
           (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100)
+    else:
+        saveFilename = sP.derivPath + '/trTimeEvo/acc_time_snap_%d-%d-%d_r%d.hdf5' % \
+          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100)
+
+    if not isdir(sP.derivPath + '/trTimeEvo'):
+        mkdir(sP.derivPath + '/trTimeEvo')
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -67,7 +83,9 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     print('Calculating new accTime for [%s]...' % sP.simName)
 
     # load
-    data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, ['rad_rvir'], snapStep)
+    data = tracersTimeEvo(sP, 'rad_rvir', snapStep)
+    if not sP.isZoom:
+        data['TracerIDs'] = globalAllTracersTimeEvo(sP, 'meta')['TracerIDs']
 
     # reverse so that increasing indices are increasing snapshot numbers
     data2d = data['rad_rvir'][::-1,:]
@@ -75,6 +93,8 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     data['snaps'] = data['snaps'][::-1]
     data['redshifts'] = data['redshifts'][::-1]
     
+    data2d[~np.isfinite(data2d)] = rVirFac * 10 # set NaN (untracked MPB) to large values (outside)
+
     # set mask to one for all radii less than factor
     mask2d = np.zeros_like( data2d, dtype='int16' )
     ww = np.where( data2d < rVirFac )
@@ -87,7 +107,7 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     accTimeInterp = np.zeros( data['TracerIDs'].size, dtype='float32' )
 
     for i in range(data['TracerIDs'].size):
-        if i % int(data['TracerIDs'].size/10) == 0:
+        if i % int(data['TracerIDs'].size/100) == 0:
             print(' %4.1f%%' % (float(i)/data['TracerIDs'].size*100.0))
 
         ind0 = firstSnapInsideInd[i]
@@ -164,8 +184,12 @@ def accMode(sP, snapStep=1):
     Where z_acc is the accretion redshift defined as the first (highest z) crossing of the virial radius. """
 
     # check for existence
-    saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_mode.hdf5' % \
+    if sP.isZoom:
+        saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_mode.hdf5' % \
           (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
+    else:
+        saveFilename = sP.derivPath + '/trTimeEvo/acc_mode_s%d-%d-%d.hdf5' % \
+          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -174,28 +198,39 @@ def accMode(sP, snapStep=1):
     print('Calculating new accMode for [%s]...' % sP.simName)
 
     # load accTime, subhalo_id tracks, and MPB history
-    mpb  = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
-    data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, ['subhalo_id'], snapStep=snapStep)
+    data = tracersTimeEvo(sP, 'subhalo_id', snapStep)
+
+    if sP.isZoom:
+        mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
+    else:
+        mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True)
+
     acc_time = accTime(sP, snapStep=snapStep)
 
     # allocate return
-    accMode = np.zeros( acc_time.size, dtype='int8' )
+    nTr = acc_time.size
+    accMode = np.zeros( nTr, dtype='int8' )
 
     # closest snapshot for each accretion time
     accSnap = accTimesToClosestSnaps(data, acc_time)
 
-    # make a mapping from snapshot number -> mpb[index]
-    mpbIndexMap = np.zeros( mpb['SnapNum'].max()+1, dtype='int32' ) - 1
-    mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].max())
+    assert nTr == data['subhalo_id'].shape[1] == accSnap.size
+
+    # prepare a mapping from snapshot number -> mpb[index]
+    if sP.isZoom:
+        mpbIndexMap = np.zeros( mpb['SnapNum'].max()+1, dtype='int32' ) - 1
+        mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].max())
+    else:
+        mpbIndexMap = np.zeros( data['snaps'].max()+1, dtype='int32' )
 
     # make a mapping from snapshot number -> data[index]
     dataIndexMap = np.zeros( data['snaps'].max()+1, dtype='int32' ) - 1
     dataIndexMap[ data['snaps'] ] = np.arange(data['snaps'].max())
 
     # start loop to determine each tracer
-    for i in range(data['TracerIDs'].size):
-        if i % int(data['TracerIDs'].size/10) == 0:
-            print(' %4.1f%%' % (float(i)/data['TracerIDs'].size*100.0))
+    for i in range(nTr):
+        if i % int(nTr/100) == 0:
+            print(' %4.1f%%' % (float(i)/nTr*100.0))
 
         # never inside rvir -> accMode is undetermined
         if accSnap[i] == -1:
@@ -206,6 +241,20 @@ def accMode(sP, snapStep=1):
         if accSnap[i] == data['snaps'].min():
             accMode[i] = ACCMODE_SMOOTH
             continue
+
+        # (only needed for periodic boxes with multiple MPBs)
+        if not sP.isZoom:
+            # tracer is in FoF halo with no primary subhalo at sP.snap (no MPB)
+            if mpbGlobal['subhalo_id'][i] == -1:
+                accMode[i] = ACCMODE_NONE
+                continue
+
+            # extract MPB used for this tracer
+            mpb = mpbGlobal['mpbs'][ mpbGlobal['subhalo_id'][i] ]
+
+            # create new mapping into MPB for this tracer
+            mpbIndexMap.fill(-1)
+            mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].max())
 
         # pull out indices
         mpbIndAcc  = mpbIndexMap[accSnap[i]]
@@ -237,6 +286,13 @@ def accMode(sP, snapStep=1):
         trParSubfindIDs_AtAccAndEarlier = data['subhalo_id'][ dataIndAcc : , i ] # squeeze?
         mpbSubfindIDs_AtAccAndEarlier = mpb['SubfindID'][ mpbInds_AtMatchingSnapNums ].copy()
 
+        # wherever mpbInds_AtMachingSnapNums is -1 (MPB is untracked at this snapshot), 
+        # rewrite the local mpbSubfindIDs_AtAccAndEarlier with -1 (i.e. once the MPB becomes 
+        # untracked, if at that point the tracer is within no subhalo, then we allow this to 
+        # count as smooth)
+        ww = np.where( mpbInds_AtMatchingSnapNums == -1 )
+        mpbSubfindIDs_AtAccAndEarlier[ww] = -1
+
         # wherever trParSubfindIDs_AtAccAndEarlier is -1 (not in any subhalo), overwrite 
         # the local mpbSubfindIDs_AtAccAndEarlier with these same values for the logic below
         ww = np.where( trParSubfindIDs_AtAccAndEarlier == -1 )
@@ -245,7 +301,8 @@ def accMode(sP, snapStep=1):
         # debug verify:
         assert trParSubfindIDs_AtAccAndEarlier.size == mpbSubfindIDs_AtAccAndEarlier.size
         mpb_SnapVerify = mpb['SnapNum'][ mpbInds_AtMatchingSnapNums ]
-        assert np.array_equal(mpb_SnapVerify, trParAtAccAndEarlier_HaveAtSnapNums)
+        ww = np.where( mpbInds_AtMatchingSnapNums >= 0 ) # mpb tracked only)
+        assert np.array_equal(mpb_SnapVerify[ww], trParAtAccAndEarlier_HaveAtSnapNums[ww])
 
         # agreement of MPB subfind IDs and tracer parent subhalo IDs at all z>=z_acc
         if np.array_equal(trParSubfindIDs_AtAccAndEarlier, mpbSubfindIDs_AtAccAndEarlier):
@@ -284,13 +341,16 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     tracer for a given property (e.g. temp). For [gas] values affected by the modified Utherm of 
     the star-forming eEOS (temp, entr) we exclude times when SFR>0. This is then also consistent 
     with what is done in the code for tracer_max* recorded values. """
-
     assert extType in allowedExtTypes
     assert isinstance(fieldName,basestring)
 
     # check for existence
-    saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_%s_%s.hdf5' % \
+    if sP.isZoom:
+        saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_%s_%s.hdf5' % \
           (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,fieldName,extType)
+    else:
+        saveFilename = sP.derivPath + '/trTimeEvo/%s_%s_snap_%d-%s-%d.hdf5' % \
+          (fieldName,extType,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
 
     if isfile(saveFilename):
         r = {}
@@ -300,11 +360,11 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
         return r
 
     # load
-    data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
+    data = tracersTimeEvo(sP, fieldName, snapStep)
 
     # mask sfr>0 points (for gas cell properties which are modified by eEOS)
     if fieldName in ['temp','entr']:
-        sfr = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, ['sfr'], snapStep)
+        sfr = tracersTimeEvo(sP, 'sfr', snapStep)
 
         with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
             ww = np.where( sfr['sfr'] > 0.0 )
@@ -333,7 +393,7 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     r['val'] = fval( data[fieldName], axis=0 )
 
     # calculate the redshift when it occured
-    r['time'] = np.zeros( data['TracerIDs'].size, dtype='float32' )
+    r['time'] = np.zeros( data[fieldName].shape[1], dtype='float32' )
     r['time'][:] = np.nan
 
     ww = np.where( ~np.isnan(r['val']) )
@@ -355,7 +415,7 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
 
     # load
     assert isinstance(valName,basestring)
-    data = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [valName], snapStep)
+    data = tracersTimeEvo(sP, valName, snapStep)
 
     assert data[valName].ndim == 2 # need to verify logic herein for ndim==3 (e.g. pos/vel) case
 
@@ -403,12 +463,17 @@ def trValsAtAccTimes(sP, valName, rVirFac=1.0, snapStep=1):
     return trValsAtRedshifts(sP, valName, acc_time, snapStep=snapStep)
 
 def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
-    """ Return some halo property from the main progenitor branch (MPB) (e.g. tvir, spin) 
+    """ Return some halo property, per tracer, from the main progenitor branch (MPB) (e.g. tvir, spin) 
     given by valName at the times in the simulation given by redshifts. """
 
     # load
+    assert sP.isZoom # todo for boxes
     assert isinstance(valName,basestring)
-    mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID, extraFields=valName)
+
+    if sP.isZoom:
+        mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID, extraFields=valName)
+    else:
+        mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True, extraFields=valName)
 
     data = {}
 
