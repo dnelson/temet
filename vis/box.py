@@ -14,14 +14,19 @@ from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 from util import simParams
 
-def boxImgSpecs(sP, zoomFac, relCenPos, axes, **kwargs):
+def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, **kwargs):
     """ Factor out some box/image related calculations common to all whole box plots. 
     Image zoomFac fraction of entire fullbox/subbox, zooming around relCenPos 
     ([0.5,0.5] being box center point). """
-
+    assert relCenPos is None or absCenPos is None
+    
     if sP.subbox is None:
         boxSizeImg = [sP.boxSize, sP.boxSize, sP.boxSize]
-        boxCenter  = [relCenPos[0],relCenPos[1],0.5] * np.array(boxSizeImg)
+
+        if absCenPos is None:
+            boxCenter = [relCenPos[0],relCenPos[1],0.5] * np.array(boxSizeImg)
+        else:
+            boxCenter = absCenPos
     else:
         boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1,1,1])
 
@@ -36,6 +41,7 @@ def boxImgSpecs(sP, zoomFac, relCenPos, axes, **kwargs):
 
     boxSizeImg[0] *= zoomFac
     boxSizeImg[1] *= zoomFac
+    boxSizeImg[2] *= sliceFac
 
     extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0],
                boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
@@ -59,6 +65,8 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True):
     zoomFac    = 1.0         # [0,1], only in axes, not along projection direction
     hsmlFac    = 1.0         # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
     relCenPos  = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
+    absCenPos  = None        # [x,y,z] in simulation coordinates to place at center of image
+    sliceFac   = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes       = [0,1]       # e.g. [0,1] is x,y
     labelZ     = False       # label redshift inside (upper right corner) of panel
     labelScale = False       # label spatial scale with scalebar (upper left of panel)
@@ -130,6 +138,8 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     zoomFac    = 1.0         # [0,1], only in axes, not along projection direction
     hsmlFac    = 2.5         # multiplier on smoothing lengths for sphMap
     relCenPos  = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
+    absCenPos  = None        # [x,y,z] in simulation coordinates to place at center of image
+    sliceFac   = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes       = [0,1]       # e.g. [0,1] is x,y
     labelZ     = False       # label redshift inside (upper right corner) of panel
     labelScale = False       # label spatial scale with scalebar (upper left of panel)

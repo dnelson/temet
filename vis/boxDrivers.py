@@ -12,6 +12,7 @@ from vis.common import savePathDefault
 from vis.box import renderBox, renderBoxFrames
 from util.helper import pSplit
 from util import simParams
+from cosmo.load import groupCatSingle
 
 def realizations(conf=1):
     """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
@@ -185,6 +186,48 @@ def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
 
     renderBox(panels, plotConfig, locals())
     #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def tngL75_mainImages():
+    """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
+    panels = []
+
+    centerHaloID = 1 # fof
+    nSlicesTot   = 3 # slice depth equal to a third, 25 Mpc/h
+    curSlice     = 2 # offset slice along projection direction?
+
+    panels.append( {'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
+
+    run        = 'tng'
+    res        = 455
+    redshift   = 0.0
+    partType   = 'gas'
+    hsmlFac    = 2.5
+    nPixels    = 2000
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    #plotHalos  = False
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    # slice centering
+    sliceFac = (1.0/nSlicesTot)
+
+    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+    relCenPos = None
+
+    absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+
+    # render config (global)
+    class plotConfig:
+        plotStyle  = 'edged'
+        rasterPx   = 2000
+        colorbars  = False
+        saveFilename = './boxImage_%s_fof-%d_axes%d%d_%dof%d.png' % \
+          (sP.simName,centerHaloID,axes[0],axes[1],curSlice,nSlicesTot)
+
+    renderBox(panels, plotConfig, locals())
 
 def tng_boxPressureComp():
     """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
