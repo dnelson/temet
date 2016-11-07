@@ -37,6 +37,8 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=Fal
     # make sure fields is not a single element
     if isinstance(fields, basestring):
         fields = [fields]
+        
+    fieldsLoad = fields + ['MainLeafProgenitorID']    
 
     # find full tree data sizes and attributes
     numTreeFiles = len(glob(il.sublink.treePath(sP.simPath,treeName,'*')))
@@ -45,13 +47,13 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=Fal
     dtypes = {}
     seconddims = {}
 
-    for field in fields+['MainLeafProgenitorID']:
+    for field in fieldsLoad:
         lengths[field] = 0
         seconddims[field] = 0
 
     for i in range(numTreeFiles):
         with h5py.File(il.sublink.treePath(sP.simPath,treeName,i),'r') as f:
-            for field in fields+['MainLeafProgenitorID']:
+            for field in fieldsLoad:
                 dtypes[field] = f[field].dtype
                 lengths[field] += f[field].shape[0]
                 if len(f[field].shape) > 1:
@@ -60,7 +62,7 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=Fal
     # allocate for a full load
     fulltree = {}
 
-    for field in fields+['MainLeafProgenitorID']:
+    for field in fieldsLoad:
         if seconddims[field] == 0: 
             fulltree[field] = np.zeros( lengths[field], dtype=dtypes[field] )
         else:
@@ -71,7 +73,7 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=Fal
 
     for i in range(numTreeFiles):
         with h5py.File(il.sublink.treePath(sP.simPath,treeName,i),'r') as f:
-            for field in fields+['MainLeafProgenitorID']:
+            for field in fieldsLoad:
                 if seconddims[field] == 0:
                     fulltree[field][offset : offset + f[field].shape[0]] = f[field][()]
                 else:

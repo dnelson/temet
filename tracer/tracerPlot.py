@@ -146,6 +146,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     rasterVerticalSize = 1080 * 2
     resizeInterpOrder = 1 # 0=nearest, 1=linear, 2=quadratic, 3=cubic, etc
+    snapStep = 1
 
     # check for existence
     trIndStr = 'all-%d' % rasterVerticalSize
@@ -154,7 +155,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     if sP.isZoom:
         saveFilename = sP.derivPath + '/trValHist/shID_%d_hf%d_snap_%d-%d-%d_%s_2d_%s.hdf5' % \
-          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,field,trIndStr)
+          (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),snapStep,field,trIndStr)
     else:
         boxOrHaloStr = 'box'
         if sP.haloInd is not None: boxOrHaloStr = 'halo-%d' % sP.haloInd
@@ -162,7 +163,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
         assert sP.haloInd is None and sP.subhaloInd is None # todo
 
         saveFilename = sP.derivPath + '/trValHist/%s_2d_%s_snap_%d-%d-%d_%s.hdf5' % \
-          (field,boxOrHaloStr,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),1,trIndStr)
+          (field,boxOrHaloStr,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),snapStep,trIndStr)
 
     if not isdir(sP.derivPath + '/trValHist'):
         mkdir(sP.derivPath + '/trValHist')
@@ -178,17 +179,17 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     # load data
     if accMode is None:
-        accMode = tracerEvo.accMode(sP)
+        accMode = tracerEvo.accMode(sP, snapStep)
     if accTime is None:
-        accTime = tracerEvo.accTime(sP)
+        accTime = tracerEvo.accTime(sP, snapStep)
 
     _, _, valMinMax, loadField = plotConfig(field)
 
-    data = tracersTimeEvo(sP, loadField)
-
-    ww = np.where( data[loadField] == 0.0 )
+    data = tracerEvo.tracersTimeEvo(sP, loadField, snapStep)
 
     # normalize?
+    w0 = np.where( data[loadField] == 0.0 )
+
     if "_tviracc" in field or "_sviracc" in field:
         if "_tviracc" in field:
             normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
@@ -206,7 +207,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
         # these fields have used 0.0 for missing values (e.g. on eEOS) in the code
         # and have possibly been transformed into valid/strange values by normalization
         # here, tag as nan for consistency with e.g. temp/entr of gas cells
-        data[loadField][ww] = np.nan
+        data[loadField][w0] = np.nan
 
     # axes ranges and place image
     x_min = int( data['snaps'].max() )
@@ -362,11 +363,11 @@ def plotEvo2D(ii):
 
 def plotEvo1D():
     """ Plot various 1D views showing evolution of tracer tracks vs redshift/radius. """
+    assert sP.isZoom # todo
     from util import simParams
 
     # config
     sP = simParams(res=9, run='zooms2', redshift=2.0, hInd=2)
-
     fieldNames = ["tracer_maxtemp","temp","tracer_maxent","tracer_maxent","entr",
                   "rad_rvir","vrad","angmom"] # dens
 
@@ -423,6 +424,8 @@ def plotEvo1D():
 def getValHistos(sP, field, extType, accMode=None):
     """ Calculate and cache 1D histograms of field/extType combinations from the full tracer tracks. """
     # load config for this field
+    assert sP.isZoom # todo
+
     r = {}
 
     _, _, valMinMax, loadField = plotConfig(field, extType=extType)

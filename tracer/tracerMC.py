@@ -1134,7 +1134,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False):
     field for all snapshots (which contain tracers). """
     assert halos is True or subhalos is True # pick one
 
-    savePath = sP.simPath + '/../postprocessing/tracer_tracks/'
+    savePath = sP.postPath + '/tracer_tracks/'
     if not isdir(savePath):
         mkdir(savePath)
 

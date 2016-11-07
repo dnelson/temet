@@ -20,7 +20,8 @@ class simParams:
     simName     = ''    # label to add to plot legends (e.g. "GADGET", "AREPO", "FEEDBACK")
     plotPrefix  = ''    # plot prefix for simulation (make unique, e.g. 'GR')
     plotPath    = ''    # working path to put plots
-    derivPath   = ''    # path to put derivative (data) files
+    derivPath   = ''    # path to put derivative files ("data.files/")
+    postPath    = ''    # path to put postprocessed files ("postprocessing/")
 
     # snapshots
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 
@@ -513,6 +514,7 @@ class simParams:
 
         self.simPath   = self.arepoPath + 'output/'
         self.derivPath = self.arepoPath + 'data.files/'
+        self.postPath  = self.arepoPath + 'postprocessing/'
         self.plotPath  = self.basePath + 'plots/'
 
         # if variant passed in, see if it requests a subbox

@@ -151,7 +151,7 @@ def simSubhaloQuantity(sP, quant, clean=False):
 
     if quant in ['fcirc_all_eps07o','fcirc_all_eps07m','fcirc_10re_eps07o','fcirc_10re_eps07m']:
         # load data from ./postprocessing/circularities/ catalog of Shy
-        basePath = sP.simPath + '/../postprocessing/circularities/circularities_aligned_'
+        basePath = sP.postPath + '/circularities/circularities_aligned_'
         if '_all' in quant: selStr = 'allstars'
         if '_10re' in quant: selStr = '10Re'
         filePath = basePath + selStr + '_L75n1820TNG%03d.hdf5' % sP.snap

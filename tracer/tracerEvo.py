@@ -10,7 +10,8 @@ import numpy as np
 from os.path import isfile, isdir
 from os import mkdir
 
-from tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, globalAllTracersTimeEvo, globalTracerMPBMap
+from tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
+  globalAllTracersTimeEvo, globalTracerMPBMap, defParPartTypes
 from cosmo.mergertree import mpbSmoothedProperties
 from cosmo.util import redshiftToSnapNum
 
@@ -52,13 +53,106 @@ def guinevereData():
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
 
-def tracersTimeEvo(sP, fieldName, snapStep=None):
+def tracersTimeEvo(sP, fieldName, snapStep=None, all=True):
     """ Wrapper to handle zoom vs. box load. """
     if sP.isZoom:
         assert snapStep is not None
-        return subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
+        r = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
     else:
-        return globalAllTracersTimeEvo(sP, fieldName)
+        r = globalAllTracersTimeEvo(sP, fieldName)
+
+    # global load
+    if all is True:
+        return r
+
+    # restrict based on [halo/subhalo] for a fullbox
+    # Note! For globalAllTracersTimeEvo(), we could move this inside and actually do a restricted 
+    # load, instead of a load and then subset... going to be mandatory
+    assert not sP.isZoom
+    assert fieldName != 'meta'
+
+    meta, nTracerTot = tracersMetaOffsets(sP)
+
+    for key in r:
+        if key == 'redshifts' or key == 'snaps':
+            continue
+
+        # size is (Nsnaps,NtrSubset)
+        subset = np.zeros( (r[key].shape[0],nTracerTot), dtype=r[key].dtype )
+        offset = 0
+
+        for pt in meta.keys():
+            if meta[pt]['length'] == 0:
+                continue
+
+            for i in range(r[key].shape[0]):
+                # we anyways made these non-contiguous on disk, so load looping over snap dim
+                subset[i, offset : offset + meta[pt]['length']] = \
+                  r[key][ i, meta[pt]['offset'] : meta[pt]['offset']+meta[pt]['length'] ]
+
+            offset += meta[pt]['length']
+
+        r[key] = subset # replace
+
+    return r
+
+def tracersMetaOffsets(sP):
+    """ For a fullbox sP and either sP.haloInd or sP.subhaloInd specified, load and return the needed 
+    offsets to load a [halo/subhalo]-restricted part of any of the tracer_tracks data. """
+    assert (sP.haloInd is not None) ^ (sP.subhaloInd is not None)
+    assert not sP.isZoom
+
+    saveFilename = sP.postPath + '/tracer_tracks/tr_all_groups_%d_meta.hdf5' % (sP.snap)
+
+    if sP.haloInd is not None:
+        gName = 'Halo'
+        dInd = sP.haloInd
+    if sP.subhaloInd is not None:
+        gName = 'Subhalo'
+        dInd = sP.subhaloInd
+
+    # load
+    r = {}
+
+    with h5py.File(saveFilename,'r') as f:
+        for ptName in defParPartTypes:
+            r[ptName] = {}
+            r[ptName]['length'] = f[gName]['TracerLength'][ptName][dInd]
+            r[ptName]['offset'] = f[gName]['TracerOffset'][ptName][dInd]
+
+    nTracerTot = np.sum([r[ptName]['length'] for ptName in r])
+
+    return r, nTracerTot
+
+def loadAllOrRestricted(sP, saveFilename, datasetName=None):
+    """ Load a single datasetName from a HDF5 tracer save file, either the entire dataset or 
+    restricted to a [halo/subhalo] subset if sP.haloInd or sP.subhaloInd is specified for a 
+    fullbox run. """
+
+    # return for all tracers
+    if sP.isZoom or (sP.haloInd is None and sP.subhaloInd is None):
+        with h5py.File(saveFilename,'r') as f:
+            return f[datasetName][()]
+
+    # get offsets from meta and do [halo/subhalo]-restricted load and return (concat types)
+    meta, nTracerTot = tracersMetaOffsets(sP)
+    
+    if nTracerTot == 0:
+        return None        
+
+    with h5py.File(saveFilename,'r') as f:
+        r = np.zeros( nTracerTot, dtype=f[datasetName].dtype )
+        offset = 0
+
+        for pt in meta.keys():
+            if meta[pt]['length'] == 0:
+                continue
+
+            r[offset : offset + meta[pt]['length']] = \
+              f[datasetName][ meta[pt]['offset'] : meta[pt]['offset']+meta[pt]['length'] ]
+            offset += meta[pt]['length']
+
+    return r
 
 def accTime(sP, snapStep=1, rVirFac=1.0):
     """ Calculate accretion time for each tracer (and cache), as the earliest (highest redshift) crossing 
@@ -76,16 +170,14 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     if not isdir(sP.derivPath + '/trTimeEvo'):
         mkdir(sP.derivPath + '/trTimeEvo')
 
+    # load pre-existing
     if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            return f['accTimeInterp'][()]
+        return loadAllOrRestricted(sP,saveFilename,'accTimeInterp')
 
     print('Calculating new accTime for [%s]...' % sP.simName)
 
-    # load
-    data = tracersTimeEvo(sP, 'rad_rvir', snapStep)
-    if not sP.isZoom:
-        data['TracerIDs'] = globalAllTracersTimeEvo(sP, 'meta')['TracerIDs']
+    # calculate new: load radial histories
+    data = tracersTimeEvo(sP, 'rad_rvir', snapStep, all=True)
 
     # reverse so that increasing indices are increasing snapshot numbers
     data2d = data['rad_rvir'][::-1,:]
@@ -104,11 +196,12 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     firstSnapInsideInd = np.argmax( mask2d, axis=0 )
 
     # interp between index and previous (one snap before first time inside) for non-discrete answer
-    accTimeInterp = np.zeros( data['TracerIDs'].size, dtype='float32' )
+    nTr = data['rad_rvir'].shape[1]
+    accTimeInterp = np.zeros( nTr, dtype='float32' )
 
-    for i in range(data['TracerIDs'].size):
-        if i % int(data['TracerIDs'].size/100) == 0:
-            print(' %4.1f%%' % (float(i)/data['TracerIDs'].size*100.0))
+    for i in range(nTr):
+        if i % int(nTr/100) == 0:
+            print(' %4.1f%%' % (float(i)/nTr*100.0))
 
         ind0 = firstSnapInsideInd[i]
         ind1 = firstSnapInsideInd[i] - 1
@@ -191,14 +284,14 @@ def accMode(sP, snapStep=1):
         saveFilename = sP.derivPath + '/trTimeEvo/acc_mode_s%d-%d-%d.hdf5' % \
           (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
 
+    # load pre-existing
     if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            return f['accMode'][()]
+        return loadAllOrRestricted(sP,saveFilename,'accMode')
 
     print('Calculating new accMode for [%s]...' % sP.simName)
 
     # load accTime, subhalo_id tracks, and MPB history
-    data = tracersTimeEvo(sP, 'subhalo_id', snapStep)
+    data = tracersTimeEvo(sP, 'subhalo_id', snapStep, all=True)
 
     if sP.isZoom:
         mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
@@ -259,6 +352,11 @@ def accMode(sP, snapStep=1):
         # pull out indices
         mpbIndAcc  = mpbIndexMap[accSnap[i]]
         dataIndAcc = dataIndexMap[accSnap[i]]
+
+        # in fullboxes, we may not even have the MPB back to the accTime (not currently allowed for zooms)
+        if mpbIndAcc == -1 and not sP.isZoom:
+            accMode[i] = ACCMODE_NONE
+            continue
 
         assert mpbIndAcc != -1
         assert dataIndAcc != -1
@@ -352,6 +450,7 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
         saveFilename = sP.derivPath + '/trTimeEvo/%s_%s_snap_%d-%s-%d.hdf5' % \
           (fieldName,extType,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
 
+    # load pre-existing
     if isfile(saveFilename):
         r = {}
         with h5py.File(saveFilename,'r') as f:
@@ -359,12 +458,14 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
                 r[key] = f[key][()]
         return r
 
-    # load
-    data = tracersTimeEvo(sP, fieldName, snapStep)
+    # calculate new: load required field
+    print('Calculating new valExtremum [%s] for [%s]...' % (fieldName,sP.simName))
+
+    data = tracersTimeEvo(sP, fieldName, snapStep, all=True)
 
     # mask sfr>0 points (for gas cell properties which are modified by eEOS)
     if fieldName in ['temp','entr']:
-        sfr = tracersTimeEvo(sP, 'sfr', snapStep)
+        sfr = tracersTimeEvo(sP, 'sfr', snapStep, all=True)
 
         with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
             ww = np.where( sfr['sfr'] > 0.0 )
@@ -412,10 +513,10 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
 def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     """ Return some property from the tracer evolution tracks (e.g. rad_rvir, temp, tracer_maxent) 
     given by valName at the times in the simulation given by redshifts. """
-
+    raise Exception('todo, seems not to work at all, unclear')
     # load
     assert isinstance(valName,basestring)
-    data = tracersTimeEvo(sP, valName, snapStep)
+    data = tracersTimeEvo(sP, valName, snapStep, all=False)
 
     assert data[valName].ndim == 2 # need to verify logic herein for ndim==3 (e.g. pos/vel) case
 
@@ -467,7 +568,7 @@ def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     given by valName at the times in the simulation given by redshifts. """
 
     # load
-    assert sP.isZoom # todo for boxes
+    assert sP.isZoom # todo for boxes (handle sP.subhaloInd and sP.haloInd as well)
     assert isinstance(valName,basestring)
 
     if sP.isZoom:
