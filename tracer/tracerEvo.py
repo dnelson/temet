@@ -62,7 +62,7 @@ def tracersTimeEvo(sP, fieldName, snapStep=None, all=True):
         r = globalAllTracersTimeEvo(sP, fieldName)
 
     # global load
-    if all is True:
+    if all is True or (sP.haloInd is None and sP.subhaloInd is None):
         return r
 
     # restrict based on [halo/subhalo] for a fullbox

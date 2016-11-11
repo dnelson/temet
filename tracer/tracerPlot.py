@@ -19,8 +19,8 @@ from os import mkdir
 
 from tracer import tracerMC
 from tracer import tracerEvo
-from util.helper import loadColorTable, logZeroSafe
-from cosmo.util import addRedshiftAgeAxes, redshiftToSnapNum
+from util.helper import loadColorTable, logZeroSafe, closest
+from cosmo.util import addRedshiftAgeAxes, redshiftToSnapNum, snapNumToRedshift
 
 # global configuration
 figsize1   = (14,8)  # set aspect ratio and relative text/label sizes
@@ -35,13 +35,24 @@ modes = {None                       : "All Modes",
          tracerEvo.ACCMODE_MERGER   : "Merger",
          tracerEvo.ACCMODE_STRIPPED : "Stripped"}
 
-def addRedshiftAgeImageAxes(ax, sP):
+def addRedshiftAgeImageAxes(ax, sP, snaps):
     """ Add a redshift (bottom) and age (top) pair of axes for imshow plots. Top axis does not work 
     when a colorbar is also added to the plot. """
-    zVals = np.array([2,3,4,5,6,7,8,9,10])
-    snaps = redshiftToSnapNum( zVals, sP )
-    ax.set_xticks(snaps)
-    ax.set_xticklabels(zVals)
+    if sP.isZoom:
+        zVals = np.array([2,3,4,5,6,7,8,9,10])
+    else:
+        zVals = np.array([0,0.5,1.0,1.5,2,3,4,5,6,7,8,9,10,11,12])
+
+    snapSpacing = ( snaps.max() - snaps.min() ) / snaps.size
+    zValsSnaps = snapNumToRedshift(sP, snap=snaps)
+
+    toplace = np.zeros( zVals.size, dtype='float32' )
+    for i, zVal in enumerate(zVals):
+        _, snapsInd = closest(zValsSnaps, zVal)
+        toplace[i] = snaps.max() - (float(snapsInd) * snapSpacing + 0.5*snapSpacing)
+
+    ax.set_xticks(toplace)
+    ax.set_xticklabels(['%g' % zVal for zVal in zVals])
     ax.set_xlabel('Redshift')
 
     if 0:
@@ -115,9 +126,13 @@ def plotConfig(fieldName, extType=''):
         label     = "Parent Subhalo ID%s"
         valMinMax = None
 
+    if fieldName == "parent_indextype":
+        label     = "Parent IndexType%s"
+        valMinMax = None    
+
     if fieldName == "angmom":
         label     = "Specific Angular Momentum%s [ log kpc km/s ]"
-        valMinMax = [-3.0,5.0]
+        valMinMax = [4.0,6.5]
 
     # add extStr to denote extremum selection and/or t_* type selections
     extStr = ''
@@ -160,8 +175,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
         boxOrHaloStr = 'box'
         if sP.haloInd is not None: boxOrHaloStr = 'halo-%d' % sP.haloInd
         if sP.subhaloInd is not None: boxOrHaloStr = 'subhalo-%d' % sP.subhaloInd
-        assert sP.haloInd is None and sP.subhaloInd is None # todo
-
+        
         saveFilename = sP.derivPath + '/trValHist/%s_2d_%s_snap_%d-%d-%d_%s.hdf5' % \
           (field,boxOrHaloStr,sP.snap,redshiftToSnapNum(tracerEvo.maxRedshift,sP),snapStep,trIndStr)
 
@@ -185,12 +199,14 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
 
     _, _, valMinMax, loadField = plotConfig(field)
 
-    data = tracerEvo.tracersTimeEvo(sP, loadField, snapStep)
+    data = tracerEvo.tracersTimeEvo(sP, loadField, snapStep, all=False)
 
     # normalize?
     w0 = np.where( data[loadField] == 0.0 )
 
     if "_tviracc" in field or "_sviracc" in field:
+        assert sP.haloInd is None and sP.subhaloInd is None # todo
+
         if "_tviracc" in field:
             normVal = 10.0**tracerEvo.mpbValsAtAccTimes(sP, 'tvir', rVirFac=1.0)
         if "_sviracc" in field:
@@ -231,6 +247,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
             y_max = y_min + trIndRange[1] - 1
 
         r[modeName]['extent'] = [x_min, x_max, y_min, y_max]
+        r[modeName]['snaps'] = data['snaps']
 
         # (A) data transform, raw
         data2d = np.transpose(data[loadField][:,ww])
@@ -274,16 +291,17 @@ def plotEvo2D(ii):
     #              "tracer_maxent","tracer_maxent_sviracc","entr",
     #              "rad_rvir","vrad","angmom"] # dens
 
-    sP = simParams(res=455, run='tng', redshift=0.0)
-    fieldNames = ['rad_rvir','angmom','subhalo_id','temp']
-
-    trIndRanges = [None, [0.5,1080]]
+    sP = simParams(res=910, run='tng', redshift=0.0)
+    trIndRanges = [None]
+    #sP = simParams(res=455, run='tng', redshift=0.0, haloInd=0)
+    fieldNames = ['rad_rvir','angmom','subhalo_id','temp','vrad','entr','sfr']
+    #trIndRanges = [None, [0.5,1080]]    
 
     # load accretion times, accretion modes (can change to None after cached)
     accTime = tracerEvo.accTime(sP)
     accMode = tracerEvo.accMode(sP)
 
-    for field in [fieldNames[ii]]:
+    for field in fieldNames: #[fieldNames[ii]]:
         ctName, label, valMinMax, _ = plotConfig(field)
 
         for trIndRange in trIndRanges:
@@ -292,13 +310,17 @@ def plotEvo2D(ii):
 
             # start pdf
             trIndStr = 'all'
-            if trIndRange is not None:
-                trIndStr = '%g-%d' % (trIndRange[0], trIndRange[1])
+            trSubStr = ''
+            if trIndRange is not None: trIndStr = '%g-%d' % (trIndRange[0], trIndRange[1])
+            if sP.haloInd is not None: trSubStr = '_halo-%d' % sP.haloInd
+            if sP.subhaloInd is not None: trSubStr = '_subhalo-%d' % sP.subhaloInd
 
-            pdf = PdfPages(sP.plotPath + 'evo2D_' + field + '_' + trIndStr + '_' + sP.simName + '.pdf')
+            pdf = PdfPages(sP.plotPath + 'evo2D_%s_%s%s_%s.pdf' % (field,trIndStr,trSubStr,sP.simName))
 
             # make following plots for each accMode separately
             for modeVal,modeName in modes.iteritems():
+                # plot bounds
+                extent = evo[modeName]['extent']
 
                 # PLOT 1: overview 2D plot of all tracker tracks
                 print('1. %s %s %s %s' % (sP.simName, field, trIndStr, modeName))
@@ -311,8 +333,7 @@ def plotEvo2D(ii):
                 # color mapping
                 cmap = loadColorTable(ctName)
 
-                plt.imshow(evo[modeName]['t2d'], cmap=cmap, extent=evo[modeName]['extent'], 
-                    aspect='auto', origin='lower')
+                plt.imshow(evo[modeName]['t2d'], cmap=cmap, extent=extent, aspect='auto', origin='lower')
 
                 if valMinMax is not None:
                     plt.clim( valMinMax )
@@ -323,7 +344,7 @@ def plotEvo2D(ii):
                 cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
                 cb.ax.set_ylabel(label)
 
-                addRedshiftAgeImageAxes(ax, sP)
+                addRedshiftAgeImageAxes(ax, sP, evo[modeName]['snaps'])
 
                 # finish
                 fig.tight_layout()
@@ -339,7 +360,7 @@ def plotEvo2D(ii):
                 # color mapping
                 cmap = loadColorTable(ctName)
 
-                plt.imshow(evo[modeName]['t2d_sort_t_acc'], cmap=cmap, extent=evo[modeName]['extent'], 
+                plt.imshow(evo[modeName]['t2d_sort_t_acc'], cmap=cmap, extent=extent, 
                     aspect='auto', origin='lower')
 
                 if valMinMax is not None:
@@ -351,7 +372,7 @@ def plotEvo2D(ii):
                 cb = plt.colorbar(cax=cax) #, format=FormatStrFormatter('%.1f'))
                 cb.ax.set_ylabel(label)
 
-                addRedshiftAgeImageAxes(ax, sP)
+                addRedshiftAgeImageAxes(ax, sP, evo[modeName]['snaps'])
 
                 # finish
                 fig.tight_layout()
@@ -359,7 +380,6 @@ def plotEvo2D(ii):
                 plt.close(fig)
 
             pdf.close()
-
 
 def plotEvo1D():
     """ Plot various 1D views showing evolution of tracer tracks vs redshift/radius. """
@@ -382,7 +402,7 @@ def plotEvo1D():
 
         # load
         #evo = getEvo2D(sP, field, trIndRange=trIndRange, accTime=accTime, accMode=accMode)
-        data = tracerMC.subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName])
+        data = tracerEvo.tracersTimeEvo(sP, fieldName, all=False)
         data2d = np.transpose(data[fieldName].copy())
 
         for j,(modeVal,modeName) in enumerate( modes.iteritems() ):
