@@ -119,21 +119,10 @@ def get_H2_frac(nHI):
     return fH2 # Sigma_H2 / Sigma_H
 
 def neutralHydrogenFraction(gas, sP, atomicOnly=True):
-    """ Get the total neutral hydrogen fraction, by default for the atomic component only. """
-    #Above star-formation threshold, we want a neutral fraction which includes
-    #explicitly the amount of gas in cold clouds.
-    #Ideally we should compute this fraction, and then do
-    #  tcool = self.get_tcool(nH,bar)[ind]
-    #  print np.median(tcool)
-    #  cold_frac = self.star.cold_gas_frac(nH[ind], tcool,self.PhysDensThresh/0.76)
-    #  print np.mean(cold_frac)
-    #  ssnH0 = (1-cold_frac)*self.neutral_fraction(nH[ind], temp[ind])+ cold_frac*self.neutral_fraction(nH[ind], 1e4)
-    #But the cooling time reported by the code is not quite what we want here,
-    #because it uses the internal energy reported by U, whereas we really want
-    #the cooling time using the energy for the hot phase, at a given density.
-    #So just assume that at the threshold all gas is in cold clouds.
-    #In reality, this should be about 90% of gas in cold clouds, so
-    #we will overpredict the neutral fraction by a small amount.
+    """ Get the total neutral hydrogen fraction, by default for the atomic component only. Note that 
+    given the SH03 model, none of the hot phase is going to be neutral hydrogen, so in fact we 
+    should remove the hot phase mass from the gas cell mass. But this is subdominant and should 
+    be less than 10%. """
 
     # fraction of total hydrogen mass which is neutral, as reported by the code, which is already 
     # based on Rahmati+ (2012) if UVB_SELF_SHIELDING is enabled. But, above the star formation 
@@ -141,7 +130,7 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True):
     frac_nH0 = gas['NeutralHydrogenAbundance'].astype('float32')
 
     # number density [1/cm^3] of total hydrogen
-    nH = sP.units.nH0ToPhys(None, gas['Density'], cgs=True, numDens=True)
+    nH = sP.units.codeDensToPhys(gas['Density'], cgs=True, numDens=True) * gas['GFM_Metals']
 
     # compare to physical density threshold for star formation [H atoms / cm^3]
     PhysDensThresh = 0.13
@@ -155,15 +144,19 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True):
 
     return frac_nH0
 
-def hydrogenMass(gas, sP, total=False, totalNeutral=False, atomic=False, molecular=False):
+def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=False, 
+                 atomic=False, molecular=False):
     """ Calculate the (total, total neutral, atomic, or molecular) hydrogen mass per cell. Here we 
         use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
         density. Return still in code units, e.g. [10^10 Msun/h].
     """
-    reqFields = ['Masses','GFM_Metals','Density','NeutralHydrogenAbundance']
+    reqFields = ['Masses','GFM_Metals','NeutralHydrogenAbundance']
+    if totalNeutral or atomic or molecular:
+        reqFields += ['Density']
+        
     if not all( [f in gas for f in reqFields] ):
         raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')
-    if sum( [total,totalNeutral,atomic,molecular] ) != 1:
+    if sum( [total,totalNeutral,totalNeutralSnap,atomic,molecular] ) != 1:
         raise Exception('Must request exactly one of total, totalNeutral, atomic, or molecular.')
     if gas['GFM_Metals'].ndim != 1:
         raise Exception('Please load just "metals_H" into GFM_Metals to avoid ambiguity.')
@@ -174,6 +167,8 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, atomic=False, molecul
     # which fraction to apply?
     if total:
         mass_fraction = 1.0
+    if totalNeutralSnap:
+        mass_fraction = gas['NeutralHydrogenAbundance'].astype('float32')
     if totalNeutral:
         mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=False)
     if atomic:

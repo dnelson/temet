@@ -443,7 +443,7 @@ def groupCatOffsetListIntoSnap(sP):
 
 def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
-                   mdi=None, sq=True):
+                   mdi=None, sq=True, haloSubset=False):
     """ For a given snapshot load only one field for one particle type
           partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
           fields   = e.g. ['ParticleIDs','Coordinates',...]
@@ -455,6 +455,7 @@ def snapshotSubset(sP, partType, fields,
             * subhaloID : if input, load particles only of the specified subalo
           mdi : multi-dimensional index slice load
           sq  : squeeze single field return into a numpy array instead of within a dict
+          haloSubset : return particle subset of only those in all FoF halos (no outer fuzz)
     """
     kwargs = {'inds':inds, 'indRange':indRange, 'haloID':haloID, 'subhaloID':subhaloID}
     subset = None
@@ -467,6 +468,8 @@ def snapshotSubset(sP, partType, fields,
         raise Exception("Cannot specify both haloID and subhaloID.")
     if ((haloID is not None) or (subhaloID is not None)) and not sP.groupOrdered:
         raise Exception("Not yet implemented (group/halo load in non-groupordered).")
+    if haloSubset and (not sP.groupOrdered or (haloID is not None) or (subhaloID is not None) or (inds is not None)):
+        raise Exception("haloSubset only for groupordered snapshots, and not with halo/subhalo subset.")
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
 
@@ -476,6 +479,12 @@ def snapshotSubset(sP, partType, fields,
     # make sure fields is not a single element, and don't modify input
     fields = list(iterable(fields))
     fieldsOrig = list(iterable(fields))
+
+    # haloSubset only? construct indRange and self-call
+    if haloSubset:
+        offsets_pt = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+        kwargs['indRange'] = [0, offsets_pt[:,sP.ptNum(partType)].max()]
+        return snapshotSubset(sP, partType, fields, sq=sq, **kwargs)
 
     # composite fields (temp, vmag, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray

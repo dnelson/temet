@@ -11,6 +11,7 @@ from functools import partial
 
 from illustris_python.util import partTypeNum
 from cosmo.util import periodicDistsSq, snapNumToRedshift
+from util.helper import logZeroMin
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -113,7 +114,7 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
     if method == 'B':
         # (A): DARK MATTER
         print(' [DM]')
-        dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], sq=False)
+        dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], sq=False, haloSubset=True)
 
         # loop over halos
         for i in wProcess:
@@ -135,7 +136,7 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
         # (B): GAS
         print(' [GAS]')
         del dm
-        gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos','mass'])
+        gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos','mass'], haloSubset=True)
 
         # loop over halos
         for i in wProcess:
@@ -157,7 +158,7 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
         # (C): STARS
         print(' [STARS]')
         del gas
-        stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','mass','sftime'])
+        stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','mass','sftime'], haloSubset=True)
 
         # loop over halos
         for i in wProcess:
@@ -266,8 +267,8 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
     if ptRestriction == 'sfr_gt0':
         fieldsLoad.append('sfr')
 
-    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False)
-    particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty])
+    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, haloSubset=True)
+    particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], haloSubset=True)
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     if particles[ptProperty].ndim == 1:
@@ -288,7 +289,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
         if weighting == 'mass':
             # use particle masses (linear) as weights
-            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields='Masses')
+            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields='Masses', haloSubset=True)
 
         if 'bandLum' in weighting:
             # prepare sps interpolator
@@ -297,7 +298,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
             # load additional fields, snapshot wide
             fieldsLoadMag = ['initialmass','metallicity']
-            magsLoad = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoadMag)
+            magsLoad = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoadMag, haloSubset=True)
 
             # request magnitudes in this band
             band = weighting.split("-")[1]
@@ -365,10 +366,12 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
     return r, attrs
 
-def subhaloStellarPhot(sP, iso=None, imf=None, dust=None):
+def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
     """ Compute the total band-magnitudes, per subhalo, under the given assumption of 
     an iso(chrone) model, imf model, and dust model. """
     from cosmo.stellarPop import sps
+    from healpy.pixelfunc import nside2npix, pix2vec
+    from cosmo.hydrogen import hydrogenMass
 
     # which bands? for now, to change, just recompute from scratch
     bands = ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
@@ -378,60 +381,199 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None):
 
     nBands = len(bands)
 
+    # which projections?
+    nProj = 1
+
+    if '_res' in dust:
+        nProj = nside2npix(Nside)
+        projVecs = pix2vec(Nside,range(nProj),nest=True)
+        projVecs = np.transpose( np.array(projVecs, dtype='float32') ) # Nproj,3
+
+    if '_conv' in dust:
+        print(' !! TODO verify convolution works entirely (non-negligible diffs wrt _eff)')
+
     # initialize a stellar population interpolator
     pop = sps(sP, iso, imf, dust)
 
     # prepare catalog metadata
     desc   = "Stellar photometrics (light emission) totals by subhalo, in multiple rest-frame bands."
-    select = "All Subfind subhalos."
+    select = "All Subfind subhalos (numProjectionsPer = %d)." % nProj
 
     # load group information
-    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType'])
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType','SubhaloPos'])
     gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
 
     # allocate return, NaN indicates not computed (no star particles)
     nSubsTot = gc['header']['Nsubgroups_Total']
+    subhaloIDsTodo = range(nSubsTot)
 
-    r = np.zeros( (nSubsTot, nBands), dtype='float32' )
+    if Nside == 32:
+        # special case: just do a few special case subhalos at high Nside for demonstration
+        assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99
+        #gcDemo = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
+        #massesDemo = sP.units.codeMassToLogMsun( gcDemo['halos']['Group_M_Crit200'] )
+        #ww = np.where( (massesDemo >= 11.9) & (massesDemo < 12.1) ) # ww[0]= [597, 620, 621...]
+        #ww = np.where( (massesDemo >= 13.4) & (massesDemo < 13.5) ) # ww[0]= [34, 52, ...]
+        # two massive + three MW-mass halos, SubhaloSFR = [0.2, 5.2, 1.7, 5.0, 1.1] Msun/yr
+        subhaloIDsTodo = [172649,208781,412332,415496,415628] # gc['halos']['GroupFirstSub'][inds]
+
+    if Nside > 1 and Nside < 32:
+        assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99
+        subhaloIDsTodo = [172649,415496]
+
+    #if sP.res == 455 and sP.run == 'tng' and sP.snap == 99:
+    #    # special case: debugging
+    #    subhaloIDsTodo = [19051,19052]
+
+    nSubsDo = len(subhaloIDsTodo)
+
+    r = np.zeros( (nSubsDo, nBands, nProj), dtype='float32' )
+    r = np.squeeze(r)
     r.fill(np.nan)
 
-    print(' Total # Subhalos: %d, processing all [%s] subhalos in [%d] bands...' % (nSubsTot,nSubsTot,nBands))
+    print(' Total # Subhalos: %d, processing [%d] in [%d] bands and [%d] projections...' % \
+        (nSubsTot,nSubsDo,nBands,nProj))
 
-    # global load of all stars in snapshot
-    stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['initialmass','sftime','metallicity'])
+    # global load of all stars in all groups in snapshot
+    starsLoad = ['initialmass','sftime','metallicity']
+    if '_res' in dust: starsLoad += ['pos']
 
-    # loop over all requested bands
-    for bandNum, band in enumerate(bands):
-        print('  %02d/%02d [%s]' % (bandNum+1,len(bands),band))
+    stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, haloSubset=True)
 
-        # request magnitudes in this band for all stars
-        mags = pop.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
-                                             stars['GFM_Metallicity'], 
-                                             stars['GFM_InitialMass'], retFullPt4Size=True)
+    # non-resolved dust: loop over all requested bands first
+    if '_res' not in dust:
+        for bandNum, band in enumerate(bands):
+            print('  %02d/%02d [%s]' % (bandNum+1,len(bands),band))
 
-        # loop over subhalos
-        for i in range(nSubsTot):
-            if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
-                print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
+            # request magnitudes in this band for all stars
+            mags = pop.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
+                                                 stars['GFM_Metallicity'], 
+                                                 stars['GFM_InitialMass'], retFullPt4Size=True)
 
-            # slice starting/ending indices for stars local to this FoF
-            i0 = gc['subhalos']['SubhaloOffsetType'][i,sP.ptNum('stars')]
-            i1 = i0 + gc['subhalos']['SubhaloLenType'][i,sP.ptNum('stars')]
+            # loop over subhalos
+            for i, subhaloID in enumerate(subhaloIDsTodo):
+                if i % np.max([1,int(nSubsDo/10)]) == 0 and i <= nSubsDo:
+                    print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+
+                # slice starting/ending indices for stars local to this subhalo
+                i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')]
+                i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
+
+                if i1 == i0:
+                    continue # zero length of this type
+                
+                magsLocal = mags[i0:i1] # wind particles have NaN
+
+                # convert mags to luminosities, sum together
+                totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
+
+                # convert back to a magnitude in this band
+                if totalLum > 0.0:
+                    r[i,bandNum] = -2.5 * np.log10( totalLum )
+
+    # or, resolved dust: loop over all subhalos first
+    if '_res' in dust:
+        # prep: resolved dust attenuation uses simulated gas distribution in each subhalo
+        gas = cosmo.load.snapshotSubset(sP, 'gas', fields=['pos','metal','mass','nh'], haloSubset=True)
+        gas['GFM_Metals'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', haloSubset=True) # H only
+
+        # prep: override 'Masses' with neutral hydrogen mass (model or snapshot value), free some memory
+        if modelH:
+            gas['Density'] = cosmo.load.snapshotSubset(sP, 'gas', 'dens', haloSubset=True)
+            gas['Masses'] = hydrogenMass(gas, sP, totalNeutral=True)
+            gas['Density'] = None
+        else:
+            gas['Masses'] = hydrogenMass(gas, sP, totalNeutralSnap=True)
+
+        gas['GFM_Metals'] = None
+        gas['NeutralHydrogenAbundance'] = None
+        gas['Cellsize'] = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize', haloSubset=True)
+
+        # prep: unit conversions on stars (age,mass,metallicity)
+        stars['GFM_StellarFormationTime'] = sP.units.scalefacToAgeLogGyr(stars['GFM_StellarFormationTime'])
+        stars['GFM_InitialMass'] = sP.units.codeMassToMsun(stars['GFM_InitialMass'])
+
+        stars['GFM_Metallicity'] = logZeroMin(stars['GFM_Metallicity'])
+        stars['GFM_Metallicity'][np.where(stars['GFM_Metallicity'] < -20.0)] = -20.0
+
+        # outer loop over all subhalos
+        print(' Bands: [%s].' % ', '.join(bands))
+
+        for i, subhaloID in enumerate(subhaloIDsTodo):
+            #print('[%d] subhalo = %d' % (i,subhaloID))
+            if i % np.max([1,int(nSubsDo/100)]) == 0 and i <= nSubsDo:
+                print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+
+            # slice starting/ending indices for stars local to this subhalo
+            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')]
+            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
 
             if i1 == i0:
                 continue # zero length of this type
             
-            magsLocal = mags[i0:i1] # wind particles have NaN
+            # real stars?
+            w_stars = np.where( np.isfinite(stars['GFM_StellarFormationTime'][i0:i1] ) )
+            if len(w_stars[0]) == 0:
+                continue
 
-            # convert to luminosities, sum together, convert back to a magnitude in this band
-            totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
+            # slice starting/ending indices for -gas- local to this subhalo
+            i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')]
+            i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
 
-            if totalLum > 0.0:
-                r[i,bandNum] = -2.5 * np.log10( totalLum )
+            # loop over all different viewing directions
+            for projNum in range(nProj):
+                #print('  proj %d of %d' % (projNum,nProj))
 
+                # some gas exists in subhalo?
+                if i0g != i1g:
+                    # projection
+                    projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                    projVec = projVecs[projNum,:]
+
+                    # subsets
+                    pos     = gas['Coordinates'][i0g:i1g,:]
+                    hsml    = 2.5 * gas['Cellsize'][i0g:i1g]
+                    mass_nh = gas['Masses'][i0g:i1g]
+                    quant_z = gas['GFM_Metallicity'][i0g:i1g]
+
+                    pos_stars = stars['Coordinates'][i0:i1,:]
+
+                    # compute line of sight integrated quantities
+                    N_H, Z_g = pop.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, 
+                                                         pos_stars, projCen, projVec)
+                else:
+                    # set columns to zero
+                    N_H = np.zeros( i1-i0, dtype='float32' )
+                    Z_g = np.zeros( i1-i0, dtype='float32' )
+
+                # loop over each requested band within this projection
+                for bandNum, band in enumerate(bands):
+                    # compute attenuated stellar luminosities
+                    ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][w_stars]
+                    metals_log  = stars['GFM_Metallicity'][i0:i1][w_stars]
+                    masses_msun = stars['GFM_InitialMass'][i0:i1][w_stars]
+
+                    magsLocal = pop.dust_tau_model_mags(band, N_H[w_stars], Z_g[w_stars],
+                                                       ages_logGyr, metals_log, masses_msun)
+
+                    # convert mags to luminosities, sum together
+                    totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
+
+                    if totalLum > 0.0:
+                        r[i,bandNum,projNum] = -2.5 * np.log10( totalLum )
+
+    # prepare save
     attrs = {'Description' : desc.encode('ascii'), 
              'Selection'   : select.encode('ascii'),
-             'bands'       : [b.encode('ascii') for b in bands]}
+             'bands'       : [b.encode('ascii') for b in bands],
+             'dust'        : dust.encode('ascii'),
+             'subhaloIDs'  : subhaloIDsTodo}
+
+    if '_res' in dust:
+        attrs['nProj'] = nProj
+        attrs['Nside'] = Nside
+        attrs['projVecs'] = projVecs
+        attrs['modelH'] = modelH
 
     return r, attrs
 
@@ -776,6 +918,8 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='none'),
    'Subhalo_StellarPhot_p07c_bc00dust' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='bc00'),
+   'Subhalo_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00'),
    'Subhalo_StellarPhot_p07k_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='kroupa', dust='none'),
    'Subhalo_StellarPhot_p07k_bc00dust' : partial(subhaloStellarPhot, 
@@ -784,6 +928,17 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='salpeter', dust='none'),
    'Subhalo_StellarPhot_p07s_bc00dust' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='salpeter', dust='bc00'),
+
+   'Subhalo_StellarPhot_p07c_bc00dust_res_eff_ns1' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='bc00_res_eff', Nside=1),
+   'Subhalo_StellarPhot_p07c_bc00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='bc00_res_conv', Nside=1),
+   'Subhalo_StellarPhot_p07c_cf00dust_res_eff_ns1' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='bc00_res_eff', Nside=1),
+   'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1),
+   'Subhalo_StellarPhot_p07c_ns8_demo' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=8),
 
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
    'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),
