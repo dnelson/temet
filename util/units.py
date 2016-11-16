@@ -6,7 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
-from util.helper import logZeroSafe
+from util.helper import logZeroSafe, logZeroMin
 from cosmo.util import correctPeriodicDistVecs
 
 class units(object):
@@ -42,6 +42,8 @@ class units(object):
     H0_kmsMpc         = 70.0            # km/s/Mpc
     H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km)
     Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
+    L_sun             = 3.839e33        # solar luminosity [erg/s]
+    Msun_in_g         = 1.98892e33      # solar mass [g]
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
 
     # code parameters
@@ -65,7 +67,6 @@ class units(object):
     s_in_yr     = 3.155693e7
     s_in_Myr    = 3.155693e13
     s_in_Gyr    = 3.155693e16
-    Msun_in_g   = 1.98892e33
     pc_in_cm    = 3.085680e18
     Mpc_in_cm   = 3.085680e24
     kpc_in_km   = 3.085680e16
@@ -397,20 +398,6 @@ class units(object):
 
         return colDensPhys
 
-    def nH0ToPhys(self, nh0, dens, cgs=False, numDens=False):
-        """ Convert (NeutralHydrogenAbundance,Density) pair from code units to mass or number density of 
-            neutral hydrogen, optionally in cgs units. This is total neutral, so includes both atomic 
-            and molecular phases. If nh0=None, then return instead total hydrogen density. """
-        dens_phys = self.codeDensToPhys(dens, cgs=cgs, numDens=numDens)
-        dens_phys *= self.hydrogen_massfrac # hydrogen mass density (code or cgs units)
-        # note: hydrogen number density = dens_phys / self.proton_mass
-
-        if nh0 is not None:
-            dens_phys *= nh0 # neutral hydrogen mass density (code or cgs units)
-        # note: H+ number density = (H number density) - (H0 number density)
-
-        return dens_phys
-
     def UToTemp(self, u, nelec, log=False):
         """ Convert (U,Ne) pair in code units to temperature in Kelvin. """
         # hydrogen mass fraction default
@@ -617,6 +604,20 @@ class units(object):
         if Gyr: dtime /= 1e9
 
         return dtime
+
+    def scalefacToAgeLogGyr(self, scalefacs):
+        """ Convert scalefactors (e.g. GFM_StellarFormationTime) to age in log(Gyr) given the 
+        current age of the universe as specified by sP.redshift. """
+        age = scalefacs.astype('float32')
+        age.fill(np.nan) # set wind to age=nan
+        w_stars = np.where(scalefacs >= 0.0)
+
+        curUniverseAgeGyr = self.redshiftToAgeFlat(self._sP.redshift)
+        birthRedshift = 1.0/scalefacs - 1.0
+        birthRedshift = logZeroMin( curUniverseAgeGyr - self.redshiftToAgeFlat(birthRedshift) )
+
+        age[w_stars] = birthRedshift[w_stars]
+        return age
 
     # --- other ---
 

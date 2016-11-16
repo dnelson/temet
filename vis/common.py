@@ -21,9 +21,8 @@ from util.treeSearch import calcHsml
 from util.helper import loadColorTable, logZeroMin
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
-from cosmo.util import periodicDists
+from cosmo.util import periodicDists, correctPeriodicDistVecs, correctPeriodicPosVecs
 from cosmo.cloudy import cloudyIon
-from cosmo.stellarPop import sps
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
@@ -218,6 +217,37 @@ def rotationMatrixFromAngleDirection(angle, direction):
                     [-direction[1], direction[0], 0.0]] )
 
     return R.astype('float32')
+
+def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
+    """ Rotate a [N,3] array of Coordinates about rotCenter according to rotMatrix. """
+    pos_in = np.array(pos) # do not modify input
+
+    # shift
+    for i in range(3):
+        pos_in[:,i] -= rotCenter[i]
+
+    # if coordinates wrapped box boundary before shift:
+    correctPeriodicDistVecs(pos_in, sP)
+
+    # rotate
+    pos_in = np.transpose( np.dot(rotMatrix, pos_in.transpose()) )
+
+    if shiftBack:
+        for i in range(3):
+            pos_in[:,i] += rotCenter[i]
+
+    # return a symmetric extent which covers the origin-centered particle distribution, which is hard to 
+    # recover after we wrap the coordinates back into the box
+    extent = np.zeros( 3, dtype='float32' )
+    for i in range(3):
+        right = pos_in[:,i].max() - rotCenter[i]
+        left = rotCenter[i] - pos_in[:,i].min()
+        extent[i] = 2.0 * np.max([left,right])
+
+    # place all coordinates back inside [0,sP.boxSize] if necessary:
+    correctPeriodicPosVecs(pos_in, sP)
+
+    return pos_in, extent
 
 def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxSizeImg, 
                                hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM):
@@ -435,6 +465,8 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
 def loadMassAndQuantity(sP, partType, partField, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
+    from cosmo.stellarPop import sps
+
     if partType in ['gas','stars']:
         mass = snapshotSubset(sP, partType, 'mass', indRange=indRange)
     elif partType == 'dm':
@@ -766,13 +798,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     if not sP.isZoom and sP.hInd is None:
                         raise Exception('Rotation in periodic box must be about a halo center.')
 
-                for i in range(3):
-                    pos[:,i] -= rotCenter[i]
-
-                pos = np.transpose( np.dot(rotMatrix, pos.transpose()) )
-
-                for i in range(3):
-                    pos[:,i] += rotCenter[i]
+                pos, _ = rotateCoordinateArray(sP, pos, rotMatrix, rotCenter)
 
             # load: mass/weights, quantity, and normalization required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)

@@ -279,6 +279,13 @@ def getIDIndexMap(ids):
 
     return arr, minid
 
+def trapsum(xin,yin):
+    """ Trapezoidal rule numerical quadrature. """
+    assert xin.size == yin.size
+    assert xin.size >= 2
+    nn = xin.size
+    return np.sum( np.abs(xin[1:nn-1]-xin[0:nn-2]) * (yin[1:nn-1]+yin[0:nn-2])*0.5 )
+
 # --- vis ---
 
 def loadColorTable(ctName, valMinMax=None):
