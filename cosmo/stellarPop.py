@@ -328,6 +328,9 @@ class sps():
 
     def prep_dust_models(self):
         """ Do possibly expensive pre-calculations for (resolved) dust model. """
+        if '_res' not in self.dustModel:
+            return
+            
         self.lambda_nm = {}
         self.A_lambda_sol = {}
         self.f_scattering = {}
@@ -531,7 +534,7 @@ class sps():
         
         return lums
 
-    def dust_tau_model_mags(self, band, N_H, Z_g, ages_logGyr, metals_log, masses_msun):
+    def dust_tau_model_mag(self, band, N_H, Z_g, ages_logGyr, metals_log, masses_msun):
         """ For a set of stars characterized by their (age,Z,M) values as well as (N_H,Z_g) 
         calculated from the resolved gas distribution, do the Model (C) attenuation on the 
         full spectra, sum together, and convolve the resulting total L(lambda) with the band 
@@ -549,9 +552,11 @@ class sps():
             tau_lambda = tau_a * self.f_scattering[band]
 
             # attenuation as a function of wavelength, interpolate onto stellar spec wavelengths
-            atten = (1 - np.exp(-tau_lambda))
-            tau_lambda[np.where(tau_lambda == 0.0)] = 1.0
-            atten *= (1/tau_lambda) # where tau_lambda==0 (outside lambda range), set atten=0
+            # leave atten at 1.0 (no change) for tau_lambda->0, and use 1e-5 threshold to avoid
+            # numerical truncation setting atten=0 for tau_lambda~0 (very small)
+            atten = np.ones( tau_lambda.size, dtype='float32' )
+            w = np.where(tau_lambda >= 1e-5)
+            atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
             
             if self.lambda_nm[band].size > 1: # _conv models
                 atten = np.interp( self.wave, self.lambda_nm[band], atten )
@@ -597,6 +602,7 @@ class sps():
             spectrum_local = spec_11*(x2-x)*(y2-y) + spec_21*(x-x1)*(y2-y) + \
                              spec_12*(x2-x)*(y-y1) + spec_22*(x-x1)*(y-y1)
             spectrum_local /= ((x2-x1)*(y2-y1))
+            spectrum_local = np.clip(spectrum_local, 0.0, np.inf) # enforce everywhere positive
 
             # accumulate attenuated contribution of this stellar population
             obs_lum += (spectrum_local * masses_msun[i]) * atten
@@ -628,6 +634,8 @@ class sps():
         nn = self.wave.size
         band_lum = np.sum( np.abs(self.wave_ang[1:nn-1]-self.wave_ang[0:nn-2]) * \
                             (obs_lum[1:nn-1] + obs_lum[0:nn-2])*0.5 )
+
+        assert band_lum > 0.0
 
         result_mag = -2.5 * np.log10(band_lum) - 48.60 - 2.5*self.mag2cgs
 

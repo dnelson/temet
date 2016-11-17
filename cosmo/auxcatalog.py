@@ -511,10 +511,14 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
             if i1 == i0:
                 continue # zero length of this type
             
-            # real stars?
+            # real stars? take subset
             w_stars = np.where( np.isfinite(stars['GFM_StellarFormationTime'][i0:i1] ) )
             if len(w_stars[0]) == 0:
                 continue
+
+            ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][w_stars]
+            metals_log  = stars['GFM_Metallicity'][i0:i1][w_stars]
+            masses_msun = stars['GFM_InitialMass'][i0:i1][w_stars]
 
             # slice starting/ending indices for -gas- local to this subhalo
             i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')]
@@ -549,11 +553,7 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
                 # loop over each requested band within this projection
                 for bandNum, band in enumerate(bands):
                     # compute attenuated stellar luminosities
-                    ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][w_stars]
-                    metals_log  = stars['GFM_Metallicity'][i0:i1][w_stars]
-                    masses_msun = stars['GFM_InitialMass'][i0:i1][w_stars]
-
-                    magsLocal = pop.dust_tau_model_mags(band, N_H[w_stars], Z_g[w_stars],
+                    magsLocal = pop.dust_tau_model_mag(band, N_H[w_stars], Z_g[w_stars],
                                                        ages_logGyr, metals_log, masses_msun)
 
                     # convert mags to luminosities, sum together
@@ -939,6 +939,8 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1),
    'Subhalo_StellarPhot_p07c_ns8_demo' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=8),
+   'Subhalo_StellarPhot_p07c_ns4_demo' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=4),
 
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
    'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),
