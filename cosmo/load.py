@@ -56,6 +56,10 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
                 for attr in f[field].attrs:
                     r[field+'_attrs'][attr] = f[field].attrs[attr]
 
+                # load subhaloIDs if present
+                if 'subhaloIDs' in f:
+                    r['subhaloIDs'] = f['subhaloIDs'][()]
+
             continue
 
         # either does not exist yet, or reCalculate requested
@@ -76,7 +80,11 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
             f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
             f[field].attrs['CreatedRev']  = curRepoVersion()
             f[field].attrs['CreatedBy']   = getpass.getuser()
+            
             for attrName, attrValue in attrs.iteritems():
+                if attrName == 'subhaloIDs':
+                    f.create_dataset('subhaloIDs', data=r[field+'_attrs']['subhaloIDs'])
+                    continue # typically too large to store as an attribute
                 f[field].attrs[attrName] = attrValue
                     
     return r
