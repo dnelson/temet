@@ -263,8 +263,6 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
     min_axis3 = boxSizeSim * 2.0
     pos_axis3 = np.zeros( NumPart, dtype=np.float32 )
     posTarget_axis3 = np.zeros( NumTarget, dtype=np.float32 )
-    #pos_axis3 = np.squeeze(pos[:,axis3]).copy()
-    #posTarget_axis3 = np.squeeze(posTarget[:,axis3].copy())
 
     for i in range(NumPart):
         pos_axis3[i] = pos[i,axis3] # copy
@@ -338,6 +336,10 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
             p2T = posTarget[kT,axis3]
 
         # (B) proceed with normal sph mapping
+
+        # immediately skip points with e.g. no mass (weight == 0)
+        if v == 0.0:
+            continue
 
         # clip points ouside box (z) dimension
         if pos.shape[1] == 3:
