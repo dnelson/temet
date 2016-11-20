@@ -389,9 +389,6 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
         projVecs = pix2vec(Nside,range(nProj),nest=True)
         projVecs = np.transpose( np.array(projVecs, dtype='float32') ) # Nproj,3
 
-    if '_conv' in dust:
-        print(' !! TODO verify convolution works entirely (non-negligible diffs wrt _eff)')
-
     # initialize a stellar population interpolator
     pop = sps(sP, iso, imf, dust)
 
@@ -407,7 +404,7 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
     nSubsTot = gc['header']['Nsubgroups_Total']
     subhaloIDsTodo = range(nSubsTot)
 
-    if Nside == 32:
+    if Nside > 1:
         # special case: just do a few special case subhalos at high Nside for demonstration
         assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99
         #gcDemo = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
@@ -417,13 +414,9 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
         # two massive + three MW-mass halos, SubhaloSFR = [0.2, 5.2, 1.7, 5.0, 1.1] Msun/yr
         subhaloIDsTodo = [172649,208781,412332,415496,415628] # gc['halos']['GroupFirstSub'][inds]
 
-    if Nside > 1 and Nside < 32:
-        assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99
-        subhaloIDsTodo = [172649,415496]
-
-    #if sP.res == 455 and sP.run == 'tng' and sP.snap == 99:
-    #    # special case: debugging
-    #    subhaloIDsTodo = [19051,19052]
+    if sP.res == 455 and sP.run == 'tng' and sP.snap == 99:
+        # special case: debugging
+        subhaloIDsTodo = [0,19051,19052] #[0]
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -550,17 +543,13 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
                     N_H = np.zeros( i1-i0, dtype='float32' )
                     Z_g = np.zeros( i1-i0, dtype='float32' )
 
+                # compute total attenuated stellar luminosity in each band
+                magsLocal = pop.dust_tau_model_mags(bands, N_H[w_stars], Z_g[w_stars],
+                                                    ages_logGyr, metals_log, masses_msun)
+
                 # loop over each requested band within this projection
                 for bandNum, band in enumerate(bands):
-                    # compute attenuated stellar luminosities
-                    magsLocal = pop.dust_tau_model_mag(band, N_H[w_stars], Z_g[w_stars],
-                                                       ages_logGyr, metals_log, masses_msun)
-
-                    # convert mags to luminosities, sum together
-                    totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
-
-                    if totalLum > 0.0:
-                        r[i,bandNum,projNum] = -2.5 * np.log10( totalLum )
+                    r[i,bandNum,projNum] = magsLocal[band]
 
     # prepare save
     attrs = {'Description' : desc.encode('ascii'), 
@@ -929,12 +918,8 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarPhot_p07s_bc00dust' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='salpeter', dust='bc00'),
 
-   'Subhalo_StellarPhot_p07c_bc00dust_res_eff_ns1' : partial(subhaloStellarPhot, 
-                                         iso='padova07', imf='chabrier', dust='bc00_res_eff', Nside=1),
-   'Subhalo_StellarPhot_p07c_bc00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
-                                         iso='padova07', imf='chabrier', dust='bc00_res_conv', Nside=1),
    'Subhalo_StellarPhot_p07c_cf00dust_res_eff_ns1' : partial(subhaloStellarPhot, 
-                                         iso='padova07', imf='chabrier', dust='bc00_res_eff', Nside=1),
+                                         iso='padova07', imf='chabrier', dust='cf00_res_eff', Nside=1),
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1),
    'Subhalo_StellarPhot_p07c_ns8_demo' : partial(subhaloStellarPhot, 

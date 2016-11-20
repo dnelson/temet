@@ -240,3 +240,51 @@ def plots():
         #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
 
         pdf.close()
+
+def viewingAngleVariation():
+    """ Demo of Nside>>1 results for variation of (one or two) galaxy colors as a function of 
+    viewing angle. 1D Histogram. """
+
+    # config
+    nBins = 100
+
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+
+    ac_nodust = 'p07c_cf00dust'
+    ac_demo   = 'p07c_ns8_demo'
+
+    bands = ['g','r']
+
+    # load
+    ac = cosmo.load.auxCat(sP, fields=['Subhalo_StellarPhot_'+ac_demo])
+    demo_ids = ac['Subhalo_StellarPhot_'+ac_demo+'_attrs']['subhaloIDs']
+
+    nodust_colors = loadSimGalColors(sP, ac_nodust, bands=bands)
+    demo_colors   = loadSimGalColors(sP, ac_demo, bands=bands)
+
+    import pdb; pdb.set_trace()
+
+    # start plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    mag_range = _bandMagRange(bands)
+    ax.set_xlim(mag_range)
+    ax.set_ylim([0,1])
+    ax.set_xlabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
+    ax.set_ylabel('PDF $\int=1$')
+
+    # histogram demo color distribution
+    #for i in range(demo_colors.shape[0]):
+    yy, xx = np.histogram(demo_colors, bins=nBins, range=mag_range, density=True)
+    xx = xx[:-1] + 0.5*(mag_range[1]-mag_range[0])/nBins
+    l, = ax.plot(xx, yy, label='', lw=2.5)
+
+    # overplot nodust color
+    #ax.plot()
+
+    # finish plot and save
+    fig.tight_layout()
+    fig.save('viewing_angle_variation.pdf')
+    plt.close(fig)
+    
