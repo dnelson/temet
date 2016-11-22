@@ -179,6 +179,29 @@ def simSubhaloQuantity(sP, quant, clean=False):
         minMax = [0.0,0.6]
         takeLog = False
 
+    if quant in ['bmag_ism_masswt','bmag_ism_volwt','bmag_halo_masswt','bmag_halo_volwt']:
+        # mean magnetic field magnitude either in the ISM (star forming gas) or halo (0.15 < r/rvir < 1.0)
+        # weighted by either gas cell mass or gas cell volume
+        if '_masswt' in quant: wtStr = 'massWt'
+        if '_volwt' in quant: wtStr = 'volumeWt'
+        if '_ism' in quant:
+            selStr = 'SFingGas'
+            selDesc = 'ISM'
+        if '_halo' in quant:
+            selStr = 'halo'
+            selDesc = 'halo'
+
+        fieldName = 'Subhalo_Bmag_%s_%s' % (selStr,wtStr)
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = ac[fieldName] * 1e-6 # Gauss -> microGauss
+
+        labels = 'log |B|$_{\\rm %s} [$\mu$G]' % selDesc
+        if not clean:
+            if '_ism' in quant: label += ' [SFR>0 %s]' % wtStr
+            if '_halo' in quant: label += ' [0.15<r/r$_{\\rm vir}$/1.0 %s]' % wtStr
+        minMax = [-4.0, 4.0]
+
     assert label is not None
     return vals, label, minMax, takeLog
 

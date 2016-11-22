@@ -202,9 +202,8 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
     if ptType == 'stars':
         ptRestriction = 'real_stars'
 
-    if ptProperty == 'mass_sfrgt0':
-        ptRestriction = 'sfr_gt0'
-        ptProperty = 'mass'
+    if '_sfrgt0' in ptProperty:
+        ptProperty, ptRestriction = ptProperty.split("_") # takes the form ptProp_sfrgt0
 
     # config
     ptLoadType = sP.ptNum(ptType)
@@ -227,15 +226,17 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
     print(' Total # Subhalos: %d, processing all [%s] subhalos...' % (nSubsTot,nSubsTot))
 
     # determine radial restriction for each subhalo
+    radSqMin = np.zeros( nSubsTot, dtype='float32' ) # leave at zero unless modified below
+
     if isinstance(rad, float):
         # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
         rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
-        radSq = np.zeros( nSubsTot, dtype='float32' ) 
-        radSq += rad_pkpc * rad_pkpc
+        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax += rad_pkpc * rad_pkpc
     elif rad is None:
         # no radial restriction (all particles in subhalo)
-        radSq = np.zeros( nSubsTot, dtype='float32' )
-        radSq += sP.boxSize**2.0
+        radSqMax = np.zeros( nSubsTot, dtype='float32' )
+        radSqMax += sP.boxSize**2.0
     elif rad == 'p10':
         # load group m200_crit values
         gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
@@ -243,7 +244,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
         # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
         r_cut = 27.3 * (parentM200/1e5)**(0.29) / sP.HubbleParam
-        radSq = r_cut * r_cut
+        radSqMax = r_cut * r_cut
     elif rad == '30h':
         # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
         rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
@@ -253,9 +254,17 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
         ww = np.where(twiceStellarRHalf > rad_pkpc)
         twiceStellarRHalf[ww] = rad_pkpc
-        radSq = twiceStellarRHalf**2.0
+        radSqMax = twiceStellarRHalf**2.0
+    elif rad == 'r015_1rvir_halo':
+        # classic 'halo' definition, 0.15rvir < r < 1.0rvir (meaningless for non-centrals)
+        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        parentR200 = gcLoad['halos'][gcLoad['subhalos']]
 
-    assert radSq.size == nSubsTot
+        radSqMax = (1.00 * parentR200)**2
+        radSqMin = (0.15 * parentR200)**2
+
+    assert radSqMax.size == nSubsTot
+    assert radSqMin.size == nSubsTot
 
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = []
@@ -264,7 +273,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
         fieldsLoad.append('pos')
     if ptRestriction == 'real_stars':
         fieldsLoad.append('sftime')
-    if ptRestriction == 'sfr_gt0':
+    if ptRestriction == 'sfrgt0':
         fieldsLoad.append('sfr')
 
     particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, haloSubset=True)
@@ -284,12 +293,12 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
         particles['weights'] = np.zeros( particles[ptProperty].shape[0], dtype='float32' )
         particles['weights'] += 1.0 # uniform
     else:
-        assert weighting == 'mass' or 'bandLum' in weighting
+        assert weighting in ['mass','volume'] or 'bandLum' in weighting
         assert op not in ['sum'] # meaningless
 
-        if weighting == 'mass':
-            # use particle masses (linear) as weights
-            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields='Masses', haloSubset=True)
+        if weighting in ['mass','volume']:
+            # use particle masses or volumes (linear) as weights
+            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, haloSubset=True)
 
         if 'bandLum' in weighting:
             # prepare sps interpolator
@@ -328,12 +337,13 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
         if rad is not None:
             rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][i,:], particles['Coordinates'][i0:i1,:], sP )
-            validMask &= (rr <= radSq[i])
+            validMask &= (rr <= radSqMax[i])
+            validMask &= (rr >= radSqMin[i])
 
         if ptRestriction == 'real_stars':
             validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
 
-        if ptRestriction == 'sfr_gt0':
+        if ptRestriction == 'sfrgt0':
             validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
 
         wValid = np.where(validMask)
@@ -414,9 +424,9 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
         # two massive + three MW-mass halos, SubhaloSFR = [0.2, 5.2, 1.7, 5.0, 1.1] Msun/yr
         subhaloIDsTodo = [172649,208781,412332,415496,415628] # gc['halos']['GroupFirstSub'][inds]
 
-    if sP.res == 455 and sP.run == 'tng' and sP.snap == 99:
-        # special case: debugging
-        subhaloIDsTodo = [0,19051,19052] #[0]
+    #if sP.res == 455 and sP.run == 'tng' and sP.snap == 99:
+    #    # special case: debugging
+    #    subhaloIDsTodo = [0,19051,19052] #[0]
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -493,7 +503,7 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
         print(' Bands: [%s].' % ', '.join(bands))
 
         for i, subhaloID in enumerate(subhaloIDsTodo):
-            #print('[%d] subhalo = %d' % (i,subhaloID))
+            print('[%d] subhalo = %d' % (i,subhaloID))
             if i % np.max([1,int(nSubsDo/100)]) == 0 and i <= nSubsDo:
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
@@ -521,8 +531,8 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
             for projNum in range(nProj):
                 #print('  proj %d of %d' % (projNum,nProj))
 
-                # some gas exists in subhalo?
-                if i0g != i1g:
+                # at least 2 gas cells exist in subhalo?
+                if i1g > i0g+1:
                     # projection
                     projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
                     projVec = projVecs[projNum,:]
@@ -902,21 +912,29 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarMeanVel' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
 
+   'Subhalo_Bmag_SFingGas_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_sfrgt0',op='mean',rad=None,weighting='mass'),
+   'Subhalo_Bmag_SFingGas_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_sfrgt0',op='mean',rad=None,weighting='volume'),
+   'Subhalo_Bmag_halo_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='mass'),
+   'Subhalo_Bmag_halo_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='volume'),
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),
    'Subhalo_StellarPhot_p07c_bc00dust' : partial(subhaloStellarPhot, 
-                                         iso='padova07', imf='chabrier', dust='bc00'),
+                                         iso='padova07', imf='chabrier', dust='bc00'), # temporary testing
    'Subhalo_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00'),
    'Subhalo_StellarPhot_p07k_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='kroupa', dust='none'),
-   'Subhalo_StellarPhot_p07k_bc00dust' : partial(subhaloStellarPhot, 
-                                         iso='padova07', imf='kroupa', dust='bc00'),
+   'Subhalo_StellarPhot_p07k_cf00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='kroupa', dust='cf00'),
    'Subhalo_StellarPhot_p07s_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='salpeter', dust='none'),
-   'Subhalo_StellarPhot_p07s_bc00dust' : partial(subhaloStellarPhot, 
-                                         iso='padova07', imf='salpeter', dust='bc00'),
+   'Subhalo_StellarPhot_p07s_cf00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='salpeter', dust='cf00'),
 
    'Subhalo_StellarPhot_p07c_cf00dust_res_eff_ns1' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_eff', Nside=1),

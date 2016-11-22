@@ -484,7 +484,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                        not None, then both pos and posTarget will be sorted on the 3rd (projection 
                        direction) coordinate, and mapping will be front to back, such that the grid 
                        value at the position (2D+depth) of each posTarget is estimated. In this case, 
-                       the return is of shape [N(posTarget)] giving the projecte ddensity or mass 
+                       the return is of shape [N(posTarget)] giving the projected density or mass 
                        weighted quantity along the line of sight to each posTarget.
     """
     # input sanity checks
@@ -497,7 +497,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         raise Exception('Strange dimensions of pos.')
     if hsml.ndim != 1 or (mass.ndim != 1 and mass.size > 1) or (quant is not None and quant.ndim != 1):
         raise Exception('Strange dimensions of hsml/mass/quant.')
-    if (mass.ndim == 0 and mass.size != 1) or (mass.size == 2):
+    if (mass.ndim == 0 and mass.size != 1):
         raise Exception('Strange shape of mass.')
     if pos.shape[0] != hsml.size or (pos.shape[0] != mass.size and mass.size > 1):
         raise Exception('Dimension mismatch for inputs (hsml/mass).')
