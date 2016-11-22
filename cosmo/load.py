@@ -476,7 +476,8 @@ def snapshotSubset(sP, partType, fields,
         raise Exception("Cannot specify both haloID and subhaloID.")
     if ((haloID is not None) or (subhaloID is not None)) and not sP.groupOrdered:
         raise Exception("Not yet implemented (group/halo load in non-groupordered).")
-    if haloSubset and (not sP.groupOrdered or (haloID is not None) or (subhaloID is not None) or (inds is not None)):
+    if haloSubset and (not sP.groupOrdered or (haloID is not None) or \
+        (subhaloID is not None) or (inds is not None) or (indRange is not None)):
         raise Exception("haloSubset only for groupordered snapshots, and not with halo/subhalo subset.")
     if sP.snap is None:
         raise Exception("Must specify sP.snap for snapshotSubset load.")
@@ -488,11 +489,11 @@ def snapshotSubset(sP, partType, fields,
     fields = list(iterable(fields))
     fieldsOrig = list(iterable(fields))
 
-    # haloSubset only? construct indRange and self-call
+    # haloSubset only? update indRange and continue
     if haloSubset:
         offsets_pt = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
-        kwargs['indRange'] = [0, offsets_pt[:,sP.ptNum(partType)].max()]
-        return snapshotSubset(sP, partType, fields, sq=sq, **kwargs)
+        indRange = [0, offsets_pt[:,sP.ptNum(partType)].max()]
+        kwargs['indRange'] = indRange
 
     # composite fields (temp, vmag, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
@@ -521,6 +522,14 @@ def snapshotSubset(sP, partType, fields,
             b = sP.units.particleCodeBFieldToGauss(b)
             bmag = np.sqrt( b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2] )
             return bmag
+
+        # volume [ckpc/h]^3
+        if field.lower() in ["vol", "volume"]:
+            # Volume eliminated in newer outputs, calculate as necessary, otherwise fall through
+            if not snapHasField(sP, partType, 'Volume'):
+                mass = snapshotSubset(sP, partType, 'mass', **kwargs)
+                dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+                return (mass / dens)
 
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:

@@ -236,6 +236,11 @@ def plots():
         #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07o', cStatistic=cs)
         histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07m', cStatistic=cs)
 
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_ism_masswt', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_ism_volwt', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_halo_masswt', cStatistic=cs)
+        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_halo_volwt', cStatistic=cs)
+
         #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant=None)
         #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
 
@@ -250,17 +255,22 @@ def viewingAngleVariation():
 
     sP = simParams(res=1820, run='tng', redshift=0.0)
 
-    ac_nodust = 'p07c_cf00dust'
-    ac_demo   = 'p07c_ns8_demo'
+    ac_modelA = 'p07c_nodust'
+    ac_modelB = 'p07c_cf00dust'
+    ac_modelC_demos  = {'p07c_ns4_demo':4} #, 'p07c_ns8_demo':8}
 
     bands = ['g','r']
 
     # load
-    ac = cosmo.load.auxCat(sP, fields=['Subhalo_StellarPhot_'+ac_demo])
-    demo_ids = ac['Subhalo_StellarPhot_'+ac_demo+'_attrs']['subhaloIDs']
+    modelA_colors = loadSimGalColors(sP, ac_modelA, bands=bands)
+    modelB_colors = loadSimGalColors(sP, ac_modelB, bands=bands)
+    modelC_colors = {}
 
-    nodust_colors = loadSimGalColors(sP, ac_nodust, bands=bands)
-    demo_colors   = loadSimGalColors(sP, ac_demo, bands=bands)
+    for ac_demo in ac_modelC_demos:
+        ac = cosmo.load.auxCat(sP, fields=['Subhalo_StellarPhot_'+ac_demo])
+        demo_ids = ac['Subhalo_StellarPhot_'+ac_demo+'_attrs']['subhaloIDs']
+
+        modelC_colors[ac_demo] = loadSimGalColors(sP, ac_demo, bands=bands)
 
     import pdb; pdb.set_trace()
 

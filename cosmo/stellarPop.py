@@ -46,6 +46,9 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None):
     if simColorsModel == 'snap':
         gc_colors = stellarPhotToSDSSColor( colorData['subhalos'], bands )
     else:
+        if colorData.ndim == 3:
+            import pdb; pdb.set_trace() # TODO, handle multiple projection saves
+
         # auxcatPhotToSDSSColor():
         acBands = list(colorData[acKey+'_attrs']['bands'])
         i0 = acBands.index('sdss_'+bands[0])
@@ -969,46 +972,6 @@ def debug_dust_plots():
     pop = sps(sP, iso, imf, dust)
 
     for band in bands:
-
-        fig = plt.figure(figsize=(22,14))
-
-        ax = fig.add_subplot(3,4,1)
-        #ax.set_xscale('log')
-        ax.set_xlabel(xf_label)
-        ax.set_ylabel('$(A_\lambda / A_V)_\odot$')
-        ax.plot( pop.lambda_nm[band], pop.A_lambda_sol[band], marker=marker )
-        if pop.lambda_nm[band].size != 1:
-            ax.set_xlim(master_lambda_range)
-
-        ax = fig.add_subplot(3,4,2)
-        #ax.set_xscale('log')
-        ax.set_xlabel(xf_label)
-        ax.set_ylabel('f_scattering')
-        ax.plot( pop.lambda_nm[band], pop.f_scattering[band], marker=marker )
-        if pop.lambda_nm[band].size != 1:
-            ax.set_xlim(master_lambda_range)
-
-        ax = fig.add_subplot(3,4,3)
-        #ax.set_xscale('log')
-        ax.set_xlabel(xf_label)
-        ax.set_ylabel('$\gamma$')
-        ax.plot( pop.lambda_nm[band], pop.gamma[band], marker=marker )
-        if pop.lambda_nm[band].size != 1:
-            ax.set_xlim(master_lambda_range)
-
-        ax = fig.add_subplot(3,4,5)
-        #ax.set_xscale('log')
-        ax.set_xlabel('Filter $\lambda$ [nm]')
-        ax.set_ylabel('Filter Transmission')
-        ax.plot( pop.trans_lambda[band], pop.trans_val[band] )
-
-        ax = fig.add_subplot(3,4,6)
-        #ax.set_xscale('log')
-        ax.set_xlim(master_lambda_range)
-        ax.set_xlabel(xm_label)
-        ax.set_ylabel('Filter Interp-Trans')
-        ax.plot( pop.wave, pop.trans_normed[band]*pop.wave_ang )
-
         # set up a calculation
         N_H = np.array([pop.N_H0 * 0.5])
         Z_g = np.array([sP.units.Z_solar * 0.8])
@@ -1084,6 +1047,41 @@ def debug_dust_plots():
         mag_f2 = pop.dust_tau_model_mag(band, N_H, Z_g, ages_logGyr, metals_log, masses_msun)
 
         print(band,mag_f1,mag_f2,result_mag-2.5*np.log10(NstarsTodo)) #,result_mag_noatten,mag)
+
+        # start figure
+        fig = plt.figure(figsize=(22,14))
+
+        ax = fig.add_subplot(3,4,1)
+        ax.set_xlabel(xf_label)
+        ax.set_ylabel('$(A_\lambda / A_V)_\odot$')
+        ax.plot( pop.lambda_nm[band], pop.A_lambda_sol[band], marker=marker )
+        if pop.lambda_nm[band].size != 1:
+            ax.set_xlim(master_lambda_range)
+
+        ax = fig.add_subplot(3,4,2)
+        ax.set_xlabel(xf_label)
+        ax.set_ylabel('f_scattering')
+        ax.plot( pop.lambda_nm[band], pop.f_scattering[band], marker=marker )
+        if pop.lambda_nm[band].size != 1:
+            ax.set_xlim(master_lambda_range)
+
+        ax = fig.add_subplot(3,4,3)
+        ax.set_xlabel(xf_label)
+        ax.set_ylabel('$\gamma$')
+        ax.plot( pop.lambda_nm[band], pop.gamma[band], marker=marker )
+        if pop.lambda_nm[band].size != 1:
+            ax.set_xlim(master_lambda_range)
+
+        ax = fig.add_subplot(3,4,5)
+        ax.set_xlabel('Filter $\lambda$ [nm]')
+        ax.set_ylabel('Filter Transmission')
+        ax.plot( pop.trans_lambda[band], pop.trans_val[band] )
+
+        ax = fig.add_subplot(3,4,6)
+        ax.set_xlim(master_lambda_range)
+        ax.set_xlabel(xm_label)
+        ax.set_ylabel('Filter Interp-Trans')
+        ax.plot( pop.wave, pop.trans_normed[band]*pop.wave_ang )
 
         # plots of spectrum
         ax = fig.add_subplot(3,4,4)
