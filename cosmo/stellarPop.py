@@ -26,7 +26,7 @@ from vis.common import rotationMatrixFromVec, rotateCoordinateArray
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
             'g':4, 'r':5, 'i':6, 'z':7}
 
-def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None):
+def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None):
     """ Load band-magnitudes either from snapshot photometrics or from auxCat SPS modeling, 
     and convert to a color if bands is passed in, otherwise return loaded data. If loaded 
     data is passed in with bands, do then magnitude computation without re-loading."""
@@ -42,20 +42,46 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None):
     if bands is None:
         return colorData
 
+    subhaloIDs = None
+
     # compute colors
     if simColorsModel == 'snap':
         gc_colors = stellarPhotToSDSSColor( colorData['subhalos'], bands )
     else:
-        if colorData.ndim == 3:
-            import pdb; pdb.set_trace() # TODO, handle multiple projection saves
+        # which subhaloIDs do these colors correspond to?
+        if 'subhaloIDs' in colorData:
+            subhaloIDs = colorData['subhaloIDs']
+        else:
+            # could generate with a range() if this came up
+            print(' warning: subhaloIDs not in [%s] auxCat.' % acKey)
 
-        # auxcatPhotToSDSSColor():
+        # band indices
         acBands = list(colorData[acKey+'_attrs']['bands'])
         i0 = acBands.index('sdss_'+bands[0])
         i1 = acBands.index('sdss_'+bands[1])
-        gc_colors = colorData[acKey][:,i0] - colorData[acKey][:,i1]
 
-    return gc_colors
+        # multiple projections per subhalo?
+        if colorData[acKey].ndim == 3:
+            assert projs is not None
+            
+            if projs == 'all':
+                # return all
+                gc_colors = colorData[acKey][:,i0,:] - colorData[acKey][:,i1,:]
+            elif projs == 'random':
+                # return one per subhalo, randomly chosen
+                np.random.seed(42424242)
+                nums = np.random.randint(0,high=colorData[acKey].shape[2],size=colorData[acKey].shape[0])
+                all_inds = range(colorData[acKey].shape[0])
+                gc_colors = colorData[acKey][all_inds,i0,nums] - colorData[acKey][all_inds,i1,nums]
+            else:
+                # otherwise, projs had better be an integer or a tuple
+                assert isinstance(projs, (int,long,list,tuple))
+                gc_colors = colorData[acKey][:,i0,projs] - colorData[acKey][:,i1,projs]
+        else:
+            # just one projection per subhalo
+            gc_colors = colorData[acKey][:,i0] - colorData[acKey][:,i1]
+
+    return gc_colors, subhaloIDs
 
 def stellarPhotToSDSSColor(photVector, bands):
     """ Convert the GFM_StellarPhotometrics[] or SubhaloStellarPhotometrics[] vector into a 

@@ -262,6 +262,12 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
         radSqMax = (1.00 * parentR200)**2
         radSqMin = (0.15 * parentR200)**2
+    elif rad == '2rhalfstars':
+        # classic Illustris galaxy definition, r < 2*r_{1/2,mass,stars}
+        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+
+        radSqMax = twiceStellarRhalf**2
 
     assert radSqMax.size == nSubsTot
     assert radSqMin.size == nSubsTot
@@ -916,10 +922,18 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_sfrgt0',op='mean',rad=None,weighting='mass'),
    'Subhalo_Bmag_SFingGas_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_sfrgt0',op='mean',rad=None,weighting='volume'),
+   'Subhalo_Bmag_2rhalfstars_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='2rhalfstars',weighting='mass'),
+   'Subhalo_Bmag_2rhalfstars_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='2rhalfstars',weighting='volume'),
    'Subhalo_Bmag_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Bmag_halo_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='volume'),
+   'Subhalo_Pratio_halo_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='pres_ratio',op='mean',rad='r015_1rvir_halo',weighting='mass'),
+   'Subhalo_Pratio_halo_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='pres_ratio',op='mean',rad='r015_1rvir_halo',weighting='volume'),
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),

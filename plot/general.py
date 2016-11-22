@@ -179,28 +179,52 @@ def simSubhaloQuantity(sP, quant, clean=False):
         minMax = [0.0,0.6]
         takeLog = False
 
-    if quant in ['bmag_ism_masswt','bmag_ism_volwt','bmag_halo_masswt','bmag_halo_volwt']:
+    if quant in ['bmag_sfrgt0_masswt','bmag_sfrgt0_volwt',
+                 'bmag_2rhalf_masswt','bmag_2rhalf_volwt',
+                 'bmag_halo_masswt','bmag_halo_volwt']:
         # mean magnetic field magnitude either in the ISM (star forming gas) or halo (0.15 < r/rvir < 1.0)
         # weighted by either gas cell mass or gas cell volume
         if '_masswt' in quant: wtStr = 'massWt'
-        if '_volwt' in quant: wtStr = 'volumeWt'
-        if '_ism' in quant:
+        if '_volwt' in quant: wtStr = 'volWt'
+
+        if '_sfrgt0' in quant:
             selStr = 'SFingGas'
             selDesc = 'ISM'
+            minMax = [0.0, 1.5]
+        if '_2rhalf' in quant:
+            selStr = '2rhalfstars'
+            selDesc = 'ISM'
+            minMax = [0.0, 1.5]
         if '_halo' in quant:
             selStr = 'halo'
             selDesc = 'halo'
+            minMax = [-1.5, 0.0]
 
         fieldName = 'Subhalo_Bmag_%s_%s' % (selStr,wtStr)
 
         ac = auxCat(sP, fields=[fieldName])
-        vals = ac[fieldName] * 1e-6 # Gauss -> microGauss
+        vals = ac[fieldName] * 1e6 # Gauss -> microGauss
 
-        labels = 'log |B|$_{\\rm %s} [$\mu$G]' % selDesc
+        label = 'log |B|$_{\\rm %s}$  [$\mu$G]' % selDesc
         if not clean:
-            if '_ism' in quant: label += ' [SFR>0 %s]' % wtStr
-            if '_halo' in quant: label += ' [0.15<r/r$_{\\rm vir}$/1.0 %s]' % wtStr
-        minMax = [-4.0, 4.0]
+            if '_sfrgt0' in quant: label += '  [SFR > 0 %s]' % wtStr
+            if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$ %s]' % wtStr
+            if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
+
+    if quant in ['pratio_halo_masswt','pratio_halo_volwt']:
+        # pressure ratio (linear ratio of magnetic to gas pressure) in halo (0.15 < r/rvir < 1.0)
+        # weighted by either gas cell mass or gas cell volume
+        if '_masswt' in quant: wtStr = 'massWt'
+        if '_volwt' in quant: wtStr = 'volWt'
+
+        fieldName = 'Subhalo_Pratio_halo_%s' % (wtStr)
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = ac[fieldName]
+
+        label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (halo) [$\mu$G]'
+        if not clean: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
+        minMax = [-2.0, 2.0]
 
     assert label is not None
     return vals, label, minMax, takeLog
