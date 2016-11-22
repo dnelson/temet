@@ -1452,7 +1452,7 @@ def galaxyColorPDF(sPs, pdf, splitCenSat=False, bands=['u','i'], simRedshift=0.0
         gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
         
         # load simulation colors
-        gc_colors = loadSimGalColors(sP, simColorsModel, bands=bands)
+        gc_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
 
         # galaxy selection
         w1, w2, w3 = cenSatSubhaloIndices(sP)
@@ -1705,7 +1705,7 @@ def galaxyColor2DPDFs(sPs, pdf, splitCenSat=False, simRedshift=0.0):
             for i, bands in enumerate(bandCombos):
 
                 # calculate simulation colors
-                gc_colors = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=bands)
+                gc_colors, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=bands)
 
                 # config for this band
                 mag_range = _bandMagRange(bands)
