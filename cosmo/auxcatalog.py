@@ -11,7 +11,7 @@ from functools import partial
 
 from illustris_python.util import partTypeNum
 from cosmo.util import periodicDistsSq, snapNumToRedshift
-from util.helper import logZeroMin
+from util.helper import logZeroMin, logZeroNaN
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -24,7 +24,7 @@ minNumPartGroup = 100 # only consider halos above a minimum total number of part
 boxGridSizeHI     = 1.5 # code units, e.g. ckpc/h
 boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
-def fofRadialSumType(sP, ptProperty, rad, method='B'):
+def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
         the SO radii already computed and available in the group catalog (input as a string). Methods A 
         and B restrict this calculation to FoF particles only, whereas method C does a full particle 
@@ -34,6 +34,7 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
       Method B: do a full snapshot load per type, then halo loop and slice per FoF, to cut down on I/O ops. 
       Method C: per type: full snapshot load, construct the global tree, spherical aperture search per FoF.
     """
+    assert pSplit is None # not implemented
     if ptProperty != 'mass':
         raise Exception('Not implemented.')
 
@@ -188,12 +189,13 @@ def fofRadialSumType(sP, ptProperty, rad, method='B'):
 
     return r, attrs
 
-def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
+def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=None):
     """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only.
     """
+    assert pSplit is None # not implemented
     assert op in ['sum','mean']
 
     # determine ptRestriction
@@ -267,7 +269,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
         gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
         twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
 
-        radSqMax = twiceStellarRhalf**2
+        radSqMax = twiceStellarRHalf**2
 
     assert radSqMax.size == nSubsTot
     assert radSqMin.size == nSubsTot
@@ -382,7 +384,7 @@ def subhaloRadialReduction(sP, ptType, ptProperty, op, rad, weighting=None):
 
     return r, attrs
 
-def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
+def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, modelH=True):
     """ Compute the total band-magnitudes, per subhalo, under the given assumption of 
     an iso(chrone) model, imf model, and dust model. """
     from cosmo.stellarPop import sps
@@ -418,11 +420,11 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
 
     # allocate return, NaN indicates not computed (no star particles)
     nSubsTot = gc['header']['Nsubgroups_Total']
-    subhaloIDsTodo = range(nSubsTot)
+    subhaloIDsTodo = np.arange(nSubsTot)
 
     if Nside > 1:
         # special case: just do a few special case subhalos at high Nside for demonstration
-        assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99
+        assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99 and pSplit is None
         #gcDemo = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
         #massesDemo = sP.units.codeMassToLogMsun( gcDemo['halos']['Group_M_Crit200'] )
         #ww = np.where( (massesDemo >= 11.9) & (massesDemo < 12.1) ) # ww[0]= [597, 620, 621...]
@@ -433,6 +435,11 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
     #if sP.res == 455 and sP.run == 'tng' and sP.snap == 99:
     #    # special case: debugging
     #    subhaloIDsTodo = [0,19051,19052] #[0]
+
+    if pSplit is not None:
+        # split up subhaloIDs in round-robin scheme (equal number of massive/centrals per job)
+        modSplit = subhaloIDsTodo % pSplit[1]
+        subhaloIDsTodo = np.where(modSplit == pSplit[0])[0]
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -582,10 +589,11 @@ def subhaloStellarPhot(sP, iso=None, imf=None, dust=None, Nside=1, modelH=True):
 
     return r, attrs
 
-def mergerTreeQuant(sP, treeName, quant, smoothing=None):
+def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
     """ For every subhalo, compute an assembly/related quantity using a merger tree. """
     from scipy.signal import medfilt
     assert quant in ['zForm']
+    assert pSplit is None # not implemented
 
     def _ma(X, windowSize):
         """ Running mean. Endpoints are copied unmodified in bwhalf region. """
@@ -699,17 +707,174 @@ def mergerTreeQuant(sP, treeName, quant, smoothing=None):
         r[i] = z_form
 
     attrs = {'Description' : desc.encode('ascii'), 
-             'Selection'   : select.encode('ascii')}
+             'Selection'   : select.encode('ascii'),
+             'subhaloIDs'  : subhaloIDsTodo}
 
     return r, attrs
 
-def wholeBoxColDensGrid(sP, species):
+def tracerTracksQuant(sP, pSplit, quant, op, time):
+    """ For every subhalo, compute a assembly/accretion/related quantity using the tracker 
+    tracks through time. """
+    from tracer.tracerEvo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
+      accTime, accMode, ACCMODES
+    from tracer.tracerMC import defParPartTypes, fields_in_log
+
+    assert pSplit is None # not implemented
+    assert op in ['mean'] #,'sample']
+    assert quant in ['angmom','entr','acc_time_1rvir','acc_time_015rvir']
+    assert time is None or time in ['acc_time_1rvir','acc_time_015rvir']
+
+    def _nansum(x):
+        """ Helper. """
+        N = np.count_nonzero(~np.isnan(x))
+
+        r = np.nan
+        if N > 0:
+            r = np.nansum(x)
+
+        return r, N
+
+    # prepare catalog metadata
+    desc   = "Tracer tracks quantity (%s) using [%s] over [%s]." % (quant,op,time)
+    select = "All Subfind subhalos."
+
+    # load snapshot and subhalo information
+    nSubsTot = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+    #subhaloIDsTodo = np.arange(2)
+    subhaloIDsTodo = np.arange(nSubsTot)
+
+    nSubsDo = len(subhaloIDsTodo)
+
+    # allocate return, NaN indicates not computed (e.g. not in tree at sP.snap)
+    nTypes = len(defParPartTypes) + 1 # store separately by z=0 particle type, +1 for 'all' combined
+    nModes = len(ACCMODES) + 1 # store separately by mode, +1 for 'all' combined
+
+    r = np.zeros( (nSubsDo,nTypes,nModes), dtype='float32' )
+    N = np.zeros( (nSubsDo,nTypes,nModes), dtype='int32' ) # accumulate bin counts
+    r.fill(np.nan)
+
+    # load 1D reduction of the tracer tracks corresponding to the requested quantity, per tracer,
+    # taking into account the time specification. note that 'accretion times' as the quantity 
+    # are already just 1D, while the others need to be selected at a specific time, or averaged 
+    # over a specific time window, reducing the (Nsnaps,Ntr) shaped tracks into a 1D (Ntr) shape
+    if quant == 'acc_time_1rvir':
+        assert time is None
+        tracks = accTime(sP, rVirFac=1.0) #snapStep
+    elif quant == 'acc_time_015rvir':
+        assert time is None
+        tracks = accTime(sP, rVirFac=0.15) #snapStep
+    else:
+        if time is None:
+            # full tracks (what are we going to do with these?)
+            tracks = tracersTimeEvo(sP, quant, all=True) #snapStep=None
+            # do e.g. a mean across all time
+            import pdb; pdb.set_trace()
+        elif time == 'acc_time_1rvir':
+            tracks = trValsAtAccTimes(sP, quant, rVirFac=1.0)
+        elif time == 'acc_time_015rvir':
+            tracks = trValsAtAccTimes(sP, quant, rVirFac=0.15)
+
+    assert tracks.ndim == 1
+
+    # remove log if needed
+    if quant in fields_in_log:
+        tracks = 10.0**tracks
+
+    # load mode decomposition, metadata offsets
+    mode = accMode(sP)
+
+    meta, nTracerTot = tracersMetaOffsets(sP, all='Subhalo')
+
+    # loop over subhalos
+    for i, subhaloID in enumerate(subhaloIDsTodo):
+        if i % np.max([1,int(nSubsDo/100)]) == 0 and i <= nSubsDo:
+            print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+
+        # loop over modes
+        for modeNum, modeName in enumerate(ACCMODES.keys()):
+            modeVal = ACCMODES[modeName]
+            #print('   [%s] %s (val=%d)' % (modeNum,modeName,modeVal))
+
+            # loop over partTypes
+            for j, ptName in enumerate(defParPartTypes):
+                # slice starting/ending indices for tracers local to this subhalo
+                i0 = meta[ptName]['offset'][subhaloID]
+                i1 = i0 + meta[ptName]['length'][subhaloID]
+
+                if i1 == i0:
+                    continue # zero length of this type
+
+                # mode segregation
+                if modeNum < len(ACCMODES):
+                    w_mode = np.where( mode[i0:i1] == modeVal )[0]
+                else:
+                    w_mode = np.arange(i1-i0) # 'all', use all
+
+                if w_mode.size == 0:
+                    continue # no tracers of this mode in this subhalo
+
+                # local slice, mode dependent
+                loc_vals = tracks[i0:i1][w_mode]
+
+                # should never overwrite anything
+                assert np.isnan( r[i,j,modeNum] )
+                assert N[i,j,modeNum] == 0
+
+                # store intermediate value (e.g. sum for mean) and counts for later calculation of op
+                if op == 'mean':
+                    r[i,j,modeNum], N[i,j,modeNum] = _nansum(loc_vals)
+
+                #print(j,ptName,N[i,j,modeNum],r[i,j,modeNum],i1-i0,w_mode.size)
+
+            # do op for all part types together, for this mode
+            assert np.isnan( r[i,j+1,modeNum] )
+            assert N[i,j+1,modeNum] == 0
+
+            if op == 'mean':                
+                r[i,j+1,modeNum], _ = _nansum( r[i,0:j+1,modeNum] )
+                N[i,j+1,modeNum] = np.sum( N[i,0:j+1,modeNum] )
+                #print(j+1,'all',N[i,j+1,modeNum],r[i,j+1,modeNum])
+            
+        # do op for all modes together, for each partType+all
+        #print('   [%s] ALL MODES' % (modeNum+1))
+
+        for j in range(len(defParPartTypes)+1):
+            assert np.isnan( r[i,j,modeNum+1] ) # should never overwrite anything
+            assert N[i,j,modeNum+1] == 0
+
+            r[i,j,modeNum+1], _ = _nansum( r[i,j,0:modeNum+1] )
+            N[i,j,modeNum+1] = np.sum( N[i,j,0:modeNum+1] )
+            #print(j,' - ',N[i,j,modeNum+1],r[i,j,modeNum+1])
+
+    # now, normalize element by element
+    w = np.where(N == 0)
+    assert len( np.where(np.isnan(r[w]))[0] ) == len(w[0]) # all zero counts should have nan value
+
+    w = np.where(N > 0)
+    assert len( np.where(np.isnan(r[w]))[0] ) == 0 # all nonzero counts should have finite value
+
+    r[w] /= N[w]
+
+    # restore log for consistency
+    if quant in fields_in_log:
+        r = logZeroNaN(r)
+
+    attrs = {'Description'  : desc.encode('ascii'), 
+             'Selection'    : select.encode('ascii')}
+             #'accModes'     : ACCMODES, # encoding errors, would need to do more carefully
+             #'parPartTypes' : defParPartTypes}
+
+    return r, attrs
+
+def wholeBoxColDensGrid(sP, pSplit, species):
     """ Compute a 2D grid of gas column densities [cm^-2] covering the entire simulation box. For 
         example to derive the neutral hydrogen CDDF. The grid has dimensions of boxGridDim x boxGridDim 
         and so a grid cell size of (sP.boxSize/boxGridDim) in each dimension. Strategy is a chunked 
         load of the snapshot files, for each using SPH-kernel deposition to distribute the mass of 
         the requested species (e.g. HI, CIV) in all gas cells onto the grid.
     """
+    assert pSplit is None # not implemented
+
     from cosmo import hydrogen
     from cosmo.load import snapshotHeader
     from util.sphMap import sphMapWholeBox
@@ -867,9 +1032,10 @@ def wholeBoxColDensGrid(sP, species):
 
     return rr, attrs
 
-def wholeBoxCDDF(sP, species):
+def wholeBoxCDDF(sP, pSplit, species):
     """ Compute the column density distribution function (CDDF, i.e. histogram) of column densities 
         given a full box colDens grid."""
+    assert pSplit is None # not implemented
     from cosmo.load import auxCat
     from cosmo.hydrogen import calculateCDDF
 
@@ -985,5 +1151,9 @@ fieldComputeFunctionMapping = \
    'Subhalo_SubLink_zForm_ma5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
                                          smoothing=['ma',5,'snap']),
    'Subhalo_SubLink_zForm_poly7' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
-                                         smoothing=['poly',7,'snap'])
+                                         smoothing=['poly',7,'snap']),
+
+   'Subhalo_Tracers_zAcc_mean'   : partial(tracerTracksQuant,quant='acc_time_1rvir',op='mean',time=None),
+   'Subhalo_Tracers_angmom_tAcc' : partial(tracerTracksQuant,quant='angmom',op='mean',time='acc_time_1rvir'),
+   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr',op='mean',time='acc_time_1rvir')
   }

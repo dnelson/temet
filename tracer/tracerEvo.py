@@ -9,6 +9,7 @@ import h5py
 import numpy as np
 from os.path import isfile, isdir
 from os import mkdir
+from collections import OrderedDict
 
 from tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
   globalAllTracersTimeEvo, globalTracerMPBMap, defParPartTypes
@@ -20,6 +21,8 @@ ACCMODE_NONE     = -1
 ACCMODE_SMOOTH   = 1
 ACCMODE_MERGER   = 2
 ACCMODE_STRIPPED = 3
+
+ACCMODES = OrderedDict( [('NONE',-1),('SMOOTH',1),('MERGER',2),('STRIPPED',3)] ) # same as above
 
 # types of extrema which we know how to calculate
 allowedExtTypes = ['min','min_b015','max','max_b015']
@@ -96,10 +99,11 @@ def tracersTimeEvo(sP, fieldName, snapStep=None, all=True):
 
     return r
 
-def tracersMetaOffsets(sP):
+def tracersMetaOffsets(sP, all=None):
     """ For a fullbox sP and either sP.haloInd or sP.subhaloInd specified, load and return the needed 
     offsets to load a [halo/subhalo]-restricted part of any of the tracer_tracks data. """
-    assert (sP.haloInd is not None) ^ (sP.subhaloInd is not None)
+    assert ((sP.haloInd is not None) ^ (sP.subhaloInd is not None)) or all is not None
+    if all is not None: assert all == 'Halo' or all == 'Subhalo'
     assert not sP.isZoom
 
     saveFilename = sP.postPath + '/tracer_tracks/tr_all_groups_%d_meta.hdf5' % (sP.snap)
@@ -117,8 +121,15 @@ def tracersMetaOffsets(sP):
     with h5py.File(saveFilename,'r') as f:
         for ptName in defParPartTypes:
             r[ptName] = {}
-            r[ptName]['length'] = f[gName]['TracerLength'][ptName][dInd]
-            r[ptName]['offset'] = f[gName]['TracerOffset'][ptName][dInd]
+
+            if all:
+                # load all lengths and offsets
+                r[ptName]['length'] = f[all]['TracerLength'][ptName][()]
+                r[ptName]['offset'] = f[all]['TracerOffset'][ptName][()]
+            else:
+                # single subhalo/halo
+                r[ptName]['length'] = f[gName]['TracerLength'][ptName][dInd]
+                r[ptName]['offset'] = f[gName]['TracerOffset'][ptName][dInd]
 
     nTracerTot = np.sum([r[ptName]['length'] for ptName in r])
 
@@ -234,21 +245,20 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
     print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
     return accTimeInterp
 
-def accTimesToClosestSnaps(data, acc_time, indsNotSnaps=False):
-    """ Return the nearest snapshot number to each acc_time (which are redshifts) using the 
+def redshiftsToClosestSnaps(data, redshifts, indsNotSnaps=False):
+    """ Return the nearest snapshot number to each redshifts using the 
     data['redshifts'] and data['snaps'] mapping. By default, return simulation snapshot 
     number, unless indsNotSnaps==True, in which case return the indices into the first dimension 
-    of data[field] for each tracer of the second dimension. 
-    Note that acc_time can be any array of redshifts (e.g. also extremum times). """
-    z_inds1 = np.searchsorted( data['redshifts'], acc_time )
+    of data[field] for each tracer of the second dimension. """
+    z_inds1 = np.searchsorted( data['redshifts'], redshifts )
 
     ww = np.where(z_inds1 == data['redshifts'].size)
     z_inds1[ww] -= 1
 
     z_inds0 = z_inds1 - 1
 
-    z_dist1 = np.abs( acc_time - data['redshifts'][z_inds1] )
-    z_dist0 = np.abs( acc_time - data['redshifts'][z_inds0] )
+    z_dist1 = np.abs( redshifts - data['redshifts'][z_inds1] )
+    z_dist0 = np.abs( redshifts - data['redshifts'][z_inds0] )
 
     if indsNotSnaps:
         accSnap = z_inds1
@@ -263,8 +273,8 @@ def accTimesToClosestSnaps(data, acc_time, indsNotSnaps=False):
     else:
         accSnap[ww] = data['snaps'][z_inds0[ww]]
 
-    # nan acc_time's (never inside rvir) got assigned to the earliest snapshot, flag them as -1
-    accSnap[np.isnan(acc_time)] = -1
+    # nan redshifts's (never inside rvir) got assigned to the earliest snapshot, flag them as -1
+    accSnap[np.isnan(redshifts)] = -1
 
     return accSnap
 
@@ -292,6 +302,7 @@ def accMode(sP, snapStep=1):
 
     # load accTime, subhalo_id tracks, and MPB history
     data = tracersTimeEvo(sP, 'subhalo_id', snapStep, all=True)
+    data_snaps_min = data['snaps'].min()
 
     if sP.isZoom:
         mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
@@ -305,7 +316,7 @@ def accMode(sP, snapStep=1):
     accMode = np.zeros( nTr, dtype='int8' )
 
     # closest snapshot for each accretion time
-    accSnap = accTimesToClosestSnaps(data, acc_time)
+    accSnap = redshiftsToClosestSnaps(data, acc_time)
 
     assert nTr == data['subhalo_id'].shape[1] == accSnap.size
 
@@ -331,7 +342,7 @@ def accMode(sP, snapStep=1):
             continue
 
         # accretion time determined as earliest snapshot (e.g. z=10), we label this smooth
-        if accSnap[i] == data['snaps'].min():
+        if accSnap[i] == data_snaps_min:
             accMode[i] = ACCMODE_SMOOTH
             continue
 
@@ -474,7 +485,7 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     # mask t>t_acc_015rvir points (only take extremum for time "before" first 0.15rvir crossing)
     if '_b015' in extType:
         acc_time = accTime(sP, snapStep=snapStep, rVirFac=0.15)
-        inds = accTimesToClosestSnaps(data, acc_time, indsNotSnaps=True)
+        inds = redshiftsToClosestSnaps(data, acc_time, indsNotSnaps=True)
 
         for i in np.arange( inds.size ):
             if inds[i] == -1:
@@ -512,8 +523,9 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
 
 def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     """ Return some property from the tracer evolution tracks (e.g. rad_rvir, temp, tracer_maxent) 
-    given by valName at the times in the simulation given by redshifts. """
-    raise Exception('todo, seems not to work at all, unclear')
+    given by valName at the times in the simulation given by redshifts. Extracted from closest 
+    snapshot, no interpolation of property value. """
+    
     # load
     assert isinstance(valName,basestring)
     data = tracersTimeEvo(sP, valName, snapStep, all=False)
@@ -521,7 +533,11 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     assert data[valName].ndim == 2 # need to verify logic herein for ndim==3 (e.g. pos/vel) case
 
     # map times to data indices
-    inds = accTimesToClosestSnaps(data, redshifts, indsNotSnaps=True)
+    if isinstance(redshifts, (float)):
+        # replicate into array
+        redshifts = redshifts * np.ones( data[valName].shape[1], dtype='float32' )
+
+    inds = redshiftsToClosestSnaps(data, redshifts, indsNotSnaps=True)
 
     assert inds.max() < data[valName].shape[0]
     assert inds.size == data[valName].shape[1]
@@ -543,8 +559,9 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     if trVals.dtype == 'int32'   : trVals[ww] = -1
     assert trVals.dtype == 'float32' or trVals.dtype == 'int32'
 
-    if 0: # debug verify
-        for i in np.arange(trVals.size):
+    if 1: # stochastic debug verify of subset
+        np.random.seed(42424242L)
+        for i in np.random.randint(0,trVals.size,100):
             if np.isnan(trVals[i]):
                 continue
             assert trVals[i] == data[valName][inds[i],i]
@@ -592,7 +609,7 @@ def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     data['redshifts'] = mpb['Redshift']
     data['snaps']     = mpb['SnapNum']
 
-    inds = accTimesToClosestSnaps(data, redshifts, indsNotSnaps=True)
+    inds = redshiftsToClosestSnaps(data, redshifts, indsNotSnaps=True)
 
     if data['val'].ndim == 1:
         return data['val'][inds]
