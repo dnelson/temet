@@ -16,7 +16,7 @@ import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
 from util.helper import iterable, logZeroSafe, curRepoVersion
 
-def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
+def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now """
@@ -38,6 +38,32 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
 
         # check for existence of auxiliary catalog file for this dataset
         auxCatPath = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (field,sP.snap)
+
+        # split the calculation over multiple jobs? check if all chunks already exist
+        if pSplit is not None:
+            auxCatPathSplit = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5' % \
+              (field,sP.snap,pSplit[0],pSplit[1])
+
+            if isfile(auxCatPath) and not reCalculate:
+                # specified chunk exists, do all exist?
+                allExist = True
+
+                for i in range(pSplit[1]):
+                    auxCatPathSplit_i = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5' % \
+                      (field,sP.snap,i,pSplit[1])
+                    print(auxCatPathSplit_i)
+                    if not isfile(auxCatPathSplit_i):
+                        allExist = False
+
+                if allExist:
+                    # all chunks exist, concatenate them now and continue
+                    import pdb; pdb.set_trace()
+                    print(' Concatenated new [%s] and saved.' % auxCatPath)
+                    print(' All chunks concatenated, please manually delete them now.')
+                else:
+                    print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
+                    r[field] = None
+                    continue
 
         # checking for existence? (do not calculate right now if missing)
         if not isfile(auxCatPath) and searchExists:
@@ -63,18 +89,26 @@ def auxCat(sP, fields=None, reCalculate=False, searchExists=False):
             continue
 
         # either does not exist yet, or reCalculate requested
-        print('Compute and save: ['+field+']')
-        r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP)
+        pSplitStr = ''
+        savePath = auxCatPath
+
+        if pSplit is not None:
+            pSplitStr = ' (split %d of %d)' % (pSplit[0],pSplit[1])
+            savePath = auxCatPathSplit
+
+        print('Compute and save: [%s]%s' % (field,pSplitStr))
+
+        r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP, pSplit)
         r[field+'_attrs'] = attrs
 
         # save new dataset (or overwrite existing)
-        with h5py.File(auxCatPath,'w') as f:
+        with h5py.File(savePath,'w') as f:
             f.create_dataset(field, data=r[field])
 
             if not reCalculate:
-                print(' Saved new.')
+                print(' Saved new [%s].' % savePath)
             else:
-                print(' Saved over existing.')
+                print(' Saved over existing [%s].' % savePath)
 
             # save metadata and any additional descriptors as attributes
             f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')

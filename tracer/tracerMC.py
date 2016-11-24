@@ -29,6 +29,7 @@ d_int_fields    = {'subhalo_id':'int32',  # use int dtype to store, otherwise de
                    'halo_id':'int32',
                    'tracer_windcounter':'int16',
                    'parent_indextype':'int64'}
+fields_in_log   = ['temp','entr','angmom']
                    
 # require MPB(s) as fields are relative to halo properties (mapping gives the snapshot quantities needed)
 halo_rel_fields = {'rad'        : ['pos'],
@@ -951,7 +952,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         # if the IDs of parents are dense enough, use a histogram counting approach
         ParentID_min = ParentID.min()
         ParentID_max = ParentID.max()
-        assert ParentID_max - ParentID_min <= 20e9 # up to 8*20GB memory allocation
+        assert ParentID_max - ParentID_min <= 30e9 # up to 8*30GB memory allocation here
 
         # offset ParentIDs by their minimum, cast into signed type, then histogram
         ParentID -= ParentID_min
