@@ -420,7 +420,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
 
     # allocate return, NaN indicates not computed (no star particles)
     nSubsTot = gc['header']['Nsubgroups_Total']
-    subhaloIDsTodo = np.arange(nSubsTot)
+    subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
 
     if Nside > 1:
         # special case: just do a few special case subhalos at high Nside for demonstration
@@ -624,7 +624,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
     gcH = cosmo.load.groupCatHeader(sP)
     nSubsTot = gcH['Nsubgroups_Total']
 
-    ids = np.arange(nSubsTot)
+    ids = np.arange(nSubsTot, dtype='int32')
 
     # allocate return, NaN indicates not computed (e.g. not in tree at sP.snap)
     r = np.zeros( nSubsTot, dtype='float32' )
@@ -740,8 +740,7 @@ def tracerTracksQuant(sP, pSplit, quant, op, time):
 
     # load snapshot and subhalo information
     nSubsTot = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
-    #subhaloIDsTodo = np.arange(2)
-    subhaloIDsTodo = np.arange(nSubsTot)
+    subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
 
     nSubsDo = len(subhaloIDsTodo)
 
