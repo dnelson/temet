@@ -27,6 +27,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
 
+    pathStr1 = sP.derivPath + 'auxCat/%s_%03d.hdf5'
+    pathStr2 = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5'
+
     r = {}
 
     if not isdir(sP.derivPath + 'auxCat'):
@@ -37,35 +40,83 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
             raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
         # check for existence of auxiliary catalog file for this dataset
-        auxCatPath = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (field,sP.snap)
+        auxCatPath = pathStr1 % (field,sP.snap)
 
         # split the calculation over multiple jobs? check if all chunks already exist
         if pSplit is not None:
-            auxCatPathSplit = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5' % \
-              (field,sP.snap,pSplit[0],pSplit[1])
+            auxCatPathSplit = pathStr2 % (field,sP.snap,pSplit[0],pSplit[1])
 
-            if isfile(auxCatPath) and not reCalculate:
-                # specified chunk exists, do all exist?
+            if isfile(auxCatPathSplit) and not reCalculate:
+                # specified chunk exists, do all exist? check and record sizes
                 allExist = True
+                allCount = 0
 
                 for i in range(pSplit[1]):
-                    auxCatPathSplit_i = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5' % \
-                      (field,sP.snap,i,pSplit[1])
-                    print(auxCatPathSplit_i)
+                    auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
                     if not isfile(auxCatPathSplit_i):
                         allExist = False
+                        continue
+
+                    # record counts and dataset shape
+                    with h5py.File(auxCatPathSplit_i,'r') as f:
+                        allCount += f['subhaloIDs'].size
+                        allShape = f[field].shape
 
                 if allExist:
                     # all chunks exist, concatenate them now and continue
-                    import pdb; pdb.set_trace()
-                    print(' Concatenated new [%s] and saved.' % auxCatPath)
+                    allShape = np.array(allShape)
+                    allShape[0] = allCount # size
+                    offset = 0
+
+                    new_r = np.zeros( allShape, dtype='float32' )
+                    subhaloIDs = np.zeros( allCount, dtype='int32' )
+                    attrs = {}
+
+                    new_r.fill(-1.0) # does validly contain nan
+                    subhaloIDs.fill(np.nan)
+
+                    print(' Concatenating into shape: ', new_r.shape)
+
+                    for i in range(pSplit[1]):
+                        auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+
+                        with h5py.File(auxCatPathSplit_i,'r') as f:
+                            length = f['subhaloIDs'].size
+                            subhaloIDs[offset : offset+length] = f['subhaloIDs'][()]
+
+                            if f[field].ndim == 1:
+                                new_r[offset : offset+length] = f[field][()]
+                            if f[field].ndim == 2:
+                                new_r[offset : offset+length, :] = f[field][()]
+                            if f[field].ndim == 3:
+                                new_r[offset : offset+length, :, :] = f[field][()]
+                            assert f[field].ndim in [1,2,3]
+
+                            for attr in f[field].attrs:
+                                attrs[attr] = f[field].attrs[attr]
+
+                            offset += length
+
+                    assert np.count_nonzero(np.isnan(subhaloIDs)) == 0
+                    assert np.count_nonzero(new_r == -1.0) == 0
+
+                    # save new auxCat
+                    assert not isfile(auxCatPath)
+                    with h5py.File(auxCatPath,'w') as f:
+                        f.create_dataset(field, data=new_r)
+                        f.create_dataset('subhaloIDs', data=subhaloIDs)
+                        for attrName, attrValue in attrs.iteritems():
+                            f[field].attrs[attrName] = attrValue
+
+                    print(' Concatenated new [%s] and saved.' % auxCatPath.split("/")[-1])
                     print(' All chunks concatenated, please manually delete them now.')
                 else:
                     print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
                     r[field] = None
                     continue
 
-        # checking for existence? (do not calculate right now if missing)
+        # done with chunk logic.
+        # just checking for existence? (do not calculate right now if missing)
         if not isfile(auxCatPath) and searchExists:
             r[field] = None
             continue
