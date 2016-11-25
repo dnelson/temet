@@ -85,11 +85,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                             subhaloIDs[offset : offset+length] = f['subhaloIDs'][()]
 
                             if f[field].ndim == 1:
-                                new_r[offset : offset+length] = f[field][()]
+                                new_r[subhaloIDs[offset : offset+length]] = f[field][()]
                             if f[field].ndim == 2:
-                                new_r[offset : offset+length, :] = f[field][()]
+                                new_r[subhaloIDs[offset : offset+length], :] = f[field][()]
                             if f[field].ndim == 3:
-                                new_r[offset : offset+length, :, :] = f[field][()]
+                                new_r[subhaloIDs[offset : offset+length], :, :] = f[field][()]
                             assert f[field].ndim in [1,2,3]
 
                             for attr in f[field].attrs:

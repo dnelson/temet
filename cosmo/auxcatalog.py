@@ -1058,8 +1058,8 @@ def wholeBoxCDDF(sP, pSplit, species):
 
     return rr, attrs
 
-# this dictionary contains a mapping between all auxCatalog fields and their generating functions, 
-# where the first sP input is stripped out with a partial func and the remaining arguments are hardcoded
+# this dictionary contains a mapping between all auxCatalogs and their generating functions, where the 
+# first sP,pSplit inputs are stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
   {'Group_Mass_Crit500_Type' : \
      partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
