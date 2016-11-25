@@ -224,7 +224,7 @@ def simSubhaloQuantity(sP, quant, clean=False):
 
         label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (halo) [$\mu$G]'
         if not clean: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
-        minMax = [-2.0, 2.0]
+        minMax = [-2.0, 1.0]
 
     assert label is not None
     return vals, label, minMax, takeLog

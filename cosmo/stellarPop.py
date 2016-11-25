@@ -62,7 +62,9 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None)
 
         # multiple projections per subhalo?
         if colorData[acKey].ndim == 3:
-            assert projs is not None
+            if projs is None:
+                print(' Warning: loadSimGalColors() projs unspecified, returning [random] by default.')
+                projs = 'random'
             
             if projs == 'all':
                 # return all
@@ -148,46 +150,6 @@ def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False):
         sdss_color += (kCorrs[bands[1]] - kCorrs[bands[0]])
 
     return sdss_color, sdss_Mstar
-
-def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None):
-    """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
-    if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
-    from scipy.stats import gaussian_kde
-
-    if sP is None:
-        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s.hdf5" % ''.join(bands)
-        dName = 'kde_obs'
-    else:
-        saveFilename = sP.derivPath + "galMstarColor_2dkde_%s_%d.hdf5" % (''.join(bands),sP.snap)
-        dName = 'kde_sim'
-
-    # check existence
-    if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            xx = f['xx'][()]
-            yy = f['yy'][()]
-            kde_obs = f[dName][()]
-
-        return xx, yy, kde_obs
-
-    # calculate
-    print('Calculating new: [%s]...' % saveFilename)
-
-    vv = np.vstack( [gal_Mstar, gal_color] )
-    kde = gaussian_kde(vv)
-
-    xx, yy = np.mgrid[Mstar_range[0]:Mstar_range[1]:200j, mag_range[0]:mag_range[1]:400j]
-    xy = np.vstack( [xx.ravel(), yy.ravel()] )
-    kde2d = np.reshape( np.transpose(kde(xy)), xx.shape)
-
-    # save
-    with h5py.File(saveFilename,'w') as f:
-        f['xx'] = xx
-        f['yy'] = yy
-        f[dName] = kde2d
-    print('Saved: [%s]' % saveFilename)
-
-    return xx, yy, kde2d
 
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
