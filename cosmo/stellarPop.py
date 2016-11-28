@@ -30,12 +30,13 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None)
     """ Load band-magnitudes either from snapshot photometrics or from auxCat SPS modeling, 
     and convert to a color if bands is passed in, otherwise return loaded data. If loaded 
     data is passed in with bands, do then magnitude computation without re-loading."""
+    acKey = 'Subhalo_StellarPhot_' + simColorsModel
+
     if colorData is None:
         # load
         if simColorsModel == 'snap':
             colorData = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
         else:
-            acKey = 'Subhalo_StellarPhot_' + simColorsModel
             colorData = auxCat(sP, fields=[acKey])
 
     # early exit with full data?
