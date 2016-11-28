@@ -36,6 +36,31 @@ def evenlySample(sequence, num, logSpace=False):
 
     return sequence[inds.astype('int32')]
 
+def contiguousIntSubsets(x):
+    """ Return a list of index pairs corresponding to contiguous integer subsets of the input array. """
+    assert x.dtype in ['int32','int64']
+
+    ranges = []
+    inRange = False
+
+    for i in range(x.size-1):
+        # start new range?
+        if not inRange:
+            if x[i+1] == x[i] + 1:
+                inRange = True
+                rangeStart = i
+        else:
+            if x[i+1] == x[i] + 1:
+                continue # range continues
+            else:
+                inRange = False
+                rangeEnd = i
+                ranges.append( (rangeStart,rangeEnd) )
+    if inRange:
+        ranges.append( (rangeStart,i) ) # final range
+
+    return ranges
+
 def logZeroSafe(x, zeroVal=1.0):
     """ Take log10 of input variable or array, keeping zeros at some value. """
     if not isinstance(x, (int,long,float)) and x.ndim: # array

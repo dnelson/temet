@@ -105,7 +105,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
   
 def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=False):
     """ Return a list of all snapshot numbers which exist. """
-    from util.helper import evenlySample
+    from util.helper import evenlySample, closest, contiguousIntSubsets
 
     if minRedshift is None:
         minRedshift = 0.0 # filter out -1 values indicating missing snaps
@@ -113,6 +113,34 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         maxRedshift = np.finfo('float32').max
 
     redshifts = snapNumToRedshift(sP, all=True)
+
+    if maxNum is not None and sP.subbox is not None:
+        # for subboxes (movie renderings), auto detect change of global timestep
+        log_scalefacs = np.log10(1 / (1+redshifts))
+        dloga = log_scalefacs - np.roll(log_scalefacs, 1)
+        dloga[0] = dloga[1] # corrupted by roll
+
+        dloga_target = np.median( dloga[ int(dloga.size*(2.0/4)):int(dloga.size*(3.0/4)) ])
+        print(' validSnapList(): subbox auto detect dloga_target = %f' % dloga_target)
+
+        ww = np.where(dloga < 0.8 * dloga_target)[0]
+        print('  number snaps below target [%d] spanning [%d-%d]' % (len(ww),ww.min(),ww.max()))
+        ww2 = np.where(dloga < 0.8 * 0.5 * dloga_target)[0]
+        assert len(ww2) == 0 # number of timesteps even one jump lower
+
+        # detect contiguous snapshot subsets in this list of integers
+        ranges = contiguousIntSubsets(ww)
+        print('  identified contiguous snap ranges:',ranges)
+
+        # override every other snapshot in these ranges with a redshift of -1 so it is filtered out below
+        for range_start, range_stop in ranges:
+            # the first entry here corresponds to the first subbox snapshot whose delta time since the 
+            # previous is half of our target, so start removing here so that the dt across this gap 
+            # becomes constant
+            snap_inds = ww[ range_start : range_stop : 2 ]
+            redshifts[snap_inds] = -1.0
+            print('  in range [%d to %d] filter out %d snaps' % (range_start,range_stop,snap_inds.size))
+
     w = np.where((redshifts >= minRedshift) & (redshifts < maxRedshift))[0]
 
     if len(w) == 0:
