@@ -174,7 +174,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                     
     return r
 
-def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
+def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     """ Find and return absolute path to a group catalog HDF5 file.
         Can be used to redefine illustris_python version (il.groupcat.gcPath = cosmo.load.gcPath). """
 
@@ -206,7 +206,10 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False):
         if isfile(fileName):
             return fileName
 
-    return None
+    if checkExists:
+        return None
+
+    raise Exception("No group catalog found.")
 
 def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None):
     """ Load HDF5 fof+subfind group catalog for a given snapshot.

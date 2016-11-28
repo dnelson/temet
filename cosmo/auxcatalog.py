@@ -15,8 +15,10 @@ from util.helper import logZeroMin, logZeroNaN
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
+
 # Group_*: parameters for computations done over each FoF halo
 minNumPartGroup = 100 # only consider halos above a minimum total number of particles? (0=disabled)
+                      # note: only affects fofRadialSumType() at present
 
 # Subhalo_*: parameters for computations done over each Subfind subhalo
 
@@ -321,7 +323,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
             band = weighting.split("-")[1]
             mags = pop.mags_code_units(sP, band, particles['GFM_StellarFormationTime'], 
                                      magsLoad['GFM_Metallicity'], 
-                                     magsLoad['GFM_InitialMass'], retFullPt4Size=True)
+                                     magsLoad['GFM_InitialMass'], retFullSize=True)
 
             # use the (linear) luminosity in this band as the weight
             particles['weights'] = np.power(10.0, -0.4 * mags)
@@ -436,10 +438,32 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
     #    # special case: debugging
     #    subhaloIDsTodo = [0,19051,19052] #[0]
 
+    # task parallelism: cosmo.load.snapshotSubset(haloSubset) manually:
+    offsets_pt = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+    indRange_stars = [0, offsets_pt[:,sP.ptNum('stars')].max()]
+    indRange_gas = [0, offsets_pt[:,sP.ptNum('gas')].max()]
+
     if pSplit is not None:
-        # split up subhaloIDs in round-robin scheme (equal number of massive/centrals per job)
-        modSplit = subhaloIDsTodo % pSplit[1]
-        subhaloIDsTodo = np.where(modSplit == pSplit[0])[0]
+        if 0:
+            # split up subhaloIDs in round-robin scheme (equal number of massive/centrals per job)
+            # works well, but retains global load of all haloSubset particles
+            modSplit = subhaloIDsTodo % pSplit[1]
+            subhaloIDsTodo = np.where(modSplit == pSplit[0])[0]
+
+        if 1:
+            # do contiguous subhalo ID division and reduce global haloSubset load 
+            # to the particle sets which cover the subhalo subset of this pSplit
+            from util.helper import pSplit as pSplitArr
+            subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
+
+            first_sub = subhaloIDsTodo[0]
+            last_sub = subhaloIDsTodo[-1]
+
+            first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
+            last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+
+            indRange_stars = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], sP.ptNum('stars')]
+            indRange_gas = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], sP.ptNum('gas')]
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -454,7 +478,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
     starsLoad = ['initialmass','sftime','metallicity']
     if '_res' in dust: starsLoad += ['pos']
 
-    stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, haloSubset=True)
+    stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, indRange=indRange_stars)
 
     # non-resolved dust: loop over all requested bands first
     if '_res' not in dust:
@@ -464,7 +488,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
             # request magnitudes in this band for all stars
             mags = pop.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
                                                  stars['GFM_Metallicity'], 
-                                                 stars['GFM_InitialMass'], retFullPt4Size=True)
+                                                 stars['GFM_InitialMass'], retFullSize=True)
 
             # loop over subhalos
             for i, subhaloID in enumerate(subhaloIDsTodo):
@@ -472,8 +496,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
                     print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
                 # slice starting/ending indices for stars local to this subhalo
-                i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')]
+                i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange_stars[0]
                 i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
+
+                assert i0 >= 0 and i1 <= (indRange_stars[1]-indRange_stars[0])
 
                 if i1 == i0:
                     continue # zero length of this type
@@ -490,12 +516,12 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
     # or, resolved dust: loop over all subhalos first
     if '_res' in dust:
         # prep: resolved dust attenuation uses simulated gas distribution in each subhalo
-        gas = cosmo.load.snapshotSubset(sP, 'gas', fields=['pos','metal','mass','nh'], haloSubset=True)
-        gas['GFM_Metals'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', haloSubset=True) # H only
+        gas = cosmo.load.snapshotSubset(sP, 'gas', fields=['pos','metal','mass','nh'], indRange=indRange_gas)
+        gas['GFM_Metals'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', indRange=indRange_gas) # H only
 
         # prep: override 'Masses' with neutral hydrogen mass (model or snapshot value), free some memory
         if modelH:
-            gas['Density'] = cosmo.load.snapshotSubset(sP, 'gas', 'dens', haloSubset=True)
+            gas['Density'] = cosmo.load.snapshotSubset(sP, 'gas', 'dens', indRange=indRange_gas)
             gas['Masses'] = hydrogenMass(gas, sP, totalNeutral=True)
             gas['Density'] = None
         else:
@@ -503,7 +529,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
 
         gas['GFM_Metals'] = None
         gas['NeutralHydrogenAbundance'] = None
-        gas['Cellsize'] = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize', haloSubset=True)
+        gas['Cellsize'] = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize', indRange=indRange_gas)
 
         # prep: unit conversions on stars (age,mass,metallicity)
         stars['GFM_StellarFormationTime'] = sP.units.scalefacToAgeLogGyr(stars['GFM_StellarFormationTime'])
@@ -521,8 +547,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
             # slice starting/ending indices for stars local to this subhalo
-            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')]
+            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange_stars[0]
             i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
+
+            assert i0 >= 0 and i1 <= (indRange_stars[1]-indRange_stars[0])
 
             if i1 == i0:
                 continue # zero length of this type
@@ -537,8 +565,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
             masses_msun = stars['GFM_InitialMass'][i0:i1][w_stars]
 
             # slice starting/ending indices for -gas- local to this subhalo
-            i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')]
+            i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange_gas[0]
             i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
+
+            assert i0g >= 0 and i1g <= (indRange_gas[1]-indRange_gas[0])
 
             # loop over all different viewing directions
             for projNum in range(nProj):

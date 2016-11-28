@@ -619,8 +619,10 @@ class sps():
 
         return mags
 
-    def mags_code_units(self, sP, band, gfm_sftime, gfm_metallicity, masses_code, retFullPt4Size=False):
-        """ Do unit conversions (and wind particle filtering) on inputs, and return mags() results. """
+    def mags_code_units(self, sP, band, gfm_sftime, gfm_metallicity, masses_code, retFullSize=False):
+        """ Do unit conversions (and wind particle filtering) on inputs, and return mags() results. 
+        If retFullSize is True, return same size as inputs with wind set to nan, otherwise filter 
+        out wind/nan values and compress return size. """
         wStars = np.where( gfm_sftime >= 0.0 )
 
         if len(wStars[0]) == 0:
@@ -638,7 +640,7 @@ class sps():
         stellarMags = self.mags(band, ages_logGyr, metals_log, masses_logMsun)
 
         # return an array of the same size of the input, with nan for wind entries
-        if retFullPt4Size:
+        if retFullSize:
             r = np.zeros( gfm_sftime.size, dtype='float32' )
             r.fill(np.nan)
             r[wStars] = stellarMags
@@ -671,7 +673,7 @@ class sps():
 
             mags = self.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
                                         stars['GFM_Metallicity'], stars['GFM_InitialMass'], 
-                                        retFullPt4Size=True)
+                                        retFullSize=True)
 
         # convert to luminosities
         lums = np.zeros( mags.size, dtype='float32' )
