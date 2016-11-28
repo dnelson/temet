@@ -34,22 +34,26 @@ linestyles = ['-',':','--','-.']       # typically for analysis variations per r
 def _bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
+    if bands[0] == 'u' and bands[1] == 'r': mag_range = [0.5,3.5]
     if bands[0] == 'g' and bands[1] == 'r': mag_range = [0.0,1.0]
     if bands[0] == 'r' and bands[1] == 'i': mag_range = [0.0,0.6]
     if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
+    if bands[0] == 'r' and bands[1] == 'z': mag_range = [0.0,0.8]
 
     if tight:
         # alternative set
         if bands == ['u','i']: mag_range = [0.5,4.0]
+        if bands == ['u','i']: mag_range = [0.5,3.5]
         if bands == ['g','r']: mag_range = [0.15,0.85]
         if bands == ['r','i']: mag_range = [0.0,0.6]
         if bands == ['i','z']: mag_range = [0.0,0.4]
+        if bands == ['i','z']: mag_range = [0.0,0.8]
     return mag_range
 
 def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None):
     """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
     if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
-    from scipy.stats import gaussian_kde
+    from os.path import isfile, expanduser
 
     if sP is None:
         saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s.hdf5" % ''.join(bands)
@@ -237,25 +241,33 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
             ('-'.join(bands),simColorsModel,xQuant,cQuant,cStatistic,cenSatSelect,minCount))
     plt.close(fig)
 
-def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModel='p07c_nodust', 
-                   simRedshift=0.0, splitCenSat=False, cenOnly=False):
+def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=['p07c_cf00dust'], 
+                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
     from util import simParams
 
     if cenOnly: assert splitCenSat is False
     allOnly = True if (splitCenSat is False and cenOnly is False) else False
+    assert not isinstance(simColorsModels,basestring) # should be iterable
+    assert len(sPs) == 1 or len(simColorsModels) == 1
     
     # config
-    stellarMassBins = ( [9.0,9.5],   [9.5,10.0],  [10.0,10.5], 
-                        [10.5,11.0], [11.0,11.5], [11.5,12.0] ) # use multiple of 2
+    if stellarMassBins is None:
+        # default, 2 cols 3 rows
+        stellarMassBins = ( [9.0,9.5],   [9.5,10.0],  [10.0,10.5], 
+                            [10.5,11.0], [11.0,11.5], [11.5,12.0] )
     obs_color = '#333333'
 
     eCorrect = True # True, False
     kCorrect = True # True, False
 
     # start plot
-    figsize = (16,9)
-    fig = plt.figure(figsize=(figsize[0]*1.5,figsize[1]*1.5))
+    sizefac = 1.5
+    if clean: sizefac = 1.3
+    if len(stellarMassBins) >= 4: figsize = (16,9)
+    else: figsize = (5.3, 13.5)
+
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
     axes = []
 
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.0,4.5]
@@ -267,7 +279,12 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModel='p07c_nodust',
     for i, stellarMassBin in enumerate(stellarMassBins):
 
         # panel setup
-        ax = fig.add_subplot(2,len(stellarMassBins)/2,i+1)
+        iLeg = 2 # upper right (2x3), or bottom (3x1)
+        if len(stellarMassBins) >= 4: # 2 rows, N columns
+            ax = fig.add_subplot(2,len(stellarMassBins)/2,i+1)
+        else: # N rows, 1 column
+            ax = fig.add_subplot(len(stellarMassBins), 1, i+1)
+
         axes.append(ax)
         
         ax.set_xlim(mag_range)
@@ -301,144 +318,169 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModel='p07c_nodust',
     sdss_Mstar = sdss_Mstar[w]
 
     # loop over each fullbox run
+    pMaxVals = np.zeros( len(stellarMassBins), dtype='float32' )
+    pNum = 0
+
     for sP in sPs:
         if sP.isZoom:
             continue
 
-        print('Color PDF [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
-        sP.setRedshift(simRedshift)
+        # loop over dustModels, for model comparison plot
+        for simColorsModel in simColorsModels:
 
-        c = ax._get_lines.prop_cycler.next()['color']
+            print('Color PDF [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
+            sP.setRedshift(simRedshift)
 
-        # load fullbox stellar masses
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-        gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
-        
-        # galaxy selection
-        w_cen, w_all, w_sat = cenSatSubhaloIndices(sP)
+            # load fullbox stellar masses
+            gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+            gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+            
+            # galaxy selection
+            w_cen, w_all, w_sat = cenSatSubhaloIndices(sP)
 
-        # load simulation colors
-        if simColorsModel[-4:] == '_all':
-            # request all 12*Nside^2 projections per subhalo, flatten into 1D array (sh0p0,sh0p1,...)
-            gc_colors, _ = loadSimGalColors(sP, simColorsModel[:-4], bands=bands, projs='all')
-            gc_colors = np.reshape( gc_colors, gc_colors.shape[0]*gc_colors.shape[1] )
+            # determine unique color
+            c = ax._get_lines.prop_cycler.next()['color']
+            # skip second color (pNum=1), reserved for L205n2500, if we do a res or dustModel comparison
+            if pNum == 1 and (len(sPs) >=3 or len(simColorsModels) >= 3):
+                c = ax._get_lines.prop_cycler.next()['color']
+            pNum += 1
 
-            # replicate stellar masses
-            from re import findall # could replace with actual Nside return from loadSimGalColors()
-            Nside = np.int32( findall(r'ns\d+',simColorsModel)[0][2:] )
-            assert Nside == 1
+            # load simulation colors
+            if simColorsModel[-4:] == '_all':
+                # request all 12*Nside^2 projections per subhalo, flatten into 1D array (sh0p0,sh0p1,...)
+                gc_colors, _ = loadSimGalColors(sP, simColorsModel[:-4], bands=bands, projs='all')
+                gc_colors = np.reshape( gc_colors, gc_colors.shape[0]*gc_colors.shape[1] )
 
-            gc_inds = np.arange( gc_masses.size, dtype='int32' )
-            gc_inds = np.repeat( gc_inds, 12*Nside**2 )
-            gc_masses = gc_masses[gc_inds]
+                # replicate stellar masses
+                from re import findall # could replace with actual Nside return from loadSimGalColors()
+                Nside = np.int32( findall(r'ns\d+',simColorsModel)[0][2:] )
+                assert Nside == 1
 
-            # replicate galaxy selections by crossmatching original selection indices with replicated list
-            from tracer.tracerMC import match3
-            origSatSize = w_sat.size
-            origCenSize = w_cen.size
-            _, w_cen = match3(w_cen, gc_inds)
-            _, w_sat = match3(w_sat, gc_inds)
-            _, w_all = match3(w_all, gc_inds)
-            assert w_sat.size == 12*Nside**2 * origSatSize
-            assert w_cen.size == 12*Nside**2 * origCenSize
-        else:
-            # request a single random color per subhalo (for "_res" models), and/or for simple models
-            # without multiple projections even saved
-            gc_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
-        
-        assert gc_colors.size == gc_masses.size
-        assert w_all.size == gc_masses.size
+                gc_inds = np.arange( gc_masses.size, dtype='int32' )
+                gc_inds = np.repeat( gc_inds, 12*Nside**2 )
+                gc_masses = gc_masses[gc_inds]
 
-        # selection:
-        normFacs = np.zeros( len(stellarMassBins) )
-        binSize  = np.zeros( len(stellarMassBins) )
-        nBins    = np.zeros( len(stellarMassBins), dtype='int32' )
+                # replicate galaxy selections by crossmatching original selection indices with replicated list
+                from tracer.tracerMC import match3
+                origSatSize = w_sat.size
+                origCenSize = w_cen.size
+                _, w_cen = match3(w_cen, gc_inds)
+                _, w_sat = match3(w_sat, gc_inds)
+                _, w_all = match3(w_all, gc_inds)
+                assert w_sat.size == 12*Nside**2 * origSatSize
+                assert w_cen.size == 12*Nside**2 * origCenSize
+            else:
+                # request a single random color per subhalo (for "_res" models), and/or for simple models
+                # without multiple projections even saved
+                gc_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
+            
+            assert gc_colors.size == gc_masses.size
+            assert w_all.size == gc_masses.size
 
-        if allOnly:     loopInds = [0,1] # total only, except we add centrals for the first mass bin only
-        if splitCenSat: loopInds = [0,1,2] # show total, and cen/sat decomposition all at once
-        if cenOnly:     loopInds = [1] # centrals only
+            # selection:
+            normFacs = np.zeros( len(stellarMassBins) )
+            binSize  = np.zeros( len(stellarMassBins) )
+            nBins    = np.zeros( len(stellarMassBins), dtype='int32' )
 
-        iLeg = len(stellarMassBins)-2
+            if allOnly:     loopInds = [0,1] # total only, except we add centrals for the first mass bin only
+            if splitCenSat: loopInds = [0,1,2] # show total, and cen/sat decomposition all at once
+            if cenOnly:     loopInds = [1] # centrals only
 
-        for j in loopInds:
-            if j == 0: w = w_all
-            if j == 1: w = w_cen
-            if j == 2: w = w_sat
+            for j in loopInds:
+                if j == 0: w = w_all
+                if j == 1: w = w_cen
+                if j == 2: w = w_sat
 
-            # galaxy mass definition and color
-            stellar_mass = gc_masses[w]
-            galaxy_color = gc_colors[w]
+                # galaxy mass definition and color
+                stellar_mass = gc_masses[w]
+                galaxy_color = gc_colors[w]
 
-            wNotNan = np.isfinite(galaxy_color) # filter out subhalos with e.g. no stars
-            galaxy_color = galaxy_color[wNotNan]
-            stellar_mass = stellar_mass[wNotNan]
+                wNotNan = np.isfinite(galaxy_color) # filter out subhalos with e.g. no stars
+                galaxy_color = galaxy_color[wNotNan]
+                stellar_mass = stellar_mass[wNotNan]
 
-            # loop over each mass bin
-            for i, stellarMassBin in enumerate(stellarMassBins):
-                if allOnly and j == 1 and i > 0:
-                    continue # add centrals for first mass bin only, if showing total only
+                # loop over each mass bin
+                for i, stellarMassBin in enumerate(stellarMassBins):
+                    if allOnly and j == 1 and stellarMassBin[0] > 9.0:
+                        continue # add centrals for first mass bin only, if showing total only
 
-                wBin = np.where( (stellar_mass >= stellarMassBin[0]) & (stellar_mass < stellarMassBin[1]) & \
-                                 (galaxy_color >= mag_range[0]) & (galaxy_color < mag_range[1]) )
+                    wBin = np.where( (stellar_mass >= stellarMassBin[0]) & (stellar_mass < stellarMassBin[1]) & \
+                                     (galaxy_color >= mag_range[0]) & (galaxy_color < mag_range[1]) )
 
-                if j == 0 or (cenOnly and j == loopInds[0]):
-                    # set normalization (such that integral of PDF is one) based on 'all galaxies'
-                    nBins[i] = np.max( [16, np.int( np.sqrt( len(wBin[0] )) * 1.4)] ) # adaptive
-                    binSize[i] = (mag_range[1]-mag_range[0]) / nBins[i]
-                    normFacs[i] = 1.0 / (binSize[i] * len(wBin[0]))
+                    if j == 0 or (cenOnly and j == loopInds[0]):
+                        # set normalization (such that integral of PDF is one) based on 'all galaxies'
+                        nBins[i] = np.max( [16, np.int( np.sqrt( len(wBin[0] )) * 1.4)] ) # adaptive
+                        binSize[i] = (mag_range[1]-mag_range[0]) / nBins[i]
+                        normFacs[i] = 1.0 / (binSize[i] * len(wBin[0]))
 
-                # plot panel config
-                label = sP.simName if i == iLeg and j == loopInds[0] and splitCenSat else ''
-                alpha = 1.0 if j == loopInds[0] else 0.7
-                if not splitCenSat: alpha = 0.1
+                    # plot panel config
+                    label = sP.simName if i == iLeg and j == loopInds[0] and splitCenSat else ''
+                    alpha = 1.0 if j == loopInds[0] else 0.7
+                    if not splitCenSat: alpha = 0.1
 
-                # obs histogram
-                wObs = np.where((sdss_Mstar >= stellarMassBin[0]) & (sdss_Mstar < stellarMassBin[1]))
-                yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
-                xx = xx[:-1] + 0.5*binSize[i]
+                    # obs histogram
+                    wObs = np.where((sdss_Mstar >= stellarMassBin[0]) & (sdss_Mstar < stellarMassBin[1]))
+                    yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
+                    xx = xx[:-1] + 0.5*binSize[i]
 
-                if not clean:
-                    axes[i].plot(xx, yy, '-', color=obs_color, alpha=alpha, lw=3.0)
+                    if not clean:
+                        axes[i].plot(xx, yy, '-', color=obs_color, alpha=alpha, lw=3.0)
 
-                # obs kde
-                xx = np.linspace(mag_range[0], mag_range[1], 200)
-                bw_scotthalf = sdss_color[wObs].size**(-1.0/(sdss_color.ndim+4.0)) * 0.5
-                kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
-                yy_obs = kde2(xx)
-                axes[i].plot(xx, yy_obs, '-', color=obs_color, alpha=1.0, lw=3.0)
-                axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)\
-
-                if len(wBin[0]) <= 1:
-                    print(' skip sim kde no data: ',sP.simName,i)
-                    continue
-
-                # sim histogram
-                yy, xx = np.histogram(galaxy_color[wBin], bins=nBins[i], range=mag_range)
-                yy2 = yy.astype('float32') * normFacs[i]
-                xx = xx[:-1] + 0.5*binSize[i]
-
-                if not clean:
-                    axes[i].plot(xx, yy2, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
-
-                # sim kde
-                if not splitCenSat:
+                    # obs kde
                     xx = np.linspace(mag_range[0], mag_range[1], 200)
-                    bw_scotthalf = galaxy_color[wBin].size**(-1.0/(galaxy_color.ndim+4.0)) * 0.5
-                    kde1 = gaussian_kde(galaxy_color[wBin], bw_method='scott') # scott, silvermann, or scalar
-                    yy_sim = kde1(xx)
+                    bw_scotthalf = sdss_color[wObs].size**(-1.0/(sdss_color.ndim+4.0)) * 0.5
+                    kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
+                    yy_obs = kde2(xx)
+                    axes[i].plot(xx, yy_obs, '-', color=obs_color, alpha=1.0, lw=3.0)
+                    axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)\
 
-                    label = sP.simName if i == iLeg and j == loopInds[0] else ''
-                    axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=1.0, lw=3.0)
-                    axes[i].fill_between(xx, 0.0, yy_sim, color=c, alpha=0.1, interpolate=True)
+                    if len(wBin[0]) <= 1:
+                        print(' skip sim kde no data: ',sP.simName,i)
+                        continue
 
-                axes[i].set_ylim([0, 1.2 * np.max([yy_obs.max(),yy_sim.max()])])
+                    # sim histogram
+                    yy, xx = np.histogram(galaxy_color[wBin], bins=nBins[i], range=mag_range)
+                    yy2 = yy.astype('float32') * normFacs[i]
+                    xx = xx[:-1] + 0.5*binSize[i]
+
+                    if not clean:
+                        axes[i].plot(xx, yy2, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
+
+                    # sim kde
+                    if not splitCenSat:
+                        xx = np.linspace(mag_range[0], mag_range[1], 200)
+                        bw_scotthalf = galaxy_color[wBin].size**(-1.0/(galaxy_color.ndim+4.0)) * 0.5
+                        kde1 = gaussian_kde(galaxy_color[wBin], bw_method='scott') # scott, silvermann, or scalar
+                        yy_sim = kde1(xx)
+
+                        if len(simColorsModels) == 1:
+                            # label by simulation
+                            label = sP.simName if i == iLeg and j == loopInds[0] else ''
+                        else:
+                            # label by dust model
+                            label = simColorsModel if i == iLeg and j == loopInds[0] else ''
+                        if clean:
+                            # replace dust model labels by paper versions
+                            label = label.replace("p07c_cf00dust_res_conv_ns1_all", "Model C (all)")
+                            label = label.replace("p07c_cf00dust_res_conv_ns1", "Model C")
+                            label = label.replace("p07c_cf00dust", "Model B")
+                            label = label.replace("p07c_nodust", "Model A")
+
+                        axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=1.0, lw=3.0)
+                        if j == 0:
+                            axes[i].fill_between(xx, 0.0, yy_sim, color=c, alpha=0.1, interpolate=True)
+
+                    pMaxVals[i] = np.max( [pMaxVals[i], np.max([yy_obs.max(),yy_sim.max()]) ])
+
+    for i, stellarMassBin in enumerate(stellarMassBins):
+        axes[i].set_ylim([0, 1.2 * pMaxVals[i]])
 
     # legend (simulations) (obs)
     handles, labels = axes[iLeg].get_legend_handles_labels()
     handlesO = [plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
     labelsO  = ['SDSS z<0.1'] # DR12 fspsGranWideDust
 
-    legend2 = axes[iLeg-1].legend(handles+handlesO, labels+labelsO, loc='upper left')
+    legend2 = axes[iLeg].legend(handles+handlesO, labels+labelsO, loc='upper left')
 
     # legend (central/satellite split)
     if splitCenSat:
@@ -448,7 +490,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModel='p07c_nodust',
         handles, labels = axes[iLeg+1].get_legend_handles_labels()
         legend3 = axes[iLeg+1].legend(handles+sExtra, labels+lExtra, loc='upper left')
 
-    if allOnly:
+    if allOnly and len(stellarMassBins) > 3:
         sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles[0:2]]
         lExtra = ['all galaxies','centrals only']
 
@@ -459,17 +501,21 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModel='p07c_nodust',
     pdf.savefig()
     plt.close(fig)
 
-def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_nodust', splitCenSat=False, simRedshift=0.0):
+def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_cf00dust', splitCenSat=False, simRedshift=0.0):
     """ 2D contours of galaxy colors/Mstar plane, multiple bands. """
     from util import simParams
     
     # config
     obs_color = '#000000'
     Mstar_range = [9.0, 12.0]
-    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
+    #bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
+    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # use multiple of 2
 
     eCorrect = True # True, False (for sdss points)
     kCorrect = True # True, False (for sdss points)
+
+    sizefac = 1.3 if clean else 1.5
+    figsize = (16,9)
 
     def _discreteReSampleMatched(obs_1dhist, sim_1dhist, nBinsDS):
         """ Apply a quasi inverse transform sampling method to draw a Mstar distribution
@@ -502,7 +548,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_nodust', splitCenSat=False,
     # create an entire plot PER run, only one 2D sim contour set each
     for sP_target in sPs:
         # start plot
-        fig = plt.figure(figsize=(figsize[0]*1.5,figsize[1]*1.5))
+        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
         axes  = []
         axes2 = []
 
@@ -596,7 +642,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_nodust', splitCenSat=False,
 
             # load fullbox stellar masses and photometrics
             gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-            gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,4] )
+            gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
             
             # load simulation colors
             colorData = loadSimGalColors(sP, simColorsModel)
@@ -799,7 +845,7 @@ def viewingAngleVariation():
 
 def plots():
     """ Driver. """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
+    sP = simParams(res=2500, run='tng', redshift=0.0)
 
     # debug:
     #pdf = PdfPages('galaxyColor_2dhistos.pdf')
@@ -833,14 +879,14 @@ def plots():
         ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas1', cStatistic=cs)
         histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='stellarage', cStatistic=cs)
 
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_mm5', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_mm5', cStatistic=cs)
         ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_ma5', cStatistic=cs)
         ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_poly7', cStatistic=cs)
 
         ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_all_eps07o', cStatistic=cs)
         ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_all_eps07m', cStatistic=cs)
         ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07o', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07m', cStatistic=cs)
+        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07m', cStatistic=cs)
 
         histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_sfrgt0_masswt', cStatistic=cs)
         histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_sfrgt0_volwt', cStatistic=cs)
@@ -867,14 +913,16 @@ def paperPlots():
 
     dust_A = 'p07c_nodust'
     dust_B = 'p07c_cf00dust'
-    dust_C = 'p07c_cf00dust_res_conv_ns1' # _all
+    dust_C = 'p07c_cf00dust_res_conv_ns1' # one random projection per subhalo
+    dust_C_all = 'p07c_cf00dust_res_conv_ns1_all' # all projections shown
 
     # figure 1
-    if 1:
-        sPs = [L75]
-        dust = dust_A
+    if 0:
+        sPs = [L75, L205]
+        dust = dust_B # dust_C_all # need L205
+
         pdf = PdfPages('figure1_%s.pdf' % dust)
-        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModel=dust)
+        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust])
         pdf.close()
 
     # figure 2
@@ -885,8 +933,33 @@ def paperPlots():
     if 0:
         viewingAngleVariation()
 
-    # appendix figure 2, dust model dependence (3 1D histos) 
+    # appendix figure 2, dust model dependence (3 1D histos)
+    if 0:
+        sPs = [L75]
+        dusts = [dust_C_all, dust_C, dust_B, dust_A]
+        massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
+
+        pdf = PdfPages('figure_appendix2.pdf')
+        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts, stellarMassBins=massBins)
+        pdf.close()
 
     # appendix figure 3, resolution convergence (3 1D histos)
+    if 0:
+        L75n910 = simParams(res=910,run='tng',redshift=0.0)
+        L75n455 = simParams(res=455,run='tng',redshift=0.0)
+        sPs = [L75, L75n910, L75n455]
+        dust = dust_C_all
+        massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
-    # appendix figure 3, 2x2 grid of different colors
+        pdf = PdfPages('figure_appendix3_%s.pdf' % dust)
+        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
+        pdf.close()
+
+    # appendix figure 4, 2x2 grid of different colors
+    if 1:
+        sPs = [L75]
+        dust = dust_C
+
+        pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
+        galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
+        pdf.close()
