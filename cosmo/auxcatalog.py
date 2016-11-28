@@ -12,6 +12,7 @@ from functools import partial
 from illustris_python.util import partTypeNum
 from cosmo.util import periodicDistsSq, snapNumToRedshift
 from util.helper import logZeroMin, logZeroNaN
+from util.helper import pSplit as pSplitArr
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -197,7 +198,6 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only.
     """
-    assert pSplit is None # not implemented
     assert op in ['sum','mean']
 
     # determine ptRestriction
@@ -225,9 +225,31 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
     nSubsTot = gc['header']['Nsubgroups_Total']
 
+    subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
+
+    # task parallelism
+    offsets_pt = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+    indRange = [0, offsets_pt[:,ptLoadType].max()]
+
+    if pSplit is not None:
+        # do contiguous subhalo ID division and reduce global haloSubset load 
+        # to the particle sets which cover the subhalo subset of this pSplit
+        
+        subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
+
+        first_sub = subhaloIDsTodo[0]
+        last_sub = subhaloIDsTodo[-1]
+
+        first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
+        last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+
+        indRange = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], ptLoadType]
+
+    nSubsDo = len(subhaloIDsTodo)
+
     # info
     print(' ' + desc)
-    print(' Total # Subhalos: %d, processing all [%s] subhalos...' % (nSubsTot,nSubsTot))
+    print(' Total # Subhalos: %d, processing [%d] subhalos...' % (nSubsTot,nSubsDo))
 
     # determine radial restriction for each subhalo
     radSqMin = np.zeros( nSubsTot, dtype='float32' ) # leave at zero unless modified below
@@ -286,14 +308,14 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     if ptRestriction == 'sfrgt0':
         fieldsLoad.append('sfr')
 
-    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, haloSubset=True)
-    particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], haloSubset=True)
+    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
+    particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     if particles[ptProperty].ndim == 1:
-        r = np.zeros( nSubsTot, dtype='float32' )
+        r = np.zeros( nSubsDo, dtype='float32' )
     else:
-        r = np.zeros( (nSubsTot,particles[ptProperty].shape[1]), dtype='float32' )
+        r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype='float32' )
 
     if ptProperty not in ['mass','Masses']:
         r.fill(np.nan)
@@ -308,7 +330,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
 
         if weighting in ['mass','volume']:
             # use particle masses or volumes (linear) as weights
-            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, haloSubset=True)
+            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, indRange=indRange)
 
         if 'bandLum' in weighting:
             # prepare sps interpolator
@@ -317,7 +339,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
 
             # load additional fields, snapshot wide
             fieldsLoadMag = ['initialmass','metallicity']
-            magsLoad = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoadMag, haloSubset=True)
+            magsLoad = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoadMag, indRange=indRange)
 
             # request magnitudes in this band
             band = weighting.split("-")[1]
@@ -331,13 +353,15 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     assert particles['weights'].ndim == 1 and particles['weights'].size == particles[ptProperty].shape[0]
 
     # loop over subhalos
-    for i in range(nSubsTot):
-        if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
-            print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
+    for i, subhaloID in enumerate(subhaloIDsTodo):
+        if i % np.max([1,int(nSubsDo/100)]) == 0 and i <= nSubsDo:
+            print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
         # slice starting/ending indices for stars local to this FoF
-        i0 = gc['subhalos']['SubhaloOffsetType'][i,ptLoadType]
-        i1 = i0 + gc['subhalos']['SubhaloLenType'][i,ptLoadType]
+        i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
+        i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,ptLoadType]
+
+        assert i0 >= 0 and i1 <= (indRange[1]-indRange[0])
 
         if i1 == i0:
             continue # zero length of this type
@@ -346,9 +370,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         validMask = np.ones( i1-i0, dtype=np.bool )
 
         if rad is not None:
-            rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][i,:], particles['Coordinates'][i0:i1,:], sP )
-            validMask &= (rr <= radSqMax[i])
-            validMask &= (rr >= radSqMin[i])
+            rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
+                                  particles['Coordinates'][i0:i1,:], sP )
+            validMask &= (rr <= radSqMax[subhaloID])
+            validMask &= (rr >= radSqMin[subhaloID])
 
         if ptRestriction == 'real_stars':
             validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
@@ -382,7 +407,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
              'ptType'      : ptType.encode('ascii'),
              'ptProperty'  : ptProperty.encode('ascii'),
              'rad'         : str(rad).encode('ascii'),
-             'weighting'   : str(weighting).encode('ascii')}
+             'weighting'   : str(weighting).encode('ascii'),
+             'subhaloIDs'  : subhaloIDsTodo}
 
     return r, attrs
 
@@ -453,7 +479,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
         if 1:
             # do contiguous subhalo ID division and reduce global haloSubset load 
             # to the particle sets which cover the subhalo subset of this pSplit
-            from util.helper import pSplit as pSplitArr
             subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
 
             first_sub = subhaloIDsTodo[0]
