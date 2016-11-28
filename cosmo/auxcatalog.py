@@ -234,7 +234,6 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     if pSplit is not None:
         # do contiguous subhalo ID division and reduce global haloSubset load 
         # to the particle sets which cover the subhalo subset of this pSplit
-        
         subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
 
         first_sub = subhaloIDsTodo[0]
