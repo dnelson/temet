@@ -182,7 +182,7 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     if not noLocal:
         bpSplit = basePath.split("/")
         localBP = "/scratch/" + bpSplit[-3] + "/" + bpSplit[-2] + "/"
-        localFT = gcPath(localBP, snapNum, noLocal=True)
+        localFT = gcPath(localBP, snapNum, noLocal=True, checkExists=True)
 
         if localFT:
             print("Note: Reading group catalog from local scratch!")
