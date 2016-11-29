@@ -502,7 +502,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     if rad is not None and isinstance(rad, float):
         # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
         rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
-        radSqMax = np.zeros( nSubsDo, dtype='float32' ) 
+        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
         radSqMax += rad_pkpc * rad_pkpc
 
     # global load of all stars in all groups in snapshot
