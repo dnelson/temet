@@ -1061,8 +1061,11 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
 
     return trCounts, trOffsets
 
-def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=False, extraFields=[]):
-    """ Load all MPBs of a global tracer set and create a mapping between unique MPBs and tracers. """
+def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=False, 
+                       extraFields=[], indRange=None):
+    """ Load all MPBs of a global tracer set and create a mapping between unique MPBs and tracers.
+    If indRange is not None (only so far when calling from accMode()), attempt to get halo_id's 
+    using already computed parent_indextype tracer_tracks (for speed and efficiency only). """
     assert halos is True or subhalos is True # pick one
 
     treeName = 'SubLink'
@@ -1077,8 +1080,36 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
     # will derive a rad/rad_rvir corresponding to the ~distance of the satellite from the halo center
     print('Identifying central subhalo IDs for all [%d] tracers at snap [%d]...' % (trIDs.size,sP.snap))
 
-    trVals = tracersTimeEvo(sP, trIDs, [], ['halo_id'], toRedshift=sP.redshift) 
-    trVals['halo_id'] = np.squeeze(trVals['halo_id']) # single snap
+    if indRange is None:
+        trVals = tracersTimeEvo(sP, trIDs, [], ['halo_id'], toRedshift=sP.redshift) 
+        trVals['halo_id'] = np.squeeze(trVals['halo_id']) # single snap
+    else:
+        # load parent_indextype of the subset
+        indRange3 = [indRange[0], indRange[1], 0] # take i=0 slice along snapshot axis
+        par_indtype = globalAllTracersTimeEvo(sP, 'parent_indextype', halos=True, indRange=indRange3)
+        assert par_indtype['snaps'][0] == sP.snap
+        assert par_indtype['parent_indextype'].size == trIDs.size
+
+        par_indtype = par_indtype['parent_indextype']
+
+        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+        SnapOffsetsGroup = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+
+        trVals = {}
+        trVals['halo_id'] = np.zeros( trIDs.size, dtype='int32' )
+        trVals['halo_id'].fill(np.nan)
+
+        for ptName in defParPartTypes:
+            ptMin = 1e11 * sP.ptNum(ptName) # see parent_indextype documentation
+            ptMax = 1e11 * (sP.ptNum(ptName)+1)
+
+            wType = np.where( (par_indtype >= ptMin) & (par_indtype < ptMax) )[0]
+            indsType = par_indtype[wType] - ptMin
+
+            trVals['halo_id'][wType] = inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
+                                         GroupLenType, SnapOffsetsGroup)
+
+        assert np.count_nonzero( np.isnan(trVals['halo_id']) ) == 0
 
     # map the FoF IDs at z=0 into subhalo_ids with GroupFirstSub
     GroupFirstSub = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
@@ -1161,7 +1192,11 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                             r[k1] = f[k1][()]
                         else:
                             # read partial dataset for 2D (shape is [Nsnaps,Ntr])
-                            r[k1] = f[k1][:, indRange[0]:indRange[1]]
+                            assert len(indRange) in [2,3]
+                            if len(indRange) == 2:
+                                r[k1] = f[k1][:, indRange[0]:indRange[1]]
+                            else:
+                                r[k1] = f[k1][indRange[2], indRange[0]:indRange[1]]
 
                     continue
 
@@ -1170,6 +1205,10 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                     for k3 in f[k1][k2]:
                         r[k1+'_'+k2+'_'+k3] = f[k1][k2][k3][()]
         return r
+
+    if indRange is not None:
+        print('Warning: globalAllTracersTimeEvo() returning None, indRange input but [%s] does not exist.' % saveFilename)
+        return None # if we requested a subset, were expecting existence, indicate problem
 
     # get child tracers of all particle types in all FoFs
     trIDs = globalTracerChildren(sP, halos=halos, subhalos=subhalos)

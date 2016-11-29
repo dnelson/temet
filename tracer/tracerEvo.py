@@ -381,14 +381,13 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     if sP.isZoom:
         mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
     else:
-        trIDs = None # load all inside globalTracerMPBMap()
-
         if pSplit is not None:
             # load the subset of the tracer IDs we are working with and obtain only their MPBs
             metaPath = tracersMetaOffsets(sP, getPath=True)
             trIDs = loadAllOrRestricted(sP,metaPath,'TracerIDs',indRange=data['indRange'])
-
-        mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True, trIDs=trIDs)
+            mpbGlobal = globalTracerMPBMap(sP,halos=True,retMPBs=True,trIDs=trIDs,indRange=data['indRange'])
+        else:
+            mpbGlobal = globalTracerMPBMap(sP,halos=True,retMPBs=True)
 
     acc_time = accTime(sP, snapStep=snapStep, indRangeLoad=data['indRange'])
 
