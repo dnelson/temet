@@ -371,7 +371,8 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     if isfile(saveFilename) and pSplit is None:
         return loadAllOrRestricted(sP,saveFilename,'accMode',indRange=indRangeLoad)
 
-    print('Calculating new accMode for [%s]... %s' % (sP.simName,splitStr))
+    print('Calculating new accMode for [%s]...' % sP.simName)
+    if pSplit is not None: print(' Split calculation [%d] of [%d].' % (pSplit[0],pSplit[1]))
 
     # load accTime, subhalo_id tracks, and MPB history
     data = tracersTimeEvo(sP, 'subhalo_id', snapStep, all=True, pSplit=pSplit)

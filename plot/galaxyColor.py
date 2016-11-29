@@ -105,12 +105,20 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     cmap = loadColorTable('viridis') # plasma
     mag_range = _bandMagRange(bands, tight=True)
 
-    # x-axis: load fullbox galaxy properties and set plot options
-    sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
-    if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
+    # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
+    if 'sim_xvals' in sP.data:
+        sim_xvals, xlabel, xMinMax = sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax']
+    else:
+        sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
+        if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
+        sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
 
-    # y-axis: load/calculate simulation colors
-    sim_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
+    # y-axis: load/calculate simulation colors, cached in sP.data
+    if 'sim_colors' in sP.data:
+        sim_colors = sP.data['sim_colors']
+    else:
+        sim_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
+        sP.data['sim_colors'] = sim_colors
 
     ylabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
     if not clean: ylabel += ' %s' % simColorsModel
@@ -508,8 +516,8 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_cf00dust', splitCenSat=Fals
     # config
     obs_color = '#000000'
     Mstar_range = [9.0, 12.0]
-    #bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
-    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # use multiple of 2
+    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
+    #bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # use multiple of 2
 
     eCorrect = True # True, False (for sdss points)
     kCorrect = True # True, False (for sdss points)
@@ -563,14 +571,16 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_cf00dust', splitCenSat=Fals
             axes.append(ax)
             mag_range = _bandMagRange(bands)
             
-            #obsMagStr = 'modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
-            #cenSatStr = '' if splitCenSat else ', cen+sat'
-            #titleStr = '[ obs=%s, sim=%s%s ]' % (obsMagStr,simColorsModel,cenSatStr)
-            #ax.set_title(titleStr)
+            if not clean and 0:
+                obsMagStr = 'modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
+                cenSatStr = '' if splitCenSat else ', cen+sat'
+                titleStr = '[ obs=%s, sim=%s%s ]' % (obsMagStr,simColorsModel,cenSatStr)
+                ax.set_title(titleStr)
 
+            xlabel2 = '' if clean else '(<2r_{\star,1/2})'
             ax.set_xlim(Mstar_range)
             ax.set_ylim(mag_range)
-            ax.set_xlabel('M$_{\\rm \star}(<2r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]')
+            ax.set_xlabel('M$_{\\rm \star}%s$ [ log M$_{\\rm sun}$ ]' % xlabel2)
             ax.set_ylabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
 
             # load observational points, restrict colors to mag_range as done for sims (for correct normalization)
@@ -865,7 +875,7 @@ def plots():
         cs = 'median'
         #css = 'cen'
 
-        pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s.pdf' % (''.join(bands),xQuant,cs,css))
+        pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
 
         histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=None)
         histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='ssfr', cStatistic=cs)
@@ -916,6 +926,15 @@ def paperPlots():
     dust_C = 'p07c_cf00dust_res_conv_ns1' # one random projection per subhalo
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_all' # all projections shown
 
+    # testing
+    if 1:
+        sPs = [simParams(res=455,run='tng',redshift=0.0)]
+        dusts = [dust_B,dust_B+'_rad30pkpc']
+
+        pdf = PdfPages('figure_test.pdf')
+        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts)
+        pdf.close()
+
     # figure 1
     if 0:
         sPs = [L75, L205]
@@ -956,7 +975,7 @@ def paperPlots():
         pdf.close()
 
     # appendix figure 4, 2x2 grid of different colors
-    if 1:
+    if 0:
         sPs = [L75]
         dust = dust_C
 
