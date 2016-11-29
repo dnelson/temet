@@ -411,7 +411,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
 
     return r, attrs
 
-def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, modelH=True):
+def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True):
     """ Compute the total band-magnitudes, per subhalo, under the given assumption of 
     an iso(chrone) model, imf model, and dust model. """
     from cosmo.stellarPop import sps
@@ -498,9 +498,16 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
     print(' Total # Subhalos: %d, processing [%d] in [%d] bands and [%d] projections...' % \
         (nSubsTot,nSubsDo,nBands,nProj))
 
+    # radial restriction
+    if rad is not None and isinstance(rad, float):
+        # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
+        rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
+        radSqMax = np.zeros( nSubsDo, dtype='float32' ) 
+        radSqMax += rad_pkpc * rad_pkpc
+
     # global load of all stars in all groups in snapshot
     starsLoad = ['initialmass','sftime','metallicity']
-    if '_res' in dust: starsLoad += ['pos']
+    if '_res' in dust or rad is not None: starsLoad += ['pos']
 
     stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, indRange=indRange_stars)
 
@@ -528,7 +535,17 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
                 if i1 == i0:
                     continue # zero length of this type
                 
-                magsLocal = mags[i0:i1] # wind particles have NaN
+                # radius restriction: use squared radii and sq distance function
+                validMask = np.ones( i1-i0, dtype=np.bool )
+                if rad is not None:
+                    rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
+                                          stars['Coordinates'][i0:i1,:], sP )
+                    validMask &= (rr <= radSqMax[subhaloID])
+                wValid = np.where(validMask)
+                if len(wValid[0]) == 0:
+                    continue # zero length of particles satisfying radial cut and restriction
+
+                magsLocal = mags[i0:i1][wValid] # wind particles have NaN
 
                 # convert mags to luminosities, sum together
                 totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
@@ -579,14 +596,28 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
             if i1 == i0:
                 continue # zero length of this type
             
-            # real stars? take subset
-            w_stars = np.where( np.isfinite(stars['GFM_StellarFormationTime'][i0:i1] ) )
-            if len(w_stars[0]) == 0:
-                continue
+            # radius restriction: use squared radii and sq distance function
+            validMask = np.ones( i1-i0, dtype=np.bool )
 
-            ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][w_stars]
-            metals_log  = stars['GFM_Metallicity'][i0:i1][w_stars]
-            masses_msun = stars['GFM_InitialMass'][i0:i1][w_stars]
+            if rad is not None:
+                rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
+                                      stars['Coordinates'][i0:i1,:], sP )
+                validMask &= (rr <= radSqMax[subhaloID])
+
+            validMask &= np.isfinite(stars['GFM_StellarFormationTime'][i0:i1] ) # remove wind
+
+            wValid = np.where(validMask)
+
+            if len(wValid[0]) == 0:
+                continue # zero length of particles satisfying radial cut and real stars restriction
+
+            ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][wValid]
+            metals_log  = stars['GFM_Metallicity'][i0:i1][wValid]
+            masses_msun = stars['GFM_InitialMass'][i0:i1][wValid]
+            pos_stars   = np.squeeze( stars['Coordinates'][i0:i1,:][wValid,:] )
+            
+            assert ages_logGyr.shape == metals_log.shape == masses_msun.shape
+            assert pos_stars.shape[0] == ages_logGyr.size and pos_stars.shape[1] == 3
 
             # slice starting/ending indices for -gas- local to this subhalo
             i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange_gas[0]
@@ -596,8 +627,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
 
             # loop over all different viewing directions
             for projNum in range(nProj):
-                #print('  proj %d of %d' % (projNum,nProj))
-
                 # at least 2 gas cells exist in subhalo?
                 if i1g > i0g+1:
                     # projection
@@ -610,8 +639,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
                     mass_nh = gas['Masses'][i0g:i1g]
                     quant_z = gas['GFM_Metallicity'][i0g:i1g]
 
-                    pos_stars = stars['Coordinates'][i0:i1,:]
-
                     # compute line of sight integrated quantities
                     N_H, Z_g = pop.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, 
                                                          pos_stars, projCen, projVec)
@@ -621,8 +648,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, model
                     Z_g = np.zeros( i1-i0, dtype='float32' )
 
                 # compute total attenuated stellar luminosity in each band
-                magsLocal = pop.dust_tau_model_mags(bands, N_H[w_stars], Z_g[w_stars],
-                                                    ages_logGyr, metals_log, masses_msun)
+                magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun)
 
                 # loop over each requested band within this projection
                 for bandNum, band in enumerate(bands):
@@ -1160,6 +1186,8 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='bc00'), # temporary testing
    'Subhalo_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00'),
+   'Subhalo_StellarPhot_p07c_cf00dust_rad30pkpc' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00', rad=30.0),
    'Subhalo_StellarPhot_p07k_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='kroupa', dust='none'),
    'Subhalo_StellarPhot_p07k_cf00dust' : partial(subhaloStellarPhot, 
@@ -1173,6 +1201,8 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_eff', Nside=1),
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1),
+   'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1, rad=30.0),
    'Subhalo_StellarPhot_p07c_ns8_demo' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=8),
    'Subhalo_StellarPhot_p07c_ns4_demo' : partial(subhaloStellarPhot, 
