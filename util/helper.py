@@ -262,6 +262,26 @@ def pSplit(array, numProcs, curProc):
 
     return arraySplit
 
+def pSplitRange(indrange, numProcs, curProc):
+    """ As pSplit(), but accept a 2-tuple of [start,end] indices and return a new range subset. """
+    assert len(indrange) == 2 and indrange[1] > indrange[0]
+
+    if numProcs == 1:
+        if curProc != 0:
+            raise Exception("Only a single processor but requested curProc>0.")
+        return indrange
+
+    # split array into numProcs segments, and return the curProc'th segment
+    splitSize = int(np.floor( (indrange[1]-indrange[0]) / numProcs ))
+    start = indrange[0] + curProc*splitSize
+    end   = indrange[0] + (curProc+1)*splitSize
+
+    # for last split, make sure it takes any leftovers
+    if curProc == numProcs-1:
+        end = indrange[1]
+
+    return [start,end]
+
 def getIDIndexMapSparse(ids):
     """ Return an array which maps ID->indices within dense, disjoint subsets which are 
         allowed to be sparse in the entire ID range. within each subset i of size binsize

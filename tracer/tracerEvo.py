@@ -15,6 +15,7 @@ from tracer.tracerMC import subhaloTracersTimeEvo, subhalosTracersTimeEvo, \
   globalAllTracersTimeEvo, globalTracerMPBMap, defParPartTypes
 from cosmo.mergertree import mpbSmoothedProperties
 from cosmo.util import redshiftToSnapNum
+from util.helper import pSplitRange
 
 # integer flags for accretion modes
 ACCMODE_NONE     = -1
@@ -56,57 +57,82 @@ def guinevereData():
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
 
-def tracersTimeEvo(sP, fieldName, snapStep=None, all=True):
+def tracersTimeEvo(sP, fieldName, snapStep=None, all=True, pSplit=None):
     """ Wrapper to handle zoom vs. box load. """
-    if sP.isZoom:
-        assert snapStep is not None
-        r = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
-    else:
-        r = globalAllTracersTimeEvo(sP, fieldName)
 
-    # global load
-    if all is True or (sP.haloInd is None and sP.subhaloInd is None):
+    # restricted load? task parallel
+    if pSplit is not None:
+        assert not sP.isZoom
+        assert sP.haloInd is None and sP.subhaloInd is None and all is True
+        assert fieldName != 'meta'
+
+        # determine index range
+        _, nTracerTot = tracersMetaOffsets(sP, all='Halo')
+        indRange = pSplitRange([0,nTracerTot], pSplit[1], pSplit[0])
+
+        print(' tracersTimeEvo [%s] indRange [%d %d]' % (fieldName,indRange[0],indRange[1]))
+
+        r = globalAllTracersTimeEvo(sP, fieldName, indRange=indRange)
+
+        r['indRange'] = indRange
         return r
 
-    # restrict based on [halo/subhalo] for a fullbox
-    # Note! For globalAllTracersTimeEvo(), we could move this inside and actually do a restricted 
-    # load, instead of a load and then subset... going to be mandatory
-    assert not sP.isZoom
-    assert fieldName != 'meta'
+    # restricted load? full box, but only a [halo/subhalo] subset
+    if all is False and (sP.haloInd is not None or sP.subhaloInd is not None):
+        assert pSplit is None
+        assert not sP.isZoom
+        assert fieldName != 'meta'
 
-    meta, nTracerTot = tracersMetaOffsets(sP)
+        # determine index range
+        meta, nTracerTot = tracersMetaOffsets(sP)
 
-    for key in r:
-        if key == 'redshifts' or key == 'snaps':
-            continue
-
-        # size is (Nsnaps,NtrSubset)
-        subset = np.zeros( (r[key].shape[0],nTracerTot), dtype=r[key].dtype )
+        r = {}
         offset = 0
 
         for pt in meta.keys():
             if meta[pt]['length'] == 0:
                 continue
 
-            for i in range(r[key].shape[0]):
-                # we anyways made these non-contiguous on disk, so load looping over snap dim
-                subset[i, offset : offset + meta[pt]['length']] = \
-                  r[key][ i, meta[pt]['offset'] : meta[pt]['offset']+meta[pt]['length'] ]
+            # request load of tracers for this halos/subhalo for this partType
+            indRange = [ meta[pt]['offset'] , meta[pt]['offset']+meta[pt]['length'] ]
+            rLocal = globalAllTracersTimeEvo(sP, fieldName, indRange=indRange)
 
+            # save redshifts, snaps
+            for key in ['redshifts','snaps']:
+                r[key] = rLocal[key]
+
+            # allocate main return if needed
+            if fieldName not in r:
+                r[fieldName] = np.zeros( (rLocal[fieldName].shape[0],nTracerTot), 
+                                         dtype=rLocal[fieldName].dtype )
+
+            # stamp in return for this partType
+            r[fieldName][:, offset : offset+meta[pt]['length']] = rLocal[fieldName]
             offset += meta[pt]['length']
 
-        r[key] = subset # replace
+        return r
 
+    # global load
+    if sP.isZoom:
+        assert snapStep is not None
+        r = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
+    else:
+        r = globalAllTracersTimeEvo(sP, fieldName, indRange=indRange)
+
+    # global load requested?
     return r
 
-def tracersMetaOffsets(sP, all=None):
+def tracersMetaOffsets(sP, all=None, getPath=False):
     """ For a fullbox sP and either sP.haloInd or sP.subhaloInd specified, load and return the needed 
     offsets to load a [halo/subhalo]-restricted part of any of the tracer_tracks data. """
-    assert ((sP.haloInd is not None) ^ (sP.subhaloInd is not None)) or all is not None
+    assert ((sP.haloInd is not None) ^ (sP.subhaloInd is not None)) or (all is not None or getPath is True)
     if all is not None: assert all == 'Halo' or all == 'Subhalo'
     assert not sP.isZoom
 
     saveFilename = sP.postPath + '/tracer_tracks/tr_all_groups_%d_meta.hdf5' % (sP.snap)
+
+    if getPath:
+        return saveFilename
 
     if sP.haloInd is not None:
         gName = 'Halo'
@@ -135,17 +161,22 @@ def tracersMetaOffsets(sP, all=None):
 
     return r, nTracerTot
 
-def loadAllOrRestricted(sP, saveFilename, datasetName=None):
+def loadAllOrRestricted(sP, saveFilename, datasetName=None, indRange=None):
     """ Load a single datasetName from a HDF5 tracer save file, either the entire dataset or 
     restricted to a [halo/subhalo] subset if sP.haloInd or sP.subhaloInd is specified for a 
     fullbox run. """
 
-    # return for all tracers
+    # return for all tracers, or an indRange subset
     if sP.isZoom or (sP.haloInd is None and sP.subhaloInd is None):
         with h5py.File(saveFilename,'r') as f:
-            return f[datasetName][()]
+            if indRange is None:
+                return f[datasetName][()]
+            else:
+                assert f[datasetName].ndim == 1
+                return f[datasetName][ indRange[0]:indRange[1] ]
 
     # get offsets from meta and do [halo/subhalo]-restricted load and return (concat types)
+    assert indRange is None
     meta, nTracerTot = tracersMetaOffsets(sP)
     
     if nTracerTot == 0:
@@ -165,7 +196,7 @@ def loadAllOrRestricted(sP, saveFilename, datasetName=None):
 
     return r
 
-def accTime(sP, snapStep=1, rVirFac=1.0):
+def accTime(sP, snapStep=1, rVirFac=1.0, indRangeLoad=None):
     """ Calculate accretion time for each tracer (and cache), as the earliest (highest redshift) crossing 
     of the virial radius of the MPB halo. Uses the 'rad_rvir' field. 
     Argument: rVirFac = what fraction of the virial radius denotes the accretion time? """
@@ -183,7 +214,7 @@ def accTime(sP, snapStep=1, rVirFac=1.0):
 
     # load pre-existing
     if isfile(saveFilename):
-        return loadAllOrRestricted(sP,saveFilename,'accTimeInterp')
+        return loadAllOrRestricted(sP,saveFilename,'accTimeInterp',indRange=indRangeLoad)
 
     print('Calculating new accTime for [%s]...' % sP.simName)
 
@@ -278,7 +309,7 @@ def redshiftsToClosestSnaps(data, redshifts, indsNotSnaps=False):
 
     return accSnap
 
-def accMode(sP, snapStep=1):
+def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     """ Derive an 'accretion mode' categorization for each tracer based on its group membership history. 
     Specifically, separate all tracers into one of [smooth/merger/stripped] defined as:
       - smooth: child of MPB or no subhalo at all z>=z_acc 
@@ -291,25 +322,74 @@ def accMode(sP, snapStep=1):
         saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_mode.hdf5' % \
           (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
     else:
-        saveFilename = sP.derivPath + '/trTimeEvo/acc_mode_s%d-%d-%d.hdf5' % \
-          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep)
+        splitStr = '' if pSplit is None else '_split-%d-%d'
+        saveFilenameBase = sP.derivPath + '/trTimeEvo/acc_mode_s%d-%d-%d%s.hdf5' % \
+          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,splitStr)
+        saveFilename = saveFilenameBase % (pSplit[0],pSplit[1])
+
+    # check for existence of all split files for concatenation
+    if isfile(saveFilename) and pSplit is not None:
+        allExist = True
+        allCount = 0
+
+        for i in range(pSplit[1]):
+            saveFileSplit_i = saveFilenameBase % (i,pSplit[1])
+            if not isfile(saveFileSplit_i):
+                allExist = False
+                continue
+
+            # record counts and dataset shape
+            with h5py.File(saveFileSplit_i,'r') as f:
+                allCount += f['accMode'].size
+
+        if allExist:
+            # all chunks exist, concatenate them now and continue
+            accMode = np.zeros( allCount, dtype='int8' )
+            print(' Concatenating into shape: ', accMode.shape)
+
+            for i in range(pSplit[1]):
+                saveFileSplit_i = saveFilenameBase % (i,pSplit[1])
+
+                with h5py.File(saveFileSplit_i,'r') as f:
+                    indRange = f['indRange'][()]
+                    accMode[ indRange[0]:indRange[1] ] = f['accMode'][()]
+
+            assert np.count_zero(accMode) == 0 # all should be filled
+            saveFilename = saveFilenameBase.replace(splitStr,'')
+            assert not isfile(saveFilename)
+
+            with h5py.File(saveFilename,'w') as f:
+                f.create_dataset('accMode', data=accMode)
+
+            print(' Concatenated new [%s] and saved.' % saveFilename.split("/")[-1])
+            print(' All chunks concatenated, please manually delete them now.')
+        else:
+            print('Chunk [%s] already exists, but all not yet done, exiting.' % saveFilename.split("/")[-1])
+            return None
 
     # load pre-existing
-    if isfile(saveFilename):
-        return loadAllOrRestricted(sP,saveFilename,'accMode')
+    if isfile(saveFilename) and pSplit is None:
+        return loadAllOrRestricted(sP,saveFilename,'accMode',indRange=indRangeLoad)
 
-    print('Calculating new accMode for [%s]...' % sP.simName)
+    print('Calculating new accMode for [%s]... %s' % (sP.simName,splitStr))
 
     # load accTime, subhalo_id tracks, and MPB history
-    data = tracersTimeEvo(sP, 'subhalo_id', snapStep, all=True)
+    data = tracersTimeEvo(sP, 'subhalo_id', snapStep, all=True, pSplit=pSplit)
     data_snaps_min = data['snaps'].min()
 
     if sP.isZoom:
         mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID)
     else:
-        mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True)
+        trIDs = None # load all inside globalTracerMPBMap()
 
-    acc_time = accTime(sP, snapStep=snapStep)
+        if pSplit is not None:
+            # load the subset of the tracer IDs we are working with and obtain only their MPBs
+            metaPath = tracersMetaOffsets(sP, getPath=True)
+            trIDs = loadAllOrRestricted(sP,metaPath,'TracerIDs',indRange=data['indRange'])
+
+        mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True, trIDs=trIDs)
+
+    acc_time = accTime(sP, snapStep=snapStep, indRangeLoad=data['indRange'])
 
     # allocate return
     nTr = acc_time.size
@@ -441,6 +521,10 @@ def accMode(sP, snapStep=1):
     # save
     with h5py.File(saveFilename,'w') as f:
         f['accMode'] = accMode
+
+        if 'indRange' in data: # save pSplit portion
+            f['pSplit'] = pSplit
+            f['indRange'] = data['indRange']
 
     print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
     return accMode

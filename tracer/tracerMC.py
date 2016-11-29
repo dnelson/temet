@@ -1130,7 +1130,7 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
 
     return mpb
 
-def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False):
+def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None):
     """ For all tracers in all FoFs at the simulation endtime, record time evolution tracks of one 
     field for all snapshots (which contain tracers). """
     assert halos is True or subhalos is True # pick one
@@ -1149,9 +1149,22 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False):
         r = {}
         with h5py.File(saveFilename,'r') as f:
             for k1 in f:
+
                 if isinstance(f[k1], h5py.Dataset):
-                    r[k1] = f[k1][()]
+                    # we have a dataset, full or subset read?
+                    if indRange is None:
+                        # read full dataset
+                        r[k1] = f[k1][()]
+                    else:
+                        if f[k1].ndim == 1:
+                            # read full dataset for 1D (e.g. redshifts)
+                            r[k1] = f[k1][()]
+                        else:
+                            # read partial dataset for 2D (shape is [Nsnaps,Ntr])
+                            r[k1] = f[k1][:, indRange[0]:indRange[1]]
+
                     continue
+
                 # handle meta: nested Halo/TracerLength/gas type structure
                 for k2 in f[k1]:
                     for k3 in f[k1][k2]:
