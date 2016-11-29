@@ -469,13 +469,13 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     indRange_gas = [0, offsets_pt[:,sP.ptNum('gas')].max()]
 
     if pSplit is not None:
-        if 0:
+        if 1:
             # split up subhaloIDs in round-robin scheme (equal number of massive/centrals per job)
             # works well, but retains global load of all haloSubset particles
             modSplit = subhaloIDsTodo % pSplit[1]
             subhaloIDsTodo = np.where(modSplit == pSplit[0])[0]
 
-        if 1:
+        if 0:
             # do contiguous subhalo ID division and reduce global haloSubset load 
             # to the particle sets which cover the subhalo subset of this pSplit
             subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
@@ -611,10 +611,16 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             if len(wValid[0]) == 0:
                 continue # zero length of particles satisfying radial cut and real stars restriction
 
-            ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][wValid]
-            metals_log  = stars['GFM_Metallicity'][i0:i1][wValid]
-            masses_msun = stars['GFM_InitialMass'][i0:i1][wValid]
-            pos_stars   = np.squeeze( stars['Coordinates'][i0:i1,:][wValid,:] )
+            ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1]
+            metals_log  = stars['GFM_Metallicity'][i0:i1]
+            masses_msun = stars['GFM_InitialMass'][i0:i1]
+            pos_stars   = stars['Coordinates'][i0:i1,:]
+
+            if len(wValid[0]) > 1:
+                ages_logGyr = ages_logGyr[wValid]
+                metals_log  = metals_log[wValid]
+                masses_msun = masses_msun[wValid]
+                pos_stars   = np.squeeze( pos_stars[wValid,:] )
             
             assert ages_logGyr.shape == metals_log.shape == masses_msun.shape
             assert pos_stars.shape[0] == ages_logGyr.size and pos_stars.shape[1] == 3
@@ -644,8 +650,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                                                          pos_stars, projCen, projVec)
                 else:
                     # set columns to zero
-                    N_H = np.zeros( i1-i0, dtype='float32' )
-                    Z_g = np.zeros( i1-i0, dtype='float32' )
+                    N_H = np.zeros( len(wValid[0]), dtype='float32' )
+                    Z_g = np.zeros( len(wValid[0]), dtype='float32' )
 
                 # compute total attenuated stellar luminosity in each band
                 magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun)
