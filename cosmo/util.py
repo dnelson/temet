@@ -404,11 +404,13 @@ def gasMassesFromIDs(search_ids, sP):
 
     return masses
 
-def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, 
-                                      SubhaloLenType=None, SnapOffsetsSubhalo=None, debug=False):
+def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuzz=True,
+                                      SubhaloLenType=None, SnapOffsetsSubhalo=None):
     """ For a particle type ptName and snapshot indices for that type indsType, compute the 
         subhalo ID to which each particle index belongs. Optional: SubhaloLenType (from groupcat) 
         and SnapOffsetsSubhalo (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
+        If flagFuzz is True (default), particles in FoF fuzz are marked as outside any subhalo, 
+        otherwise they are attributed to the closest (prior) subhalo.
     """
     if SubhaloLenType is None:
         SubhaloLenType = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
@@ -427,23 +429,25 @@ def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName,
     val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
     val = val.astype('int32')
 
-    # search and flag all tracers with parents whose indices exceed the length of the 
+    # search and flag all matches where the indices exceed the length of the 
     # subhalo they have been assigned to, e.g. either in fof fuzz, in subhalos with 
     # no particles of this type, or not in any subhalo at the end of the file
-    gcOffsetsMax = gcOffsetsType + gcLenType - 1
-    ww = np.where( indsType > gcOffsetsMax[val] )[0]
+    if flagFuzz:
+        gcOffsetsMax = gcOffsetsType + gcLenType - 1
+        ww = np.where( indsType > gcOffsetsMax[val] )[0]
 
-    if len(ww):
-        val[ww] = -1
+        if len(ww):
+            val[ww] = -1
 
     if debug:        
-        # for tracers we identified in subhalos, verify parents directly
-        for i in range(indsType.size):
+        # for all inds we identified in subhalos, verify parents directly
+        for i in range(len(indsType)):
             if val[i] < 0:
                 continue
             assert indsType[i] >= gcOffsetsType[val[i]]
-            assert indsType[i] < gcOffsetsType[val[i]]+gcLenType[val[i]]
-            assert gcLenType[val[i]] != 0
+            if flagFuzz:
+                assert indsType[i] < gcOffsetsType[val[i]]+gcLenType[val[i]]
+                assert gcLenType[val[i]] != 0
 
     return val
 
@@ -472,7 +476,7 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
 
     if debug:
         # verify directly
-        for i in range(indsType.size):
+        for i in range(len(indsType)):
             if val[i] < 0:
                 continue
             assert indsType[i] >= gcOffsetsType[val[i]]
@@ -480,6 +484,36 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
             assert gcLenType[val[i]] != 0
 
     return val
+
+def subhaloIDListToBoundingPartIndices(sP, subhaloIDs):
+    """ For a list of subhalo IDs, return a dictionary with an entry for each partType, 
+    whose value is a 2-tuple of the particle index range bounding the members of the 
+    parent groups of this list of subhalo IDs. """
+    first_sub = subhaloIDs[0]
+    last_sub = subhaloIDs[-1]
+
+    min_sub = np.min(subhaloIDs)
+    max_sub = np.max(subhaloIDs)
+
+    if first_sub != min_sub:
+        print('Warning: First sub [%d] was not minimum of subhaloIDs [%d].' % (first_sub,min_sub))
+        first_sub = min_sub
+    if last_sub != max_sub:
+        print('Warning: Last sub [%d] was not maximum of subhaloIDs [%d].' % (last_sub,max_sub))
+        last_sub = max_sub
+
+    # get parent groups of extremum subhalos
+    first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
+    last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+
+    # load group offsets
+    offsets_pt = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+
+    r = {}
+    for ptName in ['gas','dm','stars','bhs']:
+        r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], sP.ptNum(ptName) ]
+
+    return r
 
 def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
     """ Return a tuple of three sets of indices into the group catalog for subhalos: 
