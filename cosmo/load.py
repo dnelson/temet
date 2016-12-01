@@ -676,6 +676,19 @@ def snapshotSubset(sP, partType, fields,
             P_gas = 10.0**snapshotSubset(sP, partType, 'P_gas', **kwargs)
             return np.log10( P_B + P_gas )
 
+        # cloudy based ionic mass calculation, if field name has a space in it
+        if " " in field:
+            element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
+            assert sP.isPartType(partType, 'gas')
+            assert prop == 'mass'
+
+            from cosmo.cloudy import cloudyIon
+            ion = cloudyIon(sP, el=element, redshiftInterp=True)
+            masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
+            masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
+
+            return masses
+
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
 

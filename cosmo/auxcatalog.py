@@ -228,22 +228,25 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
 
     subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
 
-    # task parallelism
-    offsets_pt = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
-    indRange = [0, offsets_pt[:,ptLoadType].max()]
+    # if no task parallelism (pSplit), set default particle load ranges
+    indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
     if pSplit is not None:
-        # do contiguous subhalo ID division and reduce global haloSubset load 
-        # to the particle sets which cover the subhalo subset of this pSplit
-        subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
+        # subdivide the global [variable ptType!] particle set, then map this back into a division of 
+        # subhalo IDs which will be better work-load balanced among tasks
+        gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
 
-        first_sub = subhaloIDsTodo[0]
-        last_sub = subhaloIDsTodo[-1]
+        invSubs = inverseMapPartIndicesToSubhaloIDs(sP, gasSplit, ptType, debug=True, flagFuzz=False)
 
-        first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
-        last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+        if pSplit[0] == pSplit[1] - 1:
+            invSubs[1] = nSubsTot
+        else:
+            assert invSubs[1] != -1
 
-        indRange = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], ptLoadType]
+        subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
+        indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+
+    indRange = indRange[ptType] # choose index range for the requested particle type
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -308,7 +311,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     if ptRestriction == 'sfrgt0':
         fieldsLoad.append('sfr')
 
-    particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
+    particles = {}
+    if len(fieldsLoad):
+        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
+
     particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
 
     # allocate, NaN indicates not computed except for mass where 0 will do
@@ -317,8 +323,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     else:
         r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype='float32' )
 
-    if ptProperty not in ['mass','Masses']:
-        r.fill(np.nan)
+    if op not in ['sum']:
+        r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
 
     # load weights
     if weighting is None:
@@ -1158,6 +1164,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='p10'),
    'Subhalo_Mass_SFingGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass_sfrgt0',op='sum',rad=None),
+   'Subhalo_Mass_OVI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O VI mass',op='sum',rad=None),
+   'Subhalo_Mass_OVII' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O VII mass',op='sum',rad=None),
 
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
