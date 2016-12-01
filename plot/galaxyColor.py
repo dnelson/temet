@@ -50,16 +50,26 @@ def _bandMagRange(bands, tight=False):
         if bands == ['i','z']: mag_range = [0.0,0.8]
     return mag_range
 
-def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None):
+def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None, simColorsModel=None):
     """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
     if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
-    from os.path import isfile, expanduser
+    from os.path import isfile, isdir, expanduser
+    from os import mkdir
 
     if sP is None:
-        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s.hdf5" % ''.join(bands)
+        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s_%d-%d_%d-%d.hdf5" % \
+          (''.join(bands),Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10)
         dName = 'kde_obs'
     else:
-        saveFilename = sP.derivPath + "galMstarColor_2dkde_%s_%d.hdf5" % (''.join(bands),sP.snap)
+        assert simColorsModel is not None
+        savePath = sP.derivPath + "/galMstarColor/"
+
+        if not isdir(savePath):
+            mkdir(savePath)
+
+        saveFilename = savePath + "galMstarColor_2dkde_%s_%s_%d_%d-%d_%d-%d.hdf5" % \
+          (''.join(bands),simColorsModel,sP.snap,
+            Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10)
         dName = 'kde_sim'
 
     # check existence
@@ -94,9 +104,13 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
             minCount=None, simColorsModel='p07c_cf00dust'):
     """ Make a 2D histogram of subhalos with some color on the y-axis, a property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
-    points a bin must contain to show it as non-white. """
+    points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
+    empty bins are white, and bins whose cStatistic is NaN (e.g. any NaNs in bin) are gray. Or, if 
+    '_nan' is in cStatistic, then empty bins remain white, while the cStatistic for bins with any 
+    non-NaN values is computed ignoring NaNs (e.g. np.nanmean() instead of np.mean()), and bins 
+    which are non-empty but contain only NaN values are gray. """
     assert cenSatSelect in ['all', 'cen', 'sat']
-    assert cStatistic in [None,'mean','median','count','sum'] # or any user function
+    assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
     assert simColorsModel in ['snap','p07c_nodust','p07c_bc00dust','p07c_cf00dust']
 
     # hard-coded config
@@ -134,6 +148,7 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
 
         clabel = 'log N$_{\\rm gal}$'
         cMinMax = [0.0,2.0]
+        if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
         sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
 
@@ -149,6 +164,29 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     sim_colors = sim_colors[wFiniteColor]
     sim_cvals  = sim_cvals[wFiniteColor]
     sim_xvals  = sim_xvals[wFiniteColor]
+
+    # _nan cStatistic? separate points into two sets
+    nanFlag = False
+    if '_nan' in cStatistic:
+        nanFlag = True
+
+        wFiniteCval = np.isfinite(sim_cvals)
+        wNaNCval = np.isnan(sim_cvals)
+
+        assert np.count_nonzero(wFiniteCval) + np.count_nonzero(wNaNCval) == sim_cvals.size
+
+        # save points with NaN cvals
+        sim_colors_nan = sim_colors[wNaNCval]
+        sim_cvals_nan  = sim_cvals[wNaNCval]
+        sim_xvals_nan  = sim_xvals[wNaNCval]
+
+        # override default binning to only points with finite cvals
+        sim_colors = sim_colors[wFiniteCval]
+        sim_cvals  = sim_cvals[wFiniteCval]
+        sim_xvals  = sim_xvals[wFiniteCval]
+
+        # replace cStatistic string
+        cStatistic = cStatistic.split("_nan")[0]
 
     # start plot
     fig = plt.figure(figsize=figsize)
@@ -177,11 +215,12 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     cc = cc.T # imshow convention
 
     # only show bins with a minimum number of points?
-    if minCount is not None:
-        nn, _, _, _ = binned_statistic_2d(sim_xvals, sim_colors, sim_cvals, 'count', 
-                                          bins=nBins2D, range=[xMinMax,mag_range])
+    nn, _, _, _ = binned_statistic_2d(sim_xvals, sim_colors, sim_cvals, 'count', 
+                                      bins=nBins2D, range=[xMinMax,mag_range])
+    nn = nn.T
 
-        cc[nn.T < minCount] = np.nan
+    if minCount is not None:
+        cc[nn < minCount] = np.nan
 
     # for now: log on density and all color quantities
     cc2d = cc
@@ -194,11 +233,26 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
 
     # mask bins with median==0 and map to special color, which right now have been set to log10(0)=NaN
     if cQuant is not None:
-        cc2d_rgb[cc == 0.0,:] = colorConverter.to_rgba('#dddddd')
+        cc2d_rgb[cc == 0.0,:] = colorConverter.to_rgba('#eeeeee')
 
-    # mask bins with median==NaN (empty) to white
-    cc2d_rgb[~np.isfinite(cc),:] = colorConverter.to_rgba('#ffffff')
+    if nanFlag:
+        # bin NaN point set counts
+        nn_nan, _, _, _ = binned_statistic_2d(sim_xvals_nan, sim_colors_nan, sim_cvals_nan, 'count', 
+                                              bins=nBins2D, range=[xMinMax,mag_range])
+        nn_nan = nn_nan.T        
 
+        # flag bins with nn_nan>0 and nn==0 (only NaNs in bin) as second gray color
+        cc2d_rgb[ ((nn_nan > 0) & (nn == 0)), :] = colorConverter.to_rgba('#dddddd')
+
+        nn += nn_nan # accumulate total counts
+    else:
+        # mask bins with median==NaN (nonzero number of NaNs in bin) to gray
+        cc2d_rgb[~np.isfinite(cc),:] = colorConverter.to_rgba('#dddddd')
+
+    # mask empty bins to whity
+    cc2d_rgb[(nn == 0),:] = colorConverter.to_rgba('#ffffff')
+
+    # plot
     plt.imshow(cc2d_rgb, extent=extent, origin='lower', interpolation='nearest', aspect='auto', 
                cmap=cmap, norm=norm)
 
@@ -306,7 +360,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=['p07c_cf00dust'],
             Mlabel = '%.1f < M$_{\\rm \star}(<2r_{\star,1/2})$ < %.1f'
 
             xlabel += ' [ %s ]' % obsMagStr
-            ylabel += ' [ sim=%s%s ]' % (simColorsModel,cenSatStr)
+            ylabel += ' [ sim=%s%s ]' % (simColorsModels[0],cenSatStr)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -718,7 +772,8 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_cf00dust', splitCenSat=Fals
 
                     # (A) sim 2D kde approach
                     xx, yy, kde_sim = calcMstarColor2dKDE(bands, stellar_mass[wBin], galaxy_color[wBin], 
-                                                          Mstar_range, mag_range, sP=sP)
+                                                          Mstar_range, mag_range, 
+                                                          sP=sP, simColorsModel=simColorsModel)
 
                     for k in range(kde_sim.shape[0]):
                         kde_sim[k,:] /= kde_sim[k,:].max() # by column normalization
@@ -849,13 +904,13 @@ def viewingAngleVariation():
 
     # finish plot and save
     fig.tight_layout()
-    fig.savefig('viewing_angle_variation.pdf')
+    fig.savefig('figure_appendix1_viewing_angle_variation.pdf')
     plt.close(fig)
 
 
 def plots():
     """ Driver. """
-    sP = simParams(res=2500, run='tng', redshift=0.0)
+    sP = simParams(res=1820, run='tng', redshift=0.0)
 
     # debug:
     #pdf = PdfPages('galaxyColor_2dhistos.pdf')
@@ -869,10 +924,10 @@ def plots():
 
     # plots
     #for cs in ['median','mean']:
-    for css in ['cen','sat','all']:
+    for css in ['cen']: #['cen','sat','all']:
         bands = ['g','r']
         xQuant = 'mstar2_log'
-        cs = 'median'
+        cs = 'median_nan'
         #css = 'cen'
 
         pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
@@ -927,8 +982,8 @@ def paperPlots():
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_all' # all projections shown
 
     # testing
-    if 1:
-        sPs = [simParams(res=455,run='tng',redshift=0.0)]
+    if 0:
+        sPs = [L205]
         dusts = [dust_B,dust_B+'_rad30pkpc']
 
         pdf = PdfPages('figure_test.pdf')
@@ -975,9 +1030,9 @@ def paperPlots():
         pdf.close()
 
     # appendix figure 4, 2x2 grid of different colors
-    if 0:
+    if 1:
         sPs = [L75]
-        dust = dust_C
+        dust = dust_B
 
         pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
