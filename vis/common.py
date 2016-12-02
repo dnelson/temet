@@ -26,7 +26,7 @@ from cosmo.cloudy import cloudyIon
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
-savePathDefault = expanduser("~") + '/Dropbox/odyssey/'
+savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
@@ -74,6 +74,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
         # stars
         if sP.isPartType(partType, 'stars'):
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
+            ##hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
             pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
             treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
             nNGBDev = int( np.sqrt(nNGB)/4 )
@@ -579,7 +580,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
             grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
-        if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens'
+        if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 

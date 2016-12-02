@@ -178,8 +178,8 @@ def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     res        = sP.res
     redshift   = sP.redshift
     partType   = 'gas'
-    partField  = 'O VI' #'HI_segmented'
-    valMinMax  = [13.5, 15.5] #[13.5,21.5]
+    partField  = 'Si II' #'O VI' #'HI_segmented'
+    valMinMax  = [14.0,17.0] #[13.5, 15.5] #[13.5,21.5]
     rVirFracs  = [1.0]
     method     = 'sphMap' # sphMap_global
     nPixels    = [960,960]
@@ -323,6 +323,53 @@ def zoomHalo_z2_MultiQuant():
         saveFilename = savePathDefault + '%s_h%dL%d_z%.1f_multiQuant.pdf' % (run,hInd,res,redshift)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def tngDwarf_firstNhalos(conf=0):
+    """ Plot gas/stellar densities of centers of N most massive L35n2160 halos (at some redshift).
+    All separate (fullpage) plots. """
+    run      = 'tng'
+    res      = 2160
+    redshift = 6.0
+    nHalos   = 10
+
+    rVirFracs  = [0.1]
+    method     = 'sphMap'
+    nPixels    = [1000,1000]
+    sizeFac    = -100.0 # 100 ckpc
+    hsmlFac    = 2.5
+    labelZ     = True
+    labelScale = True
+    labelHalo  = True
+    axes       = [1,0]
+    rotation   = None
+
+    if conf == 0:
+        partType   = 'gas'
+        partField  = 'coldens_msunkpc2'
+        valMinMax  = [6.5,9.0]
+    if conf == 1:
+        partType   = 'stars'
+        partField  = 'coldens_msunkpc2'
+        valMinMax  = [6.5,10.0]
+        #hsmlFac    = 1.0 # when real CalcHsml() is working again
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    # render one plot per halo
+    for i in range(nHalos):
+        halo = groupCatSingle(sP, haloID=i)
+        print(sP.simName, sP.snap, sP.redshift, i, halo['GroupFirstSub'], halo['GroupPos'])
+
+        panels = [ {'hInd':halo['GroupFirstSub']} ]
+
+        class plotConfig:
+            plotStyle    = 'open_black'
+            colorbars    = True
+            rasterPx     = 1000
+            saveFilename = savePathDefault + '%s_haloInd-%d_%s-%s_z%.1f.pdf' % \
+                           (sP.simName,i,partType,partField,redshift)
+
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def tngCluster_center_timeSeriesPanels(conf=0):
     """ Plot a time series of panels from subsequent snapshots in the center of fof0. """
