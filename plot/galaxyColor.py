@@ -31,6 +31,8 @@ clean   = False  # make visually clean plots with less information
 
 linestyles = ['-',':','--','-.']       # typically for analysis variations per run
 
+defSimColorModel = 'p07c_cf00dust' # used by histo2D(), histoSlice(), 1D and 2D PDFs by default
+
 def _bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
@@ -101,7 +103,7 @@ def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=
     return xx, yy, kde2d
 
 def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, cStatistic=None, 
-            minCount=None, simColorsModel='p07c_cf00dust'):
+            minCount=None, simColorsModel=defSimColorModel):
     """ Make a 2D histogram of subhalos with some color on the y-axis, a property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
@@ -111,7 +113,6 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     which are non-empty but contain only NaN values are gray. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
-    assert simColorsModel in ['snap','p07c_nodust','p07c_bc00dust','p07c_cf00dust']
 
     # hard-coded config
     nBins = 80
@@ -140,7 +141,6 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     # c-axis: load properties for color mappings
     if cQuant is None:
         sim_cvals = np.zeros( sim_xvals.size, dtype='float32' )
-        assert cStatistic in [None,'count']
 
         # overrides for density distribution
         cStatistic = 'count'
@@ -198,7 +198,7 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
     ax.set_ylabel(ylabel)
 
     if not clean:
-        print(' ','-'.join(bands),simColorsModel,xQuant,cenSatSelect,cQuant,cStatistic,minCount)
+        print(' ',cQuant,sP.simName,'-'.join(bands),simColorsModel,xQuant,cenSatSelect,cStatistic,minCount)
         ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
 
     # 2d histogram
@@ -303,7 +303,137 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
             ('-'.join(bands),simColorsModel,xQuant,cQuant,cStatistic,cenSatSelect,minCount))
     plt.close(fig)
 
-def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=['p07c_cf00dust'], 
+def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen', simColorsModel=defSimColorModel):
+    """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
+    sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
+    For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
+    yQuants (could be just one) and plot this (y-axis) against the bands-color (x-axis) using the 
+    simColorsModel. Supports multiple sPs which are overplotted. Multiple yQuants results in a grid. """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    nRows = np.floor(np.sqrt(len(yQuants)))
+    nCols = np.ceil(len(yQuants) / nRows)
+
+    # hard-coded config
+    lw = 2.5
+    ptPlotThresh = 2000
+    #cmap = loadColorTable('viridis') # plasma
+
+    sizefac = 0.9 if not clean else 0.7
+
+    # start plot
+    fig = plt.figure(figsize=[figsize[0]*nCols*sizefac, figsize[1]*nRows*sizefac])
+
+    # loop over each yQuantity (panel)
+    for i, yQuant in enumerate(yQuants):
+        ax = fig.add_subplot(nRows,nCols,i+1)
+
+        for sP in sPs:
+            # loop over each run and add to the same plot
+            print(' ',yQuant,sP.simName,'-'.join(bands),simColorsModel,cenSatSelect,sQuant,sRange)
+
+            # slice values: load fullbox galaxy properties (almost always Mstar)
+            if 'histoSlice_svals' in sP.data:
+                sim_svals = sP.data['histoSlice_svals']
+            else:
+                sim_svals, _, _, _ = simSubhaloQuantity(sP, sQuant, clean)
+                sP.data['histoSlice_svals'] = sim_svals
+
+            # x-axis: load/calculate simulation colors, cached in sP.data
+            if 'sim_colors' in sP.data:
+                sim_colors = sP.data['sim_colors']
+            else:
+                sim_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
+                sP.data['sim_colors'] = sim_colors
+
+            xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
+            if not clean: xlabel += ' %s' % simColorsModel
+
+            # y-axis: load galaxy properties (in histo2D were the color mappings)
+            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+
+            if yLog is True:
+                sim_yvals = logZeroNaN(sim_yvals)
+
+            # central/satellite selection?
+            wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+
+            sim_colors = sim_colors[wSelect]
+            #sim_cvals = sim_cvals[wSelect]
+            sim_yvals = sim_yvals[wSelect]
+            sim_svals = sim_svals[wSelect]
+
+            # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
+            wFinite = np.isfinite(sim_colors) & np.isfinite(sim_yvals)
+            sim_colors = sim_colors[wFinite]
+            #sim_cvals  = sim_cvals[wFinite]
+            sim_yvals  = sim_yvals[wFinite]
+            sim_svals  = sim_svals[wFinite]
+
+            # make slice selection
+            wSlice = np.where( (sim_svals >= sRange[0]) & (sim_svals < sRange[1]) )
+            sim_colors = sim_colors[wSlice]
+            #sim_cvals  = sim_cvals[wSlice]
+            sim_yvals  = sim_yvals[wSlice]
+            sim_svals  = sim_svals[wSlice]
+
+            mag_range = _bandMagRange(bands, tight=True)
+            ax.set_xlim(mag_range)
+            ax.set_ylim(yMinMax)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
+            # plot points
+            c = ax._get_lines.prop_cycler.next()['color']
+
+            if sim_colors.size < ptPlotThresh:
+                ax.plot(sim_colors, sim_yvals, 'o', color=c, alpha=0.3)
+
+            # median and 10/90th percentile lines
+            nBins = 30
+            if sim_colors.size >= ptPlotThresh:
+                nBins *= 2
+
+            binSize = (mag_range[1]-mag_range[0]) / nBins
+
+            xm, ym, sm, pm = running_median(sim_colors,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
+            xm = xm[1:-1]
+            ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
+            sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
+            pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+
+            ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+
+            ax.plot(xm, pm2[1,:], linestyles[1], color=c, lw=lw)
+            ax.plot(xm, pm2[-2,:], linestyles[1], color=c, lw=lw)
+
+            if sim_colors.size >= ptPlotThresh:
+                ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+
+        # legend
+        if i == 0:
+            handles, labels = ax.get_legend_handles_labels()
+            handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0]),
+                        plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[1])]
+            labelsO  = ['median', 'P[10,90]']
+
+            legend = ax.legend(handles+handlesO, labels+labelsO, loc='best')
+
+        # colorbar
+        #cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        #cb = plt.colorbar(cax=cax)
+        #cb.ax.set_ylabel(clabel)
+
+    # finish plot and save
+    fig.tight_layout()
+    if pdf is not None:
+        pdf.savefig()
+    else:
+        fig.savefig('slice1d_%s_%s_%s_%s_%s_%s_%s.pdf' % \
+            ('-'.join(bands),simColorsModel,xQuant,cQuant,cStatistic,cenSatSelect,minCount))
+    plt.close(fig)
+
+def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
     from util import simParams
@@ -494,7 +624,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=['p07c_cf00dust'],
                     kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
                     yy_obs = kde2(xx)
                     axes[i].plot(xx, yy_obs, '-', color=obs_color, alpha=1.0, lw=3.0)
-                    axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)\
+                    axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)
 
                     if len(wBin[0]) <= 1:
                         print(' skip sim kde no data: ',sP.simName,i)
@@ -563,7 +693,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=['p07c_cf00dust'],
     pdf.savefig()
     plt.close(fig)
 
-def galaxyColor2DPDFs(sPs, pdf, simColorsModel='p07c_cf00dust', splitCenSat=False, simRedshift=0.0):
+def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=False, simRedshift=0.0):
     """ 2D contours of galaxy colors/Mstar plane, multiple bands. """
     from util import simParams
     
@@ -912,59 +1042,55 @@ def plots():
     """ Driver. """
     sP = simParams(res=1820, run='tng', redshift=0.0)
 
-    # debug:
-    #pdf = PdfPages('galaxyColor_2dhistos.pdf')
-    #bands = ['g','r']
-    #xQuant = 'mstar2_log'
-    #cs = 'median'
-    #css = 'cen'
-    #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='ssfr', cStatistic=cs)
-    #pdf.close()
-    #import pdb; pdb.set_trace()
-
-    # plots
     #for cs in ['median','mean']:
-    for css in ['cen']: #['cen','sat','all']:
+    for css in ['cen','sat','all']:
         bands = ['g','r']
-        xQuant = 'mstar2_log'
+        xQuant = 'mstar2_log' # ssfr
         cs = 'median_nan'
-        #css = 'cen'
 
-        pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
+        pdf = PdfPages('BgalaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
 
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=None)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='ssfr', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='Z_stars', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='Z_gas', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='size_stars', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='size_gas', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fgas1', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas2', cStatistic=cs)
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='mgas1', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='stellarage', cStatistic=cs)
+        # generally availably (groupcat)
+        cQuants1 = [None, 'ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
 
-        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_mm5', cStatistic=cs)
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_ma5', cStatistic=cs)
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='zform_poly7', cStatistic=cs)
+        # generally available (auxcat)
+        cQuants2 = ['stellarage', #'mass_OVI', 
+                    'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
+                    'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
 
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_all_eps07o', cStatistic=cs)
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_all_eps07m', cStatistic=cs)
-        ###histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07o', cStatistic=cs)
-        #histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='fcirc_10re_eps07m', cStatistic=cs)
+        # L75 only:
+        cQuants3 = ['zform_mm5', 'fcirc_10re_eps07m']
 
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_sfrgt0_masswt', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_sfrgt0_volwt', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_2rhalf_masswt', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_2rhalf_volwt', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_halo_masswt', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='bmag_halo_volwt', cStatistic=cs)
+        # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7'
+        #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
 
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='pratio_halo_masswt', cStatistic=cs)
-        histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant='pratio_halo_volwt', cStatistic=cs)
+        for cQuant in ['Z_stars']:#cQuants1+cQuants2:#+cQuants3:
+            histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
 
-        #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant=None)
-        #histo2D(sP, pdf, bands, xQuant='ssfr', cenSatSelect=css, cQuant='fgas2', cStatistic=cs)
+        pdf.close()
+
+def plots2():
+    """ Driver. """
+    sPs = []
+    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+
+    bands = ['g','r']
+    sQuant = 'mstar2_log'
+    sRange = [10.4,10.6]
+
+    yQuant1 = ['ssfr','Z_stars','Z_gas','size_stars','size_gas','fgas1','fgas2','stellarage'] #'mass_OVI' 
+    yQuant2 = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
+               'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt'] 
+
+    for css in ['cen','sat','all']:
+        pdf = PdfPages('galaxyColor_1Dslices_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
+            ('-'.join([sP.simName for sP in sPs]),''.join(bands),sQuant,sRange[0],sRange[1],css))
+
+        histoSlice(sPs, pdf, bands, yQuants=yQuant1, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+
+        for yQuant in yQuant1+yQuant2:
+            histoSlice(sPs, pdf, bands, yQuants=[yQuant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
 
         pdf.close()
     
@@ -980,15 +1106,6 @@ def paperPlots():
     dust_B = 'p07c_cf00dust'
     dust_C = 'p07c_cf00dust_res_conv_ns1' # one random projection per subhalo
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_all' # all projections shown
-
-    # testing
-    if 0:
-        sPs = [L205]
-        dusts = [dust_B,dust_B+'_rad30pkpc']
-
-        pdf = PdfPages('figure_test.pdf')
-        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts)
-        pdf.close()
 
     # figure 1
     if 0:
@@ -1031,9 +1148,18 @@ def paperPlots():
 
     # appendix figure 4, 2x2 grid of different colors
     if 1:
-        sPs = [L75]
+        sPs = [L205]
         dust = dust_B
 
         pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
+        pdf.close()
+
+    # testing
+    if 0:
+        sPs = [L205]
+        dusts = [dust_B,dust_B+'_rad30pkpc']
+
+        pdf = PdfPages('figure_test.pdf')
+        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts)
         pdf.close()
