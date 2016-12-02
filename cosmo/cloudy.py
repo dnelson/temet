@@ -790,8 +790,8 @@ def plotIonAbundances(res='lg'):
     ct = 'jet'
 
     # data config and load full table
-    elements = ['Carbon']
-    redshift = 2.0
+    elements = ['Oxygen']
+    redshift = 0.0
     gridSize = 3 # 3x3
 
     ion = cloudyIon(sP=simParams(res=455,run='illustris'),res=res,redshiftInterp=True)

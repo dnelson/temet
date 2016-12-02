@@ -377,6 +377,16 @@ def loadColorTable(ctName, valMinMax=None):
                  'blue'  : ((0.0, 0.05, 0.05), (0.3,0.5,0.5), (0.6, 0.6, 0.6), (1.0, 1.0, 1.0))}
         cmap = LinearSegmentedColormap(ctName, cdict)
 
+    if ctName == 'dmdens_tng':
+        # TNG dark matter density
+        #cdict = {'red'   : ((0.0, 0.0, 0.0), (0.3,0.1,0.1), (0.6, 0.76, 0.76), (1.0, 1.0, 1.0)),
+        #         'green' : ((0.0, 0.0, 0.0), (0.3,0.3,0.3), (0.6, 0.53, 0.53), (1.0, 1.0, 1.0)),
+        #         'blue'  : ((0.0, 0.05, 0.05), (0.3,0.5,0.5), (0.6, 0.33, 0.33), (1.0, 1.0, 1.0))}
+        cdict = {'red'   : ((0.0, 0.0, 0.0), (0.15,0.1,0.1), (0.3,0.1,0.1), (0.6, 0.76, 0.76), (1.0, 1.0, 1.0)),
+                 'green' : ((0.0, 0.0, 0.0), (0.15,0.13,0.13), (0.3,0.3,0.3), (0.6, 0.53, 0.53), (1.0, 1.0, 1.0)),
+                 'blue'  : ((0.0, 0.05, 0.05), (0.15,0.26,0.26), (0.3,0.5,0.5), (0.6, 0.33, 0.33), (1.0, 1.0, 1.0))}
+        cmap = LinearSegmentedColormap(ctName, cdict)
+
     if ctName == 'HI_segmented':
         # discontinuous colormap for column densities, split at 10^20 and 10^19 cm^(-3)
         assert valMinMax is not None # need for placing discontinuities at correct physical locations

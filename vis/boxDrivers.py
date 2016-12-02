@@ -69,14 +69,14 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
     panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
     run     = 'tng' #'illustris'
-    variant = 'subbox1'
+    variant = 'subbox0'
     res     = 1820
     method  = 'sphMap'
     nPixels = 960
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath = '/home/extdylan/data/frames/%s_sb1/' % run
+        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 960
         colorbars = True
@@ -84,7 +84,7 @@ def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
         # movie config
         minZ      = 0.0
         maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
-        maxNSnaps = None
+        maxNSnaps = 2700 # 90 seconds at 30 fps
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
@@ -92,8 +92,12 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     """ Render a movie comparing Illustris-1 and L75n1820TNG subbox0, one quantity side by side. """
     panels = []
 
-    panels.append( {'run':'illustris', 'labelScale':True, 'labelSim':True} )
-    panels.append( {'run':'tng', 'labelZ':True, 'labelSim':True} )
+    # subbox0:
+    #panels.append( {'run':'illustris', 'variant':'subbox0', 'zoomFac':0.99, 'labelScale':True} )
+    #panels.append( {'run':'tng',       'variant':'subbox0', 'zoomFac':0.99, 'labelZ':True} )
+    # subbox1:
+    panels.append( {'run':'illustris', 'variant':'subbox2', 'zoomFac':0.99, 'labelScale':True} )
+    panels.append( {'run':'tng',       'variant':'subbox1', 'zoomFac':0.99*(5.0/7.5), 'labelZ':True} )
 
     if conf == 1:
         hsmlFac = 2.5
@@ -101,15 +105,14 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
         partField = 'coldens_msunkpc2'
         valMinMax = [4.2,7.2]
 
-    zoomFac = 0.99 # avoid edge effects
-    variant = 'subbox0'
-    res     = 1820
-    method  = 'sphMap'
-    nPixels = 1920
-    axes    = [0,1] # x,y
+    res      = 1820
+    method   = 'sphMap'
+    nPixels  = 1920
+    labelSim = True
+    axes     = [0,1] # x,y
 
     class plotConfig:
-        savePath  = '/home/extdylan/data/frames/comp_gasdens_sb0/'
+        savePath  = '/home/extdylan/data/frames/comp_gasdens_sb1/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = True
@@ -187,36 +190,47 @@ def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
     renderBox(panels, plotConfig, locals())
     #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def tngL75_mainImages():
+def TNG_mainImages(res, conf=0):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
-    centerHaloID = 1 # fof
-    nSlicesTot   = 3 # slice depth equal to a third, 25 Mpc/h
-    curSlice     = 2 # offset slice along projection direction?
+    if res in [455,910,1820]:
+        # L75
+        centerHaloID = 1 # fof
+        nSlicesTot   = 3 # slice depth equal to a third, 25 Mpc/h = 37 Mpc
+        curSlice     = 0 # offset slice along projection direction?
+    if res in [625,1250,2500]:
+        # L205
+        centerHaloID = 0 # fof
+        nSlicesTot   = 3 # slice depth equal to a fifth, 41 Mpc/h = 60 Mpc
+        curSlice     = 0 # offset slice along projection direction?
+    if res in [270,540,1080,2160]:
+        # L35
+        centerHaloID = 0 # fof
+        nSlicesTot   = 1 # slice depth equal to a fifth, 35 Mpc/h = 52 Mpc
+        curSlice     = 0 # offset slice along projection direction?
 
-    panels.append( {'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
+    if conf == 0: panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
+    if conf == 1: panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
 
     run        = 'tng'
-    res        = 455
     redshift   = 0.0
-    partType   = 'gas'
     hsmlFac    = 2.5
     nPixels    = 2000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
     labelSim   = False
-    #plotHalos  = False
+    plotHalos  = False
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
     # slice centering
-    sliceFac = (1.0/nSlicesTot)
-
-    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+    sliceFac  = (1.0/nSlicesTot)
     relCenPos = None
 
+    #for curSlice in range(nSlicesTot):
+    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
     absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
     # render config (global)
@@ -224,8 +238,10 @@ def tngL75_mainImages():
         plotStyle  = 'edged'
         rasterPx   = 2000
         colorbars  = False
-        saveFilename = './boxImage_%s_fof-%d_axes%d%d_%dof%d.png' % \
-          (sP.simName,centerHaloID,axes[0],axes[1],curSlice,nSlicesTot)
+
+        saveFilename = './boxImage_%s_%s-%s_fof-%d_axes%d%d_%dof%d.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],centerHaloID,
+           axes[0],axes[1],curSlice,nSlicesTot)
 
     renderBox(panels, plotConfig, locals())
 
