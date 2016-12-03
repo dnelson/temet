@@ -117,7 +117,7 @@ def tracersTimeEvo(sP, fieldName, snapStep=None, all=True, pSplit=None):
         assert snapStep is not None
         r = subhaloTracersTimeEvo(sP, sP.zoomSubhaloID, [fieldName], snapStep)
     else:
-        r = globalAllTracersTimeEvo(sP, fieldName, indRange=indRange)
+        r = globalAllTracersTimeEvo(sP, fieldName)
 
     # global load requested?
     return r
@@ -325,7 +325,8 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
         splitStr = '' if pSplit is None else '_split-%d-%d'
         saveFilenameBase = sP.derivPath + '/trTimeEvo/acc_mode_s%d-%d-%d%s.hdf5' % \
           (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,splitStr)
-        saveFilename = saveFilenameBase % (pSplit[0],pSplit[1])
+        saveFilename = saveFilenameBase
+        if pSplit is not None: saveFilename = saveFilename % (pSplit[0],pSplit[1])
 
     # check for existence of all split files for concatenation
     if isfile(saveFilename) and pSplit is not None:
@@ -354,7 +355,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
                     indRange = f['indRange'][()]
                     accMode[ indRange[0]:indRange[1] ] = f['accMode'][()]
 
-            assert np.count_zero(accMode) == 0 # all should be filled
+            assert np.count_nonzero(accMode) == accMode.size # all should be filled
             saveFilename = saveFilenameBase.replace(splitStr,'')
             assert not isfile(saveFilename)
 
@@ -368,7 +369,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
             return None
 
     # load pre-existing
-    if isfile(saveFilename) and pSplit is None:
+    if isfile(saveFilename):
         return loadAllOrRestricted(sP,saveFilename,'accMode',indRange=indRangeLoad)
 
     print('Calculating new accMode for [%s]...' % sP.simName)
