@@ -194,6 +194,8 @@ def TNG_mainImages(res, conf=0):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
+    dmMM = [5.0, 8.5]
+
     if res in [455,910,1820]:
         # L75
         centerHaloID = 1 # fof
@@ -204,6 +206,7 @@ def TNG_mainImages(res, conf=0):
         centerHaloID = 0 # fof
         nSlicesTot   = 3 # slice depth equal to a fifth, 41 Mpc/h = 60 Mpc
         curSlice     = 0 # offset slice along projection direction?
+        dmMM = [5.5, 8.5]
     if res in [270,540,1080,2160]:
         # L35
         centerHaloID = 0 # fof
@@ -211,7 +214,7 @@ def TNG_mainImages(res, conf=0):
         curSlice     = 0 # offset slice along projection direction?
 
     if conf == 0: panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
-    if conf == 1: panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+    if conf == 1: panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
 
     run        = 'tng'
     redshift   = 0.0
