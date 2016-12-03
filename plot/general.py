@@ -57,6 +57,24 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\\rm \star}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ '+logStr+'M$_{\\rm sun}$ ]'
 
+    if quant in ['mass_ovi','mass_ovii']:
+        # total OVI/OVII mass in subhalo
+        speciesStr = quant.split("_")[1].upper()
+
+        fieldName = 'Subhalo_Mass_%s' % speciesStr
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = sP.units.codeMassToMsun(ac[fieldName])
+
+        label = 'M$_{\\rm %s}$[ log M$_{\\rm sun}$ ]' % (speciesStr)
+        
+        if speciesStr == 'OVI':
+            minMax = [4.6, 7.2]
+            if tight: minMax = [4.6, 7.2]
+        if speciesStr == 'OVII':
+            minMax = [5.6, 8.6]
+            if tight: minMax = [5.6, 8.6]
+
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
         gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
@@ -187,6 +205,40 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += ' [%s, shy]' % selStr
         minMax = [0.0,0.6]
         takeLog = False
+
+    if quant in ['massfrac_exsitu','massfrac_exsitu_inrad','massfrac_insitu','massfrac_insitu_inrad']:
+        # load data from ./postprocessing/StellarAssembly/ catalog of Vicente
+        inRadStr = ''
+        if '_inrad' in quant: inRadStr = '_in_rad'
+        filePath = sP.postPath + '/StellarAssembly/galaxies%s_%03d.hdf5' % (inRadStr,sP.snap)
+
+        dNameNorm = 'StellarMassTotal'
+
+        if 'massfrac_exsitu' in quant:
+            dName = 'StellarMassExSitu'
+            label = 'Ex Situ Stellar Mass Fraction'
+        if 'massfrac_insitu' in quant:
+            dName = 'StellarMassInSitu'
+            label = 'In Situ Stellar Mass Fraction'
+
+        if '_inrad' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
+
+        with h5py.File(filePath,'r') as f:
+            mass_type = f[dName][()]
+            mass_norm = f[dNameNorm][()]
+
+        # take fraction and set Mstar=0 cases to nan silently
+        wZeroMstar = np.where(mass_norm == 0.0)
+        wNonzeroMstar = np.where(mass_norm > 0.0)
+
+        vals = mass_type
+        vals[wNonzeroMstar] /= mass_norm[wNonzeroMstar]
+        vals[wZeroMstar] = np.nan
+
+        assert vals.size == vals.shape[0] == groupCatHeader(sP)['Nsubgroups_Total'] # verify dims
+
+        minMax = [-2.2,0.0]
+        if tight: minMax = [-3.0,0.0]
 
     if quant in ['bmag_sfrgt0_masswt','bmag_sfrgt0_volwt',
                  'bmag_2rhalf_masswt','bmag_2rhalf_volwt',

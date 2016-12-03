@@ -1042,29 +1042,30 @@ def plots():
     """ Driver. """
     sP = simParams(res=1820, run='tng', redshift=0.0)
 
-    #for cs in ['median','mean']:
-    for css in ['cen','sat','all']:
-        bands = ['g','r']
-        xQuant = 'mstar2_log' # ssfr
-        cs = 'median_nan'
+    bands = ['g','r']
+    xQuant = 'mstar2_log' # ssfr
+    cs = 'median_nan'
+    cenSatSelects = ['cen','sat','all']
 
-        pdf = PdfPages('BgalaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
+    for css in cenSatSelects:
+
+        pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
 
         # generally availably (groupcat)
         cQuants1 = [None, 'ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
 
         # generally available (auxcat)
-        cQuants2 = ['stellarage', #'mass_OVI', 
+        cQuants2 = ['stellarage', 'mass_ovi', #'mass_ovii',
                     'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                     'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
 
         # L75 only:
-        cQuants3 = ['zform_mm5', 'fcirc_10re_eps07m']
+        cQuants3 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
 
-        # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7'
+        # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
         #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
 
-        for cQuant in ['Z_stars']:#cQuants1+cQuants2:#+cQuants3:
+        for cQuant in cQuants1+cQuants2: #+cQuants3:
             histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
 
         pdf.close()
@@ -1079,7 +1080,7 @@ def plots2():
     sQuant = 'mstar2_log'
     sRange = [10.4,10.6]
 
-    yQuant1 = ['ssfr','Z_stars','Z_gas','size_stars','size_gas','fgas1','fgas2','stellarage'] #'mass_OVI' 
+    yQuant1 = ['ssfr','Z_stars','Z_gas','size_stars','size_gas','fgas1','fgas2','stellarage','mass_ovi'] 
     yQuant2 = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt'] 
 
@@ -1087,7 +1088,7 @@ def plots2():
         pdf = PdfPages('galaxyColor_1Dslices_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('-'.join([sP.simName for sP in sPs]),''.join(bands),sQuant,sRange[0],sRange[1],css))
 
-        histoSlice(sPs, pdf, bands, yQuants=yQuant1, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+        histoSlice(sPs, pdf, bands, yQuants=yQuant1+yQuant2, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
 
         for yQuant in yQuant1+yQuant2:
             histoSlice(sPs, pdf, bands, yQuants=[yQuant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
