@@ -10,6 +10,7 @@ import h5py
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
+from os.path import isfile
 
 import illustris_python as il
 from util import simParams
@@ -290,6 +291,71 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
         minMax = [-2.0, 1.0]
         if tight: minMax = [-2.2, 1.2]
+
+    if quant[0:3] == 'tr_':
+        # tracer tracks quantity (tr_zacc_mean_mode=smooth)
+        from tracer.tracerMC import defParPartTypes
+        from tracer.tracerEvo import ACCMODES
+        ACCMODES['ALL'] = len(ACCMODES) # add 'all' mode last
+        defParPartTypes.append('all') # add 'all' parent type last
+
+        quant = quant[3:] # remove 'tr_'
+        mode = 'all' # default unless specified
+        par  = 'all' # default unless specified
+        if 'mode=' in quant and 'par=' in quant:
+            assert quant.find('mode=') <= quant.find('par=') # parType request must be second
+
+        if 'par=' in quant:
+            par = quant.split('par=')[1].split('_')[0]
+            quant = quant.split('_par=')[0]
+        if 'mode=' in quant:
+            mode = quant.split('mode=')[1].split('_')[0]
+            quant = quant.split('_mode=')[0]
+
+        assert mode.upper() in ACCMODES.keys() and par in defParPartTypes
+        modeInd = ACCMODES.keys().index(mode.upper())
+        parInd  = defParPartTypes.index(par)
+
+        norm = None
+        quantLoad = quant
+        if quant == 'zAcc_mean_over_zForm':
+            quantLoad = 'zAcc_mean'
+            norm = 'zForm'
+        fieldName = 'Subhalo_Tracers_%s' % quantLoad
+
+        auxCatPath = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sP.snap)
+        assert isfile(auxCatPath)
+
+        with h5py.File(auxCatPath,'r') as f:
+            # load data
+            vals = f[fieldName][:,parInd,modeInd]
+
+        # normalization by something else?
+        if norm is not None and norm == 'zForm':
+            acField = 'Subhalo_SubLink_zForm_mm5'
+            vals /= auxCat(sP, fields=[acField])[acField]
+
+        # plot properties
+        if quant == 'zAcc_mean':
+            label = 'Tracer Mean z$_{\\rm acc}$'
+            minMax = [0.0,3.0]
+            takeLog = False
+        if quant == 'zAcc_mean_over_zForm':
+            label = 'log ( Tracer Mean z$_{\\rm acc}$ / z$_{\\rm form,halo}$ )'
+            minMax = [0.5,2.0]
+            takeLog = False
+        if quant == 'angmom_tAcc':
+            label = 'Tracer Mean j$_{\\rm spec}$ at $t_{\\rm acc}$ [ log kpc km/s ]'
+            minMax = [3.0,5.0]
+            takeLog = False # auxCat() angmom vals are in log
+        if quant == 'entr_tAcc':
+            label = 'Tracer Mean S$_{\\rm gas}$ at $t_{\\rm acc}$ [ log K cm^2 ]'
+            minMax = [7.0,9.0]
+            takeLog = False # auxCat() entr vals are in log
+
+        if mode != 'all': label += ' [%s]' % mode
+        if not clean:
+            if par != 'all': label += ' [%s]' % par
 
     assert label is not None
     return vals, label, minMax, takeLog
