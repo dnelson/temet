@@ -198,7 +198,7 @@ def loadAllOrRestricted(sP, saveFilename, datasetName=None, indRange=None):
 
 def accTime(sP, snapStep=1, rVirFac=1.0, indRangeLoad=None):
     """ Calculate accretion time for each tracer (and cache), as the earliest (highest redshift) crossing 
-    of the virial radius of the MPB halo. Uses the 'rad_rvir' field. 
+    of rVirFac times the virial radius of the MPB halo. Uses the 'rad_rvir' field. 
     Argument: rVirFac = what fraction of the virial radius denotes the accretion time? """
 
     # check for existence
@@ -266,8 +266,8 @@ def accTime(sP, snapStep=1, rVirFac=1.0, indRangeLoad=None):
         r0 = data2d[ind0,i]
         r1 = data2d[ind1,i]
 
-        # linear interpolation, find redshift where rad_rvir=1.0
-        accTimeInterp[i] = (1.0-r0)/(r1-r0) * (z1-z0) + z0
+        # linear interpolation, find redshift where rad_rvir=rVirFac
+        accTimeInterp[i] = (rVirFac-r0)/(r1-r0) * (z1-z0) + z0
 
     # save
     with h5py.File(saveFilename,'w') as f:
