@@ -628,9 +628,10 @@ class units(object):
         if redshifts.ndim == 0:
             redshifts = np.array([z])
 
-        w = np.where(redshifts >= 0.0)
+        w = np.where( (redshifts >= 0.0) & np.isfinite(redshifts) )
 
-        age = np.zeros(redshifts.size, dtype='float32') - 100.0 # negative indicates not set
+        age = np.zeros(redshifts.size, dtype='float32')
+        age.fill(np.nan) # leave negative/nan redshifts unset
         
         arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+redshifts[w])**(-3.0/2.0)
         age[w] = 2 * np.arcsinh(arcsinh_arg) / (self.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
@@ -646,12 +647,13 @@ class units(object):
         w = np.where(age >= 0.0)
 
         z = np.zeros(len(age), dtype='float32')
+        z.fill(np.nan)
 
         sinh_arg = (self.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
         sinh_arg *= 3.15567e+7 * 1e9 * age[w] / 2.0 / 3.085678e+19
 
-        z = np.sinh(sinh_arg) / np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m )
-        z = z**(-2.0/3.0) - 1
+        z[w] = np.sinh(sinh_arg) / np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m )
+        z[w] = z[w]**(-2.0/3.0) - 1
 
         if len(z) == 1:
             return z[0]
