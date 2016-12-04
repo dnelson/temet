@@ -1062,10 +1062,23 @@ def plots():
         # L75 only:
         cQuants3 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
 
+        # tracer tracks quantities (L75 only):
+        trQuants = []
+        trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm']
+        trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc']
+
+        for trBase in trBases1+trBases2:
+            trQuants.append(trBase + '')
+            trQuants.append(trBase + '_mode=smooth')
+            trQuants.append(trBase + '_mode=merger')
+            trQuants.append(trBase + '_par=bhs')
+            trQuants.append(trBase + '_mode=smooth_par=bhs')
+            trQuants.append(trBase + '_mode=merger_par=stars')
+
         # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
         #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
 
-        for cQuant in cQuants1+cQuants2: #+cQuants3:
+        for cQuant in trQuants: #cQuants1+cQuants2: #+cQuants3:
             histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
 
         pdf.close()
