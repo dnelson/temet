@@ -216,7 +216,7 @@ class simParams:
                     assert int(variant) >= 0 and int(variant) < 9999
                     assert self.boxSize == 25000.0
                     mStr   = '_method'
-                    runStr += '_%s' % self.variant
+                    runStr = '_%s' % self.variant
 
             # make paths and names
             bs = str(int(self.boxSize/1000.0))
