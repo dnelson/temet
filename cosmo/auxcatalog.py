@@ -804,17 +804,18 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
 
     return r, attrs
 
-def tracerTracksQuant(sP, pSplit, quant, op, time):
+def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
     """ For every subhalo, compute a assembly/accretion/related quantity using the tracker 
     tracks through time. """
     from tracer.tracerEvo import tracersTimeEvo, tracersMetaOffsets, trValsAtAccTimes, \
-      accTime, accMode, ACCMODES
+      accTime, accMode, ACCMODES, mpbValsAtRedshifts, mpbValsAtAccTimes
     from tracer.tracerMC import defParPartTypes, fields_in_log
 
     assert pSplit is None # not implemented
     assert op in ['mean'] #,'sample']
-    assert quant in ['angmom','entr','acc_time_1rvir','acc_time_015rvir']
+    assert quant in ['angmom','entr','temp','acc_time_1rvir','acc_time_015rvir','dt_halo']
     assert time is None or time in ['acc_time_1rvir','acc_time_015rvir']
+    assert norm is None or norm in ['tvir_tacc','tvir_cur']
 
     def _nansum(x):
         """ Helper. """
@@ -849,19 +850,36 @@ def tracerTracksQuant(sP, pSplit, quant, op, time):
     # are already just 1D, while the others need to be selected at a specific time, or averaged 
     # over a specific time window, reducing the (Nsnaps,Ntr) shaped tracks into a 1D (Ntr) shape
     if quant == 'acc_time_1rvir':
-        assert time is None
-        tracks = accTime(sP, rVirFac=1.0) #snapStep
+        assert time is None and norm is None
+        tracks = accTime(sP, rVirFac=1.0)
+
     elif quant == 'acc_time_015rvir':
-        assert time is None
-        tracks = accTime(sP, rVirFac=0.15) #snapStep
+        assert time is None and norm is None
+        tracks = accTime(sP, rVirFac=0.15)
+
+    elif quant == 'dt_halo':
+        assert time is None and norm is None
+        age_universe_rad100rvir = sP.units.redshiftToAgeFlat( accTime(sP, rVirFac=1.0) )
+        age_universe_rad015rvir = sP.units.redshiftToAgeFlat( accTime(sP, rVirFac=0.15) )
+        tracks = age_universe_rad015rvir - age_universe_rad100rvir
+        assert np.nanmin(tracks) >= 0.0 # negative would contradict definition
+
+        # handful of zeros, set to nan
+        w = np.where(tracks == 0.0)[0]
+        if len(w):
+            print(' Note: setting [%d] of [%d] dt_halo==0 to nan.' % (len(w),tracks.size))
+            tracks[w] = np.nan
     else:
         if time is None:
             # full tracks (what are we going to do with these?)
             tracks = tracersTimeEvo(sP, quant, all=True) #snapStep=None
             # do e.g. a mean across all time
+            assert norm is None
             import pdb; pdb.set_trace()
+
         elif time == 'acc_time_1rvir':
             tracks = trValsAtAccTimes(sP, quant, rVirFac=1.0)
+            
         elif time == 'acc_time_015rvir':
             tracks = trValsAtAccTimes(sP, quant, rVirFac=0.15)
 
@@ -870,6 +888,23 @@ def tracerTracksQuant(sP, pSplit, quant, op, time):
     # remove log if needed
     if quant in fields_in_log:
         tracks = 10.0**tracks
+
+    # normalization?
+    if norm is not None:
+        # what MPB property to normalize by, and take it at which time (e.g. Tvir at tAcc)
+        norm_field, norm_time = norm.split("_")
+
+        if norm_time == 'tacc':
+            norm_vals = mpbValsAtAccTimes(sP, norm_field, rVirFac=1.0)
+        if norm_time == 'z0':
+            norm_vals = mpbValsAtRedshifts(sP, norm_field, 0.0)
+        if norm_time == 'cur':
+            norm_vals = mpbValsAtRedshifts(sP, norm_field, sP.redshift)
+
+        assert tracks.shape == norm_vals.shape
+        if tracks.max() > 20.0 and norm_vals.max() < 20.0: assert 0 # check log of norm_vals
+
+        tracks /= norm_vals
 
     # load mode decomposition, metadata offsets
     mode = accMode(sP)
@@ -1257,6 +1292,10 @@ fieldComputeFunctionMapping = \
                                          smoothing=['poly',7,'snap']),
 
    'Subhalo_Tracers_zAcc_mean'   : partial(tracerTracksQuant,quant='acc_time_1rvir',op='mean',time=None),
+   'Subhalo_Tracers_dtHalo_mean' : partial(tracerTracksQuant,quant='dt_halo',op='mean',time=None),
    'Subhalo_Tracers_angmom_tAcc' : partial(tracerTracksQuant,quant='angmom',op='mean',time='acc_time_1rvir'),
-   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr',op='mean',time='acc_time_1rvir')
+   'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr',op='mean',time='acc_time_1rvir'),
+   'Subhalo_Tracers_temp_tAcc'   : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir'),
+   'Subhalo_Tracers_tempTviracc_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_tacc'),
+   'Subhalo_Tracers_tempTvircur_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_cur')
   }
