@@ -628,7 +628,8 @@ class units(object):
         if redshifts.ndim == 0:
             redshifts = np.array([z])
 
-        w = np.where( (redshifts >= 0.0) & np.isfinite(redshifts) )
+        with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
+            w = np.where( (redshifts >= 0.0) & np.isfinite(redshifts) )
 
         age = np.zeros(redshifts.size, dtype='float32')
         age.fill(np.nan) # leave negative/nan redshifts unset
@@ -644,7 +645,8 @@ class units(object):
     def ageFlatToRedshift(self, age):
         """ Calculate redshift from age of the universe [Gyr] (assuming flat cosmology).
             Inversion of analytical formula from redshiftToAgeFlat(). """
-        w = np.where(age >= 0.0)
+        with np.errstate(invalid='ignore'): # ignore nan comparison RuntimeWarning
+            w = np.where( (age >= 0.0) & np.isfinite(age) )
 
         z = np.zeros(len(age), dtype='float32')
         z.fill(np.nan)

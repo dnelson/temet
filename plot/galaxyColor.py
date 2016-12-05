@@ -1064,8 +1064,8 @@ def plots():
 
         # tracer tracks quantities (L75 only):
         trQuants = []
-        trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm']
-        trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc']
+        trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm','tr_dtHalo']
+        trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc','tr_temp_tAcc']
 
         for trBase in trBases1+trBases2:
             trQuants.append(trBase + '')

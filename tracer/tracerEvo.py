@@ -196,7 +196,7 @@ def loadAllOrRestricted(sP, saveFilename, datasetName=None, indRange=None):
 
     return r
 
-def accTime(sP, snapStep=1, rVirFac=1.0, indRangeLoad=None):
+def accTime(sP, snapStep=1, rVirFac=1.0, pSplit=None, indRangeLoad=None):
     """ Calculate accretion time for each tracer (and cache), as the earliest (highest redshift) crossing 
     of rVirFac times the virial radius of the MPB halo. Uses the 'rad_rvir' field. 
     Argument: rVirFac = what fraction of the virial radius denotes the accretion time? """
@@ -206,20 +206,64 @@ def accTime(sP, snapStep=1, rVirFac=1.0, indRangeLoad=None):
         saveFilename = sP.derivPath + '/trTimeEvo/shID_%d_hf%d_snap_%d-%d-%d_acc_time_%d.hdf5' % \
           (sP.zoomSubhaloID,True,sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100)
     else:
-        saveFilename = sP.derivPath + '/trTimeEvo/acc_time_snap_%d-%d-%d_r%d.hdf5' % \
-          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100)
+        splitStr = '' if pSplit is None else '_split-%d-%d'
+        saveFilenameBase = sP.derivPath + '/trTimeEvo/acc_time_snap_%d-%d-%d_r%d%s.hdf5' % \
+          (sP.snap,redshiftToSnapNum(maxRedshift,sP),snapStep,rVirFac*100,splitStr)
+        saveFilename = saveFilenameBase
+        if pSplit is not None: saveFilename = saveFilename % (pSplit[0],pSplit[1])
 
     if not isdir(sP.derivPath + '/trTimeEvo'):
         mkdir(sP.derivPath + '/trTimeEvo')
+
+    # check for existence of all split files for concatenation
+    if isfile(saveFilename) and pSplit is not None:
+        allExist = True
+        allCount = 0
+
+        for i in range(pSplit[1]):
+            saveFileSplit_i = saveFilenameBase % (i,pSplit[1])
+            if not isfile(saveFileSplit_i):
+                allExist = False
+                continue
+
+            # record counts and dataset shape
+            with h5py.File(saveFileSplit_i,'r') as f:
+                allCount += f['accTimeInterp'].size
+
+        if allExist:
+            # all chunks exist, concatenate them now and continue
+            accTimeInterp = np.zeros( allCount, dtype='float32' ) - 1.0
+            print(' Concatenating into shape: ', accTimeInterp.shape,)
+
+            for i in range(pSplit[1]):
+                saveFileSplit_i = saveFilenameBase % (i,pSplit[1])
+
+                with h5py.File(saveFileSplit_i,'r') as f:
+                    indRange = f['indRange'][()]
+                    accTimeInterp[ indRange[0]:indRange[1] ] = f['accTimeInterp'][()]
+
+            assert np.count_nonzero(accTimeInterp == -1.0) == 0 # all should be filled
+            saveFilename = saveFilenameBase.replace(splitStr,'')
+            assert not isfile(saveFilename)
+
+            with h5py.File(saveFilename,'w') as f:
+                f.create_dataset('accTimeInterp', data=accTimeInterp)
+
+            print(' Concatenated new [%s] and saved.' % saveFilename.split("/")[-1])
+            print(' All chunks concatenated, please manually delete them now.')
+        else:
+            print('Chunk [%s] already exists, but all not yet done, exiting.' % saveFilename.split("/")[-1])
+            return None
 
     # load pre-existing
     if isfile(saveFilename):
         return loadAllOrRestricted(sP,saveFilename,'accTimeInterp',indRange=indRangeLoad)
 
     print('Calculating new accTime for [%s]...' % sP.simName)
+    if pSplit is not None: print(' Split calculation [%d] of [%d].' % (pSplit[0],pSplit[1]))
 
     # calculate new: load radial histories
-    data = tracersTimeEvo(sP, 'rad_rvir', snapStep, all=True)
+    data = tracersTimeEvo(sP, 'rad_rvir', snapStep, all=True, pSplit=pSplit)
 
     # reverse so that increasing indices are increasing snapshot numbers
     data2d = data['rad_rvir'][::-1,:]
@@ -272,6 +316,10 @@ def accTime(sP, snapStep=1, rVirFac=1.0, indRangeLoad=None):
     # save
     with h5py.File(saveFilename,'w') as f:
         f['accTimeInterp'] = accTimeInterp
+
+        if 'indRange' in data: # save pSplit portion
+            f['pSplit'] = pSplit
+            f['indRange'] = data['indRange']
 
     print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
     return accTimeInterp
