@@ -103,7 +103,7 @@ class simParams:
 
         # pick run and snapshot
         self.run      = run
-        self.variant  = variant
+        self.variant  = str(variant)
         self.res      = res
         self.redshift = redshift
         self.snap     = snap
@@ -186,29 +186,39 @@ class simParams:
 
                 self.targetGasMass = 0.0
 
-            # L12.5 test box with resolutions same as L25
-            if variant == 'L12.5':
-                self.gravSoft      /= 2.0
-                self.targetGasMass /= 8.0
-                self.boxSize       /= 2.0
-
-            # sims.TNG_method variations
+            # defaults
             runStr = 'TNG'
             mStr   = ''
 
-            if variant is not None and 'r0' in variant:
+            if self.variant is not None:
                 # r001 through r010 IC realizations, L25n256 boxes
-                mStr   = '_method'
-                runStr = 'FP_TNG_' + variant
+                if 'r0' in self.variant:
+                    assert self.boxSize == 25000.0 and self.res == 256
+                    mStr   = '_method'
+                    runStr = 'FP_TNG_' + self.variant
 
-            # other variants
-            if variant == 'wmap':
-                runStr = 'TNG_WMAP'
-                self.omega_m     = 0.2726
-                self.omega_L     = 0.7274
-                self.omega_b     = 0.0456
-                self.HubbleParam = 0.704
+                # L12.5 test box with resolutions same as L25
+                if self.variant == 'L12.5':
+                    self.gravSoft      /= 2.0
+                    self.targetGasMass /= 8.0
+                    self.boxSize       /= 2.0
 
+                # wmap runs
+                if self.variant == 'wmap':
+                    runStr = 'TNG_WMAP'
+                    self.omega_m     = 0.2726
+                    self.omega_L     = 0.7274
+                    self.omega_b     = 0.0456
+                    self.HubbleParam = 0.704
+
+                # sims.TNG_method variations (e.g. L25n512_1002)
+                if self.variant.isdigit():
+                    assert int(variant) >= 0 and int(variant) < 9999
+                    assert self.boxSize == 25000.0
+                    mStr   = '_method'
+                    runStr += '_%s' % self.variant
+
+            # make paths and names
             bs = str(int(self.boxSize/1000.0))
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
@@ -516,6 +526,10 @@ class simParams:
         self.derivPath = self.arepoPath + 'data.files/'
         self.postPath  = self.arepoPath + 'postprocessing/'
         self.plotPath  = self.basePath + 'plots/'
+
+        # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
+        if not path.isdir(self.derivPath):
+            self.derivPath = self.postPath
 
         # if variant passed in, see if it requests a subbox
         if self.variant is not None and 'subbox' in self.variant:
