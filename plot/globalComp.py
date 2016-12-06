@@ -14,8 +14,9 @@ from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroSafe
 from illustris_python.util import partTypeNum
 from cosmo.load import groupCat, groupCatSingle, auxCat
-from cosmo.util import addRedshiftAgeAxes, validSnapList, periodicDists
+from cosmo.util import validSnapList, periodicDists
 from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
+from plot.cosmoGeneral import addRedshiftAgeAxes
 
 # global configuration
 sKn     = 5   # savgol smoothing kernel length (1=disabled)

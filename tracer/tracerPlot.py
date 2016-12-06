@@ -20,7 +20,8 @@ from os import mkdir
 from tracer import tracerMC
 from tracer import tracerEvo
 from util.helper import loadColorTable, logZeroSafe, closest
-from cosmo.util import addRedshiftAgeAxes, redshiftToSnapNum, snapNumToRedshift
+from cosmo.util import redshiftToSnapNum, snapNumToRedshift
+from plot.cosmoGeneral import addRedshiftAgeAxes
 
 # global configuration
 figsize1   = (14,8)  # set aspect ratio and relative text/label sizes

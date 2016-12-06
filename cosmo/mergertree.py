@@ -260,7 +260,7 @@ def debugPlot():
     """ Testing MPB loading and smoothing. """
     from util import simParams
     import matplotlib.pyplot as plt
-    from cosmo.util import addRedshiftAgeAxes
+    from plot.cosmoGeneral import addRedshiftAgeAxes
 
     # config
     #sP = simParams(res=455, run='tng', redshift=0.0) 
