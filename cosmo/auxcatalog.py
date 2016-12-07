@@ -1210,6 +1210,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='bandLum-sdss_r'),
    'Subhalo_StellarAge_4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_4pkpc_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
 
    'Subhalo_StellarMeanVel' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
