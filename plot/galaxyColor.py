@@ -29,9 +29,11 @@ binSize = 0.2 # dex in stellar mass/halo mass for median lines
 figsize = (14,10) # (8,6)
 clean   = False  # make visually clean plots with less information
 
-linestyles = ['-',':','--','-.']       # typically for analysis variations per run
+linestyles = ['-',':','--','-.'] # typically for analysis variations per run
 
-defSimColorModel = 'p07c_cf00dust' # used by histo2D(), histoSlice(), 1D and 2D PDFs by default
+# the dust model used by histo2D(), histoSlice(), 1D and 2D PDFs by default
+#defSimColorModel = 'p07c_cf00dust'
+defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
 
 def _bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
@@ -151,6 +153,9 @@ def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
         sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
+
+    if sim_cvals is None:
+        return # property is not calculated for this run (e.g. expensive auxCat)
 
     # central/satellite selection?
     wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -319,7 +324,7 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen', sim
     ptPlotThresh = 2000
     #cmap = loadColorTable('viridis') # plasma
 
-    sizefac = 0.9 if not clean else 0.7
+    sizefac = 1.0 if not clean else 0.9
 
     # start plot
     fig = plt.figure(figsize=[figsize[0]*nCols*sizefac, figsize[1]*nRows*sizefac])
@@ -331,6 +336,16 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen', sim
         for sP in sPs:
             # loop over each run and add to the same plot
             print(' ',yQuant,sP.simName,'-'.join(bands),simColorsModel,cenSatSelect,sQuant,sRange)
+
+            # y-axis: load galaxy properties (in histo2D were the color mappings)
+            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+
+            if sim_yvals is None:
+                print('   skip')
+                continue # property is not calculated for this run (e.g. expensive auxCat)
+
+            if yLog is True:
+                sim_yvals = logZeroNaN(sim_yvals)
 
             # slice values: load fullbox galaxy properties (almost always Mstar)
             if 'histoSlice_svals' in sP.data:
@@ -348,12 +363,6 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen', sim
 
             xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
             if not clean: xlabel += ' %s' % simColorsModel
-
-            # y-axis: load galaxy properties (in histo2D were the color mappings)
-            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
-
-            if yLog is True:
-                sim_yvals = logZeroNaN(sim_yvals)
 
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -653,8 +662,8 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                             label = simColorsModel if i == iLeg and j == loopInds[0] else ''
                         if clean:
                             # replace dust model labels by paper versions
-                            label = label.replace("p07c_cf00dust_res_conv_ns1_all", "Model C (all)")
-                            label = label.replace("p07c_cf00dust_res_conv_ns1", "Model C")
+                            label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc_all", "Model C (all)")
+                            label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc", "Model C")
                             label = label.replace("p07c_cf00dust", "Model B")
                             label = label.replace("p07c_nodust", "Model A")
 
@@ -950,8 +959,8 @@ def viewingAngleVariation():
 
     ac_modelA = 'p07c_nodust'
     ac_modelB = 'p07c_cf00dust'
-    ac_modelD = 'p07c_bc00dust' # debugging
-    ac_modelC_demos  = ['p07c_ns4_demo', 'p07c_ns8_demo']
+    ac_modelD = 'p07c_bc00dust' # debugging, not shown
+    ac_modelC_demos  = ['p07c_ns4_demo_rad30pkpc', 'p07c_ns8_demo_rad30pkpc']
 
     bands = ['g','r']
 
@@ -966,10 +975,11 @@ def viewingAngleVariation():
         modelC_colors[ac_demo], modelC_ids[ac_demo] = loadSimGalColors(sP, ac_demo, bands=bands, projs='all')
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else 0.9
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
     ax = fig.add_subplot(111)
 
-    mag_range  = [0.3,0.8] #_bandMagRange(bands, tight=True)
+    mag_range  = [0.3,0.85] #_bandMagRange(bands, tight=True)
 
     #mag_range = [0.7,0.75]
     #nBins = 100
@@ -1001,7 +1011,8 @@ def viewingAngleVariation():
             subhalo = groupCatSingle(sP, subhaloID=sub_id)
             mstar = sP.units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][sP.ptNum('star')])
             sSFR = np.log10(subhalo['SubhaloSFR'] / 10.0**mstar)
-            label = '[%d] M$_\star$=10$^{%.1f}$ sSFR=%.1f' % (sub_id,mstar,sSFR)
+            label = 'M$_\star$=10$^{%.1f}$ sSFR=%.1f' % (mstar,sSFR)
+            if not clean: label = '[%d] %s' % (sub_id,label)
 
             # keep same color per subhalo, across different Ns demos
             if i == 0:
@@ -1037,54 +1048,70 @@ def viewingAngleVariation():
     fig.savefig('figure_appendix1_viewing_angle_variation.pdf')
     plt.close(fig)
 
+def quantList(wCounts=True, wTr=True, onlyTr=False):
+    """ Return a list of quantities (galaxy properties) which we know about for exploration. """
+
+    # generally availably (groupcat)
+    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
+
+    if wCounts: quants1 = [None] + quants1
+
+    # generally available (auxcat)
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii',
+                'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
+                'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
+
+    # L75 only:
+    quants3 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
+
+    # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
+    #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
+
+    # tracer tracks quantities (L75 only):
+    trQuants = []
+    trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm','tr_dtHalo_mean']
+    trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc','tr_temp_tAcc']
+
+    for trBase in trBases1+trBases2:
+        trQuants.append(trBase + '')
+        trQuants.append(trBase + '_mode=smooth')
+        trQuants.append(trBase + '_mode=merger')
+        trQuants.append(trBase + '_par=bhs')
+        trQuants.append(trBase + '_mode=smooth_par=bhs')
+        trQuants.append(trBase + '_mode=merger_par=stars')
+
+    quantList = quants1 + quants2 + quants3
+    if wTr: quantList += trQuants
+    if onlyTr: quantList = trQuants
+
+    return quantList
 
 def plots():
-    """ Driver. """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
+    """ Driver (exploration). """
+    sPs = []
+    #sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     bands = ['g','r']
     xQuant = 'mstar2_log' # ssfr
     cs = 'median_nan'
     cenSatSelects = ['cen','sat','all']
 
-    for css in cenSatSelects:
+    quants = quantList()
 
-        pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,''.join(bands),xQuant,cs,css))
+    for sP in sPs:
+        for css in cenSatSelects:
 
-        # generally availably (groupcat)
-        cQuants1 = [None, 'ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
+            pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % \
+                (sP.simName,''.join(bands),xQuant,cs,css))
 
-        # generally available (auxcat)
-        cQuants2 = ['stellarage', 'mass_ovi', #'mass_ovii',
-                    'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
-                    'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
+            for cQuant in quants:
+                histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
 
-        # L75 only:
-        cQuants3 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
-
-        # tracer tracks quantities (L75 only):
-        trQuants = []
-        trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm','tr_dtHalo']
-        trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc','tr_temp_tAcc']
-
-        for trBase in trBases1+trBases2:
-            trQuants.append(trBase + '')
-            trQuants.append(trBase + '_mode=smooth')
-            trQuants.append(trBase + '_mode=merger')
-            trQuants.append(trBase + '_par=bhs')
-            trQuants.append(trBase + '_mode=smooth_par=bhs')
-            trQuants.append(trBase + '_mode=merger_par=stars')
-
-        # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
-        #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
-
-        for cQuant in trQuants: #cQuants1+cQuants2: #+cQuants3:
-            histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
-
-        pdf.close()
+            pdf.close()
 
 def plots2():
-    """ Driver. """
+    """ Driver (exploration). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
@@ -1092,24 +1119,27 @@ def plots2():
     bands = ['g','r']
     sQuant = 'mstar2_log'
     sRange = [10.4,10.6]
+    cenSatSelects = ['cen']
 
-    yQuant1 = ['ssfr','Z_stars','Z_gas','size_stars','size_gas','fgas1','fgas2','stellarage','mass_ovi'] 
-    yQuant2 = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
-               'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt'] 
+    quants = quantList(wCounts=False,wTr=False)
+    quantsTr = quantList(wCounts=False,onlyTr=False)
 
-    for css in ['cen','sat','all']:
+    for css in cenSatSelects:
         pdf = PdfPages('galaxyColor_1Dslices_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('-'.join([sP.simName for sP in sPs]),''.join(bands),sQuant,sRange[0],sRange[1],css))
 
-        histoSlice(sPs, pdf, bands, yQuants=yQuant1+yQuant2, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+        # all quantities on one multi-panel page:
+        histoSlice(sPs, pdf, bands, yQuants=quants, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+        histoSlice(sPs, pdf, bands, yQuants=quantsTr, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
 
-        for yQuant in yQuant1+yQuant2:
+        # one page per quantity:
+        for yQuant in quants + quantsTr:
             histoSlice(sPs, pdf, bands, yQuants=[yQuant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
 
         pdf.close()
     
 def paperPlots():
-    """ Construct all the plots for the paper. """
+    """ Construct all the final plots for the paper. """
     global clean
     clean = True
 
@@ -1118,8 +1148,8 @@ def paperPlots():
 
     dust_A = 'p07c_nodust'
     dust_B = 'p07c_cf00dust'
-    dust_C = 'p07c_cf00dust_res_conv_ns1' # one random projection per subhalo
-    dust_C_all = 'p07c_cf00dust_res_conv_ns1_all' # all projections shown
+    dust_C = 'p07c_cf00dust_res_conv_ns1_rad30pkpc' # one random projection per subhalo
+    dust_C_all = 'p07c_cf00dust_res_conv_ns1_rad30pkpc_all' # all projections shown
 
     # figure 1
     if 0:
@@ -1139,7 +1169,7 @@ def paperPlots():
         viewingAngleVariation()
 
     # appendix figure 2, dust model dependence (3 1D histos)
-    if 0:
+    if 1:
         sPs = [L75]
         dusts = [dust_C_all, dust_C, dust_B, dust_A]
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
@@ -1161,8 +1191,8 @@ def paperPlots():
         pdf.close()
 
     # appendix figure 4, 2x2 grid of different colors
-    if 1:
-        sPs = [L205]
+    if 0:
+        sPs = [L75]
         dust = dust_B
 
         pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
@@ -1171,9 +1201,4 @@ def paperPlots():
 
     # testing
     if 0:
-        sPs = [L205]
-        dusts = [dust_B,dust_B+'_rad30pkpc']
-
-        pdf = PdfPages('figure_test.pdf')
-        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts)
-        pdf.close()
+        pass

@@ -64,7 +64,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = auxCat(sP, fields=[fieldName], searchExists=True)
+        if ac[fieldName] is None: return [None]*4
         vals = sP.units.codeMassToMsun(ac[fieldName])
 
         label = 'M$_{\\rm %s}$[ log M$_{\\rm sun}$ ]' % (speciesStr)
@@ -169,7 +170,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quant in ['zform_mm5','zform_ma5','zform_poly7']:
         zFormType = quant.split("_")[1]
         fieldName = 'Subhalo_SubLink_zForm_' + zFormType
-        ac = auxCat(sP, fields=[fieldName])
+        ac = auxCat(sP, fields=[fieldName], searchExists=True)
+        if ac[fieldName] is None: return [None]*4
 
         vals = ac[fieldName]
         label = 'z$_{\\rm form,halo}$'
@@ -191,6 +193,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if '_eps07m' in quant:
             dName = 'CircAbove07MinusBelowNeg07Frac'
             label += ' $f(\epsilon > 0.7) - f(\epsilon < -0.7)$'
+
+        if not isfile(filePath):
+            return [None]*4
 
         with h5py.File(filePath,'r') as f:
             done = np.squeeze( f['done'][()] )
@@ -223,6 +228,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'In Situ Stellar Mass Fraction'
 
         if '_inrad' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
+
+        if not isfile(filePath):
+            return [None]*4
 
         with h5py.File(filePath,'r') as f:
             mass_type = f[dName][()]
@@ -324,7 +332,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         fieldName = 'Subhalo_Tracers_%s' % quantLoad
 
         auxCatPath = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (fieldName,sP.snap)
-        assert isfile(auxCatPath)
+
+        if not isfile(auxCatPath):
+            return [None]*4
 
         with h5py.File(auxCatPath,'r') as f:
             # load data
@@ -344,6 +354,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'log ( Tracer Mean z$_{\\rm acc}$ / z$_{\\rm form,halo}$ )'
             minMax = [0.5,2.0]
             takeLog = False
+        if quant == 'dtHalo_mean':
+            label = 'log ( Tracer Mean $\Delta {\\rm t}_{\\rm halo}$ [Gyr] )'
+            minMax = [-0.2,0.6]
+            if tight: minMax = [-0.2, 0.7]
         if quant == 'angmom_tAcc':
             label = 'Tracer Mean j$_{\\rm spec}$ at $t_{\\rm acc}$ [ log kpc km/s ]'
             minMax = [3.0,5.0]
@@ -352,6 +366,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'Tracer Mean S$_{\\rm gas}$ at $t_{\\rm acc}$ [ log K cm^2 ]'
             minMax = [7.0,9.0]
             takeLog = False # auxCat() entr vals are in log
+        if quant == 'temp_tAcc':
+            label = 'Tracer Mean T$_{\\rm gas}$ at $t_{\\rm acc}$ [ log K ]'
+            minMax = [4.5,7.0]
+            takeLog = False # auxCat() temp vals are in log
 
         if mode != 'all': label += ' [%s]' % mode
         if not clean:

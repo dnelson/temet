@@ -721,12 +721,32 @@ def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     assert sP.isZoom # todo for boxes (handle sP.subhaloInd and sP.haloInd as well)
     assert isinstance(valName,basestring)
 
+    # TODO: maybe whole function is divergent for sP.isZoom or not, split
     if sP.isZoom:
         mpb = mpbSmoothedProperties(sP, sP.zoomSubhaloID, extraFields=valName)
     else:
         mpbGlobal = globalTracerMPBMap(sP, halos=True, retMPBs=True, extraFields=valName)
 
     data = {}
+
+    # (only needed for periodic boxes with multiple MPBs)
+    if not sP.isZoom:
+        # TODO: this block of code copied in and incomplete, need to do a loop over all tracers, 
+        # for each get the respective MPB, and save the valName at the requested redshifts[i] 
+        # or redshifts (if constant)
+        if len(redshifts) > 1: assert redshifts.size == mpbGlobal['subhalo_id']
+        import pdb; pdb.set_trace()
+
+        # tracer is in FoF halo with no primary subhalo at sP.snap (no MPB)
+        if mpbGlobal['subhalo_id'][i] == -1:
+            pass # todo
+
+        # extract MPB used for this tracer
+        mpb = mpbGlobal['mpbs'][ mpbGlobal['subhalo_id'][i] ]
+
+        # create new mapping into MPB for this tracer
+        mpbIndexMap.fill(-1)
+        mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].max())
 
     # pull out either smoothed value or raw field straight from trees
     if valName in mpb['sm'].keys():
