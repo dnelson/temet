@@ -1553,11 +1553,11 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1576,10 +1576,18 @@ def plots():
     #sPs.append( simParams(res=2160, run='tng') )  
     #sPs.append( simParams(res=1080, run='tng') )  
     #sPs.append( simParams(res=540, run='tng') )  
-    #sPs.append( simParams(res=270, run='tng') )  
+    #sPs.append( simParams(res=270, run='tng') )
+
+    # add runs: TNG_methods
+    sPs.append( simParams(res=512, run='tng', variant=0000) )
+    sPs.append( simParams(res=512, run='tng', variant=4401) )
+    sPs.append( simParams(res=512, run='tng', variant=4402) )
+    sPs.append( simParams(res=512, run='tng', variant=4501) )
+    sPs.append( simParams(res=512, run='tng', variant=4502) )
+    sPs.append( simParams(res=512, run='tng', variant=4503) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_test_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_440x_450x_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
