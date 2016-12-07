@@ -9,8 +9,11 @@ import numpy as np
 import h5py
 import pdb
 import matplotlib.pyplot as plt
+from os.path import isfile
+from scipy.signal import savgol_filter
 
 from util import simParams
+from util.helper import running_median
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat
 
@@ -151,3 +154,97 @@ def plotMassFunctions():
     fig.tight_layout()    
     fig.savefig('mass_functions.pdf')
     plt.close(fig)
+
+def haloMassesVsDMOMatched():
+    """ Plot the ratio of halo masses matched between baryonic and DMO runs. """
+    # config
+    runList = ['tng','illustris']
+    redshift = 0.0
+    resList = [1820, 910, 455]
+    cenSatSelect = 'cen' #all, cen, sat
+
+    binSize = 0.1
+    linestyles = ['-','--',':']
+    sKn = 3 #5
+    sKo = 2 #3
+    lw = 2.5
+    xrange = [8.0, 15.0]
+    yrange = [0.6, 1.2]
+
+    # start plot
+    fig = plt.figure(figsize=(14,10))
+    ax = fig.add_subplot(111)
+    ax.set_xlim(xrange)
+    ax.set_ylim(yrange)
+    ax.set_title('z=%.1f %s [bijective only]' % (redshift,cenSatSelect))
+
+    ax.set_xlabel('M$_{\\rm halo,DM}$ [ log M$_{\\rm sun}$ subhalo ]')
+    ax.set_ylabel('M$_{\\rm halo,DM}$ / M$_{\\rm halo,baryonic}$')
+
+    # loop over runs
+    for run in runList:
+        c = ax._get_lines.prop_cycler.next()['color']
+
+        for i, res in enumerate(resList):
+            sP = simParams(res=res,run=run,redshift=redshift)
+            sPdm = simParams(res=res,run=run+'_dm',redshift=redshift)
+            print(sP.simName)
+
+            # load masses from group catalogs for TNG and DMO runs
+            gc_b = groupCat(sP, fieldsSubhalos=['SubhaloMass'])['subhalos']
+            gc_dm = groupCat(sPdm, fieldsSubhalos=['SubhaloMass'])['subhalos']
+
+            # restrict to central subhalos of DMO, and valid (!= -1) matches
+            wSelect_b = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+            mask_b = np.zeros( gc_b.size, dtype='bool' )
+            mask_b[wSelect_b] = 1
+
+            # loop over matching methods
+            for j, method in enumerate(['LHaloTree']): #,'SubLink'
+                # load matching catalog
+                if method == 'SubLink':
+                    catPath = sP.postPath + '/SubhaloMatchingToDark/SubLink_%03d.hdf5' % sP.snap
+                    assert isfile(catPath)
+
+                    with h5py.File(catPath,'r') as f:
+                        dm_inds = f['DescendantIndex'][()]
+
+                    gcInds_b = np.where( (dm_inds >= 0) & (mask_b == 1) )
+                    gcInds_dm = dm_inds[ gcInds_b ]
+                    assert gcInds_dm.min() >= 0
+
+                if method == 'LHaloTree':
+                    catPath = sP.postPath + '/SubhaloMatchingToDark/LHaloTree_%03d.hdf5' % sP.snap
+                    assert isfile(catPath)
+
+                    with h5py.File(catPath,'r') as f:
+                        b_inds = f['SubhaloIndexFrom'][()]
+                        dm_inds = f['SubhaloIndexTo'][()]
+
+                    cs_take_matched = np.where( mask_b[b_inds] == 1 )
+
+                    gcInds_b = b_inds[cs_take_matched]
+                    gcInds_dm = dm_inds[cs_take_matched]
+
+                # calculate mass ratios of matched
+                masses = sP.units.codeMassToLogMsun(gc_dm[gcInds_dm])
+                mass_ratios = gc_b[gcInds_b] / gc_dm[gcInds_dm]
+
+                # plot
+                xm, ym, sm, pm = running_median(masses,mass_ratios,binSize=binSize,percs=[10,25,75,90])
+                xm = xm[1:-1]
+                ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
+                sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
+                pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+
+                ax.plot(xm, ym2, linestyles[i], lw=lw, color=c, label=sP.simName)
+                if i == 0:
+                    ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+
+    ax.plot(xrange, [1.0,1.0], '-', color='black', alpha=0.2)
+
+    ax.legend()
+    fig.tight_layout()    
+    fig.savefig('haloMassRatioVsDMO_L75.pdf')
+    plt.close(fig)
+
