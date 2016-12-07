@@ -1,3 +1,10 @@
+# add our local path on prior to system path
+# otherwise, even if we add ~/.local/ to PYTHONPATH first,
+# np is e.g. always loaded from the system-wide version
+import sys
+from os.path import expanduser
+sys.path.insert(0,expanduser("~")+'/.local/lib/python2.7/site-packages/')
+
 # libraries
 import numpy as np
 #import matplotlib.pyplot as plt
