@@ -750,19 +750,37 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
     pdf.savefig()
     plt.close(fig)
 
-def massMetallicityStars(sPs, pdf, simRedshift=0.0):
+def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
     """ Stellar mass-metallicity relation at z=0. """
     # config
-    metalFields = ['SubhaloStarMetallicityHalfRad','SubhaloStarMetallicity','SubhaloStarMetallicityMaxRad']
+    acMetalFields = ['Subhalo_StellarZ_4pkpc_rBandLumWt']
+    metalFields   = ['SubhaloStarMetallicityHalfRad',
+                     'SubhaloStarMetallicity',
+                     'SubhaloStarMetallicityMaxRad']
+    if clean: metalFields = []
+
+    minNumStars = 1
+    if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
     
-    ax.set_xlim([7.0, 12.0])
-    ax.set_ylim([-2.0,1.0])
-    ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
-    ax.set_ylabel('Z$_{\\rm stars}$ [ log Z$_{\\rm sun}$ ] [ centrals and satellites ]')
+    ax.set_xlim([8.0, 12.5])
+    ax.set_ylim([-1.5,1.0])
+
+    xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+    ylabel = 'Z$_{\\rm stars}$ [ log Z$_{\\rm sun}$ ]'
+    if not clean:
+        xlabel += ' [ < 2r$_{1/2}$ ]'
+        ylabel += ' [ centrals and satellites ]'
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     # observational points
     g = gallazzi2005(sPs[0])
@@ -780,7 +798,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0):
                          xerr=[k['stellarMassErr'],k['stellarMassErr']], yerr=[k['ZstarsErr'],k['ZstarsErr']],
                          color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='o')
 
-    legend1 = ax.legend([l1,l2,l3], [g['label'],w['label'],k['label']], loc='upper left')
+    legend1 = ax.legend([l1,l2,l3], [g['label'],w['label'],k['label']], loc='lower right')
     ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -789,59 +807,82 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0):
         sP.setRedshift(simRedshift)
 
         if sP.isZoom:
-            gc = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID)
-            gh = groupCatSingle(sP, haloID=gc['SubhaloGrNr'])
+            continue
 
-            # stellar mass definition
-            xx_code = gc['SubhaloMassInRadType'][partTypeNum('stars')]
-            xx = sP.units.codeMassToLogMsun( xx_code )
+        # load
+        c = ax._get_lines.prop_cycler.next()['color']
 
-            for i, metalField in enumerate(metalFields):
-                # metallicity definition(s)
-                yy = np.log10( gc[metalFields[i]] / sP.units.Z_solar )
-                ax.plot(xx,yy,sP.marker,color=colors[i])
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+            fieldsSubhalos=['SubhaloMass','SubhaloMassInRadType']+metalFields)
+        ac = auxCat(sP, fields=acMetalFields)
 
-        else:
-            gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
-                fieldsSubhalos=['SubhaloMassInRadType']+metalFields)
+        # include: centrals + satellites (no noticeable difference vs. centrals only)
+        # stellar mass definition, enforce resolution limit
+        xx_code = gc['subhalos']['SubhaloMassInRadType'][:,partTypeNum('stars')]
 
-            # include: centrals + satellites (no noticeable difference vs. centrals only)
-            w = np.arange(gc['subhalos']['count'])
-            #w = np.where(gc['subhalos']['SubhaloMassInRadType'][:,partTypeNum('stars')] > 0.0)[0]
+        w = np.where( xx_code >= minNumStars * sP.targetGasMass )
+        xx = sP.units.codeMassToLogMsun( xx_code[w] )
 
-            # stellar mass definition
-            xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
-            xx = sP.units.codeMassToLogMsun( xx_code )
+        # metallicities based on auxCat calculation?
+        for i, acMetalField in enumerate(acMetalFields):
+            yy = logZeroSafe( ac[acMetalField][w] / sP.units.Z_solar )
 
-            # metallicity measured within what radius?
-            c = ax._get_lines.prop_cycler.next()['color']
-                    
-            for i, metalField in enumerate(metalFields):
-                # note: Vogelsberger+ (2014a) scales the simulation values by Z_solar=0.02 instead of 
-                # correcting the observational Gallazzi/... points, resulting in the vertical shift 
-                # with respect to this plot (sim,Gal,Woo all shift up, but I think Kirby is good as is)
-                yy = logZeroSafe( gc['subhalos'][metalField][w] / sP.units.Z_solar )
+            # only include subhalos with non-nan entries (e.g. at least 1 real star within radial cut)
+            ww = np.where(np.isfinite(yy))
+            yy_loc = yy[ww]
+            xx_loc = xx[ww]
 
-                xm, ym, sm = running_median(xx,yy,binSize=binSize,skipZeros=True)
-                ym2 = savgol_filter(ym,sKn,sKo)
+            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,
+                                                  skipZeros=True,percs=[10,25,75,90])
+            ym = savgol_filter(ym_i,sKn,sKo)
+            sm = savgol_filter(sm_i,sKn,sKo)
+            pm = savgol_filter(pm_i,sKn,sKo,axis=1) # P[10,90]
 
-                label = sP.simName if i==0 else ''
-                ax.plot(xm[1:-1], ym2[1:-1], linestyles[i], color=c, lw=3.0, label=label)
+            label = sP.simName if i == 0 else ''
+            ax.plot(xm[:-1], ym[:-1], linestyles[i], color=c, lw=3.0, label=label)
+
+            ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+
+        # metallicities from groupcat, measured within what radius?                    
+        for i, metalField in enumerate(metalFields):
+            # note: Vogelsberger+ (2014a) scales the simulation values by Z_solar=0.02 instead of 
+            # correcting the observational Gallazzi/... points, resulting in the vertical shift 
+            # with respect to this plot (sim,Gal,Woo all shift up, but I think Kirby is good as is)
+            yy = logZeroSafe( gc['subhalos'][metalField][w] / sP.units.Z_solar )
+
+            xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,skipZeros=True,percs=[10,25,75,90])
+            ym2 = savgol_filter(ym,sKn,sKo)
+            pm2 = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
+
+            ax.plot(xm[1:-1], ym2[1:-1], linestyles[i+len(acMetalFields)], color=c, lw=3.0)
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
-              plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1]),
-              plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
-    lExtra = ['Z$_{\\rm stars}$ (r < 1r$_{1/2})$', 
-              'Z$_{\\rm stars}$ (r < 2r$_{1/2})$',
-              'Z$_{\\rm stars}$ (r < r$_{\\rm max})$']
+    sExtra = []
+    lExtra = []
 
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+    if not clean:
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[0]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[1]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2]),
+                  plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[3])]
+        lExtra = ['Z$_{\\rm stars}$ (r < 4pkpc, rBand-LumWt)',
+                  'Z$_{\\rm stars}$ (r < 1r$_{1/2})$', 
+                  'Z$_{\\rm stars}$ (r < 2r$_{1/2})$',
+                  'Z$_{\\rm stars}$ (r < r$_{\\rm max})$']
 
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
 
 def massMetallicityGas(sPs, pdf, simRedshift=0.0):
     """ Gas mass-metallicity relation at z=0. 
@@ -1449,21 +1490,35 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     pdf.savefig()
     plt.close(fig)
 
-def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0):
+def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None,None]):
     """ Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25). """
     ageTypes = ['Subhalo_StellarAge_4pkpc_rBandLumWt',
                 'Subhalo_StellarAge_NoRadCut_MassWt',
                 'Subhalo_StellarAge_NoRadCut_rBandLumWt']
-    # plot setup
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-    
-    ax.set_xlim([8.0,12.0])
-    ax.set_ylim([0,14])
-    ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{\star,1/2}$ ]')
+    if clean: ageTypes = [ageTypes[0]]
 
-    cenSatStr = '[ centrals only ]' if centralsOnly else '[ centrals & satellites ]'
-    ax.set_ylabel('Stellar Age [ Gyr ] %s' % cenSatStr)
+    minNumStars = 1
+    if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
+
+    # plot setup
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+    
+    ax.set_xlim([8.0,12.5])
+    ax.set_ylim([0,14])
+
+    xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+    if not clean: xlabel += ' [ < 2r$_{\star,1/2}$ ]'
+    ax.set_xlabel(xlabel)
+
+    cenSatStr = ' [ centrals only ]' if centralsOnly else ' [ centrals & satellites ]'
+    if clean: cenSatStr = ''
+    ax.set_ylabel('Stellar Age [ Gyr ]%s' % cenSatStr)
 
     # observational points
     g05 = gallazzi2005(sPs[0])
@@ -1500,9 +1555,13 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0):
         else:
             w = np.arange(gc['subhalos'].shape[0])
 
-        # stellar mass definition
-        xx_code = gc['subhalos'][w,partTypeNum('stars')]
-        xx = sP.units.codeMassToLogMsun( xx_code )
+        # stellar mass definition, and enforce resolution limit
+        xx_code = gc['subhalos'][:,partTypeNum('stars')]
+
+        wResLimit = np.where( xx_code >= minNumStars * sP.targetGasMass )[0]
+        w = np.intersect1d(w,wResLimit)
+
+        xx = sP.units.codeMassToLogMsun( xx_code[w] )
 
         # loop through ages measured through different techniques
         c = ax._get_lines.prop_cycler.next()['color']
@@ -1515,28 +1574,40 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0):
             yy_loc = yy[ww]
             xx_loc = xx[ww]
 
-            xm, ym_i, sm_i = running_median(xx_loc,yy_loc,binSize=binSize)
+            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+
             ym = savgol_filter(ym_i,sKn,sKo)
             sm = savgol_filter(sm_i,sKn,sKo)
+            pm = savgol_filter(pm_i,sKn,sKo,axis=1)
 
             label = sP.simName if i == 0 else ''
             ax.plot(xm[:-1], ym[:-1], linestyles[i], color=c, lw=3.0, label=label)
 
-            if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0:
-                ax.fill_between(xm[:-1], ym[:-1]-sm[:-1], ym[:-1]+sm[:-1], 
-                                color=c, interpolate=True, alpha=0.25)
+            if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0: # P[10,90]
+                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
 
     # legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[i]) \
-                for i,ageType in enumerate(ageTypes)]
-    lExtra = [', '.join(ageType.split("_")[2:]) for ageType in ageTypes]
+    sExtra = []
+    lExtra = []
+
+    if not clean:
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[i]) \
+                    for i,ageType in enumerate(ageTypes)]
+        lExtra = [', '.join(ageType.split("_")[2:]) for ageType in ageTypes]
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
 
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
 
 def plots():
     """ Plot portfolio of global population comparisons between runs. """

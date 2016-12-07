@@ -32,7 +32,6 @@ clean   = False  # make visually clean plots with less information
 linestyles = ['-',':','--','-.'] # typically for analysis variations per run
 
 # the dust model used by histo2D(), histoSlice(), 1D and 2D PDFs by default
-#defSimColorModel = 'p07c_cf00dust'
 defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
 
 def _bandMagRange(bands, tight=False):
@@ -709,8 +708,8 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
     # config
     obs_color = '#000000'
     Mstar_range = [9.0, 12.0]
-    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
-    #bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # use multiple of 2
+    #bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
+    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # use multiple of 2
 
     eCorrect = True # True, False (for sdss points)
     kCorrect = True # True, False (for sdss points)
@@ -980,10 +979,6 @@ def viewingAngleVariation():
     ax = fig.add_subplot(111)
 
     mag_range  = [0.3,0.85] #_bandMagRange(bands, tight=True)
-
-    #mag_range = [0.7,0.75]
-    #nBins = 100
-
     markers    = ['o','s','D']
     linestyles = [':','-']
     binSize    = (mag_range[1]-mag_range[0])/nBins
@@ -1140,27 +1135,42 @@ def plots2():
     
 def paperPlots():
     """ Construct all the final plots for the paper. """
+    import plot.globalComp
+    plot.globalComp.clean = True
+
     global clean
     clean = True
 
-    L75  = simParams(res=1820,run='tng',redshift=0.0)
-    L205 = simParams(res=2500,run='tng',redshift=0.0)
+    L75   = simParams(res=1820,run='tng',redshift=0.0)
+    L205  = simParams(res=2500,run='tng',redshift=0.0)
+    L75FP = simParams(res=1820,run='illustris',redshift=0.0)
 
     dust_A = 'p07c_nodust'
     dust_B = 'p07c_cf00dust'
     dust_C = 'p07c_cf00dust_res_conv_ns1_rad30pkpc' # one random projection per subhalo
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_rad30pkpc_all' # all projections shown
 
-    # figure 1
-    if 0:
+    # figure 1, 1D color PDFs in six mstar bins
+    if 1:
         sPs = [L75, L205]
-        dust = dust_B # dust_C_all # need L205
+        dust = dust_C_all
 
         pdf = PdfPages('figure1_%s.pdf' % dust)
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust])
         pdf.close()
 
-    # figure 2
+    # figure 2, stellar ages and metallicities vs mstar
+    if 0:
+        sPs = [L75, L205] # L75FP
+        figsize_loc = [figsize[0]*2*0.9, figsize[1]*1*0.9] # orig * nCols_or_nRows * sizefac_clean
+
+        pdf = PdfPages('figure2.pdf')
+        fig = plt.figure(figsize=figsize_loc)
+        plot.globalComp.stellarAges(sPs, pdf, centralsOnly=True, fig_subplot=[fig,121])
+        plot.globalComp.massMetallicityStars(sPs, pdf, fig_subplot=[fig,122])
+        pdf.close()
+
+    # figure 3: 
     if 0:
         pass
 
@@ -1169,7 +1179,7 @@ def paperPlots():
         viewingAngleVariation()
 
     # appendix figure 2, dust model dependence (3 1D histos)
-    if 1:
+    if 0:
         sPs = [L75]
         dusts = [dust_C_all, dust_C, dust_B, dust_A]
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
@@ -1190,10 +1200,10 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
         pdf.close()
 
-    # appendix figure 4, 2x2 grid of different colors
+    # appendix figure 4, 2x2 grid of different 2D color PDFs
     if 0:
         sPs = [L75]
-        dust = dust_B
+        dust = dust_C
 
         pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
