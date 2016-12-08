@@ -72,10 +72,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         
         if speciesStr == 'OVI':
             minMax = [4.6, 7.2]
-            if tight: minMax = [4.6, 7.2]
+            if tight: minMax = [5.0, 8.0]
         if speciesStr == 'OVII':
             minMax = [5.6, 8.6]
-            if tight: minMax = [5.6, 8.6]
+            if tight: minMax = [6.0, 9.0]
 
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
@@ -95,7 +95,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
 
         minMax = [-12.0, -9.0]
-        if tight: minMax = [-12.5, -9.0]
+        if tight: minMax = [-13.0, -9.0]
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
@@ -105,7 +105,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'log ( Z$_{\\rm stars}$ / Z$_{\odot}$ )'
         if not clean: label += ' (<2r$_{\star,1/2}$)'
         minMax = [-0.5, 0.5]
-        if tight: minMax = [0.0, 0.4]
+        if tight: minMax = [0.1, 0.4]
 
     if quant == 'Z_gas':
         # mass-weighted mean gas metallicity (within 2r1/2stars)
@@ -121,7 +121,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'r$_{\\rm gas,1/2}$ [ log kpc ]'
         minMax = [1.0, 2.8]
-        if tight: minMax = [1.6, 2.8]
+        if tight: minMax = [1.4, 2.8]
 
     if quant == 'size_stars':
         gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
@@ -129,7 +129,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'r$_{\\rm \star,1/2}$ [ log kpc ]'
         minMax = [0.1, 1.6]
-        if tight: minMax = [0.4, 1.2]
+        if tight: minMax = [0.3, 1.2]
 
     if quant in ['fgas1','fgas2']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
@@ -146,7 +146,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             mstar[w] = 1.0
             mgas[w] = 0.0
 
-        vals = mgas / mstar
+        vals = mgas / (mgas+mstar)
 
         label = 'log f$_{\\rm gas}$'
         if not clean:
@@ -210,6 +210,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if not clean: label += ' [%s, shy]' % selStr
         minMax = [0.0,0.6]
+        if tight: minMax = [0.0, 0.8]
         takeLog = False
 
     if quant in ['massfrac_exsitu','massfrac_exsitu_inrad','massfrac_insitu','massfrac_insitu_inrad']:
@@ -266,12 +267,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             selStr = '2rhalfstars'
             selDesc = 'ISM'
             minMax = [0.0, 1.5]
-            if tight: minMax = [-1.0, 1.6]
+            if tight: minMax = [-1.0, 1.8]
         if '_halo' in quant:
             selStr = 'halo'
             selDesc = 'halo'
             minMax = [-1.5, 0.0]
-            if tight: minMax = [-2.0, 0.2]
+            if tight: minMax = [-2.0, -0.5]
 
         fieldName = 'Subhalo_Bmag_%s_%s' % (selStr,wtStr)
 
@@ -348,11 +349,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # plot properties
         if quant == 'zAcc_mean':
             label = 'Tracer Mean z$_{\\rm acc}$'
-            minMax = [0.0,3.0]
+            minMax = [0.0,3.5]
             takeLog = False
         if quant == 'zAcc_mean_over_zForm':
             label = 'log ( Tracer Mean z$_{\\rm acc}$ / z$_{\\rm form,halo}$ )'
-            minMax = [0.5,2.0]
+            minMax = [0.5,3.0]
             takeLog = False
         if quant == 'dtHalo_mean':
             label = 'log ( Tracer Mean $\Delta {\\rm t}_{\\rm halo}$ [Gyr] )'
@@ -368,7 +369,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             takeLog = False # auxCat() entr vals are in log
         if quant == 'temp_tAcc':
             label = 'Tracer Mean T$_{\\rm gas}$ at $t_{\\rm acc}$ [ log K ]'
-            minMax = [4.5,7.0]
+            minMax = [4.6,6.2]
+            if tight: minMax = [4.8, 6.0]
             takeLog = False # auxCat() temp vals are in log
 
         if mode != 'all': label += ' [%s]' % mode
