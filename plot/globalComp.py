@@ -825,23 +825,32 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
 
         # metallicities based on auxCat calculation?
         for i, acMetalField in enumerate(acMetalFields):
-            yy = logZeroSafe( ac[acMetalField][w] / sP.units.Z_solar )
 
-            # only include subhalos with non-nan entries (e.g. at least 1 real star within radial cut)
-            ww = np.where(np.isfinite(yy))
-            yy_loc = yy[ww]
-            xx_loc = xx[ww]
+            iters = [0]
+            #if clean: iters = [0,1] # disabled
 
-            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,
-                                                  skipZeros=True,percs=[10,25,75,90])
-            ym = savgol_filter(ym_i,sKn,sKo)
-            sm = savgol_filter(sm_i,sKn,sKo)
-            pm = savgol_filter(pm_i,sKn,sKo,axis=1) # P[10,90]
+            for i_num in iters:
+                yy = logZeroSafe( ac[acMetalField][w] / sP.units.Z_solar )
 
-            label = sP.simName if i == 0 else ''
-            ax.plot(xm[:-1], ym[:-1], linestyles[i], color=c, lw=3.0, label=label)
+                if i_num == 1:
+                    # apply and plot Guidi+ (2016) correction from Z(Lum-W_fibre) to Z(OBS)
+                    yy = (yy - 0.23) / 0.69
 
-            ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+                # only include subhalos with non-nan entries (e.g. at least 1 real star within radial cut)
+                ww = np.where(np.isfinite(yy))
+                yy_loc = yy[ww]
+                xx_loc = xx[ww]
+
+                xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,
+                                                      skipZeros=True,percs=[10,25,75,90])
+                ym = savgol_filter(ym_i,sKn,sKo)
+                sm = savgol_filter(sm_i,sKn,sKo)
+                pm = savgol_filter(pm_i,sKn,sKo,axis=1) # P[10,90]
+
+                label = sP.simName if (i == 0 and i_num == 0) else ''
+                ax.plot(xm[:-1], ym[:-1], linestyles[i+i_num*2], color=c, lw=3.0, label=label)
+
+                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
 
         # metallicities from groupcat, measured within what radius?                    
         for i, metalField in enumerate(metalFields):
@@ -870,6 +879,9 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
                   'Z$_{\\rm stars}$ (r < 1r$_{1/2})$', 
                   'Z$_{\\rm stars}$ (r < 2r$_{1/2})$',
                   'Z$_{\\rm stars}$ (r < r$_{\\rm max})$']
+    else:
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+        lExtra = ['Guidi+ (2016) Correction'] 
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
@@ -1567,24 +1579,32 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
         c = ax._get_lines.prop_cycler.next()['color']
                 
         for i, ageType in enumerate(ageTypes):
-            yy = ac[ageType][w]
 
-            # only include subhalos with non-nan age entries (e.g. at least 1 real star within radial cut)
-            ww = np.where(np.isfinite(yy))
-            yy_loc = yy[ww]
-            xx_loc = xx[ww]
+            iters = [0]
+            #if clean: iters = [0,1] # disabled
 
-            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+            for i_num in iters:
+                yy = ac[ageType][w]
 
-            ym = savgol_filter(ym_i,sKn,sKo)
-            sm = savgol_filter(sm_i,sKn,sKo)
-            pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+                if i_num == 1: # apply Guidi+ (2016) correction from Age(Lum-W_fibre) to Age(OBS)
+                    yy = (yy - 2.37) / 0.97
 
-            label = sP.simName if i == 0 else ''
-            ax.plot(xm[:-1], ym[:-1], linestyles[i], color=c, lw=3.0, label=label)
+                # only include subhalos with non-nan age entries (e.g. at least 1 real star within radial cut)
+                ww = np.where(np.isfinite(yy))
+                yy_loc = yy[ww]
+                xx_loc = xx[ww]
 
-            if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0: # P[10,90]
-                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+                xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+
+                ym = savgol_filter(ym_i,sKn,sKo)
+                sm = savgol_filter(sm_i,sKn,sKo)
+                pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+
+                label = sP.simName if (i == 0 and i_num == 0) else ''
+                ax.plot(xm[:-1], ym[:-1], linestyles[i+2*i_num], color=c, lw=3.0, label=label)
+
+                if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0: # P[10,90]
+                    ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
 
     # legend
     handles, labels = ax.get_legend_handles_labels()
@@ -1595,6 +1615,10 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
         sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[i]) \
                     for i,ageType in enumerate(ageTypes)]
         lExtra = [', '.join(ageType.split("_")[2:]) for ageType in ageTypes]
+    else:
+        pass
+        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+        #lExtra = ['Guidi+ (2016) Correction'] 
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
 
