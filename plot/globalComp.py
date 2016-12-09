@@ -465,14 +465,24 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
     pdf.savefig()
     plt.close(fig)
 
-def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
+def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None]):
     """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. """
+
     # plot setup
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
     
     ax.set_ylim([0.3,2e2])
-    ax.set_ylabel('Galaxy Size [ kpc ] [ r$_{\\rm 1/2, stars/gas}$ ] [ only centrals ]')
+
+    ylabel = 'Galaxy Size [ kpc ]'
+    if not clean: ylabel += ' [ r$_{\\rm 1/2, stars/gas}$ ] [ only centrals ]'
+    if clean: ylabel += ' [ Halfmass Radius ]'
+    ax.set_ylabel(ylabel)
     ax.set_yscale('log')
 
     if vsHaloMass:
@@ -480,9 +490,12 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
         ax.set_xlim([9,14.5])
         ax.set_ylim([1.0,8e2])
     else:
-        ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
+        xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
+        if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
+        ax.set_xlabel(xlabel)
         #ax.set_xlim( behrooziSMHM(sPs[0], logHaloMass=np.array(ax.get_xlim())) )
         ax.set_xlim([7,12.0])
+        if clean: ax.set_xlim([8.0,12.0])
 
     # observational points
     if not vsHaloMass:
@@ -507,7 +520,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
         legend1 = ax.legend([l1,l2,l3,l4], 
                             [b['red']['label'], b['blue']['label'], 
                              s['early']['label'], s['late']['label']], 
-                            loc='lower right')
+                            loc='upper left') # lower right
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -562,7 +575,9 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
         xm_stars = xm_stars[ww_stars]
 
         l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=sP.simName)
-        l, = ax.plot(xm_gas[1:-1], ym_gas[1:-1], linestyles[1], color=l.get_color(), lw=3.0)
+
+        if not clean:
+            l, = ax.plot(xm_gas[1:-1], ym_gas[1:-1], linestyles[1], color=l.get_color(), lw=3.0)
 
         if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
             y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
@@ -572,16 +587,26 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0):
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
-    sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[0]),
-              plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[1])]
-    lExtra = [r'stars',
-              r'gas']
+    sExtra = []
+    lExtra = []
 
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+    if not clean:
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[0]),
+                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[1])]
+        lExtra = [r'stars',r'gas']
 
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
 
 def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, 
                         use30kpc=False, use30H=False, useP10=False, simRedshift=0.0):
