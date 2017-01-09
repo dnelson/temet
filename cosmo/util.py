@@ -300,11 +300,9 @@ def periodicDists(pt, vecs, sP, chebyshev=False):
           if pt is several points: distance from each pt to each vec (must have same number of points as vecs)
           Chebyshev=1 : use Chebyshev distance metric (greatest difference in positions along any one axis)
     """
-
-    if (vecs.ndim != 1 and vecs.ndim != 2) or vecs.shape[1] != 3:
-        raise Exception("Input vecs not in expected shape.")
-    if pt.ndim not in [1,2]:
-        raise Exception("Something in wrong, pt has strange dimensionality.")
+    assert vecs.ndim in [1,2]
+    assert pt.ndim in [1,2]
+    assert vecs.shape[1] == 3 # cannot currently handle vecs.shape == [3] e.g. single vec
 
     # distances from one point (x,y,z) to a vector of other points [N,3]
     if pt.ndim == 1:
