@@ -107,7 +107,7 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
     method     = 'sphMap'
     nPixels    = [960,960]
     sizeFac    = -80.0 #0.3 # central object
-    axes       = [1,0]
+    axes       = [0,1]
     labelZ     = False
     labelScale = True
     labelSim   = False
@@ -127,15 +127,15 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
 
         #panels.append( {'partType':'stars', 'hsmlFac':0.5, \
         #                'partField':pF, 'res':resLevel, 'hInd':shID, sizeFac:-50.0} )
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'face-on', \
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'face-on-I', \
                         'partField':pF, 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
         panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
-                        'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+                        'rotation':'face-on-I', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'edge-on', 'nPixels':[960,320], \
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'edge-on-I', 'nPixels':[960,320], \
                         'partField':pF, 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
         panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', 'nPixels':[960,320], \
-                        'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+                        'rotation':'edge-on-I', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
         #panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
         #                'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
