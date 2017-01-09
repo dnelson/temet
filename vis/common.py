@@ -178,6 +178,97 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
 
     return ang_mom_mean
 
+def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None):
+    """ Calculate the moment of inertia tensor (3x3 matrix) for a subhalo or halo, given a load 
+    of its member gas and stars (at least within 2*rHalf==shHalfMassRadStars) and center position shPos. """
+    if subhaloID is not None:
+        assert all(v is None for v in [gas,stars,rHalf])
+        # load required particle data for this subhalos
+        subhalo = groupCatSingle(sP, subhaloID=subhaloID)
+        rHalf = subhalo['SubhaloHalfmassRadType'][sP.ptNum('stars')]
+        shPos = subhalo['SubhaloPos']
+
+        gas = snapshotSubset(sP, 'gas', fields=['mass','pos','sfr'], subhaloID=subhaloID)
+        stars = snapshotSubset(sP, 'stars', fields=['mass','pos','sftime'], subhaloID=subhaloID)
+    else:
+        assert all(v is not None for v in [gas,stars,rHalf,shPos])
+
+    useStars = True
+
+    if len(gas['Masses']) > 1:
+        rad_gas = periodicDists(shPos, gas['Coordinates'], sP)
+        wGas = np.where( (rad_gas <= 0.5*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
+
+        if len(wGas) >= 50:
+            useStars = False
+
+    if useStars:
+        # restrict to real stars
+        wValid = np.where( stars['GFM_StellarFormationTime'] > 0.0 )
+
+        if len(wValid[0]) <= 1:
+            return np.identity(3)
+
+        stars['Masses'] = stars['Masses'][wValid]
+        stars['Coordinates'] = np.squeeze(stars['Coordinates'][wValid,:])
+
+        # use all stars within 1*rHalf
+        rad_stars = periodicDists(shPos, stars['Coordinates'], sP)
+        wStars = np.where( (rad_stars <= 1.0*rHalf) )
+
+        if len(wStars[0]) <= 1:
+            return np.identity(3)
+
+        masses = stars['Masses'][wStars]
+        xyz = stars['Coordinates'][wStars,:]
+    else:
+        # use all star-forming gas cells within 2*rHalf
+        wGas = np.where( (rad_gas <= 2.0*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
+
+        masses = gas['Masses'][wGas]
+        xyz = gas['Coordinates'][wGas,:]
+
+    # shift
+    xyz = np.squeeze(xyz)
+
+    for i in range(3):
+        xyz[:,i] -= shPos[i]
+
+    # if coordinates wrapped box boundary before shift:
+    correctPeriodicDistVecs(xyz, sP)
+
+    # construct moment of inertia
+    I = np.zeros( (3,3), dtype='float32' )
+
+    I[0,0] = np.sum( masses * (xyz[:,1]*xyz[:,1] + xyz[:,2]*xyz[:,2]) )
+    I[1,1] = np.sum( masses * (xyz[:,0]*xyz[:,0] + xyz[:,2]*xyz[:,2]) )
+    I[2,2] = np.sum( masses * (xyz[:,0]*xyz[:,0] + xyz[:,1]*xyz[:,1]) )
+    I[0,1] = -1 * np.sum( masses * (xyz[:,0]*xyz[:,1]) )
+    I[0,2] = -1 * np.sum( masses * (xyz[:,0]*xyz[:,2]) )
+    I[1,2] = -1 * np.sum( masses * (xyz[:,1]*xyz[:,2]) )
+    I[1,0] = I[0,1]
+    I[2,0] = I[0,2]
+    I[2,1] = I[1,2]
+
+    return I
+
+def rotationMatrixFromInertiaTensor(I):
+    """ Calculate 3x3 rotation matrix by a diagonalization of the moment of inertia tensor. """
+    # get eigenv alues and normalized right eigenvectors
+    eigen_values, rotation_matrix = np.linalg.eig(I)
+
+    # sort ascending the eigen values
+    sort_inds = np.argsort(eigen_values)
+    eigen_values = eigen_values[sort_inds]
+
+    # permute the eigenvectors into this order, which is the rotation matrix which orients the 
+    # principal axes to the cartesian x,y,z axes, such that if axes=[0,1] we have edge-on
+    new_matrix = np.matrix( (rotation_matrix[:,sort_inds[0]],
+                             rotation_matrix[:,sort_inds[1]],
+                             rotation_matrix[:,sort_inds[2]]) ).T
+
+    return new_matrix
+
 def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
     """ Calculate 3x3 rotation matrix to align input vec with a target vector. By default this is the 
     z-axis, such that with vec the angular momentum vector of the galaxy, an (x,y) projection will 
@@ -187,12 +278,17 @@ def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
     vec /= np.linalg.norm(vec,2)
     target_vec /= np.linalg.norm(target_vec,2)
 
+    I = np.identity(3)
+
+    if np.array_equal(vec, target_vec):
+        # identity rotation
+        return np.asmatrix(I)
+
     v = np.cross(vec,target_vec)
     s = np.linalg.norm(v,2)
     c = np.dot(vec,target_vec)
 
     # v_x is the skew-symmetric cross-product matrix of v
-    I = np.identity(3)
     v_x = np.asmatrix( np.array( [ [0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0] ] ) )
 
     # R * (x,y,z)_unrotated == (x,y,z)_rotated
@@ -246,7 +342,8 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
         extent[i] = 2.0 * np.max([left,right])
 
     # place all coordinates back inside [0,sP.boxSize] if necessary:
-    correctPeriodicPosVecs(pos_in, sP)
+    if shiftBack:
+        correctPeriodicPosVecs(pos_in, sP)
 
     return pos_in, extent
 
