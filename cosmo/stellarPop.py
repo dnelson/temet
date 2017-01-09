@@ -270,6 +270,124 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
     # return full attenuated spectrum, for later convlution with some band
     return obs_lum
 
+@jit(nopython=True, nogil=True, cache=True)
+def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
+    beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec):
+    """ Helper for sps.dust_tau_model_mag(). Cannot JIT a class member function, so it sits here. """
+
+    # accumulate per star attenuated luminosity (wavelength dependent):
+    obs_lum_indiv = np.zeros( (N_H.size, wave.size), dtype=np.float32 )
+    atten = np.zeros( wave.size, dtype=np.float32 )
+    gamma_term = np.zeros( wave.size, dtype=np.float32 )
+
+    gamma_w_lt200 = np.where(wave_ang < 2000.0)
+    gamma_w_gt200 = np.where(wave_ang >= 2000.0)
+
+    for i in range(N_H.size):
+        # taking np.power() using gamma as a full array does ~6000 powers, need to avoid for efficiency
+        gamma_val_lt200 = np.power(Z_g[i]/Z_solar, 1.35)
+        gamma_val_gt200 = np.power(Z_g[i]/Z_solar, 1.6)
+
+        gamma_term[gamma_w_lt200] = gamma_val_lt200
+        gamma_term[gamma_w_gt200] = gamma_val_gt200
+
+        # finish absorption tau and total tau
+        tau_a = A_lambda_sol * np.power(1+redshift,beta) * gamma_term * (N_H[i]/N_H0)
+
+        tau_lambda = tau_a * f_scattering
+
+        # attenuation as a function of wavelength
+        atten *= 0.0
+        atten += 1.0 # reset to one
+
+        # leave atten at 1.0 (no change) for tau_lambda->0, and use 1e-5 threshold to avoid
+        # numerical truncation setting atten=0 for tau_lambda~0 (very small)
+        w = np.where(tau_lambda >= 1e-5)
+        atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
+
+        # bilinear interpolation: stellar population spectrum
+        x = metals_log[i]
+        y = ages_logGyr[i]
+
+        ##x_ind = np.interp( x, metals, np.arange(metals.size) )
+        ##y_ind = np.interp( y, ages,   np.arange(ages.size) )
+        for x_ind0 in range(metals.size):
+            if x < metals[x_ind0]:
+                break
+        for y_ind0 in range(ages.size):
+            if y < ages[y_ind0]:
+                break
+
+        xt = (x - metals[x_ind0-1]) / (metals[x_ind0]-metals[x_ind0-1])
+        yt = (y - ages[y_ind0-1]) / (ages[y_ind0]-ages[y_ind0-1])
+        x_ind = (x_ind0-1) * (1 - xt) + x_ind0 * xt
+        y_ind = (y_ind0-1) * (1 - yt) + y_ind0 * yt           
+
+        # set indices out of bounds on purpose if we are in extrapolation regime, which then causes 
+        # below x1_ind==x2_ind or y1_ind==y2_ind such that constant (not linear) extrapolation occurs
+        if x < metals[0]:
+            x_ind = -1.0
+        if x > metals[-1]:
+            x_ind = metals.size - 1
+        if y < ages[0]:
+            y_ind = -1.0
+        if y > ages[-1]:
+            y_ind = ages.size - 1
+
+        # clip indices at [0,size] which leads to constant extrap (nearest grid edge value in that dim)
+        x1_ind = np.int32(np.floor(x_ind))
+        x2_ind = x1_ind + 1
+        y1_ind = np.int32(np.floor(y_ind))
+        y2_ind = y1_ind + 1
+
+        if x1_ind < 0 or x2_ind < 0:
+            x1_ind = 0
+            x2_ind = 0
+        if y1_ind < 0 or y2_ind < 0:
+            y1_ind = 0
+            y2_ind = 0
+        if x1_ind > metals.size-1 or x2_ind > metals.size-1:
+            x1_ind = metals.size-1
+            x2_ind = metals.size-1
+        if y1_ind > ages.size-1 or y2_ind > ages.size-1:
+            y1_ind = ages.size-1
+            y2_ind = ages.size-1
+
+        spec_12 = spec[x1_ind,y2_ind,:]
+        spec_21 = spec[x2_ind,y1_ind,:]
+        spec_11 = spec[x1_ind,y1_ind,:]
+        spec_22 = spec[x2_ind,y2_ind,:]
+
+        x1 = metals[x1_ind]
+        x2 = metals[x2_ind]
+        y1 = ages[y1_ind]
+        y2 = ages[y2_ind]
+
+        # constant beyond edges, make denominator nonzero
+        if x2_ind == x1_ind == metals.size-1:
+            x2 += (metals[-1]-metals[-2])
+        if x2_ind == x1_ind == 0:
+            x1 -= (metals[1]-metals[0])
+        if y2_ind == y1_ind == ages.size-1:
+            y2 += (ages[-1]-ages[-2])
+        if y2_ind == y1_ind == 0:
+            y1 -= (ages[1]-ages[0])
+
+        # interpolated 1D spectrum
+        spectrum_local = spec_11*(x2-x)*(y2-y) + spec_21*(x-x1)*(y2-y) + \
+                         spec_12*(x2-x)*(y-y1) + spec_22*(x-x1)*(y-y1)
+        spectrum_local /= ((x2-x1)*(y2-y1))
+
+        #spectrum_local = np.clip(spectrum_local, 0.0, np.inf) # enforce everywhere positive
+        w = np.where(spectrum_local < 0.0)
+        spectrum_local[w] = 0.0
+
+        # accumulate attenuated contribution of this stellar population
+        obs_lum_indiv[i,:] = (spectrum_local * masses_msun[i]) * atten
+
+    # return full attenuated spectra, for later convlution with bands
+    return obs_lum_indiv
+
 class sps():
     """ Use pre-computed FSPS stellar photometrics tables to derive magnitudes for simulation stars. """
     basePath = expanduser("~") + '/code/fsps.run/'
@@ -685,7 +803,7 @@ class sps():
         
         return lums
 
-    def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun):
+    def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, ret_indiv=False):
         """ For a set of stars characterized by their (age,Z,M) values as well as (N_H,Z_g) 
         calculated from the resolved gas distribution, do the Model (C) attenuation on the 
         full spectra, sum together, and convolve the resulting total L(lambda) with the  
@@ -700,19 +818,24 @@ class sps():
 
         r = {}
 
-        #start_time = time.time()
-
         if '_conv' in self.dustModel:
             # the aggregate spectrum is actually band-independent, get now from JITed helper function
             # band is any member of self.bands, since A_lambda_sol,gamma,f_scattering are all actually 
             # band-independent in this case where self.lambda_nm == self.wave
-            obs_lum = _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
-                          self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
-                          self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
-                          self.metals,self.ages,self.wave_ang,self.spec)
+            if ret_indiv:
+                obs_lum = _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
+                              self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
+                              self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
+                              self.metals,self.ages,self.wave_ang,self.spec)
+            else:
+                obs_lum = _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
+                                  self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
+                                  self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
+                                  self.metals,self.ages,self.wave_ang,self.spec)
 
         for band in bands:
             if '_eff' in self.dustModel:
+                assert ret_indiv is False
                 # the aggregate spectrum is band-dependent, but its calculation is very fast since
                 # the lambda_nm is a single value instead of a ~6000 element array
                 obs_lum = _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
@@ -721,17 +844,31 @@ class sps():
                               self.metals,self.ages,self.wave_ang,self.spec)
 
             # convolve with band (trapezoidal rule)
-            obs_lum_conv = obs_lum * self.trans_normed[band]
+            if not ret_indiv:
+                # return total band magnitude of all star particles combined
+                obs_lum_conv = obs_lum * self.trans_normed[band]
 
-            nn = self.wave.size
-            band_lum = np.sum( np.abs(self.wave_ang[1:nn-1]-self.wave_ang[0:nn-2]) * \
-                (obs_lum_conv[1:nn-1] + obs_lum_conv[0:nn-2])*0.5 )
+                nn = self.wave.size
+                band_lum = np.sum( np.abs(self.wave_ang[1:nn-1]-self.wave_ang[0:nn-2]) * \
+                    (obs_lum_conv[1:nn-1] + obs_lum_conv[0:nn-2])*0.5 )
 
-            assert band_lum > 0.0
+                assert band_lum > 0.0
 
-            r[band] = -2.5 * np.log10(band_lum) - 48.60 - 2.5*self.mag2cgs
+                r[band] = -2.5 * np.log10(band_lum) - 48.60 - 2.5*self.mag2cgs
+            else:
+                # return band magnitude individually for each star particle
+                r[band] = np.zeros( obs_lum.shape[0], dtype='float32' )
 
-        #print('   dust_tau_model_mag took [%.3g] sec' % (time.time()-start_time) )
+                for i in range(obs_lum.shape[0]):
+                    obs_lum_conv = np.squeeze(obs_lum[i,:]) * self.trans_normed[band]
+
+                    nn = self.wave.size
+                    band_lum = np.sum( np.abs(self.wave_ang[1:nn-1]-self.wave_ang[0:nn-2]) * \
+                        (obs_lum_conv[1:nn-1] + obs_lum_conv[0:nn-2])*0.5 )
+
+                    assert band_lum > 0.0
+
+                    r[band][i] = -2.5 * np.log10(band_lum) - 48.60 - 2.5*self.mag2cgs
 
         return r
 
@@ -873,19 +1010,23 @@ class sps():
         return result_mag
 
     def resolved_dust_mapping(self, pos_in, hsml, mass_nh, quant_z, pos_stars_in, 
-                              projCen, projVec, pxSize=1.0):
+                              projCen, projVec=None, rotMatrix=None, pxSize=1.0):
         """ Compute line of sight quantities per star for a resolved dust attenuation calculation.
         Gas (pos,hsml,mass_nh,quant_z) and stars (pos_stars) are used for the gridding of the gas 
         and the target (star) list. projVec is a [3]-vector, and the particles are rotated about 
         projCen [3] such that it aligns with the projection direction. pxSize is in physical kpc. """
-        assert projCen.size == 3 and projVec.size == 3
-
-        #start_time = time.time()
+        assert projCen.size == 3
+        assert projVec is not None or rotMatrix is not None
 
         # rotation
         axes = [0,1]
-        targetVec = np.array( [0,0,1], dtype='float32' )
-        rotMatrix = rotationMatrixFromVec(projVec, targetVec)
+
+        if rotMatrix is None:
+            targetVec = np.array( [0,0,1], dtype='float32' )
+            rotMatrix = rotationMatrixFromVec(projVec, targetVec)
+            assert projVec.size == 3
+        else:
+            assert rotMatrix.size == 9
 
         pos, _ = rotateCoordinateArray(self.sP, pos_in, rotMatrix, projCen, shiftBack=True)
         pos_stars, extentStars = rotateCoordinateArray(self.sP, pos_stars_in, rotMatrix, 
@@ -906,14 +1047,6 @@ class sps():
             nThreads = 4
         if pos_in.shape[0] < 1e2 and pos_stars_in.shape[0] < 1e2:
             nThreads = 1
-
-        #print('   nStars: ',pos_stars.shape[0])
-        #print('   nGas: ',pos.shape[0])
-        #print('   extentStars: ',extentStars)
-        #print('   boxSizeImg: ',boxSizeImg)
-        #print('   boxCen: ',projCen)
-        #print('   nPixels: ',nPixels)
-        #print('   nThreads: ',nThreads)
 
         # efficiency cut: neutral hydrogen mass in a cell less than 1e-6 times the target cell mass, 
         # and in large (h > 2.5 * softening) cells, clip to zero to avoid sph deposition calculation
@@ -937,8 +1070,6 @@ class sps():
 
         N_H /= pixelArea
         N_H = self.sP.units.codeColDensToPhys(N_H, cgs=True, numDens=True)
-
-        #print('   resolved_dust_mapping [%.3g] sec' % (time.time()-start_time))
 
         return N_H, Z_g
 
