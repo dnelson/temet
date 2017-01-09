@@ -477,7 +477,9 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         fig = fig_subplot[0]
         ax = fig.add_subplot(fig_subplot[1])
     
-    ax.set_ylim([0.3,2e2])
+    addHalfLightRad = ['p07c_nodust_efr','sdss_r'] # [dustModel,band], or None to skip
+
+    ax.set_ylim([0.3,1e2])
 
     ylabel = 'Galaxy Size [ kpc ]'
     if not clean: ylabel += ' [ r$_{\\rm 1/2, stars/gas}$ ] [ only centrals ]'
@@ -488,7 +490,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
     if vsHaloMass:
         ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
         ax.set_xlim([9,14.5])
-        ax.set_ylim([1.0,8e2])
+        ax.set_ylim([0.7,8e2])
     else:
         xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
         if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
@@ -501,6 +503,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
     if not vsHaloMass:
         b = baldry2012SizeMass()
         s = shen2003SizeMass()
+        l = lange2016SizeMass()
 
         l1,_,_ = ax.errorbar(b['red']['stellarMass'], b['red']['sizeKpc'], 
                              yerr=[b['red']['errorDown'],b['red']['errorUp']],
@@ -517,10 +520,14 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         ax.fill_between(s['early']['stellarMass'], s['early']['sizeKpcDown'], s['early']['sizeKpcUp'], 
                         color='#aaaaaa', interpolate=True, alpha=0.3)
 
-        legend1 = ax.legend([l1,l2,l3,l4], 
-                            [b['red']['label'], b['blue']['label'], 
-                             s['early']['label'], s['late']['label']], 
-                            loc='upper left') # lower right
+        l5, = ax.plot(l['stellarMass2'], l['hubbletype']['E_gt2e10']['sizeKpc'], '--', color='#777777')
+        l6, = ax.plot(l['stellarMass'], l['combined']['all_discs']['sizeKpc'], '--', color='#333333')
+
+        legend1 = ax.legend([l1,l2,l3,l4,l5,l6], 
+          [ b['red']['label'], b['blue']['label'], 
+            s['early']['label'], s['late']['label'],
+            l['hubbletype']['E_gt2e10']['label'], l['combined']['all_discs']['label'] ], 
+          loc='upper left') # lower right
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -546,11 +553,30 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
 
         xx = sP.units.codeMassToLogMsun( xx_code )
 
-        # stellar mass definition(s)
+        # sizes
         yy_gas   = gc['subhalos']['SubhaloHalfmassRadType'][w,partTypeNum('gas')]
         yy_gas   = sP.units.codeLengthToKpc( yy_gas )
         yy_stars = gc['subhalos']['SubhaloHalfmassRadType'][w,partTypeNum('stars')]
         yy_stars = sP.units.codeLengthToKpc( yy_stars )
+
+        if addHalfLightRad is not None:
+            # load auxCat half light radii
+            acField = 'Subhalo_HalfLightRad_' + addHalfLightRad[0]
+            ac = auxCat(sP, fields=[acField])
+            bandNum = np.where( ac[acField+'_attrs']['bands'] == addHalfLightRad[1] )[0]
+            assert len(bandNum)
+
+            yy_stars_Re = []
+
+            # split by each projection
+            for i in range(ac[acField].shape[2]):
+                yy_stars_Re.append( sP.units.codeLengthToKpc(ac[acField][w,bandNum,i]) )
+
+            if ac[acField].shape[2] == 4:
+                Re_labels = ['edge-on','face-on','z-axis','3d']
+            if ac[acField].shape[2] == 6:
+                Re_labels = ['edge-on 2d','face-on 2d','z-axis 2d','edge-on 3d','face-on 3d','z-axis 3d']
+            assert ac[acField].shape[2] in [4,6]
 
         # if plotting vs halo mass, restrict our attention to those galaxies with sizes (e.g. nonzero 
         # number of either gas cells or star particles)
@@ -560,6 +586,11 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
             yy_stars = yy_stars[ww]
             xx = xx[ww]
 
+        if vsHaloMass and addHalfLightRad is not None:
+            for i in range(ac[acField].shape[2]):
+                yy_stars_Re[i] = yy_stars_Re[i][ww]
+
+        # take median vs mass and smooth
         xm_gas, ym_gas, sm_gas       = running_median(xx,yy_gas,binSize=binSize,skipZeros=True)
         xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize,skipZeros=True)
 
@@ -583,6 +614,23 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
             y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
             y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
             ax.fill_between(xm_stars[1:-1], y_down, y_up, 
+                            color=l.get_color(), interpolate=True, alpha=0.3)
+
+        # add all of the half-light radii size measurements, one line per projection
+        if addHalfLightRad is not None:
+            for i in range(ac[acField].shape[2]):
+                xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars_Re[i],binSize=binSize,skipZeros=True)
+                ww_stars = np.where(ym_stars > 0.0)
+                ym_stars = savgol_filter(ym_stars[ww_stars],sKn,sKo)
+                sm_stars = savgol_filter(sm_stars[ww_stars],sKn,sKo)
+                xm_stars = xm_stars[ww_stars]
+
+                l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=Re_labels[i])
+
+                if i == 0:
+                    y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
+                    y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
+                    ax.fill_between(xm_stars[1:-1], y_down, y_up, 
                             color=l.get_color(), interpolate=True, alpha=0.3)
 
     # second legend
@@ -1673,7 +1721,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -1699,15 +1747,15 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    sPs.append( simParams(res=512, run='tng', variant=0000) )
-    sPs.append( simParams(res=512, run='tng', variant=4401) )
-    sPs.append( simParams(res=512, run='tng', variant=4402) )
-    sPs.append( simParams(res=512, run='tng', variant=4501) )
-    sPs.append( simParams(res=512, run='tng', variant=4502) )
-    sPs.append( simParams(res=512, run='tng', variant=4503) )
+    #sPs.append( simParams(res=512, run='tng', variant=0000) )
+    #sPs.append( simParams(res=512, run='tng', variant=4401) )
+    #sPs.append( simParams(res=512, run='tng', variant=4402) )
+    #sPs.append( simParams(res=512, run='tng', variant=4501) )
+    #sPs.append( simParams(res=512, run='tng', variant=4502) )
+    #sPs.append( simParams(res=512, run='tng', variant=4503) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_440x_450x_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_sizeCheck_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 

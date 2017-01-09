@@ -348,6 +348,53 @@ def baldry2012SizeMass():
 
     return r
 
+def lange2016SizeMass():
+    """ Load observational data points from Lange+ (2016) GAMA. """
+    r = {}
+
+    def _plawFit(log_Mstar,a,b):
+        # errors not yet implemented
+        return a * np.power(10.0**log_Mstar/1e10, b) # kpc
+
+    # Table 1 (selected rows), and Eqn 2
+    stellarMassRange  = np.log10( [1e8, 1e11] ) # Msun, effective covered by sample
+    stellarMassRange2 = np.log10( [2e10, 3e11] ) # Msun, most massive elliptical fit
+
+    stellarMass  = np.linspace( stellarMassRange[0], stellarMassRange[1], 2)
+    stellarMass2 = np.linspace( stellarMassRange2[0], stellarMassRange2[1], 2)
+
+    r['stellarMass']  = stellarMass
+    r['stellarMass2'] = stellarMass2
+
+    for k in ['hubbletype','structural','combined']: r[k] = {}
+
+    for k in ['E_gt2e10']: r['hubbletype'][k] = {}
+    for k in ['late_disc','late_bulge','early_disc','early_bulge']: r['structural'][k] = {}
+    for k in ['all_discs','global_late','E_ETB']: r['combined'][k] = {}
+
+    r['hubbletype']['E_gt2e10']['sizeKpc'] = _plawFit(stellarMass2, 0.999, 0.786) # errs: 0.089, 0.048
+    r['hubbletype']['E_gt2e10']['label']   = 'Lange+ (2016) GAMA R$_{\\rm e}$ E (>2e10)'
+
+    r['structural']['late_disc']['sizeKpc']   = _plawFit(stellarMass, 6.939, 0.245)
+    r['structural']['late_bulge']['sizeKpc']  = _plawFit(stellarMass, 4.041, 0.339)
+    r['structural']['early_disc']['sizeKpc']  = _plawFit(stellarMass, 4.55, 0.247)
+    r['structural']['early_bulge']['sizeKpc'] = _plawFit(stellarMass, 1.836, 0.267)
+
+    r['structural']['late_disc']['label']   = 'Lange+ (2016) GAMA R$_{\\rm e}$ late discs'
+    r['structural']['late_bulge']['label']  = 'Lange+ (2016) GAMA R$_{\\rm e}$ late bulges'
+    r['structural']['early_disc']['label']  = 'Lange+ (2016) GAMA R$_{\\rm e}$ early discs'
+    r['structural']['early_bulge']['label'] = 'Lange+ (2016) GAMA R$_{\\rm e}$ early bulges'
+
+    r['combined']['all_discs']['sizeKpc']   = _plawFit(stellarMass, 5.56, 0.274)
+    r['combined']['global_late']['sizeKpc'] = _plawFit(stellarMass, 4.104, 0.208)
+    r['combined']['E_ETB']['sizeKpc']       = _plawFit(stellarMass, 2.033, 0.318)
+
+    r['combined']['all_discs']['label']   = 'Lange+ (2016) GAMA R$_{\\rm e}$ all discs'
+    r['combined']['global_late']['label'] = 'Lange+ (2016) GAMA R$_{\\rm e}$ global late'
+    r['combined']['E_ETB']['label']       = 'Lange+ (2016) GAMA R$_{\\rm e}$ E + ETB'
+
+    return r
+
 def shen2003SizeMass():
     """ Load observational data points from Shen+ (2013). Table 1 and Eqns 17-19 (Fig 11). """
     def earlyTypeR(stellar_mass_msun, b=2.88e-6, a=0.56): # see Erratum for b coefficient
