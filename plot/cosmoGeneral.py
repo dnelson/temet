@@ -9,11 +9,12 @@ import numpy as np
 import h5py
 import pdb
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
 from scipy.signal import savgol_filter
 
 from util import simParams
-from util.helper import running_median
+from util.helper import running_median, logZeroNaN
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat
 
@@ -111,8 +112,8 @@ def plotMassFunctions():
     binSize = 0.2
     
     sPs = []
-    sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
-    sPs.append( simParams(res=2500,run='tng',redshift=2.0) )
+    sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
+    sPs.append( simParams(res=2500,run='tng',redshift=0.0) )
 
     # plot setup
     fig = plt.figure(figsize=(18,8))
@@ -135,12 +136,16 @@ def plotMassFunctions():
             print(j,sP.simName)
 
             if j == 0:
-                gc = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'])
+                gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'])
                 masses = sP.units.codeMassToLogMsun(gc['halos'])
+                #print(sP.simName, np.where(masses >= 14.0)[0].size)
+                #continue
             if j == 1:
-                gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMassInRadType'])
+                gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMassInRadType'])
                 masses = gc['subhalos'][ gc['halos'] ][:,sP.ptNum('stars')] # Mstar (<2*r_{1/2,stars})
                 masses = sP.units.codeMassToLogMsun(masses)
+                #print(sP.simName, np.where( (masses >= 10.4) & (masses < 10.6) )[0].size)
+                #continue
 
             yy, xx = np.histogram(masses, bins=nBins, range=mass_range)
             yy_max = np.max([yy_max,yy.max()])
@@ -248,3 +253,184 @@ def haloMassesVsDMOMatched():
     fig.savefig('haloMassRatioVsDMO_L75.pdf')
     plt.close(fig)
 
+def plotClumpsEvo():
+    """ Plot evolution of clumps (smallest N subhalos in halfmassrad) using SubLink_gal tree. """
+    import cosmo
+
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+    figsize = (22.4,12.6) # (16,9)*1.4
+    treeName = 'SubLink_gal'
+    selectQuant = 'SubhaloHalfmassRad' # SubhaloHalfmassRadType
+    selectN = 1000 # number 
+    lw = 2.0
+    reverseSort = False # if True, then descending
+
+    # load and select
+    gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMass', selectQuant])
+    sort_inds = np.argsort( gc['subhalos'][selectQuant] )
+    if reverseSort: sort_inds = sort_inds[::-1]
+
+    snapRedshifts = cosmo.util.snapNumToRedshift(sP, all=True)
+    snapAgeGyr = sP.units.redshiftToAgeFlat( snapRedshifts )
+    snapDtGyr = snapAgeGyr - np.roll(snapAgeGyr,1)
+    snapDtGyr[0] = snapAgeGyr[0] - sP.units.redshiftToAgeFlat(127.0)
+
+    # start pdf
+    pdf = PdfPages('clumps_evo_%s_first%d.pdf' % (sP.simName,selectN))
+
+    # halo or stellar mass function
+    for i in range(selectN):
+        print('[%3d] subhaloID = %d' % (i,sort_inds[i]))
+        fig = plt.figure(figsize=figsize)
+
+        # load MPB
+        mpbFields = ['SnapNum','SubhaloPos','SubhaloHalfmassRad','SubhaloHalfmassRadType','SubhaloSFR',
+                     'SubhaloMass','SubhaloMassType','SubhaloGrNr','Group_M_Crit200','SubhaloParent']
+        mpb = cosmo.mergertree.loadMPB(sP, sort_inds[i], fields=mpbFields, treeName=treeName)
+
+        xx = cosmo.util.snapNumToRedshift(sP, mpb['SnapNum'])
+
+        # get the MPB of the z=0 parent halo
+        halo = cosmo.load.groupCatSingle(sP, haloID=mpb['SubhaloGrNr'][0])
+        mpbParent = cosmo.mergertree.loadMPB(sP, halo['GroupFirstSub'], fields=mpbFields, treeName=treeName)
+
+        xxPar = cosmo.util.snapNumToRedshift(sP, mpbParent['SnapNum'])
+
+        # allocate parent relative properties
+        radFromPar = np.zeros( xx.size, dtype='float32')
+        inParFlag = np.zeros( xx.size, dtype='float32' )
+        inParFlag2 = np.zeros( xx.size, dtype='float32' )
+        radFromPar.fill(np.nan)
+
+        for j in range(xx.size):
+            # cross-match
+            w = np.where(mpbParent['SnapNum'] == mpb['SnapNum'][j])[0]
+            if len(w) == 0:
+                continue
+            assert len(w) == 1
+            w = w[0]
+
+            # calculate radial distance of clump from this z=0 parent halo MPB
+            xyzPar = mpbParent['SubhaloPos'][w,:].reshape( (1,3) )
+            xyzSub = mpb['SubhaloPos'][j,:].reshape( (1,3) )
+
+            radFromPar[j] = cosmo.util.periodicDists(xyzPar, xyzSub, sP)
+
+            # calculate when clump is/isnot within this z=0 parent halo
+            if mpbParent['SubhaloGrNr'][w] == mpb['SubhaloGrNr'][j]:
+                inParFlag[j] = 1
+            if mpbParent['SubhaloParent'][w] == mpb['SubhaloParent'][j]:
+                inParFlag2[j] = 1
+
+        # load member star particle formation times and calculate a SFR(t) based on them
+        sfh = np.zeros( snapRedshifts.size, dtype='float32' )
+        sfh.fill(np.nan)
+
+        if mpb['SubhaloMassType'][0,sP.ptNum('stars')] > 0:
+            stars = cosmo.load.snapshotSubset(sP, 'stars', ['masses','sftime'], subhaloID=sort_inds[i])
+
+            snapScalefacs = 1.0 / (1+snapRedshifts)
+            for j in range(snapRedshifts.size-1):
+                aMin = snapScalefacs[j]
+                aMax = snapScalefacs[j+1]
+                w = np.where( (stars['GFM_StellarFormationTime'] > aMin) & \
+                              (stars['GFM_StellarFormationTime'] <= aMax) )
+
+                # compute SFR in [Msun/yr] in this redshift bin between two successive snapshots
+                sfh[j] = sP.units.codeMassToMsun(np.sum(stars['Masses'][w])) / (snapDtGyr[j]*1e9)
+
+            #verifyMass1 = np.log10( np.nanmean(sfh) * sP.units.redshiftToAgeFlat(0.0)*1e9 )
+            #verifyMass2 = sP.units.codeMassToLogMsun( mpb['SubhaloMassType'][0,sP.ptNum('stars')] )
+            #assert np.abs(verifyMass1-verifyMass2)/verifyMass1 < 0.5 # 50% agreement in log
+
+        # modify symbol to a single circle for clumps with no tracked snapshots
+        sym = '-' if xx.size > 1 else 'o'
+
+        # six quantities
+        for j in range(6):
+            ax = fig.add_subplot(2,3,j+1)
+
+            redshift_max = 2.0 if xx.max() > 2.0 else xx.max()+0.1
+            if xx.size == 1: redshift_max = 2.0
+            ax.set_xlim([redshift_max, -0.1])
+            ax.set_xlabel('Redshift')
+
+            if j == 0:
+                # quant (A): mass by type
+                ax.set_title(sP.simName + ' ['+str(i)+'] shID='+str(sort_inds[i]))
+                ax.set_ylabel('Subhalo Mass [ log M$_{\\rm sun}$ ]')
+                yy0 = sP.units.codeMassToLogMsun( mpb['SubhaloMass'] )
+                ax.plot(xx, yy0, sym, lw=lw, label='total')
+
+                for ptName in ['gas','stars','dm','bhs']:
+                    yy = sP.units.codeMassToLogMsun( mpb['SubhaloMassType'][:,sP.ptNum(ptName)])
+                    if ptName == 'bhs' and yy.size == 1 and yy == 0.0: continue
+                    ax.plot(xx, yy, sym, lw=lw, label=ptName)
+
+                ax.legend(loc='best')
+
+            if j == 1:
+                # quant (B): mass fractions
+                ax.set_title('z=0 size: %.3f ckpc/h' % mpb['SubhaloHalfmassRad'][0])
+                ax.set_ylabel('log ( Subhalo Mass Fraction )')
+                c = ax._get_lines.prop_cycler.next()['color'] # skip total color
+
+                for ptName in ['gas','stars','dm']:
+                    yy = mpb['SubhaloMassType'][:,sP.ptNum(ptName)] / mpb['SubhaloMass']
+                    yy = logZeroNaN(yy)
+                    ax.plot(xx, yy, sym, lw=lw, label=ptName+'/total')
+
+                ax.legend(loc='best')
+
+            if j == 2:
+                # quant (C): sizes
+                ax.set_title('z$_{\\rm trackedto}$=%.1f numSnapsTracked=%d' % (xx.max(),xx.size))
+                ax.set_ylabel('Subhalo Size [ log ckpc/h ]')
+                ax.plot(xx, logZeroNaN(mpb['SubhaloHalfmassRad']), sym, lw=lw, label='total')
+
+                for ptName in ['gas','stars','dm']:
+                    yy = mpb['SubhaloHalfmassRadType'][:,sP.ptNum(ptName)]
+                    yy = logZeroNaN(yy)
+                    ax.plot(xx, yy, sym, lw=lw, label=ptName)
+
+                ax.legend(loc='best')
+
+            if j == 3:
+                # quant (D): parent halo mass
+                ax.set_ylabel('Parent Halo M$_{200}$ [ log M$_{\\rm sun}$ ]')
+
+                yy = sP.units.codeMassToLogMsun( mpbParent['Group_M_Crit200'] )
+                ax.plot(xxPar, yy, '-', lw=lw, color='black')
+
+            if j == 4:
+                # quant (E): radial distance from parent halo
+                ax.set_ylabel('Radial Dist from Parent [ log ckpc/h ]')
+
+                w1 = np.where( inParFlag == 0 )
+                w2 = np.where( inParFlag2 == 0 )
+
+                if len(w1[0]):
+                    ax.plot(xx[w1], logZeroNaN(radFromPar)[w1], 'o', markeredgecolor='red', alpha=0.8, label='outside z=0 parentGr')
+                if len(w2[0]):
+                    ax.plot(xx[w2], logZeroNaN(radFromPar)[w2], 's', markeredgecolor='green', alpha=0.8, label='subhParent differs from mpb')
+                if len(w1[0]) or len(w2[0]):
+                    ax.legend()
+
+                ax.plot(xx, logZeroNaN(radFromPar), sym, lw=lw, color='black')
+
+            if j == 5:
+                # quant (F): SFR(t) and SFH histogram of constitutient star particles
+                ax.set_ylabel('Subhalo SFR [ log M$_{\\rm sun}$/yr ]')
+                yy = logZeroNaN( mpb['SubhaloSFR'] )
+
+                ax.plot(xx, yy, sym, lw=lw, color='black')
+
+                if mpb['SubhaloMassType'][0,sP.ptNum('stars')] > 0:
+                    ax.plot(snapRedshifts, logZeroNaN(sfh), '-', lw=lw, color='red', label='from star ages')
+                    ax.legend()
+
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
