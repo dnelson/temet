@@ -1729,7 +1729,6 @@ def plots():
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=512, run='cosmo0_v6') )
     #sPs.append( simParams(res=512, run='tng') )
     #sPs.append( simParams(res=256, run='tng') )
     #sPs.append( simParams(res=256, run='tng', variant='wmap') )
