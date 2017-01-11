@@ -18,6 +18,91 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def combineAuxCatSubdivisions():
+    """ Combine a subdivision of a pSplit auxCat calculation. """
+    from os.path import isfile
+
+    basePath = '/n/home07/dnelson/sims.TNG/L205n2500TNG/data.files/auxCat/'
+    field    = 'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' # _rad30pkpc
+    fileBase = field + '_099-split-%d-%d.hdf5'
+
+    pSplitBig = [90,100,160] # from
+    pSplitSm  = [9,16] # to
+
+    # load properties
+    allExist = True
+    allCount = 0
+
+    for i in range(pSplitBig[0],pSplitBig[1]):
+        filePath_i = basePath + fileBase % (i,pSplitBig[2])
+        print(filePath_i)
+
+        if not isfile(filePath_i):
+            allExist = False
+            continue
+
+        # record counts and dataset shape
+        with h5py.File(filePath_i,'r') as f:
+            allCount += f['subhaloIDs'].size
+            allShape = f[field].shape
+
+    assert allExist
+
+    # allocate
+    allShape = np.array(allShape)
+    allShape[0] = allCount # size
+    offset = 0
+
+    new_r = np.zeros( allShape, dtype='float32' )
+    subhaloIDs = np.zeros( allCount, dtype='int32' )
+
+    new_r.fill(-1.0) # does validly contain nan
+    subhaloIDs.fill(np.nan)
+
+    # read
+    for i in range(pSplitBig[0],pSplitBig[1]):
+        filePath_i = basePath + fileBase % (i,pSplitBig[2])
+        print(filePath_i)
+
+        # record counts and dataset shape
+        with h5py.File(filePath_i,'r') as f:
+            length = f['subhaloIDs'].size
+            subhaloIDs[offset : offset+length] = f['subhaloIDs'][()]
+
+            new_r[offset : offset+length, :, :] = f[field][()]
+
+            offset += length
+
+    assert np.count_nonzero(np.isnan(subhaloIDs)) == 0
+    assert np.count_nonzero(new_r == -1.0) == 0
+
+    outPath = '/n/home07/dnelson/data7/' + fileBase % (pSplitSm[0],pSplitSm[1])
+    print('Write to: [%s]' % outPath)
+
+    assert not isfile(outPath)
+    with h5py.File(outPath,'w') as f:
+        f.create_dataset(field, data=new_r)
+        f.create_dataset('subhaloIDs', data=subhaloIDs)
+
+    print('Saved.')
+
+    verifyPath = basePath + fileBase % (pSplitSm[0],pSplitSm[1])
+    if not isfile(verifyPath):
+        print('Verify does not exist, skip [%s].' % verifyPath)
+        return
+
+    with h5py.File(verifyPath,'r') as f:
+        verify_r = f[field][()]
+        verify_ids = f['subhaloIDs'][()]
+
+    assert np.array_equal( verify_ids, subhaloIDs )
+    # np.array_equal() is False for NaN entries
+    # roundoff differences:
+    #assert ((verify_r == new_r) | (np.isnan(verify_r) & np.isnan(new_r))).all() 
+    assert np.allclose( verify_r, new_r, equal_nan=True)
+    print('Verified.')
+
+
 def testOffsets():
     basePath = '/n/home07/dnelson/sims.TNG/L75n455TNG/output/'
     snapNum = 99
@@ -924,27 +1009,32 @@ def plotUsersData():
     from datetime import datetime
     
     # config
-    col_headers = ["Date","NumUsers","Num30","CountApi","CountFits","CountSnapUni","CountSnapSub",\
-                   "SizeUni","SizeSub","CountGroup","CountLHaloTree","CountSublink","CutoutSubhalo","CutoutSublink"]
-    labels = ["Total Number of Users","Users Active in Last 30 Days","Total API Requests / $10^3$",\
-              "FITS File Downloads / $10^2$","Number of Downloads: Snapshots [Uniform]",\
-              "Number of Downloads: Snapshots [Subbox]","Total Download Size: Uniform [TB]",\
-              "Total Download Size: Subbox [TB]", "Number of Downloads: Group Catalogs",\
-              "Number of Downloads: LHaloTree","Number of Downloads: Sublink",\
+    col_headers = ["Date","NumUsers","Num30","CountApi","CountFits","CountSnapUni","CountSnapSub",
+                   "SizeUni","SizeSub","CountGroup","CountLHaloTree","CountSublink","CutoutSubhalo",
+                   "CutoutSublink"]
+    col_headers = [s.encode('latin1') for s in col_headers]
+    labels = ["Total Number of Users","Users Active in Last 30 Days","Total API Requests", # / $10^3$
+              "FITS File Downloads","Number of Downloads: Snapshots [Uniform]", #  / $10^2$
+              "Number of Downloads: Snapshots [Subbox]","Total Download Size: Uniform [TB]",
+              "Total Download Size: Subbox [TB]", "Number of Downloads: Group Catalogs",
+              "Number of Downloads: LHaloTree","Number of Downloads: Sublink",
               "Cutout Requests: Subhalos","Cutout Requests: Sublink"]
-    facs = [1,1,1e3,1e2,1,1,1e3,1e3,1,1,1,1,1]
+    #facs = [1,1,1e3,1e2,1,1,1e3,1e3,1,1,1,1,1]
+    facs = [1,1,1,1,1,1,1e3,1e3,1,1,1,1,1]
     facs2 = [0.80,0.85,1.06,1.06,1.1,1.06,0.75,1.06,1.06,1.06,1.06,1.06,0.82]
     sym  = ['-','-','-','-','--','--',':',':','--','--','--','-','-']
 
+    lw = 2.0
+
     # load
     convertfunc = lambda x: datetime.strptime(x, '%Y-%m-%d')    
-    dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
-    data = np.genfromtxt('/n/home07/dnelson/python/users_data.txt', delimiter=',',\
-                        names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=70)
+    #dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
+    dd = [object] + ['d' for a in col_headers[1:]]
+    data = np.genfromtxt('/n/home07/dnelson/users_data.txt', delimiter=',',\
+                        names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=50)
     
     # plot
     import matplotlib.pyplot as plt
-    #plt.style.use('fivethirtyeight') #ggplot
     from matplotlib.dates import DateFormatter
     
     tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
@@ -956,7 +1046,7 @@ def plotUsersData():
         r, g, b = tableau20[i]
         tableau20[i] = (r / 255., g / 255., b / 255.)
     
-    fig = plt.figure(figsize=(12,9), facecolor='white')
+    fig = plt.figure(figsize=(20,13), facecolor='white')
     ax = fig.add_subplot(111)
     ax.set_yscale('log')
     
@@ -967,14 +1057,12 @@ def plotUsersData():
     ax.get_xaxis().tick_bottom()
     ax.get_yaxis().tick_left()
     
-    ax.tick_params(axis='both', which='major', labelsize=14)
+    #ax.tick_params(axis='both', which='major', labelsize=14)
     #ax.set_axis_bgcolor( (1.0,1.0,1.0) )
-    ax.set_ylim([8,2e4])
+    ax.set_ylim([1,1e9])
     
     launch_date = datetime.strptime('2015-04-01', '%Y-%m-%d')
-    ax.plot([launch_date,launch_date],[14,1e3],'--',lw=1.3,color=(0.95,0.95,0.95))
-    
-    lw = 1.7
+    ax.plot([launch_date,launch_date],[2,1e4],'-',lw=lw,color='black',alpha=0.8)
     
     for i in range(len(col_headers)-1):
         col = col_headers[i+1]
@@ -990,7 +1078,7 @@ def plotUsersData():
                     horizontalalignment='right',color=tableau20[i])
     
     ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
-    ax.legend(loc='best', frameon=False)
+    ax.legend(loc='best', ncol=3, frameon=False)
     fig.autofmt_xdate()
     fig.tight_layout()
     
