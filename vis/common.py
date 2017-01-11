@@ -74,11 +74,11 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
         # stars
         if sP.isPartType(partType, 'stars'):
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
-            ##hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
-            nNGBDev = int( np.sqrt(nNGB)/4 )
-            hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
+            hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+            ##pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+            ##treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
+            ###nNGBDev = int( np.sqrt(nNGB)/4 )
+            ##hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
 
         # save
         if useCache:
@@ -183,7 +183,7 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
     of its member gas and stars (at least within 2*rHalf==shHalfMassRadStars) and center position shPos. """
     if subhaloID is not None:
         assert all(v is None for v in [gas,stars,rHalf])
-        # load required particle data for this subhalos
+        # load required particle data for this subhalo
         subhalo = groupCatSingle(sP, subhaloID=subhaloID)
         rHalf = subhalo['SubhaloHalfmassRadType'][sP.ptNum('stars')]
         shPos = subhalo['SubhaloPos']
@@ -252,9 +252,11 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
 
     return I
 
-def rotationMatrixFromInertiaTensor(I):
-    """ Calculate 3x3 rotation matrix by a diagonalization of the moment of inertia tensor. """
-    # get eigenv alues and normalized right eigenvectors
+def rotationMatricesFromInertiaTensor(I):
+    """ Calculate 3x3 rotation matrix by a diagonalization of the moment of inertia tensor. 
+    Note the resultant rotation matrices are hard-coded for projection with axes=[0,1] e.g. along z. """
+
+    # get eigen values and normalized right eigenvectors
     eigen_values, rotation_matrix = np.linalg.eig(I)
 
     # sort ascending the eigen values
@@ -262,12 +264,38 @@ def rotationMatrixFromInertiaTensor(I):
     eigen_values = eigen_values[sort_inds]
 
     # permute the eigenvectors into this order, which is the rotation matrix which orients the 
-    # principal axes to the cartesian x,y,z axes, such that if axes=[0,1] we have edge-on
+    # principal axes to the cartesian x,y,z axes, such that if axes=[0,1] we have face-on
     new_matrix = np.matrix( (rotation_matrix[:,sort_inds[0]],
                              rotation_matrix[:,sort_inds[1]],
-                             rotation_matrix[:,sort_inds[2]]) ).T
+                             rotation_matrix[:,sort_inds[2]]) )
 
-    return new_matrix
+    # make a random edge on view
+    phi = np.random.uniform(0, 2*np.pi)
+    theta = np.pi / 2
+    psi = 0
+
+    A_00 =  np.cos(psi)*np.cos(phi) - np.cos(theta)*np.sin(phi)*np.sin(psi)
+    A_01 =  np.cos(psi)*np.sin(phi) + np.cos(theta)*np.cos(phi)*np.sin(psi)
+    A_02 =  np.sin(psi)*np.sin(theta)
+    A_10 = -np.sin(psi)*np.cos(phi) - np.cos(theta)*np.sin(phi)*np.cos(psi)
+    A_11 = -np.sin(psi)*np.sin(phi) + np.cos(theta)*np.cos(phi)*np.cos(psi)
+    A_12 =  np.cos(psi)*np.sin(theta)
+    A_20 =  np.sin(theta)*np.sin(phi)
+    A_21 = -np.sin(theta)*np.cos(phi)
+    A_22 =  np.cos(theta)
+
+    random_edgeon_matrix = np.matrix( ((A_00, A_01, A_02), (A_10, A_11, A_12), (A_20, A_21, A_22)) )
+
+    # prepare return with a few other useful versions of this rotation matrix
+    r = {}
+    r['face-on'] = new_matrix
+    r['edge-on'] = np.matrix( ((1,0,0),(0,0,1),(0,-1,0)) ) * r['face-on']
+    r['edge-on-smallest'] = np.matrix( ((0,1,0),(0,0,1),(1,0,0)) ) * r['face-on']
+    r['edge-on-random'] = random_edgeon_matrix * r['face-on']
+    r['phi'] = phi
+    r['identity'] = np.matrix( np.identity(3) )
+
+    return r
 
 def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
     """ Calculate 3x3 rotation matrix to align input vec with a target vector. By default this is the 

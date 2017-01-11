@@ -122,22 +122,20 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
         shID = h['GroupFirstSub']
         print('subhalo ID: ',shID)
 
-        # append some panels
-        pF = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+        # which stellar composite to use
+        pF_stars = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
 
-        #panels.append( {'partType':'stars', 'hsmlFac':0.5, \
-        #                'partField':pF, 'res':resLevel, 'hInd':shID, sizeFac:-50.0} )
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'face-on-I', \
-                        'partField':pF, 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
+        # append panels
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, \
+                        'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
         panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
-                        'rotation':'face-on-I', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+                        'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'rotation':'edge-on-I', 'nPixels':[960,320], \
-                        'partField':pF, 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
-        panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', 'nPixels':[960,320], \
-                        'rotation':'edge-on-I', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
-        #panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
-        #                'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+        #'nPixels':[960,320], \ # reduce vertical size of edge-on panels
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, \
+                        'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
+        panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
+                        'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
     class plotConfig:
         plotStyle    = 'open'
@@ -151,9 +149,9 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
 
 def helperLoop():
     for i in range(20):
-        resSeriesGaussProposal(i,resInput=256)
+        resSeriesGaussProposal(i,resInput=256) #fof=12
     for i in range(20):
-        resSeriesGaussProposal(i,resInput=512)
+        resSeriesGaussProposal(i,resInput=512) #fof=10
 
 def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     """ Split over several pages, plot many panels, one per halo, showing a single quantity. """
