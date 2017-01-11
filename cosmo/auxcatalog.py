@@ -426,11 +426,11 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     from healpy.pixelfunc import nside2npix, pix2vec
     from cosmo.hydrogen import hydrogenMass
     from vis.common import rotationMatrixFromVec, rotateCoordinateArray, momentOfInertiaTensor, \
-      rotationMatrixFromInertiaTensor, meanAngMomVector
+      rotationMatricesFromInertiaTensor, meanAngMomVector
 
     def _findHalfLightRadius(rad,mags):
         """ Helper function, linearly interpolate in rr (squared radii) to find the half light 
-        radius, given the magnitudes mags[i] corresponding to each star particle at radsq[i]. 
+        radius, given the magnitudes mags[i] corresponding to each star particle at rad[i]. 
         Will give 3D or 2D radii exactly if rad is input 3D or 2D. """
         assert rad.size == mags.size
 
@@ -495,9 +495,11 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             # string Nside -> custom projection vectors
             if Nside == 'edgeon_faceon_rnd':
                 if '_res' in dust:
-                    nProj = 3 * 2 # edge-on, face-on, random for 2D, and then again for 3D
+                    # 2D: edge-on, face-on, edge-on-smallest, edge-on-random, random for 2D, and then again for 3D
+                    nProj = 5 * 2 
                 else:
-                    nProj = 3 + 1 # 2D: edge-on, face-on, random, and +1 for 3D half-light rad
+                    # 2D: edge-on, face-on, edge-on-smallest, edge-on-random, random, and +1 for 3D half-light rad
+                    nProj = 5 + 1
 
                 Nside = Nside.encode('ascii') # for hdf5 attr save
                 projVecs = np.zeros( (nProj-1,3), dtype='float32' ) # derive per subhalo
@@ -589,8 +591,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     # global load of all stars in all groups in snapshot
     starsLoad = ['initialmass','sftime','metallicity']
-    if '_res' in dust or rad is not None: starsLoad += ['pos']
-    if sizes: starsLoad += ['pos','mass']
+    if '_res' in dust or rad is not None or sizes is not None: starsLoad += ['pos']
+    if sizes: starsLoad += ['mass']
 
     stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, indRange=indRange['stars'])
 
@@ -631,7 +633,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 if len(wValid[0]) == 0:
                     continue # zero length of particles satisfying radial cut and restriction
 
-                magsLocal = mags[i0:i1][wValid] # wind particles have NaN
+                magsLocal = mags[i0:i1][wValid] # wind particles still here, and have NaN
 
                 if not sizes:
                     # convert mags to luminosities, sum together
@@ -667,12 +669,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                                        'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0:i1] }
 
                         I = momentOfInertiaTensor(sP, gas=gasLocal, stars=starsLocal, rHalf=rHalf, shPos=shPos)
+                        rots = rotationMatricesFromInertiaTensor(I)
 
-                        rotMatrix2 = rotationMatrixFromInertiaTensor(I) # face-on in axes=[0,1]
-                        rotMatrix1 = np.matrix( ((1,0,0),(0,0,1),(0,-1,0)) ) * rotMatrix2 # edge-on in axes=[0,1]
-                        rotMatrix3 = np.matrix( np.identity(3) ) # "random": z-axis
-
-                        rotMatrices = [rotMatrix1, rotMatrix2, rotMatrix3]
+                        rotMatrices = [rots['edge-on'], rots['face-on'], rots['edge-on-smallest'],
+                                       rots['edge-on-random'], rots['identity']]
 
                     # get interpolated 2D half light radii
                     for projNum in range(nProj-1):
@@ -696,6 +696,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                     # get interpolated 3D half light radius
                     r[i,bandNum,-1] = _findHalfLightRadius(rr,magsLocal)
+
+                    import pdb; pdb.set_trace()
 
     # or, resolved dust: loop over all subhalos first
     if '_res' in dust:
@@ -792,13 +794,11 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                                    'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0:i1] }
 
                     I = momentOfInertiaTensor(sP, gas=gasLocal, stars=starsLocal, rHalf=rHalf, shPos=shPos)
+                    rots = rotationMatricesFromInertiaTensor(I)
 
-                    rotMatrix2 = rotationMatrixFromInertiaTensor(I) # face-on in axes=[0,1]
-                    rotMatrix1 = np.matrix( ((1,0,0),(0,0,1),(0,-1,0)) ) * rotMatrix2 # edge-on in axes=[0,1]
-                    rotMatrix3 = np.matrix( np.identity(3) ) # "random": z-axis
-
-                    # 2d x3, 3d x3
-                    rotMatrices = [rotMatrix1, rotMatrix2, rotMatrix3, rotMatrix1, rotMatrix2, rotMatrix3]
+                    rotMatrices = [rots['edge-on'], rots['face-on'], rots['edge-on-smallest'],
+                                   rots['edge-on-random'], rots['identity']]
+                    rotMatrices.extend(rotMatrices) # append to itself, now has (5 2d + 5 3d) = 10 elements
 
             # loop over all different viewing directions
             for projNum in range(nProj):
@@ -1475,10 +1475,10 @@ fieldComputeFunctionMapping = \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside=None, sizes=True),
    'Subhalo_HalfLightRad_p07c_nodust_efr' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside='edgeon_faceon_rnd', sizes=True), 
-   'Subhalo_HalfLightRad_p07c_cf00dust' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside=None, sizes=True),
-   'Subhalo_HalfLightRad_p07c_cf00dust_rad30pkpc' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside=None, rad=30.0, sizes=True),   
+   'Subhalo_HalfLightRad_p07c_cf00dust_efr' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', sizes=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_efr_rad30pkpc' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),   
   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \

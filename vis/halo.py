@@ -10,7 +10,7 @@ from datetime import datetime
 from os.path import isfile
 
 from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, savePathDefault, \
-                       momentOfInertiaTensor, rotationMatrixFromInertiaTensor
+                       momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 from cosmo.load import groupCatSingle, snapshotSubset
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
@@ -81,7 +81,7 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
     rotCenter = None
 
     if rotation is not None:
-        if str(rotation) in ['face-on','edge-on']:
+        if str(rotation) in ['face-on-j','edge-on-j']:
             # calculate 'mean angular momentum' vector of the galaxy (method choices herein)
             if mpb is None:
                 jVec = meanAngMomVector(sP, subhaloID=shID)
@@ -95,17 +95,17 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
             target_vec = np.zeros( 3, dtype='float32' )
 
             # face-on: rotate the galaxy j vector onto the unit axis vector we are projecting along
-            if str(rotation) == 'face-on': target_vec[ 3-axes[0]-axes[1] ] = 1.0
+            if str(rotation) == 'face-on-j': target_vec[ 3-axes[0]-axes[1] ] = 1.0
 
             # edge-on: rotate the galaxy j vector to be aligned with the 2nd (e.g. y) requested axis
-            if str(rotation) == 'edge-on': target_vec[ axes[1] ] = 1.0
+            if str(rotation) == 'edge-on-j': target_vec[ axes[1] ] = 1.0
 
             if target_vec.sum() == 0.0:
                 raise Exception('Not implemented.')
 
             rotMatrix = rotationMatrixFromVec(jVec, target_vec)
 
-        if str(rotation) in ['face-on-I','edge-on-I']:
+        if str(rotation) in ['face-on','edge-on','edge-on-smallest','edge-on-random']:
             # calculate moment of inertia tensor
             I = momentOfInertiaTensor(sP, subhaloID=shID)
 
@@ -114,10 +114,8 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
             assert axes[0] == 0 and axes[1] == 1 # e.g. if flipped, then edge-on is vertical not horizontal
 
             # calculate rotation matrix
-            rotMatrix = rotationMatrixFromInertiaTensor(I) # edge-on in axes=[0,1]
-
-            if str(rotation) == 'face-on-I':
-                rotMatrix = np.matrix( ((1,0,0),(0,0,1),(0,-1,0)) ) * rotMatrix # face-on in axes=[0,1]
+            rotMatrices = rotationMatricesFromInertiaTensor(I)
+            rotMatrix = rotMatrices[rotation]
 
     return boxSizeImg, boxCenter, extent, haloVirRad, rotMatrix, rotCenter
 
