@@ -74,11 +74,11 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
         # stars
         if sP.isPartType(partType, 'stars'):
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
-            hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-            ##pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            ##treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
-            ###nNGBDev = int( np.sqrt(nNGB)/4 )
-            ##hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
+            ##hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+            treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
+            nNGBDev = int( np.sqrt(nNGB)/4 )
+            hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
 
         # save
         if useCache:
