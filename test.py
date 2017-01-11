@@ -18,6 +18,62 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def createEmptyMissingGroupCatChunk():
+    nChunks = 64
+    basePath = '/u/dnelson/sims.TNG_method/L25n512_4503/output/groups_004/'
+    fileBase = basePath + 'fof_subhalo_tab_004.%d.hdf5'
+    fileMake = fileBase % 60
+
+    # load all chunks, determine number of missing groups/subgroups
+    nGroups = 0
+    nSubgroups = 0
+
+    for i in range(nChunks):
+        if not path.isfile(fileBase % i):
+            print('Skip: %s' % fileBase % i)
+            continue
+        with h5py.File(fileBase % i, 'r') as f:
+            nGroups += f['Header'].attrs['Ngroups_ThisFile']
+            nSubgroups += f['Header'].attrs['Nsubgroups_ThisFile']
+
+    # load data shapes and types, and write
+    f = h5py.File(fileBase % 0, 'r')
+    fOut = h5py.File(fileMake, 'w')
+
+    nGroupsTot = f['Header'].attrs['Ngroups_Total']
+    nSubgroupsTot = f['Header'].attrs['Nsubgroups_Total']
+
+    nMissingGroups = nGroupsTot - nGroups
+    nMissingSubgroups = nSubgroupsTot - nSubgroups
+
+    print('Missing groups [%d] subgroups [%d].' % (nMissingGroups,nMissingSubgroups))
+
+    fOut.create_group('Header')
+    fOut.create_group('Group')
+    fOut.create_group('Subhalo')
+
+    # (header)
+    for attr in f['Header'].attrs:
+        fOut['Header'].attrs[attr] = f['Header'].attrs[attr]
+    fOut['Header'].attrs['Ngroups_ThisFile'] = nMissingGroups
+    fOut['Header'].attrs['Nsubgroups_ThisFile'] = nMissingSubgroups
+
+    # (group)
+    for key in f['Group']:
+        shape = np.array( f['Group'][key].shape )
+        shape[0] = nMissingGroups
+        fOut['Group'][key] = np.zeros( shape, dtype=f['Group'][key].dtype )
+
+    # (subhalo)
+    for key in f['Subhalo']:
+        shape = np.array( f['Subhalo'][key].shape )
+        shape[0] = nMissingSubgroups
+        fOut['Subhalo'][key] = np.zeros( shape, dtype=f['Subhalo'][key].dtype )
+
+    f.close()
+    fOut.close()
+    print('Wrote: %s' % fileMake)
+
 def combineAuxCatSubdivisions():
     """ Combine a subdivision of a pSplit auxCat calculation. """
     from os.path import isfile
