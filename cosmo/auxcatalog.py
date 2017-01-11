@@ -697,8 +697,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     # get interpolated 3D half light radius
                     r[i,bandNum,-1] = _findHalfLightRadius(rr,magsLocal)
 
-                    import pdb; pdb.set_trace()
-
     # or, resolved dust: loop over all subhalos first
     if '_res' in dust:
         # prep: resolved dust attenuation uses simulated gas distribution in each subhalo
@@ -856,12 +854,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                             # get interpolated 3D half light radius
                             r[i,bandNum,projNum] = _findHalfLightRadius(rrLocal,magsLocal[band])
 
-                    #print(r[i,:,projNum])
-                    #print(gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')])
-                    #TODO: we are hyper sensitive to the rad30pkpc for the BCGs...
-                    #import pdb; pdb.set_trace()
-                    #TODO: circular vs major/minor axes radii: Rc = sqrt(b/a)*Re where b,a are the
-                    #      semi-minor and semi-major axes (see Lange+ 2016 pg 20) (Re=1.33*Rc on avg)
                 else:
                     # compute total attenuated stellar luminosity in each band
                     magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun)
