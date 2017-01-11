@@ -88,21 +88,21 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             mstar[w] = 1.0
             gc['subhalos']['SubhaloSFRinRad'][w] = 0.0
 
-        vals = gc['subhalos']['SubhaloSFRinRad'] / mstar
+        vals = gc['subhalos']['SubhaloSFRinRad'] / mstar * 1e9 # 1/yr to 1/Gyr
         #vals[vals == 0.0] = vals[vals > 0.0].min() * 1.0 # set SFR=0 values
 
-        label = 'log sSFR [ M$_\odot$ / yr ]'
+        label = 'log sSFR [ Gyr$^{-1}$ ]'
         if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
 
-        minMax = [-12.0, -9.0]
-        if tight: minMax = [-13.0, -9.0]
+        minMax = [-3.0, 0.0]
+        if tight: minMax = [-1.0, 0.0]
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
         gc = groupCat(sP, fieldsSubhalos=['SubhaloStarMetallicity'])
         vals = sP.units.metallicityInSolar(gc['subhalos'])
 
-        label = 'log ( Z$_{\\rm stars}$ / Z$_{\odot}$ )'
+        label = 'log ( Z$_{\\rm stars}$ / Z$_{\\rm sun}$ )'
         if not clean: label += ' (<2r$_{\star,1/2}$)'
         minMax = [-0.5, 0.5]
         if tight: minMax = [0.1, 0.4]
@@ -112,7 +112,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         gc = groupCat(sP, fieldsSubhalos=['SubhaloGasMetallicity'])
         vals = sP.units.metallicityInSolar(gc['subhalos'])
 
-        label = 'log ( Z$_{\\rm gas}$ / Z$_{\odot}$ )'
+        label = 'log ( Z$_{\\rm gas}$ / Z$_{\\rm sun}$ )'
         minMax = [-1.0, 0.5]
 
     if quant == 'size_gas':
@@ -150,8 +150,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'log f$_{\\rm gas}$'
         if not clean:
-            if quant == 'fgas1': label += ' (M$_{\\rm gas}$ / M$_{\\rm \star}$, <1r$_{\star,1/2})$'
-            if quant == 'fgas2': label += ' (M$_{\\rm gas}$ / M$_{\\rm \star}$, <2r$_{\star,1/2})$'
+            if quant == 'fgas1': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <1r$_{\star,1/2})$'
+            if quant == 'fgas2': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <2r$_{\star,1/2})$'
         minMax = [-3.5,0.0]
         if tight: minMax = [-4.0, 0.0]
 
@@ -272,7 +272,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             selStr = 'halo'
             selDesc = 'halo'
             minMax = [-1.5, 0.0]
-            if tight: minMax = [-2.0, -0.5]
+            if tight: minMax = [-1.8, 0.2]
 
         fieldName = 'Subhalo_Bmag_%s_%s' % (selStr,wtStr)
 
@@ -430,7 +430,7 @@ def plotPhaseSpace2D(yAxis):
     if yAxis == 'sfr':
         yvals = snapshotSubset(sP, 'gas', 'sfr', haloID=haloID)
         yvals = np.log10( yvals )
-        ax.set_ylabel('Star Formation Rate [ log M$_\odot$ / yr ]')
+        ax.set_ylabel('Star Formation Rate [ log M$_{\\rm sun}$ / yr ]')
         yMinMax = [-5.0, 1.0]
 
     if yAxis == 'mass_sfr_dt':
