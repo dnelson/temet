@@ -9,6 +9,7 @@ import numpy as np
 import h5py
 import illustris_python as il
 import cosmo.load
+import copy
 from os.path import isfile, isdir
 from os import mkdir
 
@@ -249,6 +250,96 @@ def snapNumToAgeFlat(sP, snap=None):
     """ Convert snapshot number to approximate age of the universe at that time. """
     z = snapNumToRedshift(sP, snap=snap)
     return sP.units.redshiftToAgeFlat(z)
+
+def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, method='LHaloTree'):
+    """ Given a set of subhaloInds_from_search in sP_from, find matched subhalos in sP_to.
+    Can implement many methods. For now, uses external (pre-generated) postprocessing/SubhaloMatching/ 
+    for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG runs. 
+    Return is an int32 array of the same size as input, where -1 indicates no match. """
+    from tracer.tracerMC import match3
+    from util.simParams import simParams
+
+    assert method in ['LHaloTree','SubLink']
+    assert sP_from.snap == sP_to.snap
+    assert sP_from != sP_to
+
+    # are we cross-matching between two non-fiducial sims.rTNG_method runs?
+    if sP_from.run == 'tng' and sP_from.variant.isdigit() and \
+       sP_to.run == 'tng' and sP_to.variant.isdigit() and \
+       int(sP_to.variant) != 0 and int(sP_from.variant) != 0:
+        # we route all such requests through the fiducial run as an intermediate step by self-calling
+        assert sP_from.res == sP_to.res # otherwise we need to implement: chain through resolution levels
+        sP_fid = simParams(res=sP_from.res, run=sP_from.run, redshift=sP_from.redshift, variant=0000)
+
+        # what are the matched halos of 'from' in 'fiducial'
+        match_from_fid = crossMatchSubhalosToRun(sP_from, sP_fid, subhaloInds_from_search, method=method)
+
+        # what are these match results in 'to'
+        match_to_fid = crossMatchSubhalosToRun(sP_fid, sP_to, match_from_fid, method=method)
+
+        w = np.where(match_from_fid == -1)
+        match_to_fid[w] = -1 # to confirm
+
+        return match_to_fid
+
+    # are we matching to the DMO analog of sP_from? or vice versa
+    swapMatchDirection = False
+
+    dmo1 = (sP_to.run == sP_from.run+'_dm' and sP_to.res == sP_from.res and sP_to.hInd == sP_from.hInd)
+    dmo2 = (sP_to.run+'_dm' == sP_from.run and sP_to.res == sP_from.res and sP_to.hInd == sP_from.hInd)
+
+    if dmo1:
+        # yes, sP_to is the DMO version of sP_from
+        basePath = sP_from.postPath + 'SubhaloMatchingToDark/%s_' % method
+        filePath = basePath + '%03d.hdf5' % sP_from.snap
+    elif dmo2:
+        # yes, sP_from is the DMO version of sP_to
+        basePath = sP_to.postPath + 'SubhaloMatchingToDark/%s_' % method
+        filePath = basePath + '%03d.hdf5' % sP_to.snap
+
+        swapMatchDirection = True
+    else:
+        # no, use a match subdirectory to a specific run
+        basePath = sP_from.postPath + 'SubhaloMatching/%s/%s_' % (sP_to.simName,method)
+        filePath = basePath + '%03d.hdf5' % sP_from.snap
+
+        # only have matching in the other direction?
+        if not isfile(filePath):
+            basePath = sP_to.postPath + 'SubhaloMatching/%s/%s_' % (sP_from.simName,method)
+            filePath = basePath + '%03d.hdf5' % sP_to.snap
+            assert isfile(filePath) # otherwise fail
+
+            swapMatchDirection = True
+
+    # load results of a matching catalog
+    if method == 'LHaloTree':
+        with h5py.File(filePath,'r') as f:
+            subhaloInds_from = f['SubhaloIndexFrom'][()]
+            subhaloInds_to = f['SubhaloIndexTo'][()]
+
+    if method == 'SubLink':
+        with h5py.File(filePath,'r') as f:
+            subhaloInds_from = np.indgen( f['DescendantIndex'].size )
+            subhaloInds_to = f['DescendantIndex'][()]
+
+        w = np.where(subhaloInds_to >= 0)
+        subhaloInds_from = subhaloInds_from[w]
+        subhaloInds_to = subhaloInds_to[w]
+
+    # if we requested a DMO->Physics match, we have instead loaded [the only thing available] the 
+    # Physics->DMO SubhaloMatchingToDark information. so, swap the 'from' and 'to' subhaloInds 
+    # such that subhaloInds_from_search is matched against the DMO and the return is for the Physics
+    if swapMatchDirection:
+        subhaloInds_from, subhaloInds_to = subhaloInds_to, subhaloInds_from
+
+    # find matches and make return
+    match_inds_source, match_inds_search = match3(subhaloInds_from, subhaloInds_from_search)
+
+    r = np.zeros( len(subhaloInds_from_search), dtype='int32' ) - 1
+
+    r[match_inds_search] = subhaloInds_to[match_inds_source]
+
+    return r
 
 # --- periodic B.C. ---
 

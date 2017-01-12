@@ -899,3 +899,7 @@ class simParams:
         h = snapshotHeader(self)
 
         return np.array( h['MassTable'][self.ptNum('dm')], dtype='float32' )
+
+    # operator overloads
+    def __eq__(self, other): 
+        return self.__dict__ == other.__dict__

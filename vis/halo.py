@@ -74,6 +74,9 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
         boxSizeImg = size * galHalfMassRad
     if sizeType == 'rHalfMassStars':
         boxSizeImg = size * galHalfMassRadStars
+        if boxSizeImg == 0.0:
+            print(' WARNING! Subhalo HalfmassRadStars==0, switching to HalfmassRad/5.')
+            boxSizeImg = size * galHalfMassRad / 5
     if sizeType == 'codeUnits':
         boxSizeImg = size
     if sizeType == 'pkpc':
