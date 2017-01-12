@@ -11,13 +11,15 @@ from os.path import isfile
 
 from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, savePathDefault, \
                        momentOfInertiaTensor, rotationMatricesFromInertiaTensor
-from cosmo.load import groupCatSingle, snapshotSubset
+from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
 from util import simParams
 
-def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs):
+def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
+    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','pkpc']
+
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
         if sP.isZoom:
@@ -33,9 +35,13 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
             print('WARNING! Rendering a non-central subhalo, are you sure?')
 
         haloVirRad = gr['Group_R_Crit200']
+        galHalfMassRad = sh['SubhaloHalfmassRad']
+        galHalfMassRadStars = sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]
         boxCenter  = sh['SubhaloPos'][ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
     else:
         # use the smoothed MPB properties to get halo properties at this snapshot
+        assert sizeType not in ['rHalfMass','rHalfMassStars'] # not implemented
+
         if sP.snap < mpb['SnapNum'].min():
             # for very early times, linearly interpolate properties at start of tree back to t=0
             if rotation is not None:
@@ -61,12 +67,20 @@ def haloImgSpecs(sP, sizeFac, nPixels, axes, relCoords, rotation, mpb, **kwargs)
             boxCenter = mpb['sm']['pos'][ind[0],:]
             boxCenter = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
 
-    if sizeFac > 0:
-        # multiplier on the virial radius
-        boxSizeImg = sizeFac * np.array([haloVirRad, haloVirRad*(nPixels[1]/nPixels[0]), haloVirRad])
-    else:
-        # absolute size (in -1* code length units)
-        boxSizeImg = -sizeFac * np.array([1.0, 1.0*(nPixels[1]/nPixels[0]), 1.0])
+    # convert size into code units
+    if sizeType == 'rVirial':
+        boxSizeImg = size * haloVirRad
+    if sizeType == 'rHalfMass':
+        boxSizeImg = size * galHalfMassRad
+    if sizeType == 'rHalfMassStars':
+        boxSizeImg = size * galHalfMassRadStars
+    if sizeType == 'codeUnits':
+        boxSizeImg = size
+    if sizeType == 'pkpc':
+        boxSizeImg = sP.units.physicalKpcToCodeLength(size)
+
+    boxSizeImg = boxSizeImg * np.array([1.0, 1.0, 1.0]) # same width, height, and depth
+    boxSizeImg[1] *= (nPixels[1]/nPixels[0]) # account for aspect ratio
 
     extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0], 
                boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
@@ -135,7 +149,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     rVirFracs  = [1.0]         # draw circles at these fractions of a virial radius
     method     = 'sphMap'      # sphMap, sphMap_global, voronoi_const, voronoi_grads, ...
     nPixels    = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
-    sizeFac    = 3.0           # side length of imaging box around halo center in units of its virial radius
+    size       = 3.0           # side-length specification of imaging box around halo/galaxy center
+    sizeType   = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     hsmlFac    = 2.5           # multiplier on smoothing lengths for sphMap
     axes       = [1,0]         # e.g. [0,1] is x,y
     labelZ     = False         # label redshift inside (upper right corner) of panel
@@ -208,7 +223,8 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     rVirFracs  = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
     method     = 'sphMap'        # sphMap, voronoi_const, voronoi_grads, ...
     nPixels    = [1400,1400]     # number of pixels for each dimension of images when projecting
-    sizeFac    = 2.5             # size of imaging box around halo center in units of its virial radius
+    size       = 3.0             # side-length specification of imaging box around halo/galaxy center
+    sizeType   = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     hsmlFac    = 2.5             # multiplier on smoothing lengths for sphMap
     axes       = [1,0]           # e.g. [0,1] is x,y
     labelZ     = False           # label redshift inside (upper right corner) of panel
@@ -290,45 +306,61 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
 
         renderMultiPanel(panels, plotConfig)
 
-def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=None):
+def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=None, selType='linear'):
     """ Select one or more subhalo indices from an input set of massBins (log Mhalo), a requested 
     number of halos per bin, and either (i) an index haloNum which should iterate from 0 to the total 
     number of halos requested across all bins, in which case the return is a single subhalo ID 
     as appropriate for a multi-quantity single system comparison figure, or (ii) an index massBinInd 
     which should iterate from 0 to the number of bins, in which case all subhalo IDs in that bin 
     are returned (limited to numPerBin), as appropriate for a multi-system single-quantity figure. """
+    assert selType in ['linear','even','random']
+    from util.helper import evenlySample
+
     gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupFirstSub'])
     haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
 
+    # locate # of halos in mass bins (informational only)
     for massBin in massBins:
         w = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
-        print(massBin,len(w))
+        print('selectHalosFromMassBin(): In massBin [%.1f %.1f] have %d halos total.' % \
+            (massBin[0],massBin[1],len(w)))
 
+    # choose mass bin
     if haloNum is not None:
         myMassBinInd = int(np.floor(float(haloNum)/numPerBin))
     else:
         myMassBinInd = massBinInd
 
     myMassBin = massBins[ myMassBinInd ]
-    wMassBin  = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
-    wMassBin  = wMassBin[0:numPerBin]
+    wMassBinAll = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
 
-    haloInd = haloNum - myMassBinInd*numPerBin
-    if haloInd >= len(wMassBin):
-        return None, None, None
+    # what algorithm to sub-select within mass bin
+    if selType == 'linear':
+        wMassBin = wMassBinAll[0:numPerBin]
+    if selType == 'even':
+        wMassBin = evenlySample(wMassBinAll, numPerBin)
+    if selType == 'random':
+        np.random.seed(seed=424242+sP.snap+sP.res+int(myMassBin[0]*100)+int(myMassBin[1]*100))
+        wMassBin = sorted(np.random.choice(wMassBinAll, size=numPerBin, replace=False))
 
     if haloNum is not None:
+        haloInd = haloNum - myMassBinInd*numPerBin
+
+        # job past requested range, tell to skip
+        if haloInd >= len(wMassBin):
+            return None, None
+
         # single halo ID return
-        hIDs = gc['halos']['GroupFirstSub'][wMassBin[haloInd]]
+        shIDs = gc['halos']['GroupFirstSub'][wMassBin[haloInd]]
 
         print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f] ind [%d of %d]...' % \
-            (haloNum,wMassBin[haloInd],hIDs,myMassBin[0],myMassBin[1],haloInd,len(wMassBin)))
+            (haloNum,wMassBin[haloInd],shIDs,myMassBin[0],myMassBin[1],haloInd,len(wMassBin)))
     else:
         # return full set in this mass bin
-        hIDs = gc['halos']['GroupFirstSub'][wMassBin]
+        shIDs = gc['halos']['GroupFirstSub'][wMassBin]
 
-        for hID in hIDs:
-            print('[%d] Render subhalo [%d] from massBin [%.1f %.1f]...' % \
-                (haloNum,hID,myMassBin[0],myMassBin[1]))
+        #for i, shID in enumerate(shIDs):
+        #    print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f]...' % \
+        #        (i,wMassBin[i],shID,myMassBin[0],myMassBin[1]))
 
-    return hIDs, myMassBinInd
+    return shIDs, myMassBinInd

@@ -312,6 +312,14 @@ def groupCatHeader(sP, fileName=None):
 
     return header
 
+def groupCatHasField(sP, objType, field):
+    """ True or False, does group catalog for objType=['Group','Subhalo'] have field? """
+    with h5py.File(gcPath(sP.simPath,sP.snap),'r') as f:
+        if objType in f and field in f[objType]:
+            return True
+
+    return False
+
 def subboxVals(subbox):
     """ Return sbNum (integer) and sbStr1 and sbStr2 for use in locating subbox files. """
     sbNum = subbox if isinstance(subbox, (int,long)) else 0

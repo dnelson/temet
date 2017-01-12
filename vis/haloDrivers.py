@@ -30,7 +30,8 @@ def oneHaloPressureCompAndRatios(shID=0):
     rVirFracs  = [1.0]
     method     = 'sphMap'
     nPixels    = [960,960]
-    sizeFac    = 2.5
+    size       = 2.5
+    sizeType   = 'rVirial'
     hsmlFac    = 2.5
     axes       = [1,0]
     labelZ     = False
@@ -66,7 +67,8 @@ def oneHaloGaussProposal():
     rVirFracs  = [1.0]
     method     = 'sphMap'
     nPixels    = [960,960]
-    sizeFac    = 0.3 # central object
+    size       = 0.3 # central object
+    sizeType   = 'rVirial'
     vecOverlay = True # experimental B field streamlines
     hsmlFac    = 2.5
     axes       = [1,0]
@@ -85,6 +87,58 @@ def oneHaloGaussProposal():
         saveFilename = './gasDens_%s_%d_z%.1f_sh-%d.pdf' % (run,res,redshift,shID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def oneGalaxyThreeRotations(conf=0):
+    """ Plot stellar stamps of N random massive L25n512_0000 galaxies. 
+    If curPage,numPages both specified, do a paged exploration instead. """
+    run        = 'illustris' 
+    res        = 1820
+    redshift   = 0.0
+    hInd       = 283832 # subhalo ID
+    rVirFracs  = None
+    method     = 'sphMap'
+    nPixels    = [700,700]
+    axes       = [0,1]
+    labelZ     = False
+    labelSim   = False
+    labelHalo  = True
+    relCoords  = True
+    mpb        = None
+    rotations  = [None, 'face-on', 'edge-on']
+
+    #size       = 70.0 # 140 ckpc/h size length
+    #sizeType   = 'codeUnits'
+    size       = 5.0
+    sizeType   = 'rHalfMassStars'
+
+    if conf == 0:
+        partType  = 'stars'
+        partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+        hsmlFac   = 0.5
+
+    if conf == 1:
+        partType  = 'gas'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [6.0, 8.2]
+        hsmlFac   = 2.5
+
+    # create panels, one per view
+    sPloc = simParams(res=res, run=run, redshift=redshift)
+    sub   = groupCatSingle(sPloc, subhaloID=hInd)
+    panels = []
+
+    for i, rot in enumerate(rotations):
+        labelScaleLoc = True if i == 0 else False
+        panels.append( {'rotation':rot, 'labelScale':labelScaleLoc} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 700
+        colorbars    = False
+        saveFilename = './fig_galaxy_%s_%d_shID=%d_%s.pdf' % \
+          (sPloc.simName,sPloc.snap,hInd,partType)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def resSeriesGaussProposal(fofInputID=12, resInput=256):
     """ Render a 3x2 panel resolution series for Gauss proposal (MW/structural fig). """
@@ -106,7 +160,8 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
     rVirFracs  = None
     method     = 'sphMap'
     nPixels    = [960,960]
-    sizeFac    = -80.0 #0.3 # central object
+    size       = 80.0 #0.3 # central object
+    sizeType   = 'codeUnits'
     axes       = [0,1]
     labelZ     = False
     labelScale = True
@@ -126,14 +181,14 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
         pF_stars = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
 
         # append panels
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, \
-                        'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, 'rotation':'face-on', \
+                        'res':resLevel, 'hInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
         panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
                         'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
         #'nPixels':[960,320], \ # reduce vertical size of edge-on panels
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, \
-                        'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'sizeFac':-50.0} )
+        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, 'rotation':'edge-on', \
+                        'res':resLevel, 'hInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
         panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
                         'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
@@ -181,7 +236,8 @@ def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     rVirFracs  = [1.0]
     method     = 'sphMap' # sphMap_global
     nPixels    = [960,960]
-    sizeFac    = -140.0 # sizeFac = 10^2.8 * 0.7 * 2 (match to pm2.0 for Guinevere)
+    size       = 140.0 # size = 10^2.8 * 0.7 * 2 (match to pm2.0 for Guinevere)
+    sizeType   = 'codeUnits'
     hsmlFac    = 2.5
     axes       = [1,0]
     rotation   = None
@@ -223,15 +279,15 @@ def boxHalo_HI():
     #panels.append( {'rotation':None, 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
     #panels.append( {'rotation':'edge-on', 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
     #panels.append( {'rotation':'face-on', 'smoothFWHM':2.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    #sizeFac = 2.5
+    #size = 2.5
 
     # proposed
-    panels.append( {'rotation':None, 'sizeFac':2.5, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'rotation':'edge-on', 'sizeFac':-120.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'rotation':'face-on', 'sizeFac':-120.0, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'rotation':None, 'sizeFac':2.5, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
-    panels.append( {'rotation':'edge-on', 'sizeFac':-120.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
-    panels.append( {'rotation':'face-on', 'sizeFac':-120.0, 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    panels.append( {'rotation':None, 'size':2.5, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':'edge-on', 'size':120.0, 'sizeType':'codeUnits', 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':'face-on', 'size':120.0, 'sizeType':'codeUnits', 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':None, 'size':2.5, 'partField':'HI_segmented', 'valMinMax':vmm_col} )
+    panels.append( {'rotation':'edge-on', 'size':120.0, 'sizeType':'codeUnits', 'partField':'vel_los', 'valMinMax':vmm_vel} )
+    panels.append( {'rotation':'face-on', 'size':120.0, 'sizeType':'codeUnits', 'partField':'vel_los', 'valMinMax':vmm_vel} )
     #smoothFWHM = 2.0
     labelScale = True
 
@@ -280,7 +336,8 @@ def boxHalo_MultiQuant():
     rVirFracs  = [1.0] # None
     method     = 'sphMap'
     #nPixels    = [1920,1920]
-    sizeFac    = 2.5 #-50.0
+    size       = 2.5 #-50.0
+    sizeType   = 'rVirial'
     #hsmlFac    = 2.5
     #axes       = [1,2]
     #rotation   = None
@@ -288,7 +345,7 @@ def boxHalo_MultiQuant():
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = savePathDefault + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,hInd,sizeFac)
+        saveFilename = savePathDefault + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,hInd,size)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -310,7 +367,8 @@ def zoomHalo_z2_MultiQuant():
     rVirFracs  = [1.0]
     method     = 'sphMap' # sphMap_global
     nPixels    = [960,960]
-    sizeFac    = 2.5
+    size       = 2.5
+    sizeType   = 'rVirial'
     hsmlFac    = 2.5
     axes       = [1,0]
     rotation   = None
@@ -333,7 +391,8 @@ def tngDwarf_firstNhalos(conf=0):
     rVirFracs  = [0.1]
     method     = 'sphMap'
     nPixels    = [1000,1000]
-    sizeFac    = -100.0 # 100 ckpc
+    size       = 100.0
+    sizeType   = 'codeUnits'
     hsmlFac    = 2.5
     labelZ     = True
     labelScale = True
@@ -369,6 +428,89 @@ def tngDwarf_firstNhalos(conf=0):
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None):
+    """ Plot stellar stamps of N random massive L25n512_0000 galaxies. 
+    If curPage,numPages both specified, do a paged exploration instead. """
+    run       = 'tng'
+    res       = 512
+    variant   = 0010 #0010 #0000 # 'L12.5'
+    massBin   = [12.0, 14.0]
+    nGalaxies = 12
+    selType   = 'random'
+
+    # stellar composite, 20 kpc on a side, include M* label per panel, and scale bar once
+    # select random in [12.0,inf] halo mass range, do each of: face-on, edge-on, random(z)
+    # possible panel configurations: 4x2 = 8, 4x3 = 12, 5x3 = 15, 6x3 = 18
+    redshift   = 0.0
+    rVirFracs  = None
+    method     = 'sphMap'
+    nPixels    = [700,700]
+    axes       = [0,1]
+    labelZ     = False
+    labelSim   = False
+    labelHalo  = 'Mstar'
+    relCoords  = True
+    mpb        = None
+
+    size      = 50.0 # 25 ckpc/h each direction
+    sizeType  = 'codeUnits'
+    #size       = 6.0
+    #sizeType   = 'rHalfMassStars'
+
+    if conf == 0:
+        partType = 'stars'
+        partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+        #partField = 'stellarComp-snap_K-snap_B-snap_U'
+        #partField = 'stellarComp-sdss_i-sdss_r-sdss_g' #irg # zirgu (red -> blue)
+        hsmlFac = 0.5
+
+    if conf == 1:
+        partType = 'gas'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [6.0, 8.2]
+        hsmlFac = 2.5
+
+    # load halos of this bin
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+    
+    if curPage is None:
+        # non-paged, load requested number
+        shIDs, binInd = selectHalosFromMassBin(sP, [massBin], nGalaxies, massBinInd=0, selType=selType)
+        saveFilename2 = './methods2_stamps_%s_%s_rot=%s_size=%.1f.pdf' % \
+          (sP.simName,partType,rotation,size)
+    else:
+        # paged, load all and sub-divide
+        shIDsAll, _ = selectHalosFromMassBin(sP, [[11.8,14.0]], 200, massBinInd=0, selType='linear')
+        shIDs = pSplit(shIDsAll, numPages, curPage)
+        import pdb; pdb.set_trace() # make sure we have nGalaxies per render
+        saveFilename2 = './methods2_stamps_%s_%s_rot=%s_size=%.1f_%dof%d.pdf' % \
+          (sP.simName,partType,rotation,size,curPage,numPages)
+
+    # create panels, one per galaxy
+    panels = []
+    for i, shID in enumerate(shIDs):
+        labelScaleLoc = True if (i == 0 or sizeType == 'rHalfMassStars') else False
+        panels.append( {'hInd':shID, 'labelScale':labelScaleLoc} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 700
+        colorbars    = False
+        saveFilename = saveFilename2
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def loop_stamps():
+    """ Helper. """
+    numPages = 12
+
+    for conf in [0]:
+        for rotation in [None]:
+            for curPage in range(numPages):
+                print(conf,rotation,curPage,numPages)
+                tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, rotation=rotation)
+
+
 def tngCluster_center_timeSeriesPanels(conf=0):
     """ Plot a time series of panels from subsequent snapshots in the center of fof0. """
     panels = []
@@ -382,7 +524,8 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     rVirFracs  = None #[0.05]
     method     = 'sphMap'
     nPixels    = [960,960]
-    sizeFac    = -100.0
+    size       = 100.0
+    sizeType   = 'codeUnits'
     hsmlFac    = 2.5
     labelZ     = True
     axes       = [1,0]
@@ -456,7 +599,8 @@ def massBinsSample_3x2_EdgeOnFaceOn(conf,haloOrMassBinNum=None):
     rVirFracs  = None
     method     = 'sphMap'
     nPixels    = [960,960]
-    sizeFac    = -120.0 # 120 ckpc/h
+    size       = 120.0
+    sizeType   = 'codeUnits'
     hsmlFac    = 2.5
     axes       = [1,0]
 
@@ -479,7 +623,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(conf,haloOrMassBinNum=None):
             print('Task past bin size, quitting.')
             return
 
-        if binInd >= 4: sizeFac = -60.0
+        if binInd >= 4: size = 60.0
 
         panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelHalo':True} )
         panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
@@ -497,7 +641,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(conf,haloOrMassBinNum=None):
 
         hIDs, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, massBinInd=haloNum)
 
-        if binInd >= 4: sizeFac = -60.0
+        if binInd >= 4: size = 60.0
 
         for hID in hIDs:
             if panelNum == 0:
@@ -552,7 +696,8 @@ def zoomEvoMovies(conf):
     rVirFracs  = [0.15,0.5,1.0]
     method     = 'sphMap'
     nPixels    = [1920,1920]
-    sizeFac    = 3.5
+    size       = 3.5
+    sizeType   = 'rVirial'
     hsmlFac    = 2.5
     axes       = [1,0]
     labelSim   = False

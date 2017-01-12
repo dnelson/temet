@@ -34,21 +34,21 @@ colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented']
 totSumFields     = ['mass','mass2']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 
-def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
+def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
-
     _, sbStr, _ = subboxVals(sP.subbox)
     irStr = '' if indRange is None else '.%d-%d' % (indRange[0],indRange[1])
-    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s.hdf5' % \
-                   (sbStr, sP.snap, partType, irStr)
+    shStr = '' if snapHsmlForStars is False else '.sv'
+    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s%s.hdf5' % \
+                   (sbStr, sP.snap, partType, irStr, shStr)
 
     if not isdir(sP.derivPath + 'hsml/'):
         mkdir(sP.derivPath + 'hsml/')
 
     # cache?
-    useCache = sP.isPartType(partType, 'stars') or \
-              (sP.isPartType(partType, 'dm') and not snapHasField(sP, partType, 'SubfindHsml'))
+    useCache = (sP.isPartType(partType, 'stars') and not snapHsmlForStars) or \
+               (sP.isPartType(partType, 'dm') and not snapHasField(sP, partType, 'SubfindHsml'))
 
     if useCache and isfile(saveFilename):
         # load if already made
@@ -74,11 +74,13 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
         # stars
         if sP.isPartType(partType, 'stars'):
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
-            ##hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
-            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-            treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
-            nNGBDev = int( np.sqrt(nNGB)/4 )
-            hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
+            if snapHsmlForStars:
+                hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+            else:
+                pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+                treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
+                nNGBDev = int( np.sqrt(nNGB)/4 )
+                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
 
         # save
         if useCache:
@@ -86,31 +88,35 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None):
                 f['hsml'] = hsml
             print(' saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
-    return hsml
+    return hsml.astype('float32')
 
     raise Exception('Unimplemented partType.')
 
-def clipStellarHSMLs(hsml, sP, pxScale, nPixels):
+def clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2):
     """ Clip input stellar HSMLs/sizes to minimum/maximum values. Work in progress. """
 
     # use a minimum/maximum size for stars in outskirts
-    if 0:
+    if method == 0:
         # constant based on numerical resolution
         hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
         hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness
 
+        print(' [m0] stellar hsml clip above [%.1f px] below [%.1f px]' % (2.0*sP.gravSoft,0.05*sP.gravSoft))
+
     # adaptively clip in proportion to pixel scale of image, depending on ~pixel number
-    if 1:
+    if method == 1:
         # adaptive technique 2 (used for Gauss proposal stellar composite figure)
         clipAboveNumPx = 30.0*(np.max(nPixels)/1920)
         clipAboveToPx  = np.max([5.0, 6.0-2*1920/np.max(nPixels)]) # was 3.0 not 5.0 before composite tests
         hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
 
-        print(' [m2] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
+        print(' [m1] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
             (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
-    if 0:
+
+    if method == 2:
         # adaptive technique 1 (preferred) (used for TNG subbox movies)
-        minClipVal = 4.0 # was 3.0 before composite tests
+        #minClipVal = 4.0 # was 3.0 before composite tests # previous
+        minClipVal = 30.0*(np.max(nPixels)/1920) # testing for tng.methods2
 
         #if 'sdss_g' in partField:
         #    minClipVal = 20.0
@@ -120,10 +126,11 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels):
         clipAboveToPx = clipAboveNumPx # coupled
         hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
 
-        print(' [m1] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
+        print(' [m2] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
             (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
 
-    #print(' hsml clip DISABLED!')
+    if method is None:
+        print(' hsml clip DISABLED!')
 
     return hsml
 
@@ -388,8 +395,8 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
     band2_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[2], nPixels, axes, boxCenter, 
                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
-    band2b_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-sdss_g', nPixels, axes, boxCenter, 
-                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
+    #band2b_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-sdss_g', nPixels, axes, boxCenter, 
+    #                             boxSizeImg, hsmlFac, rotMatrix, rotCenter, forceRecalculate, smoothFWHM)
 
     ww = np.where(band0_grid_mag < 99) # these left at zero
     band0_grid = band0_grid_mag.astype('float32') * 0.0
@@ -403,9 +410,9 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
     band2_grid = band2_grid_mag.astype('float32') * 0.0
     band2_grid[ww] = np.power(10.0, -0.4 * band2_grid_mag[ww])
 
-    ww = np.where(band2b_grid_mag < 99)
-    band2b_grid = band2b_grid_mag.astype('float32') * 0.0
-    band2b_grid[ww] = np.power(10.0, -0.4 * band2b_grid_mag[ww])
+    #ww = np.where(band2b_grid_mag < 99)
+    #band2b_grid = band2b_grid_mag.astype('float32') * 0.0
+    #band2b_grid[ww] = np.power(10.0, -0.4 * band2b_grid_mag[ww])
 
     grid_master = np.zeros( (nPixels[1], nPixels[0], 3), dtype='float32' )
     grid_master_u = np.zeros( (nPixels[1], nPixels[0], 3), dtype='uint8' )
@@ -448,10 +455,9 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
             maxVal = np.max( grid_master[:,:,i] )
             print('channel [%d] max = %g' % (i,maxVal))
             grid_master[:,:,i] /= maxVal
-        #    #grid_master[ww_max,i] = grid_master[ww_max,i] / max_rgbval[ww_max]
-        #    #grid_master[ww_min,i] = 0.0
-
-        #grid_master /= grid_master.max()
+            grid_master_u[:,:,i] = grid_master[:,:,i] * np.uint8(255)
+            #grid_master[ww_max,i] = grid_master[ww_max,i] / max_rgbval[ww_max]
+            #grid_master[ww_min,i] = 0.0
 
     if 0:
         #fac = (1/res)**2 * (pxScale)**2 (maybe)
@@ -467,13 +473,13 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
                    'wfc_acs_f606w' : [20, 50000], # green
                    'wfc_acs_f475w' : [3, 20000], # blue
                    \
-                   'jwst_f070w' : [400, 30000], # red
-                   'jwst_f115w' : [200, 85000], # green
-                   'jwst_f200w': [100, 75000], # blue
+                   'jwst_f070w' : [4000, 30000], # red  #[400, 30000]
+                   'jwst_f115w' : [2000, 85000], # green  #[200, 85000]
+                   'jwst_f200w': [1000, 75000], # blue  #[100, 75000]
                    \
                    'sdss_z' : [100, 50000], # red
                    'sdss_i' : [30, 5000], # red
-                   'sdss_r' : [2, 6000], # green
+                   'sdss_r' : [30, 6000], # green
                    'sdss_g' : [1, 7000], # blue
                    'sdss_u' : [5, 15000]} # blue
 
@@ -492,33 +498,41 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
             grid_stretch = (grid_log - drange_log[0]) / (drange_log[1]-drange_log[0])
 
             grid_master[:,:,i] = grid_stretch
+            grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
             #import pdb; pdb.set_trace()
     if 1:
         pxArea = (boxSizeImg[axes[1]] / nPixels[0]) * (boxSizeImg[axes[0]] / nPixels[1])
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
         resFac = 1.0 #(512.0/sP.res)**2.0
 
-        minValLog = 3.3
+        minValLog = np.array([2.8,2.8,2.8]) # previous: 3.3
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
-        maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w
+        #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
+        maxValLog = np.array([5.60, 5.68, 5.36])*1.0 # little less clipping, more yellow/red color
+
         maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
-        print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
+        #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
 
         for i in range(3):
             if i == 0: grid_loc = band0_grid
             if i == 1: grid_loc = band1_grid
-            if i == 2: grid_loc = band2_grid + 0.5*band2b_grid
-            if i == 2: print(' extra blue channel added float')
+            if i == 2: grid_loc = band2_grid
 
+            if 0:
+                # testing: add extra partial strength sdss_g band into the blue channel
+                if i == 2:
+                    grid_loc += 0.5*band2b_grid
+                    print(' extra blue channel added float')
+
+            # handle zero values
             ww = np.where(grid_loc == 0.0)
             grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
             grid_log = np.log10( grid_loc )
 
-            #grid_log = np.clip( grid_log, minValLog, grid_log.max() )
-            #grid_stretch = (grid_log - minValLog) / (grid_log.max()-minValLog)
-            grid_log = np.clip( grid_log, minValLog, maxValLog[i] )
-            grid_stretch = (grid_log - minValLog) / (maxValLog[i]-minValLog)
+            # clip and stretch within [minValLog,maxValLog]
+            grid_log = np.clip( grid_log, minValLog[i], maxValLog[i] )
+            grid_stretch = (grid_log - minValLog[i]) / (maxValLog[i]-minValLog[i])
 
             grid_master[:,:,i] = grid_stretch
             grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
@@ -554,13 +568,13 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
             print(' adjusted saturation')
 
         # contrast adjust
-        if 0:
-            C = 5.0
+        if 1:
+            C = 20.0
             F = 259*(C+255) / (255*(259-C))
             for i in range(3):
                 new_i = F * (np.float32(grid_master_u[:,:,i]) - 128) + 128
                 grid_master_u[:,:,i] = np.uint8( np.clip( new_i, 0, 255 ) )
-            print(' adjusted contrast ',F)
+            #print(' adjusted contrast ',F)
 
     # DEBUG: dump 16 bit tiff without clipping
     if 0:
@@ -594,7 +608,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     from cosmo.stellarPop import sps
 
     if partType in ['gas','stars']:
-        mass = snapshotSubset(sP, partType, 'mass', indRange=indRange)
+        mass = snapshotSubset(sP, partType, 'mass', indRange=indRange).astype('float32')
     elif partType == 'dm':
         mass = sP.dmParticleMass
 
@@ -965,20 +979,24 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             if method in ['sphMap','sphMap_global']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
                 if 'stellarBand-' in partField:
-                    hsml = getHsmlForPartType(sP, partType, nNGB=16, indRange=indRange)
-                    hsmlFac = sP.res/512.0 # match sizes roughly to 512 sizes
-                    hsml *= hsmlFac
-                    print(' debugging stellarBand getHsml() with nNGB=16 and hsmlFac/res.')
+                    print(' debugging stellarBand-* getHsml() snapHsmlForStars=True')
+                    hsml = getHsmlForPartType(sP, partType, indRange=indRange, snapHsmlForStars=True)
+
+                    #print(' debugging stellarBand-* getHsml() with nNGB=16 and OVERRIDE hsmlFac(res).')
+                    #hsml = getHsmlForPartType(sP, partType, nNGB=16, indRange=indRange)
+                    #hsmlFac = sP.res/512.0 # match sizes roughly to 512 sizes
                 else:
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange)
-                    hsml *= hsmlFac
+
+                # modulate hsml values by hsmlFac
+                hsml *= hsmlFac
 
                 if wMask is not None:
                     hsml = hsml[wMask]
 
                 if sP.isPartType(partType, 'stars'):
                     pxScale = np.max(boxSizeImg[axes] / nPixels)
-                    hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels)
+                    hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2)
 
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                                          boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, 
@@ -1134,9 +1152,15 @@ def addBoxMarkers(p, conf, ax):
         p0 = plt.Line2D((0,0),(0,0), linestyle='')
         p1 = plt.Line2D((0,0),(0,0), linestyle='')
 
-        legend = ax.legend([p0,p1], [str1,str2], fontsize='xx-large', loc='lower right')
-        legend.get_texts()[0].set_color('white')
-        legend.get_texts()[1].set_color('white')
+        if p['labelHalo'] == 'Mstar':
+            legend = ax.legend([p1], [str2], fontsize='xx-large', loc='lower right')
+        else:
+            # both Mhalo and Mstar
+            legend = ax.legend([p0,p1], [str1,str2], fontsize='xx-large', loc='lower right')
+
+        for text in legend.get_texts(): text.set_color('white')
+        #legend.get_texts()[0].set_color('white')
+        #legend.get_texts()[1].set_color('white')
 
 def addVectorFieldOverlay(p, conf, ax):
     """ Experimental quiver/streamline overlay for vector field data. Work in progress. """
@@ -1383,7 +1407,7 @@ def renderMultiPanel(panels, conf):
         for p in panels:
             pPartTypes.add(p['partType'])
             pPartFields.add(p['partField'])
-            pValMinMaxes.add(str(p['valMinMax']))
+            if 'valMinMax' in p: pValMinMaxes.add(str(p['valMinMax']))
 
         # if all panels in the entire figure are the same, we will do 1 single colorbar
         oneGlobalColorbar = False
