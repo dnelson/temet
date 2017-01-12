@@ -188,13 +188,13 @@ class simParams:
 
             # defaults
             runStr = 'TNG'
-            mStr   = ''
+            dirStr = 'TNG'
 
             if self.variant is not None:
                 # r001 through r010 IC realizations, L25n256 boxes
                 if 'r0' in self.variant:
                     assert self.boxSize == 25000.0 and self.res == 256
-                    mStr   = '_method'
+                    dirStr = 'TNG_method'
                     runStr = 'FP_TNG_' + self.variant
 
                 # L12.5 test box with resolutions same as L25
@@ -213,9 +213,10 @@ class simParams:
 
                 # sims.TNG_method variations (e.g. L25n512_1002)
                 if self.variant.isdigit():
-                    assert int(variant) >= 0 and int(variant) < 9999
+                    if int(self.variant) == 8: self.variant = '0010' # number 0010 interpreted as octal 8! why.
+                    assert int(self.variant) >= 0 and int(self.variant) < 9999
                     assert self.boxSize == 25000.0
-                    mStr   = '_method'
+                    dirStr = 'rTNG_method'
                     runStr = '_%s' % self.variant.zfill(4)
 
             # make paths and names
@@ -224,7 +225,7 @@ class simParams:
 
             dmStr = '_DM' if '_dm' in run else ''
 
-            self.arepoPath  = self.basePath + 'sims.TNG'+mStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
+            self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.saveTag    = 'iP'
