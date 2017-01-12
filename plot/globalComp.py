@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroSafe
 from illustris_python.util import partTypeNum
-from cosmo.load import groupCat, groupCatSingle, auxCat
+from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField
 from cosmo.util import validSnapList, periodicDists
 from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
 from plot.cosmoGeneral import addRedshiftAgeAxes
@@ -412,6 +412,10 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
         if sP.isZoom:
             continue
 
+        if not groupCatHasField(sP, 'Subhalo', 'SubhaloBHMass'): #snapHasField(sP, 'bh', 'Coordinates'):
+            print('BHMass: %s [SKIP: sim has no BHs]' % sP.simName)
+            continue
+
         print('BHMass: '+sP.simName)
         sP.setRedshift(simRedshift)
 
@@ -477,7 +481,8 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         fig = fig_subplot[0]
         ax = fig.add_subplot(fig_subplot[1])
     
-    addHalfLightRad = ['p07c_nodust_efr','sdss_r'] # [dustModel,band], or None to skip
+    #addHalfLightRad = ['p07c_nodust_efr','sdss_r'] # [dustModel,band], or None to skip
+    addHalfLightRad = None
 
     ax.set_ylim([0.3,1e2])
 
@@ -1102,7 +1107,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     markers   = ['o','D','s']  # gas, stars, baryons
     fracTypes = ['gas','stars','baryons']
 
-    field = 'Group_Mass_Crit500_Type'
+    acField = 'Group_Mass_Crit500_Type'
 
     # plot setup
     fig = plt.figure(figsize=figsize)
@@ -1160,17 +1165,21 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                 yy = val / xx_code # fraction with respect to total
                 ax.plot(xx,yy,markers[i],color=colors[0])
         else:
-            ac = auxCat(sP, fields=[field])
+            ac = auxCat(sP, fields=[acField]) #, searchExists=True)
+            #if ac[acField] is None:
+            #    print(' SKIP missing')
+            #    continue
+            data = ac[acField]
 
             # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
-            xx_code = np.sum( ac[field], axis=1 )
+            xx_code = np.sum( data, axis=1 )
 
             # handle NaNs
             ww = np.isnan(xx_code)
             xx_code[ww] = 1e-10
             xx_code[xx_code == 0.0] = 1e-10
-            ac[field][ww,0] = 1e-10
-            ac[field][ww,1:2] = 0.0
+            data[ww,0] = 1e-10
+            data[ww,1:2] = 0.0
 
             xx = sP.units.codeMassToLogMsun( xx_code )
 
@@ -1179,11 +1188,11 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                     
             for i, fracType in enumerate(fracTypes):
                 if fracType == 'gas':
-                    val = ac[field][:,1]
+                    val = data[:,1]
                 if fracType == 'stars':
-                    val = ac[field][:,2]
+                    val = data[:,2]
                 if fracType == 'baryons':
-                    val = ac[field][:,1] + ac[field][:,2]
+                    val = data[:,1] + data[:,2]
 
                 yy = val / xx_code # fraction with respect to total
 
@@ -1747,14 +1756,13 @@ def plots():
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=512, run='tng', variant=0000) )
-    #sPs.append( simParams(res=512, run='tng', variant=4401) )
-    #sPs.append( simParams(res=512, run='tng', variant=4402) )
-    #sPs.append( simParams(res=512, run='tng', variant=4501) )
-    #sPs.append( simParams(res=512, run='tng', variant=4502) )
-    #sPs.append( simParams(res=512, run='tng', variant=4503) )
+    #sPs.append( simParams(res=512, run='tng', variant=0010) )
+    #sPs.append( simParams(res=512, run='tng', variant=1000) )
+    #sPs.append( simParams(res=512, run='tng', variant=2101) )
+    #sPs.append( simParams(res=512, run='tng', variant=2202) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_sizeCheck_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_methods2fig7_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
