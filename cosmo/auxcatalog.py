@@ -644,7 +644,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         r[i,bandNum,0] = -2.5 * np.log10( totalLum )
                 else:
                     # require at least 2 stars for size calculation
-                    if i1 == i0+1:
+                    if len(wValid[0]) < 2:
                         continue
 
                     # slice starting/ending indices for -gas- local to this subhalo
@@ -773,7 +773,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
             if sizes:
                 # require at least 2 stars for size calculation
-                if i1 == i0+1:
+                if len(wValid) < 2:
                     continue
 
                 # calculate projection directions for this subhalo
@@ -1471,7 +1471,7 @@ fieldComputeFunctionMapping = \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_efr_rad30pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),   
-  'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr' : \
+   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),
