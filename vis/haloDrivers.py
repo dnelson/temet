@@ -12,7 +12,7 @@ from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
 from util.helper import pSplit
 from cosmo.load import groupCat, groupCatSingle
-from cosmo.util import snapNumToRedshift, redshiftToSnapNum
+from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns
 from util import simParams
 
 def oneHaloPressureCompAndRatios(shID=0):
@@ -428,12 +428,14 @@ def tngDwarf_firstNhalos(conf=0):
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None):
+def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, matchedToVariant=None):
     """ Plot stellar stamps of N random massive L25n512_0000 galaxies. 
-    If curPage,numPages both specified, do a paged exploration instead. """
+    If curPage,numPages both specified, do a paged exploration instead. 
+    If matchedToVariant is not None, then run the halo selection on this variant instead (e.g. always 0000) 
+    and then use the SubhaloMatching catalog to pick the matched halos in this run. """
     run       = 'tng'
     res       = 512
-    variant   = 0010 #0010 #0000 # 'L12.5'
+    variant   = 0000 #0010 #0000 # 'L12.5'
     massBin   = [12.0, 14.0]
     nGalaxies = 12
     selType   = 'random'
@@ -470,21 +472,33 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None):
         valMinMax = [6.0, 8.2]
         hsmlFac = 2.5
 
-    # load halos of this bin
+    # load halos of this bin, from this run or from the matchedToVariant source run
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    sP_from = sP
+    mvStr = ''
+
+    if matchedToVariant is not None:
+        sP_from = simParams(res=res, run=run, redshift=redshift, variant=matchedToVariant)
+        mvStr = '_matched-to-%s' % sP_from.simName
     
     if curPage is None:
         # non-paged, load requested number
-        shIDs, binInd = selectHalosFromMassBin(sP, [massBin], nGalaxies, massBinInd=0, selType=selType)
-        saveFilename2 = './methods2_stamps_%s_%s_rot=%s_size=%.1f.pdf' % \
-          (sP.simName,partType,rotation,size)
+        shIDs, binInd = selectHalosFromMassBin(sP_from, [massBin], nGalaxies, massBinInd=0, selType=selType)
+        saveFilename2 = './methods2_stamps_%s_%s_rot=%s%s.pdf' % \
+          (sP.simName,partType,rotation,mvStr)
     else:
         # paged, load all and sub-divide
-        shIDsAll, _ = selectHalosFromMassBin(sP, [[11.8,14.0]], 200, massBinInd=0, selType='linear')
-        shIDs = pSplit(shIDsAll, numPages, curPage)
-        import pdb; pdb.set_trace() # make sure we have nGalaxies per render
-        saveFilename2 = './methods2_stamps_%s_%s_rot=%s_size=%.1f_%dof%d.pdf' % \
-          (sP.simName,partType,rotation,size,curPage,numPages)
+        shIDsAll, _ = selectHalosFromMassBin(sP_from, [[11.8,14.0]], 200, massBinInd=0, selType='linear')
+        shIDs = pSplit(shIDsAll, numPages, curPage)[0:nGalaxies]
+        assert shIDs.size == nGalaxies # make sure we have nGalaxies per render
+        saveFilename2 = './methods2_pages_%s_%s_rot=%s%s_page-%dof%d.pdf' % \
+          (sP.simName,partType,rotation,mvStr,curPage,numPages)
+
+    # if we loaded the subhalo list to plot from another run, match them to the current run
+    if matchedToVariant is not None:
+        shIDs = crossMatchSubhalosBetweenRuns(sP_from, sP, shIDs)
+        assert shIDs.min() >= 0 # if any matches failed, we should make a blank panel
 
     # create panels, one per galaxy
     panels = []
@@ -502,13 +516,15 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None):
 
 def loop_stamps():
     """ Helper. """
-    numPages = 12
+    numPages = 10
+    matchedToVariant = None # 0000
 
     for conf in [0]:
         for rotation in [None]:
             for curPage in range(numPages):
                 print(conf,rotation,curPage,numPages)
-                tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, rotation=rotation)
+                tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, 
+                                   rotation=rotation, matchedToVariant=matchedToVariant)
 
 
 def tngCluster_center_timeSeriesPanels(conf=0):
