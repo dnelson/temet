@@ -459,7 +459,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             r1 = lums_cum[w1]
             halfLightRad = (0.5*totalLum - 0.0)/(r1-0.0) * (rad[w1]-0.0) + 0.0
 
-            assert halfLightRad >= 0.0 and halfLightRad <= rad[w1]
+            assert (halfLightRad >= 0.0 and halfLightRad <= rad[w1]) or np.isnan(halfLightRad)
         else:
             # more generally valid case
             w0 = w1 - 1
