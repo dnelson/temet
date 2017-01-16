@@ -278,7 +278,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         match_to_fid = crossMatchSubhalosToRun(sP_fid, sP_to, match_from_fid, method=method)
 
         w = np.where(match_from_fid == -1)
-        match_to_fid[w] = -1 # to confirm
+        match_to_fid[w] = -1 # flag any matches which failed first step as complete failures
 
         return match_to_fid
 
@@ -319,7 +319,7 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
 
     if method == 'SubLink':
         with h5py.File(filePath,'r') as f:
-            subhaloInds_from = np.indgen( f['DescendantIndex'].size )
+            subhaloInds_from = np.arange( f['DescendantIndex'].size )
             subhaloInds_to = f['DescendantIndex'][()]
 
         w = np.where(subhaloInds_to >= 0)
