@@ -435,9 +435,9 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
     and then use the SubhaloMatching catalog to pick the matched halos in this run. """
     run       = 'tng'
     res       = 512
-    variant   = 0000 #0010 #0000 # 'L12.5'
+    variant   = 0010 #0010 #0000 # 'L12.5'
     massBin   = [12.0, 14.0]
-    nGalaxies = 12
+    nGalaxies = 15 #12
     selType   = 'random'
 
     # stellar composite, 20 kpc on a side, include M* label per panel, and scale bar once
@@ -484,7 +484,7 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
     
     if curPage is None:
         # non-paged, load requested number
-        shIDs, binInd = selectHalosFromMassBin(sP_from, [massBin], nGalaxies, massBinInd=0, selType=selType)
+        shIDs, _ = selectHalosFromMassBin(sP_from, [massBin], nGalaxies, massBinInd=0, selType=selType)
         saveFilename2 = './methods2_stamps_%s_%s_rot=%s%s.pdf' % \
           (sP.simName,partType,rotation,mvStr)
     else:
@@ -517,10 +517,10 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
 def loop_stamps():
     """ Helper. """
     numPages = 10
-    matchedToVariant = None # 0000
+    matchedToVariant = 0000 # 0000
 
-    for conf in [0]:
-        for rotation in [None]:
+    for conf in [0,1]:
+        for rotation in [None,'edge-on','face-on']:
             for curPage in range(numPages):
                 print(conf,rotation,curPage,numPages)
                 tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, 

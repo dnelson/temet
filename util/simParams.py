@@ -118,7 +118,7 @@ class simParams:
         # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
         if 'tng' in run or 'prime' in run:
 
-            res_L25  = [128, 256, 512]
+            res_L25  = [128, 256, 512, 1024]
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]

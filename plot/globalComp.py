@@ -28,14 +28,23 @@ clean   = False # make visually clean plots with less information
 linestyles = ['-',':','--','-.']       # typically for analysis variations per run
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
 
-def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, simRedshift=0.0):
+def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
+                        simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
     """ Stellar mass / halo mass relation, full boxes and zoom points vs. abundance matching lines. """
     # plot setup
     xrange = [10.0, 15.0]
     yrange = [0.0, 0.30]
+    if dataRedshift > 0.0: yrange[1] = 0.25
 
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    # plot setup
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+
     ax.set_xlim(xrange)
     ax.set_ylim(yrange)
 
@@ -47,17 +56,18 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
     ax.set_ylabel('M$_\star$ / M$_{\\rm halo}$ $(\Omega_{\\rm b} / \Omega_{\\rm m})^{-1}$ [ only centrals ]')
 
     # observational data: abundance matching constraints
-    b = behrooziSMHM(sPs[0])
-    m = mosterSMHM(sPs[0])
+    b = behrooziSMHM(sPs[0], redshift=dataRedshift)
+    m = mosterSMHM(sPs[0], redshift=dataRedshift)
     k = kravtsovSMHM(sPs[0])
 
-    ax.plot(b['haloMass_i'], b['y_mid_i'], color='#333333', label='Behroozi+ (2013)')
+    ax.plot(b['haloMass_i'], b['y_mid_i'], color='#333333', label='Behroozi+ (2013) z=%d' % dataRedshift)
     ax.fill_between(b['haloMass_i'], b['y_low_i'], b['y_high_i'], color='#333333', interpolate=True, alpha=0.3)
 
-    ax.plot(m['haloMass'], m['y_mid'], color='#dddddd', label='Moster+ (2013)')
+    ax.plot(m['haloMass'], m['y_mid'], color='#dddddd', label='Moster+ (2013) z=%d' % dataRedshift)
     ax.fill_between(m['haloMass'], m['y_low'], m['y_high'], color='#dddddd', interpolate=True, alpha=0.3)
 
-    ax.plot(k['haloMass'], k['y_mid'], color='#888888', label='Kravtsov+ (2014)')
+    if dataRedshift == 0.0:
+        ax.plot(k['haloMass'], k['y_mid'], color='#888888', label='Kravtsov+ (2014) z=0')
 
     handles, labels = ax.get_legend_handles_labels()
     legend1 = ax.legend(handles, labels, loc='upper right')
@@ -67,8 +77,8 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
     lines = []
 
     for i, sP in enumerate(sPs):
-        print('SMHM: '+sP.simName)
         sP.setRedshift(simRedshift)
+        print('SMHM (z=%d): %s (z=%d)' % (dataRedshift,sP.simName,sP.redshift))
 
         if sP.isZoom:
             gc = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID)
@@ -94,6 +104,8 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
               fieldsSubhalos=['SubhaloMass','SubhaloMassType',
                               'SubhaloMassInRadType','SubhaloMassInHalfRadType'])
 
+            label = sP.simName + ' z=%d' % sP.redshift
+
             # centrals only
             wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
             w = gc['halos']['GroupFirstSub'][wHalo]
@@ -113,7 +125,7 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
                 yy = ac[field][w] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
-                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], color=c, lw=3.0, label=sP.simName)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], color=c, lw=3.0, label=label)
                 lines.append(l)
 
             if allMassTypes:
@@ -127,7 +139,7 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
                 yy = gc['subhalos']['SubhaloMassInRadType'][w,4] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
-                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], lw=3.0, color=c, label=sP.simName)
+                l, = ax.plot(xm[:-1], ym2[:-1], linestyles[0], lw=3.0, color=c, label=label)
                 lines.append(l)
 
             if allMassTypes:
@@ -160,14 +172,40 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
         if not sP.isZoom or sP.marker in markers:
             continue
         sExtra.append( plt.Line2D((0,1),(0,0),color='black',marker=sP.marker,linestyle='',label='test') )
-        lExtra.append( sP.simName )
+        lExtra.append( sP.simName + ' z=%d' % sP.redshift )
         markers.append( sP.marker )
 
     legend2 = ax.legend(sExtra, lExtra, loc='upper left')
 
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+def stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
+                                  redshifts=[0,1,2,3]):
+    """ Stellar mass / halo mass relation (2x2 panels at 4 different redshifts, matching simulation and 
+    data redshifts), vs. abundance matching lines. """
+
+    nRows = np.floor(np.sqrt(len(redshifts)))
+    nCols = np.ceil(len(redshifts) / nRows)
+
+    sizefac_loc = 0.9
+    figsize_loc = [figsize[0]*nCols*sizefac_loc, figsize[1]*nRows*sizefac_loc]
+
+    fig = plt.figure(figsize=figsize_loc)
+
+    for i, redshift in enumerate(redshifts):
+        # append each panel to existing figure, which is automatically saved into pdf at the end
+        ind = int(nRows*100 + nCols*10 + (i+1))
+        stellarMassHaloMass(sPs, pdf, ylog=ylog, allMassTypes=allMassTypes, use30kpc=use30kpc, 
+                            simRedshift=redshift, dataRedshift=redshift, fig_subplot=[fig,ind])
 
 def sfrAvgVsRedshift(sPs, pdf):
     """ Average SFRs in some halo mass bins vs. redshift vs. abundance matching lines. """
@@ -661,21 +699,27 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         pdf.savefig()
         plt.close(fig)
 
-def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, 
-                        use30kpc=False, use30H=False, useP10=False, simRedshift=0.0):
-    """ Stellar mass function (number density of galaxies) at redshift zero. """
+def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kpc=False, use30H=False, 
+                        useP10=False, simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
+    """ Stellar mass function (number density of galaxies) at redshift zero, or above. """
     # config
     mts = ['SubhaloMassInRadType','SubhaloMassInHalfRadType','SubhaloMassType']
 
     cutClumps = False
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
     
     ax.set_ylim([5e-6,2e-1])
     ax.set_xlim([7,12.5])
     if clean: ax.set_xlim([5,12.5])
+    if dataRedshift >= 3.0: ax.set_ylim([5e-7,6e-2])
 
     if highMassEnd:
         #ax.set_ylim([1e-7,2e-2])
@@ -702,24 +746,46 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < puchwein2010 r$_{\\rm cut}$ ]')
 
     # observational points
-    b08 = baldry2008SMF()
-    b12 = baldry2012SMF()
-    b13 = bernardi2013SMF()
-    d15 = dsouza2015SMF()
+    data = []
+    lines = []
 
-    l1,_,_ = ax.errorbar(b08['stellarMass'], b08['numDens'], yerr=[b08['errorDown'],b08['errorUp']],
-                         color='#bbbbbb', ecolor='#bbbbbb', alpha=0.9, capsize=0.0, fmt='D')
-    l2,_,_ = ax.errorbar(b12['stellarMass'], b12['numDens'], yerr=b12['error'],
-                         color='#888888', ecolor='#888888', alpha=0.9, capsize=0.0, fmt='o')
-    l3,_,_ = ax.errorbar(b13['SerExp']['stellarMass'], b13['SerExp']['numDens'], 
-                         yerr=[b13['SerExp']['errorUp'],b13['SerExp']['errorDown']],
-                         color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, fmt='p')
-    l4,_,_ = ax.errorbar(d15['stellarMass'], d15['numDens'], yerr=d15['error'],
-                         color='#222222', ecolor='#222222', alpha=0.9, capsize=0.0, fmt='s')
+    if dataRedshift == 0.0:
+        data.append( baldry2008SMF() )
+        data.append( baldry2012SMF() )
+        data.append( bernardi2013SMF()['SerExp'] )
+        data.append( dsouza2015SMF() )
+    if dataRedshift == 3.0:
+        data.append( davidzon2017SMF(redshift=2.5) )
+        data.append( davidzon2017SMF(redshift=3.0) )
+        data.append( caputi2015SMF(redshift=3) )
+    if dataRedshift == 4.0:
+        data.append( davidzon2017SMF(redshift=3.5) )
+        data.append( song2015SMF(redshift=4) )
+        data.append( caputi2015SMF(redshift=3) )
+        data.append( caputi2015SMF(redshift=4) )
+        data.append( grazian2015SMF(redshift=3.5) )
+    if dataRedshift == 5.0:
+        data.append( davidzon2017SMF(redshift=4.5) )
+        data.append( song2015SMF(redshift=5) )
+        data.append( caputi2015SMF(redshift=4) )
+        data.append( grazian2015SMF(redshift=4.5) )
+
+    symbols = ['D','o','p','s','x']
+    colors = ['#bbbbbb','#888888','#555555','#222222','#000000']
+
+    for i, d in enumerate(data):
+        ll = d['lowerLimits'] if 'lowerLimits' in d else False
+        if 'errorUp' in d:
+            l,_,_ = ax.errorbar(d['stellarMass'], d['numDens'], yerr=[d['errorUp'],d['errorDown']],
+                         color=colors[i], ecolor=colors[i], alpha=0.9, capsize=0.0, fmt=symbols[i], lolims=ll)
+        if 'error' in d:
+            l,_,_ = ax.errorbar(d['stellarMass'], d['numDens'], yerr=d['error'], 
+                         color=colors[i], ecolor=colors[i], alpha=0.9, capsize=0.0, fmt=symbols[i], lolims=ll)
+
+        lines.append(l)
 
     if not clean:
-        legend1 = ax.legend([l1,l2,l3,l4], 
-            [b08['label'], b12['label'], b13['SerExp']['label'], d15['label']], loc='upper right')
+        legend1 = ax.legend(lines, [d['label'] for d in data],loc='upper right')
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -799,11 +865,11 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
                 xx = gc['subhalos'][mt][w,partTypeNum('stars')]
                 xx = sP.units.codeMassToLogMsun(xx)
 
-            normFac = sP.boxSizeCubicPhysicalMpc * binSize
+            normFac = sP.boxSizeCubicComovingMpc * binSize
             xm, ym_i = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
             ym = savgol_filter(ym_i,sKn,sKo)
 
-            label = sP.simName if count == 0 else ''
+            label = sP.simName+' z=%d'%sP.redshift if count == 0 else ''
             color = l.get_color() if count > 0 else None
             l, = ax.plot(xm[1:], ym[1:], linestyles[count], color=color, lw=3.0, label=label)
 
@@ -824,9 +890,35 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False,
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')
 
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+def stellarMassFunctionMultiPanel(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kpc=False, 
+                                  use30H=False, useP10=False, redshifts=[0,1,2,3]):
+    """ Stellar mass function (number density of galaxies) in 2x2 panels at 4 different redshifts, 
+    matching simulation and data redshifts. """
+    nRows = np.floor(np.sqrt(len(redshifts)))
+    nCols = np.ceil(len(redshifts) / nRows)
+
+    sizefac_loc = 0.9
+    figsize_loc = [figsize[0]*nCols*sizefac_loc, figsize[1]*nRows*sizefac_loc]
+
+    fig = plt.figure(figsize=figsize_loc)
+
+    for i, redshift in enumerate(redshifts):
+        # append each panel to existing figure, which is automatically saved into pdf at the end
+        ind = int(nRows*100 + nCols*10 + (i+1))
+        stellarMassFunction(sPs, pdf, highMassEnd=highMassEnd, centralsOnly=centralsOnly, 
+                            use30kpc=use30kpc, use30H=use30H, useP10=useP10, 
+                            simRedshift=redshift, dataRedshift=redshift, fig_subplot=[fig,ind])
 
 def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
     """ Stellar mass-metallicity relation at z=0. """
@@ -1730,7 +1822,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -1755,20 +1847,20 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    #sPs.append( simParams(res=512, run='tng', variant=0000) )
-    #sPs.append( simParams(res=512, run='tng', variant=0010) )
-    #sPs.append( simParams(res=512, run='tng', variant=1000) )
-    #sPs.append( simParams(res=512, run='tng', variant=2101) )
-    #sPs.append( simParams(res=512, run='tng', variant=2202) )
+    sPs.append( simParams(res=512, run='tng', variant=0000) )
+    #sPs.append( simParams(res=1024, run='tng', variant=0000) )
+    #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_methods2fig7_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_L25n1024z3_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
+    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True)
+
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
     sfrdVsRedshift(sPs, pdf, xlog=False)
@@ -1779,6 +1871,7 @@ def plots():
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
+
     massMetallicityStars(sPs, pdf, simRedshift=zZero)
     massMetallicityGas(sPs, pdf, simRedshift=zZero)
     massMetallicityGas(sPs, pdf, simRedshift=0.7)

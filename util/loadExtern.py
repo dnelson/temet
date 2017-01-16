@@ -17,10 +17,12 @@ logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
 dataBasePath = expanduser("~") + '/python/data/'
 
-def behrooziSMHM(sP, logHaloMass=None):
+def behrooziSMHM(sP, logHaloMass=None, redshift=0.1):
     """ Load from data files: Behroozi+ (2013) abundance matching, stellar mass / halo mass relation. """
     basePath = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/smmr/'
-    fileName = 'c_smmr_z0.10_red_all_smf_m1p1s1_bolshoi_fullcosmos_ms.dat'
+    if redshift == 0.0: redshift = 0.1
+    fileName = 'c_smmr_z%.2f_red_all_smf_m1p1s1_bolshoi_fullcosmos_ms.dat' % redshift
+    assert isfile(basePath + fileName)
 
     # columns: log10(halo_mass), log10(stellar_mass/halo_mass), err_up (dex), err_down (dex)
     data = np.loadtxt(basePath+fileName)
@@ -115,9 +117,9 @@ def bouwensSFRD2014():
 
     return r
 
-def mosterSMHM(sP):
+def mosterSMHM(sP, redshift=0.0):
     """ Load from data files: Moster+ (2013) abundance matching, stellar mass / halo mass relation. """
-    def f2013(mass, ind=1, redshift=0.0):
+    def f2013(mass, ind, redshift):
         """ Eqn. 2 of Moster+ (2013) with redshift dependent parameters from Eqns 11-14 and the 
             best fit values and 1sigma scatter as given in Table 1. 
               ind=1 : best fit relation, ind=0: 1sigma lower envelope, ind=2: 1sigma upper envelope
@@ -188,9 +190,9 @@ def mosterSMHM(sP):
 
     r = {}
     r['haloMass'] = np.linspace(8.0, 16.0, num=200)
-    r['y_low']  = f2013( 10.0**r['haloMass'], ind=0 ) / (sP.omega_b/sP.omega_m)
-    r['y_mid']  = f2013( 10.0**r['haloMass'], ind=1 ) / (sP.omega_b/sP.omega_m)
-    r['y_high'] = f2013( 10.0**r['haloMass'], ind=2 ) / (sP.omega_b/sP.omega_m)
+    r['y_low']  = f2013( 10.0**r['haloMass'], ind=0, redshift=redshift ) / (sP.omega_b/sP.omega_m)
+    r['y_mid']  = f2013( 10.0**r['haloMass'], ind=1, redshift=redshift ) / (sP.omega_b/sP.omega_m)
+    r['y_high'] = f2013( 10.0**r['haloMass'], ind=2, redshift=redshift ) / (sP.omega_b/sP.omega_m)
 
     return r
 
@@ -527,6 +529,122 @@ def dsouza2015SMF():
           'numDens'    : valMid,
           'error'      : valUp - valMid,
           'label'      : 'D\'Souza+ (2015) SDSS z~0.1'}
+
+    return r
+
+def song2015SMF(redshift):
+    """ Load observational data points from Song+ (2015). """
+    path = dataBasePath + 'song/song2015_table2.txt'
+    assert redshift in [4.0,5.0,6.0,7.0,8.0]
+
+    # redshift log_Mstar[msun] log_phi[1/Mpc^3/dex] log_err_up[1sigma] log_err_down[1sigma]
+    data = np.loadtxt(path,delimiter=' ')
+    #data = np.genfromtxt(path, dtype=None)
+
+    w = np.where(data[:,0] == redshift)
+
+    r = { 'zMin'        : np.squeeze( data[w,0] ),
+          'stellarMass' : np.squeeze( data[w,1] ),
+          'numDens'     : np.squeeze( data[w,2] ),
+          'errorUp'     : np.squeeze( data[w,3] ),   
+          'errorDown'   : np.squeeze( data[w,4] ),
+          'label'       : 'Song+ (2015) CANDELS/GOODS/HUDF z=%d' % redshift }
+
+    r['errorUp']   = 10.0**(r['numDens']+r['errorUp']) - 10.0**r['numDens']
+    r['errorDown'] = 10.0**r['numDens'] - 10.0**(r['numDens']+r['errorDown'])
+    r['numDens']   = 10.0**r['numDens']
+
+    # rescale stellar masses from Salpeter to Chabrier
+    fac_from_Salpeter_to_Chabrier = 0.61 # 0.66 for Kroupa
+    r['stellarMass'] = np.log10(10.0**r['stellarMass'] * fac_from_Salpeter_to_Chabrier)
+
+    return r
+
+def grazian2015SMF(redshift):
+    """ Load observational data points from Grazian+ (2015). """
+    path = dataBasePath + 'grazian/grazian2015_fig6.txt'
+    assert redshift in [3.5,4.5,5.5,6.5] # lower bin edges
+
+    # zmin zmax Mstar[msun/h70^2] log_phi[h70^3/Mpc^3/dex] log_phi_up log_phi_down lowerlimit
+    data = np.loadtxt(path,delimiter=',')
+
+    w = np.where( (data[:,0] == redshift) & (data[:,6] == 0) ) # remove lower limits
+
+    r = { 'zMin'         : np.squeeze( data[w,0] ),
+          'zMax'         : np.squeeze( data[w,1] ),
+          'stellarMass'  : np.squeeze( data[w,2] ),
+          'numDens'      : np.squeeze( data[w,3] ),
+          'numDensUp'    : np.squeeze( data[w,4] ),   
+          'numDensDown'  : np.squeeze( data[w,5] ),
+          'label'        : 'Grazian+ (2015) GOODS-South/UDS %.1f<z<%.1f' % (data[w,0].min(),data[w,1].max()) }
+
+    r['errorUp']   = 10.0**r['numDensUp'] - 10.0**r['numDens']
+    r['errorDown'] = 10.0**r['numDens'] - 10.0**r['numDensDown']
+    r['numDens']   = 10.0**r['numDens']
+
+    # rescale stellar masses from Salpeter to Chabrier
+    fac_from_Salpeter_to_Chabrier = 0.61 # 0.66 for Kroupa
+    r['stellarMass'] = np.log10(r['stellarMass'] * fac_from_Salpeter_to_Chabrier)
+
+    return r
+
+def caputi2015SMF(redshift):
+    """ Load observational data points from Caputi+ (2015). """
+    path = dataBasePath + 'caputi/caputi2015_table1.txt'
+    assert redshift in [3.0,4.0] # lower bin edges
+
+    # zmin zmax log_Mstar[msun] log_phi[1/Mpc^3/dex] err_up err_down
+    data = np.loadtxt(path,delimiter=' ')
+
+    # flag lower limits
+    #lowerLims = np.zeros( data[:,0].size, dtype='bool' )
+    #lowerLims[np.where(data[:,4] >= 1.0)] = True
+    # remove lower limits:
+
+    w = np.where( (data[:,0] == redshift) & (data[:,4] < 1.0) )
+
+    r = { 'zMin'        : np.squeeze( data[w,0] ),
+          'zMax'        : np.squeeze( data[w,1] ),
+          'stellarMass' : np.squeeze( data[w,2] ),
+          'numDens'     : np.squeeze( data[w,3] ),
+          'errorUp'     : np.squeeze( data[w,4] ),  
+          'errorDown'   : np.squeeze( data[w,5] ),
+          #'lowerLimits' : np.squeeze( lowerLims[w] ),
+          'label'       : 'Caputi+ (2015) COSMOS %.1f<z<%.1f' % (data[w,0].min(),data[w,1].max()) }
+
+    r['errorUp']   = 10.0**(r['numDens']+r['errorUp']) - 10.0**r['numDens']
+    r['errorDown'] = 10.0**r['numDens'] - 10.0**(r['numDens']+r['errorDown'])
+    r['numDens']   = 10.0**r['numDens']
+
+    # rescale stellar masses from Salpeter to Chabrier
+    # note in this paper: "stellar masses have been multiplied by a factor of 1.7 to convert from 
+    #   a Chabrier to a Salpeter IMF over (0.1-100) Msun." (factor of 0.59)
+    fac_from_Salpeter_to_Chabrier = 0.61 # 0.66 for Kroupa
+    r['stellarMass'] = np.log10(10.0**r['stellarMass'] * fac_from_Salpeter_to_Chabrier)
+
+    return r
+
+def davidzon2017SMF(redshift):
+    """ Load observational data points from Davidzon+ (2017). """
+    path = dataBasePath + 'davidzon/davidzon17_fig8.txt'
+    assert redshift in [2.5,3.0,3.5,4.5] # lower bin edges
+
+    # Columns: zmin zmax log_M[msun] log_phi[1/Mpc^3/dex] log_phi_up, log_phi_down
+    data = np.loadtxt(path,delimiter=',')
+
+    w = np.where(data[:,0] == redshift)
+
+    r = { 'zMin'        : np.squeeze( data[w,0] ),
+          'zMax'        : np.squeeze( data[w,1] ),
+          'stellarMass' : np.squeeze( data[w,2] ),
+          'numDens'     : np.squeeze( data[w,3] ),
+          'numDensUp'   : np.squeeze( data[w,4] ),   
+          'numDensDown' : np.squeeze( data[w,5] ),
+          'label'       : 'Davidzon+ (2017) COSMOS %.1f<z<%.1f' % (data[w,0].min(),data[w,1].max()) }
+
+    r['errorUp']   = 10.0**r['numDensUp'] - 10.0**r['numDens']
+    r['errorDown'] = 10.0**r['numDens'] - 10.0**r['numDensDown']
+    r['numDens'] = 10.0**r['numDens']
 
     return r
 

@@ -384,8 +384,8 @@ def plotPhaseSpace2D(yAxis):
     """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box. """
     assert yAxis in ['temp','P_B','P_tot','P_tot_dens','sfr','mass_sfr_dt','mass_sfr_dt_hydro','dt_yr']
 
-    sP = simParams(res=2160, run='tng', redshift=6.0)
-    haloID = 0 # None for fullbox
+    sP = simParams(res=1820, run='tng', redshift=0.0) #, variant=0000
+    haloID = None # None for fullbox, or integer fof index
 
     # start plot
     fig = plt.figure(figsize=(16,9))
@@ -488,7 +488,7 @@ def plotPhaseSpace2D(yAxis):
     cb = plt.colorbar(cax=cax)
     cb.ax.set_ylabel('Relative Gas Mass [ log ]')
 
-    fig.savefig('phase_%s_%s_%s.pdf' % (sP.simName,yAxis,hStr))
+    fig.savefig('phase_%s_z=%.1f_%s_%s.pdf' % (sP.simName,sP.redshift,yAxis,hStr))
     plt.close(fig)
 
 def plotRadialProfile1D(quant='Potential'):
