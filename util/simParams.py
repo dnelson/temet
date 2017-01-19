@@ -142,6 +142,10 @@ class simParams:
             if res in res_L75:  self.boxSize = 75000.0
             if res in res_L205: self.boxSize = 205000.0
 
+            if res in res_L35:  boxSizeName = 50
+            if res in res_L75:  boxSizeName = 100
+            if res in res_L205: boxSizeName = 300
+
             # common: Planck2015 cosmology
             self.omega_m     = 0.3089
             self.omega_L     = 0.6911
@@ -231,6 +235,13 @@ class simParams:
             self.saveTag    = 'iP'
             self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
+
+            if res in res_L35+res_L75+res_L205:
+                if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
+                if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
+                if res in res_L205: resInd = len(res_L205) - res_L205.index(res)
+
+                self.simName = 'TNG%d-%d' % (boxSizeName,resInd)
 
         # iClusters
         if run in ['iClusters']:
