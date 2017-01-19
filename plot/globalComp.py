@@ -1848,11 +1848,12 @@ def plots():
 
     # add runs: TNG_methods
     sPs.append( simParams(res=512, run='tng', variant=0000) )
+    sPs.append( simParams(res=512, run='tng', variant=5001) )
     #sPs.append( simParams(res=1024, run='tng', variant=0000) )
     #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_L25n1024z3_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_check5001_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
@@ -1860,6 +1861,7 @@ def plots():
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True)
+    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True)
 
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
@@ -1871,6 +1873,7 @@ def plots():
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
+    stellarMassFunctionMultiPanel(sPs, pdf, use30kpc=True, highMassEnd=False, redshifts=[3,4])
 
     massMetallicityStars(sPs, pdf, simRedshift=zZero)
     massMetallicityGas(sPs, pdf, simRedshift=zZero)

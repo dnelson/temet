@@ -771,3 +771,4 @@ def depletionVsDynamicalTimescale():
         fig.tight_layout()
         fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
         plt.close(fig)
+
