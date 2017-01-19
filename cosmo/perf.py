@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime, timedelta
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile, isdir
+from os.path import isfile, isdir, expanduser
 from os import mkdir
 from os import remove, rename
 from glob import glob
@@ -154,11 +154,11 @@ def tail(fileName, nLines):
 def getCpuTxtLastTimestep(filePath):
     """ Parse cpu.txt for last timestep number and number of CPUs/tasks. """
     # hardcode Illustris-1 finalized data and complicated txt-files
-    if filePath == '/n/home07/dnelson/sims.illustris/L75n1820FP/output/cpu.txt':
+    if filePath == expanduser('~') + '/sims.illustris/L75n1820FP/output/cpu.txt':
         return 1.0, 912915, 8192
-    if filePath == '/n/home07/dnelson/sims.illustris/L75n910FP/output/cpu.txt':
+    if filePath == expanduser('~') + '/sims.illustris/L75n910FP/output/cpu.txt':
         return 1.0, 876580, 4096
-    if filePath == '/n/home07/dnelson/sims.illustris/L75n455FP/output/cpu.txt':
+    if filePath == expanduser('~') + '/sims.illustris/L75n455FP/output/cpu.txt':
         return 1.0, 268961, 128
 
     lines = tail(filePath, 100)
@@ -334,6 +334,9 @@ def plotCpuTimes():
     #sPs.append( simParams(res=1080, run='tng') )
     #sPs.append( simParams(res=540, run='tng') )
 
+    #sPs.append( simParams(res=1024, run='tng', variant=0000) )
+    #sPs.append( simParams(res=1024, run='tng', variant=4503) )
+
     # L75n1820TNG cpu.txt error: there is a line:
     # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
     # after Step 6495017
@@ -342,8 +345,8 @@ def plotCpuTimes():
 
     # multipage pdf: one plot per value
     #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
-    fName1 = '/n/home07/dnelson/plots/cpu_tng_new.pdf'
-    fName2 = '/n/home07/dnelson/plots/cpu_tng.pdf'
+    fName1 = expanduser('~') + '/plots/cpu_tng_new.pdf'
+    fName2 = expanduser('~') + '/plots/cpu_tng.pdf'
     pdf = PdfPages(fName1)
 
     for plotKey in plotKeys:
@@ -395,7 +398,7 @@ def plotCpuTimes():
 
             # total time predictions for runs which aren't yet done
             if plotKey in ['total'] and xx.max() < 0.99: #ax.get_yscale() == 'log' and 
-                ax.set_ylim([1e-2,60])
+                ax.set_ylim([1e-2,5])
 
                 fac_delta = 0.02
                 xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
@@ -444,7 +447,7 @@ def plotCpuTimes():
 
         # second legend for predictions
         if len(pLabels) > 0:
-            loc = 'upper right'
+            loc = 'upper left'
             if ax.get_yscale() == 'log': loc = 'lower left'
             legend2 = ax.legend(pColors, pLabels, loc=loc)
             ax.add_artist(legend2)
@@ -467,7 +470,7 @@ def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
          based on the Hazel Hen tests. """
 
     # config
-    basePath = '/n/home07/dnelson/sims.TNG_method/%s/' % seriesName
+    basePath = expanduser('~') + '/sims.TNG_method/%s/' % seriesName
     plotKeys = ['total','domain','voronoi','treegrav','pm_grav','hydro']
     dtInd    = 0 # index for column which is the differential time per step
     timestep = 2 # start at the second timestep (first shows strange startup numbers)
