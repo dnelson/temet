@@ -688,16 +688,19 @@ def enrichChecks():
     from util import simParams
 
     # config
-    sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
-    #sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.0001', redshift=0.0)
-    sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.00001', redshift=0.0)
+    #sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)
+    ##sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.0001', redshift=0.0)
+    #sP2 = simParams(res=256, run='L12.5n256_discrete_dm0.00001', redshift=0.0)
+
+    sP1 = simParams(res=1820,run='tng',redshift=0.0)
+    sP2 = simParams(res=1820,run='illustris',redshift=0.0)
 
     nBins = 100 # 60 for 128, 100 for 256
 
-    pdf = PdfPages('enrichChecks_' + sP1.run + '_' + sP2.run + '.pdf')
+    pdf = PdfPages('enrichChecks_' + sP1.simName + '_' + sP2.simName + '.pdf')
 
     # (1) - enrichment counter
-    if 1:
+    if 0:
         ec1 = snapshotSubset(sP1,'stars','GFM_EnrichCount')
         ec2 = snapshotSubset(sP2,'stars','GFM_EnrichCount')
 
@@ -710,8 +713,8 @@ def enrichChecks():
         ax.set_ylabel('N$_{\\rm stars}$')
 
         hRange = [ 0, max(ec1.max(),ec2.max()) ]
-        plt.hist(ec1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
-        plt.hist(ec2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+        plt.hist(ec1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.simName)
+        plt.hist(ec2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
         fig.tight_layout()    
@@ -719,7 +722,7 @@ def enrichChecks():
         plt.close(fig)
 
     # (2) final stellar masses
-    if 1:
+    if 0:
         mstar1 = snapshotSubset(sP1,'stars','mass')
         mstar2 = snapshotSubset(sP2,'stars','mass')
         mstar1 = sP1.units.codeMassToLogMsun(mstar1)
@@ -734,8 +737,36 @@ def enrichChecks():
         ax.set_ylabel('N$_{\\rm stars}$')
 
         hRange = [ min(mstar1.min(),mstar2.min()), max(mstar1.max(),mstar2.max()) ]
-        plt.hist(mstar1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
-        plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+        plt.hist(mstar1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.simName)
+        plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
+
+        ax.plot([sP1.targetGasMass,sP1.targetGasMass],[1,1e8],':',color='black',alpha=0.7,label='target1')
+        ax.plot([sP2.targetGasMass,sP2.targetGasMass],[1,1e8],':',color='black',alpha=0.7,label='target2')
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    # (2b) initial stellar masses
+    if 1:
+        mstar1 = snapshotSubset(sP1,'stars','mass_ini')
+        mstar2 = snapshotSubset(sP2,'stars','mass_ini')
+        mstar1 = np.log10( mstar1 / sP1.targetGasMass )
+        mstar2 = np.log10( mstar2 / sP2.targetGasMass )
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+        ax.set_yscale('log')
+
+        ax.set_title('')
+        ax.set_xlabel('Initial Stellar Masses / targetGasMass [ log z=0 ]')
+        ax.set_ylabel('N$_{\\rm stars}$')
+
+        hRange = [ min(mstar1.min(),mstar2.min()), max(mstar1.max(),mstar2.max()) ]
+        plt.hist(mstar1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.simName)
+        plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
         fig.tight_layout()    
@@ -743,7 +774,7 @@ def enrichChecks():
         plt.close(fig)
 
     # (3) final gas metallicities
-    if 1:
+    if 0:
         zgas1 = snapshotSubset(sP1,'gas','GFM_Metallicity')
         zgas2 = snapshotSubset(sP2,'gas','GFM_Metallicity')
         zgas1 = np.log10(zgas1)
@@ -759,8 +790,36 @@ def enrichChecks():
         ax.set_ylabel('N$_{\\rm cells}$')
 
         hRange = [ min(zgas1.min(),zgas2.min()), max(zgas1.max(),zgas2.max()) ]
-        plt.hist(zgas1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.run)
-        plt.hist(zgas2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.run)
+        plt.hist(zgas1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.simName)
+        plt.hist(zgas2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
+
+        ax.legend(loc='upper right')
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    # (4) final/initial stellar masses
+    if 0:
+        mstar1_final = snapshotSubset(sP1,'stars','mass')
+        mstar2_final = snapshotSubset(sP2,'stars','mass')
+        mstar1_ini = snapshotSubset(sP1,'stars','mass_ini')
+        mstar2_ini = snapshotSubset(sP2,'stars','mass_ini')
+
+        ratio1 = mstar1_final / mstar1_ini
+        ratio2 = mstar2_final / mstar2_ini
+
+        fig = plt.figure(figsize=(14,7))
+
+        ax = fig.add_subplot(111)
+        ax.set_yscale('log')
+
+        ax.set_title('')
+        ax.set_xlabel('(Final / Initial) Stellar Masses [ z=0 ]')
+        ax.set_ylabel('N$_{\\rm stars}$')
+
+        hRange = [ min(ratio1.min(),ratio2.min()), max(ratio1.max(),ratio2.max()) ]
+        plt.hist(ratio1, nBins, range=hRange, facecolor='red', alpha=0.7, label=sP1.simName)
+        plt.hist(ratio2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
         fig.tight_layout()    
