@@ -673,7 +673,7 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             return sP.units.calcPressureCGS(u, dens, log=True)
 
-        # magnetic prssure [log K/cm^3]
+        # magnetic pressure [log K/cm^3]
         if field.lower() in ['mag_pres','magnetic_pressure','p_b','p_magnetic']:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             return sP.units.calcMagneticPressureCGS(b, log=True)

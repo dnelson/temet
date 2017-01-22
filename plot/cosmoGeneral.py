@@ -10,13 +10,13 @@ import h5py
 import pdb
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile
+from os.path import isfile, expanduser
 from scipy.signal import savgol_filter
 
 from util import simParams
 from util.helper import running_median, logZeroNaN
 from cosmo.util import cenSatSubhaloIndices
-from cosmo.load import groupCat
+from cosmo.load import groupCat, snapshotSubset
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
     """ Add a redshift axis as a second x-axis on top (assuming bottom axis is Age of Universe [Gyr]). """
@@ -434,3 +434,83 @@ def plotClumpsEvo():
         plt.close(fig)
 
     pdf.close()
+
+def compareEOSFiles(doTempNotPres=False):
+    """ Compare eos.txt files from different runs (in eosFiles), and actual runs as well (in sPs). """
+    sPs = []
+    sPs.append( simParams(res=455,run='tng',redshift=0.0) )
+    sPs.append( simParams(res=910,run='tng',redshift=0.0) )
+    sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
+
+    eosBasePath = expanduser("~") + '/python/data/sim.tng/'
+    eosFiles = ['eos_q03.txt','eos_q1.txt','eos_poly.txt']
+    eosLabels = ['normal eEOS q=0.3',
+                 'normal eEOS q=1.0',
+                 'normal eEOS q=0.3 + polytropic 4/3 above 100$\\rho_{\\rm crit}$']
+
+    binSize = 0.1 # in log(dens)
+
+    # start plot
+    fig = plt.figure(figsize=(12.0,8.0))
+    ax = fig.add_subplot(111)
+
+    ax.set_ylim([0,13])
+    if doTempNotPres: ax.set_ylim([4,8])
+    ax.set_xlim([-6,5])
+    
+    # load eos.txt details and plot
+    for i, eosFile in enumerate(eosFiles):
+        # load and unit conversion
+        print(eosFile)
+        sP = simParams(res=455,run='tng',redshift=0.0) # eos.txt has density in [code/a^3] units with a=1
+
+        data = np.loadtxt(eosBasePath + eosFile)
+        dens = sP.units.codeDensToPhys(np.squeeze( data[:,0] ), cgs=True, numDens=True)
+        dens *= sP.units.hydrogen_massfrac
+        pres = np.squeeze( data[:,1] ) * sP.units.UnitPressure_in_cgs / sP.units.boltzmann # K/cm^3 (CGS)
+        temp = pres / (sP.units.gamma-1.0) / dens # K
+
+        # plot
+        if doTempNotPres:
+            ax.plot(np.log10(dens),np.log10(temp),'-', alpha=0.9, label=eosLabels[i])
+        else:
+            ax.plot(np.log10(dens),np.log10(pres),'-', alpha=0.9, label=eosLabels[i])
+
+    # load actual sim data and plot
+    for sP in sPs:
+        print(sP.simName)
+        
+        sim_dens = snapshotSubset(sP, 'gas', 'dens')
+        sim_dens = sP.units.codeDensToPhys(sim_dens, cgs=True, numDens=True) * sP.units.hydrogen_massfrac
+        sim_dens = np.log10(sim_dens)
+
+        if doTempNotPres:
+            sim_temp = snapshotSubset(sP, 'gas', 'temp')
+            xm1, ym1, sm1 = running_median(sim_dens,sim_temp,binSize=binSize)
+
+            ax.plot(xm1[:-1], ym1[:-1], '-', alpha=0.9, label=sP.simName+' median T$_{\\rm gas}$')
+        else:
+            # pressures
+            sim_pres_gas = snapshotSubset(sP, 'gas', 'P_gas')
+            sim_pres_B   = snapshotSubset(sP, 'gas', 'P_B')
+
+            xm1, ym1, sm1 = running_median(sim_dens,sim_pres_gas,binSize=binSize)
+            xm2, ym2, sm2 = running_median(sim_dens,sim_pres_B,binSize=binSize)
+
+            l, = ax.plot(xm1[:-1], ym1[:-1], '-', alpha=0.9, label=sP.simName+' median P$_{\\rm gas}$')
+            ax.plot(xm2[:-1], ym2[:-1], ':', alpha=0.9, color=l.get_color(), label=sP.simName+' median P$_{\\rm B}$')
+
+    if doTempNotPres:
+        ax.set_ylabel('Temperature [log K]')
+    else:
+        ax.set_ylabel('Pressure [log cgs K/cm^3]')
+
+    ax.set_xlabel('Density [log physical 1/cm^3]')
+
+    fig.tight_layout()
+    ax.legend(loc='best')
+    if doTempNotPres:
+        plt.savefig('compareTwoEosFiles_temp.pdf')
+    else:
+        plt.savefig('compareTwoEosFiles.pdf')
+    plt.close()
