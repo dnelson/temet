@@ -367,7 +367,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
         i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,ptLoadType]
 
-        assert i0 >= 0 and i1 <= (indRange[1]-indRange[0])
+        assert i0 >= 0 and i1 <= (indRange[1]-indRange[0]+1)
 
         if i1 == i0:
             continue # zero length of this type
@@ -618,7 +618,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]
                 i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
 
-                assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0])
+                assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
                 if i1 == i0:
                     continue # zero length of this type
@@ -651,7 +651,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
                     i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
 
-                    assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0])
+                    assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
 
                     # calculate projection directions for this subhalo
                     projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
@@ -737,7 +737,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]
             i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
 
-            assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0])
+            assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
             if i1 == i0:
                 continue # zero length of this type
@@ -769,7 +769,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
             i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
 
-            assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0])
+            assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
 
             if sizes:
                 # require at least 2 stars for size calculation

@@ -577,7 +577,8 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
 def subhaloIDListToBoundingPartIndices(sP, subhaloIDs):
     """ For a list of subhalo IDs, return a dictionary with an entry for each partType, 
     whose value is a 2-tuple of the particle index range bounding the members of the 
-    parent groups of this list of subhalo IDs. """
+    parent groups of this list of subhalo IDs. Indices are inclusive in the sense of 
+    cosmo.load.snapshotSubset()."""
     first_sub = subhaloIDs[0]
     last_sub = subhaloIDs[-1]
 
@@ -601,6 +602,8 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs):
     r = {}
     for ptName in ['gas','dm','stars','bhs']:
         r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], sP.ptNum(ptName) ]
+        # the final index should be included when using this range, as in snapshotSubset(), but not as in numpy indexing
+        r[ptName][1] -= 1
 
     return r
 
