@@ -377,6 +377,72 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean:
             if par != 'all': label += ' [%s]' % par
 
+    if quant in ['M_BH','M_BH_actual']:
+        # either dynamical (particle masses) or "actual" BH masses excluding gas reservoir
+        if quant == 'M_BH': fieldName = 'SubhaloMassType'
+        if quant == 'M_BH_actual': fieldName = 'SubhaloBHMass'
+
+        # 'total' black hole mass in this subhalo
+        # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 
+        # are effectively taking the sum of all their BH masses (better than mean, but max probably best)
+        gc = groupCat(sP, fieldsSubhalos=[fieldName])
+
+        if quant == 'M_BH':
+            vals = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum('bhs')] )
+        if quant == 'M_BH_actual':
+            vals = sP.units.codeMassToMsun( gc['subhalos'] )
+
+        label = 'M$_{\\rm BH}$ [ log M$_{\\rm sun}$ ]'
+        if not clean:
+            if quant == 'B_MH': label += ' w/ reservoir'
+            if quant == 'B_MH_actual': label += ' w/o reservoir'
+        minMax = [6.0,9.0]
+        #if tight: minMax = [6.5,8.5]
+
+    if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio',
+                 'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:
+        # cumulative energy/mass growth in the low vs high states, and the respective ratios
+        if quant == 'BH_CumEgy_ratio':
+            fields = ['CumEgyInjection_High','CumEgyInjection_Low']
+            label = 'BH $\int$ E$_{\\rm injected,high}$ / $\int$ E$_{\\rm injected,low}$ [ log ]'
+            minMax = [0.0,4.0]
+        if quant == 'BH_CumMass_ratio':
+            fields = ['CumMassGrowth_High','CumMassGrowth_Low']
+            label = 'BH $\int$ M$_{\\rm growth,high}$ / $\int$ M$_{\\rm growth,low}$ [ log ]'
+            minMax = [1.0,5.0]
+        if quant == 'BH_CumEgy_low':
+            fields = ['CumEgyInjection_Low']
+            label = 'BH $\int$ E$_{\\rm injected,low}$ [ log erg ]'
+            minMax = [54, 61]
+        if quant == 'BH_CumEgy_high':
+            fields = ['CumEgyInjection_High']
+            label = 'BH $\int$ E$_{\\rm injected,high}$ [ log erg ]'
+            minMax = [58, 62]
+        if quant == 'BH_CumMass_low':
+            fields = ['CumMassGrowth_Low']
+            label = '$\int$ M$_{\\rm growth,low}$ [ log M$_{\\rm sun}$ ]'
+            minMax = [0.0,7.0]
+        if quant == 'BH_CumMass_high':
+            fields = ['CumMassGrowth_High']
+            label = '$\int$ M$_{\\rm growth,high}$ [ log M$_{\\rm sun}$ ]'
+            minMax = [5.0,9.0]
+
+        fields = ['Subhalo_BH_' + f for f in fields]
+        ac = auxCat(sP, fields=fields)
+
+        if '_ratio' in quant:
+            # fix ac[fields[1]]=0 values such that vals is zero, which is then specially colored
+            w = np.where(ac[fields[1]] == 0.0)[0]
+            if len(w):
+                ac[fields[1]][w] = 1.0
+                ac[fields[0]][w] = 0.0
+
+            vals = ac[fields[0]] / ac[fields[1]]
+        else:
+            vals = ac[fields[0]]
+            if 'CumMass' in quant: vals = sP.units.codeMassToMsun(vals)
+            if 'CumEgy' in quant: vals = sP.units.codeEnergyToErg(vals)
+
     assert label is not None
     return vals, label, minMax, takeLog
 

@@ -631,8 +631,11 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
     # start plot
     sizefac = 1.5
     if clean: sizefac = 1.3
-    if len(stellarMassBins) >= 4: figsize = (16,9)
-    else: figsize = (5.3, 13.5)
+    if len(stellarMassBins) >= 4:
+        figsize = (16,9) # 2 rows, N columns
+        #figsize = (9,16) # 3 rows, N (2) columns
+    else:
+        figsize = (5.3, 13.5)
 
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
     axes = []
@@ -646,9 +649,10 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
     for i, stellarMassBin in enumerate(stellarMassBins):
 
         # panel setup
-        if len(stellarMassBins) >= 4: # 2 rows, N columns
+        if len(stellarMassBins) >= 4:
             iLeg = 5 #2 # lower right (2x3)
-            ax = fig.add_subplot(2,len(stellarMassBins)/2,i+1)
+            ax = fig.add_subplot(2,len(stellarMassBins)/2,i+1) #2 rows, N columns
+            #ax = fig.add_subplot(3,len(stellarMassBins)/3,i+1) #3 rows, N columns
         else: # N rows, 1 column
             iLeg = 2 # bottom (3x1)
             ax = fig.add_subplot(len(stellarMassBins), 1, i+1)
@@ -804,7 +808,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                     kde2 = gaussian_kde(sdss_color[wObs], bw_method='scott')
                     yy_obs = kde2(xx)
                     axes[i].plot(xx, yy_obs, '-', color=obs_color, alpha=1.0, lw=3.0)
-                    axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)
+                    #axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)
 
                     if len(wBin[0]) <= 1:
                         print(' skip sim kde no data: ',sP.simName,i)
@@ -838,7 +842,8 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                             label = label.replace("p07c_cf00dust", "Model B")
                             label = label.replace("p07c_nodust", "Model A")
 
-                        axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=1.0, lw=3.0)
+                        alpha = 0.5 if 'Illustris' in sP.simName else 1.0
+                        axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
                         if j == 0:
                             axes[i].fill_between(xx, 0.0, yy_sim, color=c, alpha=0.1, interpolate=True)
 
@@ -1430,9 +1435,11 @@ def quantList(wCounts=True, wTr=True, onlyTr=False):
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii',
                 'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                 'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
+    quants3 = ['M_BH_actual', 'BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio',
+               'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
 
     # L75 only:
-    quants3 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
+    quants4 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
 
     # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
     #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
@@ -1450,7 +1457,7 @@ def quantList(wCounts=True, wTr=True, onlyTr=False):
         trQuants.append(trBase + '_mode=smooth_par=bhs')
         trQuants.append(trBase + '_mode=merger_par=stars')
 
-    quantList = quants1 + quants2 + quants3
+    quantList = quants1 + quants2 + quants3 + quants4
     if wTr: quantList += trQuants
     if onlyTr: quantList = trQuants
 
@@ -1460,12 +1467,12 @@ def plots():
     """ Driver (exploration). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
-    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     bands = ['g','r']
-    xQuant = 'mstar2_log' # ssfr
+    xQuant = 'mstar2_log' # mstar2_log, ssfr, M_BH_actual
     cs = 'median_nan'
-    cenSatSelects = ['cen','sat','all']
+    cenSatSelects = ['cen'] #['cen','sat','all']
 
     quants = quantList()
 
@@ -1526,7 +1533,7 @@ def paperPlots():
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_rad30pkpc_all' # all projections shown
 
     # figure 1, 1D color PDFs in six mstar bins (3x2)
-    if 0:
+    if 1:
         sPs = [L75, L75FP] #[L75, L205]
         dust = dust_C_all
 
@@ -1534,7 +1541,18 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust])
         pdf.close()
 
-    # figure 2, stellar ages and metallicities vs mstar (2x1 in a row)
+    # figure 2, 2x2 grid of different 2D color PDFs
+    if 0:
+        sPs = [L75]
+        dust = dust_C
+
+        pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
+        galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
+        pdf.close()
+
+    # figure 3: fullbox demonstratrion projections
+
+    # figure 4, stellar ages and metallicities vs mstar (2x1 in a row)
     if 0:
         sPs = [L75, L205] # L75FP
         figsize_loc = [figsize[0]*2*0.9, figsize[1]*1*0.9] # orig * nCols_or_nRows * sizefac_clean
@@ -1545,18 +1563,8 @@ def paperPlots():
         plot.globalComp.massMetallicityStars(sPs, pdf, fig_subplot=[fig,122])
         pdf.close()
 
-    # figure 3, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
-    if 0:
-        figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
 
-        pdf = PdfPages('figure3.pdf')
-        fig = plt.figure(figsize=figsize_loc)
-        histo2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
-        histo2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
-        histo2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
-        pdf.close()
-
-    # figure 4, grid of L205_cen 2d color histos vs. several properties (2x3 or 3x4)
+    # figure 5, grid of L205_cen 2d color histos vs. several properties (2x3 or 3x4)
     if 0:
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         params = {'bands':['g','r'], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
@@ -1572,7 +1580,7 @@ def paperPlots():
         pdf.close()
 
     # figure 5
-    if 1:
+    if 0:
         sP = L75
         dust = dust_C
         toRedshift = 0.1
@@ -1584,11 +1592,23 @@ def paperPlots():
                              minCount=minCount, simColorsModel=dust)
         pdf.close()
 
-    # appendix figure 1, viewing angle variation (1 panel)
+    # appendix figure 1, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
+    if 0:
+        figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
+
+        pdf = PdfPages('figure3.pdf')
+        fig = plt.figure(figsize=figsize_loc)
+        histo2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
+        histo2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
+        histo2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
+        pdf.close()
+
+
+    # appendix figure 2, viewing angle variation (1 panel)
     if 0:
         viewingAngleVariation()
 
-    # appendix figure 2, dust model dependence (1x3 1D histos in a column)
+    # appendix figure 3, dust model dependence (1x3 1D histos in a column)
     if 0:
         sPs = [L75]
         dusts = [dust_C_all, dust_C, dust_B, dust_A]
@@ -1598,7 +1618,7 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts, stellarMassBins=massBins)
         pdf.close()
 
-    # appendix figure 3, resolution convergence (1x3 1D histos in a column)
+    # appendix figure 4, resolution convergence (1x3 1D histos in a column)
     if 0:
         L75n910 = simParams(res=910,run='tng',redshift=0.0)
         L75n455 = simParams(res=455,run='tng',redshift=0.0)
@@ -1610,14 +1630,6 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
         pdf.close()
 
-    # appendix figure 4, 2x2 grid of different 2D color PDFs
-    if 0:
-        sPs = [L75]
-        dust = dust_C
-
-        pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
-        galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
-        pdf.close()
 
     # testing
     if 0:

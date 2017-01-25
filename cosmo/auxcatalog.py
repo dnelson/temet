@@ -1510,5 +1510,15 @@ fieldComputeFunctionMapping = \
    'Subhalo_Tracers_entr_tAcc'   : partial(tracerTracksQuant,quant='entr',op='mean',time='acc_time_1rvir'),
    'Subhalo_Tracers_temp_tAcc'   : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir'),
    'Subhalo_Tracers_tempTviracc_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_tacc'),
-   'Subhalo_Tracers_tempTvircur_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_cur')
+   'Subhalo_Tracers_tempTvircur_tAcc' : partial(tracerTracksQuant,quant='temp',op='mean',time='acc_time_1rvir',norm='tvir_cur'),
+
+   'Subhalo_BH_CumEgyInjection_Low' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumEgyInjection_RM',op='sum',rad=None),
+   'Subhalo_BH_CumEgyInjection_High' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumEgyInjection_QM',op='sum',rad=None),
+   'Subhalo_BH_CumMassGrowth_Low' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_RM',op='sum',rad=None),
+   'Subhalo_BH_CumMassGrowth_High' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_QM',op='sum',rad=None)
+
   }
