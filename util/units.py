@@ -6,7 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
-from util.helper import logZeroSafe, logZeroMin
+from util.helper import logZeroSafe, logZeroNaN, logZeroMin
 from cosmo.util import correctPeriodicDistVecs
 
 class units(object):
@@ -121,7 +121,7 @@ class units(object):
 
     def codeMassToMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (msun). """
-        mass_msun = mass.astype('float32') * (self.UnitMass_in_g / self.Msun_in_g) / self._sP.HubbleParam
+        mass_msun = mass.astype('float32') * (self.UnitMass_in_Msun) / self._sP.HubbleParam
         
         return mass_msun
 
@@ -618,6 +618,14 @@ class units(object):
 
         age[w_stars] = birthRedshift[w_stars]
         return age
+
+    def codeEnergyToErg(self, energy, log=False):
+        """ Convert energy from code units (unitMass*unitLength^2/unitType^2) to [erg]. """
+        energy_cgs = energy.astype('float32') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
+        
+        if log:
+            return logZeroNaN(energy_cgs)
+        return energy_cgs
 
     # --- other ---
 
