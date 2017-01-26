@@ -17,16 +17,10 @@ from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapH
 from cosmo.util import validSnapList, periodicDists
 from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
 from plot.cosmoGeneral import addRedshiftAgeAxes
+from plot.config import *
 
-# global configuration
-sKn     = 5   # savgol smoothing kernel length (1=disabled)
-sKo     = 3   # savgol smoothing kernel poly order
-binSize = 0.2 # dex in stellar mass/halo mass for median lines
+# still overriding figsize for globalComps:
 figsize = (16,9) # (16,9) (8,6) (smf:10.6,7.0)
-clean   = False # make visually clean plots with less information
-
-linestyles = ['-',':','--','-.']       # typically for analysis variations per run
-colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
 
 def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):

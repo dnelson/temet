@@ -26,16 +26,9 @@ from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
 from cosmo.mergertree import loadMPBs
 from plot.general import simSubhaloQuantity
+from plot.cosmoGeneral import quantMedianVsSecondQuant
 from vis.common import setAxisColors
-
-# global configuration (remove duplication with globalComp.py)
-sKn     = 5   # savgol smoothing kernel length (1=disabled)
-sKo     = 3   # savgol smoothing kernel poly order
-binSize = 0.2 # dex in stellar mass/halo mass for median lines
-figsize = (14,10) # (8,6)
-clean   = False  # make visually clean plots with less information
-
-linestyles = ['-',':','--','-.'] # typically for analysis variations per run
+from plot.config import *
 
 # the dust model used by histo2D(), histoSlice(), 1D and 2D PDFs by default
 defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
@@ -475,7 +468,6 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen',
     # hard-coded config
     lw = 2.5
     ptPlotThresh = 2000
-    #cmap = loadColorTable('viridis') # plasma
 
     sizefac = 1.0 if not clean else 0.9
     if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
@@ -529,21 +521,18 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen',
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
 
             sim_colors = sim_colors[wSelect]
-            #sim_cvals = sim_cvals[wSelect]
             sim_yvals = sim_yvals[wSelect]
             sim_svals = sim_svals[wSelect]
 
             # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
             wFinite = np.isfinite(sim_colors) & np.isfinite(sim_yvals)
             sim_colors = sim_colors[wFinite]
-            #sim_cvals  = sim_cvals[wFinite]
             sim_yvals  = sim_yvals[wFinite]
             sim_svals  = sim_svals[wFinite]
 
             # make slice selection
             wSlice = np.where( (sim_svals >= sRange[0]) & (sim_svals < sRange[1]) )
             sim_colors = sim_colors[wSlice]
-            #sim_cvals  = sim_cvals[wSlice]
             sim_yvals  = sim_yvals[wSlice]
             sim_svals  = sim_svals[wSlice]
 
@@ -574,9 +563,7 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen',
 
             ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
 
-            # percentile:
-            #ax.plot(xm, pm2[1,:], linestyles[1], color=c, lw=lw)
-            #ax.plot(xm, pm2[-2,:], linestyles[1], color=c, lw=lw)
+            # percentile band:
             if sim_colors.size >= ptPlotThresh:
                 ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
@@ -587,11 +574,6 @@ def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen',
             labelsO  = ['median, P[10,90]']
 
             legend = ax.legend(handles+handlesO, labels+labelsO, loc='best')
-
-        # colorbar
-        #cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        #cb = plt.colorbar(cax=cax)
-        #cb.ax.set_ylabel(clabel)
 
     # finish plot and save
     finishFlag = False
@@ -1423,7 +1405,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
                 facecolor=fig.get_facecolor())
         plt.close(fig)
 
-def quantList(wCounts=True, wTr=True, onlyTr=False):
+def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
     # generally availably (groupcat)
@@ -1435,6 +1417,7 @@ def quantList(wCounts=True, wTr=True, onlyTr=False):
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii',
                 'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                 'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
+
     quants3 = ['M_BH_actual', 'BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio',
                'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
 
@@ -1460,11 +1443,12 @@ def quantList(wCounts=True, wTr=True, onlyTr=False):
     quantList = quants1 + quants2 + quants3 + quants4
     if wTr: quantList += trQuants
     if onlyTr: quantList = trQuants
+    if onlyBH: quantList = quants3
 
     return quantList
 
 def plots():
-    """ Driver (exploration). """
+    """ Driver (exploration 2D histograms). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
@@ -1488,7 +1472,7 @@ def plots():
             pdf.close()
 
 def plots2():
-    """ Driver (exploration). """
+    """ Driver (exploration 1D slices). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
@@ -1512,6 +1496,32 @@ def plots2():
         # one page per quantity:
         for yQuant in quants + quantsTr:
             histoSlice(sPs, pdf, bands, yQuants=[yQuant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+
+        pdf.close()
+
+def plots3():
+    """ Driver (exploration median trends). """
+    sPs = []
+    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+
+    bands = ['g','r']
+    xQuant = 'mstar2_log'
+    cenSatSelects = ['cen']
+
+    quants = quantList(onlyBH=True)
+
+    # make plots
+    for css in cenSatSelects:
+        pdf = PdfPages('medianQuants_%s_%s_%s.pdf' % \
+            ('-'.join([sP.simName for sP in sPs]),xQuant,css))
+
+        # all quantities on one multi-panel page:
+        quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
+
+        # one page per quantity:
+        for yQuant in quants:
+            quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
 
         pdf.close()
     

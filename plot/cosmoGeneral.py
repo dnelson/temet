@@ -17,6 +17,8 @@ from util import simParams
 from util.helper import running_median, logZeroNaN
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
+from plot.general import simSubhaloQuantity
+from plot.config import *
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
     """ Add a redshift axis as a second x-axis on top (assuming bottom axis is Age of Universe [Gyr]). """
@@ -514,3 +516,119 @@ def compareEOSFiles(doTempNotPres=False):
     else:
         plt.savefig('compareTwoEosFiles.pdf')
     plt.close()
+
+def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_subplot=[None,None]):
+    """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
+    For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
+    yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
+    which are overplotted. Multiple yQuants results in a grid. """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    nRows = np.floor(np.sqrt(len(yQuants)))
+    nCols = np.ceil(len(yQuants) / nRows)
+
+    # hard-coded config
+    lw = 2.5
+    ptPlotThresh = 2000
+    nBins = 60
+    #cmap = loadColorTable('viridis') # plasma
+
+    sizefac = 1.0 if not clean else 0.9
+    if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
+
+    # start plot
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=[figsize[0]*nCols*sizefac, figsize[1]*nRows*sizefac])
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+
+    # loop over each yQuantity (panel)
+    for i, yQuant in enumerate(yQuants):
+        if fig_subplot[0] is None:
+            ax = fig.add_subplot(nRows,nCols,i+1)
+        else:
+            ax = fig.add_subplot(fig_subplot[1])
+
+        for sP in sPs:
+            # loop over each run and add to the same plot
+            print(' ',yQuant,xQuant,sP.simName,cenSatSelect)
+
+            # y-axis: load fullbox galaxy properties
+            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+
+            if sim_yvals is None:
+                print('   skip')
+                continue # property is not calculated for this run (e.g. expensive auxCat)
+
+            if yLog is True:
+                sim_yvals = logZeroNaN(sim_yvals)
+
+            # x-axis: load fullbox galaxy properties
+            if 'quantMedian_xvals' in sP.data:
+                sim_xvals, xlabel, xMinMax = sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax']                
+            else:
+                sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean)
+                if xLog:
+                    sim_xvals = logZeroNaN(sim_xvals)
+                sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
+
+            # central/satellite selection?
+            wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+
+            sim_yvals = sim_yvals[wSelect]
+            sim_xvals = sim_xvals[wSelect]
+
+            # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
+            wFinite = np.isfinite(sim_xvals) & np.isfinite(sim_yvals)
+            sim_yvals  = sim_yvals[wFinite]
+            sim_xvals  = sim_xvals[wFinite]
+
+            ax.set_xlim(xMinMax)
+            ax.set_ylim(yMinMax)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
+            # plot points (todo: update for medianQuant)
+            c = ax._get_lines.prop_cycler.next()['color']
+
+            if sim_xvals.size < ptPlotThresh:
+                ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=0.3)
+
+            # median and 10/90th percentile lines
+            binSize = (xMinMax[1]-xMinMax[0]) / nBins
+
+            xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
+            xm = xm[1:-1]
+            ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
+            sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
+            pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+
+            ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+
+            # percentile:
+            if sim_xvals.size >= ptPlotThresh:
+                ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+
+        # legend
+        if i == 0:
+            handles, labels = ax.get_legend_handles_labels()
+            handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0])]
+            labelsO  = ['median, P[10,90]']
+
+            legend = ax.legend(handles+handlesO, labels+labelsO, loc='best')
+
+    # finish plot and save
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        if pdf is not None:
+            pdf.savefig()
+        else:
+            fig.savefig('medianQuants_%s_%s_%s_%s.pdf' % \
+                ('-'.join([sP.simName for sP in sPs],'-'.join([xQ for xQ in xQuant]),yQuant,cenSatSelect)))
+        plt.close(fig)

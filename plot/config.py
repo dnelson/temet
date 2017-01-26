@@ -1,0 +1,13 @@
+"""
+config.py
+  Global plot-related configuration which is imported into other plotting submodules.
+"""
+
+sKn     = 5   # savgol smoothing kernel length (1=disabled)
+sKo     = 3   # savgol smoothing kernel poly order
+binSize = 0.2 # dex in stellar mass/halo mass for median lines
+figsize = (14,10) # (8,6)
+clean   = False  # make visually clean plots with less information
+
+linestyles = ['-',':','--','-.'] # typically for analysis variations per run
+colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
