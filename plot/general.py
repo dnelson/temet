@@ -397,7 +397,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if quant == 'B_MH': label += ' w/ reservoir'
             if quant == 'B_MH_actual': label += ' w/o reservoir'
         minMax = [6.0,9.0]
-        #if tight: minMax = [6.5,8.5]
+        if tight: minMax = [6.0,10.0]
 
     if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:
@@ -406,26 +406,32 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             fields = ['CumEgyInjection_High','CumEgyInjection_Low']
             label = 'BH $\int$ E$_{\\rm injected,high}$ / $\int$ E$_{\\rm injected,low}$ [ log ]'
             minMax = [0.0,4.0]
+            if tight: minMax = [0.0,7.0]
         if quant == 'BH_CumMass_ratio':
             fields = ['CumMassGrowth_High','CumMassGrowth_Low']
             label = 'BH $\int$ M$_{\\rm growth,high}$ / $\int$ M$_{\\rm growth,low}$ [ log ]'
             minMax = [1.0,5.0]
+            if tight: minMax = [1.0,6.0]
         if quant == 'BH_CumEgy_low':
             fields = ['CumEgyInjection_Low']
             label = 'BH $\int$ E$_{\\rm injected,low}$ [ log erg ]'
             minMax = [54, 61]
+            if tight: minMax = [54,63]
         if quant == 'BH_CumEgy_high':
             fields = ['CumEgyInjection_High']
             label = 'BH $\int$ E$_{\\rm injected,high}$ [ log erg ]'
             minMax = [58, 62]
+            if tight: minMax = [58,63]
         if quant == 'BH_CumMass_low':
             fields = ['CumMassGrowth_Low']
             label = '$\int$ M$_{\\rm growth,low}$ [ log M$_{\\rm sun}$ ]'
             minMax = [0.0,7.0]
+            if tight: minMax = [0.0,9.0]
         if quant == 'BH_CumMass_high':
             fields = ['CumMassGrowth_High']
             label = '$\int$ M$_{\\rm growth,high}$ [ log M$_{\\rm sun}$ ]'
             minMax = [5.0,9.0]
+            if tight: minMax = [6.0,10.0]
 
         fields = ['Subhalo_BH_' + f for f in fields]
         ac = auxCat(sP, fields=fields)
