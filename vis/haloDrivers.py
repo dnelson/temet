@@ -69,7 +69,6 @@ def oneHaloGaussProposal():
     nPixels    = [960,960]
     size       = 0.3 # central object
     sizeType   = 'rVirial'
-    vecOverlay = True # experimental B field streamlines
     hsmlFac    = 2.5
     axes       = [1,0]
     labelZ     = False
@@ -79,6 +78,11 @@ def oneHaloGaussProposal():
     relCoords  = True
     rotation   = None
     mpb        = None
+
+    vecOverlay = 'bfield' # experimental B field streamlines
+    vecMethod  = 'E' # colored streamlines, uniform thickness
+    vecColorPT = 'gas'
+    vecColorPF = 'bmag'
 
     class plotConfig:
         plotStyle    = 'open'
@@ -440,7 +444,7 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
     nGalaxies = 15 #12
     selType   = 'random'
 
-    # stellar composite, 20 kpc on a side, include M* label per panel, and scale bar once
+    # stellar composite, 50 kpc/h on a side, include M* label per panel, and scale bar once
     # select random in [12.0,inf] halo mass range, do each of: face-on, edge-on, random(z)
     # possible panel configurations: 4x2 = 8, 4x3 = 12, 5x3 = 15, 6x3 = 18
     redshift   = 0.0
@@ -526,6 +530,107 @@ def loop_stamps():
                 tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, 
                                    rotation=rotation, matchedToVariant=matchedToVariant)
 
+def tngMethods2_windPatterns(conf=1, pageNum=0):
+    """ Plot gas streamlines (galaxy wind patterns), 4x2, top four from L25n512_0000 and bottom four 
+    from L25n512_0010 (Illustris model), matched. """
+    run       = 'tng'
+    res       = 512
+    variant   = 0000 # TNG fiducial
+    matchedToVariant = 0010 # Illustris fiducial
+
+    # stellar composite, 50 kpc/h on a side, include M* label per panel, and scale bar once
+    redshift   = 2.0
+    rVirFracs  = None
+    method     = 'sphMap'
+    nPixels    = [700,700]
+    axes       = [0,1]
+    labelZ     = False
+    labelSim   = False
+    labelHalo  = 'Mstar'
+    relCoords  = True
+    mpb        = None
+    rotation   = 'edge-on'
+
+    vecOverlay  = 'gas_vel' # experimental gas (x,y) velocity streamlines
+    vecMinMax   = [0,450] # range for streamlines color scaling and colorbar
+    vecColorbar = True
+    vecMethod   = 'E' # colored streamlines, uniform thickness
+    vecColorPT  = 'gas'
+    vecColorPF  = 'vmag'
+
+    size      = 120.0 # [50,80,120] --> 25,40,60 ckpc/h each direction
+    sizeType  = 'codeUnits'
+
+    if conf == 0:
+        partType = 'stars'
+        partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+        hsmlFac = 0.5
+
+    if conf == 1:
+        partType = 'gas'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [7.2, 8.6]
+        hsmlFac = 2.5
+
+    # pick halos from this run and crossmatch
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+    sP2 = simParams(res=res, run=run, redshift=redshift, variant=matchedToVariant)
+    
+    # _page (z0)
+    #selectHalosFromMassBin(): In massBin [11.9 12.2] have 47 halos total.
+    #pages = [[11057, 11486, 11533, 11662],  [11792, 12049, 12078, 12135],  [12192, 12328, 12367, 12453],
+    #         [12498, 12533, 12587, 12618],  [12650, 12727, 12802, 12831],  [12900, 12936, 12965, 12991],
+    #         [13037, 13070, 13092, 13117],  [13136, 13165, 13185, 13214],  [13266, 13284, 13319, 13379],
+    #         [13414, 13458, 13486, 13575],  [13593, 13611, 13638, 13707],  [13736, 13875, 13949, 13949]]
+
+    # 11.5_page (z0)
+    #selectHalosFromMassBin(): In massBin [11.5 11.6] have 43 halos total.
+    #pages = [[14074, 14425, 14626, 14654], [14689, 14724, 14764, 14779], [14815, 14894, 14917, 14940],
+    #         [14948, 14975, 14987, 14997], [15007, 15017, 15037, 15067], [15087, 15106, 15113, 15127],
+    #         [15148, 15169, 15185, 15204], [15212, 15219, 15228, 15241], [15253, 15264, 15272, 15279],
+    #         [15304, 15306, 15353, 15391], [15396, 15402, 15504, 15504]]
+
+    # z2_11.5_page (z=2)
+    #selectHalosFromMassBin(): In massBin [11.5 11.7] have 85 halos total.
+    #pages = [[3498, 3833, 3861, 4097], [4250, 4481, 4511, 4578], [4601, 4656, 4720, 4763], 
+    #         [4882, 4898, 4913, 4928], [4952, 4985, 5004, 5023], [5037, 5049, 5062, 5077],
+    #         [5133, 5154, 5173, 5186], [5202, 5220, 5231, 5240], [5278, 5295, 5310, 5323],
+    #         [5396, 5441, 5459, 5469], [5482, 5491, 5508, 5520], [5533, 5546, 5558, 5584]]
+
+    # z2 selections from above
+    pages = [[3498, 4250, 5396, 5173], [4481, 4656, 5482, 5546]]
+
+    shIDs = pages[pageNum]
+
+    # todo: change to manual ID selection below
+    #nGalaxies = 4
+    #shIDs, _ = selectHalosFromMassBin(sP, [[11.5,11.7]], nGalaxies, massBinInd=0, selType='linear')
+    #import pdb; pdb.set_trace()
+
+    # crossmatch to other run
+    shIDs2 = crossMatchSubhalosBetweenRuns(sP, sP2, shIDs)
+    assert shIDs2.min() >= 0 # if any matches failed, we should make a blank panel
+
+    # create panels, one per galaxy
+    panels = []
+    for i, shID in enumerate(shIDs):
+        labelScaleLoc = True if i == 0 else False
+        panels.append( {'hInd':shID, 'labelScale':labelScaleLoc, 'variant':variant} )
+    for i, shID in enumerate(shIDs2):
+        panels.append( {'hInd':shID, 'labelScale':labelScaleLoc, 'variant':matchedToVariant} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 700
+        colorbars    = True
+        saveFilename = './methods2_gasflows_z2_final_page-%d_%s-%s_%s-%s_%s_%dckpch.pdf' % (pageNum,sP.simName,matchedToVariant,partType,partField,rotation,size)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def loop_patterns():
+    for i in range(2):
+        print(i)
+        tngMethods2_windPatterns(conf=1, pageNum=i)
 
 def tngCluster_center_timeSeriesPanels(conf=0):
     """ Plot a time series of panels from subsequent snapshots in the center of fof0. """

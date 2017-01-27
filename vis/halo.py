@@ -142,27 +142,34 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
 
     # defaults (all panel fields that can be specified)
 
-    hInd      = 0              # zoom halo index
-    run       = 'illustris'    # run name
-    res       = 1820           # run resolution
-    redshift  = 0.0            # run redshift
-    partType   = 'gas'         # which particle type to project
-    partField = 'temp'         # which quantity/field to project for that particle type
-    #valMinMax = [min,max]     # stretch colortable between minimum and maximum field values
-    rVirFracs  = [1.0]         # draw circles at these fractions of a virial radius
-    method     = 'sphMap'      # sphMap, sphMap_global, voronoi_const, voronoi_grads, ...
-    nPixels    = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
-    size       = 3.0           # side-length specification of imaging box around halo/galaxy center
-    sizeType   = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
-    hsmlFac    = 2.5           # multiplier on smoothing lengths for sphMap
-    axes       = [1,0]         # e.g. [0,1] is x,y
-    labelZ     = False         # label redshift inside (upper right corner) of panel
-    labelScale = False         # label spatial scale with scalebar (upper left of panel)
-    labelSim   = False         # label simulation name (lower right corner) of panel
-    labelHalo  = False         # label halo total mass and stellar mass
-    relCoords  = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
-    rotation   = None          # 'face-on', 'edge-on', or None
-    mpb        = None          # use None for non-movie/single frame
+    hInd        = 0              # zoom halo index
+    run         = 'illustris'    # run name
+    res         = 1820           # run resolution
+    redshift    = 0.0            # run redshift
+    partType    = 'gas'         # which particle type to project
+    partField   = 'temp'         # which quantity/field to project for that particle type
+    #valMinMax  = [min,max]     # stretch colortable between minimum and maximum field values
+    rVirFracs   = [1.0]         # draw circles at these fractions of a virial radius
+    method      = 'sphMap'      # sphMap, sphMap_global, voronoi_const, voronoi_grads, ...
+    nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
+    size        = 3.0           # side-length specification of imaging box around halo/galaxy center
+    sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
+    hsmlFac     = 2.5           # multiplier on smoothing lengths for sphMap
+    axes        = [1,0]         # e.g. [0,1] is x,y
+    vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
+    vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
+    vecMinMax   = None          # stretch vector field visualizaton between these bounds (None=automatic)
+    vecColorPT  = None          # partType to use for vector field vis coloring (if None, =partType)
+    vecColorPF  = None          # partField to use for vector field vis coloring (if None, =partField)
+    vecColorbar = False         # add additional colorbar for the vector field coloring
+    vecColormap = 'afmhot'      # default colormap to use when showing quivers or streamlines
+    labelZ      = False         # label redshift inside (upper right corner) of panel
+    labelScale  = False         # label spatial scale with scalebar (upper left of panel)
+    labelSim    = False         # label simulation name (lower right corner) of panel
+    labelHalo   = False         # label halo total mass and stellar mass
+    relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
+    rotation    = None          # 'face-on', 'edge-on', or None
+    mpb         = None          # use None for non-movie/single frame
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
@@ -216,26 +223,33 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
 
     # defaults (all panel fields that can be specified)
 
-    hInd       = 2               # zoom halo index
-    run        = 'zooms2'        # run name
-    res        = 9               # run resolution
-    redshift   = 2.0             # run redshift
-    partType   = 'gas'           # which particle type to project
-    partField  = 'temp'          # which quantity/field to project for that particle type
-    #valMinMax = [min,max]       # stretch colortable between minimum and maximum field values
-    rVirFracs  = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
-    method     = 'sphMap'        # sphMap, voronoi_const, voronoi_grads, ...
-    nPixels    = [1400,1400]     # number of pixels for each dimension of images when projecting
-    size       = 3.0             # side-length specification of imaging box around halo/galaxy center
-    sizeType   = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
-    hsmlFac    = 2.5             # multiplier on smoothing lengths for sphMap
-    axes       = [1,0]           # e.g. [0,1] is x,y
-    labelZ     = False           # label redshift inside (upper right corner) of panel
-    labelScale = False           # label spatial scale with scalebar (upper left of panel)
-    labelSim   = False           # label simulation name (lower right corner) of panel
-    labelHalo  = False           # label halo total mass and stellar mass
-    relCoords  = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
-    rotation   = None            # 'face-on', 'edge-on', or None
+    hInd        = 2               # zoom halo index
+    run         = 'zooms2'        # run name
+    res         = 9               # run resolution
+    redshift    = 2.0             # run redshift
+    partType    = 'gas'           # which particle type to project
+    partField   = 'temp'          # which quantity/field to project for that particle type
+    #valMinMax  = [min,max]       # stretch colortable between minimum and maximum field values
+    rVirFracs   = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
+    method      = 'sphMap'        # sphMap, voronoi_const, voronoi_grads, ...
+    nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
+    size        = 3.0             # side-length specification of imaging box around halo/galaxy center
+    sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
+    hsmlFac     = 2.5             # multiplier on smoothing lengths for sphMap
+    axes        = [1,0]           # e.g. [0,1] is x,y
+    vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
+    vecMethod   = 'E'             # method to use for vector vis: A, B, C, D, E, F (see common.py)
+    vecMinMax   = None            # stretch vector field visualizaton between these bounds (None=automatic)
+    vecColorPT  = None            # partType to use for vector field vis coloring (if None, =partType)
+    vecColorPF  = None            # partField to use for vector field vis coloring (if None, =partField)
+    vecColorbar = False           # add additional colorbar for the vector field coloring
+    vecColormap = 'afmhot'        # default colormap to use when showing quivers or streamlines
+    labelZ      = False           # label redshift inside (upper right corner) of panel
+    labelScale  = False           # label spatial scale with scalebar (upper left of panel)
+    labelSim    = False           # label simulation name (lower right corner) of panel
+    labelHalo   = False           # label halo total mass and stellar mass
+    relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
+    rotation    = None            # 'face-on', 'edge-on', or None
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
@@ -336,6 +350,8 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
 
     myMassBin = massBins[ myMassBinInd ]
     wMassBinAll = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
+
+    #print(gc['halos']['GroupFirstSub'][wMassBinAll])
 
     # what algorithm to sub-select within mass bin
     if selType == 'linear':
