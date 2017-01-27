@@ -33,6 +33,7 @@ volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented']
 totSumFields     = ['mass','mass2']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
+velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
@@ -647,7 +648,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     if partField in ['vrad','vrad_vvir']:
         partFieldLoad = 'vel'
-    if partField in velLOSFieldNames:
+    if partField in velLOSFieldNames + velCompFieldNames:
         partFieldLoad = 'vel'
     if partField in ['bmag_uG']:
         partFieldLoad = 'bmag'
@@ -673,7 +674,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     if partField in ['vrad','vrad_vvir']:
         raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
 
-    if partField in velLOSFieldNames:
+    if partField in velLOSFieldNames + velCompFieldNames:
         quant = sP.units.particleCodeVelocityToKms(quant) # could add hubble expansion
 
     if partField in ['TimebinHydro']: # cast integers to float
@@ -798,6 +799,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
     if partField in velLOSFieldNames:
         config['label']  = '%s Line of Sight Velocity [km/s]' % ptStr
         config['ctName'] = 'RdBu_r' # bwr, coolwarm, RdBu_r
+
+    if partField in velCompFieldNames:
+        velDirection = partField.split("_")[1]
+        config['label'] = '%s %s-Velocity [km/s]' % (ptStr,velDirection)
+        config['ctName'] = 'RdBu_r'
 
     if partField == 'vrad':
         config['label']  = '%s Radial Velocity [km/s]' % ptStr
@@ -943,8 +949,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             # load: mass/weights, quantity, and normalization required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
 
-            # rotation? handle for view dependent quantities (e.g. velLOS)
-            if partField in velLOSFieldNames:
+            # rotation? handle for view dependent quantities (e.g. velLOS) (any 3-vector really...)
+            if partField in velLOSFieldNames + velCompFieldNames:
                 # first compensate for subhalo CM motion (if this is a halo plot)
                 if sP.isZoom or sP.hInd is not None:
                     sh = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.hInd)
@@ -952,12 +958,24 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                         # SubhaloVel already peculiar, quant converted already in loadMassAndQuantity()
                         quant[:,i] -= sh['SubhaloVel'][i] 
 
-                # slice corresponding to (optionally rotated) LOS component
+                if partField in velLOSFieldNames:
+                    # slice corresponding to (optionally rotated) LOS component
+                    sliceIndNoRot = 3-axes[0]-axes[1]
+                    sliceIndRot = 2
+
+                if partField in velCompFieldNames:
+                    # slice corresponding to (optionally rotated) _x or _y velocity component
+                    if '_x' in partField: sliceIndRot = 0
+                    if '_y' in partField: sliceIndRot = 1
+                    sliceIndNoRot = sliceIndRot
+
+                # do slice (convert 3-vector into scalar)
                 if rotMatrix is None:
-                    quant = quant[:,3-axes[0]-axes[1]]
+                    quant = quant[:,sliceIndNoRot]
                 else:
                     quant = np.transpose( np.dot(rotMatrix, quant.transpose()) )
-                    quant = np.squeeze( np.array(quant[:,2]) )
+                    quant = np.squeeze( np.array(quant[:,sliceIndRot]) )
+                    quant = quant.astype('float32') # rotMatrix was posssibly in double
 
             assert quant is None or quant.ndim == 1 # must be scalar
 
@@ -1163,23 +1181,33 @@ def addBoxMarkers(p, conf, ax):
         #legend.get_texts()[1].set_color('white')
 
 def addVectorFieldOverlay(p, conf, ax):
-    """ Experimental quiver/streamline overlay for vector field data. Work in progress. """
-    if 'vecOverlay' not in p:
+    """ Add quiver or streamline overlay on top to visualization vector field data. """
+    if 'vecOverlay' not in p or not p['vecOverlay']:
         return
 
-    assert p['rotMatrix'] is None # otherwise need to handle like los-vel
+    field_pt = None
 
-    field_pt = 'gas'
-    field_x = 'bfield_' + ['x','y','z'][p['axes'][0]]
-    field_y = 'bfield_' + ['x','y','z'][p['axes'][1]]
-    field_color = 'bmag'
+    if p['vecOverlay'] == 'bfield':
+        assert p['rotMatrix'] is None # otherwise need to handle like los-vel/velComps
+        field_pt = 'gas'
+        field_name = 'bfield'
+
+    if '_vel' in p['vecOverlay']:
+        # we are handling rotation properly for the velocity field (e.g. 'gas_vel', 'stars_vel', 'dm_vel')
+        field_pt, field_name = p['vecOverlay'].split("_")
+
+    assert field_pt is not None
+
+    field_x = field_name + '_' + ['x','y','z'][p['axes'][0]]
+    field_y = field_name + '_' + ['x','y','z'][p['axes'][1]]
     nPixels = [40,40]
-    qStride = 2 # total number of ticks per axis is nPixels[i]/qStride
+    qStride = 3 # total number of ticks per axis is nPixels[i]/qStride
+    vecSliceWidth = 5.0 # pkpc
     smoothFWHM = None
 
     # compress vector grids along third direction to more thin slice
     boxSizeImg = np.array(p['boxSizeImg'])
-    boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(5.0) # 5 pkpc
+    boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(vecSliceWidth)
 
     # load two grids of vector length in plot-x and plot-y directions
     grid_x, _ = gridBox(p['sP'], p['method'], field_pt, field_x, nPixels, p['axes'],
@@ -1191,12 +1219,16 @@ def addVectorFieldOverlay(p, conf, ax):
                         smoothFWHM=smoothFWHM)
 
     # load a grid of any quantity to use to color map the strokes
-    grid_c, conf_c = gridBox(p['sP'], p['method'], field_pt, field_color, nPixels, p['axes'],
+    grid_c, conf_c = gridBox(p['sP'], p['method'], p['vecColorPT'], p['vecColorPF'], nPixels, p['axes'],
                              p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'],
                              smoothFWHM=smoothFWHM)
 
     # create a unit vector at the position of each pixel
     grid_mag = np.sqrt(grid_x**2.0 + grid_y**2.0)
+
+    w = np.where(grid_mag == 0.0) # protect against zero magnitude
+    grid_mag[w] = grid_mag.max() * 1e10 # set grid_x,y to zero in these cases
+
     grid_x /= grid_mag
     grid_y /= grid_mag
 
@@ -1205,28 +1237,54 @@ def addVectorFieldOverlay(p, conf, ax):
     xx = np.linspace( p['extent'][0] + pxScale[0]/2, p['extent'][1] - pxScale[0]/2, nPixels[0] )
     yy = np.linspace( p['extent'][2] + pxScale[1]/2, p['extent'][3] - pxScale[1]/2, nPixels[1] )
 
-    # (A) plot white quivers
-    #q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride], 
-    #              color='white', angles='xy', pivot='mid')
-
-    # (B) plot colored quivers
-    #q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride],
-    #              grid_c[::qStride,::qStride], angles='xy', pivot='mid')
-    #ax.quiverkey(q, 1.1, 1.05, 10.0, 'label', labelpos='E', labelsep=0.1,  coordinates='figure')
-
-    # (C) plot white streamlines, uniform thickness
-    #ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=None, color='white')
-
-    # (D) plot white streamlines, thickness scaled by color quantity
+    # prepare for streamline variable thickness
     maxSize = 4.0
     minSize = 0.5
-    grid_c2 = 10.0**grid_c * 1e12 # [log G] -> [linear pG]
+    uniSize = 1.0
+
+    grid_c2 = grid_c
+    if p['vecOverlay'] == 'bfield':
+        # do a unit conversion such that we could actually make a quantitative streamplot (in progress)
+        grid_c2 = 10.0**grid_c * 1e12 # [log G] -> [linear pG]
+
     grid_s = (maxSize - minSize)/(grid_c2.max() - grid_c2.min()) * (grid_c2 - grid_c2.min()) + minSize
-    #ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=grid_s, color='white')
+
+    # set normalization?
+    norm = None
+    if p['vecMinMax'] is not None:
+        norm = mpl.colors.Normalize(vmin=p['vecMinMax'][0], vmax=p['vecMinMax'][1])
+
+    # (A) plot white quivers
+    if p['vecMethod'] == 'A':
+        assert norm is None
+        q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride], 
+                      color='white', angles='xy', pivot='mid')
+
+    # (B) plot colored quivers
+    if p['vecMethod'] == 'B':
+        assert norm is None # don't yet know how to handle
+        q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride],
+                      grid_c[::qStride,::qStride], angles='xy', pivot='mid')
+        # legend for quiver length: (in progress)
+        #ax.quiverkey(q, 1.1, 1.05, 10.0, 'label', labelpos='E', labelsep=0.1,  coordinates='figure')
+
+    # (C) plot white streamlines, uniform thickness
+    if p['vecMethod'] == 'C':
+        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=None, color='white')
+
+    # (D) plot white streamlines, thickness scaled by color quantity
+    if p['vecMethod'] == 'D':
+        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=grid_s, color='white')
 
     # (E) plot colored streamlines, uniform thickness
-    ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=grid_s, color=grid_c, cmap='afmhot')
-    #import pdb; pdb.set_trace()
+    if p['vecMethod'] == 'E':
+        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], 
+                      linewidth=uniSize, color=grid_c, cmap='afmhot', norm=norm)
+
+    # (F) plot colored streamlines, thickness also proportional to color quantity
+    if p['vecMethod'] == 'F':
+        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], 
+                      linewidth=grid_s, color=grid_c, cmap='afmhot', norm=norm)
 
 def setAxisColors(ax, color2):
     """ Factor out common axis color commands. """
@@ -1240,7 +1298,7 @@ def setAxisColors(ax, color2):
         ax.tick_params(axis=a, colors=color2)
 
 def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
-                       rowHeight, colWidth, bottomNorm, leftNorm):
+                       rowHeight, colWidth, bottomNorm, leftNorm, cmap=None):
     """ Add colorbar(s) with custom positioning and labeling, either below or above panels. """
     if not conf.colorbars:
         return
@@ -1271,7 +1329,14 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     cax = fig.add_axes(posBar)
     cax.set_axis_off()
 
-    colorbar = plt.colorbar(cax=cax, orientation='horizontal')
+    if 'vecMinMax' in config:
+        #norm = mpl.colors.Normalize(vmin=config['vecMinMax'][0], vmax=config['vecMinMax'][1])
+        colorbar = mpl.colorbar.ColorbarBase(cax, cmap=config['ctName'], orientation='horizontal')
+        valLimits = config['vecMinMax'] #colorbar.get_clim()
+    else:
+        colorbar = plt.colorbar(cax=cax, orientation='horizontal')
+        valLimits = plt.gci().get_clim()
+
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
@@ -1279,8 +1344,6 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
              size='x-large', ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
 
     # tick labels, 5 evenly spaced inside bar
-    valLimits = plt.gci().get_clim()
-
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
     colorsB = ['white','white','white','black','black']
 
@@ -1397,7 +1460,7 @@ def renderMultiPanel(panels, conf):
 
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
-        barAreaHeight = np.max([0.035,0.1 / nRows]) if conf.colorbars else 0.0
+        barAreaHeight = np.max([0.035,0.12 / nRows]) if conf.colorbars else 0.0
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes   = set()
@@ -1428,6 +1491,9 @@ def renderMultiPanel(panels, conf):
         if nRows > 2:
             # verify that each column contains the same field and valMinMax
             pass
+
+        if p['vecColorbar'] and not oneGlobalColorbar:
+            raise Exception('Only support vecColorbar addition with oneGlobalColorbar type configuration.')
 
         # start plot
         fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
@@ -1495,9 +1561,24 @@ def renderMultiPanel(panels, conf):
         if oneGlobalColorbar:
             heightFac = np.max([1.0/nRows, 0.35])
             if nRows == 1: heightFac *= 0.5 # reduce
+            if nRows == 2: heightFac *= 1.3 # increase
 
-            addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
-                               rowHeight, 0.4, bottomNorm, 0.3)
+            if not p['vecColorbar']:
+                # normal
+                addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                                   rowHeight, 0.4, bottomNorm, 0.3)
+            else:
+                # normal, offset to the left
+                addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                                   rowHeight, 0.4, bottomNorm, 0.05)
+
+                # colorbar for the vector field visualization, offset to the right
+                _, vConfig = gridOutputProcess(p['sP'], np.zeros(2), p['vecColorPT'], p['vecColorPF'], 1.0)
+                vConfig['vecMinMax'] = p['vecMinMax']
+                vConfig['ctName'] = p['vecColormap']
+
+                addCustomColorbars(fig, ax, conf, vConfig, heightFac, barAreaBottom, barAreaTop, color2, 
+                                   rowHeight, 0.4, bottomNorm, 0.55)
 
         fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
 
