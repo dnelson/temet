@@ -517,6 +517,7 @@ def dsouza2015SMF():
     """ Load observational data points from D'Souza+ (2015) Fig 7. """
     path = dataBasePath + 'dsouza/ds2015_fig7.txt'
 
+    # columns: log10(M_star*h^2), log10(Phi/h^3 / Mpc^3 / log10(Mstar)), y_err
     data = np.loadtxt(path,delimiter=',')
 
     little_h = 0.72

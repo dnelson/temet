@@ -1,5 +1,5 @@
 # D'Souza+ (2015) Figure 7 extracted
-# log10(M_star/h^2), log10(Phi/h^3 / Mpc^3 / log10(Mstar)), y_err
+# log10(M_star/h^2), log10(Phi*h^3 / Mpc^3 / log10(Mstar)), y_err
 11.95, -7.113, 0.46
 11.85, -6.296, 0.21
 11.75, -5.642, 0.35
