@@ -501,8 +501,10 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
     pdf.savefig()
     plt.close(fig)
 
-def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None]):
-    """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. """
+def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], addHalfLightRad=None):
+    """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. 
+    If addHalfLightRad is not None, then addHalfLightRad = [dustModel,band,show3D] e.g.
+    addHalfLightRad = ['p07c_cf00dust_res_conv_efr_rad30pkpc','sdss_r',False]. """
 
     # plot setup
     if fig_subplot[0] is None:
@@ -512,9 +514,6 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         # add requested subplot to existing figure
         fig = fig_subplot[0]
         ax = fig.add_subplot(fig_subplot[1])
-    
-    #addHalfLightRad = ['p07c_nodust_efr','sdss_r'] # [dustModel,band], or None to skip
-    addHalfLightRad = None
 
     ax.set_ylim([0.3,1e2])
 
@@ -603,17 +602,28 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
             bandNum = np.where( ac[acField+'_attrs']['bands'] == addHalfLightRad[1] )[0]
             assert len(bandNum)
 
-            yy_stars_Re = []
+            # hard-coded structure of these files for now
+            assert ac[acField].shape[2] in [6,10]
+
+            if ac[acField].shape[2] == 6:
+                # non-resolved (models A,B)
+                Re_labels = ['edge-on','face-on','edge-on-smallest','edge-on-random','z-axis','3d']
+            if ac[acField].shape[2] == 10:
+                # resolved (model C): even 3d radii are projection dependent
+                Re_labels = ['edge-on 2d','face-on 2d','edge-on-smallest 2d','edge-on-random 2d','z-axis 2d',
+                             'edge-on 3d','face-on 3d','edge-on-smallest 3d','edge-on-random 3d','z-axis 3d']
+                if addHalfLightRad[2]:
+                    Re_labels = Re_labels[5:]
+                    ac[acField] = ac[acField][:,:,5:]
+                else:
+                    Re_labels = Re_labels[0:5]
+                    ac[acField] = ac[acField][:,:,:5]
 
             # split by each projection
+            yy_stars_Re = []
+            
             for i in range(ac[acField].shape[2]):
-                yy_stars_Re.append( sP.units.codeLengthToKpc(ac[acField][w,bandNum,i]) )
-
-            if ac[acField].shape[2] == 4:
-                Re_labels = ['edge-on','face-on','z-axis','3d']
-            if ac[acField].shape[2] == 6:
-                Re_labels = ['edge-on 2d','face-on 2d','z-axis 2d','edge-on 3d','face-on 3d','z-axis 3d']
-            assert ac[acField].shape[2] in [4,6]
+                yy_stars_Re.append( sP.units.codeLengthToKpc(ac[acField][w,bandNum,i]) )         
 
         # if plotting vs halo mass, restrict our attention to those galaxies with sizes (e.g. nonzero 
         # number of either gas cells or star particles)
@@ -748,6 +758,10 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
         data.append( baldry2012SMF() )
         data.append( bernardi2013SMF()['SerExp'] )
         data.append( dsouza2015SMF() )
+    if dataRedshift == 1.0:
+        raise Exception('todo')
+    if dataRedshift == 2.0:
+        raise Exception('todo')
     if dataRedshift == 3.0:
         data.append( davidzon2017SMF(redshift=2.5) )
         data.append( davidzon2017SMF(redshift=3.0) )
@@ -1847,7 +1861,7 @@ def plots():
     #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_check5001_' + datetime.now().strftime('%d-%m-%Y')+'.pdf')
+    pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
@@ -1863,8 +1877,9 @@ def plots():
     blackholeVsStellarMass(sPs, pdf, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, actualBHMasses=True, simRedshift=zZero)
-    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero)
-    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
+    ##addHalfLightRad = ['p07c_cf00dust_res_conv_efr','sdss_r',False]
+    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
+    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
     stellarMassFunctionMultiPanel(sPs, pdf, use30kpc=True, highMassEnd=False, redshifts=[3,4])
@@ -1881,7 +1896,6 @@ def plots():
     dlaMetallicityPDF(sPs, pdf) # z=3
 
     galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
-    ###galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=True, simRedshift=zZero)
     galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
     galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
     galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
@@ -1891,7 +1905,6 @@ def plots():
     stellarAges(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=True, simRedshift=zZero)
 
-    # todo: SMF 2x2 at z=0,1,2,3 (Torrey Fig 1)
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
     # todo: SFR main sequence (Schaye Fig 11) (sSFR vs Mstar colored by Sersic index, e.g. Wuyts)
