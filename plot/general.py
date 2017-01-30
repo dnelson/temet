@@ -18,6 +18,23 @@ from util.helper import loadColorTable, running_median, logZeroSafe
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 
+def getWhiteBlackColors(pStyle):
+    """ Plot style helper. """
+    assert pStyle in ['white','black']
+
+    if pStyle == 'white':
+        color1 = 'white' # background
+        color2 = 'black' # axes etc
+        color3 = '#dddddd' # color bins with only NaNs
+        color4 = '#eeeeee' # color bins with value 0.0
+    if pStyle == 'black':
+        color1 = 'black'
+        color2 = 'white'
+        color3 = '#333333'
+        color4 = '#222222'
+
+    return color1, color2, color3, color4
+
 def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     """ Return a 1D vector of size Nsubhalos, one quantity per subhalo as specified by the string 
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range.

@@ -11,3 +11,6 @@ clean   = False  # make visually clean plots with less information
 
 linestyles = ['-',':','--','-.'] # typically for analysis variations per run
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
+
+# the dust model used by default for all colors
+defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
