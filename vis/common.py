@@ -721,7 +721,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma'
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma' # perula for methods2
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:

@@ -439,7 +439,7 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
     and then use the SubhaloMatching catalog to pick the matched halos in this run. """
     run       = 'tng'
     res       = 512
-    variant   = 0010 #0010 #0000 # 'L12.5'
+    variant   = 0000 #0010 #0000 # 'L12.5'
     massBin   = [12.0, 14.0]
     nGalaxies = 15 #12
     selType   = 'random'
@@ -512,7 +512,7 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
 
     class plotConfig:
         plotStyle    = 'edged'
-        rasterPx     = 700
+        rasterPx     = 500
         colorbars    = False
         saveFilename = saveFilename2
 
@@ -533,6 +533,8 @@ def loop_stamps():
 def tngMethods2_windPatterns(conf=1, pageNum=0):
     """ Plot gas streamlines (galaxy wind patterns), 4x2, top four from L25n512_0000 and bottom four 
     from L25n512_0010 (Illustris model), matched. """
+    # change to: barAreaHeight = np.max([0.035,0.14 / nRows]) if conf.colorbars else 0.0
+    # change to: if sP.isPartType(partType,'gas'):   config['ctName'] = 'perula' #'magma'
     run       = 'tng'
     res       = 512
     variant   = 0000 # TNG fiducial
@@ -558,7 +560,7 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
     vecColorPT  = 'gas'
     vecColorPF  = 'vmag'
 
-    size      = 120.0 # [50,80,120] --> 25,40,60 ckpc/h each direction
+    size      = 50.0 # [50,80,120] --> 25,40,60 ckpc/h each direction
     sizeType  = 'codeUnits'
 
     if conf == 0:
@@ -576,20 +578,6 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
     sP2 = simParams(res=res, run=run, redshift=redshift, variant=matchedToVariant)
     
-    # _page (z0)
-    #selectHalosFromMassBin(): In massBin [11.9 12.2] have 47 halos total.
-    #pages = [[11057, 11486, 11533, 11662],  [11792, 12049, 12078, 12135],  [12192, 12328, 12367, 12453],
-    #         [12498, 12533, 12587, 12618],  [12650, 12727, 12802, 12831],  [12900, 12936, 12965, 12991],
-    #         [13037, 13070, 13092, 13117],  [13136, 13165, 13185, 13214],  [13266, 13284, 13319, 13379],
-    #         [13414, 13458, 13486, 13575],  [13593, 13611, 13638, 13707],  [13736, 13875, 13949, 13949]]
-
-    # 11.5_page (z0)
-    #selectHalosFromMassBin(): In massBin [11.5 11.6] have 43 halos total.
-    #pages = [[14074, 14425, 14626, 14654], [14689, 14724, 14764, 14779], [14815, 14894, 14917, 14940],
-    #         [14948, 14975, 14987, 14997], [15007, 15017, 15037, 15067], [15087, 15106, 15113, 15127],
-    #         [15148, 15169, 15185, 15204], [15212, 15219, 15228, 15241], [15253, 15264, 15272, 15279],
-    #         [15304, 15306, 15353, 15391], [15396, 15402, 15504, 15504]]
-
     # z2_11.5_page (z=2)
     #selectHalosFromMassBin(): In massBin [11.5 11.7] have 85 halos total.
     #pages = [[3498, 3833, 3861, 4097], [4250, 4481, 4511, 4578], [4601, 4656, 4720, 4763], 

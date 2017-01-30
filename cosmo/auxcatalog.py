@@ -359,8 +359,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     assert particles['weights'].ndim == 1 and particles['weights'].size == particles[ptProperty].shape[0]
 
     # loop over subhalos
+    printFac = 100.0 if sP.res > 512 else 10.0
+
     for i, subhaloID in enumerate(subhaloIDsTodo):
-        if i % np.max([1,int(nSubsDo/100)]) == 0 and i <= nSubsDo:
+        if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
             print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
         # slice starting/ending indices for stars local to this FoF
@@ -596,6 +598,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, indRange=indRange['stars'])
 
+    printFac = 100.0 if sP.res > 512 else 10.0
+
     # non-resolved dust: loop over all requested bands first
     if '_res' not in dust:
         if sizes:
@@ -611,7 +615,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
             # loop over subhalos
             for i, subhaloID in enumerate(subhaloIDsTodo):
-                if i % np.max([1,int(nSubsDo/10)]) == 0 and i <= nSubsDo:
+                if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
                     print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
                 # slice starting/ending indices for stars local to this subhalo
@@ -730,7 +734,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
         for i, subhaloID in enumerate(subhaloIDsTodo):
             print('[%d] subhalo = %d' % (i,subhaloID))
-            if i % np.max([1,int(nSubsDo/100)]) == 0 and i <= nSubsDo:
+            if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
             # slice starting/ending indices for stars local to this subhalo
@@ -929,8 +933,10 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
     mpbs = cosmo.mergertree.loadMPBs(sP, ids, fields=fields, treeName=treeName)
 
     # loop over subhalos
+    printFac = 100.0 if sP.res > 512 else 10.0
+
     for i in range(nSubsTot):
-        if i % int(nSubsTot/10) == 0 and i <= nSubsTot:
+        if i % int(nSubsTot/printFac) == 0 and i <= nSubsTot:
             print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
 
         if i not in mpbs:

@@ -9,31 +9,26 @@ import numpy as np
 import h5py
 import pdb
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize, LogNorm, colorConverter
 from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
-
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from glob import glob
 
 from util import simParams
-from util.helper import loadColorTable, running_median, contourf, logZeroSafe, logZeroNaN, closest
+from util.helper import running_median, contourf, logZeroSafe, logZeroNaN, closest
 from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, loadSimGalColors
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
 from cosmo.mergertree import loadMPBs
-from plot.general import simSubhaloQuantity
-from plot.cosmoGeneral import quantMedianVsSecondQuant
+from plot.general import simSubhaloQuantity, getWhiteBlackColors
+from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from plot.config import *
 
-# the dust model used by histo2D(), histoSlice(), 1D and 2D PDFs by default
-defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
-
-def _bandMagRange(bands, tight=False):
+def bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
     if bands[0] == 'u' and bands[1] == 'r': mag_range = [0.5,3.5]
@@ -51,23 +46,6 @@ def _bandMagRange(bands, tight=False):
         if bands == ['i','z']: mag_range = [0.0,0.4]
         if bands == ['i','z']: mag_range = [0.0,0.8]
     return mag_range
-
-def _getWhiteBlackColors(pStyle):
-    """ Plot style helper. """
-    assert pStyle in ['white','black']
-
-    if pStyle == 'white':
-        color1 = 'white' # background
-        color2 = 'black' # axes etc
-        color3 = '#dddddd' # color bins with only NaNs
-        color4 = '#eeeeee' # color bins with value 0.0
-    if pStyle == 'black':
-        color1 = 'black'
-        color2 = 'white'
-        color3 = '#333333'
-        color4 = '#222222'
-
-    return color1, color2, color3, color4
 
 def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None, simColorsModel=None):
     """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
@@ -213,382 +191,6 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
     return colorEvo, subhaloIDs, savedSnaps
-
-def histo2D(sP, pdf, bands, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, cStatistic=None, 
-            minCount=None, simColorsModel=defSimColorModel, fig_subplot=[None,None], pStyle='white'):
-    """ Make a 2D histogram of subhalos with some color on the y-axis, a property on the x-axis, 
-    and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
-    points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
-    empty bins are white, and bins whose cStatistic is NaN (e.g. any NaNs in bin) are gray. Or, if 
-    '_nan' is in cStatistic, then empty bins remain white, while the cStatistic for bins with any 
-    non-NaN values is computed ignoring NaNs (e.g. np.nanmean() instead of np.mean()), and bins 
-    which are non-empty but contain only NaN values are gray. """
-    assert cenSatSelect in ['all', 'cen', 'sat']
-    assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
-
-    # hard-coded config
-    nBins = 80
-
-    cmap = loadColorTable('viridis') # plasma
-    mag_range = _bandMagRange(bands, tight=True)
-
-    colorMed = 'orange'
-    lwMed = 2.0
-
-    color1, color2, color3, color4 = _getWhiteBlackColors(pStyle)
-
-    # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
-    if 'sim_xvals' in sP.data:
-        sim_xvals, xlabel, xMinMax = sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax']
-    else:
-        sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
-        if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
-        sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
-
-    # y-axis: load/calculate simulation colors, cached in sP.data
-    if 'sim_colors' in sP.data:
-        sim_colors = sP.data['sim_colors']
-    else:
-        sim_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
-        sP.data['sim_colors'] = sim_colors
-
-    ylabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
-    if not clean: ylabel += ' %s' % simColorsModel
-
-    # c-axis: load properties for color mappings
-    if cQuant is None:
-        sim_cvals = np.zeros( sim_xvals.size, dtype='float32' )
-
-        # overrides for density distribution
-        cStatistic = 'count'
-        ctName = 'gray_r' if pStyle == 'white' else 'gray'
-        cmap = loadColorTable(ctName)
-
-        clabel = 'log N$_{\\rm gal}$'
-        cMinMax = [0.0,2.0]
-        if sP.boxSize > 100000: cMinMax = [1.0,2.5]
-    else:
-        sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
-
-    if sim_cvals is None:
-        return # property is not calculated for this run (e.g. expensive auxCat)
-
-    # central/satellite selection?
-    wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
-
-    sim_xvals = sim_xvals[wSelect]
-    sim_cvals = sim_cvals[wSelect]
-    sim_colors = sim_colors[wSelect]
-
-    # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
-    wFiniteColor = np.isfinite(sim_colors) #& np.isfinite(sim_xvals)
-    sim_colors = sim_colors[wFiniteColor]
-    sim_cvals  = sim_cvals[wFiniteColor]
-    sim_xvals  = sim_xvals[wFiniteColor]
-
-    # _nan cStatistic? separate points into two sets
-    nanFlag = False
-    if '_nan' in cStatistic:
-        nanFlag = True
-
-        wFiniteCval = np.isfinite(sim_cvals)
-        wNaNCval = np.isnan(sim_cvals)
-
-        assert np.count_nonzero(wFiniteCval) + np.count_nonzero(wNaNCval) == sim_cvals.size
-
-        # save points with NaN cvals
-        sim_colors_nan = sim_colors[wNaNCval]
-        sim_cvals_nan  = sim_cvals[wNaNCval]
-        sim_xvals_nan  = sim_xvals[wNaNCval]
-
-        # override default binning to only points with finite cvals
-        sim_colors = sim_colors[wFiniteCval]
-        sim_cvals  = sim_cvals[wFiniteCval]
-        sim_xvals  = sim_xvals[wFiniteCval]
-
-        # replace cStatistic string
-        cStatistic = cStatistic.split("_nan")[0]
-
-    # start plot
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize,facecolor=color1)
-        ax = fig.add_subplot(111, axisbg=color1)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1], axisbg=color1)
-
-    setAxisColors(ax, color2)
-
-    ax.set_xlim(xMinMax)
-    ax.set_ylim(mag_range)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-
-    print(' ',cQuant,sP.simName,'-'.join(bands),simColorsModel,xQuant,cenSatSelect,cStatistic,minCount)
-    if not clean:
-        ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
-    else:
-        if cQuant is None:
-            cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
-            ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
-
-    # 2d histogram
-    bbox = ax.get_window_extent()
-    nBins2D = np.array([nBins, int(nBins*(bbox.height/bbox.width))])
-    extent = [xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]]
-
-    # statistic reduction (e.g. median, sum, count) color by bin
-    if '_log' not in xQuant: sim_xvals = logZeroSafe(sim_xvals) # xMinMax always corresponds to log values
-
-    cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_colors, sim_cvals, cStatistic, 
-                                                 bins=nBins2D, range=[xMinMax,mag_range])
-
-    cc = cc.T # imshow convention
-
-    # only show bins with a minimum number of points?
-    nn, _, _, _ = binned_statistic_2d(sim_xvals, sim_colors, sim_cvals, 'count', 
-                                      bins=nBins2D, range=[xMinMax,mag_range])
-    nn = nn.T
-
-    if minCount is not None:
-        cc[nn < minCount] = np.nan
-
-    # for now: log on density and all color quantities
-    cc2d = cc
-    if cQuant is None or cLog is True:
-        cc2d = logZeroNaN(cc)
-
-    # normalize and color map
-    norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
-    cc2d_rgb = cmap(norm(cc2d))
-
-    # mask bins with median==0 and map to special color, which right now have been set to log10(0)=NaN
-    if cQuant is not None:
-        cc2d_rgb[cc == 0.0,:] = colorConverter.to_rgba(color4)
-
-    if nanFlag:
-        # bin NaN point set counts
-        nn_nan, _, _, _ = binned_statistic_2d(sim_xvals_nan, sim_colors_nan, sim_cvals_nan, 'count', 
-                                              bins=nBins2D, range=[xMinMax,mag_range])
-        nn_nan = nn_nan.T        
-
-        # flag bins with nn_nan>0 and nn==0 (only NaNs in bin) as second gray color
-        cc2d_rgb[ ((nn_nan > 0) & (nn == 0)), :] = colorConverter.to_rgba(color3)
-
-        nn += nn_nan # accumulate total counts
-    else:
-        # mask bins with median==NaN (nonzero number of NaNs in bin) to gray
-        cc2d_rgb[~np.isfinite(cc),:] = colorConverter.to_rgba(color3)
-
-    # mask empty bins to white
-    cc2d_rgb[(nn == 0),:] = colorConverter.to_rgba(color1)
-
-    # plot
-    plt.imshow(cc2d_rgb, extent=extent, origin='lower', interpolation='nearest', aspect='auto', 
-               cmap=cmap, norm=norm)
-
-    # method (B) unused
-    #reduceMap = {'mean':np.mean, 'median':np.median, 'count':np.size, 'sum':np.sum}
-    #reduceFunc = reduceMap[cStatistic] if cStatistic in reduceMap else cStatistic
-    #plt.hexbin(sim_xvals, sim_colors, C=None, gridsize=nBins, extent=extent, bins='log', 
-    #          mincnt=minCount, cmap=cmap, marginals=False)
-    #plt.hexbin(sim_xvals, sim_colors, C=sim_cvals, gridsize=nBins, extent=extent, bins='log', 
-    #          mincnt=minCount, cmap=cmap, marginals=False, reduce_C_function=reduceFunc)
-
-    # median line?
-    if cQuant is None and cenSatSelect == 'cen':
-        binSizeMed = (xMinMax[1]-xMinMax[0]) / nBins * 2
-
-        xm, ym, sm, pm = running_median(sim_xvals,sim_colors,binSize=binSizeMed,percs=[5,10,25,75,90,95])
-        ym2 = savgol_filter(ym,sKn,sKo)
-        sm2 = savgol_filter(sm,sKn,sKo)
-        pm2 = savgol_filter(pm,sKn,sKo,axis=1)
-
-        ax.plot(xm[:-1], ym2[:-1], '-', color=colorMed, lw=lwMed, label='median')
-
-        ax.plot(xm[:-1], pm2[1,:-1], ':', color=colorMed, lw=lwMed, label='P[10,90]')
-        ax.plot(xm[:-1], pm2[-2,:-1], ':', color=colorMed, lw=lwMed)
-
-        l = ax.legend(loc='lower right')
-        for text in l.get_texts(): text.set_color(color2)
-
-    # contours?
-    if fig_subplot[0] is not None and cQuant is not None and cenSatSelect == 'cen':
-        extent = [xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]]
-        cLevels = [0.75,0.95]
-        cAlphas = [0.5,0.8]
-
-        xx, yy, kde_sim = calcMstarColor2dKDE(bands, sim_xvals, sim_colors, xMinMax, mag_range, 
-                                              sP=sP, simColorsModel=simColorsModel)
-
-        for k in range(kde_sim.shape[0]):
-            kde_sim[k,:] /= kde_sim[k,:].max() # by column normalization
-
-        for k, cLevel in enumerate(cLevels):
-            ax.contour(xx, yy, kde_sim, [cLevel], colors=[color2], 
-                       alpha=cAlphas[k], linewidths=lwMed, extent=extent)
-
-    # colorbar
-    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-    cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel(clabel, color=color2)
-    cb.outline.set_edgecolor(color2)
-    cb.ax.yaxis.set_tick_params(color=color2)
-    plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
-
-    # finish plot and save
-    finishFlag = False
-    if fig_subplot[0] is not None: # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]: finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
-        if pdf is not None:
-            pdf.savefig(facecolor=fig.get_facecolor())
-        else:
-            fig.savefig('histo2d_%s_%s_%s_%s_%s_%s_%s.pdf' % \
-                ('-'.join(bands),simColorsModel,xQuant,cQuant,cStatistic,cenSatSelect,minCount), 
-                facecolor=fig.get_facecolor())
-        plt.close(fig)
-
-def histoSlice(sPs, pdf, bands, yQuants, sQuant, sRange, cenSatSelect='cen', 
-               simColorsModel=defSimColorModel, fig_subplot=[None,None]):
-    """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
-    sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
-    For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
-    yQuants (could be just one) and plot this (y-axis) against the bands-color (x-axis) using the 
-    simColorsModel. Supports multiple sPs which are overplotted. Multiple yQuants results in a grid. """
-    assert cenSatSelect in ['all', 'cen', 'sat']
-
-    nRows = np.floor(np.sqrt(len(yQuants)))
-    nCols = np.ceil(len(yQuants) / nRows)
-
-    # hard-coded config
-    lw = 2.5
-    ptPlotThresh = 2000
-
-    sizefac = 1.0 if not clean else 0.9
-    if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
-
-    # start plot
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=[figsize[0]*nCols*sizefac, figsize[1]*nRows*sizefac])
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-
-    # loop over each yQuantity (panel)
-    for i, yQuant in enumerate(yQuants):
-        if fig_subplot[0] is None:
-            ax = fig.add_subplot(nRows,nCols,i+1)
-        else:
-            ax = fig.add_subplot(fig_subplot[1])
-
-        for sP in sPs:
-            # loop over each run and add to the same plot
-            print(' ',yQuant,sP.simName,'-'.join(bands),simColorsModel,cenSatSelect,sQuant,sRange)
-
-            # y-axis: load galaxy properties (in histo2D were the color mappings)
-            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
-
-            if sim_yvals is None:
-                print('   skip')
-                continue # property is not calculated for this run (e.g. expensive auxCat)
-
-            if yLog is True:
-                sim_yvals = logZeroNaN(sim_yvals)
-
-            # slice values: load fullbox galaxy properties (almost always Mstar)
-            if 'histoSlice_svals' in sP.data:
-                sim_svals = sP.data['histoSlice_svals']
-            else:
-                sim_svals, _, _, _ = simSubhaloQuantity(sP, sQuant, clean)
-                sP.data['histoSlice_svals'] = sim_svals
-
-            # x-axis: load/calculate simulation colors, cached in sP.data
-            if 'sim_colors' in sP.data:
-                sim_colors = sP.data['sim_colors']
-            else:
-                sim_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
-                sP.data['sim_colors'] = sim_colors
-
-            xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
-            if not clean: xlabel += ' %s' % simColorsModel
-
-            # central/satellite selection?
-            wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
-
-            sim_colors = sim_colors[wSelect]
-            sim_yvals = sim_yvals[wSelect]
-            sim_svals = sim_svals[wSelect]
-
-            # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
-            wFinite = np.isfinite(sim_colors) & np.isfinite(sim_yvals)
-            sim_colors = sim_colors[wFinite]
-            sim_yvals  = sim_yvals[wFinite]
-            sim_svals  = sim_svals[wFinite]
-
-            # make slice selection
-            wSlice = np.where( (sim_svals >= sRange[0]) & (sim_svals < sRange[1]) )
-            sim_colors = sim_colors[wSlice]
-            sim_yvals  = sim_yvals[wSlice]
-            sim_svals  = sim_svals[wSlice]
-
-            mag_range = _bandMagRange(bands, tight=True)
-            ax.set_xlim(mag_range)
-            ax.set_ylim(yMinMax)
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
-
-            # plot points
-            c = ax._get_lines.prop_cycler.next()['color']
-
-            if sim_colors.size < ptPlotThresh:
-                ax.plot(sim_colors, sim_yvals, 'o', color=c, alpha=0.3)
-
-            # median and 10/90th percentile lines
-            nBins = 30
-            if sim_colors.size >= ptPlotThresh:
-                nBins *= 2
-
-            binSize = (mag_range[1]-mag_range[0]) / nBins
-
-            xm, ym, sm, pm = running_median(sim_colors,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-            xm = xm[1:-1]
-            ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
-            sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
-            pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
-
-            ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
-
-            # percentile band:
-            if sim_colors.size >= ptPlotThresh:
-                ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
-
-        # legend
-        if i == 0:
-            handles, labels = ax.get_legend_handles_labels()
-            handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0])]
-            labelsO  = ['median, P[10,90]']
-
-            legend = ax.legend(handles+handlesO, labels+labelsO, loc='best')
-
-    # finish plot and save
-    finishFlag = False
-    if fig_subplot[0] is not None: # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]: finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
-        if pdf is not None:
-            pdf.savefig()
-        else:
-            fig.savefig('slice1d_%s_%s_%s_%s_%s_%s_%s.pdf' % \
-                ('-'.join(bands),simColorsModel,xQuant,cQuant,cStatistic,cenSatSelect,minCount))
-        plt.close(fig)
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None):
@@ -903,7 +505,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
 
             nWantedToMatchObs = np.int32(obsMstarHist[k] * sim_1dhist.size)
 
-            if len(simIndsBin[0]) == 0 and nWantedToMatchObs > 0:
+            if len(simIndsBin[0]) == 0 or nWantedToMatchObs == 0:
                 continue # failure in small boxes to have massive halos, or low res to have small halos
 
             #print(k,'sim size: ',simIndsBin[0].size,'wanted: ',nWantedToMatchObs)
@@ -930,7 +532,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             # panel setup
             ax = fig.add_subplot(2,len(bandCombos)/2,i+1)
             axes.append(ax)
-            mag_range = _bandMagRange(bands)
+            mag_range = bandMagRange(bands)
             
             if not clean and 0:
                 obsMagStr = 'modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
@@ -1033,7 +635,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
                 gc_colors, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=bands)
 
                 # config for this band
-                mag_range = _bandMagRange(bands)
+                mag_range = bandMagRange(bands)
                 extent = [Mstar_range[0],Mstar_range[1],mag_range[0],mag_range[1]]
 
                 loopInds = range(1) # total only
@@ -1147,7 +749,7 @@ def viewingAngleVariation():
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
     ax = fig.add_subplot(111)
 
-    mag_range  = [0.3,0.85] #_bandMagRange(bands, tight=True)
+    mag_range  = [0.3,0.85] #bandMagRange(bands, tight=True)
     markers    = ['o','s','D']
     linestyles = [':','-']
     binSize    = (mag_range[1]-mag_range[0])/nBins
@@ -1227,9 +829,9 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     nBins = 40
     rndProjInd = 0
 
-    mag_range = _bandMagRange(bands, tight=True)
+    mag_range = bandMagRange(bands, tight=True)
 
-    color1, color2, color3, color4 = _getWhiteBlackColors(pStyle)
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
     if 'sim_xvals' in sP.data:
@@ -1453,9 +1055,10 @@ def plots():
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    bands = ['g','r']
+    yQuant = 'color'
+    ySpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
     xQuant = 'mstar2_log' # mstar2_log, ssfr, M_BH_actual
-    cs = 'median_nan'
+    cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
     quants = quantList()
@@ -1463,11 +1066,11 @@ def plots():
     for sP in sPs:
         for css in cenSatSelects:
 
-            pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % \
-                (sP.simName,''.join(bands),xQuant,cs,css))
+            pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,yQuant,xQuant,cs,css))
 
             for cQuant in quants:
-                histo2D(sP, pdf, bands, xQuant=xQuant, cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
+                quantHisto2D(sP, pdf, yQuant=yQuant, ySpec=ySpec, xQuant=xQuant, 
+                             cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
 
             pdf.close()
 
@@ -1477,7 +1080,8 @@ def plots2():
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    bands = ['g','r']
+    xQuant = 'color'
+    xSpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
     sQuant = 'mstar2_log'
     sRange = [10.4,10.6]
     cenSatSelects = ['cen']
@@ -1487,15 +1091,18 @@ def plots2():
 
     for css in cenSatSelects:
         pdf = PdfPages('galaxyColor_1Dslices_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
-            ('-'.join([sP.simName for sP in sPs]),''.join(bands),sQuant,sRange[0],sRange[1],css))
+            ('-'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
 
         # all quantities on one multi-panel page:
-        histoSlice(sPs, pdf, bands, yQuants=quants, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
-        histoSlice(sPs, pdf, bands, yQuants=quantsTr, sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+        quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quants, sQuant=sQuant, 
+                     sRange=sRange, cenSatSelect=css, )
+        quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quantsTr, sQuant=sQuant, 
+                     sRange=sRange, cenSatSelect=css)
 
         # one page per quantity:
         for yQuant in quants + quantsTr:
-            histoSlice(sPs, pdf, bands, yQuants=[yQuant], sQuant=sQuant, sRange=sRange, cenSatSelect=css)
+            quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[yQuant], sQuant=sQuant, 
+                         sRange=sRange, cenSatSelect=css)
 
         pdf.close()
 
@@ -1581,12 +1188,12 @@ def paperPlots():
 
         pdf = PdfPages('figure4.pdf')
         fig = plt.figure(figsize=figsize_loc)
-        histo2D(L205, pdf, cQuant='ssfr', fig_subplot=[fig,321], **params)
-        histo2D(L205, pdf, cQuant='Z_gas', fig_subplot=[fig,322], **params)
-        histo2D(L205, pdf, cQuant='fgas2', fig_subplot=[fig,323], **params)
-        histo2D(L205, pdf, cQuant='stellarage', fig_subplot=[fig,324], **params)
-        histo2D(L205, pdf, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
-        histo2D(L205, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
+        quantHisto2D(L205, pdf, cQuant='ssfr', fig_subplot=[fig,321], **params)
+        quantHisto2D(L205, pdf, cQuant='Z_gas', fig_subplot=[fig,322], **params)
+        quantHisto2D(L205, pdf, cQuant='fgas2', fig_subplot=[fig,323], **params)
+        quantHisto2D(L205, pdf, cQuant='stellarage', fig_subplot=[fig,324], **params)
+        quantHisto2D(L205, pdf, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
+        quantHisto2D(L205, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
         pdf.close()
 
     # figure 5
@@ -1608,9 +1215,9 @@ def paperPlots():
 
         pdf = PdfPages('figure3.pdf')
         fig = plt.figure(figsize=figsize_loc)
-        histo2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
-        histo2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
-        histo2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
+        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
+        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
+        quantHisto2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
         pdf.close()
 
 
@@ -1640,12 +1247,11 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
         pdf.close()
 
-
     # testing
     if 0:
         params = {'bands':['g','r'], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
         pdf = PdfPages('figure_test.pdf')
         fig = plt.figure(figsize=figsize)
-        histo2D(L75, pdf, cQuant='ssfr', fig_subplot=[fig,111], **params)
+        quantHisto2D(L75, pdf, cQuant='ssfr', fig_subplot=[fig,111], **params)
         pdf.close()

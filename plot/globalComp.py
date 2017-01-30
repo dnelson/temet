@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroSafe
 from illustris_python.util import partTypeNum
-from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField
+from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
 from cosmo.util import validSnapList, periodicDists
 from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
 from plot.cosmoGeneral import addRedshiftAgeAxes
@@ -400,7 +400,7 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMasses=False, simRedshift=0.0):
+def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMasses=True, simRedshift=0.0):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     # plot setup
     fig = plt.figure(figsize=figsize)
@@ -444,7 +444,8 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
         if sP.isZoom:
             continue
 
-        if not groupCatHasField(sP, 'Subhalo', 'SubhaloBHMass'): #snapHasField(sP, 'bh', 'Coordinates'):
+        numBHs = snapshotHeader(sP)['NumPart'][sP.ptNum('bhs')]
+        if not groupCatHasField(sP, 'Subhalo', 'SubhaloBHMass') or numBHs == 0:
             print('BHMass: %s [SKIP: sim has no BHs]' % sP.simName)
             continue
 
@@ -599,8 +600,8 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
             # load auxCat half light radii
             acField = 'Subhalo_HalfLightRad_' + addHalfLightRad[0]
             ac = auxCat(sP, fields=[acField])
-            bandNum = np.where( ac[acField+'_attrs']['bands'] == addHalfLightRad[1] )[0]
-            assert len(bandNum)
+            assert addHalfLightRad[1] in ac[acField+'_attrs']['bands']
+            bandNum = list(ac[acField+'_attrs']['bands']).index( addHalfLightRad[1] )
 
             # hard-coded structure of these files for now
             assert ac[acField].shape[2] in [6,10]
@@ -672,7 +673,8 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
                 sm_stars = savgol_filter(sm_stars[ww_stars],sKn,sKo)
                 xm_stars = xm_stars[ww_stars]
 
-                l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=Re_labels[i])
+                l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, 
+                             label='R$_{\\rm e}$ '+addHalfLightRad[1]+' '+Re_labels[i])
 
                 if i == 0:
                     y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
@@ -1855,15 +1857,20 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    sPs.append( simParams(res=512, run='tng', variant=0000) )
-    sPs.append( simParams(res=512, run='tng', variant=5001) )
-    #sPs.append( simParams(res=1024, run='tng', variant=0000) )
-    #sPs.append( simParams(res=1024, run='tng', variant=4503) )
+    sPs.append( simParams(res=128, run='tng', variant=0000) )
+    sPs.append( simParams(res=128, run='tng', variant=2202) )
+    sPs.append( simParams(res=128, run='tng', variant=3603) )
 
     # make multipage PDF
     pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
+
+    # TEST AREA
+    #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
+    #pdf.close()
+    #return
+    # END TEST AREA
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
@@ -1876,9 +1883,9 @@ def plots():
     sfrdVsRedshift(sPs, pdf, xlog=False)
     blackholeVsStellarMass(sPs, pdf, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
-    blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, actualBHMasses=True, simRedshift=zZero)
-    ##addHalfLightRad = ['p07c_cf00dust_res_conv_efr','sdss_r',False]
+    blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
+    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
@@ -1895,11 +1902,12 @@ def plots():
     nOVIcddf(sPs, pdf, moment=1)
     dlaMetallicityPDF(sPs, pdf) # z=3
 
-    galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero)
-    galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero)
-    galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero)
-    galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero)
-    galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero)
+    cheapDustModel = 'p07c_cf00dust_rad30pkpc' #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
+    galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+    galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero, simColorsModel=cheapDustModel)
 
     velocityFunction(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=False, simRedshift=zZero)
