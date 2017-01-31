@@ -18,6 +18,56 @@ from util.helper import loadColorTable, running_median, logZeroSafe
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 
+def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
+    """ Return a list of quantities (galaxy properties) which we know about for exploration. """
+
+    # generally availably (groupcat)
+    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
+
+    if wCounts: quants1 = [None] + quants1
+
+    # generally available (auxcat)
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii',
+               'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
+               'bmag_halo_masswt',   'bmag_halo_volwt',   'pratio_halo_masswt', 'pratio_halo_volwt']
+
+    quants3 = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high','BH_CumEgy_ratio',
+               'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
+
+    quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
+               'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
+
+    quants_misc = ['M_bulge_counter_rot']
+
+    # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
+    #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
+
+    # L75 only:
+    quants5 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
+
+    # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
+    #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
+
+    # tracer tracks quantities (L75 only):
+    trQuants = []
+    trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm','tr_dtHalo_mean']
+    trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc','tr_temp_tAcc']
+
+    for trBase in trBases1+trBases2:
+        trQuants.append(trBase + '')
+        trQuants.append(trBase + '_mode=smooth')
+        trQuants.append(trBase + '_mode=merger')
+        trQuants.append(trBase + '_par=bhs')
+        trQuants.append(trBase + '_mode=smooth_par=bhs')
+        trQuants.append(trBase + '_mode=merger_par=stars')
+
+    quantList = quants1 + quants2 + quants3 + quants4 + quants5 + quants_misc
+    if wTr: quantList += trQuants
+    if onlyTr: quantList = trQuants
+    if onlyBH: quantList = quants3
+
+    return quantList
+
 def getWhiteBlackColors(pStyle):
     """ Plot style helper. """
     assert pStyle in ['white','black']
@@ -34,6 +84,25 @@ def getWhiteBlackColors(pStyle):
         color4 = '#222222'
 
     return color1, color2, color3, color4
+
+def bandMagRange(bands, tight=False):
+    """ Hard-code some band dependent magnitude ranges. """
+    if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
+    if bands[0] == 'u' and bands[1] == 'r': mag_range = [0.5,3.5]
+    if bands[0] == 'g' and bands[1] == 'r': mag_range = [0.0,1.0]
+    if bands[0] == 'r' and bands[1] == 'i': mag_range = [0.0,0.6]
+    if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
+    if bands[0] == 'r' and bands[1] == 'z': mag_range = [0.0,0.8]
+
+    if tight:
+        # alternative set
+        if bands == ['u','i']: mag_range = [0.5,4.0]
+        if bands == ['u','i']: mag_range = [0.5,3.5]
+        if bands == ['g','r']: mag_range = [0.15,0.85]
+        if bands == ['r','i']: mag_range = [0.0,0.6]
+        if bands == ['i','z']: mag_range = [0.0,0.4]
+        if bands == ['i','z']: mag_range = [0.0,0.8]
+    return mag_range
 
 def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     """ Return a 1D vector of size Nsubhalos, one quantity per subhalo as specified by the string 
@@ -466,6 +535,76 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if 'CumMass' in quant: vals = sP.units.codeMassToMsun(vals)
             if 'CumEgy' in quant: vals = sP.units.codeEnergyToErg(vals)
 
+    if 'Krot_' in quant or 'Arot_' in quant or 'specAngMom_' in quant:
+        # rotation / angular momentum auxCat properties
+        if '_stars' in quant:
+            ptName = 'Stellar'
+            lStr = '\star'
+        if '_gas' in quant:
+            ptName = 'Gas'
+            lStr = 'gas'
+
+        radStr = '_2rhalfstars' if '2' in quant else ''
+        if '1' in quant: radStr = '_1rhalfstars'
+
+        if 'Krot_' in quant:
+            acIndex = 0
+            label = '$\kappa_{\\rm %s, rot}$' % lStr
+            minMax = [0.1, 0.8]
+            if '_gas' in quant: minMax = [0.1, 1.0]
+            takeLog = False
+        if 'Krot_oriented_' in quant:
+            acIndex = 1
+            label = '$\kappa_{\\rm %s, rot} (J_z > 0)$' % lStr
+            minMax = [0.1, 0.8]
+            if '_gas' in quant: minMax = [0.1, 1.0]
+            takeLog = False
+        if 'Arot_' in quant:
+            acIndex = 2
+            label = '$M_{\\rm %s, counter-rot} / M_{\\rm %s, total}$' % (lStr,lStr)
+            minMax = [0.0, 0.6]
+            if '_gas' in quant: minMax = [0.0, 0.4]
+            takeLog = False
+        if 'specAngMom_' in quant:
+            acIndex = 3
+            label = '$j_{\\rm %s}$ [ log kpc km/s ]' % lStr
+            minMax = [1.0, 5.0] # kpc km/s
+            if '_gas' in quant: minMax = [2.0, 5.0]
+
+        if not clean:
+            if '2' in quant:     label += ' (r < 2r$_{\star,1/2}$)'
+            elif '1' in quant:   label += ' (r < r$_{\star,1/2}$)'
+            else:                label += ' (all subhalo)'
+
+        acField = 'Subhalo_%sRotation%s' % (ptName,radStr)
+
+        # load and slice
+        ac = auxCat(sP, fields=[acField])
+
+        vals = np.squeeze(ac[acField][:,acIndex])
+
+    if quant == 'M_bulge_counter_rot':
+        # M_bulge estimator: twice the counter-rotating stellar mass within 1*halfmassradstars
+        # using the kinematic 'Arot_stars1' estimate
+        acField = 'Subhalo_StellarRotation_1rhalfstars'
+        acIndex = 2
+
+        # load auxCat and groupCat masses
+        ac = auxCat(sP, fields=[acField])
+        ac = np.squeeze( ac[acField][:,acIndex] ) # counter-rotating mass fraction relative to total
+        assert np.nanmin(ac) >= 0.0 and np.nanmax(ac) <= 1.0
+
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInHalfRadType'])
+        masses = np.squeeze( gc['subhalos'][:,sP.ptNum('stars')] )
+
+        # multiply 2 x (massfrac) x (stellar mass) and convert to solar masses
+        vals = sP.units.codeMassToMsun(2.0 * ac * masses)
+
+        minMax = [8.0, 12.0]
+        label = 'M$_{\\rm bulge}$ [ log M$_{\\rm sun}$ ]'
+        if not clean: label += ' (r < r$_{\star,1/2}$ counter-rotating)'
+
+    # return
     assert label is not None
     return vals, label, minMax, takeLog
 

@@ -11,7 +11,7 @@ from functools import partial
 
 from illustris_python.util import partTypeNum
 from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
-  inverseMapPartIndicesToSubhaloIDs
+  inverseMapPartIndicesToSubhaloIDs, correctPeriodicDistVecs
 from util.helper import logZeroMin, logZeroNaN
 from util.helper import pSplit as pSplitArr, pSplitRange
 
@@ -199,7 +199,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only.
     """
-    assert op in ['sum','mean']
+    assert op in ['sum','mean','ufunc']
+    if op == 'func': assert ptProperty in ['Krot']
 
     # determine ptRestriction
     ptRestriction = None
@@ -297,6 +298,12 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
 
         radSqMax = twiceStellarRHalf**2
+    elif rad == '1rhalfstars':
+        # inner galaxy definition, r < 1*r_{1/2,mass,stars}
+        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 1.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+
+        radSqMax = twiceStellarRHalf**2
 
     assert radSqMax.size == nSubsTot
     assert radSqMin.size == nSubsTot
@@ -311,24 +318,34 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     if ptRestriction == 'sfrgt0':
         fieldsLoad.append('sfr')
 
+    if ptProperty == 'Krot':
+        if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
+        fieldsLoad.append('vel')
+        fieldsLoad.append('mass')
+
     particles = {}
     if len(fieldsLoad):
         particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
 
-    particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
+    if op != 'ufunc':
+        particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
 
     # allocate, NaN indicates not computed except for mass where 0 will do
-    if particles[ptProperty].ndim == 1:
-        r = np.zeros( nSubsDo, dtype='float32' )
+    if op == 'ufunc': 
+        if ptProperty == 'Krot':
+            r = np.zeros( (nSubsDo,4), dtype='float32' )
     else:
-        r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype='float32' )
+        if particles[ptProperty].ndim == 1:
+            r = np.zeros( nSubsDo, dtype='float32' )
+        else:
+            r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype='float32' )
 
     if op not in ['sum']:
         r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
 
     # load weights
     if weighting is None:
-        particles['weights'] = np.zeros( particles[ptProperty].shape[0], dtype='float32' )
+        particles['weights'] = np.zeros( particles['count'], dtype='float32' )
         particles['weights'] += 1.0 # uniform
     else:
         assert weighting in ['mass','volume'] or 'bandLum' in weighting
@@ -356,7 +373,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
             # use the (linear) luminosity in this band as the weight
             particles['weights'] = np.power(10.0, -0.4 * mags)
 
-    assert particles['weights'].ndim == 1 and particles['weights'].size == particles[ptProperty].shape[0]
+    assert particles['weights'].ndim == 1 and particles['weights'].size == particles['count']
 
     # loop over subhalos
     printFac = 100.0 if sP.res > 512 else 10.0
@@ -394,6 +411,66 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         if len(wValid[0]) == 0:
             continue # zero length of particles satisfying radial cut and restriction
 
+        # user function reduction operations
+        if op == 'ufunc':
+            # kappa rot
+            if ptProperty == 'Krot':
+                # minimum two star particles
+                if len(wValid[0]) < 2:
+                    continue
+
+                stars_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
+                stars_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
+                stars_mass = particles['Masses'][i0:i1][wValid].reshape( (len(wValid[0]),1) )
+
+                # velocity of stellar CoM
+                sub_stellarMass = stars_mass.sum()
+                sub_stellarCoM_vel = np.sum(stars_mass * stars_vel, axis=0) / sub_stellarMass
+
+                # positions relative to most bound star, velocities relative to stellar CoM vel
+                for j in range(3):
+                    stars_pos[:,j] -= stars_pos[0,j]
+                    stars_vel[:,j] -= sub_stellarCoM_vel[j]
+
+                correctPeriodicDistVecs( stars_pos, sP )
+                stars_pos = sP.units.codeLengthToKpc( stars_pos ) # kpc
+                stars_vel = sP.units.particleCodeVelocityToKms( stars_vel ) # km/s
+                stars_rad_sq = stars_pos[:,0]**2.0 + stars_pos[:,1]**2.0 + stars_pos[:,2]**2.0
+
+                # total kinetic energy
+                sub_K = 0.5 * np.sum(stars_mass * stars_vel**2.0)
+
+                # specific stellar angular momentum
+                stars_J = stars_mass * np.cross(stars_pos, stars_vel, axis=1)
+                sub_stellarJ = np.sum(stars_J, axis=0)
+                sub_stellarJ_mag = np.linalg.norm(sub_stellarJ)
+                sub_stellarJ /= sub_stellarJ_mag # to unit vector
+                stars_Jz_i = np.dot(stars_J, sub_stellarJ)
+
+                # kinetic energy in rot (exclude first star with zero radius)
+                stars_R_i = np.sqrt(stars_rad_sq - np.dot(stars_pos,sub_stellarJ)**2.0)
+
+                stars_mass = stars_mass.reshape( stars_mass.size )
+                sub_Krot = 0.5 * np.sum( (stars_Jz_i[1:]/stars_R_i[1:])**2.0 / stars_mass[1:])
+
+                # restricted to those stars with the same rotation orientation as the mean
+                w = np.where( (stars_Jz_i > 0.0) & (stars_R_i > 0.0) )
+                sub_Krot_oriented = np.nan
+                if len(w[0]):
+                    sub_Krot_oriented = 0.5 * np.sum( (stars_Jz_i[w]/stars_R_i[w])**2.0 / stars_mass[w])
+
+                # mass fraction of stars with counter-rotation
+                w = np.where( (stars_Jz_i < 0.0) )
+                mass_frac_counter = stars_mass[w].sum() / sub_stellarMass
+
+                r[i,0] = sub_Krot / sub_K                   # \kappa_{star, rot}
+                r[i,1] = sub_Krot_oriented / sub_K          # \kappa_{star, rot oriented}
+                r[i,2] = mass_frac_counter                  # M_{star,counter} / M_{star,total}
+                r[i,3] = sub_stellarJ_mag / sub_stellarMass # j_star [kpc km/s]
+
+            continue
+
+        # standard reduction operation
         if particles[ptProperty].ndim == 1:
             # scalar
             loc_val = particles[ptProperty][i0:i1][wValid]
@@ -1407,6 +1484,17 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VI mass',op='sum',rad=None),
    'Subhalo_Mass_OVII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VII mass',op='sum',rad=None),
+
+   'Subhalo_StellarRotation' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Krot',op='ufunc',rad=None),
+   'Subhalo_StellarRotation_2rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Krot',op='ufunc',rad='2rhalfstars'),
+   'Subhalo_StellarRotation_1rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Krot',op='ufunc',rad='1rhalfstars'),
+   'Subhalo_GasRotation' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Krot',op='ufunc',rad=None),
+   'Subhalo_GasRotation_2rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Krot',op='ufunc',rad='2rhalfstars'),
 
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
