@@ -23,29 +23,10 @@ from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, loadSimGalC
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
 from cosmo.mergertree import loadMPBs
-from plot.general import simSubhaloQuantity, getWhiteBlackColors
+from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from plot.config import *
-
-def bandMagRange(bands, tight=False):
-    """ Hard-code some band dependent magnitude ranges. """
-    if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
-    if bands[0] == 'u' and bands[1] == 'r': mag_range = [0.5,3.5]
-    if bands[0] == 'g' and bands[1] == 'r': mag_range = [0.0,1.0]
-    if bands[0] == 'r' and bands[1] == 'i': mag_range = [0.0,0.6]
-    if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
-    if bands[0] == 'r' and bands[1] == 'z': mag_range = [0.0,0.8]
-
-    if tight:
-        # alternative set
-        if bands == ['u','i']: mag_range = [0.5,4.0]
-        if bands == ['u','i']: mag_range = [0.5,3.5]
-        if bands == ['g','r']: mag_range = [0.15,0.85]
-        if bands == ['r','i']: mag_range = [0.0,0.6]
-        if bands == ['i','z']: mag_range = [0.0,0.4]
-        if bands == ['i','z']: mag_range = [0.0,0.8]
-    return mag_range
 
 def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None, simColorsModel=None):
     """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
@@ -1007,48 +988,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
                 facecolor=fig.get_facecolor())
         plt.close(fig)
 
-def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
-    """ Return a list of quantities (galaxy properties) which we know about for exploration. """
-
-    # generally availably (groupcat)
-    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
-
-    if wCounts: quants1 = [None] + quants1
-
-    # generally available (auxcat)
-    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii',
-                'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
-                'bmag_halo_masswt', 'bmag_halo_volwt', 'pratio_halo_masswt', 'pratio_halo_volwt']
-
-    quants3 = ['M_BH_actual', 'BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio',
-               'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
-
-    # L75 only:
-    quants4 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
-
-    # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
-    #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
-
-    # tracer tracks quantities (L75 only):
-    trQuants = []
-    trBases1 = ['tr_zAcc_mean','tr_zAcc_mean_over_zForm','tr_dtHalo_mean']
-    trBases2 = ['tr_angmom_tAcc','tr_entr_tAcc','tr_temp_tAcc']
-
-    for trBase in trBases1+trBases2:
-        trQuants.append(trBase + '')
-        trQuants.append(trBase + '_mode=smooth')
-        trQuants.append(trBase + '_mode=merger')
-        trQuants.append(trBase + '_par=bhs')
-        trQuants.append(trBase + '_mode=smooth_par=bhs')
-        trQuants.append(trBase + '_mode=merger_par=stars')
-
-    quantList = quants1 + quants2 + quants3 + quants4
-    if wTr: quantList += trQuants
-    if onlyTr: quantList = trQuants
-    if onlyBH: quantList = quants3
-
-    return quantList
-
 def plots():
     """ Driver (exploration 2D histograms). """
     sPs = []
@@ -1061,7 +1000,15 @@ def plots():
     cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = quantList()
+    #quants = quantList()
+    quants = ['Krot_stars', 'Krot_stars2', 
+              'Krot_oriented_stars', 'Krot_oriented_stars2', 
+              'Arot_stars', 'Arot_stars2',
+              'specAngMom_stars', 'specAngMom_stars2',
+              'Krot_gas', 'Krot_gas2',
+              'Krot_oriented_gas', 'Krot_oriented_gas2',
+              'Arot_gas', 'Arot_gas2',
+              'specAngMom_gas', 'specAngMom_gas2']
 
     for sP in sPs:
         for css in cenSatSelects:
@@ -1110,13 +1057,25 @@ def plots3():
     """ Driver (exploration median trends). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     bands = ['g','r']
-    xQuant = 'mstar2_log'
+    xQuant = 'mstar1_log'
     cenSatSelects = ['cen']
 
-    quants = quantList(onlyBH=True)
+    #quants = quantList(onlyBH=True)
+    quants = ['Krot_stars', 'Krot_stars2', 
+              'Krot_oriented_stars', 'Krot_oriented_stars2', 
+              'Arot_stars', 'Arot_stars2',
+              'specAngMom_stars', 'specAngMom_stars2',
+              'Krot_gas', 'Krot_gas2',
+              'Krot_oriented_gas', 'Krot_oriented_gas2',
+              'Arot_gas', 'Arot_gas2',
+              'specAngMom_gas', 'specAngMom_gas2']
+
+    sPs.append( simParams(res=512, run='tng', redshift=0.0, variant=0000) )
+    quants = ['M_bulge_kinematic_counter_rot']
 
     # make plots
     for css in cenSatSelects:
@@ -1124,7 +1083,7 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css))
 
         # all quantities on one multi-panel page:
-        quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
+        #quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
 
         # one page per quantity:
         for yQuant in quants:

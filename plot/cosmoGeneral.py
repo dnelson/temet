@@ -22,8 +22,7 @@ from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
 from cosmo.stellarPop import loadSimGalColors
 from vis.common import setAxisColors
-from plot.general import simSubhaloQuantity, getWhiteBlackColors
-from plot.galaxyColor import bandMagRange, calcMstarColor2dKDE
+from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
 from plot.config import *
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
@@ -636,8 +635,13 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
 
         wFiniteCval = np.isfinite(sim_cvals)
         wNaNCval = np.isnan(sim_cvals)
+        wInfCval = np.isinf(sim_cvals)
 
-        assert np.count_nonzero(wFiniteCval) + np.count_nonzero(wNaNCval) == sim_cvals.size
+        if np.count_nonzero(wInfCval) > 0: # unusual
+            print(' warning: [%d] infinite color values [%s].' % (np.count_nonzero(wInfCval),cQuant))
+
+        assert np.count_nonzero(wFiniteCval) + np.count_nonzero(wNaNCval) + \
+               np.count_nonzero(wInfCval) == sim_cvals.size
 
         # save points with NaN cvals
         sim_yvals_nan = sim_yvals[wNaNCval]
@@ -758,6 +762,8 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
 
     # contours?
     if colorContours:
+        from plot.galaxyColor import calcMstarColor2dKDE
+        
         extent = [xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]]
         cLevels = [0.75,0.95]
         cAlphas = [0.5,0.8]
