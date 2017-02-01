@@ -170,9 +170,8 @@ def plotMassFunctions():
 def haloMassesVsDMOMatched():
     """ Plot the ratio of halo masses matched between baryonic and DMO runs. """
     # config
-    runList = ['tng','illustris']
+    runList = { 'tng':[1820,910,455], 'illustris':[1820,910,455], 'tng':[2500,1250,625] }
     redshift = 0.0
-    resList = [1820, 910, 455]
     cenSatSelect = 'cen' #all, cen, sat
 
     binSize = 0.1
@@ -194,10 +193,10 @@ def haloMassesVsDMOMatched():
     ax.set_ylabel('M$_{\\rm halo,DM}$ / M$_{\\rm halo,baryonic}$')
 
     # loop over runs
-    for run in runList:
+    for run in runList.keys():
         c = ax._get_lines.prop_cycler.next()['color']
 
-        for i, res in enumerate(resList):
+        for i, res in enumerate(runList[run]):
             sP = simParams(res=res,run=run,redshift=redshift)
             sPdm = simParams(res=res,run=run+'_dm',redshift=redshift)
             print(sP.simName)

@@ -1,6 +1,7 @@
 from . import gfmExternalFiles
 from . import helper
 from . import loadExtern
+from . import metaPlots
 from simParams import simParams
 from . import sphMap
 from . import treeSearch

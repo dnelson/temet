@@ -12,10 +12,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroSafe
-from illustris_python.util import partTypeNum
 from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
 from cosmo.util import validSnapList, periodicDists
 from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
+from plot.sizes import galaxySizes
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.config import *
 
@@ -464,9 +464,9 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
 
         # stellar mass definition: would want to mimic bulge mass measurements
         if not twiceR and not vsHaloMass:
-            xx_code = gc['subhalos']['SubhaloMassInHalfRadType'][w,partTypeNum('stars')]
+            xx_code = gc['subhalos']['SubhaloMassInHalfRadType'][w,sP.ptNum('stars')]
         if twiceR:
-            xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
+            xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
         if vsHaloMass:
             xx_code = gc['halos']['Group_M_Crit200'][wHalo]
 
@@ -480,7 +480,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
             yy = gc['subhalos']['SubhaloBHMass'][w]
         else:
             # dynamical (particle masses)
-            yy = gc['subhalos']['SubhaloMassType'][w,partTypeNum('bhs')]
+            yy = gc['subhalos']['SubhaloMassType'][w,sP.ptNum('bhs')]
 
         yy = sP.units.codeMassToLogMsun(yy)
         ww = np.where(yy > 0.0)
@@ -501,209 +501,6 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
     fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
-
-def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], addHalfLightRad=None):
-    """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. 
-    If addHalfLightRad is not None, then addHalfLightRad = [dustModel,band,show3D] e.g.
-    addHalfLightRad = ['p07c_cf00dust_res_conv_efr_rad30pkpc','sdss_r',False]. """
-
-    # plot setup
-    if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-    else:
-        # add requested subplot to existing figure
-        fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1])
-
-    ax.set_ylim([0.3,1e2])
-
-    ylabel = 'Galaxy Size [ kpc ]'
-    if not clean: ylabel += ' [ r$_{\\rm 1/2, stars/gas}$ ] [ only centrals ]'
-    if clean: ylabel += ' [ Halfmass Radius ]'
-    ax.set_ylabel(ylabel)
-    ax.set_yscale('log')
-
-    if vsHaloMass:
-        ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
-        ax.set_xlim([9,14.5])
-        ax.set_ylim([0.7,8e2])
-    else:
-        xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
-        if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
-        ax.set_xlabel(xlabel)
-        #ax.set_xlim( behrooziSMHM(sPs[0], logHaloMass=np.array(ax.get_xlim())) )
-        ax.set_xlim([7,12.0])
-        if clean: ax.set_xlim([8.0,12.0])
-
-    # observational points
-    if not vsHaloMass:
-        b = baldry2012SizeMass()
-        s = shen2003SizeMass()
-        l = lange2016SizeMass()
-
-        l1,_,_ = ax.errorbar(b['red']['stellarMass'], b['red']['sizeKpc'], 
-                             yerr=[b['red']['errorDown'],b['red']['errorUp']],
-                             color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
-        l2,_,_ = ax.errorbar(b['blue']['stellarMass'], b['blue']['sizeKpc'], 
-                             yerr=[b['blue']['errorDown'],b['blue']['errorUp']],
-                             color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='o')
-
-        l4, = ax.plot(s['late']['stellarMass'], s['late']['sizeKpc'], '-', color='#cccccc')
-        ax.fill_between(s['late']['stellarMass'], s['late']['sizeKpcDown'], s['late']['sizeKpcUp'], 
-                        color='#cccccc', interpolate=True, alpha=0.3)
-
-        l3, = ax.plot(s['early']['stellarMass'], s['early']['sizeKpc'], '-', color='#aaaaaa')
-        ax.fill_between(s['early']['stellarMass'], s['early']['sizeKpcDown'], s['early']['sizeKpcUp'], 
-                        color='#aaaaaa', interpolate=True, alpha=0.3)
-
-        l5, = ax.plot(l['stellarMass2'], l['hubbletype']['E_gt2e10']['sizeKpc'], '--', color='#777777')
-        l6, = ax.plot(l['stellarMass'], l['combined']['all_discs']['sizeKpc'], '--', color='#333333')
-
-        legend1 = ax.legend([l1,l2,l3,l4,l5,l6], 
-          [ b['red']['label'], b['blue']['label'], 
-            s['early']['label'], s['late']['label'],
-            l['hubbletype']['E_gt2e10']['label'], l['combined']['all_discs']['label'] ], 
-          loc='upper left') # lower right
-        ax.add_artist(legend1)
-
-    # loop over each fullbox run
-    for sP in sPs:
-        if sP.isZoom:
-            continue
-
-        print('Sizes: '+sP.simName)
-        sP.setRedshift(simRedshift)
-
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
-            fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
-
-        # centrals only
-        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
-        w = gc['halos']['GroupFirstSub'][wHalo]
-
-        # x-axis: mass definition
-        if vsHaloMass:
-            xx_code = gc['halos']['Group_M_Crit200'][wHalo]
-        else:
-            xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
-
-        xx = sP.units.codeMassToLogMsun( xx_code )
-
-        # sizes
-        yy_gas   = gc['subhalos']['SubhaloHalfmassRadType'][w,partTypeNum('gas')]
-        yy_gas   = sP.units.codeLengthToKpc( yy_gas )
-        yy_stars = gc['subhalos']['SubhaloHalfmassRadType'][w,partTypeNum('stars')]
-        yy_stars = sP.units.codeLengthToKpc( yy_stars )
-
-        if addHalfLightRad is not None:
-            # load auxCat half light radii
-            acField = 'Subhalo_HalfLightRad_' + addHalfLightRad[0]
-            ac = auxCat(sP, fields=[acField])
-            assert addHalfLightRad[1] in ac[acField+'_attrs']['bands']
-            bandNum = list(ac[acField+'_attrs']['bands']).index( addHalfLightRad[1] )
-
-            # hard-coded structure of these files for now
-            assert ac[acField].shape[2] in [6,10]
-
-            if ac[acField].shape[2] == 6:
-                # non-resolved (models A,B)
-                Re_labels = ['edge-on','face-on','edge-on-smallest','edge-on-random','z-axis','3d']
-            if ac[acField].shape[2] == 10:
-                # resolved (model C): even 3d radii are projection dependent
-                Re_labels = ['edge-on 2d','face-on 2d','edge-on-smallest 2d','edge-on-random 2d','z-axis 2d',
-                             'edge-on 3d','face-on 3d','edge-on-smallest 3d','edge-on-random 3d','z-axis 3d']
-                if addHalfLightRad[2]:
-                    Re_labels = Re_labels[5:]
-                    ac[acField] = ac[acField][:,:,5:]
-                else:
-                    Re_labels = Re_labels[0:5]
-                    ac[acField] = ac[acField][:,:,:5]
-
-            # split by each projection
-            yy_stars_Re = []
-            
-            for i in range(ac[acField].shape[2]):
-                yy_stars_Re.append( sP.units.codeLengthToKpc(ac[acField][w,bandNum,i]) )         
-
-        # if plotting vs halo mass, restrict our attention to those galaxies with sizes (e.g. nonzero 
-        # number of either gas cells or star particles)
-        if vsHaloMass:
-            ww = np.where( (yy_gas > 0.0) & (yy_stars > 0.0) )
-            yy_gas = yy_gas[ww]
-            yy_stars = yy_stars[ww]
-            xx = xx[ww]
-
-        if vsHaloMass and addHalfLightRad is not None:
-            for i in range(ac[acField].shape[2]):
-                yy_stars_Re[i] = yy_stars_Re[i][ww]
-
-        # take median vs mass and smooth
-        xm_gas, ym_gas, sm_gas       = running_median(xx,yy_gas,binSize=binSize,skipZeros=True)
-        xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize,skipZeros=True)
-
-        ww_gas   = np.where(ym_gas > 0.0)
-        ww_stars = np.where(ym_stars > 0.0)
-
-        ym_gas   = savgol_filter(ym_gas[ww_gas],sKn,sKo)
-        ym_stars = savgol_filter(ym_stars[ww_stars],sKn,sKo)
-        sm_gas   = savgol_filter(sm_gas[ww_gas],sKn,sKo)
-        sm_stars = savgol_filter(sm_stars[ww_stars],sKn,sKo)
-
-        xm_gas = xm_gas[ww_gas]
-        xm_stars = xm_stars[ww_stars]
-
-        l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=sP.simName)
-
-        if not clean:
-            l, = ax.plot(xm_gas[1:-1], ym_gas[1:-1], linestyles[1], color=l.get_color(), lw=3.0)
-
-        if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
-            y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
-            y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
-            ax.fill_between(xm_stars[1:-1], y_down, y_up, 
-                            color=l.get_color(), interpolate=True, alpha=0.3)
-
-        # add all of the half-light radii size measurements, one line per projection
-        if addHalfLightRad is not None:
-            for i in range(ac[acField].shape[2]):
-                xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars_Re[i],binSize=binSize,skipZeros=True)
-                ww_stars = np.where(ym_stars > 0.0)
-                ym_stars = savgol_filter(ym_stars[ww_stars],sKn,sKo)
-                sm_stars = savgol_filter(sm_stars[ww_stars],sKn,sKo)
-                xm_stars = xm_stars[ww_stars]
-
-                l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, 
-                             label='R$_{\\rm e}$ '+addHalfLightRad[1]+' '+Re_labels[i])
-
-                if i == 0:
-                    y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
-                    y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
-                    ax.fill_between(xm_stars[1:-1], y_down, y_up, 
-                            color=l.get_color(), interpolate=True, alpha=0.3)
-
-    # second legend
-    handles, labels = ax.get_legend_handles_labels()
-    sExtra = []
-    lExtra = []
-
-    if not clean:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[0]),
-                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[1])]
-        lExtra = [r'stars',r'gas']
-
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
-
-    # finish figure
-    finishFlag = False
-    if fig_subplot[0] is not None: # add_subplot(abc)
-        digits = [int(digit) for digit in str(fig_subplot[1])]
-        if digits[2] == digits[0] * digits[1]: finishFlag = True
-
-    if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
-        pdf.savefig()
-        plt.close(fig)
 
 def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kpc=False, use30H=False, 
                         useP10=False, simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
@@ -872,7 +669,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                 ac = auxCat(sP, fields=[field])
                 xx = sP.units.codeMassToLogMsun(ac[field][w])
             if not use30kpc and not useP10 and not use30H:
-                xx = gc['subhalos'][mt][w,partTypeNum('stars')]
+                xx = gc['subhalos'][mt][w,sP.ptNum('stars')]
                 xx = sP.units.codeMassToLogMsun(xx)
 
             normFac = sP.boxSizeCubicComovingMpc * binSize
@@ -998,7 +795,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
 
         # include: centrals + satellites (no noticeable difference vs. centrals only)
         # stellar mass definition, enforce resolution limit
-        xx_code = gc['subhalos']['SubhaloMassInRadType'][:,partTypeNum('stars')]
+        xx_code = gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')]
 
         w = np.where( xx_code >= minNumStars * sP.targetGasMass )
         xx = sP.units.codeMassToLogMsun( xx_code[w] )
@@ -1162,10 +959,10 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
 
         # include: centrals + satellites (no noticeable difference vs. centrals only)
         w = np.arange(gc['subhalos']['count'])
-        #w = np.where(gc['subhalos']['SubhaloMassInRadType'][:,partTypeNum('stars')] > 0.0)[0]
+        #w = np.where(gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] > 0.0)[0]
 
         # stellar mass definition
-        xx_code = gc['subhalos']['SubhaloMassInRadType'][w,partTypeNum('stars')]
+        xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
         xx = sP.units.codeMassToLogMsun( xx_code )
 
         # metallicity measured how/within what radius?
@@ -1752,7 +1549,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
             w = np.arange(gc['subhalos'].shape[0])
 
         # stellar mass definition, and enforce resolution limit
-        xx_code = gc['subhalos'][:,partTypeNum('stars')]
+        xx_code = gc['subhalos'][:,sP.ptNum('stars')]
 
         wResLimit = np.where( xx_code >= minNumStars * sP.targetGasMass )[0]
         w = np.intersect1d(w,wResLimit)
@@ -1857,9 +1654,9 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    sPs.append( simParams(res=128, run='tng', variant=0000) )
-    sPs.append( simParams(res=128, run='tng', variant=2202) )
-    sPs.append( simParams(res=128, run='tng', variant=3603) )
+    sPs.append( simParams(res=512, run='tng', variant=0000) )
+    sPs.append( simParams(res=256, run='tng', variant=0000) )
+    sPs.append( simParams(res=256, run='tng', variant=4506) )
 
     # make multipage PDF
     pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
@@ -1867,7 +1664,7 @@ def plots():
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
+    #galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
     #pdf.close()
     #return
     # END TEST AREA
