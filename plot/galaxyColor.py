@@ -1064,18 +1064,7 @@ def plots3():
     xQuant = 'mstar1_log'
     cenSatSelects = ['cen']
 
-    #quants = quantList(onlyBH=True)
-    quants = ['Krot_stars', 'Krot_stars2', 
-              'Krot_oriented_stars', 'Krot_oriented_stars2', 
-              'Arot_stars', 'Arot_stars2',
-              'specAngMom_stars', 'specAngMom_stars2',
-              'Krot_gas', 'Krot_gas2',
-              'Krot_oriented_gas', 'Krot_oriented_gas2',
-              'Arot_gas', 'Arot_gas2',
-              'specAngMom_gas', 'specAngMom_gas2']
-
-    sPs.append( simParams(res=512, run='tng', redshift=0.0, variant=0000) )
-    quants = ['M_bulge_kinematic_counter_rot']
+    quants = quantList(onlyBH=True)
 
     # make plots
     for css in cenSatSelects:
@@ -1083,7 +1072,7 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css))
 
         # all quantities on one multi-panel page:
-        #quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
+        quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
 
         # one page per quantity:
         for yQuant in quants:
