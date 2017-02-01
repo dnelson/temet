@@ -734,6 +734,42 @@ def giodini2009(sP):
 
     return r
 
+def lovisari2015(sP):
+    """ Load observational data points (gas/total mass within r500crit) from Lovisari+ (2015). """
+    # Table 2, 7th column is M500 in [10^13 / h70 Msun], 9th column is M500gas in [10^12 * h70^{-5/2} Msun]
+    path = dataBasePath + 'lovisari/lovisari2015_table2.txt'
+
+    data = np.genfromtxt(path, dtype=None)
+
+    m500_tot = np.array([d[6] for d in data])
+    m500_tot_err = np.array([d[7] for d in data])
+    m500_gas = np.array([d[8] for d in data])
+    m500_gas_err = np.array([d[9] for d in data])
+
+    # we assume their units mean that h=0.7 is assumed and included in their numbers, so slightly
+    # compensate for our cosmology
+    m500_tot_Msun     = m500_tot * 1e13 / (0.70/sP.HubbleParam)
+    m500_tot_Msun_err = m500_tot_err * 1e13 / (0.70/sP.HubbleParam)
+    m500_gas_Msun     = m500_gas * 1e12 / (0.70/sP.HubbleParam)
+    m500_gas_Msun_err = m500_gas_err * 1e12 / (0.70/sP.HubbleParam)
+
+    frac_500_gas = m500_gas_Msun / m500_tot_Msun
+
+    # maximal error estimate:
+    #frac_500_gas_errUp   = (m500_gas_Msun+m500_gas_Msun_err) / (m500_tot_Msun-m500_tot_Msun_err)
+    #frac_500_gas_errDown = (m500_gas_Msun-m500_gas_Msun_err) / (m500_tot_Msun+m500_tot_Msun_err)
+    #frac_500_gas_err = (frac_500_gas_errUp + frac_500_gas_errDown) / 2.0
+    frac_500_gas_err = (m500_gas_Msun+m500_gas_Msun_err) / m500_tot_Msun
+
+    r = { 'name'             : np.array([d[0] for d in data]), 
+          'm500_logMsun'     : np.log10(m500_tot_Msun),
+          'm500_logMsun_err' : np.log10(m500_tot_Msun_err),
+          'fGas500'          : frac_500_gas,
+          'fGas500Err'       : frac_500_gas_err,
+          'label'            : 'Losivari+ (2015) z<0.04' }
+
+    return r
+
 def zafar2013():
     """ Load observational data points (HI absorption, f_HI(N) z=[1.51,5.0]) from Zafar+ (2013), sub-DLAs. """
     # Table 4

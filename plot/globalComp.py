@@ -1019,6 +1019,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
 
     # observational points
     g = giodini2009(sPs[0])
+    l = lovisari2015(sPs[0])
 
     l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
                          color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
@@ -1029,10 +1030,14 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     l3,_,_ = ax.errorbar(g['m500_logMsun'], g['fBaryon500'], yerr=g['fBaryon500Err'],
                          color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
                          fmt=markers[2]+linestyles[2])
+    l4,_,_ = ax.errorbar(l['m500_logMsun'], l['fGas500'], #yerr=l['fGas500Err'],
+                         color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, 
+                         marker=markers[0],linestyle='')
 
-    legend1 = ax.legend([l1,l2,l3], [g['label']+' f$_{\\rm gas}$',
-                                     g['label']+' f$_{\\rm stars}$',
-                                     g['label']+' f$_{\\rm baryons}$'], loc='upper left')
+    legend1 = ax.legend([l1,l2,l3,l4], [g['label']+' f$_{\\rm gas}$',
+                                        g['label']+' f$_{\\rm stars}$',
+                                        g['label']+' f$_{\\rm baryons}$',
+                                        l['label']+' f$_{\\rm gas}$'], loc='upper left')
     ax.add_artist(legend1)
 
     # universal baryon fraction line
@@ -1664,7 +1669,7 @@ def plots():
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    #galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
+    #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
     #pdf.close()
     #return
     # END TEST AREA
