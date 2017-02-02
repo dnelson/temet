@@ -1,0 +1,24 @@
+# Vogelsberger+ (2013)
+# SMHM relation in Illustris L25n256 fiducial and on/offvariations
+# /n/hernquistfs1/Illustris/SmallBox/GFM/Production/Cosmo/TurnOnOff
+# Figure 15 (lower left panel) and Table 3. note: all masses in log[msun]
+# M_star's are the usual within 2*rhalfmassstars
+#   MeGaWiMlQuEmRa = fiducial
+#   MeGaWiMl = fiducial with no BHs but still with metal cooling
+#   NoWindFeed = fiducail with no winds but still with metal cooling
+#   plain = no winds no BHs and no metal cooling
+# M_halo[200crit] M_star(MeGaWiMlQuEmRa) M_star(MeGaWiMl) M_star(NoWindFeed) M_star[plain]
+10.4700, 7.5908, 7.5282, 9.0856, 9.2177
+10.7500, 8.2591, 8.2591, 9.5870, 9.7365
+11.0000, 8.7743, 8.7708, 9.6920, 10.0605
+11.2500, 9.2478, 9.3069, 9.8422, 10.3428
+11.5000, 9.6553, 9.7665, 10.0446, 10.5765
+11.7500, 10.0766, 10.2956, 10.2435, 10.8136
+12.0000, 10.3346, 10.6788, 10.4007, 11.0438
+12.2255, 10.5612, 11.0097, 10.6586, 11.1939
+12.5000, 10.7880, 11.3825, 10.8471, 11.4207
+12.7500, 11.0286, 11.5814, 11.0251, 11.5883
+13.0000, 11.1893, 11.7872, 11.1893, 11.7907
+13.2240, 11.3394, 12.0799, 11.5098, 12.0903
+13.5000, 11.4202, 12.2093, 11.5697, 12.1954
+13.6700, 11.8239, 12.4879, 11.7996, 12.4149
