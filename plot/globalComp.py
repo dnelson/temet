@@ -400,7 +400,8 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMasses=True, simRedshift=0.0):
+def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass=True, 
+                           actualBHMasses=False, actualLargestBHMasses=True, simRedshift=0.0):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     # plot setup
     fig = plt.figure(figsize=figsize)
@@ -409,9 +410,11 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
     ax.set_xlim([8.5, 13.0])
     ax.set_ylim([5.5, 11.0])
 
-    ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ tot, only centrals ]')
+    ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ tot dyn sum, only cen ]')
     if actualBHMasses:
-        ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ actual, only centrals ]')
+        ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ actual sum, only cen ]')
+    if actualLargestBHMasses:
+        ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ actual max, only cen ]')
 
     ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
     if twiceR:
@@ -420,6 +423,8 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
         ax.set_xlabel('M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
         ax.set_xlim([9,14.5])
         ax.set_ylim([5.0, 11.0])
+    if vsBulgeMass:
+        ax.set_xlabel('M$_{\\rm bulge,\star}$ [ log M$_{\\rm sun}$ ] [ 2*counter-rotating < 1r$_{1/2}$ ]')
 
     # observational points
     if not vsHaloMass:
@@ -444,13 +449,14 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
         if sP.isZoom:
             continue
 
+        sP.setRedshift(simRedshift)
+
         numBHs = snapshotHeader(sP)['NumPart'][sP.ptNum('bhs')]
         if not groupCatHasField(sP, 'Subhalo', 'SubhaloBHMass') or numBHs == 0:
             print('BHMass: %s [SKIP: sim has no BHs]' % sP.simName)
             continue
 
         print('BHMass: '+sP.simName)
-        sP.setRedshift(simRedshift)
 
         fieldsSubhalos = ['SubhaloBHMass','SubhaloMassType']
         if not twiceR and not vsHaloMass: fieldsSubhalos.append('SubhaloMassInHalfRadType')
@@ -469,6 +475,18 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
             xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
         if vsHaloMass:
             xx_code = gc['halos']['Group_M_Crit200'][wHalo]
+        if vsBulgeMass:
+            # load auxCat and compute bulge-mass
+            acField = 'Subhalo_StellarRotation_1rhalfstars'
+            acIndex = 2
+
+            ac = auxCat(sP, fields=[acField])
+            ac = np.squeeze( ac[acField][w,acIndex] ) # counter-rotating mass fraction relative to total
+            ac[np.where(np.isnan(ac))] = 0.0 # set NaN to zero (consistent with groupcat)
+
+            # multiply 2 x (massfrac) x (stellar mass)
+            mass_1rhalf = gc['subhalos']['SubhaloMassInHalfRadType'][w,sP.ptNum('stars')]
+            xx_code = 2.0 * ac * np.squeeze(mass_1rhalf)
 
         xx = sP.units.codeMassToLogMsun( xx_code )
 
@@ -481,6 +499,12 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, actualBHMas
         else:
             # dynamical (particle masses)
             yy = gc['subhalos']['SubhaloMassType'][w,sP.ptNum('bhs')]
+        if actualLargestBHMasses:
+            # load auxCat (fix this problem by using the most massive BH in each subhalo)
+            acField = 'Subhalo_BH_Mass_largest'
+            ac = auxCat(sP, fields=[acField])[acField]
+            ac[np.where(np.isnan(ac))] = 0.0 # set NaN to zero (consistent with groupcat)
+            yy = ac[w]
 
         yy = sP.units.codeMassToLogMsun(yy)
         ww = np.where(yy > 0.0)
@@ -1634,11 +1658,11 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1661,17 +1685,18 @@ def plots():
     # add runs: TNG_methods
     sPs.append( simParams(res=512, run='tng', variant=0000) )
     sPs.append( simParams(res=256, run='tng', variant=0000) )
-    sPs.append( simParams(res=256, run='tng', variant=4506) )
+    #sPs.append( simParams(res=256, run='tng', variant=4506) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_bh_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    #baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
-    #pdf.close()
-    #return
+    blackholeVsStellarMass(sPs, pdf, simRedshift=zZero, twiceR=False, vsHaloMass=False, vsBulgeMass=False, 
+                           actualBHMasses=False, actualLargestBHMasses=True)
+    pdf.close()
+    return
     # END TEST AREA
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
@@ -1687,7 +1712,7 @@ def plots():
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
-    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
+    ##galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
@@ -1698,11 +1723,12 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    nHIcddf(sPs, pdf) # z=3
-    nHIcddf(sPs, pdf, moment=1)
-    nOVIcddf(sPs, pdf) # z=0.2
-    nOVIcddf(sPs, pdf, moment=1)
-    dlaMetallicityPDF(sPs, pdf) # z=3
+    if 0:
+        nHIcddf(sPs, pdf) # z=3
+        nHIcddf(sPs, pdf, moment=1)
+        nOVIcddf(sPs, pdf) # z=0.2
+        nOVIcddf(sPs, pdf, moment=1)
+        dlaMetallicityPDF(sPs, pdf) # z=3
 
     cheapDustModel = 'p07c_cf00dust_rad30pkpc' #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
     galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
