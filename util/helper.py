@@ -5,6 +5,7 @@ util/helper.py
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
 
+import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import collections
@@ -333,12 +334,16 @@ def trapsum(xin,yin):
 
 # --- vis ---
 
-def loadColorTable(ctName, valMinMax=None):
-    """ Load a custom or built-in color table.
-          rgb_table : do not load for active plotting, just return table as an array.
+def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None):
+    """ Load a custom or built-in color table specified by ctName.
+      valMinMax: required for some custom colormaps, and for some adjustments.
+      plawScale: return the colormap modified as cmap_new = cmap_old**plawScale
+      cmapCenterVal: return the colormap modified such that its middle point lands at 
+        the numerical value cmapCenterVal, given the bounds valMinMax (e.g. zero, 
+        for any symmetric colormap, say for positive/negative radial velocities)
     """
     if ctName is None: return None
-    
+
     from matplotlib.pyplot import cm
     from matplotlib.colors import LinearSegmentedColormap
     cmap = None
@@ -379,13 +384,14 @@ def loadColorTable(ctName, valMinMax=None):
 
     if ctName == 'dmdens_tng':
         # TNG dark matter density
-        #cdict = {'red'   : ((0.0, 0.0, 0.0), (0.3,0.1,0.1), (0.6, 0.76, 0.76), (1.0, 1.0, 1.0)),
-        #         'green' : ((0.0, 0.0, 0.0), (0.3,0.3,0.3), (0.6, 0.53, 0.53), (1.0, 1.0, 1.0)),
-        #         'blue'  : ((0.0, 0.05, 0.05), (0.3,0.5,0.5), (0.6, 0.33, 0.33), (1.0, 1.0, 1.0))}
-        cdict = {'red'   : ((0.0, 0.0, 0.0), (0.15,0.1,0.1), (0.3,0.1,0.1), (0.6, 0.76, 0.76), (1.0, 1.0, 1.0)),
-                 'green' : ((0.0, 0.0, 0.0), (0.15,0.13,0.13), (0.3,0.3,0.3), (0.6, 0.53, 0.53), (1.0, 1.0, 1.0)),
-                 'blue'  : ((0.0, 0.05, 0.05), (0.15,0.26,0.26), (0.3,0.5,0.5), (0.6, 0.33, 0.33), (1.0, 1.0, 1.0))}
-        cmap = LinearSegmentedColormap(ctName, cdict)
+        #cdict = {'red'   : ((0.0, 0.0, 0.0), (0.15,0.1,0.1), (0.3,0.1,0.1), (0.6, 0.76, 0.76), (0.9, 1.0, 1.0), (1.0, 1.0, 1.0)),
+        #         'green' : ((0.0, 0.0, 0.0), (0.15,0.13,0.13), (0.3,0.3,0.3), (0.6, 0.53, 0.53), (0.9, 1.0, 1.0), (1.0, 1.0, 1.0)),
+        #         'blue'  : ((0.0, 0.05, 0.05), (0.15,0.26,0.26), (0.3,0.5,0.5), (0.6, 0.33, 0.33), (0.9, 1.0, 1.0), (1.0, 1.0, 1.0))}
+        # with powerlaw scaling of 1.1 added:
+        cdict = {'red'   : ((0.0, 0.0, 0.0), (0.124,0.1,0.1), (0.266,0.1,0.1), (0.570, 0.76, 0.76), (0.891, 1.0, 1.0), (1.0, 1.0, 1.0)),
+                 'green' : ((0.0, 0.0, 0.0), (0.124,0.13,0.13), (0.266,0.3,0.3), (0.570, 0.53, 0.53), (0.891, 1.0, 1.0), (1.0, 1.0, 1.0)),
+                 'blue'  : ((0.0, 0.05, 0.05), (0.124,0.26,0.26), (0.266,0.5,0.5), (0.570, 0.33, 0.33), (0.891, 1.0, 1.0), (1.0, 1.0, 1.0))}
+        cmap = LinearSegmentedColormap(ctName, cdict, N=1024)
 
     if ctName == 'HI_segmented':
         # discontinuous colormap for column densities, split at 10^20 and 10^19 cm^(-3)
@@ -442,6 +448,27 @@ def loadColorTable(ctName, valMinMax=None):
 
     if cmap is None:
         raise Exception('Unrecognized colormap request ['+ctName+'] or not implemented.')
+
+    def _plawScale(cmap, plaw_index):
+        assert plaw_index > 0.0
+        cdict = {}
+
+        for k in ['red','green','blue']:
+            cdict[k] = []
+            for j in range(len(cmap._segmentdata[k])):
+                xx = cmap._segmentdata[k][j]
+                cdict[k].append( [xx[0]**plaw_index, xx[1], xx[2]] )
+            assert (cdict[k][0] < 0 or cdict[k][-1] > 1) # outside [0,1]
+        return LinearSegmentedColormap(ctName+'_p', cdict, N=1024)
+
+    if plawScale is not None:
+        cmap = _plawScale(cmap, plawScale)
+
+    if cmapCenterVal is not None:
+        assert cmapCenterVal > valMinMax[0] and cmapCenterVal < valMinMax[1]
+        center_rel = np.abs(cmapCenterVal - valMinMax[0]) / np.abs(valMinMax[1] - valMinMax[0])
+        plaw_index = np.log(center_rel) / np.log(0.5)
+        cmap = _plawScale(cmap, plaw_index)
 
     return cmap
 

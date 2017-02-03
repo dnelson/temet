@@ -215,16 +215,23 @@ def TNG_mainImages(res, conf=0):
 
     if conf == 0: panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
     if conf == 1: panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
+    if conf == 2: panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2'} )
+    if conf == 3: panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+    if conf == 4: panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
+    if conf == 5: panels.append( {'partType':'gas', 'partField':'P_B',   'valMinMax':[-5,7]} )
+    if conf == 6: panels.append( {'partType':'gas', 'partField':'P_gas', 'valMinMax':[-5,7]} )
 
     run        = 'tng'
     redshift   = 0.0
-    hsmlFac    = 2.5
     nPixels    = 2000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
     labelSim   = False
     plotHalos  = False
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    #plawScale = 2.0
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
@@ -238,45 +245,13 @@ def TNG_mainImages(res, conf=0):
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'edged'
+        plotStyle  = 'open'
         rasterPx   = 2000
-        colorbars  = False
+        colorbars  = True
 
         saveFilename = './boxImage_%s_%s-%s_fof-%d_axes%d%d_%dof%d.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],centerHaloID,
            axes[0],axes[1],curSlice,nSlicesTot)
-
-    renderBox(panels, plotConfig, locals())
-
-def tng_boxPressureComp():
-    """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
-    panels = []
-
-    #panels.append( {'partField':'P_B', 'valMinMax':[-5,7]} )
-    #panels.append( {'partField':'P_gas', 'valMinMax':[-5,7]} )
-    panels.append( {'partField':'pressure_ratio', 'valMinMax':[-3.0,0.0]} )
-    #panels.append( {'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
-
-    run        = 'tng'
-    res        = 1820
-    redshift   = 0.0
-    partType   = 'gas'
-    hsmlFac    = 2.5
-    nPixels    = 1920
-    axes       = [0,1] # x,y
-    labelZ     = False
-    labelScale = True
-    labelSim   = False
-    plotHalos  = 50
-
-    # render config (global)
-    class plotConfig:
-        plotStyle  = 'open'
-        rasterPx   = 1920
-        colorbars  = True
-
-        sP = simParams(res=res, run=run, redshift=redshift)
-        saveFilename = './boxPressure_%s_z%.1f.pdf' % (sP.simName, redshift)
 
     renderBox(panels, plotConfig, locals())
 
