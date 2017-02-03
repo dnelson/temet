@@ -102,7 +102,7 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2):
         hsml[hsml < 0.05*sP.gravSoft] = 0.05*sP.gravSoft
         hsml[hsml > 2.0*sP.gravSoft] = 2.0*sP.gravSoft # can decouple, leads to strageness
 
-        print(' [m0] stellar hsml clip above [%.1f px] below [%.1f px]' % (2.0*sP.gravSoft,0.05*sP.gravSoft))
+        #print(' [m0] stellar hsml clip above [%.1f px] below [%.1f px]' % (2.0*sP.gravSoft,0.05*sP.gravSoft))
 
     # adaptively clip in proportion to pixel scale of image, depending on ~pixel number
     if method == 1:
@@ -111,8 +111,8 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2):
         clipAboveToPx  = np.max([5.0, 6.0-2*1920/np.max(nPixels)]) # was 3.0 not 5.0 before composite tests
         hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
 
-        print(' [m1] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
-            (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
+        #print(' [m1] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
+        #    (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
 
     if method == 2:
         # adaptive technique 1 (preferred) (used for TNG subbox movies)
@@ -127,8 +127,8 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2):
         clipAboveToPx = clipAboveNumPx # coupled
         hsml[hsml > clipAboveNumPx*pxScale] = clipAboveToPx*pxScale
 
-        print(' [m2] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
-            (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
+        #print(' [m2] stellar hsml above [%.1f px] to [%.1f px] (%.1f to %.1f kpc)' % \
+        #    (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
 
     if method is None:
         print(' hsml clip DISABLED!')
@@ -1013,7 +1013,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     hsml = hsml[wMask]
 
                 if sP.isPartType(partType, 'stars'):
-                    pxScale = np.max(boxSizeImg[axes] / nPixels)
+                    pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
                     hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2)
 
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
@@ -1130,7 +1130,8 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen >= 1000.0:
             scaleBarLen = 1000.0 * np.round(scaleBarLen/1000.0)
 
-        unitStrs = ['cpc','ckpc','cMpc','cGpc'] # comoving
+        cmStr = 'c' if p['sP'].redshift > 0.0 else ''
+        unitStrs = [cmStr+'pc',cmStr+'kpc',cmStr+'Mpc',cmStr+'Gpc'] # comoving (drop 'c' if at z=0)
         unitInd = 1 if p['sP'].mpcUnits is False else 2
 
         scaleBarStr = "%g %s" % (scaleBarLen, unitStrs[unitInd])
@@ -1430,7 +1431,9 @@ def renderMultiPanel(panels, conf):
 
             # color mapping and place image
             vMM = p['valMinMax'] if 'valMinMax' in p else None
-            cmap = loadColorTable(config['ctName'], valMinMax=vMM)
+            plaw = p['plawScale'] if 'plawScale' in p else None
+            cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
+            cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
            
             #cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
             #grid = np.ma.array(grid, mask=np.isnan(grid))
@@ -1492,7 +1495,7 @@ def renderMultiPanel(panels, conf):
             # verify that each column contains the same field and valMinMax
             pass
 
-        if p['vecColorbar'] and not oneGlobalColorbar:
+        if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
             raise Exception('Only support vecColorbar addition with oneGlobalColorbar type configuration.')
 
         # start plot
@@ -1525,7 +1528,9 @@ def renderMultiPanel(panels, conf):
 
             # color mapping and place image
             vMM = p['valMinMax'] if 'valMinMax' in p else None
-            cmap = loadColorTable(config['ctName'], valMinMax=vMM)
+            plaw = p['plawScale'] if 'plawScale' in p else None
+            cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
+            cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
 
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal')
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
@@ -1563,7 +1568,7 @@ def renderMultiPanel(panels, conf):
             if nRows == 1: heightFac *= 0.5 # reduce
             if nRows == 2: heightFac *= 1.3 # increase
 
-            if not p['vecColorbar']:
+            if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, 0.4, bottomNorm, 0.3)
