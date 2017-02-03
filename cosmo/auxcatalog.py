@@ -199,7 +199,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only.
     """
-    assert op in ['sum','mean','ufunc']
+    assert op in ['sum','mean','max','ufunc']
     if op == 'func': assert ptProperty in ['Krot']
 
     # determine ptRestriction
@@ -329,6 +329,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
 
     if op != 'ufunc':
         particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
+
+    if 'count' not in particles:
+        particles['count'] = particles[ particles.keys()[0] ].shape[0]
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     if op == 'ufunc': 
@@ -477,6 +480,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
             loc_wt  = particles['weights'][i0:i1][wValid]
 
             if op == 'sum': r[i] = np.sum( loc_val )
+            if op == 'max': r[i] = np.max( loc_val )
             if op == 'mean': r[i] = np.average( loc_val , weights=loc_wt )
         else:
             # vector (e.g. pos, vel, Bfield)
@@ -485,6 +489,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
                 loc_wt  = particles['weights'][i0:i1][wValid]
 
                 if op == 'sum': r[i,j] = np.sum( loc_val )
+                if op == 'max': r[i,j] = np.max( loc_val )
                 if op == 'mean': r[i,j] = np.average( loc_val , weights=loc_wt )
 
     attrs = {'Description' : desc.encode('ascii'),
@@ -1484,6 +1489,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VI mass',op='sum',rad=None),
    'Subhalo_Mass_OVII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VII mass',op='sum',rad=None),
+   'Subhalo_BH_Mass_largest' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_Mass',op='max',rad=None),
 
    'Subhalo_StellarRotation' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Krot',op='ufunc',rad=None),

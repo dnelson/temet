@@ -336,3 +336,69 @@ def sizeModelsRatios():
 
     # close pdf
     pdf.close()
+
+def clumpSizes(sP):
+    """ Galaxy sizes of the very small things vs stellar mass or halo mass, at redshift zero. """
+    from util.loadExtern import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+    from cosmo.util import cenSatSubhaloIndices
+
+    centralsOnly = False
+    vsMstarXaxis = True
+
+    # plot setup
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    ax.set_title(sP.simName + ' z=%.1f' % sP.redshift)
+
+    ylabel = 'Subhalo Size [ kpc ] [ r$_{\\rm 1/2, stars}$ ]'
+    if centralsOnly: ylabel += ' [ only centrals ]'
+    ax.set_ylabel(ylabel)
+    ax.set_yscale('log')
+
+    ax.set_xlabel('Parent Group Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
+    ax.set_xlim([8,14.5])
+    ax.set_ylim([0.1,100])
+
+    # load
+    gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+        fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType','SubhaloGrNr'])
+
+    # centrals only?
+    inds_cen, inds_all, _ = cenSatSubhaloIndices(sP, gc=gc)
+
+    if centralsOnly:
+        w = inds_cen
+    else:
+        w = inds_all
+    wHalo = gc['subhalos']['SubhaloGrNr'][w]
+
+    # x-axis: mass definition
+    xx_code = gc['halos']['Group_M_Crit200'][wHalo]
+    xx = sP.units.codeMassToLogMsun( xx_code )
+
+    if vsMstarXaxis:
+        xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
+        xx = sP.units.codeMassToLogMsun( xx_code )
+        ax.set_xlim([6.0,11.5])
+        ax.set_xlabel('Subhalo Stellar Mass [ log M$_{\\rm sun}$ ] [ <2r$_{\\rm 1/2, stars}$ ]')
+
+    # sizes
+    yy_stars = gc['subhalos']['SubhaloHalfmassRadType'][w,sP.ptNum('stars')]
+    yy_stars = sP.units.codeLengthToKpc( yy_stars )
+
+    # plot (xx, yy_gas) and (xx, yy_stars)
+    ax.plot(xx, yy_stars, '.', alpha=0.7, label=sP.simName)
+
+    # plot median
+    ww = np.where(yy_stars > 0.0)
+    xx = xx[ww]
+    yy_stars = yy_stars[ww]
+
+    xm_stars, ym_stars, _ = running_median(xx,yy_stars,binSize=0.2,skipZeros=True)
+
+    ax.plot(xm_stars[1:-1], ym_stars[1:-1], '-', lw=3.0, label=sP.simName)
+
+    # finish figure
+    fig.tight_layout()
+    plt.savefig('sizes_diagnostic_cenOnly=%s_vsMstar=%s_%s_z=%.1f.pdf' % (centralsOnly,vsMstarXaxis,sP.simName,sP.redshift))
+    plt.close(fig)
