@@ -640,7 +640,7 @@ def snapshotSubset(sP, partType, fields,
             return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
         # metallicity in log(solar) units
-        if field.lower() in ["metal_solar","Z_solar"]:
+        if field.lower() in ["metal_solar","z_solar"]:
             metal = snapshotSubset(sP, partType, 'metal', **kwargs) # metal mass / total mass ratio
             return sP.units.metallicityInSolar(metal,log=False)
 
