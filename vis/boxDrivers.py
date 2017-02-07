@@ -194,7 +194,12 @@ def TNG_mainImages(res, conf=0):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
-    dmMM = [5.0, 8.5]
+    dmMM  = [5.0, 8.5]
+    gasMM = [4.3,7.3]
+
+    # TESTING
+    #gasMM = [4.0,7.0]
+    # END
 
     if res in [455,910,1820]:
         # L75
@@ -206,20 +211,27 @@ def TNG_mainImages(res, conf=0):
         centerHaloID = 0 # fof
         nSlicesTot   = 3 # slice depth equal to a fifth, 41 Mpc/h = 60 Mpc
         curSlice     = 0 # offset slice along projection direction?
-        dmMM = [5.5, 8.5]
+
+        # adjust for deeper slice
+        dmMM[0] += 0.5 
+        gasMM[0] += 0.7
     if res in [270,540,1080,2160]:
         # L35
         centerHaloID = 0 # fof
         nSlicesTot   = 1 # slice depth equal to a fifth, 35 Mpc/h = 52 Mpc
         curSlice     = 0 # offset slice along projection direction?
 
-    if conf == 0: panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
-    if conf == 1: panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
-    if conf == 2: panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2'} )
-    if conf == 3: panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-    if conf == 4: panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
-    if conf == 5: panels.append( {'partType':'gas', 'partField':'P_B',   'valMinMax':[-5,7]} )
-    if conf == 6: panels.append( {'partType':'gas', 'partField':'P_gas', 'valMinMax':[-5,7]} )
+    if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+    if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
+    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2'} )
+    if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+    if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
+    if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.5,1.0]} )
+    if conf == 6:  panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-3,1]} )
+    if conf == 7:  panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,7.2]} )
+    if conf == 8:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_Fe', 'valMinMax':[-0.1,3.5]} )
+    if conf == 9:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-2.0,2.5]} )
+    if conf == 10: panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
 
     run        = 'tng'
     redshift   = 0.0
@@ -230,10 +242,14 @@ def TNG_mainImages(res, conf=0):
     labelSim   = False
     plotHalos  = False
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+    variant    = None
 
-    #plawScale = 2.0
+    # TESTING
+    #variant = 0000
+    #res = 512
+    # END 
 
-    sP = simParams(res=res, run=run, redshift=redshift)
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
     # slice centering
     sliceFac  = (1.0/nSlicesTot)
@@ -242,6 +258,10 @@ def TNG_mainImages(res, conf=0):
     #for curSlice in range(nSlicesTot):
     absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
     absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+
+    # TESTING
+    #absCenPos = [sP.boxSize*0.5, sP.boxSize*0.5, sP.boxSize*0.5] # unshifted
+    # END
 
     # render config (global)
     class plotConfig:

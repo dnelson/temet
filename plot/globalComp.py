@@ -1685,16 +1685,17 @@ def plots():
     # add runs: TNG_methods
     sPs.append( simParams(res=512, run='tng', variant=0000) )
     sPs.append( simParams(res=256, run='tng', variant=0000) )
-    #sPs.append( simParams(res=256, run='tng', variant=4506) )
+    sPs.append( simParams(res=256, run='tng', variant=2202) )
+    sPs.append( simParams(res=256, run='tng', variant=3000) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_bh_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_sizes_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    blackholeVsStellarMass(sPs, pdf, simRedshift=zZero, twiceR=False, vsHaloMass=False, vsBulgeMass=False, 
-                           actualBHMasses=False, actualLargestBHMasses=True)
+    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
+    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
     pdf.close()
     return
     # END TEST AREA
@@ -1743,16 +1744,16 @@ def plots():
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
-    # todo: SFR main sequence (Schaye Fig 11) (sSFR vs Mstar colored by Sersic index, e.g. Wuyts)
+    # todo: SFR main sequence (Schaye Fig 11)
     # todo: active/passive fraction vs Mstar (Schaye Fig 11) (or red/blue Vog Fig ?)
     # todo: SFRD decomposed into contribution by halo mass bin (Genel Fig ?)
 
     # with additional modeling:
-    # todo: M_HI vs Mstar (Vog 14a Fig 3)
+    # todo: M_HI vs Mstar (Vog 14a Fig 3), HI-vs-halo mass relation
     # todo: R_HI vs Mstar
     # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon) (HI z=0.1 Gurvich2016)
     # todo: Omega_X(z) (e.g. Bird? Fig ?)
     # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)
-    # todo: X-ray (e.g. Schaye Fig 16)
+    # todo: X-ray (e.g. Schaye Fig 16), SZ, radio
 
     pdf.close()

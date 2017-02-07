@@ -721,7 +721,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'magma' # perula for methods2
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng2b'
+        if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0
+        #if sP.isPartType(partType,'gas'):   config['ctName'] = 'perula' # methods2
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
@@ -790,6 +792,21 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         grid = logZeroMin( grid )
         config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
         config['ctName'] = 'gist_earth'
+
+    if partField in ['SN_IaII_ratio_Fe']:
+        grid = logZeroMin( grid )
+        config['label']  = '%s Fe$_{\\rm SNIa}$ / Fe$_{\\rm SNII}$ Mass [log]' % ptStr
+        config['ctName'] = 'Spectral'
+        config['cmapCenVal'] = 0.0
+    if partField in ['SN_IaII_ratio_metals']:
+        grid = logZeroMin( grid )
+        config['label']  = '%s Z$_{\\rm SNIa}$ / Z$_{\\rm SNII}$ Mass [log]' % ptStr
+        config['ctName'] = 'Spectral'
+        config['cmapCenVal'] = 0.0
+    if partField in ['SN_Ia_AGB_ratio_metals']:
+        grid = logZeroMin( grid )
+        config['label']  = '%s Z$_{\\rm SNIa}$ / Z$_{\\rm AGB}$ Mass [log]' % ptStr
+        config['ctName'] = 'Spectral'
 
     # velocities (mass-weighted)
     if partField in ['vmag','velmag']:
@@ -1432,7 +1449,9 @@ def renderMultiPanel(panels, conf):
             # color mapping and place image
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             plaw = p['plawScale'] if 'plawScale' in p else None
+            if 'plawScale' in config: plaw = config['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
+            if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
            
             #cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
@@ -1464,6 +1483,7 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         barAreaHeight = np.max([0.035,0.12 / nRows]) if conf.colorbars else 0.0
+        if nRows == 1 and nCols == 1 and conf.colorbars: barAreaHeight = 0.05
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes   = set()
@@ -1529,7 +1549,9 @@ def renderMultiPanel(panels, conf):
             # color mapping and place image
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             plaw = p['plawScale'] if 'plawScale' in p else None
+            if 'plawScale' in config: plaw = config['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
+            if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
 
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal')
@@ -1571,7 +1593,7 @@ def renderMultiPanel(panels, conf):
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
-                                   rowHeight, 0.4, bottomNorm, 0.3)
+                                   rowHeight, 0.6, bottomNorm, 0.2)
             else:
                 # normal, offset to the left
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
