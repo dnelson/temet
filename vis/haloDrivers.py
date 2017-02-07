@@ -432,22 +432,23 @@ def tngDwarf_firstNhalos(conf=0):
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, matchedToVariant=None):
+def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, 
+                       variant=None, matchedToVariant=None):
     """ Plot stellar stamps of N random massive L25n512_0000 galaxies. 
     If curPage,numPages both specified, do a paged exploration instead. 
     If matchedToVariant is not None, then run the halo selection on this variant instead (e.g. always 0000) 
     and then use the SubhaloMatching catalog to pick the matched halos in this run. """
     run       = 'tng'
-    res       = 512
-    variant   = 0000 #0010 #0000 # 'L12.5'
+    res       = 1024
+    redshift  = 3.0
+    #variant   = 4503 #0010 #0000
     massBin   = [12.0, 14.0]
-    nGalaxies = 15 #12
+    nGalaxies = 15
     selType   = 'random'
 
     # stellar composite, 50 kpc/h on a side, include M* label per panel, and scale bar once
     # select random in [12.0,inf] halo mass range, do each of: face-on, edge-on, random(z)
     # possible panel configurations: 4x2 = 8, 4x3 = 12, 5x3 = 15, 6x3 = 18
-    redshift   = 0.0
     rVirFracs  = None
     method     = 'sphMap'
     nPixels    = [700,700]
@@ -493,7 +494,9 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
           (sP.simName,partType,rotation,mvStr)
     else:
         # paged, load all and sub-divide
-        shIDsAll, _ = selectHalosFromMassBin(sP_from, [[11.8,14.0]], 200, massBinInd=0, selType='linear')
+        if sP.res == 512: massBin = [11.8,14.0] # methods2 paper
+        if sP.res == 1024: massBin = [11.3, 14.0]
+        shIDsAll, _ = selectHalosFromMassBin(sP_from, [massBin], 200, massBinInd=0, selType='linear')
         shIDs = pSplit(shIDsAll, numPages, curPage)[0:nGalaxies]
         assert shIDs.size == nGalaxies # make sure we have nGalaxies per render
         saveFilename2 = './methods2_pages_%s_%s_rot=%s%s_page-%dof%d.pdf' % \
@@ -521,14 +524,28 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None, match
 def loop_stamps():
     """ Helper. """
     numPages = 10
-    matchedToVariant = 0000 # 0000
+
+    # plot some other run choosing its subhalos matched to the 0000 selection
+    variant = 4503 # 0010 for methods2
+    matchedToVariant = 0000
 
     for conf in [0,1]:
         for rotation in [None,'edge-on','face-on']:
             for curPage in range(numPages):
                 print(conf,rotation,curPage,numPages)
                 tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, 
-                                   rotation=rotation, matchedToVariant=matchedToVariant)
+                                   rotation=rotation, variant=variant, matchedToVariant=matchedToVariant)
+
+    # plot the 0000 selection itself
+    variant = 0000
+    matchedToVariant = None
+
+    for conf in [0,1]:
+        for rotation in [None,'edge-on','face-on']:
+            for curPage in range(numPages):
+                print(conf,rotation,curPage,numPages)
+                tngMethods2_stamps(conf=conf, curPage=curPage, numPages=numPages, 
+                                   rotation=rotation, variant=variant, matchedToVariant=matchedToVariant)
 
 def tngMethods2_windPatterns(conf=1, pageNum=0):
     """ Plot gas streamlines (galaxy wind patterns), 4x2, top four from L25n512_0000 and bottom four 

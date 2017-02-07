@@ -697,6 +697,24 @@ def snapshotSubset(sP, partType, fields,
 
             return masses
 
+        # GFM_MetalsTagged: ratio of iron mass [linear] produced in SNIa versus SNII
+        if field.lower() in ['sn_iaii_ratio_fe']:
+            metals_FeSNIa = snapshotSubset(sP, partType, 'metals_FeSNIa', **kwargs)
+            metals_FeSNII = snapshotSubset(sP, partType, 'metals_FeSNII', **kwargs)
+            return ( metals_FeSNIa / metals_FeSNII )
+
+        # GFM_MetalsTagged: ratio of total metals [linear] produced in SNIa versus SNII
+        if field.lower() in ['sn_iaii_ratio_metals']:
+            metals_SNIa = snapshotSubset(sP, partType, 'metals_SNIa', **kwargs)
+            metals_SNII = snapshotSubset(sP, partType, 'metals_SNII', **kwargs)
+            return ( metals_SNIa / metals_SNII )
+
+        # GFM_MetalsTagged: ratio of total metals [linear] produced in SNIa versus AGB stars
+        if field.lower() in ['sn_ia_agb_ratio_metals']:
+            metals_SNIa = snapshotSubset(sP, partType, 'metals_SNIa', **kwargs)
+            metals_AGB = snapshotSubset(sP, partType, 'metals_AGB', **kwargs)
+            return ( metals_SNIa / metals_AGB )
+
         # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
         # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
 
@@ -799,7 +817,13 @@ def snapshotSubset(sP, partType, fields,
       { 'names':['metals_Mg','magnesium'],              'field':'GFM_Metals', 'fN':6 },
       { 'names':['metals_Si','silicon'],                'field':'GFM_Metals', 'fN':7 },
       { 'names':['metals_Fe','iron'],                   'field':'GFM_Metals', 'fN':8 },
-      { 'names':['metals_tot','metals_total'],          'field':'GFM_Metals', 'fN':9 } \
+      { 'names':['metals_tot','metals_total'],          'field':'GFM_Metals', 'fN':9 },
+      { 'names':['metaltag_SNIa',  'metals_SNIa'],      'field':'GFM_MetalsTagged', 'fN':0 },
+      { 'names':['metaltag_SNII',  'metals_SNII'],      'field':'GFM_MetalsTagged', 'fN':1 },
+      { 'names':['metaltag_AGB',   'metals_AGB'],       'field':'GFM_MetalsTagged', 'fN':2 },
+      { 'names':['metaltag_NSNS',  'metals_NSNS'],      'field':'GFM_MetalsTagged', 'fN':3 },
+      { 'names':['metaltag_FeSNIa','metals_FeSNIa'],    'field':'GFM_MetalsTagged', 'fN':4 },
+      { 'names':['metaltag_FeSNII','metals_FeSNII'],    'field':'GFM_MetalsTagged', 'fN':5 } \
     ]
 
     for i,field in enumerate(fields):
