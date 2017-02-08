@@ -30,8 +30,8 @@ savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
-colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented']
-totSumFields     = ['mass','mass2']
+colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented','xray','xray_lum']
+totSumFields     = ['mass']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
@@ -635,6 +635,14 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
+    # other total sum fields (replace mass)
+    if partField in ['xray','xray_lum']:
+        # xray: replace 'mass' with x-ray luminosity, which is then accumulated into a total 
+        # Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
+        mass = snapshotSubset(sP, partType, 'xray', indRange=indRange)
+        mass /= 1e40 # values are linear and too large, accumulate in a more reasonable range
+        mass = mass.astype('float32') # type for xray_lum return is float64
+
     # single stellar band, replace mass array with linear luminosity of each star particle
     if 'stellarBand-' in partField:
         bands = partField.split("-")[1:]
@@ -739,6 +747,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
         config['ctName'] = 'HI_segmented'
 
+    if partField in ['xray','xray_lum']:
+        grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e40, totKpc2=True ) ) # return 1e40 factor
+        config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
+        config['ctName'] = 'inferno'
+
     # gas: mass-weighted quantities
     if partField in ['temp','temperature']:
         grid = logZeroMin( grid )
@@ -792,20 +805,20 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         grid = logZeroMin( grid )
         config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
         config['ctName'] = 'gist_earth'
+        config['plawScale'] = 1.5
 
     if partField in ['SN_IaII_ratio_Fe']:
         grid = logZeroMin( grid )
-        config['label']  = '%s Fe$_{\\rm SNIa}$ / Fe$_{\\rm SNII}$ Mass [log]' % ptStr
+        config['label']  = '%s Mass Ratio Fe$_{\\rm SNIa}$ / Fe$_{\\rm SNII}$ [log]' % ptStr
         config['ctName'] = 'Spectral'
-        config['cmapCenVal'] = 0.0
     if partField in ['SN_IaII_ratio_metals']:
         grid = logZeroMin( grid )
-        config['label']  = '%s Z$_{\\rm SNIa}$ / Z$_{\\rm SNII}$ Mass [log]' % ptStr
+        config['label']  = '%s Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm SNII}$ [log]' % ptStr
         config['ctName'] = 'Spectral'
         config['cmapCenVal'] = 0.0
     if partField in ['SN_Ia_AGB_ratio_metals']:
         grid = logZeroMin( grid )
-        config['label']  = '%s Z$_{\\rm SNIa}$ / Z$_{\\rm AGB}$ Mass [log]' % ptStr
+        config['label']  = '%s Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm AGB}$ [log]' % ptStr
         config['ctName'] = 'Spectral'
 
     # velocities (mass-weighted)
