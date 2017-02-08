@@ -32,6 +32,7 @@ class units(object):
 
     # constants
     boltzmann         = 1.380650e-16    # cgs (erg/K)
+    boltzmann_keV     = 11604505.0      # Kelvin/KeV
     mass_proton       = 1.672622e-24    # cgs
     gamma             = 1.666666667     # 5/3
     hydrogen_massfrac = 0.76            # XH (solar)
@@ -366,19 +367,19 @@ class units(object):
             dens_phys /= self.mass_proton
         return dens_phys
 
-    def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, msunKpc2Sq=False):
+    def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, totKpc2=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
             Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
             Return: [10^10 Msun/kpc^2] or 
                     [g/cm^2 if cgs=True] or 
                     [1/cm^2] if cgs=True and numDens=True, which is in fact [H atoms/cm^2]] or 
                     [Msun/kpc^2 if msunKpc2=True] or 
-                    [Msun^2/kpc^4 if msunKpc2=True].
+                    [[orig units]/kpc^2 if totKpc2=True].
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
-        if (msunKpc2 or msunKpc2Sq) and (numDens or cgs):
+        if (msunKpc2 or totKpc2) and (numDens or cgs):
             raise Exception("Invalid combination.")
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
@@ -392,8 +393,9 @@ class units(object):
         if msunKpc2:
             colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g) # remove 10^10 factor
             colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
-        if msunKpc2Sq:
-            colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g)**2.0 # remove 10^10 factor
+        if totKpc2:
+            # non-mass quantity input as numerator, assume it did not have an h factor
+            colDensPhys *= self.HubbleParam
             colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys
@@ -461,6 +463,39 @@ class units(object):
         if log:
             ent_cgs = logZeroSafe(ent_cgs)
         return ent_cgs
+
+    def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, log=False):
+        """ Following Navarro+ (1994) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
+        in [erg/s] for individual gas cells, based only on their density and temperature. Assumes 
+        simplified (primordial) high-temp cooling function, and only free-free (bremsstrahlung) 
+        emission contribution from T>10^6 Kelvin gas. All inputs in code units. """
+        hmassfrac = self.hydrogen_massfrac
+
+        # calculate mean molecular weight
+        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float64')) 
+        meanmolwt *= self.mass_proton
+
+        # calculate temperature (K)
+        temp = u.astype('float32')
+        temp *= (self.gamma-1.0) / self.boltzmann * self.UnitEnergy_in_cgs / self.UnitMass_in_g * meanmolwt
+
+        # Eqn. 6
+        mass_g = mass.astype('float32') * (self.UnitMass_in_g) / self._sP.HubbleParam
+        dens_g_cm3 = self.codeDensToPhys(dens, cgs=True) # g/cm^3
+
+        Lx = 1.2e-24 / (meanmolwt)**2.0 * mass_g *  dens_g_cm3 * np.sqrt(temp/self.boltzmann_keV)
+
+        # clip any cells on eEOS (SFR>0) to zero
+        w = np.where(sfr > 0.0)
+        Lx[w] = 0.0
+
+        # implement a linear ramp from log(T)=6.0 to log(T)=5.8 over which we clip to zero
+        temp = np.log10(temp)
+        Lx *= np.clip( (temp-5.8)/0.2, 0.0, 1.0 )
+
+        if log:
+            Lx = logZeroSafe(Lx)
+        return Lx # note: CANNOT truncate to float32 this clips high values at inf
 
     def calcEntropyCGS(self, u, dens, log=False):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. """

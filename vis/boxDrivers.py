@@ -197,10 +197,6 @@ def TNG_mainImages(res, conf=0):
     dmMM  = [5.0, 8.5]
     gasMM = [4.3,7.3]
 
-    # TESTING
-    #gasMM = [4.0,7.0]
-    # END
-
     if res in [455,910,1820]:
         # L75
         centerHaloID = 1 # fof
@@ -227,11 +223,12 @@ def TNG_mainImages(res, conf=0):
     if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
     if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
     if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.5,1.0]} )
-    if conf == 6:  panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-3,1]} )
+    if conf == 6:  panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,-0.2]} )
     if conf == 7:  panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,7.2]} )
-    if conf == 8:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_Fe', 'valMinMax':[-0.1,3.5]} )
-    if conf == 9:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-2.0,2.5]} )
+    if conf == 8:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_Fe', 'valMinMax':[0.0,2.6]} )
+    if conf == 9:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
     if conf == 10: panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
+    if conf == 11: panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
 
     run        = 'tng'
     redshift   = 0.0
@@ -244,11 +241,6 @@ def TNG_mainImages(res, conf=0):
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
     variant    = None
 
-    # TESTING
-    #variant = 0000
-    #res = 512
-    # END 
-
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
     # slice centering
@@ -258,10 +250,6 @@ def TNG_mainImages(res, conf=0):
     #for curSlice in range(nSlicesTot):
     absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
     absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
-
-    # TESTING
-    #absCenPos = [sP.boxSize*0.5, sP.boxSize*0.5, sP.boxSize*0.5] # unshifted
-    # END
 
     # render config (global)
     class plotConfig:

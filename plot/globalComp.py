@@ -402,7 +402,8 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
 
 def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass=True, 
                            actualBHMasses=False, actualLargestBHMasses=True, simRedshift=0.0):
-    """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
+    """ Black hole mass vs. stellar (bulge) mass relation at z=0. 
+    Choose one of (for x-axis): twiceR, vsHaloMass, vsBulgeMass. """
     # plot setup
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
@@ -459,7 +460,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
         print('BHMass: '+sP.simName)
 
         fieldsSubhalos = ['SubhaloBHMass','SubhaloMassType']
-        if not twiceR and not vsHaloMass: fieldsSubhalos.append('SubhaloMassInHalfRadType')
+        if vsBulgeMass: fieldsSubhalos.append('SubhaloMassInHalfRadType')
         if twiceR: fieldsSubhalos.append('SubhaloMassInRadType')
 
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=fieldsSubhalos)
@@ -1658,11 +1659,11 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1684,20 +1685,18 @@ def plots():
 
     # add runs: TNG_methods
     sPs.append( simParams(res=512, run='tng', variant=0000) )
-    sPs.append( simParams(res=256, run='tng', variant=0000) )
-    sPs.append( simParams(res=256, run='tng', variant=2202) )
-    sPs.append( simParams(res=256, run='tng', variant=3000) )
+    sPs.append( simParams(res=512, run='tng', variant=4506) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_sizes_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_poly_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
-    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
-    pdf.close()
-    return
+    #galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
+    #galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
+    #pdf.close()
+    #return
     # END TEST AREA
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
@@ -1713,7 +1712,7 @@ def plots():
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
-    ##galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
+    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
@@ -1724,7 +1723,7 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 0:
+    if 1:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2

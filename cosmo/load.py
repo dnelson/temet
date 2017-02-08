@@ -657,6 +657,15 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             return sP.units.calcSoundSpeedKmS(u,dens)
 
+        # bolometric x-ray luminosity (simple model) [erg/s]
+        if field.lower() in ['xray_lum','xray']:
+            sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            mass = snapshotSubset(sP, partType, 'Masses', **kwargs)
+            u    = snapshotSubset(sP, partType, 'u', **kwargs)
+            ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
+            return sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
+
         # pressure_ratio (linear ratio of magnetic to gas pressure)
         if field.lower() in ['pres_ratio','pressure_ratio']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
