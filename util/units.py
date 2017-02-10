@@ -466,7 +466,7 @@ class units(object):
 
     def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, log=False):
         """ Following Navarro+ (1994) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
-        in [erg/s] for individual gas cells, based only on their density and temperature. Assumes 
+        in [10^-30 erg/s] for individual gas cells, based only on their density and temperature. Assumes 
         simplified (primordial) high-temp cooling function, and only free-free (bremsstrahlung) 
         emission contribution from T>10^6 Kelvin gas. All inputs in code units. """
         hmassfrac = self.hydrogen_massfrac
@@ -493,9 +493,11 @@ class units(object):
         temp = np.log10(temp)
         Lx *= np.clip( (temp-5.8)/0.2, 0.0, 1.0 )
 
+        Lx *= 1e-30 # work in this unit system of [10^-30 erg/s] for xray to avoid overflows to inf
+
         if log:
             Lx = logZeroSafe(Lx)
-        return Lx # note: CANNOT truncate to float32 this clips high values at inf
+        return Lx.astype('float32')
 
     def calcEntropyCGS(self, u, dens, log=False):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. """

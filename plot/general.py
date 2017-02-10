@@ -37,7 +37,7 @@ def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
 
-    quants_misc = ['M_bulge_counter_rot']
+    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo']
 
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
@@ -604,6 +604,36 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\\rm bulge}$ [ log M$_{\\rm sun}$ ]'
         if not clean: label += ' (r < r$_{\star,1/2}$ counter-rotating)'
 
+    if quant in ['xray_r500','xray_subhalo']:
+        # bolometric x-ray luminosity (simple free-free model), either within r500crit or whole subhalo
+        # note: for the r500crit, computed per group, e.g. for centrals only
+        label = 'L$_{\\rm X}$ Bolometric [ log erg/s ]'
+
+        if quant == 'xray_r500':
+            acField = 'Group_XrayBolLum_Crit500'
+            if not clean: label += ' [ R$_{\\rm 500,crit}$ ]'
+        if quant == 'xray_subhalo':
+            acField = 'Subhalo_XrayBolLum'
+            if not clean: label += ' [ subhalo ]'
+
+        # load auxCat, unit conversion: [10^-30 erg/s] -> [erg/s]
+        ac = auxCat(sP, fields=[acField])[acField]
+        vals = ac.astype('float64') * 1e30
+
+        # if group-based, expand into array for subhalos, leave non-centrals nan
+        if quant == 'xray_r500':
+            groupFirstSubs = groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
+            nSubs = groupCatHeader(sP)['Nsubgroups_Total']
+
+            vals_sub = np.zeros( nSubs, dtype='float64' )
+            vals_sub.fill(np.nan)
+            vals_sub[groupFirstSubs] = vals
+
+            vals = vals_sub
+
+        minMax = [37, 42]
+        #if tight: minMax = [38, 45]
+
     # return
     assert label is not None
     return vals, label, minMax, takeLog
@@ -612,7 +642,7 @@ def plotPhaseSpace2D(yAxis):
     """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box. """
     assert yAxis in ['temp','P_B','P_tot','P_tot_dens','sfr','mass_sfr_dt','mass_sfr_dt_hydro','dt_yr']
 
-    sP = simParams(res=1820, run='tng', redshift=0.0) #, variant=0000
+    sP = simParams(res=1024, run='tng', redshift=3.0, variant=4503)
     haloID = None # None for fullbox, or integer fof index
 
     # start plot

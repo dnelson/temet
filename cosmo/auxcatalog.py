@@ -9,18 +9,13 @@ import numpy as np
 import cosmo.load
 from functools import partial
 
-from illustris_python.util import partTypeNum
 from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
-  inverseMapPartIndicesToSubhaloIDs, correctPeriodicDistVecs
+  inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs
 from util.helper import logZeroMin, logZeroNaN
 from util.helper import pSplit as pSplitArr, pSplitRange
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
-
-# Group_*: parameters for computations done over each FoF halo
-minNumPartGroup = 100 # only consider halos above a minimum total number of particles? (0=disabled)
-                      # note: only affects fofRadialSumType() at present
 
 # Subhalo_*: parameters for computations done over each Subfind subhalo
 
@@ -28,27 +23,32 @@ minNumPartGroup = 100 # only consider halos above a minimum total number of part
 boxGridSizeHI     = 1.5 # code units, e.g. ckpc/h
 boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
-def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B'):
+def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
         the SO radii already computed and available in the group catalog (input as a string). Methods A 
         and B restrict this calculation to FoF particles only, whereas method C does a full particle 
-        search over the entire box in order to compute the total/sum for each FoF halo.
+        search over the entire box in order to compute the total/sum for each FoF halo. If ptType='all', 
+        then do for all types (dm,gas,stars), otherwise just for the single specified type.
 
       Method A: do individual halo loads per halo, one loop over all halos.
       Method B: do a full snapshot load per type, then halo loop and slice per FoF, to cut down on I/O ops. 
-      Method C: per type: full snapshot load, construct the global tree, spherical aperture search per FoF.
+      Method C: per type: full snapshot load, spherical aperture search per FoF (brute-force global).
+      Method D: per type: full snapshot load, construct octtree, spherical aperture search per FoF (global).
     """
-    assert pSplit is None # not implemented
-    if ptProperty != 'mass':
-        raise Exception('Not implemented.')
 
     # config
-    ptSaveTypes = {'dm':0, 'gas':1, 'stars':2} # instead of making a half-empty Nx6 array
-    ptLoadTypes = {'dm':partTypeNum('dm'), 'gas':partTypeNum('gas'), 'stars':partTypeNum('stars')}
+    if ptType == 'all':
+        # (0=dm, 1=gas+wind, 2=stars-wind), instead of making a half-empty Nx6 array
+        ptSaveTypes = {'dm':0, 'gas':1, 'stars':2}
+        ptLoadTypes = {'dm':sP.ptNum('dm'), 'gas':sP.ptNum('gas'), 'stars':sP.ptNum('stars')}
+        assert ptProperty == 'Masses' # not yet implemented any other fields which apply to all partTypes
+    else:
+        ptSaveTypes = {ptType:0}
+        ptLoadTypes = {ptType:sP.ptNum(ptType)}
 
     desc   = "Mass by type enclosed within a radius of "+rad+" (only FoF particles included). "
     desc  += "Type indices: " + " ".join([t+'='+str(i) for t,i in ptSaveTypes.iteritems()]) + "."
-    select = "All FoF halos with GroupLen >= %d." % minNumPartGroup
+    select = "All FoF halos."
 
     # load group information
     gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupPos','GroupLen','GroupLenType',rad])
@@ -56,31 +56,47 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B'):
 
     h = cosmo.load.snapshotHeader(sP)
 
-    # allocate return (0=gas+wind, 1=dm, 2=stars-wind), NaN indicates not computed
-    r = np.zeros( (gc['header']['Ngroups_Total'], len(ptSaveTypes.keys())), dtype='float32' )
-    r.fill(np.nan)
+    nGroupsTot = gc['header']['Ngroups_Total']
+    haloIDsTodo = np.arange(nGroupsTot, dtype='int32')
+
+    # if no task parallelism (pSplit), set default particle load ranges
+    indRange = subhaloIDListToBoundingPartIndices(sP, haloIDsTodo, groups=True)
+
+    if pSplit is not None:
+        ptSplit = ptType if ptType != 'all' else 'gas'
+
+        # subdivide the global [variable ptType!] particle set, then map this back into a division of 
+        # group IDs which will be better work-load balanced among tasks
+        gasSplit = pSplitRange( indRange[ptSplit], pSplit[1], pSplit[0] )
+
+        invGroups = inverseMapPartIndicesToHaloIDs(sP, gasSplit, ptSplit, debug=True)
+
+        if pSplit[0] == pSplit[1] - 1:
+            invGroups[1] = nGroupsTot
+        else:
+            assert invGroups[1] != -1
+
+        haloIDsTodo = np.arange( invGroups[0], invGroups[1] )
+        indRange = subhaloIDListToBoundingPartIndices(sP, haloIDsTodo, groups=True)
+
+    nHalosDo = len(haloIDsTodo)
 
     # info
-    Ngroups_Process = len( np.where(gc['halos']['GroupLen'] >= minNumPartGroup)[0] )
+    print(' ' + desc)
+    print(' Total # Halos: %d, processing [%d] halos...' % (nGroupsTot,nHalosDo))
 
-    print(' Total # Halos: '+str(gc['header']['Ngroups_Total'])+', above threshold ('+\
-          str(minNumPartGroup)+' particles) = '+str(Ngroups_Process))
-
-    # mark halos to be processed (sum will be zero if there are no particles of a give type)
-    wProcess = np.where(gc['halos']['GroupLen'] >= minNumPartGroup)[0]
-    r[wProcess,:] = 0.0
+    # allocate return, NaN indicates not computed
+    r = np.zeros( (nHalosDo, len(ptSaveTypes.keys())), dtype='float32' )
+    r.fill(np.nan)
 
     # square radii, and use sq distance function
     gc['halos'][rad] = gc['halos'][rad] * gc['halos'][rad]
 
     if method == 'A':
         # loop over all halos
-        for i in np.arange(gc['header']['Ngroups_Total']):
-            if i % int(Ngroups_Process/50) == 0 and i <= Ngroups_Process:
-                print(' %4.1f%%' % (float(i+1)*100.0/Ngroups_Process))
-
-            if gc['halos']['GroupLen'][i] < minNumPartGroup:
-                continue
+        for i, haloID in enumerate(haloIDsTodo):
+            if i % int(nHalosDo/50) == 0 and i <= nHalosDo:
+                print(' %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
             # For each type:
             #   1. Load pos (DM), pos/mass (gas), pos/mass/sftime (stars) for this FoF.
@@ -88,108 +104,140 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B'):
             #      gas/stars: sum mass of those within rad (gas = gas+wind, stars=real stars only)
 
             # DM
-            dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], haloID=i, sq=False)
+            if 'dm' in ptLoadTypes:
+                dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], haloID=haloID, sq=False)
 
-            if dm['count']:
-                rDM = periodicDistsSq( gc['halos']['GroupPos'][i,:], dm['Coordinates'], sP )
-                wDM = np.where( rDM <= gc['halos'][rad][i] )
+                if dm['count']:
+                    rDM = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], dm['Coordinates'], sP )
+                    wDM = np.where( rDM <= gc['halos'][rad][haloID] )
 
-                r[i, ptSaveTypes['dm']] = len(wDM[0]) * h['MassTable'][ptLoadTypes['dm']]
+                    r[i, ptSaveTypes['dm']] = len(wDM[0]) * h['MassTable'][ptLoadTypes['dm']]
 
             # GAS
-            gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos','mass'], haloID=i)
+            if 'gas' in ptLoadTypes:
+                gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos',ptProperty], haloID=haloID)
+                assert gas[ptProperty].ndim == 1
 
-            if gas['count']:
-                rGas = periodicDistsSq( gc['halos']['GroupPos'][i,:], gas['Coordinates'], sP )
-                wGas = np.where( rGas <= gc['halos'][rad][i] )
+                if gas['count']:
+                    rGas = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], gas['Coordinates'], sP )
+                    wGas = np.where( rGas <= gc['halos'][rad][haloID] )
 
-                r[i, ptSaveTypes['gas']] = np.sum( gas['Masses'][wGas] )
+                    r[i, ptSaveTypes['gas']] = np.sum( gas[ptProperty][wGas] )
 
             # STARS
-            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','mass','sftime'], haloID=i)
+            if 'stars' in ptLoadTypes:
+                stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','sftime',ptProperty], haloID=haloID)
+                assert stars[ptProperty].ndim == 1
 
-            if stars['count']:
-                rStars = periodicDistsSq( gc['halos']['GroupPos'][i,:], stars['Coordinates'], sP )
-                wWind  = np.where( (rStars <= gc['halos'][rad][i]) & (stars['GFM_StellarFormationTime'] < 0.0) )
-                wStars = np.where( (rStars <= gc['halos'][rad][i]) & (stars['GFM_StellarFormationTime'] >= 0.0) )
+                if stars['count']:
+                    rStars = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], stars['Coordinates'], sP )
+                    wWind  = np.where( (rStars <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'] < 0.0) )
+                    wStars = np.where( (rStars <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'] >= 0.0) )
 
-                r[i, ptSaveTypes['gas']] += np.sum( stars['Masses'][wWind] )
-                r[i, ptSaveTypes['stars']] = np.sum( stars['Masses'][wStars] )
+                    r[i, ptSaveTypes['gas']] += np.sum( stars[ptProperty][wWind] )
+                    r[i, ptSaveTypes['stars']] = np.sum( stars[ptProperty][wStars] )
 
     if method == 'B':
         # (A): DARK MATTER
-        print(' [DM]')
-        dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], sq=False, haloSubset=True)
+        if 'dm' in ptLoadTypes:
+            print(' [DM]')
+            dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], sq=False, indRange=indRange['dm'])
 
-        # loop over halos
-        for i in wProcess:
-            if i % int(Ngroups_Process/10) == 0 and i <= Ngroups_Process:
-                print('  %4.1f%%' % (float(i+1)*100.0/Ngroups_Process))
+            if ptProperty == 'Masses':
+                dm[ptProperty] = np.zeros( dm['count'], dtype='float32' ) + h['MassTable'][ptLoadTypes['dm']]
+            else:
+                dm[ptProperty] = cosmo.load.snapshotSubset(sP, partType='dm', fields=ptProperty, haloSubset=True)
 
-            # slice starting/ending indices for dm local to this FoF
-            i0 = gc['halos']['GroupOffsetType'][i,ptLoadTypes['dm']]
-            i1 = i0 + gc['halos']['GroupLenType'][i,ptLoadTypes['dm']]
+            # loop over halos
+            for i, haloID in enumerate(haloIDsTodo):
+                if i % int(nHalosDo/10) == 0 and i <= nHalosDo:
+                    print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
-            if i1 == i0:
-                continue # zero length of this type
+                # slice starting/ending indices for dm local to this FoF
+                i0 = gc['halos']['GroupOffsetType'][haloID,ptLoadTypes['dm']] - indRange['dm'][0]
+                i1 = i0 + gc['halos']['GroupLenType'][haloID,ptLoadTypes['dm']]
 
-            rr = periodicDistsSq( gc['halos']['GroupPos'][i,:], dm['Coordinates'][i0:i1,:], sP )
-            ww = np.where( rr <= gc['halos'][rad][i] )
+                assert i0 >= 0 and i1 <= (indRange['dm'][1]-indRange['dm'][0]+1)
 
-            r[i, ptSaveTypes['dm']] = len(ww[0]) * h['MassTable'][ptLoadTypes['dm']]
+                if i1 == i0:
+                    continue # zero length of this type
+
+                rr = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], dm['Coordinates'][i0:i1,:], sP )
+                ww = np.where( rr <= gc['halos'][rad][haloID] )
+
+                r[i, ptSaveTypes['dm']] = np.sum( dm[ptProperty][i0:i1][ww] )
+            del dm
 
         # (B): GAS
-        print(' [GAS]')
-        del dm
-        gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos','mass'], haloSubset=True)
+        if 'gas' in ptLoadTypes:
+            print(' [GAS]')
+            gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos'], sq=False, indRange=indRange['gas'])
+            gas[ptProperty] = cosmo.load.snapshotSubset(sP, partType='gas', fields=ptProperty, indRange=indRange['gas'])
+            assert gas[ptProperty].ndim == 1
 
-        # loop over halos
-        for i in wProcess:
-            if i % int(Ngroups_Process/10) == 0 and i <= Ngroups_Process:
-                print('  %4.1f%%' % (float(i+1)*100.0/Ngroups_Process))
+            # loop over halos
+            for i, haloID in enumerate(haloIDsTodo):
+                if i % int(nHalosDo/10) == 0 and i <= nHalosDo:
+                    print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
-            # slice starting/ending indices for gas local to this FoF
-            i0 = gc['halos']['GroupOffsetType'][i,ptLoadTypes['gas']]
-            i1 = i0 + gc['halos']['GroupLenType'][i,ptLoadTypes['gas']]
+                # slice starting/ending indices for gas local to this FoF
+                i0 = gc['halos']['GroupOffsetType'][haloID,ptLoadTypes['gas']] - indRange['gas'][0]
+                i1 = i0 + gc['halos']['GroupLenType'][haloID,ptLoadTypes['gas']]
 
-            if i1 == i0:
-                continue # zero length of this type
+                assert i0 >= 0 and i1 <= (indRange['gas'][1]-indRange['gas'][0]+1)
 
-            rr = periodicDistsSq( gc['halos']['GroupPos'][i,:], gas['Coordinates'][i0:i1,:], sP )
-            ww = np.where( rr <= gc['halos'][rad][i] )
+                if i1 == i0:
+                    continue # zero length of this type
 
-            r[i, ptSaveTypes['gas']] = np.sum( gas['Masses'][i0:i1][ww] )
+                rr = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], gas['Coordinates'][i0:i1,:], sP )
+                ww = np.where( rr <= gc['halos'][rad][haloID] )
+
+                r[i, ptSaveTypes['gas']] = np.sum( gas[ptProperty][i0:i1][ww] )
+            del gas
 
         # (C): STARS
-        print(' [STARS]')
-        del gas
-        stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','mass','sftime'], haloSubset=True)
+        if 'stars' in ptLoadTypes:
+            print(' [STARS]')
+            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','sftime'], sq=False, indRange=indRange['stars'])
+            stars[ptProperty] = cosmo.load.snapshotSubset(sP, partType='stars', fields=ptProperty, indRange=indRange['stars'])
+            assert stars[ptProperty].ndim == 1
 
-        # loop over halos
-        for i in wProcess:
-            if i % int(Ngroups_Process/10) == 0 and i <= Ngroups_Process:
-                print('  %4.1f%%' % (float(i+1)*100.0/Ngroups_Process))
+            # loop over halos
+            for i, haloID in enumerate(haloIDsTodo):
+                if i % int(nHalosDo/10) == 0 and i <= nHalosDo:
+                    print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
-            # slice starting/ending indices for stars local to this FoF
-            i0 = gc['halos']['GroupOffsetType'][i,ptLoadTypes['stars']]
-            i1 = i0 + gc['halos']['GroupLenType'][i,ptLoadTypes['stars']]
+                # slice starting/ending indices for stars local to this FoF
+                i0 = gc['halos']['GroupOffsetType'][haloID,ptLoadTypes['stars']] - indRange['stars'][0]
+                i1 = i0 + gc['halos']['GroupLenType'][haloID,ptLoadTypes['stars']]
 
-            if i1 == i0:
-                continue # zero length of this type
+                assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
-            rr = periodicDistsSq( gc['halos']['GroupPos'][i,:], stars['Coordinates'][i0:i1,:], sP )
-            wWind  = np.where( (rr <= gc['halos'][rad][i]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
-            wStars = np.where( (rr <= gc['halos'][rad][i]) & (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
+                if i1 == i0:
+                    continue # zero length of this type
 
-            r[i, ptSaveTypes['gas']] += np.sum( stars['Masses'][i0:i1][wWind] )
-            r[i, ptSaveTypes['stars']] = np.sum( stars['Masses'][i0:i1][wStars] )
+                rr = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], stars['Coordinates'][i0:i1,:], sP )
+                wWind  = np.where( (rr <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
+                wStars = np.where( (rr <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
+
+                r[i, ptSaveTypes['gas']] += np.sum( stars[ptProperty][i0:i1][wWind] )
+                r[i, ptSaveTypes['stars']] = np.sum( stars[ptProperty][i0:i1][wStars] )
 
     if method == 'C':
-        # scipy methods may work ('toroidal geometry' for periodic BC searches), but probably not fast
+        # proceed with loads as in B and simply do rr calculation against all particles
+        raise Exception('Not implemented.')
+
+    if method == 'D':
+        # use our numba tree implementation for 3d ball searches (todo)
         raise Exception('Not implemented.')
 
     attrs = {'Description' : desc.encode('ascii'), 
-             'Selection'   : select.encode('ascii')}
+             'Selection'   : select.encode('ascii'),
+             'ptType'      : ptType.encode('ascii'),
+             'ptProperty'  : ptProperty.encode('ascii'),
+             'subhaloIDs'  : haloIDsTodo}
+
+    r = np.squeeze(r)
 
     return r, attrs
 
@@ -1324,7 +1372,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     # END DEBUG
 
     boxGridDim = round(sP.boxSize / boxGridSize)
-    chunkSize = int(h['NumPart'][partTypeNum('gas')] / nChunks)
+    chunkSize = int(h['NumPart'][sP.ptNum('gas')] / nChunks)
 
     if species in hDensSpecies + zDensSpecies:
         desc = "Square grid of integrated column densities of ["+species+"] in units of [cm^-2]. "
@@ -1364,7 +1412,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     for i in np.arange(nChunks):
         # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
         indRange = [i*chunkSize, (i+1)*chunkSize-1]
-        if i == nChunks-1: indRange[1] = h['NumPart'][partTypeNum('gas')]-1
+        if i == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum('gas')]-1
         print('  [%2d] %9d - %d' % (i,indRange[0],indRange[1]))
 
         # load
@@ -1475,7 +1523,9 @@ def wholeBoxCDDF(sP, pSplit, species):
 # first sP,pSplit inputs are stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
   {'Group_Mass_Crit500_Type' : \
-     partial(fofRadialSumType,ptProperty='mass',rad='Group_R_Crit500'),
+     partial(fofRadialSumType,ptProperty='Masses',ptType='all',rad='Group_R_Crit500'),
+   'Group_XrayBolLum_Crit500' : \
+     partial(fofRadialSumType,ptProperty='xray_lum',ptType='gas',rad='Group_R_Crit500'),
 
    'Subhalo_Mass_30pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
@@ -1489,6 +1539,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VI mass',op='sum',rad=None),
    'Subhalo_Mass_OVII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VII mass',op='sum',rad=None),
+   'Subhalo_XrayBolLum' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
+   'Subhalo_XrayBolLum_2rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad='2rhalfstars'),
    'Subhalo_BH_Mass_largest' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_Mass',op='max',rad=None),
 

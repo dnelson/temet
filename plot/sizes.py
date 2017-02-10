@@ -357,7 +357,7 @@ def clumpSizes(sP):
 
     ax.set_xlabel('Parent Group Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
     ax.set_xlim([8,14.5])
-    ax.set_ylim([0.1,100])
+    ax.set_ylim([0.1,10])
 
     # load
     gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
@@ -400,5 +400,5 @@ def clumpSizes(sP):
 
     # finish figure
     fig.tight_layout()
-    plt.savefig('sizes_diagnostic_cenOnly=%s_vsMstar=%s_%s_z=%.1f.pdf' % (centralsOnly,vsMstarXaxis,sP.simName,sP.redshift))
+    plt.savefig('sizes_diagnostic_cenOnly=%s_vsMstar=%s_%s_z=%.1f.png' % (centralsOnly,vsMstarXaxis,sP.simName,sP.redshift))
     plt.close(fig)

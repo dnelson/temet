@@ -400,10 +400,11 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
     pdf.savefig()
     plt.close(fig)
 
-def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass=True, 
+def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass=False, 
                            actualBHMasses=False, actualLargestBHMasses=True, simRedshift=0.0):
-    """ Black hole mass vs. stellar (bulge) mass relation at z=0. 
-    Choose one of (for x-axis): twiceR, vsHaloMass, vsBulgeMass. """
+    """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
+    assert twiceR or vsHaloMass or vsBulgeMass
+
     # plot setup
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
@@ -1644,6 +1645,129 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
         pdf.savefig()
         plt.close(fig)
 
+def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig_subplot=[None,None]):
+    """ X-ray bolometric luminosity scaling relation vs halo mass (e.g. Schaye Fig 16). """
+    lumTypes = ['Subhalo_XrayBolLum','Group_XrayBolLum_Crit500'] #,'Subhalo_XrayBolLum_2rhalfstars']
+    if clean: lumTypes = [lumTypes[0]]
+
+    # plot setup
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+    
+    ax.set_xlim([10.0,12.0])
+    ax.set_ylim([38,45])
+
+    xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+    ylabel = 'L$_{\\rm X}$ Bolometric [ log erg/s ]'
+    cenSatStr = ''
+
+    if not clean:
+        if use30kpc: xlabel += ' [ < 30 pkpc ]'
+        if not use30kpc: xlabel += ' [ < 2r$_{\star,1/2}$ ]'
+        if centralsOnly: ylabel += ' [ centrals only ]'
+        if not centralsOnly: ylabel += ' [ centrals & satellites ]'
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    # observational points
+    a15 = anderson2015(sPs[0])
+
+    l1,_,_ = ax.errorbar(a15['stellarMass'], a15['xray_LumBol'],xerr=a15['stellarMass_err'],
+                         yerr=[a15['xray_LumBol_errDown'],a15['xray_LumBol_errUp']],
+                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='D')
+
+    legend1 = ax.legend([l1], [a15['label']], loc='upper left')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        print('XRAY: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
+        if sP.isZoom:
+            continue
+
+        # load
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+        ac = auxCat(sP, fields=lumTypes)
+
+        # include: centrals + satellites, or centrals only
+        if centralsOnly:
+            gcLoad = groupCat(sP, fieldsHalos=['GroupFirstSub'])
+            wHalo = np.where((gcLoad['halos'] >= 0))
+            w = gcLoad['halos'][wHalo]
+        else:
+            w = np.arange(gc['subhalos'].shape[0])
+
+        # stellar mass definition, and enforce resolution limit
+        xx_code = gc['subhalos'][:,sP.ptNum('stars')]
+
+        if use30kpc:
+            # load auxcat
+            field = 'Subhalo_Mass_30pkpc_Stars'
+            xx_code = auxCat(sP, fields=[field])[field]
+
+        xx = sP.units.codeMassToLogMsun( xx_code[w] )
+
+        # loop through ages measured through different techniques
+        c = ax._get_lines.prop_cycler.next()['color']
+                
+        for i, lumType in enumerate(lumTypes):
+            # auxCat values are per subhalo or per group?
+            if 'Group_' in lumType:
+                yy = ac[lumType][wHalo]
+            else:
+                yy = ac[lumType][w]
+
+            # unit conversion: [10^-30 erg/s] -> [log erg/s]
+            yy = logZeroSafe(yy.astype('float64') * 1e30)
+
+            # only include subhalos with non-nan Lum entries
+            ww = np.where(np.isfinite(xx) & np.isfinite(yy))
+            yy_loc = yy[ww]
+            xx_loc = xx[ww]
+
+            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+
+            ym = savgol_filter(ym_i,sKn,sKo)
+            sm = savgol_filter(sm_i,sKn,sKo)
+            pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+
+            label = sP.simName if (i == 0) else ''
+            ax.plot(xm[:-1], ym[:-1], linestyles[i], color=c, lw=3.0, label=label)
+
+            if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0: # P[10,90]
+                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+
+    # legend
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = []
+    lExtra = []
+
+    if not clean and len(lumTypes) > 1:
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[i]) \
+                    for i,lumType in enumerate(lumTypes)]
+        lExtra = [' '.join(lumType.split("_")) for lumType in lumTypes]
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
 def plots():
     """ Plot portfolio of global population comparisons between runs. """
     from matplotlib.backends.backend_pdf import PdfPages
@@ -1659,11 +1783,11 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1674,7 +1798,7 @@ def plots():
     #for i in range(1,11):
     #    sPs.append( simParams(res=256, run='tng', variant='r%03d' % i) )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -1685,16 +1809,16 @@ def plots():
 
     # add runs: TNG_methods
     sPs.append( simParams(res=512, run='tng', variant=0000) )
-    sPs.append( simParams(res=512, run='tng', variant=4506) )
+    #sPs.append( simParams(res=512, run='tng', variant=4503) )
+    #sPs.append( simParams(res=512, run='tng', variant=4504) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_poly_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    #galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
-    #galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
+    #haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
     #pdf.close()
     #return
     # END TEST AREA
@@ -1702,13 +1826,14 @@ def plots():
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
+
     stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True)
     stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True)
 
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
     sfrdVsRedshift(sPs, pdf, xlog=False)
-    blackholeVsStellarMass(sPs, pdf, simRedshift=zZero)
+    blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
@@ -1723,23 +1848,25 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 1:
+    if 0:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2
         nOVIcddf(sPs, pdf, moment=1)
         dlaMetallicityPDF(sPs, pdf) # z=3
 
-    cheapDustModel = 'p07c_cf00dust_rad30pkpc' #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
-    galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
-    galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
-    galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
-    galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
-    galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero, simColorsModel=cheapDustModel)
+    if 0:
+        cheapDustModel = 'p07c_cf00dust_rad30pkpc' #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
+        galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+        galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+        galaxyColorPDF(sPs, pdf, bands=['r','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+        galaxyColorPDF(sPs, pdf, bands=['i','z'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
+        galaxyColor2DPDFs(sPs, pdf, simRedshift=zZero, simColorsModel=cheapDustModel)
 
     velocityFunction(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=False, simRedshift=zZero)
     stellarAges(sPs, pdf, centralsOnly=True, simRedshift=zZero)
+    haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)
@@ -1753,6 +1880,6 @@ def plots():
     # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon) (HI z=0.1 Gurvich2016)
     # todo: Omega_X(z) (e.g. Bird? Fig ?)
     # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)
-    # todo: X-ray (e.g. Schaye Fig 16), SZ, radio
+    # todo: other cluster observables: SZ, radio
 
     pdf.close()

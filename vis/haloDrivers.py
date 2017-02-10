@@ -474,7 +474,7 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None,
     if conf == 1:
         partType = 'gas'
         partField = 'coldens_msunkpc2'
-        valMinMax = [6.0, 8.2]
+        valMinMax = [6.8, 8.8] # for z=3 1024 # [6.0, 8.2] for z=2 512
         hsmlFac = 2.5
 
     # load halos of this bin, from this run or from the matchedToVariant source run
