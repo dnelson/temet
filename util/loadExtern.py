@@ -1137,6 +1137,44 @@ def bekeraite16VF():
 
     return r
 
+def anderson2015(sP):
+    """ Load observational x-ray data from Anderson+ (2015). Table 3. """
+
+    # note: stellar masses are from 'SDSS photometry' (so use 30pkpc for comparison)
+    Mstar = np.array([10.0, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 
+                      11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9])
+    Mstar_width = 0.1
+    Mstar += Mstar_width/2
+
+    # [erg/s] X-ray luminosities in (0.5-2.0 keV) soft band, within r500crit
+    log_Lx_tot = np.array([0.0,   39.60, 40.0, 39.94, 38.96, 39.60, 40.10, 39.96, 40.40, 40.58,
+                           40.97, 41.29, 41.52, 41.80, 42.34, 42.64, 42.98, 43.39, 43.46, 43.82])
+    sigma_m_Ltot = np.array([0.0,  0.97, 0.19, 0.21, 0.86, 0.97, 0.19, 0.27, 0.09, 0.07,
+                             0.04, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.02, 0.03])
+    sigma_b_Ltot = np.array([0.40, 0.86, 0.47, 0.28, 0.83, 0.78, 0.63, 0.46, 0.19, 0.10,
+                             0.11, 0.07, 0.05, 0.06, 0.06, 0.05, 0.06, 0.09, 0.11, 0.21])
+
+    log_Lx_tot_up = log_Lx_tot + np.sqrt(sigma_m_Ltot**2.0 + sigma_b_Ltot**2.0)
+    log_Lx_tot_down = log_Lx_tot - np.sqrt(sigma_m_Ltot**2.0 + sigma_b_Ltot**2.0)
+
+    # [0.0-2keV -> bolometric] correction using Table 2
+    C_bolo = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                       1.1, 1.1, 1.2, 1.3, 1.4, 1.8, 2.1, 2.5, 2.8, 3.2])
+
+    log_Lx_bol = np.log10(10.0**log_Lx_tot * C_bolo)
+    log_Lx_bol_up = np.log10(10.0**log_Lx_tot_up * C_bolo)
+    log_Lx_bol_down = np.log10(10.0**log_Lx_tot_down * C_bolo)
+
+    r = {'stellarMass'         : Mstar,
+         'stellarMass_err'     : Mstar_width/2,
+         'xray_LumBol'         : log_Lx_bol,
+         'xray_LumBol_errUp'   : log_Lx_bol_up - log_Lx_bol,
+         'xray_LumBol_errDown' : log_Lx_bol - log_Lx_bol_down,
+         'label' : 'Anderson+ (2015) 0.05<z<0.4 ROSAT stacking'}
+
+    return r
+
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT

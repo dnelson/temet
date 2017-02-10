@@ -637,11 +637,9 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     # other total sum fields (replace mass)
     if partField in ['xray','xray_lum']:
-        # xray: replace 'mass' with x-ray luminosity, which is then accumulated into a total 
-        # Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
+        # xray: replace 'mass' with x-ray luminosity [10^-30 erg/s], which is then accumulated into a 
+        # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
         mass = snapshotSubset(sP, partType, 'xray', indRange=indRange)
-        mass /= 1e40 # values are linear and too large, accumulate in a more reasonable range
-        mass = mass.astype('float32') # type for xray_lum return is float64
 
     # single stellar band, replace mass array with linear luminosity of each star particle
     if 'stellarBand-' in partField:
@@ -729,9 +727,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng2b'
-        if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4'
         #if sP.isPartType(partType,'gas'):   config['ctName'] = 'perula' # methods2
+        if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
@@ -748,7 +746,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['ctName'] = 'HI_segmented'
 
     if partField in ['xray','xray_lum']:
-        grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e40, totKpc2=True ) ) # return 1e40 factor
+        grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e30, totKpc2=True ) ) # return 1e30 factor
         config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
@@ -1026,7 +1024,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             # render
             if method in ['sphMap','sphMap_global']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
-                if 'stellarBand-' in partField:
+                if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
                     print(' debugging stellarBand-* getHsml() snapHsmlForStars=True')
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange, snapHsmlForStars=True)
 

@@ -992,7 +992,7 @@ def plots():
     """ Driver (exploration 2D histograms). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
-    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     yQuant = 'color'
     ySpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
@@ -1000,15 +1000,7 @@ def plots():
     cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    #quants = quantList()
-    quants = ['Krot_stars', 'Krot_stars2', 
-              'Krot_oriented_stars', 'Krot_oriented_stars2', 
-              'Arot_stars', 'Arot_stars2',
-              'specAngMom_stars', 'specAngMom_stars2',
-              'Krot_gas', 'Krot_gas2',
-              'Krot_oriented_gas', 'Krot_oriented_gas2',
-              'Arot_gas', 'Arot_gas2',
-              'specAngMom_gas', 'specAngMom_gas2']
+    quants = quantList()
 
     for sP in sPs:
         for css in cenSatSelects:

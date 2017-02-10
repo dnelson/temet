@@ -574,11 +574,12 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
 
     return val
 
-def subhaloIDListToBoundingPartIndices(sP, subhaloIDs):
+def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False):
     """ For a list of subhalo IDs, return a dictionary with an entry for each partType, 
     whose value is a 2-tuple of the particle index range bounding the members of the 
     parent groups of this list of subhalo IDs. Indices are inclusive in the sense of 
-    cosmo.load.snapshotSubset()."""
+    cosmo.load.snapshotSubset(). If groups==True, then the input IDs are assumed to be 
+    actually group (FoF) IDs, and we return bounding ranges for them."""
     first_sub = subhaloIDs[0]
     last_sub = subhaloIDs[-1]
 
@@ -592,9 +593,14 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs):
         print('Warning: Last sub [%d] was not maximum of subhaloIDs [%d].' % (last_sub,max_sub))
         last_sub = max_sub
 
-    # get parent groups of extremum subhalos
-    first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
-    last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+    if not groups:
+        # get parent groups of extremum subhalos
+        first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
+        last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+    else:
+        # input 'subhaloIDs' are already group IDs
+        first_sub_groupID = first_sub
+        last_sub_groupID = last_sub
 
     # load group offsets
     offsets_pt = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']

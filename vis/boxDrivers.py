@@ -190,7 +190,7 @@ def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
     renderBox(panels, plotConfig, locals())
     #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def TNG_mainImages(res, conf=0):
+def TNG_mainImages(res, conf=0, variant=None):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
@@ -216,6 +216,9 @@ def TNG_mainImages(res, conf=0):
         centerHaloID = 0 # fof
         nSlicesTot   = 1 # slice depth equal to a fifth, 35 Mpc/h = 52 Mpc
         curSlice     = 0 # offset slice along projection direction?
+    if res in [128,256,512]:
+        # L25 variants
+        centerHaloID = None
 
     if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
     if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
@@ -239,17 +242,20 @@ def TNG_mainImages(res, conf=0):
     labelSim   = False
     plotHalos  = False
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
-    variant    = None
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
     # slice centering
-    sliceFac  = (1.0/nSlicesTot)
-    relCenPos = None
+    sliceStr = ''
 
-    #for curSlice in range(nSlicesTot):
-    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
-    absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+    if centerHaloID is not None:
+        relCenPos = None
+        sliceFac  = (1.0/nSlicesTot)
+        sliceStr = '_fof-%d_%dof%d' % (centerHaloID,curSlice,nSlicesTot)
+
+        #for curSlice in range(nSlicesTot):
+        absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+        absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
     # render config (global)
     class plotConfig:
@@ -257,9 +263,54 @@ def TNG_mainImages(res, conf=0):
         rasterPx   = 2000
         colorbars  = True
 
-        saveFilename = './boxImage_%s_%s-%s_fof-%d_axes%d%d_%dof%d.png' % \
-          (sP.simName,panels[0]['partType'],panels[0]['partField'],centerHaloID,
-           axes[0],axes[1],curSlice,nSlicesTot)
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def oneBox_multiQuantCollage(variant=0000):
+    """ Make a collage (e.g. 4x3 panels, or as many as we can) for a single, of every quantity. """
+
+    panels = []
+    panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.3,7.3]} )
+    panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.5]} )
+    panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0,6.0]} )
+    panels.append( {'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
+    panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
+    panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.5,1.0]} )
+    panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,-0.2]} )
+    panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,7.2]} )
+    panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_Fe', 'valMinMax':[0.0,2.6]} )
+    panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
+    panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
+    panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
+
+    panels[3]['labelScale'] = True
+    panels[-1]['labelSim'] = True
+
+    run        = 'tng'
+    redshift   = 3.0
+    res        = 1024
+    #variant    = 0000
+
+    nPixels    = 800
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    # render config (global)
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    class plotConfig:
+        plotStyle  = 'edged'
+        rasterPx   = 800
+        colorbars  = False
+
+        saveFilename = './boxCollage_%s_z=%.1f_%dpanels_axes%d%d.png' % \
+          (sP.simName,sP.redshift,len(panels),axes[0],axes[1])
 
     renderBox(panels, plotConfig, locals())
 
