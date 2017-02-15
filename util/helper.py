@@ -332,6 +332,28 @@ def trapsum(xin,yin):
     nn = xin.size
     return np.sum( np.abs(xin[1:nn-1]-xin[0:nn-2]) * (yin[1:nn-1]+yin[0:nn-2])*0.5 )
 
+def sdss_decompose_specobjid(id):
+    """ Convert 64-bit SpecObjID into its parts, returning a dict. DR13 convention. """
+    r = {}
+    bin = np.binary_repr( id, width=64 )
+    r['plate']   = int(bin[0:14], 2) # bits 50-63
+    r['fiberid'] = int(bin[14:14+12], 2) # bits 38-49
+    r['mjd']     = int(bin[14+12:14+12+14], 2) + 50000 # bits 24-37 minus 50000
+    r['run2d']   = int(bin[14+12+14:14+12+14+14], 2) # bits 10-23
+    return r
+
+def sdss_decompose_objid(id):
+    """ Convert 64-bit ObjID into its parts, returning a dict. DR13 convention. """
+    r = {}
+    bin = np.binary_repr( id, width=64 )
+    r['rerun']  = int(bin[5:5+11], 2) # bits 48-58
+    r['run']    = int(bin[5+11:5+11+16], 2) # bits 32-47
+    r['camcol'] = int(bin[5+11+16:5+11+16+3], 2) # bits 29-31
+    r['field']  = int(bin[5+11+16+3+1:5+11+16+3+1+12], 2) # bits 16-27
+    r['id']     = int(bin[5+11+16+3+1+12:], 2) # bits 0-15
+
+    return r
+
 # --- vis ---
 
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None):

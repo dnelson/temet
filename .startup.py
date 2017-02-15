@@ -19,4 +19,5 @@ import cosmo
 import plot
 import tracer
 import util
+import obs
 from util import simParams
