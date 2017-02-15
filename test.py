@@ -18,6 +18,36 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def makeSdssSpecObjIDhdf5():
+    """ Transform some CSV files into a HDF5 for SDSS objid -> specobjid mapping. """
+    from util.helper import nUnique
+
+    files = sorted(glob.glob('z*.txt'))
+    objid = np.zeros( (10000000), dtype='uint64' )
+    specobjid = np.zeros( (10000000), dtype='uint64' )
+    offset = 0
+
+    # read
+    for file in files:
+        print(file,offset)
+        x = np.loadtxt(file,delimiter=',',skiprows=2,dtype='uint64')
+        num = x.shape[0]
+        objid[offset:offset+num] = x[:,0]
+        specobjid[offset:offset+num] = x[:,1]
+        offset += num
+
+    # look at uniqueness
+    objid = objid[0:offset]
+    specobjid = specobjid[0:offset]
+
+    assert nUnique(objid) == objid.size
+    assert nUnique(specobjid) == specobjid.size
+
+    # write
+    with h5py.File('sdss_objid_specobjid_z0.0-0.5.hdf5','w') as f:
+        f['objid'] = objid
+        f['specobjid'] = specobjid
+
 def createEmptyMissingGroupCatChunk():
     nChunks = 64
     basePath = '/u/dnelson/sims.TNG_method/L25n512_4503/output/groups_004/'
