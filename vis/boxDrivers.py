@@ -232,10 +232,12 @@ def TNG_mainImages(res, conf=0, variant=None):
     if conf == 9:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
     if conf == 10: panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
     if conf == 11: panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
+    if conf == 12: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0.0, 1.0]} )
+    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[32, 40]} )
 
     run        = 'tng'
     redshift   = 0.0
-    nPixels    = 2000
+    nPixels    = 2000 #2000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
@@ -260,7 +262,7 @@ def TNG_mainImages(res, conf=0, variant=None):
     # render config (global)
     class plotConfig:
         plotStyle  = 'open'
-        rasterPx   = 2000
+        rasterPx   = 2000 #2000
         colorbars  = True
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.png' % \

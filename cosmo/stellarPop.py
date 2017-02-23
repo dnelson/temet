@@ -396,7 +396,7 @@ class sps():
     isoTracks  = ['padova07'] # basti,geneva,mist,parsec (cannot easily dynamically change at present)
     dustModels = ['none','bc00','cf00','bc00_res_eff','bc00_res_conv','cf00_res_eff','cf00_res_conv']
 
-    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='bc00', order=3):
+    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
         import fsps
 
@@ -568,9 +568,6 @@ class sps():
 
         self.beta = -0.5
         self.N_H0 = 2.1e21 # neutral hydrogen column density [cm^2]
-
-        # Lsun/Hz to cgs at d=10pc
-        self.mag2cgs = np.log10( self.sP.units.L_sun / (4.0 * np.pi * (10*self.sP.units.pc_in_cm)**2))
 
         for band in self.bands:
             if 'suprimecam' in band:
@@ -854,7 +851,7 @@ class sps():
 
                 assert band_lum > 0.0
 
-                r[band] = -2.5 * np.log10(band_lum) - 48.60 - 2.5*self.mag2cgs
+                r[band] = self.sP.units.lumToAbsMag(band_lum)
             else:
                 # return band magnitude individually for each star particle
                 r[band] = np.zeros( obs_lum.shape[0], dtype='float32' )
@@ -868,7 +865,7 @@ class sps():
 
                     assert band_lum > 0.0
 
-                    r[band][i] = -2.5 * np.log10(band_lum) - 48.60 - 2.5*self.mag2cgs
+                    r[band][i] = self.sP.units.lumToAbsMag(band_lum)
 
         return r
 
@@ -1010,8 +1007,8 @@ def debug_dust_plots():
         assert band_lum > 0.0
         assert band_lum_noatten > 0.0
 
-        result_mag = -2.5 * np.log10(band_lum) - 48.60 - 2.5*pop.mag2cgs
-        result_mag_noatten = -2.5 * np.log10(band_lum_noatten) - 48.60 - 2.5*pop.mag2cgs
+        result_mag = pop.sP.units.lumToAbsMag(band_lum)
+        result_mag_noatten = pop.sP.units.lumToAbsMag(band_lum_noatten)
 
         # get magnitude without using our method of convolution
         ages_logGyr = np.array([age_logGyr])

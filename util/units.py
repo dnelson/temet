@@ -47,6 +47,9 @@ class units(object):
     Msun_in_g         = 1.98892e33      # solar mass [g]
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
 
+    # derived constants
+    mag2cgs     = None    # Lsun/Hz to cgs at d=10pc
+
     # code parameters
     CourantFac  = 0.3     # typical (used only in load:dt_courant)
 
@@ -101,6 +104,8 @@ class units(object):
         self.G  = self.Gravity / self.UnitLength_in_cm**3.0 * self.UnitMass_in_g * self.UnitTime_in_s**2.0
 
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0*np.pi*self.G) #code, z=0
+
+        self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
 
         # derived cosmology parameters
         self.f_b = self._sP.omega_b / self._sP.omega_m
@@ -657,12 +662,29 @@ class units(object):
         return age
 
     def codeEnergyToErg(self, energy, log=False):
-        """ Convert energy from code units (unitMass*unitLength^2/unitType^2) to [erg]. """
+        """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. """
         energy_cgs = energy.astype('float32') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
         
         if log:
             return logZeroNaN(energy_cgs)
         return energy_cgs
+
+    def codeEnergyRateToErgPerSec(self, energy_rate, log=False):
+        """ Convert energy/time from code units (unitEnergy/unitTime) to [erg/s]. """
+        energy_rate_cgs = energy_rate.astype('float64') * (1/self._sP.scalefac) # physical
+        energy_rate_cgs *= (self.UnitEnergy_in_cgs / self.UnitTime_in_s) # need float64 to avoid overflow
+
+        if log:
+            return logZeroNaN(energy_rate_cgs)
+        return energy_rate_cgs
+
+    def lumToAbsMag(self, lum):
+        """ Convert from an input luminosity in units of [Lsun/Hz] to an AB absolute magnitude. """
+        mag = -2.5 * np.log10(lum) - 48.60 - 2.5*self.mag2cgs
+
+        # mag2cgs converts from [Lsun/Hz] to cgs [erg/s/cm^2] at d=10pc (definition of absolute mag)
+        # 48.60 sets the zero-point of 3631 Jy
+        return mag
 
     # --- other ---
 
