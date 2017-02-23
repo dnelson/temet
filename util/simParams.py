@@ -857,6 +857,13 @@ class simParams:
         if self.redshift is None:
             raise Exception("Need sP.redshift")
         return 1.0/(1.0+self.redshift)
+
+    @property
+    def tage(self):
+        """ Current age of the universe [Gyr]. """
+        if self.redshift is None:
+            raise Exception("Need sP.redshift")
+        return self.units.redshiftToAgeFlat(self.redshift)
     
     @property
     def boxSizeCubicPhysicalMpc(self):

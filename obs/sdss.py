@@ -11,8 +11,30 @@ import h5py
 import time
 import requests
 
+import matplotlib.pyplot as plt
 from os.path import expanduser
-from util.helper import sdss_decompose_specobjid
+
+def sdss_decompose_specobjid(id):
+    """ Convert 64-bit SpecObjID into its parts, returning a dict. DR13 convention. """
+    r = {}
+    bin = np.binary_repr( id, width=64 )
+    r['plate']   = int(bin[0:14], 2) # bits 50-63
+    r['fiberid'] = int(bin[14:14+12], 2) # bits 38-49
+    r['mjd']     = int(bin[14+12:14+12+14], 2) + 50000 # bits 24-37 minus 50000
+    r['run2d']   = int(bin[14+12+14:14+12+14+14], 2) # bits 10-23
+    return r
+
+def sdss_decompose_objid(id):
+    """ Convert 64-bit ObjID into its parts, returning a dict. DR13 convention. """
+    r = {}
+    bin = np.binary_repr( id, width=64 )
+    r['rerun']  = int(bin[5:5+11], 2) # bits 48-58
+    r['run']    = int(bin[5+11:5+11+16], 2) # bits 32-47
+    r['camcol'] = int(bin[5+11+16:5+11+16+3], 2) # bits 29-31
+    r['field']  = int(bin[5+11+16+3+1:5+11+16+3+1+12], 2) # bits 16-27
+    r['id']     = int(bin[5+11+16+3+1+12:], 2) # bits 0-15
+
+    return r
 
 def loadSDSSSpectrum(ind):
     """ Remotely acquire (via http) a single SDSS galaxy spectrum, according to the input index 
@@ -66,23 +88,14 @@ def loadSDSSSpectrum(ind):
 
     return r
 
-def fitSDSSSpectrum(ind=12345):
-    """ Run MCMC fit against a particular SDSS spectrum. """
-    from prospect.models import priors, sedmodel, model_setup
-    from prospect.io import write_results
-    from prospect.sources import CSPBasis
-    tophat = priors.tophat
-    from sedpy.observate import load_filters
-
-    from prospect.io import write_results
-    from prospect import fitting
-
-    # load observational spectrum
+def load_obs(ind):
+    """ Construct observational object with a SDSS spectrum, ready for fitting. """
     spec = loadSDSSSpectrum(ind=ind)
 
     # convert [10^-17 erg/cm^2/s/Ang] -> [10^-23 erg/cm^2/s/Hz] since flux_nu = (lambda^2/c) * flux_lambda
     # http://coolwiki.ipac.caltech.edu/index.php/Units, https://en.wikipedia.org/wiki/AB_magnitude
-    flux_Jy = 1e-17 * spec['flux'] * 3.34e4 * (spec['wavelength']/1.0)**2.0
+    # 3.34e4 = 1/(c * 1e3 * Jy_mks) = 1/(c * 1e3 * 1e-26) = 1/(3e18 ang/s * 1e3 * 1e-26)
+    flux_Jy = 1e-17 * spec['flux'] * 3.34e4 * (spec['wavelength'])**2.0
     flux_maggies = flux_Jy / 3631.0
     flux_nMgy = flux_maggies * 1e9
 
@@ -90,7 +103,7 @@ def fitSDSSSpectrum(ind=12345):
     obs = {}
     obs['wavelength'] = spec['wavelength'] # vacuum Angstroms
     obs['spectrum'] = flux_maggies # units of maggies
-    obs['unc'] = spec['flux'] * 0.07 # todo! use sqrt(1/ivar)
+    obs['unc'] = spec['flux'] * 0.05 # todo! use sqrt(1/ivar)
     obs['mask'] = (obs['unc'] != 0.0) # optional spec (bool array, set False for ivar==0)
 
     obs['maggies'] = None # no broadband filter magnitudes
@@ -98,49 +111,38 @@ def fitSDSSSpectrum(ind=12345):
     obs['filters'] = None # no associated filters
     obs['phot_mask'] = None  # optional, no associated masks
 
-    # configuration
-    run_params = {'verbose':True,
-                  'debug':False,
-                  #'outfile':'output/demo_mock',
-                  # Fitter parameters
-                  'nwalkers':16,#128, # should be N*(nproc-1) where N is an even integer, Nproc=MPI tasks
-                  'nburn':[8,8,16],#[32, 32, 64],
-                  'niter':32,#512,
-                  #'do_powell': False,
-                  #'ftol':0.5e-5, 'maxfev':5000,
-                  'initial_disp':0.1,
-                  # Mock data parameters
-                  #'snr': 20.0,
-                  #'add_noise': False,
-                  # Mock model parameters
-                  #'mass': 1e9,
-                  #'logzsol': -0.5,
-                  #'tage': 12.,
-                  #'tau': 3.,
-                  #'dust2': 0.3,
-                  # Data manipulation parameters
-                  'logify_spectrum':False,
-                  'normalize_spectrum':False,
-                  'wlo':3750., 'whi':7200.,
-                  # SPS parameters
-                  'zcontinuous': 1,
-                  }
+    # auxiliary information
+    for k in ['ind','objid','specobjid','logMass','redshift']:
+        obs[k] = spec[k]
+
+    return obs
+
+def load_model_params(redshift=None):
+    """ Return the set of model parameters, including which are fixed and which are free, 
+    the associated priors, and initial guesses. """
+    from prospect.models import priors
 
     model_params = []
 
-    # redshift: fixed to sdss spectroscopic value (assumed to be 10pc if z=0, e.g. for absolute mags)
-    model_params.append({'name': 'zred', 'N': 1,
-                            'isfree': False,
-                            'init': spec['redshift']})#,
-                            #'units': '',
-                            #'prior_function':tophat,
-                            #'prior_args': {'mini':0.0, 'maxi':4.0}})
+    if redshift is None:
+        # no known redshift, fit freely
+        model_params.append({'name': 'zred', 'N': 1,
+                                    'isfree': True,
+                                    'init': 0.1,
+                                    'units': '',
+                                    'prior_function':priors.tophat,
+                                    'prior_args': {'mini':0.0, 'maxi':0.1}})
+    else:
+        # redshift: fixed to sdss spectroscopic value (assumed to be 10pc if z=0, e.g. for absolute mags)
+        model_params.append({'name': 'zred', 'N': 1,
+                                'isfree': False,
+                                'init': redshift})
 
     # --- SFH ---
-    # FSPS parameter.  sfh=4 is a delayed-tau SFH
+    # FSPS parameter.  sfh=1 is a exponentially declining tau SFH, sfh=4 is a delayed-tau SFH
     model_params.append({'name': 'sfh', 'N': 1,
                             'isfree': False,
-                            'init': 4,
+                            'init': 1,
                             'units': 'type'
                         })
 
@@ -150,10 +152,10 @@ def fitSDSSSpectrum(ind=12345):
     model_params.append({'name': 'mass', 'N': 1,
                             'isfree': True,
                             'init': 1e10,
-                            'init_disp': 1e8,
+                            'init_disp': 1e9,
                             'units': r'M_\odot',
-                            'prior_function':tophat,
-                            'prior_args': {'mini':1e8, 'maxi':1e12}})
+                            'prior_function':priors.tophat,
+                            'prior_args': {'mini':1e6, 'maxi':1e12}})
 
     # Since we have zcontinuous=1 above, the metallicity is controlled by the
     # ``logzsol`` parameter.
@@ -162,24 +164,25 @@ def fitSDSSSpectrum(ind=12345):
                             'init': 0,
                             'init_disp': 0.1,
                             'units': r'$\log (Z/Z_\odot)$',
-                            'prior_function': tophat,
-                            'prior_args': {'mini':-1, 'maxi':0.19}})
+                            'prior_function': priors.tophat,
+                            'prior_args': {'mini':-3.0, 'maxi':1.0}})
 
     # FSPS parameter
     model_params.append({'name': 'tau', 'N': 1,
-                            'isfree': False,
+                            'isfree': True,
                             'init': 1.0,
+                            'init_disp':0.1,
                             'units': 'Gyr',
-                            'prior_function':priors.logarithmic,
-                            'prior_args': {'mini':0.1, 'maxi':100}})
+                            'prior_function':priors.tophat,#priors.logarithmic,
+                            'prior_args': {'mini':0.1, 'maxi':10}})
 
-    # FSPS parameter
+    # FSPS parameter (could change max to == t_age at this redshift)
     model_params.append({'name': 'tage', 'N': 1,
                             'isfree': True,
                             'init': 5.0,
-                            'init_disp': 3.0,
+                            'init_disp': 1.0,
                             'units': 'Gyr',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':0.101, 'maxi':14.0}})
 
     # FSPS parameter
@@ -187,7 +190,7 @@ def fitSDSSSpectrum(ind=12345):
                             'isfree': False,
                             'init': 0.0,
                             'units': 'Gyr',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':0.1, 'maxi':14.0}})
 
     # FSPS parameter
@@ -195,7 +198,7 @@ def fitSDSSSpectrum(ind=12345):
                             'isfree': False,
                             'init': 0.0,
                             'units': '',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':0.0, 'maxi':1.3}})
 
     # FSPS parameter
@@ -203,26 +206,27 @@ def fitSDSSSpectrum(ind=12345):
                             'isfree': False,
                             'init': 0.0,
                             'units': '',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':0.0, 'maxi':0.5}})
 
     # --- Dust ---------
     # FSPS parameter
     model_params.append({'name': 'dust1', 'N': 1,
-                            'isfree': False,
-                            'init': 0.0,
+                            'isfree': True,
+                            'init': 0.7,
                             'units': '',
-                            'prior_function':tophat,
-                            'prior_args': {'mini':0.1, 'maxi':2.0}})
+                            'prior_function':priors.tophat,
+                            'prior_args': {'mini':0.0, 'maxi':2.0}})
 
-    # FSPS parameter
+    # FSPS parameter (could couple to dust1, e.g. some constant fraction, through depends_on)
     model_params.append({'name': 'dust2', 'N': 1,
                             'isfree': False,
-                            'init': 0.35,
+                            'init': 0.3,
                             'reinit': True,
+                            #'depends_on' : dust2_func,
                             'init_disp': 0.3,
                             'units': '',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':0.0, 'maxi':2.0}})
 
     # FSPS parameter
@@ -230,15 +234,15 @@ def fitSDSSSpectrum(ind=12345):
                             'isfree': False,
                             'init': -0.7,
                             'units': '',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':-1.5, 'maxi':-0.5}})
 
     # FSPS parameter
     model_params.append({'name': 'dust1_index', 'N': 1,
                             'isfree': False,
-                            'init': -1.0,
+                            'init': -0.7,
                             'units': '',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':-1.5, 'maxi':-0.5}})
 
     # FSPS parameter
@@ -312,7 +316,7 @@ def fitSDSSSpectrum(ind=12345):
                             'init': 0.0,
                             'units': r'log Z/Z_\odot',
     #                        'depends_on': stellar_logzsol,
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':-2.0, 'maxi':0.5}})
 
     # FSPS parameter
@@ -320,7 +324,7 @@ def fitSDSSSpectrum(ind=12345):
                             'isfree': False,
                             'init': -2.0,
                             'units': '',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':-4, 'maxi':-1}})
 
     # --- Calibration ---------
@@ -328,20 +332,47 @@ def fitSDSSSpectrum(ind=12345):
                             'isfree': False,
                             'init': 0.0,
                             'units': 'mags',
-                            'prior_function':tophat,
+                            'prior_function':priors.tophat,
                             'prior_args': {'mini':0.0, 'maxi':0.2}})
 
+    return model_params
 
-    # SPS Model instance as global
-    print('init sps')
-    sps = CSPBasis(zcontinuous=run_params['zcontinuous'],compute_vega_mags=False)
-    # GP instances as global
-    spec_noise, phot_noise = None, None #model_setup.load_gp(**run_params)
-    # Model as global
-    print('init sed model')
+def fitSDSSSpectrum(ind=12345):
+    """ Run MCMC fit against a particular SDSS spectrum. """
+    from prospect.models import sedmodel
+    from prospect.io import write_results
+    from prospect.sources import CSPBasis
+    from prospect import fitting
+
+    # load observational spectrum
+    obs = load_obs(ind)
+
+    # configuration
+    run_params = {'verbose':True,
+                  'debug':False,
+                  # Fitter parameters
+                  'nwalkers':128, # should be N*(nproc-1) where N is an even integer, Nproc=MPI tasks
+                  'nburn':[32, 32, 64],
+                  'niter':512,
+                  #'do_powell': False,
+                  #'ftol':0.5e-5, 'maxfev':5000,
+                  'initial_disp':0.1,
+                  # Data manipulation parameters
+                  'logify_spectrum':False,
+                  'normalize_spectrum':False,
+                  'wlo':3750.0,
+                  'whi':7200.0,
+                  # SPS parameters
+                  'zcontinuous': 1, # 1=continuous metallicity, 0=discretized zmet integers only
+                  }
+
+
+    # model
+    model_params = load_model_params(redshift=obs['redshift'])
     model = sedmodel.SedModel(model_params)
-    # Obs as global
-    #obs = model_setup.load_obs(**run_params)
+
+    # SPS Model
+    sps = CSPBasis(zcontinuous=run_params['zcontinuous'],compute_vega_mags=False)
 
     # setup
     initial_theta = model.rectify_theta(model.initial_theta)
@@ -361,7 +392,6 @@ def fitSDSSSpectrum(ind=12345):
     initial_prob = None
 
     # mcmc sample
-    print('sampling...')
     tstart = time.time()
     out = fitting.run_emcee_sampler(lnprobfn, initial_center, model,
                                     postargs=[model,obs,sps],
@@ -385,25 +415,117 @@ def fitSDSSSpectrum(ind=12345):
                              post_burnin_center=burn_p0,
                              post_burnin_prob=burn_prob0)
 
-    hf.close()
+def debug_plot(ind=12345):
+    # debug plot
+    import corner
+    from prospect.sources import CSPBasis
+    import prospect.io.read_results as bread
+
+    res, pr, mod = bread.results_from("out_12345_mcmc")
+    #cornerfig = bread.subtriangle(res, start=0, thin=5)
+
+    # load chains
+    with h5py.File('out_%d.hdf5' % ind,'r') as f:
+        chain = f['sampling']['chain'][()]
+        wave = f['obs']['wavelength'][()]
+        spec = f['obs']['spectrum'][()]
+
+    # flatten chain into a flat list of samples
+    ndim = chain.shape[2]
+    samples = chain.reshape( (-1,ndim) )
+
+    # recreate model
+    sps = CSPBasis(zcontinuous=True,compute_vega_mags=False)
+    #model = sedmodel.SedModel(model_params)
+
+    # print percentiles 'answer'
+    percs = np.percentile(samples, [16,50,84], axis=0)
+    for i, label in enumerate(res['theta_labels']):
+        print(label, percs[:,i])
+
+    # corner plot
+    fig = corner.corner(samples, labels=res['theta_labels'])
+    fig.savefig('out_%d_triangle.pdf' % ind)
+    plt.close(fig)
+
+    # plot some chain models on top of data
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('$\lambda$ [Angstroms]')
+    ax.set_ylabel('$F_\lambda$ [$\mu$Mgy]')
+    ax.set_ylim([1e-4,1e0])
+    ax.set_yscale('log')
+
+    ax.plot(wave, spec*1e6, '-', label='obs')
+
+    for i in range(20):
+        local_result = samples[i,:]
+        spec, phot, mfrac = mod.mean_model(local_result, obs=res['obs'], sps=sps)
+
+        ax.plot(wave, spec*1e6, '-', color='black', alpha=0.2, label='model %d' % i)
+
+    fig.tight_layout()
+    fig.savefig('out_%d_samples.pdf' % ind)
+    plt.close(fig)
 
     import pdb; pdb.set_trace()
 
+def debug_plot2(ind=12345):
+    # debug plot raw obs vs initial guess model
+    from prospect.models import sedmodel
+    from prospect.sources import CSPBasis
+
+    obs = load_obs(ind)
+
+    # model
+    model_params = load_model_params(redshift=obs['redshift'])
+    model = sedmodel.SedModel(model_params)
+    sps = CSPBasis(zcontinuous=True,compute_vega_mags=False)
+
+    initial_theta = model.initial_theta
+    print(initial_theta)
+    initial_theta = model.rectify_theta(model.initial_theta)
+
+    # start plot
+    fig = plt.figure(figsize=(12,8))
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('$\lambda$ [Angstroms]')
+    ax.set_ylabel('$F_\lambda$ [$\mu$Mgy]')
+    #ax.set_ylim([1e-1,1e3])
+    #ax.set_yscale('log')
+
+    # obs
+    ax.plot(obs['wavelength'], obs['spectrum']*1e6, '-', color='black', label='obs')
+
+    # model 1
+    spec, phot, mfrac = model.mean_model(initial_theta, obs=obs, sps=sps)
+    ax.plot(obs['wavelength'], spec*1e6, '-', alpha=0.8, label='model initial')
+
+    # model 2
+    initial_theta[0] = 8e9
+    spec, phot, mfrac = model.mean_model(initial_theta, obs=obs, sps=sps)
+    ax.plot(obs['wavelength'], spec*1e6, '-', alpha=0.8, label='model mass=8e9')
+
+    # model 3
+    initial_theta[0] = 5e9
+    spec, phot, mfrac = model.mean_model(initial_theta, obs=obs, sps=sps)
+    ax.plot(obs['wavelength'], spec*1e6, '-', alpha=0.8, label='model mass=5e9')
+
+    # model 4
+    initial_theta[0] = 1e9
+    spec, phot, mfrac = model.mean_model(initial_theta, obs=obs, sps=sps)
+    ax.plot(obs['wavelength'], spec*1e6, '-', alpha=0.8, label='model mass=1e9')
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('check_%d.pdf' % ind)
+    plt.close(fig)
+
+from prospect.likelihood import lnlike_spec, lnlike_phot, write_log
 
 def lnprobfn(theta, model=None, obs=None, sps=None, verbose=True):
     """ Given a parameter vector theta, return the ln of the posterior. """
-    from prospect.likelihood import lnlike_spec, lnlike_phot, write_log
-
-    #if model is None:
-    #    model = global_model
-    #if obs is None:
-    #    obs = global_obs
-
-    print('lnprobfn()')
-
     lnp_prior = model.prior_product(theta)
-
-    print('prior_product done')
 
     if not np.isfinite(lnp_prior):
         return -np.infty
@@ -416,8 +538,7 @@ def lnprobfn(theta, model=None, obs=None, sps=None, verbose=True):
         return -np.infty
     d1 = time.time() - t1
 
-    print('mean_model done [%.1f sec]' % d1)
-    import pdb; pdb.set_trace()
+    #print('mean_model done [%.1f sec]' % d1)
 
     # Noise modeling
     #if spec_noise is not None:
@@ -438,8 +559,3 @@ def lnprobfn(theta, model=None, obs=None, sps=None, verbose=True):
         write_log(theta, lnp_prior, lnp_spec, lnp_phot, d1, d2)
 
     return lnp_prior + lnp_phot + lnp_spec
-
-#def chisqfn(theta, model, obs):
-#    """ Negative of lnprobfn for minimization, and also handles passing in keyword 
-#    arguments which can only be postional arguments when using scipy minimize. """
-#    return -lnprobfn(theta, model=model, obs=obs)

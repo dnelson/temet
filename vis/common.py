@@ -777,6 +777,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         config['label']  = 'B$_{\\rm %s}$ [$\mu$G]' % dirStr
         config['ctName'] = 'PuOr' # is brewer-purpleorange
 
+    # gas: shock finder
+    if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:
+        grid = logZeroMin( sP.units.codeEnergyRateToErgPerSec(grid) )
+        config['label']  = 'Shocks Dissipated Energy [log erg/s]'
+        config['ctName'] = 'plasma'
+
+    if partField in ['machnum','shocks_machnum']:
+        grid = logZeroMin( grid )
+        config['label']  = 'Shock Mach Number [log]'
+        config['ctName'] = 'hot'
+
     # gas: pressures
     if partField in ['P_gas']:
         grid = logZeroMin( grid )
