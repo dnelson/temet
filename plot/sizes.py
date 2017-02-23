@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from datetime import datetime
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.signal import savgol_filter
 
@@ -168,7 +169,9 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         xm_gas = xm_gas[ww_gas]
         xm_stars = xm_stars[ww_stars]
 
-        l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=sP.simName)
+        label = sP.simName
+        if sP.redshift > 0.0: label += ' z=%.1f' % sP.redshift
+        l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=label)
 
         if not clean:
             l, = ax.plot(xm_gas[1:-1], ym_gas[1:-1], linestyles[1], color=l.get_color(), lw=3.0)
@@ -221,12 +224,12 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         plt.close(fig)
 
 def sizeModelsRatios():
-    """ Look at calculated HalfLightRadii. """
+    """ Look at calculated HalfLightRadii, plot ratios to evaluate impact of dust. """
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
     acPre = 'Subhalo_HalfLightRad_p07c_'
     acField1 = 'nodust_efr'
-    acField2 = 'cf00dust_res_conv_efr' #'cf00dust_efr'
+    acField2 = 'cf00dust_efr' #'cf00dust_res_conv_efr' #
 
     # non-resolved (models A,B)
     Re_labels_nonres = ['edge-on 2d','face-on 2d','edge-on-smallest 2d','edge-on-random 2d','z-axis 2d','3d']
@@ -236,11 +239,11 @@ def sizeModelsRatios():
                      'edge-on 3d','face-on 3d','edge-on-smallest 3d','edge-on-random 3d','z-axis 3d']
 
     # load auxCat
-    ac = cosmo.load.auxCat(sP, fields=[acPre+acField1,acPre+acField2])
+    ac = auxCat(sP, fields=[acPre+acField1,acPre+acField2])
     bands = list(ac[acPre+acField1+'_attrs']['bands'])
 
     # load groupCat
-    gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+    gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
         fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
 
     # centrals only, x-axis mass definition, calculate sizes
@@ -250,9 +253,6 @@ def sizeModelsRatios():
     xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
     xx = sP.units.codeMassToLogMsun( xx_code )
 
-    yy_stars = gc['subhalos']['SubhaloHalfmassRadType'][w,sP.ptNum('stars')]
-    yy_stars = sP.units.codeLengthToKpc( yy_stars )
-
     # which half light radii do we have?
     if ac[acPre+acField1].shape[2] == 6:  Re_labels_1 = Re_labels_nonres
     if ac[acPre+acField1].shape[2] == 10: Re_labels_1 = Re_labels_res
@@ -260,7 +260,7 @@ def sizeModelsRatios():
     if ac[acPre+acField2].shape[2] == 10: Re_labels_2 = Re_labels_res
 
     # start pdf
-    pdf = PdfPages('debug_HalfLightRadii_%s_%s.pdf' % (sP.simName,datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('HalfLightRadii_%s_z%.1f_%s.pdf' % (sP.simName,sP.redshift,datetime.now().strftime('%d-%m-%Y')))
 
     for band in bands:
         # start plot
@@ -312,6 +312,9 @@ def sizeModelsRatios():
             ind1 = 5 # compared to the first
             ind2 = i # we are iterating directly over the 5 3d res_conv radii outputs
 
+            if ind2 >= sizes2.shape[1]:
+                continue # e.g. model B
+
             sizes1_loc = np.squeeze( sizes2[w,ind1] )
             sizes2_loc = np.squeeze( sizes2[w,ind2] )
             label1 = Re_labels_2[ind1]
@@ -323,12 +326,94 @@ def sizeModelsRatios():
             assert ratio.shape == xx.shape
 
             xm_stars, ym_stars, sm_stars = running_median(xx,ratio,binSize=binSize,skipZeros=True)
-            ym_stars = savgol_filter(ym_stars,sKn,sKo)
 
             label = '(%s, %s) / (%s, %s)' % (acField2,label2,acField1,label1)
             l, = ax.plot(xm_stars[:-1], ym_stars[:-1], linestyles[1], lw=3.0, label=label)
 
         # finish
+        ax.legend(loc='best',prop={'size':13})
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+    # close pdf
+    pdf.close()
+
+def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
+    """ Look at calculated StellarPhot, plot ratios to evaluate impact of dust. """
+    acPre = 'Subhalo_StellarPhot_p07c_'
+    acField1 = 'nodust'
+    acField2 = 'cf00dust_res_conv_ns1' # or 'cf00dust', but no rad restriction (unless also in nodust)
+
+    # start pdf
+    sP = simParams(res=res,run=run,redshift=redshifts[0])
+    pdf = PdfPages('StellarPhotRatios_%s_%s_%s.pdf' % (sP.simName,acField2,datetime.now().strftime('%d-%m-%Y')))
+
+    for redshift in redshifts:
+        sP = simParams(res=res,run=run,redshift=redshift)
+
+        # load auxCat
+        ac = auxCat(sP, fields=[acPre+acField1,acPre+acField2])
+        bands = list(ac[acPre+acField1+'_attrs']['bands'])
+        nProj = ac[acPre+acField2].shape[2] if ac[acPre+acField2].ndim == 3 else 1
+
+        # load groupCat
+        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+            fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
+
+        # centrals only, x-axis mass definition, calculate sizes
+        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
+        w = gc['halos']['GroupFirstSub'][wHalo]
+
+        xx_code = gc['subhalos']['SubhaloMassInRadType'][w,sP.ptNum('stars')]
+        xx = sP.units.codeMassToLogMsun( xx_code )
+
+        # start plot
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        ax.set_title('%s z=%.1f' % (sP.simName,sP.redshift))
+
+        xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]' + ' [ < 2r$_{1/2}$ ]'
+        ax.set_xlabel(xlabel)
+        ax.set_xlim([7.0,12.5])
+
+        ylabel = 'Band-Luminosity Ratio'
+        ax.set_ylabel(ylabel)
+        
+        for band in bands:
+            # in this band
+            c = ax._get_lines.prop_cycler.next()['color']
+
+            bandNum1 = list(ac[acPre+acField1+'_attrs']['bands']).index( band )
+            bandNum2 = list(ac[acPre+acField2+'_attrs']['bands']).index( band )
+            assert bandNum1 == bandNum2
+
+            mags1 = np.squeeze( ac[acPre+acField1][w,bandNum1] )
+            lums1 = np.power(10.0, -0.4 * mags1)
+
+            print(sP.redshift,band)
+
+            for projNum in range(nProj):
+                # calculate ratio and plot
+                if ac[acPre+acField2].ndim == 3:
+                    mags2 = np.squeeze( ac[acPre+acField2][w,bandNum2,projNum] )
+                else:
+                    mags2 = np.squeeze( ac[acPre+acField2][w,bandNum2] )
+
+                lums2 = np.power(10.0, -0.4 * mags2)
+
+                ratio = lums2 / lums1
+                assert ratio.shape == xx.shape
+
+                xm_stars, ym_stars, sm_stars = running_median(xx,ratio,binSize=binSize,skipZeros=True)
+
+                label = '%s / %s (%s)' % (acField2,acField1,band) if projNum == 0 else ''
+                lw = 3.0 if projNum == 0 else 1.0
+                alpha = 1.0 if projNum == 0 else 0.2
+                l, = ax.plot(xm_stars[:-1], ym_stars[:-1], linestyles[0], 
+                             lw=lw, color=c, alpha=alpha, label=label)
+
+        # finish page (for one redshift)
         ax.legend(loc='best',prop={'size':13})
         fig.tight_layout()
         pdf.savefig()
