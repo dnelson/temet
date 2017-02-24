@@ -509,6 +509,17 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None):
         assert plaw_index > 0.0
         cdict = {}
 
+        # ListedColormap has no _segmentdata
+        if not hasattr(cmap, '_segmentdata'):
+            cmap = copy.deepcopy(cmap)
+            cmap._segmentdata = {'red':[],'green':[],'blue':[]}
+            for i, color in enumerate(cmap.colors):
+                ind = float(i) / (len(cmap.colors)-1) # [0,255] -> [0,1] typically
+                cmap._segmentdata['red'].append( [ind,color[0],color[0]] )
+                cmap._segmentdata['green'].append( [ind,color[1],color[1]] )
+                cmap._segmentdata['blue'].append( [ind,color[2],color[2]] )
+
+        # pull out RGB triplets and scale
         for k in ['red','green','blue']:
             cdict[k] = []
             for j in range(len(cmap._segmentdata[k])):

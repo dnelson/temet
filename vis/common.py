@@ -770,6 +770,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         grid = logZeroMin( grid * 1e6 )
         config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
+        config['plawScale'] = 0.4
 
     if partField in ['bfield_x','bfield_y','bfield_z']:
         grid = sP.units.particleCodeBFieldToGauss(grid) * 1e6 # linear micro-Gauss
@@ -782,11 +783,13 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         grid = logZeroMin( sP.units.codeEnergyRateToErgPerSec(grid) )
         config['label']  = 'Shocks Dissipated Energy [log erg/s]'
         config['ctName'] = 'plasma'
+        config['plawScale'] = 0.7
 
     if partField in ['machnum','shocks_machnum']:
-        grid = logZeroMin( grid )
-        config['label']  = 'Shock Mach Number [log]'
+        #grid = logZeroMin( grid )
+        config['label']  = 'Shock Mach Number' # [log]'
         config['ctName'] = 'hot'
+        config['plawScale'] = 1.6
 
     # gas: pressures
     if partField in ['P_gas']:
