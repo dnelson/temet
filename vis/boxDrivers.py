@@ -225,15 +225,17 @@ def TNG_mainImages(res, conf=0, variant=None):
     if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2'} )
     if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
     if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
-    if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.5,1.0]} )
+    if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} ) # [-3.5,1.0] previously
     if conf == 6:  panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,-0.2]} )
     if conf == 7:  panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,7.2]} )
     if conf == 8:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_Fe', 'valMinMax':[0.0,2.6]} )
     if conf == 9:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
     if conf == 10: panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
     if conf == 11: panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
-    if conf == 12: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0.0, 1.0]} )
-    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[32, 40]} )
+    if conf == 12: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 5]} )
+    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[32, 38]} )
+    if conf == 14: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 1000]} )
+    if conf == 15: panels.append( {'partType':'dm', 'partField':'velmag', 'valMinMax':[0, 1200]} )
 
     run        = 'tng'
     redshift   = 0.0
@@ -261,9 +263,9 @@ def TNG_mainImages(res, conf=0, variant=None):
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'open'
+        plotStyle  = 'edged'
         rasterPx   = 2000 #2000
-        colorbars  = True
+        colorbars  = False
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
@@ -271,7 +273,8 @@ def TNG_mainImages(res, conf=0, variant=None):
     renderBox(panels, plotConfig, locals())
 
 def oneBox_multiQuantCollage(variant=0000):
-    """ Make a collage (e.g. 4x3 panels, or as many as we can) for a single, of every quantity. """
+    """ Make a collage for a single run, of every quantity we can 
+    (now 15=5x3 panels, 1.67 aspect ratio vs 1.78 for 1920x1080). """
 
     panels = []
     panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.3,7.3]} )
@@ -286,6 +289,9 @@ def oneBox_multiQuantCollage(variant=0000):
     panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
     panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
     panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
+    panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 5]} )
+    panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[32, 38]} )
+    panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 1000]} )
 
     panels[3]['labelScale'] = True
     panels[-1]['labelSim'] = True
