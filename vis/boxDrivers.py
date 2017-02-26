@@ -190,7 +190,7 @@ def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
     renderBox(panels, plotConfig, locals())
     #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def TNG_mainImages(res, conf=0, variant=None):
+def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
@@ -237,14 +237,38 @@ def TNG_mainImages(res, conf=0, variant=None):
     if conf == 14: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 1000]} )
     if conf == 15: panels.append( {'partType':'dm', 'partField':'velmag', 'valMinMax':[0, 1200]} )
 
+    # testing metal vectors:
+    if conf == 16: panels.append( {'partType':'gas', 'partField':'metals_H', 'valMinMax':[3.0,6.0]})
+    if conf == 17: panels.append( {'partType':'gas', 'partField':'metals_He', 'valMinMax':[3.0,6.0]})
+    if conf == 18: panels.append( {'partType':'gas', 'partField':'metals_C', 'valMinMax':[2.0,5.5]})
+    if conf == 19: panels.append( {'partType':'gas', 'partField':'metals_N', 'valMinMax':[2.0,5.2]})
+    if conf == 20: panels.append( {'partType':'gas', 'partField':'metals_O', 'valMinMax':[2.3,5.8]})
+    if conf == 21: panels.append( {'partType':'gas', 'partField':'metals_Ne', 'valMinMax':[2.0,5.5]})
+    if conf == 22: panels.append( {'partType':'gas', 'partField':'metals_Mg', 'valMinMax':[2.0,5.2]})
+    if conf == 23: panels.append( {'partType':'gas', 'partField':'metals_Si', 'valMinMax':[2.0,5.2]})
+    if conf == 24: panels.append( {'partType':'gas', 'partField':'metals_Fe', 'valMinMax':[2.0,5.2]})
+    if conf == 25: panels.append( {'partType':'gas', 'partField':'metals_SNIa', 'valMinMax':[2.0,5.5]})
+    if conf == 26: panels.append( {'partType':'gas', 'partField':'metals_SNII', 'valMinMax':[2.0,5.5]})
+    if conf == 27: panels.append( {'partType':'gas', 'partField':'metals_AGB', 'valMinMax':[2.0,5.5]})
+    if conf == 28: panels.append( {'partType':'gas', 'partField':'metals_NSNS', 'valMinMax':[2.0,5.5]})
+    if conf == 29: panels.append( {'partType':'gas', 'partField':'metals_FeSNIa', 'valMinMax':[2.0,5.5]})
+    if conf == 30: panels.append( {'partType':'gas', 'partField':'metals_FeSNII', 'valMinMax':[2.0,5.5]})
+
+    # testing mip:
+    if conf == 31: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 100], 'method':'sphMap_maxIP'} )
+    if conf == 32: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,8.0], 'method':'sphMap_maxIP'})
+    if conf == 33: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
+    if conf == 34: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
+
     run        = 'tng'
     redshift   = 0.0
-    nPixels    = 2000 #2000
+    nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
     labelSim   = False
     plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
@@ -261,20 +285,29 @@ def TNG_mainImages(res, conf=0, variant=None):
         absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
         absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
+    if thinSlice:
+        # do very thin 100 kpc 'slice' instead
+        sliceWidth = sP.units.physicalKpcToCodeLength(100.0)
+        sliceFac = sliceWidth / sP.boxSize
+        sliceStr = '_thinSlice'
+
     # render config (global)
+    mStr = '' if method == 'sphMap' else '_'+method
+    mStr = mStr if 'method' not in panels[0] else '_'+panels[0]['method']
+
     class plotConfig:
-        plotStyle  = 'edged'
-        rasterPx   = 2000 #2000
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = 2000 # 800, 2000, 8000
         colorbars  = False
 
-        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.png' % \
-          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)
 
     renderBox(panels, plotConfig, locals())
 
 def oneBox_multiQuantCollage(variant=0000):
     """ Make a collage for a single run, of every quantity we can 
-    (now 15=5x3 panels, 1.67 aspect ratio vs 1.78 for 1920x1080). """
+    (now 15=5x3 panels, 1.67 aspect ratio vs 1.78 for 1920x1080 or 1.6 for 1920x1200). """
 
     panels = []
     panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.3,7.3]} )
@@ -289,15 +322,15 @@ def oneBox_multiQuantCollage(variant=0000):
     panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
     panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
     panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
-    panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 5]} )
+    panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 4]} )
     panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[32, 38]} )
-    panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 1000]} )
+    panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 500]} )
 
-    panels[3]['labelScale'] = True
+    panels[4]['labelScale'] = True
     panels[-1]['labelSim'] = True
 
     run        = 'tng'
-    redshift   = 3.0
+    redshift   = 2.0
     res        = 1024
     #variant    = 0000
 

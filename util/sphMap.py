@@ -55,7 +55,7 @@ def _getkernel(hinv, r2, C1, C2, C3):
 @jit(nopython=True, nogil=True, cache=True)
 def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,
-                normColDens):
+                normColDens,maxIntProj,minIntProj):
     """ Core routine for sphMap(), see below. """
     # init
     NumPart = pos.shape[0]
@@ -129,23 +129,25 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
 
-        # calculate sum (normalization)
+        # calculate sum (normalization), skip for MIP
         kSum = 0.0
-        
-        for dx in range(-nx,nx+1):
-            for dy in range(-ny,ny+1):
-                # distance of covered pixel from actual position
-                xx = x + dx * pixelSizeX - pos0
-                yy = y + dy * pixelSizeY - pos1
-                r2 = xx * xx + yy * yy
+        v_over_sum = 0.0
 
-                if r2 < h2:
-                    kSum += _getkernel(hinv, r2, COEFF_1, COEFF_2, COEFF_3)
+        if not minIntProj and not maxIntProj:
+            for dx in range(-nx,nx+1):
+                for dy in range(-ny,ny+1):
+                    # distance of covered pixel from actual position
+                    xx = x + dx * pixelSizeX - pos0
+                    yy = y + dy * pixelSizeY - pos1
+                    r2 = xx * xx + yy * yy
 
-        if kSum < 1e-10:
-            continue
+                    if r2 < h2:
+                        kSum += _getkernel(hinv, r2, COEFF_1, COEFF_2, COEFF_3)
 
-        v_over_sum = v / kSum # normalization such that all kernel values sum to the weight v
+            if kSum < 1e-10:
+                continue
+
+            v_over_sum = v / kSum # normalization such that all kernel values sum to the weight v
 
         # calculate contribution
         for dx in range(-nx,nx+1):
@@ -171,8 +173,20 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                     # divide by sum for normalization
                     kVal = _getkernel(hinv, r2, COEFF_1, COEFF_2, COEFF_3)
 
-                    dens_out [i, j] += kVal * v_over_sum
-                    quant_out[i, j] += kVal * v_over_sum * w
+                    if minIntProj:
+                        # minimum intensity projection (kernel and mass weighted to determine max)
+                        if kVal * v * w < quant_out[i, j]:
+                            dens_out [i, j] = kVal * v
+                            quant_out[i, j] = kVal * v * w
+                    elif maxIntProj:
+                        # maximum intensity projection (kernel and mass weighted to determine max)
+                        if kVal * v * w > quant_out[i, j]:
+                            dens_out [i, j] = kVal * v
+                            quant_out[i, j] = kVal * v * w
+                    else:
+                        # normal weighted projection including contributions from all overlapping kernels
+                        dens_out [i, j] += kVal * v_over_sum
+                        quant_out[i, j] += kVal * v_over_sum * w
 
     # for total column density, normalize by the pixel area, e.g. [10^10 Msun/h] -> [10^10 Msun * h / ckpc^2]
     if normColDens:
@@ -453,7 +467,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
     # void return
 
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, 
-           colDens=False, nThreads=8, multi=False, posTarget=None):
+           colDens=False, nThreads=16, multi=False, posTarget=None, maxIntProj=False, minIntProj=False):
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
         quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
         returned, optionally converted to a column density map if colDens=True. If quant is specified, 
@@ -486,6 +500,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                        value at the position (2D+depth) of each posTarget is estimated. In this case, 
                        the return is of shape [N(posTarget)] giving the projected density or mass 
                        weighted quantity along the line of sight to each posTarget.
+      maxIntProj     : perform a maximum intensity projection (MIP) instead of the usual weighting
+      minIntProj     : perform a -minimum- intensity projection, instead of the usual weighting
     """
     # input sanity checks
     if len(boxSizeImg) != 3 or not isinstance(boxSizeSim,(float)) or len(boxCen) != 3:
@@ -515,6 +531,10 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         raise Exception('Invalid axes specification.')
     if ndims not in [1,2,3]:
         raise Exception('Invalid ndims specification.')
+    if maxIntProj and minIntProj:
+        raise Exception('Cannot do both maximum and minimum intensity projections at the same time.')
+    if (maxIntProj or minIntProj) and posTarget is not None:
+        raise Exception('MIP not yet supported with posTarget.')
 
     # _calcSphMapTargets() mode?
     nTargets = 0
@@ -545,6 +565,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     rDensT  = np.zeros( nTargets, dtype='float32' )
     rQuantT = np.zeros( nTargets, dtype='float32' )
 
+    if minIntProj: rQuant.fill(np.inf)
+
     # single threaded?
     # ----------------
     if nThreads == 1:
@@ -555,7 +577,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         # call JIT compiled kernel
         if posTarget is None:
             _calcSphMap(pos,hsml,mass,quant,rDens,rQuant,
-                        boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,colDens)
+                        boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,colDens,maxIntProj,minIntProj)
         else:
             _calcSphMapTargets(pos,hsml,mass,quant,posTarget,rDens,rQuant,rDensT,rQuantT,
                                boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,colDens)
@@ -589,6 +611,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             self.rDensT  = np.zeros( nTargets, dtype='float32' )
             self.rQuantT = np.zeros( nTargets, dtype='float32' )
 
+            if minIntProj: self.rQuant.fill(np.inf)
+
             # debugging:
             self.rDensT.fill(np.nan)
             self.rQuantT.fill(np.nan)
@@ -609,18 +633,19 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             self.boxSizeImg = boxSizeImg
             self.boxSizeSim = boxSizeSim
             self.boxCen     = boxCen
-
-            self.axes    = axes
-            self.ndims   = ndims
-            self.nPixels = nPixels
-            self.colDens = colDens
+            self.axes       = axes
+            self.ndims      = ndims
+            self.nPixels    = nPixels
+            self.colDens    = colDens
+            self.maxIntProj = maxIntProj
+            self.minIntProj = minIntProj
 
         def run(self):
             # call JIT compiled kernel (normQuant=False since we handle this later)
             if posTarget is None:
                 _calcSphMap(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,
                             self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
-                            self.colDens)
+                            self.colDens,self.maxIntProj,self.minIntProj)
             else:
                 _calcSphMapTargets(self.pos,self.hsml,self.mass,self.quant,self.posTarget,
                                    self.rDens,self.rQuant,self.rDensT,self.rQuantT,
@@ -639,8 +664,20 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
         # after each has finished, add its result array to the global
         if posTarget is None:
-            rQuant += thread.rQuant
-            rDens  += thread.rDens
+            if maxIntProj:
+                # maximum intensity projection
+                w = np.where(thread.rQuant > rQuant)
+                rQuant[w] = thread.rQuant[w]
+                rDens[w] = thread.rDens[w]
+            elif minIntProj:
+                # minimum intensity projection
+                w = np.where(thread.rQuant < rQuant)
+                rQuant[w] = thread.rQuant[w]
+                rDens[w] = thread.rDens[w]
+            else:
+                # normal
+                rQuant += thread.rQuant
+                rDens  += thread.rDens
         else:
             rQuantT += np.nan_to_num(thread.rQuantT)
             rDensT  += np.nan_to_num(thread.rDensT)

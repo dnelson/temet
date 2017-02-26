@@ -619,6 +619,10 @@ def snapshotSubset(sP, partType, fields,
             bmag = np.sqrt( b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2] )
             return bmag
 
+        # Alfven velocity magnitude (of electron plasma) [physical km/s]
+        if field.lower() in ["vmag_alfven", "velmag_alfven"]:
+            assert 0 # todo
+
         # volume [ckpc/h]^3
         if field.lower() in ["vol", "volume"]:
             # Volume eliminated in newer outputs, calculate as necessary, otherwise fall through
