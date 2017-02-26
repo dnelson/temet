@@ -613,7 +613,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     elif partType == 'dm':
         mass = sP.dmParticleMass
 
-    # neutral hydrogen mass model
+    # neutral hydrogen mass model (do column densities)
     if partField in ['HI','HI_segmented']:
         nh0_frac = snapshotSubset(sP, partType, 'NeutralHydrogenAbundance', indRange=indRange)
 
@@ -625,7 +625,12 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
-    # metal ion mass
+    # elemental mass fraction (do column densities)
+    if 'metals_' in partField:
+        elem_mass_frac = snapshotSubset(sP, partType, partField, indRange=indRange)
+        mass *= elem_mass_frac
+
+    # metal ion mass (do column densities)
     if ' ' in partField:
         element = partField.split()[0]
         ionNum  = partField.split()[1]
@@ -663,7 +668,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     normCol = False
 
     if partFieldLoad in volDensityFields+colDensityFields+totSumFields or \
-      ' ' in partFieldLoad or 'stellarBand-' in partFieldLoad:
+      ' ' in partFieldLoad or 'metals_' in partFieldLoad or 'stellarBand-' in partFieldLoad:
         # distribute mass and calculate column/volume density grid
         quant = None
 
@@ -692,7 +697,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     return mass, quant, normCol
 
-def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
+def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
     """ Perform any final unit conversions on grid output and set field-specific plotting configuration. """
     config = {}
 
@@ -749,6 +754,20 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg):
         grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e30, totKpc2=True ) ) # return 1e30 factor
         config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
+
+    if 'metals_' in partField:
+        # all of GFM_Metals as well as GFM_MetalsTagged (projected as column densities)
+        grid = logZeroMin( sP.units.codeColDensToPhys(grid, msunKpc2=True) )
+        metalName = partField.split("_")[1]
+
+        mStr = '-Metals' if metalName in ['SNIa','SNII','AGB','NSNS'] else ''
+        config['label'] = '%s %s%s Column Density [log cm$^{-2}$]' % (ptStr,metalName,mStr)
+        config['ctName'] = 'cubehelix'
+
+        # testing:
+        if '_minIP' in method: config['ctName'] = 'gray' # minIP: do dark on light
+        if '_maxIP' in method: config['ctName'] = 'gray_r' # maxIP: do light on dark
+        #config['plawScale'] = 1.0
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature']:
@@ -916,7 +935,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     def emptyReturn():
         print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros( nPixels, dtype='float32' )
-        grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg)
+        grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method)
         return grid, config
 
     if h['NumPart'][sP.ptNum(partType)] <= 2:
@@ -957,6 +976,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         grid_quant = np.zeros( nPixels[::-1], dtype='float32' )
         nChunks = 1
 
+        # if doing a minimum intensity projection, pre-fill grid_quant with infinity as we 
+        # accumulate per chunk by using a minimum reduction between the master grid and each chunk grid
+        if '_minIP' in method: grid_quant.fill(np.inf)
+
         disableChunkLoad = (sP.isPartType(partType,'stars') or sP.isPartType(partType,'dm')) \
                            and not snapHasField(sP, partType, 'SubfindHsml')
 
@@ -988,7 +1011,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
                 pos, _ = rotateCoordinateArray(sP, pos, rotMatrix, rotCenter)
 
-            # load: mass/weights, quantity, and normalization required
+            # load: mass/weights, quantity, and render specifications required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
 
             # rotation? handle for view dependent quantities (e.g. velLOS) (any 3-vector really...)
@@ -1036,7 +1059,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     quant = quant[wMask]
 
             # render
-            if method in ['sphMap','sphMap_global']:
+            if method in ['sphMap','sphMap_global','sphMap_minIP','sphMap_maxIP']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
                 if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
                     print(' debugging stellarBand-* getHsml() snapHsmlForStars=True')
@@ -1058,14 +1081,32 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
                     hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2)
 
+                # further sub-method specification?
+                maxIntProj = True if '_maxIP' in method else False
+                minIntProj = True if '_minIP' in method else False
+
+                # render
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                                          boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, 
-                                         nPixels=nPixels, colDens=normCol, multi=True )
+                                         nPixels=nPixels, colDens=normCol, multi=True, 
+                                         maxIntProj=maxIntProj, minIntProj=minIntProj )
 
-                grid_dens  += grid_d
-                grid_quant += grid_q
+                # accumulate for chunked processing
+                if method in ['sphMap','sphMap_global']:
+                    grid_dens  += grid_d
+                    grid_quant += grid_q
+
+                if method in ['sphMap_minIP']:
+                    w = np.where(grid_q < grid_quant)
+                    grid_dens[w] = grid_d[w]
+                    grid_quant[w] = grid_q[w]
+                if method in ['sphMap_maxIP']:
+                    w = np.where(grid_q > grid_quant)
+                    grid_dens[w] = grid_d[w]
+                    grid_quant[w] = grid_q[w]
 
             else:
+                # todo: e.g. external calls to ArepoVTK for voronoi_* based visualization
                 raise Exception('Not implemented.')
 
         # normalize quantity
@@ -1082,7 +1123,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     # handle units and come up with units label
-    grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg)
+    grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, method)
 
     # temporary: something a bit peculiar here, request an entirely different grid and 
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)

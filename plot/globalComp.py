@@ -1787,7 +1787,7 @@ def plots():
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1798,7 +1798,7 @@ def plots():
     #for i in range(1,11):
     #    sPs.append( simParams(res=256, run='tng', variant='r%03d' % i) )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -1808,19 +1808,21 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    sPs.append( simParams(res=512, run='tng', variant=0000) )
-    #sPs.append( simParams(res=512, run='tng', variant=4503) )
-    #sPs.append( simParams(res=512, run='tng', variant=4504) )
+    #sPs.append( simParams(res=512, run='tng', variant=0000) )
+    #sPs.append( simParams(res=256, run='tng', variant=0000) )
+    #sPs.append( simParams(res=256, run='tng', variant=4601) )
+    #sPs.append( simParams(res=256, run='tng', variant=4602) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_sizes_z4_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
-    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 4.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    #haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
-    #pdf.close()
-    #return
+    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_res_conv_efr','sdss_r',False])
+    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_res_conv_efr','sdss_r',False])
+    pdf.close()
+    return
     # END TEST AREA
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
@@ -1855,7 +1857,7 @@ def plots():
         nOVIcddf(sPs, pdf, moment=1)
         dlaMetallicityPDF(sPs, pdf) # z=3
 
-    if 0:
+    if 1:
         cheapDustModel = 'p07c_cf00dust_rad30pkpc' #'p07c_cf00dust_res_conv_ns1_rad30pkpc' is very expensive to run
         galaxyColorPDF(sPs, pdf, bands=['u','i'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])
         galaxyColorPDF(sPs, pdf, bands=['g','r'], splitCenSat=False, simRedshift=zZero, simColorsModels=[cheapDustModel])

@@ -10,6 +10,7 @@ import h5py
 import pdb
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
@@ -171,7 +172,7 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
         f['savedSnaps'] = savedSnaps
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
-    return colorEvo, subhaloIDs, savedSnaps
+    return colorEvo, shIDEvo, subhaloIDs, savedSnaps
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None):
@@ -796,19 +797,23 @@ def viewingAngleVariation():
     plt.close(fig)
 
 def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCount=None, 
-      simColorsModel=defSimColorModel, fig_subplot=[None,None], pStyle='white'):
+      simColorsModel=defSimColorModel, arrowMethod='arrow', fig_subplot=[None,None], pStyle='white'):
     """ Plot 'flux' arrows in the (color,Mstar) 2D plane showing the median evolution of all 
     galaxies in each bin over X Gyrs of time. """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     # hard-coded config
     xQuant = 'mstar2_log'
-    contourColor = 'orange'
+    contourColor = '#555555' #'orange'
     arrowColor = 'black'
+    arrowAlpha = 0.8
     contourLw = 2.0
 
-    nBins = 40
+    nBins = 12 #or 20
     rndProjInd = 0
+
+    if arrowMethod in ['stream']:
+        nBins = 30
 
     mag_range = bandMagRange(bands, tight=True)
 
@@ -849,43 +854,45 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     origSnap = sP.snap
     sP.setSnap( snaps[zIndTo] )
     sim_xvals_to, _, _, _ = simSubhaloQuantity(sP, xQuant, clean)
+    ageTo = sP.tage
+
     sP.setSnap( origSnap )
-    
+
     subhalo_ids_to = np.squeeze( shID_evo[:,zIndTo] )
     sim_xvals_to = sim_xvals_to[subhalo_ids_to]
 
-    # restrict xvals to the subhaloIDs for wihch we have saved colors
-    from tracer.tracerMC import match3
-    orig_subhalo_ids = np.arange( sim_xvals.size )
-    wSaved, _ = match3(orig_subhalo_ids, subhalo_ids)
-
-    assert wSaved.size == subhalo_ids.size
-    assert np.array_equal(wSaved,subhalo_ids) # we could use subhalo_ids directly
-
-    sim_xvals = sim_xvals[wSaved]
+    # restrict xvals to the subhaloIDs for which we have saved colors
+    sim_xvals_from = sim_xvals[subhalo_ids]
 
     # central/satellite selection?
+    from tracer.tracerMC import match3
     wSelect_orig = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
-
     wSelect, _ = match3(subhalo_ids, wSelect_orig)
 
-    print(' css: [%d] of global [%d] reduced to [%d] crossmatched from [%d]' % \
-        (wSelect_orig.size,orig_subhalo_ids.size,wSelect.size,subhalo_ids.size))
+    frac_global = float(wSelect_orig.size) / sim_xvals.size * 100
+    frac_local  = float(wSelect.size) / subhalo_ids.size * 100
+    print(sP.simName,'-'.join(bands),simColorsModel,xQuant,cenSatSelect,minCount)
+    print(' time interval [%.2f] Gyr (z=%.1f to z=%.1f)' % (sP.tage-ageTo,sP.redshift,toRedshift))
+    print(' css (%s): [%d] of global [%d] = %.1f%% (reduced to [%d] of the [%d] in colorEvo = %.1f%%)' % \
+        (cenSatSelect,wSelect_orig.size,sim_xvals.size,frac_global,wSelect.size,subhalo_ids.size,frac_local))
 
     sim_colors_from = sim_colors_from[wSelect]
     sim_colors_to   = sim_colors_to[wSelect]
-    sim_xvals       = sim_xvals[wSelect]
+    sim_xvals_from  = sim_xvals_from[wSelect]
+    sim_xvals_to    = sim_xvals_to[wSelect]
 
     # reduce to the subset with non-NaN colors at both ends of the time interval
     wFiniteColor = np.isfinite(sim_colors_from) & np.isfinite(sim_colors_to)
 
     sim_colors_from = sim_colors_from[wFiniteColor]
     sim_colors_to   = sim_colors_to[wFiniteColor]
-    sim_xvals       = sim_xvals[wFiniteColor]
+    sim_xvals_from  = sim_xvals_from[wFiniteColor]
+    sim_xvals_to    = sim_xvals_to[wFiniteColor]
 
     # start plot
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize,facecolor=color1)
+        sizefac = 0.7 if clean else 1.0
+        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
         ax = fig.add_subplot(111, axisbg=color1)
     else:
         # add requested subplot to existing figure
@@ -899,7 +906,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    print(' ',sP.simName,'-'.join(bands),simColorsModel,xQuant,cenSatSelect,minCount)
     if not clean:
         ax.set_title('select=%s mincount=%s' % (cenSatSelect,minCount))
 
@@ -910,8 +916,9 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
 
     binSize_x = (xMinMax[1] - xMinMax[0]) / nBins2D[0]
     binSize_y = (mag_range[1] - mag_range[0]) / nBins2D[1]
+    print(' nBins2D: ',nBins2D,'binSizes (x,y): ', binSize_x, binSize_y)
 
-    # calculate arrows for each bin
+    # calculate arrows ('velocity') for each bin (across whole grid)
     arrows_start_x = np.zeros( nBins2D, dtype='float32' )
     arrows_start_y = np.zeros( nBins2D, dtype='float32' )
     arrows_end_x = np.zeros( nBins2D, dtype='float32' )
@@ -921,6 +928,9 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     arrows_end_x.fill(np.nan)
     arrows_end_y.fill(np.nan)
 
+    xx = np.zeros( nBins2D[0], dtype='float32' )
+    yy = np.zeros( nBins2D[1], dtype='float32' )
+
     for i in range(nBins2D[0]):
         for j in range(nBins2D[1]):
             x0 = xMinMax[0] + i*binSize_x
@@ -928,33 +938,135 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
             y0 = mag_range[0] + j*binSize_y
             y1 = mag_range[0] + (j+1)*binSize_y
 
-            w = np.where( (sim_xvals > x0) & (sim_xvals <= x1) & 
+            xx[i] = 0.5*(x0+x1)
+            yy[j] = 0.5*(y0+y1)
+
+            # select in bin (at sP.redshift, e.g. z=0)
+            w = np.where( (sim_xvals_from > x0) & (sim_xvals_from <= x1) & 
                           (sim_colors_from > y0) & (sim_colors_from <= y1) )
-            # final_mstar = uh oh
-            # final_color = sim_colors_to[w]
 
             counts[i,j] = len(w[0])
             if counts[i,j] == 0:
                 continue
 
-            arrows_start_x[i,j] = 0.5*(x0+x1)
-            arrows_start_y[i,j] = 0.5*(y0+y1)
-            # TODO
-            arrows_end_x[i,j] = arrows_start_x[i,j] + binSize_x*0.7
-            arrows_end_y[i,j] = arrows_start_y[i,j] + 0.0
+            # arrow end points are 2d bin centers
+            arrows_end_x[i,j] = 0.5*(x0+x1)
+            arrows_end_y[i,j] = 0.5*(y0+y1)
 
+            # arrow start points are median ending (Mstar,color) values of members of this bin
+            # at toRedshift, e.g. where did the z=0 occupants of this bin come from?
+            arrows_start_x[i,j] = np.median(sim_xvals_to[w])
+            arrows_start_y[i,j] = np.median(sim_colors_to[w])
 
+    # delta vectors
+    delta_x = arrows_end_x - arrows_start_x
+    delta_y = arrows_end_y - arrows_start_y
 
-    # TODO: draw arrows
+    # smoothing? interpolation? outlier exclusion?
+    for iter in range(3):
+        for i in range(1,nBins2D[0]-1):
+            for j in range(1,nBins2D[1]-1):
+                # are all neighbors missing? then set counts such that -arrows- are skipped
+                dx_ngb = [delta_x[i-1,j-1],delta_x[i-1,j],delta_x[i-1,j+1],
+                          delta_x[i+1,j-1],delta_x[i+1,j],delta_x[i+1,j+1],
+                          delta_x[i,j-1],delta_x[i,j+1]]
+                dy_ngb = [delta_y[i-1,j-1],delta_y[i-1,j],delta_y[i-1,j+1],
+                          delta_y[i+1,j-1],delta_y[i+1,j],delta_y[i+1,j+1],
+                          delta_y[i,j-1],delta_y[i,j+1]]
+
+                dx_ngood = np.count_nonzero( np.isfinite(dx_ngb) )
+                dy_ngood = np.count_nonzero( np.isfinite(dy_ngb) )
+                if dx_ngood == 0 and dy_ngood == 0 and counts[i,j] >= 0:
+                    counts[i,j] = -1
+
+    for iter in range(10):
+        for i in range(1,nBins2D[0]-1):
+            for j in range(1,nBins2D[1]-1):
+                # is the current pixel missing (nan)? if so, make a bilinear interpolation from the
+                # four immediate neighbors, so long as >=3 are non-nan, to fill in this missing pt
+                if np.isnan(delta_x[i,j]):
+                    ngb = [delta_x[i-1,j],delta_x[i+1,j],delta_x[i,j-1],delta_x[i,j+1]]
+                    ngood = np.count_nonzero( np.isfinite(ngb) )
+                    if ngood >= 3:
+                        delta_x[i,j] = np.nanmean(ngb)
+
+                if np.isnan(delta_y[i,j]):
+                    ngb = [delta_y[i-1,j],delta_y[i+1,j],delta_y[i,j-1],delta_y[i,j+1]]
+                    ngood = np.count_nonzero( np.isfinite(ngb) )
+                    if ngood >= 3:
+                        delta_y[i,j] = np.nanmean(ngb)
+
+    # (A): draw individual arrows
+    if arrowMethod in ['arrow','comp']:
+        for i in range(nBins2D[0]):
+            for j in range(nBins2D[1]):
+                if counts[i,j] < minCount:
+                    continue
+
+                # http://matplotlib.org/examples/pylab_examples/fancyarrow_demo.html
+                # http://matplotlib.org/devdocs/api/patches_api.html#matplotlib.patches.FancyArrowPatch
+                posA = [arrows_start_x[i,j], arrows_start_y[i,j]]
+                posB = [arrows_start_x[i,j]+delta_x[i,j], arrows_start_y[i,j]+delta_y[i,j]]
+                arrowstyle = 'fancy, head_width=12, head_length=12, tail_width=20'
+                #arrowstyle = 'simple, head_width=12, head_length=12, tail_width=4'
+
+                # alternating color by row (in color)
+                c = '#555555' if j % 2 == 0 else '#77aa77'
+                p = FancyArrowPatch(posA=posA, posB=posB, arrowstyle=arrowstyle, 
+                                    alpha=arrowAlpha, color=c)
+                ax.add_artist(p)
+
+    # (B): quiver
+    if arrowMethod == 'quiver':
+        q = ax.quiver(arrows_start_x, arrows_start_y, delta_x, delta_y, 
+                      color='black', angles='xy', pivot='tail') # mid,head,tail
+
+    # (C): draw streamlines using 2d vector field
+    if arrowMethod in ['stream','comp']:
+        # do stream plot
+        ax.streamplot(xx, yy, delta_x.T, delta_y.T, 
+            density=[1.0,1.0], linewidth=2.0, arrowsize=1.4, color='black')
+
+        # image gives stellar mass growth rate (e.g. dex/Gyr) or color change (e.g. mag/Gyr)
+        #delta_mstar_dex_per_Gyr = delta_x.T / (sP.tage-ageTo)
+        #delta_diag_per_Gyr = np.sqrt( delta_x**2.0 + delta_y**2.0 ).T / (sP.tage-ageTo)
+        delta_mag_per_Gyr = delta_y.T / (sP.tage-ageTo)
+
+        img = ax.imshow(delta_mag_per_Gyr, extent=[xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]], 
+                        alpha=0.5, aspect='auto', origin='lower', interpolation='nearest', cmap='jet')
+
+        # colorbar
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(img, cax=cax)
+
+        color2 = 'black'
+        clabel = 'Rate of (%s-%s) Evolution [ mag / Gyr ]' % (bands[0],bands[1])
+        cb.ax.set_ylabel(clabel, color=color2)
+        cb.outline.set_edgecolor(color2)
+        cb.ax.yaxis.set_tick_params(color=color2)
+        plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
+
+    # single box showing grid size
+    if 0:
+        box_x0 = xx[-3] - binSize_x/2
+        box_x1 = xx[-2] - binSize_x/2
+        box_y0 = yy[-2] - binSize_y/2
+        box_y1 = yy[-1] - binSize_y/2
+
+        ax.plot( [box_x0,box_x1,box_x1,box_x0,box_x0], [box_y0,box_y0,box_y1,box_y1,box_y0], ':', 
+            color='#000000', alpha=0.8)
+
+    # full box grid
     for i in range(nBins2D[0]):
-        for j in range(nBins2D[1]):
-            if counts[i,j] < minCount:
-                continue
+        box_x0 = xx[i] - binSize_x/2
+        box_x1 = box_x0 + binSize_x
 
-            delta_x = arrows_end_x[i,j] - arrows_start_x[i,j]
-            delta_y = arrows_end_y[i,j] - arrows_start_y[i,j]
-            ax.arrow( arrows_start_x[i,j], arrows_start_y[i,j], delta_x, delta_y, 
-                fc=arrowColor, ec=arrowColor, head_width=0.05, head_length=0.1 )
+        for j in range(nBins2D[1]):
+            box_y0 = yy[j] - binSize_y/2
+            box_y1 = box_y0 + binSize_y
+
+            ax.plot( [box_x0,box_x1,box_x1,box_x0,box_x0], [box_y0,box_y0,box_y1,box_y1,box_y0], '-', 
+                color='#000000', alpha=0.05, linewidth=0.5)
 
     # contours
     extent = [xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]]
@@ -1089,8 +1201,8 @@ def paperPlots():
     dust_C = 'p07c_cf00dust_res_conv_ns1_rad30pkpc' # one random projection per subhalo
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_rad30pkpc_all' # all projections shown
 
-    # figure 1, 1D color PDFs in six mstar bins (3x2)
-    if 1:
+    # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
+    if 0:
         sPs = [L75, L75FP] #[L75, L205]
         dust = dust_C_all
 
@@ -1098,35 +1210,36 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust])
         pdf.close()
 
-    # figure 2, 2x2 grid of different 2D color PDFs
+    # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
     if 0:
         sPs = [L75]
         dust = dust_C
 
-        pdf = PdfPages('figure_appendix4_%s.pdf' % dust)
+        pdf = PdfPages('figure2_appendix4_%s.pdf' % dust)
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
         pdf.close()
 
-    # figure 3: fullbox demonstratrion projections
-
-    # figure 4, stellar ages and metallicities vs mstar (2x1 in a row)
+    # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
     if 0:
         sPs = [L75, L205] # L75FP
         figsize_loc = [figsize[0]*2*0.9, figsize[1]*1*0.9] # orig * nCols_or_nRows * sizefac_clean
 
-        pdf = PdfPages('figure2.pdf')
+        pdf = PdfPages('figure3.pdf')
         fig = plt.figure(figsize=figsize_loc)
         plot.globalComp.stellarAges(sPs, pdf, centralsOnly=True, fig_subplot=[fig,121])
         plot.globalComp.massMetallicityStars(sPs, pdf, fig_subplot=[fig,122])
         pdf.close()
 
+    # figure 4: fullbox demonstratrion projections
+    if 0:
+        pass
 
-    # figure 5, grid of L205_cen 2d color histos vs. several properties (2x3 or 3x4)
+    # figure 5, grid of L205_cen 2d color histos vs. several properties (2x3)
     if 0:
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         params = {'bands':['g','r'], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
-        pdf = PdfPages('figure4.pdf')
+        pdf = PdfPages('figure5.pdf')
         fig = plt.figure(figsize=figsize_loc)
         quantHisto2D(L205, pdf, cQuant='ssfr', fig_subplot=[fig,321], **params)
         quantHisto2D(L205, pdf, cQuant='Z_gas', fig_subplot=[fig,322], **params)
@@ -1136,46 +1249,57 @@ def paperPlots():
         quantHisto2D(L205, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
         pdf.close()
 
-    # figure 5
-    if 0:
+    # figure 6: slice through 2d histo (one property)
+
+    # figure 7: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
+
+    # figure 8: flux arrows in color-mass plane
+    # TO FINALIZE: use a dual, (1)=arrows, (2)=stream with color=dcolor (add quant colorbar)
+    if 1:
         sP = L75
+        sP = simParams(res=1820,run='tng',redshift=0.0)
         dust = dust_C
-        toRedshift = 0.1
+        toRedshift = 0.5
         css = 'cen'
         minCount = 1
+        arrowMethod = 'stream' # arrow, stream, stream_interp, quiver, comp
 
-        pdf = PdfPages('figure5_%s_%s_%s_min=%d.pdf' % (sP.simName,css,dust,minCount))
-        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
-                             minCount=minCount, simColorsModel=dust)
-        pdf.close()
+        for css in ['cen']:#['cen','sat','all']:
+            pdf = PdfPages('figure5_%s_toz=%.1f_%s_%s_min=%d_%s.pdf' % \
+                (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+            colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+                                 minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
+            pdf.close()
 
-    # appendix figure 1, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
-    if 0:
-        figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
+    # figure 9: timescale histogram for color transition
 
-        pdf = PdfPages('figure3.pdf')
-        fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
-        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
-        quantHisto2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
-        pdf.close()
+    # figure 10: few N characteristic evolutionary tracks through color-mass 2d plane
 
+    # figure 11: stellar image stamps of galaxies (time evolution of above tracks)
 
-    # appendix figure 2, viewing angle variation (1 panel)
+    # figure Fig 12: double gaussian fits, [peak/scatter vs Mstar], red fraction (e.g. Baldry Figs. 5, 6, 8)
+
+    # figure Fig 13: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
+
+    # figure Fig 14: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
+
+    # figure Fig 15: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
+
+    # appendix figure 1, viewing angle variation (1 panel)
     if 0:
         viewingAngleVariation()
 
-    # appendix figure 3, dust model dependence (1x3 1D histos in a column)
+    # appendix figure 2, dust model dependence (1x3 1D histos in a column)
     if 0:
         sPs = [L75]
         dusts = [dust_C_all, dust_C, dust_B, dust_A]
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
-        pdf = PdfPages('figure_appendix2.pdf')
+        pdf = PdfPages('appendix2.pdf')
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts, stellarMassBins=massBins)
         pdf.close()
 
-    # appendix figure 4, resolution convergence (1x3 1D histos in a column)
+    # appendix figure 3, resolution convergence (1x3 1D histos in a column)
     if 0:
         L75n910 = simParams(res=910,run='tng',redshift=0.0)
         L75n455 = simParams(res=455,run='tng',redshift=0.0)
@@ -1183,8 +1307,19 @@ def paperPlots():
         dust = dust_C_all
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
-        pdf = PdfPages('figure_appendix3_%s.pdf' % dust)
+        pdf = PdfPages('appendix3_%s.pdf' % dust)
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
+        pdf.close()
+
+    # appendix figure 4, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
+    if 0:
+        figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
+
+        pdf = PdfPages('appendix4.pdf')
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
+        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
+        quantHisto2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
         pdf.close()
 
     # testing
