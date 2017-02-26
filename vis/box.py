@@ -21,7 +21,7 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, **kwargs):
     assert relCenPos is None or absCenPos is None
     
     if sP.subbox is None:
-        boxSizeImg = [sP.boxSize, sP.boxSize, sP.boxSize]
+        boxSizeImg = np.array([sP.boxSize, sP.boxSize, sP.boxSize])
 
         if absCenPos is None:
             boxCenter = [relCenPos[0],relCenPos[1],0.5] * np.array(boxSizeImg)
