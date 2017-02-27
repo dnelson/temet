@@ -808,7 +808,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         #grid = logZeroMin( grid )
         config['label']  = 'Shock Mach Number' # [log]'
         config['ctName'] = 'hot'
-        config['plawScale'] = 1.6
+        config['plawScale'] = 0.7
 
     # gas: pressures
     if partField in ['P_gas']:
@@ -1516,6 +1516,7 @@ def renderMultiPanel(panels, conf):
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
+            if 'plawScale' in p: plaw = p['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
@@ -1616,6 +1617,7 @@ def renderMultiPanel(panels, conf):
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
+            if 'plawScale' in p: plaw = p['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
