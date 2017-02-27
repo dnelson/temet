@@ -1012,8 +1012,8 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
 
                 # alternating color by row (in color)
                 c = '#555555' if j % 2 == 0 else '#77aa77'
-                p = FancyArrowPatch(posA=posA, posB=posB, arrowstyle=arrowstyle, 
-                                    alpha=arrowAlpha, color=c)
+                p = FancyArrowPatch(posA=posA, posB=posB, arrowstyle=arrowstyle,
+                                     alpha=arrowAlpha, color=c)
                 ax.add_artist(p)
 
     # (B): quiver

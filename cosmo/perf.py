@@ -160,6 +160,12 @@ def getCpuTxtLastTimestep(filePath):
         return 1.0, 876580, 4096
     if filePath == expanduser('~') + '/sims.illustris/L75n455FP/output/cpu.txt':
         return 1.0, 268961, 128
+    if filePath == expanduser('~') + '/sims.TNG/L75n1820TNG/output/cpu.txt':
+        return 1.0, 11316835, 10752
+    if filePath == expanduser('~') + '/sims.TNG/L205n2500TNG/output/cpu.txt':
+        return 1.0, 6203063, 24000
+    if filePath == expanduser('~') + '/sims.TNG/L35n2160TNG_halted/output/cpu.txt':
+        return 0.149494, 2737288, 16320
 
     lines = tail(filePath, 100)
     for line in lines.split('\n')[::-1]:
@@ -297,6 +303,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
         w = np.where( r['hatb'] > 0 )
 
         for key in r.keys():
+            if key == 'numCPUs': continue
             if r[key].ndim == 1:
                 r[key] = r[key][w]
             if r[key].ndim == 2:
@@ -319,18 +326,19 @@ def plotCpuTimes():
 
     # config
     sPs = []
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     sPs.append( simParams(res=1820, run='tng') )
-    sPs.append( simParams(res=910, run='illustris') )
-    sPs.append( simParams(res=910, run='tng') )
+    #sPs.append( simParams(res=910, run='illustris') )
+    #sPs.append( simParams(res=910, run='tng') )
     ##sPs.append( simParams(res=455, run='illustris') )
     ##sPs.append( simParams(res=455, run='tng') )
 
     sPs.append( simParams(res=2500, run='tng') )
-    sPs.append( simParams(res=1250, run='tng') )
-    sPs.append( simParams(res=625, run='tng') )
+    #sPs.append( simParams(res=1250, run='tng') )
+    #sPs.append( simParams(res=625, run='tng') )
 
     sPs.append( simParams(res=2160, run='tng') )
+    sPs.append( simParams(res=2160, run='tng', variant='halted') )
     #sPs.append( simParams(res=1080, run='tng') )
     #sPs.append( simParams(res=540, run='tng') )
 
@@ -398,7 +406,7 @@ def plotCpuTimes():
 
             # total time predictions for runs which aren't yet done
             if plotKey in ['total'] and xx.max() < 0.99: #ax.get_yscale() == 'log' and 
-                ax.set_ylim([1e-2,5])
+                ax.set_ylim([1e-2,100])
 
                 fac_delta = 0.02
                 xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
@@ -462,7 +470,7 @@ def plotCpuTimes():
     pdf.close()
 
     # if we don't make it here successfully the old pdf will not be corrupted
-    remove(fName2)
+    if isfile(fName2): remove(fName2)
     rename(fName1,fName2)
 
 def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
