@@ -223,6 +223,10 @@ class simParams:
                     dirStr = 'rTNG_method'
                     runStr = '_%s' % self.variant.zfill(4)
 
+                # L35 or L75 halted runs
+                if self.variant == 'halted':
+                    runStr = 'TNG_halted'
+
             # make paths and names
             bs = str(int(self.boxSize/1000.0))
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
@@ -241,7 +245,7 @@ class simParams:
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
                 if res in res_L205: resInd = len(res_L205) - res_L205.index(res)
 
-                self.simName = 'TNG%d-%d' % (boxSizeName,resInd)
+                self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
 
         # iClusters
         if run in ['iClusters']:
