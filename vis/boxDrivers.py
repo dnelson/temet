@@ -194,6 +194,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
+    # L75 configs
     dmMM  = [5.0, 8.5]
     gasMM = [4.3,7.3]
 
@@ -232,33 +233,43 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     if conf == 9:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_metals', 'valMinMax':[-1.0,2.5]} )
     if conf == 10: panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
     if conf == 11: panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
-    if conf == 12: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 5]} )
-    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[32, 38]} )
+    if conf == 12: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0.0, 1.5]} )
+    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 38.5]} ) # 38
     if conf == 14: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 1000]} )
     if conf == 15: panels.append( {'partType':'dm', 'partField':'velmag', 'valMinMax':[0, 1200]} )
 
     # testing metal vectors:
-    if conf == 16: panels.append( {'partType':'gas', 'partField':'metals_H', 'valMinMax':[3.0,6.0]})
-    if conf == 17: panels.append( {'partType':'gas', 'partField':'metals_He', 'valMinMax':[3.0,6.0]})
+    if conf == 16: panels.append( {'partType':'gas', 'partField':'metals_H', 'valMinMax':[7.0,10.5]})
+    if conf == 17: panels.append( {'partType':'gas', 'partField':'metals_He', 'valMinMax':[7.0,10.5]})
     if conf == 18: panels.append( {'partType':'gas', 'partField':'metals_C', 'valMinMax':[2.0,5.5]})
     if conf == 19: panels.append( {'partType':'gas', 'partField':'metals_N', 'valMinMax':[2.0,5.2]})
     if conf == 20: panels.append( {'partType':'gas', 'partField':'metals_O', 'valMinMax':[2.3,5.8]})
     if conf == 21: panels.append( {'partType':'gas', 'partField':'metals_Ne', 'valMinMax':[2.0,5.5]})
     if conf == 22: panels.append( {'partType':'gas', 'partField':'metals_Mg', 'valMinMax':[2.0,5.2]})
-    if conf == 23: panels.append( {'partType':'gas', 'partField':'metals_Si', 'valMinMax':[2.0,5.2]})
+    if conf == 23: panels.append( {'partType':'gas', 'partField':'metals_Si', 'valMinMax':[3.3,6.3]})
     if conf == 24: panels.append( {'partType':'gas', 'partField':'metals_Fe', 'valMinMax':[2.0,5.2]})
     if conf == 25: panels.append( {'partType':'gas', 'partField':'metals_SNIa', 'valMinMax':[2.0,5.5]})
     if conf == 26: panels.append( {'partType':'gas', 'partField':'metals_SNII', 'valMinMax':[2.0,5.5]})
     if conf == 27: panels.append( {'partType':'gas', 'partField':'metals_AGB', 'valMinMax':[2.0,5.5]})
-    if conf == 28: panels.append( {'partType':'gas', 'partField':'metals_NSNS', 'valMinMax':[2.0,5.5]})
+    if conf == 28: panels.append( {'partType':'gas', 'partField':'metals_NSNS', 'valMinMax':[0.0,2.0]})
     if conf == 29: panels.append( {'partType':'gas', 'partField':'metals_FeSNIa', 'valMinMax':[2.0,5.5]})
     if conf == 30: panels.append( {'partType':'gas', 'partField':'metals_FeSNII', 'valMinMax':[2.0,5.5]})
+    if conf == 31: panels.append( {'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
 
     # testing mip:
-    if conf == 31: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 100], 'method':'sphMap_maxIP'} )
-    if conf == 32: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,8.0], 'method':'sphMap_maxIP'})
-    if conf == 33: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
-    if conf == 34: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
+    if conf == 32: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 150], 'method':'sphMap_maxIP'} )
+    if conf == 33: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,8.0], 'method':'sphMap_maxIP'})
+    if conf == 34: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
+    if conf == 35: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
+
+    # thin slices may need different optimal bounds:
+    if thinSlice:
+        if conf == 0: panels[0]['valMinMax'] = [2.0, 5.0] # gas coldens_msunkpc2
+        if conf == 1: panels[0]['valMinMax'] = [2.6, 6.6] # dm coldens_msunkpc2
+        if conf == 5: panels[0]['valMinMax'] = [-9.0, 0.0]; panels[0]['plawScale'] = 0.6 # gas bmag_uG
+        if conf == 7: panels[0]['valMinMax'] = [3.3, 7.3]; panels[0]['plawScale'] = 1.8 # gas temp
+        if conf == 11: panels[0]['valMinMax'] = [28.5,37.0]; # gas xray_lum
+        if conf == 12: panels[0]['valMinMax'] = [0, 8]; panels[0]['plawScale'] = 1.6 # gas shocks_machnum
 
     run        = 'tng'
     redshift   = 0.0
