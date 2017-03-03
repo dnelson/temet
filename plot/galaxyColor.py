@@ -7,172 +7,24 @@ from builtins import *
 
 import numpy as np
 import h5py
-import pdb
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
-from os.path import isfile, isdir, expanduser
-from os import mkdir
-from glob import glob
 
 from util import simParams
-from util.helper import running_median, contourf, logZeroSafe, logZeroNaN, closest
-from cosmo.stellarPop import stellarPhotToSDSSColor, calcSDSSColors, loadSimGalColors
+from util.helper import running_median, contourf, logZeroSafe, logZeroNaN, closest, loadColorTable
+from tracer.tracerMC import match3
+from cosmo.galaxyColor import calcMstarColor2dKDE, calcColorEvoTracks, characterizeColorMassPlane, \
+   loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
-from cosmo.mergertree import loadMPBs
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from plot.config import *
-
-def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None, simColorsModel=None):
-    """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
-    if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
-    if sP is None:
-        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s_%d-%d_%d-%d.hdf5" % \
-          (''.join(bands),Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10)
-        dName = 'kde_obs'
-    else:
-        assert simColorsModel is not None
-        savePath = sP.derivPath + "/galMstarColor/"
-
-        if not isdir(savePath):
-            mkdir(savePath)
-
-        saveFilename = savePath + "galMstarColor_2dkde_%s_%s_%d_%d-%d_%d-%d.hdf5" % \
-          (''.join(bands),simColorsModel,sP.snap,
-            Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10)
-        dName = 'kde_sim'
-
-    # check existence
-    if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            xx = f['xx'][()]
-            yy = f['yy'][()]
-            kde_obs = f[dName][()]
-
-        return xx, yy, kde_obs
-
-    # calculate
-    print('Calculating new: [%s]...' % saveFilename)
-
-    vv = np.vstack( [gal_Mstar, gal_color] )
-    kde = gaussian_kde(vv)
-
-    xx, yy = np.mgrid[Mstar_range[0]:Mstar_range[1]:200j, mag_range[0]:mag_range[1]:400j]
-    xy = np.vstack( [xx.ravel(), yy.ravel()] )
-    kde2d = np.reshape( np.transpose(kde(xy)), xx.shape)
-
-    # save
-    with h5py.File(saveFilename,'w') as f:
-        f['xx'] = xx
-        f['yy'] = yy
-        f[dName] = kde2d
-    print('Saved: [%s]' % saveFilename)
-
-    return xx, yy, kde2d
-
-def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
-    """ Using already computed StellarPhot auxCat's at several snapshots, load the MPBs and 
-    re-organize the band magnitudes into tracks in time for each galaxy. Do for one band 
-    combination, saving only the color, while keeping all viewing angles. """
-    import warnings
-
-    savePath = sP.derivPath + "/auxCat/"
-
-    # how many computed StellarPhot auxCats already exist?
-    savedPaths = glob(savePath + "Subhalo_StellarPhot_%s_???.hdf5" % simColorsModel)
-    savedSnaps = sorted([int(path[-8:-5]) for path in savedPaths], reverse=True)
-    numSnaps = len( savedSnaps )
-
-    # check existence
-    saveFilename = savePath + "Subhalo_StellarPhotEvo_%s_%d-%d_%s.hdf5" % \
-      (''.join(bands),sP.snap,numSnaps,simColorsModel)
-
-    if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            colorEvo = f['colorEvo'][()]
-            shIDEvo = f['shIDEvo'][()]
-            subhaloIDs = f['subhaloIDs'][()]
-            savedSnaps = f['savedSnaps'][()]
-
-        return colorEvo, shIDEvo, subhaloIDs, savedSnaps
-
-    # compute new:
-    print('Found [%d] saved StellarPhot at snaps: %s.' % (numSnaps,', '.join([str(s) for s in savedSnaps])))
-
-    # load z=0 colors and identify subset of SubhaloIDs we will track
-    colors0, subhaloIDs = loadSimGalColors(sP, simColorsModel, bands=bands, projs='all')
-    gcH = groupCatHeader(sP)
-
-    if colors0.ndim > 1:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            colors0_mean = np.nanmean(colors0, axis=1)
-    else:
-        colors0_mean = colors0.copy()
-
-    assert colors0.shape[0] == gcH['Nsubgroups_Total'] == subhaloIDs.size
-    assert colors0_mean.ndim == 1
-
-    w = np.where( np.isfinite(colors0_mean) ) # keep subhalos with non-NaN colors
-
-    print(' calcColorEvoTracks: keep [%d] of [%d] subhalos.' % (len(w[0]),subhaloIDs.size))
-    subhaloIDs = subhaloIDs[w]
-
-    # allocate
-    numProjs = colors0.shape[1] if colors0.ndim > 1 else 1
-    colorEvo = np.zeros( (subhaloIDs.size,numProjs,numSnaps), dtype='float32' )
-    shIDEvo  = np.zeros( (subhaloIDs.size,numSnaps), dtype='int32' )
-
-    colorEvo.fill(np.nan)
-    shIDEvo.fill(-1)
-
-    # load MPBs of the subhalo selection
-    mpbs = loadMPBs(sP, subhaloIDs, fields=['SnapNum','SubfindID'])
-
-    # walk backwards through snapshots where we have computed StellarPhot data
-    origSnap = sP.snap
-
-    for i, snap in enumerate(savedSnaps):
-        sP.setSnap(snap)
-        print(' [%d] snap = %d' % (i,snap))
-
-        # load local colors
-        colors_loc, subhaloIDs_loc = loadSimGalColors(sP, simColorsModel, bands=bands, projs='all')
-
-        # loop over each z=0 subhalo
-        for j, subhaloID in enumerate(subhaloIDs):
-            # get progenitor SubfindID at this snapshot
-            if subhaloID not in mpbs:
-                continue # not tracked anywhere
-
-            snapInd = np.where( mpbs[subhaloID]['SnapNum'] == snap )[0]
-
-            if len(snapInd) == 0:
-                continue # not tracked to this snapshot
-
-            # map progenitor to its color at this snapshot, and save
-            subhaloID_loc = mpbs[subhaloID]['SubfindID'][snapInd]
-
-            colorEvo[j,:,i] = colors_loc[subhaloID_loc]
-            shIDEvo[j,i] = subhaloID_loc
-
-    sP.setSnap(origSnap)
-
-    # save
-    with h5py.File(saveFilename,'w') as f:
-        f['colorEvo'] = colorEvo
-        f['shIDEvo'] = shIDEvo
-        f['subhaloIDs'] = subhaloIDs
-        f['savedSnaps'] = savedSnaps
-    print('Saved: [%s]' % saveFilename.split(savePath)[1])
-
-    return colorEvo, shIDEvo, subhaloIDs, savedSnaps
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
                    simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None):
@@ -303,7 +155,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                 gc_masses = gc_masses[gc_inds]
 
                 # replicate galaxy selections by crossmatching original selection indices with replicated list
-                from tracer.tracerMC import match3
                 origSatSize = w_sat.size
                 origCenSize = w_cen.size
                 _, w_cen = match3(w_cen, gc_inds)
@@ -462,13 +313,13 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
     obs_color = '#000000'
     Mstar_range = [9.0, 12.0]
     #bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['i','z'] ] # use multiple of 2
-    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # use multiple of 2
+    bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ]
+    #bandCombos = [ ['u','i'], ['g','r'], ['r','z'], ['u','r'] ] 
 
     eCorrect = True # True, False (for sdss points)
     kCorrect = True # True, False (for sdss points)
 
-    sizefac = 1.3 if clean else 1.5
-    figsize = (16,9)
+    sizefac = 1.0/sfclean if clean else 1.5
 
     def _discreteReSampleMatched(obs_1dhist, sim_1dhist, nBinsDS):
         """ Apply a quasi inverse transform sampling method to draw a Mstar distribution
@@ -727,7 +578,7 @@ def viewingAngleVariation():
         modelC_colors[ac_demo], modelC_ids[ac_demo] = loadSimGalColors(sP, ac_demo, bands=bands, projs='all')
 
     # start plot
-    sizefac = 1.0 if not clean else 0.9
+    sizefac = 1.0 if not clean else sfclean
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
     ax = fig.add_subplot(111)
 
@@ -738,7 +589,7 @@ def viewingAngleVariation():
 
     ax.set_xlim(mag_range)
     ax.set_yscale('log')
-    ax.set_ylim([2,500])
+    ax.set_ylim([4,800])
     ax.set_xlabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
     ax.set_ylabel('PDF $\int=1$')
 
@@ -793,7 +644,7 @@ def viewingAngleVariation():
 
     # finish plot and save
     fig.tight_layout()
-    fig.savefig('figure_appendix1_viewing_angle_variation.pdf')
+    fig.savefig('appendix1_viewing_angle_variation.pdf')
     plt.close(fig)
 
 def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCount=None, 
@@ -865,7 +716,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     sim_xvals_from = sim_xvals[subhalo_ids]
 
     # central/satellite selection?
-    from tracer.tracerMC import match3
     wSelect_orig = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
     wSelect, _ = match3(subhalo_ids, wSelect_orig)
 
@@ -891,7 +741,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
 
     # start plot
     if fig_subplot[0] is None:
-        sizefac = 0.7 if clean else 1.0
+        sizefac = sfclean if clean else 1.0
         fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
         ax = fig.add_subplot(111, axisbg=color1)
     else:
@@ -1011,7 +861,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
                 #arrowstyle = 'simple, head_width=12, head_length=12, tail_width=4'
 
                 # alternating color by row (in color)
-                c = '#555555' if j % 2 == 0 else '#77aa77'
+                c = '#555555' if j % 2 == 0 else '#68af5a'
                 p = FancyArrowPatch(posA=posA, posB=posB, arrowstyle=arrowstyle,
                                      alpha=arrowAlpha, color=c)
                 ax.add_artist(p)
@@ -1023,21 +873,20 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
 
     # (C): draw streamlines using 2d vector field
     if arrowMethod in ['stream','comp']:
-        # do stream plot
-        ax.streamplot(xx, yy, delta_x.T, delta_y.T, 
-            density=[1.0,1.0], linewidth=2.0, arrowsize=1.4, color='black')
 
         # image gives stellar mass growth rate (e.g. dex/Gyr) or color change (e.g. mag/Gyr)
         #delta_mstar_dex_per_Gyr = delta_x.T / (sP.tage-ageTo)
         #delta_diag_per_Gyr = np.sqrt( delta_x**2.0 + delta_y**2.0 ).T / (sP.tage-ageTo)
         delta_mag_per_Gyr = delta_y.T / (sP.tage-ageTo)
 
+        cmap = loadColorTable('jet', plawScale=1.0, fracSubset=[0.15,0.95])
         img = ax.imshow(delta_mag_per_Gyr, extent=[xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]], 
-                        alpha=0.5, aspect='auto', origin='lower', interpolation='nearest', cmap='jet')
+                        alpha=1.0, aspect='auto', origin='lower', interpolation='nearest', cmap=cmap,
+                        vmin=-0.06, vmax=0.1)
 
         # colorbar
         cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(img, cax=cax)
+        cb = plt.colorbar(img, cax=cax, drawedges=False)
 
         color2 = 'black'
         clabel = 'Rate of (%s-%s) Evolution [ mag / Gyr ]' % (bands[0],bands[1])
@@ -1045,6 +894,14 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
         cb.outline.set_edgecolor(color2)
         cb.ax.yaxis.set_tick_params(color=color2)
         plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
+
+        # bugfix for alpha<1 striping in colorbar
+        #cb.solids.set_rasterized(True)
+        #cb.solids.set_edgecolor("face")
+
+        # do stream plot
+        ax.streamplot(xx, yy, delta_x.T, delta_y.T, 
+            density=[1.0,1.0], linewidth=2.0, arrowsize=1.4, color='black')
 
     # single box showing grid size
     if 0:
@@ -1054,7 +911,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
         box_y1 = yy[-1] - binSize_y/2
 
         ax.plot( [box_x0,box_x1,box_x1,box_x0,box_x0], [box_y0,box_y0,box_y1,box_y1,box_y0], ':', 
-            color='#000000', alpha=0.8)
+            color='#000000', alpha=0.6)
 
     # full box grid
     for i in range(nBins2D[0]):
@@ -1099,6 +956,88 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
                 (toRedshift,'-'.join(bands),simColorsModel,xQuant,cenSatSelect,minCount), 
                 facecolor=fig.get_facecolor())
         plt.close(fig)
+
+def colorTransitionTimescale(sP, cenSatSelect='cen', simColorsModel=defSimColorModel, pStyle='white'):
+    """ Plot the distribution of 'color transition' timescales (e.g. Delta_t_green). """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    # hard-coded config
+    bands = ['g','r']
+    mag_range = bandMagRange(bands, tight=True)
+
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+
+    xMinMax = [0,10] # Gyr
+    yMinMax = [0,1] # histo todo
+    xlabel = '$\Delta t$ [ Gyr ]'
+    ylabel = 'PDF $\int=1$'
+
+    # load/calculate evolution of simulation colors, cached in sP.data
+    if 'sim_colors_evo' in sP.data:
+        sim_colors_evo, shID_evo, subhalo_ids, snaps = \
+          sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['snaps']
+    else:
+        sim_colors_evo, shID_evo, subhalo_ids, snaps = \
+          calcColorEvoTracks(sP, bands=bands, simColorsModel=simColorsModel)
+        sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['snaps'] = \
+          sim_colors_evo, shID_evo, subhalo_ids, snaps
+
+    redshifts = snapNumToRedshift(sP, snaps)
+    ages = sP.units.redshiftToAgeFlat(redshifts)
+
+    # processing at every snapshot we have calculated colors
+    for snapInd, snap in enumerate(snaps):
+        print(snapInd, snap, redshifts[snapInd])
+
+        # load the corresponding mstar values at this snapshot
+        sP.setSnap(snap)
+        mstar2_log, _, xMinMax, _ = simSubhaloQuantity(sP, 'mstar2_log', clean)
+
+        # subhaloIDs in the color evo tracks (can index subhalos in groupcat at this snap)
+        colorSHIDs_thisSnap = shID_evo[:,snapInd]
+
+        # (A) two constant cuts for edges of red and blue populations
+
+        # (B) two constant cuts w/ redshift evolution
+
+        # (C) non-constant (e.g. linear or curvy) cut from literature?
+
+        # (D) edges of double-gaussian fits at this snapshot
+
+        import pdb; pdb.set_trace()
+
+    # two timescales:
+    #  (1) actual physical crossing from blue -> red
+    #  (2) statistical!!, e.g. frequency/fraction of galaxies which leave blue at each time
+    # for each, to define the measurement method requires the cut in the color-mass plane
+    #  #1 requires two cuts, upper and lower, while #2 requires one cut
+    # each cut should be a [optionally Mstar-dependent] (g-r) color value?
+    #  [redshift-dependent]!?
+    # check Schwinski, Trayford
+    # could use any obs (e.g. Baldry) cuts if they exist in (g-r)
+    # otherwise, adopt the general philosophy and define our own cuts by likewise fitting to the 
+    #  color distributions as a function of Mstar/redshift
+
+    import pdb; pdb.set_trace()
+
+    # start plot
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    ax = fig.add_subplot(111, axisbg=color1)
+
+    setAxisColors(ax, color2)
+
+    ax.set_xlim(xMinMax)
+    ax.set_ylim(yMinMax)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    # todo
+
+    # finish plot and save
+    fig.tight_layout()
+    fig.savefig('figure9_%s_%s_%s.pdf' % (sP.simName,cenSatSelect,simColorsModel))
+    plt.close(fig)
 
 def plots():
     """ Driver (exploration 2D histograms). """
@@ -1188,9 +1127,8 @@ def paperPlots():
     """ Construct all the final plots for the paper. """
     import plot.globalComp
     plot.globalComp.clean = True
-
-    global clean
-    clean = True
+    import plot.config
+    plot.config.clean = True
 
     L75   = simParams(res=1820,run='tng',redshift=0.0)
     L205  = simParams(res=2500,run='tng',redshift=0.0)
@@ -1206,7 +1144,7 @@ def paperPlots():
         sPs = [L75, L75FP] #[L75, L205]
         dust = dust_C_all
 
-        pdf = PdfPages('figure1_%s.pdf' % dust)
+        pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust])
         pdf.close()
 
@@ -1215,63 +1153,101 @@ def paperPlots():
         sPs = [L75]
         dust = dust_C
 
-        pdf = PdfPages('figure2_appendix4_%s.pdf' % dust)
+        pdf = PdfPages('figure2_%s_%s.pdf' % (sPs[0].simName,dust))
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust)
         pdf.close()
 
     # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
     if 0:
         sPs = [L75, L205] # L75FP
-        figsize_loc = [figsize[0]*2*0.9, figsize[1]*1*0.9] # orig * nCols_or_nRows * sizefac_clean
 
-        pdf = PdfPages('figure3.pdf')
-        fig = plt.figure(figsize=figsize_loc)
-        plot.globalComp.stellarAges(sPs, pdf, centralsOnly=True, fig_subplot=[fig,121])
-        plot.globalComp.massMetallicityStars(sPs, pdf, fig_subplot=[fig,122])
+        pdf = PdfPages('figure3a_stellarAges_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
+        plot.globalComp.stellarAges(sPs, pdf, centralsOnly=True)
+        pdf.close()
+        pdf = PdfPages('figure3b_massMetallicityStars_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
+        plot.globalComp.massMetallicityStars(sPs, pdf)
         pdf.close()
 
     # figure 4: fullbox demonstratrion projections
     if 0:
-        pass
+        # render each fullbox image used in the composite
+        for part in [0,1,2,3,4]:
+            vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
     # figure 5, grid of L205_cen 2d color histos vs. several properties (2x3)
     if 0:
+        sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         params = {'bands':['g','r'], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
-        pdf = PdfPages('figure5.pdf')
+        pdf = PdfPages('figure5_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(L205, pdf, cQuant='ssfr', fig_subplot=[fig,321], **params)
-        quantHisto2D(L205, pdf, cQuant='Z_gas', fig_subplot=[fig,322], **params)
-        quantHisto2D(L205, pdf, cQuant='fgas2', fig_subplot=[fig,323], **params)
-        quantHisto2D(L205, pdf, cQuant='stellarage', fig_subplot=[fig,324], **params)
-        quantHisto2D(L205, pdf, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
-        quantHisto2D(L205, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
+        quantHisto2D(sP, pdf, cQuant='ssfr', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, cQuant='Z_gas', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, cQuant='fgas2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, cQuant='stellarage', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
         pdf.close()
 
     # figure 6: slice through 2d histo (one property)
+    if 0:
+        sPs = [L75, L205]
+        xQuant = 'color'
+        xSpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
+        sQuant = 'mstar2_log'
+        sRange = [10.4,10.6]
+        css = 'cen'
+        quant = 'pratio_halo_masswt'
+
+        pdf = PdfPages('figure6_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
+            ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
+        quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[quant], sQuant=sQuant, 
+                     sRange=sRange, cenSatSelect=css)
+        pdf.close()
 
     # figure 7: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
+    if 0:
+        sPs = [L75, L205]
+        xQuant = 'mstar2_log'
+        yQuant = 'BH_CumEgy_ratio'
+        css = 'cen'
+
+        pdf = PdfPages('figure7_medianTrend_%s_%s-%s_%s.pdf' % \
+            ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
+        quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
+        pdf.close()    
 
     # figure 8: flux arrows in color-mass plane
-    # TO FINALIZE: use a dual, (1)=arrows, (2)=stream with color=dcolor (add quant colorbar)
-    if 1:
+    if 0:
         sP = L75
-        sP = simParams(res=1820,run='tng',redshift=0.0)
         dust = dust_C
-        toRedshift = 0.5
         css = 'cen'
         minCount = 1
-        arrowMethod = 'stream' # arrow, stream, stream_interp, quiver, comp
 
-        for css in ['cen']:#['cen','sat','all']:
-            pdf = PdfPages('figure5_%s_toz=%.1f_%s_%s_min=%d_%s.pdf' % \
-                (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-            colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
-                                 minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
-            pdf.close()
+        toRedshift = 0.5
+        arrowMethod = 'arrow'
+        pdf = PdfPages('figure8a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+            (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+                             minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
+        pdf.close()
+
+        toRedshift = 0.3
+        arrowMethod = 'stream'
+        pdf = PdfPages('figure8b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+            (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+                             minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
+        pdf.close()
 
     # figure 9: timescale histogram for color transition
+    if 1:
+        sP = L75
+        css = 'cen'
+        dust = dust_C
+
+        colorTransitionTimescale(sP, cenSatSelect=css, simColorsModel=dust)
 
     # figure 10: few N characteristic evolutionary tracks through color-mass 2d plane
 

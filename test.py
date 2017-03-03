@@ -391,7 +391,7 @@ def richardCutout():
 def compareOldNewMags():
     """ Compare stellar_photometrics and my new sdss subhalo mags, and BuserUconverted vs sdss_u. """
     sP = simParams(res=910, run='illustris', redshift=0.0)
-    from cosmo.stellarPop import stellarPhotToSDSSColor
+    from cosmo.galaxyColor import stellarPhotToSDSSColor
 
     bands = ['i','z']
 
@@ -424,7 +424,7 @@ def compareOldNewMags():
     plt.close(fig)
 
     # magnitudes
-    gfmBands = ['U','B','V','K','g','r','i','z']
+    from cosmo.galaxyColor import gfmBands
 
     if bands[0] == 'u':
         snap_mags = gcColorLoad['subhalos'][:,4] + (-1.0/0.2906) * \

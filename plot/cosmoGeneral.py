@@ -20,7 +20,7 @@ from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
-from cosmo.stellarPop import loadSimGalColors
+from cosmo.galaxyColor import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
 from plot.config import *
@@ -760,9 +760,7 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
         for text in l.get_texts(): text.set_color(color2)
 
     # contours?
-    if colorContours:
-        from plot.galaxyColor import calcMstarColor2dKDE
-        
+    if colorContours:        
         extent = [xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]]
         cLevels = [0.75,0.95]
         cAlphas = [0.5,0.8]
@@ -818,7 +816,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen',
     lw = 2.5
     ptPlotThresh = 2000
 
-    sizefac = 1.0 if not clean else 0.9
+    sizefac = 1.0 if not clean else sfclean
     if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
 
     # start plot
@@ -910,8 +908,12 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen',
         # legend
         if i == 0:
             handles, labels = ax.get_legend_handles_labels()
-            handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0])]
-            labelsO  = ['median, P[10,90]']
+            handlesO = []
+            labelsO = []
+
+            if not clean:
+                handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0])]
+                labelsO  = ['median, P[10,90]']
 
             legend = ax.legend(handles+handlesO, labels+labelsO, loc='best')
 
@@ -943,9 +945,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
     lw = 2.5
     ptPlotThresh = 2000
     nBins = 60
-    #cmap = loadColorTable('viridis') # plasma
+    legendLoc = 'best'
 
-    sizefac = 1.0 if not clean else 0.9
+    sizefac = 1.0 if not clean else sfclean
     if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
 
     # start plot
@@ -1022,13 +1024,49 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
             if sim_xvals.size >= ptPlotThresh:
                 ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
+        # special case: BH_CumEgy_ratio add theory curve on top from BH model
+        if clean and yQuant == 'BH_CumEgy_ratio':
+            # make a second y-axis on the right
+            color2 = '#999999'
+            chi0 = 0.002 # TNG fiducial model
+            beta = 2.0 # TNG fiducial model
+            chi_max = 0.1 # TNG fiducial model
+
+            ax.set_ylim([0.0,6.0])
+            ax2 = ax.twinx()
+            ax2.set_ylim([-0.002, 0.11])
+            #ax2.set_yscale('log')
+            ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
+            ax2.tick_params('y', which='both', colors=color2)
+
+            # need median M_BH as a function of x-axis (e.g. M_star)
+            sim_m_bh, _, _, take_log = simSubhaloQuantity(sP, 'M_BH_actual', clean)
+            sim_m_bh = sim_m_bh[wSelect][wFinite]
+            if not take_log: assert 0 # undo log then
+
+            xm_bh, ym_bh, _ = running_median(sim_xvals,sim_m_bh,binSize=binSize,skipZeros=True)
+            w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
+            xm_bh = xm_bh[w]
+            ym_bh = ym_bh[w]
+
+            # derive eddington ratio transition as a function of x-axis (e.g. M_star)
+            chi_bh = np.clip( chi0 * (ym_bh / 1e8)**beta, 0.0, chi_max )
+            ax2.plot( xm_bh, chi_bh, '-', lw=lw, color=color2)
+
+            ax.set_xlim(xMinMax) # fix
+            legendLoc = 'lower left'
+
         # legend
         if i == 0:
             handles, labels = ax.get_legend_handles_labels()
-            handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0])]
-            labelsO  = ['median, P[10,90]']
+            handlesO = []
+            labelsO = []
 
-            legend = ax.legend(handles+handlesO, labels+labelsO, loc='best')
+            if not clean:
+                handlesO = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[0])]
+                labelsO  = ['median, P[10,90]']
+
+            legend = ax.legend(handles+handlesO, labels+labelsO, loc=legendLoc)
 
     # finish plot and save
     finishFlag = False

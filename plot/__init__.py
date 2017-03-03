@@ -5,3 +5,4 @@ from . import galaxyColor
 from . import general
 from . import globalComp
 from . import sizes
+from config import *

@@ -1,5 +1,6 @@
 from . import auxcatalog
 from . import cloudy
+from . import galaxyColor
 from . import hydrogen
 from . import kCorr
 from . import load
