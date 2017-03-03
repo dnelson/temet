@@ -1154,19 +1154,45 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
     if 'plotHalos' in p and p['plotHalos'] > 0:
-        # plotting N most massive halos
+        # plotting N most massive halos in visible area
         h = groupCatHeader(p['sP'])
 
         if h['Ngroups_Total'] > 0:
             gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
 
-            for j in range(np.min( [p['plotHalos'], h['Ngroups_Total']] )):
-                xPos = gc['halos']['GroupPos'][j,p['axes'][0]]
-                yPos = gc['halos']['GroupPos'][j,p['axes'][1]]
-                rad  = gc['halos']['Group_R_Crit200'][j] * 1.0
+            countAdded = 0
+            gcInd = 0
+            while countAdded < p['plotHalos']:
+                xyzPos = gc['halos']['GroupPos'][gcInd,:]
+                xyzDist = xyzPos - p['boxCenter']
+                correctPeriodicDistVecs(xyzDist, p['sP'])
+                xyzDist = np.abs(xyzDist)
 
-                c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
-                ax.add_artist(c)
+                # in bounds?
+                if ( (xyzDist[0] <= p['boxSizeImg'][0]/2) & \
+                     (xyzDist[1] <= p['boxSizeImg'][1]/2) & \
+                     (xyzDist[2] <= p['boxSizeImg'][2]/2) ):
+                    # draw and count
+                    countAdded += 1
+
+                    xPos = gc['halos']['GroupPos'][gcInd,p['axes'][0]]
+                    yPos = gc['halos']['GroupPos'][gcInd,p['axes'][1]]
+                    rad  = gc['halos']['Group_R_Crit200'][gcInd] * 1.0
+
+                    # our plot coordinate system is true simulation coordinates, except without 
+                    # any periodicity, e.g. relative to boxCenter but restored (negatives or >boxSize ok)
+                    if xPos > p['extent'][1]: xPos -= p['boxSizeImg'][0]
+                    if yPos > p['extent'][3]: yPos -= p['boxSizeImg'][1]
+                    if xPos < p['extent'][0]: xPos += p['boxSizeImg'][0]
+                    if yPos < p['extent'][2]: yPos += p['boxSizeImg'][1]
+
+                    c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+                    ax.add_artist(c)
+
+                gcInd += 1
+                if gcInd >= h['Ngroups_Total']:
+                    print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,p['plotHalos']))
+                    break
 
     if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius
@@ -1209,9 +1235,10 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen >= 0.5 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen /= 10.0
 
-        # if scale bar is more than 1 Mpc, round to nearest 1 Mpc
-        if scaleBarLen >= 1000.0:
-            scaleBarLen = 1000.0 * np.round(scaleBarLen/1000.0)
+        # if scale bar is more than 1 Mpc (or 10Mpc), round to nearest 1 Mpc (or 10 Mpc)
+        for roundScale in [10000.0, 1000.0]:
+            if scaleBarLen >= roundScale:
+                scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
         cmStr = 'c' if p['sP'].redshift > 0.0 else ''
         unitStrs = [cmStr+'pc',cmStr+'kpc',cmStr+'Mpc',cmStr+'Gpc'] # comoving (drop 'c' if at z=0)
@@ -1661,7 +1688,7 @@ def renderMultiPanel(panels, conf):
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
-                                   rowHeight, 0.6, bottomNorm, 0.2)
+                                   rowHeight, 0.4, bottomNorm, 0.3)
             else:
                 # normal, offset to the left
                 addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 

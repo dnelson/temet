@@ -1,6 +1,6 @@
 """
-haloDrivers.py
-  Render specific halo visualizations.
+boxDrivers.py
+  Render specific fullbox visualizations.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -54,145 +54,8 @@ def realizations(conf=1):
 
     renderBox(panels, plotConfig, locals())
 
-def Illustris_1_subbox0_4x2_movie(curTask=0, numTasks=1):
-    """ Render a movie comparing several quantities of a single subbox. """
-    panels = []
-
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True} )
-    panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
-    panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2]} )
-    #panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1400]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
-
-    run     = 'tng' #'illustris'
-    variant = 'subbox0'
-    res     = 1820
-    method  = 'sphMap'
-    nPixels = 960
-    axes    = [0,1] # x,y
-
-    class plotConfig:
-        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
-        plotStyle = 'edged_black'
-        rasterPx  = 960
-        colorbars = True
-
-        # movie config
-        minZ      = 0.0
-        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
-        maxNSnaps = 2700 # 90 seconds at 30 fps
-
-    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
-
-def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
-    """ Render a movie comparing Illustris-1 and L75n1820TNG subbox0, one quantity side by side. """
-    panels = []
-
-    # subbox0:
-    #panels.append( {'run':'illustris', 'variant':'subbox0', 'zoomFac':0.99, 'labelScale':True} )
-    #panels.append( {'run':'tng',       'variant':'subbox0', 'zoomFac':0.99, 'labelZ':True} )
-    # subbox1:
-    panels.append( {'run':'illustris', 'variant':'subbox2', 'zoomFac':0.99, 'labelScale':True} )
-    panels.append( {'run':'tng',       'variant':'subbox1', 'zoomFac':0.99*(5.0/7.5), 'labelZ':True} )
-
-    if conf == 1:
-        hsmlFac = 2.5
-        partType = 'gas'
-        partField = 'coldens_msunkpc2'
-        valMinMax = [4.2,7.2]
-
-    res      = 1820
-    method   = 'sphMap'
-    nPixels  = 1920
-    labelSim = True
-    axes     = [0,1] # x,y
-
-    class plotConfig:
-        savePath  = '/home/extdylan/data/frames/comp_gasdens_sb1/'
-        plotStyle = 'edged_black'
-        rasterPx  = 1920
-        colorbars = True
-
-        # movie config
-        minZ      = 0.0
-        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
-        maxNSnaps = None
-
-    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
-
-def Illustris_vs_TNG_subbox0_4x2_movie(curTask=0, numTasks=1):
-    """ Render a movie comparing Illustris-1 (top) and L75n1820TNG subbox0 (bottom), 4 quantities per row. """
-    panels = []
-
-    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True, 'labelSim':True} )
-    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
-    panels.append( {'run':'illustris', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2]} )
-
-    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelSim':True} )
-    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
-    panels.append( {'run':'tng', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[3.2,8.2], 'labelZ':True} )
-
-    variant = 'subbox0'
-    res     = 1820
-    method  = 'sphMap'
-    nPixels = 960
-    axes    = [0,1] # x,y
-
-    class plotConfig:
-        savePath  = '/home/extdylan/data/frames/comp_4x2_sb0/'
-        plotStyle = 'edged_black'
-        rasterPx  = 960
-        colorbars = True
-
-        # movie config
-        minZ      = 0.0
-        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
-        maxNSnaps = None
-
-    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
-
-def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
-    """ Render a movie of a single quantity from multiple subboxes. """
-    panels = []
-
-    panels.append( {'variant':'subbox0', 'labelSim':True, 'labelScale':True} ) # upper left
-    panels.append( {'variant':'subbox1', 'labelSim':True} )                    # upper right
-    panels.append( {'variant':'subbox2', 'labelSim':True} )                    # lower left
-    panels.append( {'variant':'subbox3', 'labelSim':True, 'labelZ':True} )     # lower right
-
-    run       = 'illustris'
-    partType  = 'gas'
-    partField = 'density'
-    valMinMax = [-5.5, -2.0]
-    res       = 1820
-    nPixels   = 960
-    axes      = [0,1] # x,y
-    redshift  = 0.0
-
-    class plotConfig:
-        plotStyle    = 'edged_black'
-        rasterPx     = 960
-        colorbars    = True
-        saveFileBase = 'Illustris-1-4sb-gasDens'
-        saveFilename = 'out.png'
-
-        # movie config
-        minZ      = 0.0
-        maxZ      = 4.0
-        maxNSnaps = 30
-
-    renderBox(panels, plotConfig, locals())
-    #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
-
-def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
-    """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
-    panels = []
+def _TNGboxSliceConfig(res):
+    """ Get main slice config for presentation: slice depth, and center position. """
 
     # L75 configs
     dmMM  = [5.0, 8.5]
@@ -217,16 +80,28 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
         centerHaloID = 0 # fof
         nSlicesTot   = 1 # slice depth equal to a fifth, 35 Mpc/h = 52 Mpc
         curSlice     = 0 # offset slice along projection direction?
+
+        # adjust for deeper slice
+        dmMM[0] += 0.3 
+        gasMM[0] += 0.5
     if res in [128,256,512]:
         # L25 variants
         centerHaloID = None
+
+    return dmMM, gasMM, centerHaloID, nSlicesTot, curSlice
+
+def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
+    """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
+    panels = []
+
+    dmMM, gasMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
 
     if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
     if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
     if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2'} )
     if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
     if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
-    if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} ) # [-3.5,1.0] previously
+    if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
     if conf == 6:  panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,-0.2]} )
     if conf == 7:  panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,7.2]} )
     if conf == 8:  panels.append( {'partType':'gas', 'partField':'SN_IaII_ratio_Fe', 'valMinMax':[0.0,2.6]} )
@@ -234,33 +109,16 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     if conf == 10: panels.append( {'partType':'gas', 'partField':'SN_Ia_AGB_ratio_metals', 'valMinMax':[-0.48,0.06]} )
     if conf == 11: panels.append( {'partType':'gas', 'partField':'xray_lum', 'valMinMax':[29, 37.5]} )
     if conf == 12: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0.0, 1.5]} )
-    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 38.5]} ) # 38
+    if conf == 13: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 38.5]} )
     if conf == 14: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[100, 1000]} )
     if conf == 15: panels.append( {'partType':'dm', 'partField':'velmag', 'valMinMax':[0, 1200]} )
-
-    # testing metal vectors:
-    if conf == 16: panels.append( {'partType':'gas', 'partField':'metals_H', 'valMinMax':[7.0,10.5]})
-    if conf == 17: panels.append( {'partType':'gas', 'partField':'metals_He', 'valMinMax':[7.0,10.5]})
-    if conf == 18: panels.append( {'partType':'gas', 'partField':'metals_C', 'valMinMax':[2.0,5.5]})
-    if conf == 19: panels.append( {'partType':'gas', 'partField':'metals_N', 'valMinMax':[2.0,5.2]})
-    if conf == 20: panels.append( {'partType':'gas', 'partField':'metals_O', 'valMinMax':[2.3,5.8]})
-    if conf == 21: panels.append( {'partType':'gas', 'partField':'metals_Ne', 'valMinMax':[2.0,5.5]})
-    if conf == 22: panels.append( {'partType':'gas', 'partField':'metals_Mg', 'valMinMax':[2.0,5.2]})
-    if conf == 23: panels.append( {'partType':'gas', 'partField':'metals_Si', 'valMinMax':[3.3,6.3]})
-    if conf == 24: panels.append( {'partType':'gas', 'partField':'metals_Fe', 'valMinMax':[2.0,5.2]})
-    if conf == 25: panels.append( {'partType':'gas', 'partField':'metals_SNIa', 'valMinMax':[2.0,5.5]})
-    if conf == 26: panels.append( {'partType':'gas', 'partField':'metals_SNII', 'valMinMax':[2.0,5.5]})
-    if conf == 27: panels.append( {'partType':'gas', 'partField':'metals_AGB', 'valMinMax':[2.0,5.5]})
-    if conf == 28: panels.append( {'partType':'gas', 'partField':'metals_NSNS', 'valMinMax':[0.0,2.0]})
-    if conf == 29: panels.append( {'partType':'gas', 'partField':'metals_FeSNIa', 'valMinMax':[2.0,5.5]})
-    if conf == 30: panels.append( {'partType':'gas', 'partField':'metals_FeSNII', 'valMinMax':[2.0,5.5]})
-    if conf == 31: panels.append( {'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
+    if conf == 16: panels.append( {'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
 
     # testing mip:
-    if conf == 32: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 150], 'method':'sphMap_maxIP'} )
-    if conf == 33: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,8.0], 'method':'sphMap_maxIP'})
-    if conf == 34: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
-    if conf == 35: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
+    if conf == 17: panels.append( {'partType':'gas', 'partField':'shocks_machnum', 'valMinMax':[0, 150], 'method':'sphMap_maxIP'} )
+    if conf == 18: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,8.0], 'method':'sphMap_maxIP'})
+    if conf == 19: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
+    if conf == 20: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -309,10 +167,68 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = 2000 # 800, 2000, 8000
-        colorbars  = False
+        colorbars  = True
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def TNG_colorFlagshipBoxImage(part=0):
+    """ Create the parts of the fullbox demonstrate image for the galaxy colors L75/L205 flagship paper. """
+    panels = []
+
+    run        = 'tng'
+    redshift   = 0.0
+    nPixels    = 2000
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = True
+    labelSim   = False
+    plotHalos  = False
+    hsmlFac    = 2.5
+
+    # parts 0,1,2 = L205, parts 3,4 = L75
+    if part in [0,1,2]: res = 2500
+    if part in [3,4]: res = 1820
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    dmMM, gasMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
+    sliceFac  = (1.0/nSlicesTot)
+
+    if part == 0: # part 0: L205 gas dens
+        plotHalos = 50
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+
+    if part == 1: # part 1: L205 Bmag thinSlice
+        panels.append( {'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-9.0,-1.0]} ) # [-9.0,0.5]
+        sliceWidth = sP.units.physicalKpcToCodeLength(100.0)
+        sliceFac = sliceWidth / sP.boxSize
+
+    if part == 2: # part 2: L205 gas temp
+        panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,7.2]} )
+
+    if part == 3: # part 3: L75 gas dens
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+
+    if part == 4: # part 4: L75 dm dens
+        panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
+
+    # slice centering
+    relCenPos = None
+    
+    sliceStr = '_fof-%d_%dof%d' % (centerHaloID,curSlice,nSlicesTot)
+    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+    absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = 2000
+        colorbars  = True
+
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.pdf' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
 
     renderBox(panels, plotConfig, locals())
 
