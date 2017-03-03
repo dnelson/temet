@@ -14,7 +14,7 @@ from os.path import isfile
 
 import illustris_python as il
 from util import simParams
-from util.helper import loadColorTable, running_median, logZeroSafe
+from util.helper import loadColorTable, running_median, logZeroSafe, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 
@@ -115,7 +115,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     takeLog = True
 
     if quant in ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2']:
-        # variations
+        # stellar mass (variations)
         if 'mstar' in quant:
             partName = 'star'
             partLabel = '\star'
@@ -143,6 +143,34 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'M$_{\\rm \star}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+
+    if quant in ['mhalo_200','mhalo_200_log','mhalo_subfind','mhalo_subfind_log']:
+        # halo mass
+        if '_200' in quant:
+            # M200crit values, satellites given naN
+            gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+            vals = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit200'][gc['subhalos']] )
+
+            mask = np.zeros( gc['subhalos'].size, dtype='int16' )
+            mask[ gc['halos']['GroupFirstSub'] ] = 1
+            wSat = np.where(mask == 0)
+            vals[wSat] = np.nan
+
+            mTypeStr = '200,crit'
+
+        if '_subfind' in quant:
+            gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
+            vals = sP.units.codeMassToMsun( gc['subhalos'] )
+            mTypeStr = 'Subfind'
+
+        if '_log' in quant:
+            takeLog = False
+            vals = logZeroNaN(vals)
+            logStr = 'log '
+
+        minMax = [9.0, 15.0]
+        label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'M$_{\\rm sun}$ ]'
+        if clean: label = 'M$_{\\rm halo}$ [ '+logStr+'M$_{\\rm sun}$ ]'
 
     if quant in ['mass_ovi','mass_ovii']:
         # total OVI/OVII mass in subhalo

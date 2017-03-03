@@ -6,7 +6,9 @@ config.py
 sKn     = 5   # savgol smoothing kernel length (1=disabled)
 sKo     = 3   # savgol smoothing kernel poly order
 binSize = 0.2 # dex in stellar mass/halo mass for median lines
+
 figsize = (14,10) # (8,6)
+sfclean = 0.8     # sizefac to multiply figsize by if clean == True
 clean   = False  # make visually clean plots with less information
 
 linestyles = ['-',':','--','-.'] # typically for analysis variations per run

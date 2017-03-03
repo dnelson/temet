@@ -764,10 +764,12 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
 
     minNumStars = 1
     if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
+    if clean: from plot.config import figsize # do not override
 
     # plot setup
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -830,7 +832,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
         for i, acMetalField in enumerate(acMetalFields):
 
             iters = [0]
-            #if clean: iters = [0,1] # disabled
+            if clean: iters = [0,1] # add Guidi corrections
 
             for i_num in iters:
                 yy = logZeroSafe( ac[acMetalField][w] / sP.units.Z_solar )
@@ -850,10 +852,17 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
                 sm = savgol_filter(sm_i,sKn,sKo)
                 pm = savgol_filter(pm_i,sKn,sKo,axis=1) # P[10,90]
 
+                if i_num == 1:
+                    # only show Guidi correction for [restricted] applicable mass range
+                    ww = np.where( (xm >= 10.0) & (xm <= 11.1) )
+                    xm = xm[ww]
+                    ym = ym[ww]
+
                 label = sP.simName if (i == 0 and i_num == 0) else ''
                 ax.plot(xm[:-1], ym[:-1], linestyles[i+i_num*2], color=c, lw=3.0, label=label)
 
-                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+                if i_num == 0:
+                    ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
 
         # metallicities from groupcat, measured within what radius?                    
         for i, metalField in enumerate(metalFields):
@@ -883,8 +892,9 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
                   'Z$_{\\rm stars}$ (r < 2r$_{1/2})$',
                   'Z$_{\\rm stars}$ (r < r$_{\\rm max})$']
     else:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
-        lExtra = ['Guidi+ (2016) Correction'] 
+        pass
+        #sExtra = [plt.Line2D( (0,1), (0,0), color='black', lw=3.0, marker='', linestyle=linestyles[2])]
+        #lExtra = ['Guidi+ (2016) Correction'] 
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
@@ -1523,10 +1533,12 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
 
     minNumStars = 1
     if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
+    if clean: from plot.config import figsize # do not override
 
     # plot setup
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -1593,7 +1605,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
         for i, ageType in enumerate(ageTypes):
 
             iters = [0]
-            #if clean: iters = [0,1] # disabled
+            if clean: iters = [0,1] # show Guidi correction
 
             for i_num in iters:
                 yy = ac[ageType][w]
@@ -1612,10 +1624,16 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
                 sm = savgol_filter(sm_i,sKn,sKo)
                 pm = savgol_filter(pm_i,sKn,sKo,axis=1)
 
+                if i_num == 1:
+                    # only show Guidi correction for [restricted] applicable mass range
+                    ww = np.where( (xm >= 10.0) & (xm <= 11.0) )
+                    xm = xm[ww]
+                    ym = ym[ww]
+
                 label = sP.simName if (i == 0 and i_num == 0) else ''
                 ax.plot(xm[:-1], ym[:-1], linestyles[i+2*i_num], color=c, lw=3.0, label=label)
 
-                if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0: # P[10,90]
+                if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0 and i_num == 0: # P[10,90]
                     ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
 
     # legend
