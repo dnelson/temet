@@ -334,13 +334,14 @@ def trapsum(xin,yin):
 
 # --- vis ---
 
-def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None):
+def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None):
     """ Load a custom or built-in color table specified by ctName.
       valMinMax: required for some custom colormaps, and for some adjustments.
       plawScale: return the colormap modified as cmap_new = cmap_old**plawScale
       cmapCenterVal: return the colormap modified such that its middle point lands at 
         the numerical value cmapCenterVal, given the bounds valMinMax (e.g. zero, 
         for any symmetric colormap, say for positive/negative radial velocities)
+      fracSubset: a 2-tuple in [0,1] e.g. [0.2,0.8] to use only part of the original colormap range
     """
     if ctName is None: return None
 
@@ -536,6 +537,11 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None):
         center_rel = np.abs(cmapCenterVal - valMinMax[0]) / np.abs(valMinMax[1] - valMinMax[0])
         plaw_index = np.log(center_rel) / np.log(0.5)
         cmap = _plawScale(cmap, plaw_index)
+
+    if fracSubset is not None:
+        cmap = LinearSegmentedColormap.from_list(
+          'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=fracSubset[0], b=fracSubset[1]),
+          cmap(np.linspace(fracSubset[0], fracSubset[1], 512)) )
 
     return cmap
 
