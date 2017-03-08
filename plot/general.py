@@ -777,21 +777,22 @@ def plotPhaseSpace2D(yAxis):
     fig.savefig('phase_%s_z=%.1f_%s_%s.pdf' % (sP.simName,sP.redshift,yAxis,hStr))
     plt.close(fig)
 
-def plotRadialProfile1D(quant='Potential'):
+def plotRadialProfile1D(quant='entr'):
     """ Quick radial profile of some quantity vs. radius (FoF restricted). """
-    sP = simParams(res=2160, run='tng', redshift=6.0)
-    haloID = 0
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+    haloID = 4
 
     nBins = 200
-    valMinMax = [-3.0,2.5]
+    radMinMax = [-1.0,3.0] # log(pKpc)
 
     # start plot
-    fig = plt.figure(figsize=(16,9))
+    fig = plt.figure(figsize=(14,10))
     ax = fig.add_subplot(111)
 
     ax.set_title('%s z=%.1f halo%d' % (sP.simName,sP.redshift,haloID))
-    ax.set_xlabel('Radius [ log pkpc ]')
-    ax.set_xlim(valMinMax)
+    ax.set_xlabel('Radius [ pKpc ]')
+    ax.set_xlim(10.0**np.array(radMinMax))
+    ax.set_xscale('log')
 
     # load
     halo = groupCatSingle(sP, haloID=haloID)
@@ -828,19 +829,25 @@ def plotRadialProfile1D(quant='Potential'):
         ax.set_ylabel('Star Formation Rate [ Msun/yr ]')
         ax.set_yscale('log')
 
+    if quant == 'entr':
+        yvals = snapshotSubset(sP, 'gas', 'entr', haloID=haloID)
+        yvals = 10.0**yvals / sP.units.boltzmann_keV # [K cm^2] -> [keV cm^2]
+        ax.set_ylabel('Entropy [ log keV cm$^2$ ]')
+        ax.set_yscale('log')
+
     # plot radial profile of quant
     yy_mean = np.zeros( nBins, dtype='float32' ) + np.nan
     yy_med  = np.zeros( nBins, dtype='float32' ) + np.nan
     xx      = np.zeros( nBins, dtype='float32' )
 
-    binSize = (valMinMax[1]-valMinMax[0])/nBins
+    binSize = (radMinMax[1]-radMinMax[0])/nBins
 
     for i in range(nBins):
-        binStart = valMinMax[0] + i*binSize
-        binEnd   = valMinMax[0] + (i+1)*binSize
+        binStart = radMinMax[0] + i*binSize
+        binEnd   = radMinMax[0] + (i+1)*binSize
 
         ww = np.where((rad >= binStart) & (rad < binEnd))
-        xx[i] = (binStart+binEnd)/2.0
+        xx[i] = 10.0**( (binStart+binEnd)/2.0 )
 
         if len(ww[0]) > 0:
             yy_mean[i] = np.mean(yvals[ww])
