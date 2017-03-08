@@ -357,6 +357,8 @@ def plotCpuTimes():
     fName2 = expanduser('~') + '/plots/cpu_tng.pdf'
     pdf = PdfPages(fName1)
 
+    print(' -- run: %s --' % datetime.now().strftime('%d %B, %Y'))
+
     for plotKey in plotKeys:
         fig = plt.figure(figsize=(14,8))
 
@@ -455,7 +457,10 @@ def plotCpuTimes():
 
         # second legend for predictions
         if len(pLabels) > 0:
-            loc = 'upper left'
+            pLabels.append( '(Last Updated: %s)' % datetime.now().strftime('%d %B, %Y'))
+            pColors.append( plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-') )
+
+            loc = 'upper right'
             if ax.get_yscale() == 'log': loc = 'lower left'
             legend2 = ax.legend(pColors, pLabels, loc=loc)
             ax.add_artist(legend2)
