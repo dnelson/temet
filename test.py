@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 import glob
 import pdb
-from os import path
+from os import path, mkdir
 from datetime import datetime
 import matplotlib.pyplot as plt
 
@@ -17,6 +17,54 @@ import cosmo
 from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
+
+def makeSnapSubsetsForMergerTrees():
+    """ Copy snapshot chunks reducing to needed fields for tree calculation. """
+    nChunks = 600
+    nSnaps  = 100
+    copyFields = {'PartType0':['Masses','StarFormationRate','ParticleIDs'],
+                  'PartType1':['ParticleIDs'],
+                  'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
+
+    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/data/sims.TNG/L205n2500TNG_temp/output/snapdir_%03d/'
+    fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
+    fileTo   = pathTo + 'snap_%03d.%s.hdf5'
+
+    # verify number of chunks
+    files = glob.glob(fileFrom % (0,0,'*'))
+    assert len(files) == nChunks
+
+    # loop over snapshots
+    for i in range(0,10):
+        if not path.isdir(pathTo % i):
+            mkdir(pathTo % i)
+
+        # loop over chunks
+        for j in range(nChunks):
+            # open destination for writing
+            fOut = h5py.File(fileTo % (i,i,j), 'w')
+
+            # open origin file for reading
+            assert path.isfile(fileFrom % (i,i,j))
+
+            with h5py.File(fileFrom % (i,i,j),'r') as f:
+                # copy header
+                g = fOut.create_group('Header')
+                for attr in f['Header'].attrs:
+                    fOut['Header'].attrs[attr] = f['Header'].attrs[attr]
+                # loop over partTypes
+                for gName in copyFields.keys():
+                    # skip if not in origin
+                    if gName not in f:
+                        continue
+                    # copy fields for this partType
+                    g = fOut.create_group(gName)
+                    for dName in copyFields[gName]:
+                        g[dName] = f[gName][dName][()]
+
+            fOut.close()
+            print('%s' % fileTo % (i,i,j))
 
 def makeSdssSpecObjIDhdf5():
     """ Transform some CSV files into a HDF5 for SDSS objid -> specobjid mapping. """
