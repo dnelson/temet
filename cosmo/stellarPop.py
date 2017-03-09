@@ -273,7 +273,7 @@ class sps():
         self.data  = {} # band magnitudes
         self.spec  = {} # spectra
         self.order = order # bicubic interpolation by default (1 = bilinear)
-        self.bands = fsps.find_filter('') # do them all (138)
+        self.bands = fsps.find_filter('') # do them all (138, now 143)
 
         self.dust = dustModel.split("_")[0]
         self.dustModel = dustModel
@@ -282,7 +282,8 @@ class sps():
 
         # no saved table? compute now
         if not isfile(saveFilename):
-            print(' Computing new stellarPhotTable: [iso=%s imf=%s dust=%s]...' % (iso,imf,dustModel))
+            print(' Computing new stellarPhotTable: [iso=%s imf=%s dust=%s bands=%d]...' % \
+                (iso,imf,dustModel,len(self.bands)))
             self.computePhotTable(iso, imf, saveFilename)
 
         # load
@@ -543,7 +544,7 @@ class sps():
         self.wave_ang = self.wave * 10.0
 
         for band in self.bands:
-            if 'suprimecam' in band:
+            if 'suprimecam' in band or 'ps1_' in band:
                 continue # missing transmission data
 
             f = fsps.get_filter(band)

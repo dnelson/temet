@@ -574,12 +574,17 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
 
     return val
 
-def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False):
+def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubhalos=False):
     """ For a list of subhalo IDs, return a dictionary with an entry for each partType, 
     whose value is a 2-tuple of the particle index range bounding the members of the 
     parent groups of this list of subhalo IDs. Indices are inclusive in the sense of 
     cosmo.load.snapshotSubset(). If groups==True, then the input IDs are assumed to be 
-    actually group (FoF) IDs, and we return bounding ranges for them."""
+    actually group (FoF) IDs, and we return bounding ranges for them. If strictSubhalos==True, 
+    then do not use parent groups to bound subhalo members, instead return exact bounding 
+    index ranges. """
+    if strictSubhalos: assert not groups
+    if groups: assert not strictSubhalos #  mutually exclusive
+
     first_sub = subhaloIDs[0]
     last_sub = subhaloIDs[-1]
 
@@ -603,13 +608,35 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False):
         last_sub_groupID = last_sub
 
     # load group offsets
-    offsets_pt = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+    snapOffsets = cosmo.load.groupCatOffsetListIntoSnap(sP)
+    offsets_pt = snapOffsets['snapOffsetsGroup']
+
+    if strictSubhalos:
+        # use subhalo offsets instead
+        offsets_pt = snapOffsets['snapOffsetsSubhalo']
+
+        # and change *_sub_groupID to actually be our subhalo IDs
+        first_sub_groupID = first_sub
+        last_sub_groupID = last_sub
+
+        # load length of last subhalo
+        last_sub_length = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloLenType']
 
     r = {}
     for ptName in ['gas','dm','stars','bhs']:
+        # bound upper range using the start of the next group/subhalo, minus one
         r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], sP.ptNum(ptName) ]
-        # the final index should be included when using this range, as in snapshotSubset(), but not as in numpy indexing
+        # the final index is inclusive, as in snapshotSubset(), but not as in numpy indexing
         r[ptName][1] -= 1
+
+        if strictSubhalos:
+            # need to use the end of the final subhalo, instead of the beginning of the one after, 
+            # as they are not necessarily contiguous (if they span across groups)
+            # also solves the issue of using the very last subhalo of the catalog
+            r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID], sP.ptNum(ptName) ]
+            r[ptName][1] += last_sub_length[ sP.ptNum(ptName) ] - 1
+
+        assert r[ptName][1] >= 0 # otherwise indicates we read the last/unused element of offsets_pt
 
     return r
 

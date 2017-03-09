@@ -550,15 +550,20 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
 
     return r, attrs
 
-def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True, sizes=False):
+def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True, 
+                       sizes=False, indivStarMags=False):
     """ Compute the total band-magnitudes (or instead half-light radii if sizes==True), per subhalo, 
     under the given assumption of an iso(chrone) model, imf model, dust model, and radial restrction. 
-    If using a dust model, include multiple projection directions per subhalo. """
+    If using a dust model, include multiple projection directions per subhalo. If indivStarMags==True, 
+    then save the magnitudes for every Pt4 (wind->NaN) in all subhalos. """
     from cosmo.stellarPop import sps
     from healpy.pixelfunc import nside2npix, pix2vec
     from cosmo.hydrogen import hydrogenMass
     from vis.common import rotationMatrixFromVec, rotateCoordinateArray, momentOfInertiaTensor, \
       rotationMatricesFromInertiaTensor, meanAngMomVector
+
+    if sizes: assert not indivStarMags
+    if indivStarMags: assert not sizes
 
     def _findHalfLightRadius(rad,mags):
         """ Helper function, linearly interpolate in rr (squared radii) to find the half light 
@@ -611,6 +616,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     bands += ['des_y']
     bands += ['jwst_f150w']
 
+    if indivStarMags: bands = ['sdss_r']
+
     nBands = len(bands)
 
     # which projections?
@@ -637,6 +644,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 projVecs = np.zeros( (nProj-1,3), dtype='float32' ) # derive per subhalo
                 efrDirs = True
                 assert sizes is True
+            elif Nside == 'z-axis':
+                nProj = 1
+                projVecs = np.array( [0,0,1], dtype='float32' )
             elif Nside == None:
                 pass # no 2D radii
             else:
@@ -646,12 +656,14 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     pop = sps(sP, iso, imf, dust)
 
     # prepare catalog metadata
-    if sizes:
-        desc = "Stellar half light radii (code units) by subhalo"
-    else:
-        desc = "Stellar light emission (total magnitudes) by subhalo"
+    desc = "Stellar light emission (total magnitudes) by subhalo"
+    if sizes: desc = "Stellar half light radii (code units) by subhalo"
+    if indivStarMags: desc = "Star particle individual magnitudes"
     desc  += ", in multiple rest-frame bands."
-    select = "All Subfind subhalos (numProjectionsPer = %d)." % nProj
+
+    select = "All Subfind subhalos"
+    if indivStarMags: select = "All PartType4 particles in all subhalos"
+    select += " (numProjectionsPer = %d)." % nProj
 
     # load group information
     gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType','SubhaloPos'])
@@ -707,12 +719,36 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
     nSubsDo = len(subhaloIDsTodo)
-
-    r = np.zeros( (nSubsDo, nBands, nProj), dtype='float32' )
-    r.fill(np.nan)
+    partInds = -1
 
     print(' Total # Subhalos: %d, processing [%d] in [%d] bands and [%d] projections...' % \
         (nSubsTot,nSubsDo,nBands,nProj))
+
+    if indivStarMags:
+        # make subhalo-strict bounding index range and compute number of PT4 particles we will do
+        indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo, strictSubhalos=True)
+
+        nPt4Tot = cosmo.load.snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
+        nPt4Do = indRange['stars'][1] - indRange['stars'][0] + 1
+
+        # full Pt4 size
+        if pSplit is None: nPt4Do = nPt4Tot
+        if pSplit is not None and pSplit[0] == pSplit[1] - 1:
+            nPt4Do = nPt4Tot - indRange['stars'][0]
+
+        # allocate for individual particles
+        r = np.zeros( (nPt4Do, nBands, nProj), dtype='float32' )
+
+        # store global (snapshot) indices of particles we process
+        partInds = np.arange(indRange['stars'][0], nPt4Do+indRange['stars'][0], dtype='int64')
+        assert partInds.size == nPt4Do
+        print(' Total # PT4 particles: %d, processing [%d] now, range [%d - %d]...' % \
+            (nPt4Tot,nPt4Do,indRange['stars'][0],indRange['stars'][0]+nPt4Do))
+    else:
+        # allocate one save per subhalo
+        r = np.zeros( (nSubsDo, nBands, nProj), dtype='float32' )
+        
+    r.fill(np.nan)
 
     # radial restriction
     if rad is not None and isinstance(rad, float):
@@ -769,14 +805,18 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                 magsLocal = mags[i0:i1][wValid] # wind particles still here, and have NaN
 
-                if not sizes:
+                if not sizes and not indivStarMags:
                     # convert mags to luminosities, sum together
                     totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
 
                     # convert back to a magnitude in this band
                     if totalLum > 0.0:
                         r[i,bandNum,0] = -2.5 * np.log10( totalLum )
-                else:
+                elif indivStarMags:
+                    # save raw magnitudes per particle (wind/outside subhalo entries left at NaN)
+                    saveInds = np.arange(i0, i1)
+                    r[saveInds[wValid],bandNum,0] = magsLocal
+                elif sizes:
                     # require at least 2 stars for size calculation
                     if len(wValid[0]) < 2:
                         continue
@@ -988,6 +1028,17 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                             # get interpolated 3D half light radius
                             r[i,bandNum,projNum] = _findHalfLightRadius(rrLocal,magsLocal[band])
 
+                elif indivStarMags:
+                    # compute attenuated stellar luminosity for each star particle in each band
+                    magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun,
+                                                        ret_indiv=True)
+
+                    saveInds = np.arange(i0, i1)
+                    # loop over each requested band within this projection
+                    for bandNum, band in enumerate(bands):
+                        # save raw magnitudes per particle (wind/outside subhalos left at NaN)
+                        r[saveInds[wValid],bandNum,projNum] = magsLocal[band]
+
                 else:
                     # compute total attenuated stellar luminosity in each band
                     magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun)
@@ -1001,7 +1052,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
              'Selection'   : select.encode('ascii'),
              'bands'       : [b.encode('ascii') for b in bands],
              'dust'        : dust.encode('ascii'),
-             'subhaloIDs'  : subhaloIDsTodo}
+             'subhaloIDs'  : subhaloIDsTodo,
+             'partInds'    : partInds}
 
     if '_res' in dust:
         attrs['nProj'] = nProj
@@ -1009,7 +1061,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         attrs['projVecs'] = projVecs
         attrs['modelH'] = modelH
 
-    r = np.squeeze(r) # remove nProj dimension if unity
+    r = np.squeeze(r) # remove nProj and/or nBands dimensions if unity
 
     return r, attrs
 
@@ -1630,6 +1682,13 @@ fieldComputeFunctionMapping = \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),
+
+   'Particle_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none', indivStarMags=True),
+   'Particle_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00', indivStarMags=True),
+   'Particle_StellarPhot_p07c_cf00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', indivStarMags=True, Nside='z-axis'),
 
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
    'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),

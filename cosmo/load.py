@@ -50,6 +50,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                 # specified chunk exists, do all exist? check and record sizes
                 allExist = True
                 allCount = 0
+                allCountPart = 0
 
                 for i in range(pSplit[1]):
                     auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
@@ -60,10 +61,21 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                     # record counts and dataset shape
                     with h5py.File(auxCatPathSplit_i,'r') as f:
                         allCount += f['subhaloIDs'].size
+                        if 'partInds' in f: allCountPart += f['partInds'].size
                         allShape = f[field].shape
 
                 if allExist:
                     # all chunks exist, concatenate them now and continue
+                    catIndFieldName = 'subhaloIDs'
+
+                    if allCountPart > 0:
+                        # can relax this if we ever do Particle* auxCat with pts other than stars:
+                        assert allCountPart == snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
+                        
+                        # proceed with 1-per-particle based concatenation, then 'subhaloIDs' = 'partInds'
+                        allCount = allCountPart
+                        catIndFieldName = 'partInds'
+
                     allShape = np.array(allShape)
                     allShape[0] = allCount # size
                     offset = 0
@@ -81,8 +93,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                         auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
 
                         with h5py.File(auxCatPathSplit_i,'r') as f:
-                            length = f['subhaloIDs'].size
-                            subhaloIDs[offset : offset+length] = f['subhaloIDs'][()]
+                            length = f[catIndFieldName].size
+                            subhaloIDs[offset : offset+length] = f[catIndFieldName][()]
 
                             if f[field].ndim == 1:
                                 new_r[subhaloIDs[offset : offset+length]] = f[field][()]
@@ -104,7 +116,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                     assert not isfile(auxCatPath)
                     with h5py.File(auxCatPath,'w') as f:
                         f.create_dataset(field, data=new_r)
-                        f.create_dataset('subhaloIDs', data=subhaloIDs)
+                        if catIndFieldName == 'subhaloIDs':
+                            f.create_dataset(catIndFieldName, data=subhaloIDs)
                         for attrName, attrValue in attrs.iteritems():
                             f[field].attrs[attrName] = attrValue
 
@@ -133,9 +146,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                 for attr in f[field].attrs:
                     r[field+'_attrs'][attr] = f[field].attrs[attr]
 
-                # load subhaloIDs if present
+                # load subhaloIDs, partInds if present
                 if 'subhaloIDs' in f:
                     r['subhaloIDs'] = f['subhaloIDs'][()]
+                if 'partInds' in f:
+                    r['partInds'] = f['partInds'][()]
 
             continue
 
@@ -167,8 +182,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
             f[field].attrs['CreatedBy']   = getpass.getuser()
             
             for attrName, attrValue in attrs.iteritems():
-                if attrName == 'subhaloIDs':
-                    f.create_dataset('subhaloIDs', data=r[field+'_attrs']['subhaloIDs'])
+                if attrName in ['subhaloIDs','partInds']:
+                    f.create_dataset(attrName, data=r[field+'_attrs'][attrName])
                     continue # typically too large to store as an attribute
                 f[field].attrs[attrName] = attrValue
                     
@@ -548,16 +563,16 @@ def groupCatOffsetListIntoSnap(sP):
 def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
                    mdi=None, sq=True, haloSubset=False):
-    """ For a given snapshot load only one field for one particle type
+    """ For a given snapshot load one or more field(s) for one particle type
           partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
-          fields   = e.g. ['ParticleIDs','Coordinates',...]
+          fields   = e.g. ['ParticleIDs','Coordinates','temp',...]
 
-          the following four optional, but at most one can be specified:
+          the following four arguments are optional, but at most one can be specified:
             * inds      : known indices requested, optimize the load
             * indRange  : same, but specify only min and max indices (inclusive)
             * haloID    : if input, load particles only of the specified fof halo
             * subhaloID : if input, load particles only of the specified subalo
-          mdi : multi-dimensional index slice load
+          mdi : multi-dimensional index slice load (only used in recursive calls, don't input directly)
           sq  : squeeze single field return into a numpy array instead of within a dict
           haloSubset : return particle subset of only those in all FoF halos (no outer fuzz)
     """
@@ -572,6 +587,8 @@ def snapshotSubset(sP, partType, fields,
         raise Exception("Cannot specify both haloID and subhaloID.")
     if ((haloID is not None) or (subhaloID is not None)) and not sP.groupOrdered:
         raise Exception("Not yet implemented (group/halo load in non-groupordered).")
+    if indRange is not None:
+        assert indRange[0] >= 0 and indRange[1] >= indRange[0]
     if haloSubset and (not sP.groupOrdered or (haloID is not None) or \
         (subhaloID is not None) or (inds is not None) or (indRange is not None)):
         raise Exception("haloSubset only for groupordered snapshots, and not with halo/subhalo subset.")
