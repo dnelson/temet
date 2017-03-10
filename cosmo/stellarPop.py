@@ -258,8 +258,9 @@ class sps():
     basePath = expanduser("~") + '/code/fsps.run/'
 
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
-    isoTracks  = ['padova07'] # basti,geneva,mist,parsec (cannot easily dynamically change at present)
-    dustModels = ['none','bc00','cf00','bc00_res_eff','bc00_res_conv','cf00_res_eff','cf00_res_conv']
+    isoTracks  = ['mist','padova07','parsec','basti','geneva']
+    stellarLib = ['miles','basel','csk'] # unused
+    dustModels = ['none','cf00','cf00_res_eff','cf00_res_conv']
 
     def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
@@ -273,7 +274,8 @@ class sps():
         self.data  = {} # band magnitudes
         self.spec  = {} # spectra
         self.order = order # bicubic interpolation by default (1 = bilinear)
-        self.bands = fsps.find_filter('') # do them all (138, now 143)
+        self.bands = fsps.find_filter('') # do them all (138, now 143 with ps1*)
+        #self.bands = [b for b in self.bands if 'ps1_' not in b] # exclude new 5 ps1* bands (for now)
 
         self.dust = dustModel.split("_")[0]
         self.dustModel = dustModel
@@ -284,6 +286,7 @@ class sps():
         if not isfile(saveFilename):
             print(' Computing new stellarPhotTable: [iso=%s imf=%s dust=%s bands=%d]...' % \
                 (iso,imf,dustModel,len(self.bands)))
+            print(' MAKE SURE sps_vars.f90 HAS iso=%s! THIS IS NOT VERIFIED HEREIN.' % iso)
             self.computePhotTable(iso, imf, saveFilename)
 
         # load
@@ -349,6 +352,9 @@ class sps():
                                      dust_index = dust_index,
                                      dust_tesc = dust_tesc,
                                      dust1_index = dust1_index)
+
+        assert pop.libraries[1] == 'miles' 
+        assert pop.libraries[0] == 'pdva' # padova07, otherwise generalize this
 
         # different tracks are available at discrete metallicities (linear mass_Z/mass_tot, not in solar!)
         # (unused)
