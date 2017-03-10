@@ -7,17 +7,18 @@ from builtins import *
 
 import numpy as np
 import h5py
-import pdb
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from glob import glob
+from scipy.optimize import leastsq
 
-from util import simParams
 from util.loadExtern import loadSDSSData
 from cosmo.kCorr import kCorrections, coeff
 from cosmo.load import groupCat, groupCatHeader, auxCat
-from cosmo.util import correctPeriodicDistVecs
+from cosmo.util import correctPeriodicDistVecs, cenSatSubhaloIndices
 from cosmo.mergertree import loadMPBs
+from plot.config import defSimColorModel
+from plot.general import bandMagRange
 
 # currently same for all sims, otherwise move into sP:
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
@@ -294,32 +295,10 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
 
     return colorEvo, shIDEvo, subhaloIDs, savedSnaps
 
-def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='cen', simColorsModel=defSimColorModel):
-    """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
-    location, extent, relative numbers, for sP at sP.snap. """
-    assert cenSatSelect in ['all', 'cen', 'sat']
-
-    mag_range = bandMagRange(bands, tight=True)
-
-    # let us also achieve all the analysis necessary for figures 12-15 here at the same time
-
-    binSizeMass = 0.1
-    binSizeColor = 0.05
-
-    # load colors
-    gc_colors, _ = loadSimGalColors(sP, simColorsModel[:-4], bands=bands, projs='all')
-    #gc_colors = np.reshape( gc_colors, gc_colors.shape[0]*gc_colors.shape[1] )
-
-    # load stellar masses
-    # do this normally!!!
-    mstar2_log, _, xMinMax, _ = simSubhaloQuantity(sP, 'mstar2_log', clean)
-    import pdb; pdb.set_trace()
-
-    nBinsMass = np.ceil((xMinMax[1]-xMinMax[0])/binSizeMass)
-
-    # (A) double gaussian fits in 0.1 dex mstar bins, unconstrained (unrelated)
-    # Levenberg-Marquadrt non-linear least squares minimization method
-    from scipy.optimize import leastsq
+def _fitCMPlaneDoubleGaussian(masses, colors, xMinMax, mag_range):
+    """ Return the parameters of a full fit to objects in the (color-mass) plane. A double gaussian 
+    is fit to each mass bin, histogramming in color, both bin sizes fixed herein. The centers and 
+    widths of the Gaussians may be optionally constrained as inputs (todo). """
 
     def double_gaussian(x, params):
         """ Additive double gaussian function used for fitting. """
@@ -331,22 +310,152 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='cen', simColor
 
     def double_gaussian_error(params, x, y):
         y_fit = double_gaussian(x, params)
-        return y_fit - y    
+        return y_fit - y
+
+    # config
+    binSizeMass = 0.15
+    binSizeColor = 0.05
+
+    nBinsMass = int(np.ceil((xMinMax[1]-xMinMax[0])/binSizeMass))
+
+    nParams = 6
+    p = np.zeros( (nParams,nBinsMass), dtype='float32' )
+    m = np.zeros( nBinsMass, dtype='float32' )
 
     for i in range(nBinsMass):
         # select in this mass bin
         minMass = xMinMax[0] + binSizeMass * i
         maxMass = xMinMax[0] + binSizeMass * (i+1)
 
+        wMassBin = np.where( (masses > minMass) & (masses <= maxMass) )
+
+        if len(wMassBin[0]) == 0:
+            print('Warning: empty mass bin.')
+
+        colors_data = np.ravel( colors[wMassBin,:] ) # flatten into 1D
+
         # have to histogram (or 1D-KDE) them, to get a (x_data,y_data) point set
-        nBins = (mag_range[1]-mag_range[0]) / binSizeColor
+        nBins = int( (mag_range[1]-mag_range[0]) / binSizeColor )
+
         y_data, x_data = np.histogram(colors_data, range=mag_range, bins=nBins, density=True)
-        import pdb; pdb.set_trace()
-        # initial guess for (A1, mu1, sigma1, A2, mu2, sigma2)
-        params_guess = []
+        x_data = x_data[:-1] + binSizeColor/2.0
+
+        if 1:
+            print('Debug, fake test data!')
+            x_data = np.linspace( mag_range[0], mag_range[1], 100 )
+            p0 = [0.5, 0.3+0.02*i, 0.2, 2.0, 0.8, 0.1]
+            y_data = double_gaussian(x_data, p0)
+            y_data += np.random.normal(loc=0.0, scale=p0[0]*0.05, size=x_data.size)
+
+        # initial guess for (A1, mu1, sigma1, A2, mu2, sigma2) (1=blue, 2=red)
+        params_guess = [1.0, 0.25, 0.5, 1.0, 0.75, 0.5]
 
         # run fit
-        params_best, params_cov = leastsq(double_gaussian_error, params_guess, args=(x_data,y_data))
+        params_best, params_cov, info, errmsg, retcode = \
+          leastsq(double_gaussian_error, params_guess, args=(x_data,y_data), full_output=True)
+
+        # sigma_i can fit negative since this is symmetric in the fit function...
+        params_best[2] = np.abs(params_best[2])
+        params_best[5] = np.abs(params_best[5])
+
+        # estimate errors (unused)
+        params_stddev = np.zeros( len(params_best), dtype='float32' )
+
+        if params_cov is not None:
+            # reduced chi^2 (i.e. residual variance)
+            chi2 = np.sum(double_gaussian_error(params_best, x_data, y_data)**2.0)
+            reduced_chi2 = chi2 / (y_data.size - len(params_best))
+
+            # incorporate into fractional covariance matrix
+            params_cov *= reduced_chi2
+
+            # square root of diagonal elements estimates stddev of each parameter
+            for j in range(len(params_best)):
+                params_stddev[j] = np.abs(np.sqrt( params_cov[j][j] ))
+
+        # save
+        m[i] = minMass
+        p[:,i] = params_best
+
+        #print(minMass,params_best)
 
         # the integral of y_data is unity, so we probably have normalized Gaussians such that
         # A_i = 1.0/(sigma_i*np.sqrt(2*np.pi)) is constrained and not a free parameter?
+
+    return p, m, binSizeMass, binSizeColor
+
+def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel):
+    """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
+    location, extent, relative numbers, for sP at sP.snap. """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    # let us also achieve all the analysis necessary for figures 12-15 here at the same time
+    mag_range = bandMagRange(bands, tight=False)
+    xMinMax = [9.0, 12.0]
+
+    # check existence
+    r = {}
+
+    savePath = sP.derivPath + "/galMstarColor/"
+    saveFilename = savePath + "colorMassPlaneFits_%s_%d_%s_%s.hdf5" % \
+      (''.join(bands),sP.snap,cenSatSelect,simColorsModel)
+
+    if 0 and isfile(saveFilename): # load currently disabled
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # load colors
+    gc_colors, _ = loadSimGalColors(sP, simColorsModel, bands=bands, projs='all')
+    #gc_colors = np.reshape( gc_colors, gc_colors.shape[0]*gc_colors.shape[1] )
+
+    # load stellar masses (<2rhalf definition)
+    gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+    mstar2_log = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+
+    # cen/sat selection
+    wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    gc_colors = gc_colors[wSelect,:]
+    mstar2_log = mstar2_log[wSelect]
+
+    # (A) double gaussian fits in 0.1 dex mstar bins, unconstrained (unrelated)
+    # Levenberg-Marquadrt non-linear least squares minimization method
+    r['A_params'], r['A_mstar'], r['binSizeMass'], r['binSizeColor'] = \
+      _fitCMPlaneDoubleGaussian(mstar2_log, gc_colors, xMinMax, mag_range)
+
+    # (B) double gaussian fits in 0.1 dex mstar bins, with widths and centers constrained by the 
+    # T() function as in Baldry+ 2003, iterative fit (LM-LSF for each step)
+    def T(x, params):
+        (p0, p1, q0, q1, q2) = params
+        y = p0 + p1 * x + q0 * np.tanh( (x-q1)/q2 )
+        return y
+
+    for iter in range(4):
+        # fit double gaussians, all mass bins
+        p, m, _, _ = _fitCMPlaneDoubleGaussian(mstar2_log, gc_colors, xMinMax, mag_range)
+
+        # force edge bins to extrapolation (only blue params at high mass end needed?)
+
+        # fit T(sigma)
+
+        # re-fit double gaussians with fixed sigma
+
+        # fit T(mu)
+
+        # calculate change of both T() versus previous iteration
+
+    # re-fit double gaussians with fixed sigma and mu from final T() functions
+
+    # (C) double gaussian fits in 0.1 dex mstar bins, with widths and centers constrained by the 
+    # T() function as in Baldry+ 2003, global MCMC fit to all the parameters simultaneously
+    # five for each T() function, plus 2 amplitudes per mass bin (=30x2+10=70!)
+
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        for key in r:
+            f[key] = r[key]
+    print('Saved: [%s]' % saveFilename.split(savePath)[1])
+
+    return r

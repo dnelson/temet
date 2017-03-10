@@ -1039,6 +1039,150 @@ def colorTransitionTimescale(sP, cenSatSelect='cen', simColorsModel=defSimColorM
     fig.savefig('figure9_%s_%s_%s.pdf' % (sP.simName,cenSatSelect,simColorsModel))
     plt.close(fig)
 
+def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel, pStyle='white'):
+    """ Plot double gaussian fits in the color-mass plane with different methods. """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+
+    mag_range = [-0.5, 1.5] #bandMagRange(bands, tight=False)
+    yMinMax   = [0.0,3.0]
+    mMinMax   = [9.0, 12.0] # log Mstar
+    sMinMax   = [0.0, 0.5] # sigma
+
+    lw = 2.5
+    xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
+    ylabel = 'PDF' 
+    mlabel = '%.2f < M$_{\\rm \star}$ < %.2f'
+    sizefac = 1.0 if not clean else sfclean
+
+    # load
+    fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
+                                      simColorsModel=simColorsModel)
+
+    # (A) start plot, debugging double gaussians (two plots of 10 panels each to cover 20 bins)
+    nCols = 2 * 0.6
+    nRows = 5 * 0.6 # 0.6=visual adjust fac
+
+    for iterNum in [0,1]:
+        fig = plt.figure(figsize=(figsize[0]*nCols*sizefac,figsize[1]*nRows*sizefac),facecolor=color1)
+
+        #import cosmo.galaxyColor.double_gaussian as modelFunc
+        xx = np.linspace(mag_range[0], mag_range[1], 100)
+
+        # load results for a particular method, including the model
+        method = 'A'
+        masses = fits['%s_mstar' % method]
+        params = fits['%s_params' % method]
+
+        for i, mass in enumerate(masses[iterNum::2]):
+            ax = fig.add_subplot(5,2,i+1, axisbg=color1)
+
+            setAxisColors(ax, color2)
+            ax.set_xlim(mag_range)
+            ax.set_ylim(yMinMax)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
+            (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+
+            y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
+            y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+
+            ax.plot(xx,y1,'-',color='blue',alpha=0.8,lw=lw,label=mlabel % (mass,mass+fits['binSizeMass']))
+            ax.plot(xx,y2,'-',color='red',alpha=0.8,lw=lw)
+        
+            ax.legend(loc='best')
+
+        # finish plot and save
+        fig.tight_layout()
+        fig.savefig('colorMassPlaneFits%d_%s_%s_%s_%s.pdf' % \
+            (iterNum,sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
+        plt.close(fig)
+
+    # (B,C,D) start plot, sigma/mu/A vs Mstar
+    for iterNum in [0,1,2]:
+        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+
+        ax = fig.add_subplot(111, axisbg=color1)
+
+        setAxisColors(ax, color2)
+        ax.set_xlim(mMinMax)
+        ax.set_xlabel('M$_{\star}$ [ log M$_{\\rm sun}$ ]')
+
+        if iterNum == 0:
+            ax.set_ylabel('$\sigma$ [standard deviation (%s-%s)]' % (bands[0],bands[1]))
+            saveStr = 'Sigma'
+            ax.set_ylim([0.0,0.4])
+        if iterNum == 1:
+            ax.set_ylabel('$\mu$ [mean (%s-%s) peak location]' % (bands[0],bands[1]))
+            saveStr = 'Mu'
+            ax.set_ylim(mag_range)
+        if iterNum == 2:
+            ax.set_ylabel('$A$ [peak amplitude (%s-%s)]' % (bands[0],bands[1]))
+            saveStr = 'A'
+            ax.set_ylim([0.0,3.0])
+
+        # load results for a particular method, including the model
+        method = 'A'
+        masses = fits['%s_mstar' % method]
+        params = fits['%s_params' % method]
+
+        val_red  = np.zeros( masses.size, dtype='float32' )
+        val_blue = np.zeros( masses.size, dtype='float32' )
+
+        for i in range(len(masses)):
+            (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+
+            if iterNum == 0:
+                val_blue[i] = sigma1
+                val_red[i] = sigma2
+            if iterNum == 1:
+                val_blue[i] = mu1
+                val_red[i] = mu2
+            if iterNum == 2:
+                val_blue[i] = A1
+                val_red[i] = A2
+
+        ax.plot(masses,val_blue,'-',color='blue',alpha=0.8,lw=lw)
+        ax.plot(masses,val_red,'-',color='red',alpha=0.8,lw=lw)
+            
+        # finish plot and save
+        fig.tight_layout()
+        fig.savefig('colorMassPlane-%s_%s_%s_%s_%s.pdf' % \
+            (saveStr,sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
+        plt.close(fig)
+
+    # (E) start plot, red fraction (ratio of areas/heights?)
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+
+    ax = fig.add_subplot(111, axisbg=color1)
+
+    setAxisColors(ax, color2)
+    ax.set_xlim(mMinMax)
+    ax.set_xlabel('M$_{\star}$ [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('Red Fraction [in (%s-%s) double Gaussian fit]' % (bands[0],bands[1]))
+    ax.set_ylim([0.0,1.0])
+
+    # load results for a particular method, including the model
+    method = 'A'
+    masses = fits['%s_mstar' % method]
+    params = fits['%s_params' % method]
+
+    fraction_red = np.zeros( masses.size, dtype='float32' )
+
+    for i in range(len(masses)):
+        (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+        fraction_red[i] = (A2*sigma2) / (A1*sigma1) # area = A*sigma*sqrt(2pi)
+
+    ax.plot(masses,fraction_red,'-',alpha=0.8,lw=lw)
+        
+    # finish plot and save
+    fig.tight_layout()
+    fig.savefig('colorMassPlane-RedFrac_%s_%s_%s_%s.pdf' % \
+        (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
+    plt.close(fig)
+
 def plots():
     """ Driver (exploration 2D histograms). """
     sPs = []

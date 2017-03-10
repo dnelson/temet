@@ -20,7 +20,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def makeSnapSubsetsForMergerTrees():
     """ Copy snapshot chunks reducing to needed fields for tree calculation. """
-    nChunks = 600
     nSnaps  = 100
     copyFields = {'PartType0':['Masses','StarFormationRate','ParticleIDs'],
                   'PartType1':['ParticleIDs'],
@@ -31,12 +30,16 @@ def makeSnapSubsetsForMergerTrees():
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
+    # L205 config
+    nChunks = 600
+    if '_DM' in pathFrom: nChunks = 75
+
     # verify number of chunks
     files = glob.glob(fileFrom % (0,0,'*'))
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(0,10):
+    for i in range(29,31):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 

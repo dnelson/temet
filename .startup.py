@@ -14,10 +14,10 @@ import h5py
 import illustris_python as il
 
 # dnelson
-import vis
 import cosmo
 import plot
 import tracer
 import util
 import obs
+import vis
 from util import simParams
