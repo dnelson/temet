@@ -87,6 +87,8 @@ def _TNGboxSliceConfig(res):
     if res in [128,256,512]:
         # L25 variants
         centerHaloID = None
+        nSlicesTot = None
+        curSlice = None
 
     return dmMM, gasMM, centerHaloID, nSlicesTot, curSlice
 
