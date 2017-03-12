@@ -7,7 +7,9 @@ from builtins import *
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.dates import DateFormatter
 from datetime import datetime
+from os.path import isfile, isdir, expanduser
 
 def plotUsersData():
     """ Parse and plot a user data dump from the Illustris public data release website. """
@@ -38,9 +40,6 @@ def plotUsersData():
                         names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=50)
     
     # plot
-    import matplotlib.pyplot as plt
-    from matplotlib.dates import DateFormatter
-    
     tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
                  (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
                  (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),
@@ -88,3 +87,93 @@ def plotUsersData():
     
     fig.savefig('out.pdf')
     
+def plotCpuTimeEstimates():
+    """ Read the log file produced by plotCpuTimes() and plot the 'predicted' total CPUhs 
+    and finish date of a run versus the date on which that prediction was made. """
+    fName1 = expanduser('~') + '/plots/cpu_estimated.pdf'
+    fName2 = expanduser('~') + '/lsf/crontab/cpu_tng.log'
+    runName = "TNG50-1"
+
+    lw = 2.0
+    date_fmt = '%d %B, %Y'
+    xlim_dates = [datetime.strptime(d,date_fmt) for d in ['01 February, 2017', '01 July, 2017']]
+    ylim_dates = [datetime.strptime(d,date_fmt) for d in ['01 June, 2017', '01 March, 2018']]
+    start_date = datetime.strptime('21 February, 2017',date_fmt)
+
+    dates = []
+    cpuhs = []
+    finish_dates = []
+
+    # load and parse
+    readNextAsPredict = False
+    iterUntilNextDate = True
+
+    f = open(fName2,'r')
+    lines = f.readlines()
+
+    for line in lines:
+        line = line.strip()
+
+        # daily run header
+        if line[0:7] == '-- run:':
+            date = line.split("run: ")[1].split(" --")[0].replace("Feb","February")
+            date = datetime.strptime(date, date_fmt)
+            dates.append(date)
+            iterUntilNextDate = False
+
+        if iterUntilNextDate:
+            continue
+
+        if line[0:len(runName)+9] == '%s [total]:' % runName:
+            readNextAsPredict = True
+            continue
+
+        # e.g. "Predicted total time: 104.8 million CPUhs (21 November, 2017)" after "TNG50-1 [total]:*" line
+        if readNextAsPredict:
+            assert line[0:21] == 'Predicted total time:'
+            cpuh = float(line.split("time: ")[1].split(" ")[0])
+            finish_date = line.split("(")[1].split(")")[0]
+            finish_date = datetime.strptime(finish_date, date_fmt)
+            cpuhs.append(cpuh)
+            finish_dates.append(finish_date)
+            readNextAsPredict = False
+            iterUntilNextDate = True
+
+    f.close()
+
+    # start plot
+    fig = plt.figure(figsize=(16,14))
+    # (A)
+    ax = fig.add_subplot(211)
+    
+    ax.set_xlim(xlim_dates)
+    ax.set_ylim([20,140])
+    #ax.set_yscale('log')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Estimated Total CPU time [Mh]')
+
+    ax.plot_date([start_date,start_date],[30,130],':',lw=lw,color='black')
+
+    ax.plot_date(dates, cpuhs, 'o-', lw=lw, label=runName)
+    ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
+    ax.legend()
+    fig.autofmt_xdate()
+
+    # (B)
+    ax = fig.add_subplot(212)
+    ax.set_xlim(xlim_dates)
+    ax.set_ylim(ylim_dates)
+    ax.set_xlabel('Prediction Date')
+    ax.set_ylabel('Estimated Completion Date')
+
+    #ax.plot_date([start_date,start_date],[ylim_dates[0],ylim_dates[1]],':',lw=lw,color='black')
+    ax.plot_date(dates, finish_dates, 'o-', lw=lw, label=runName)
+    ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
+    ax.yaxis.set_major_formatter(DateFormatter('%b %Y'))
+    ax.legend()
+    fig.autofmt_xdate()
+
+    fig.tight_layout()
+    fig.savefig(fName1)
+    plt.close(fig)
+
