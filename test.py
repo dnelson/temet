@@ -39,7 +39,7 @@ def makeSnapSubsetsForMergerTrees():
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(29,31):
+    for i in range(31,40):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 
