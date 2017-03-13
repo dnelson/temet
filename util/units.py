@@ -38,7 +38,6 @@ class units(object):
     hydrogen_massfrac = 0.76            # XH (solar)
     helium_massfrac   = 0.24            # Y (solar)
     mu                = 0.6             # for ionized primordial (e.g. hot halo gas)
-    HubbleParam       = 0.7             # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
     Gravity           = 6.673e-8        # G in cgs, cm**3/g/s**2
     H0_kmsMpc         = 70.0            # km/s/Mpc
     H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km)
@@ -74,6 +73,7 @@ class units(object):
     pc_in_cm    = 3.085680e18
     Mpc_in_cm   = 3.085680e24
     kpc_in_km   = 3.085680e16
+    arcsec_in_rad = 4.84814e-6 # 1 arcsecond / radian
 
     # derived unit conversions
     kmS_in_kpcYr  = None
@@ -99,7 +99,7 @@ class units(object):
         self.UnitTime_in_yr      = self.UnitTime_in_s / self.s_in_yr
 
         # derived constants (in code units)
-        self.H0 = self.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm) / \
+        self.H0 = self._sP.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm) / \
                    self.UnitVelocity_in_cm_per_s * self.UnitLength_in_cm
         self.G  = self.Gravity / self.UnitLength_in_cm**3.0 * self.UnitMass_in_g * self.UnitTime_in_s**2.0
 
@@ -178,7 +178,7 @@ class units(object):
 
         Delta_c = 18*np.pi**2 + 82*(omega_m_z-1.0) - 39*(omega_m_z-1.0)**2.0
 
-        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*self.HubbleParam)**(2.0/3.0) * \
+        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*self._sP.HubbleParam)**(2.0/3.0) * \
                         (self._sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
                         (1.0 + self._sP.redshift)/10.0 # K
              
@@ -246,7 +246,7 @@ class units(object):
         """ Convert magnetic field 3-vector (for cells) into Gauss, input b is PartType0/MagneticField. """
         UnitMagneticField_in_cgs = np.float32( np.sqrt(self.UnitPressure_in_cgs) )
 
-        b_gauss = b * self.HubbleParam # remove little h factor
+        b_gauss = b * self._sP.HubbleParam # remove little h factor
         b_gauss /= self.scalefac**2.0 # convert 'comoving' into physical
 
         b_gauss *= UnitMagneticField_in_cgs # [Gauss] = [g^(1/2) * cm^(-1/2) * s^(-1)]
@@ -364,7 +364,7 @@ class units(object):
         if numDens and not cgs:
             raise Exception('Odd choice.')
 
-        dens_phys = dens.astype('float32') * self.HubbleParam**2 / self.scalefac**3
+        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3
 
         if cgs:
             dens_phys *= self.UnitDensity_in_cgs
@@ -388,7 +388,7 @@ class units(object):
             raise Exception("Invalid combination.")
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
-        colDensPhys = colDens.astype('float32') * self.HubbleParam / self.scalefac**2.0
+        colDensPhys = colDens.astype('float32') * self._sP.HubbleParam / self.scalefac**2.0
 
         if cgs:
             UnitColumnDensity_in_cgs = self.UnitMass_in_g / self.UnitLength_in_cm**2.0
@@ -400,7 +400,7 @@ class units(object):
             colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
         if totKpc2:
             # non-mass quantity input as numerator, assume it did not have an h factor
-            colDensPhys *= self.HubbleParam
+            colDensPhys *= self._sP.HubbleParam
             colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys
@@ -443,7 +443,7 @@ class units(object):
         """ Convert code units (du/dt) to erg/s/g (cgs). """
         coolrate_cgs = coolrate.astype('float32')
         coolrate_cgs *= self.UnitEnergy_in_cgs * self.UnitTime_in_s**(-1.0) * \
-                       self.UnitMass_in_g**(-1.0) * self.HubbleParam
+                       self.UnitMass_in_g**(-1.0) * self._sP.HubbleParam
 
         return coolrate_cgs
 
@@ -511,7 +511,7 @@ class units(object):
         a3inv = 1.0 / self.scalefac**3.0
 
         # cosmological and unit system conversions
-        dens_phys = dens.astype('float32') * self.HubbleParam**2.0 # remove all little h factors
+        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2.0 # remove all little h factors
 
         # pressure in [K/cm^3]
         pressure = u.astype('float32')
@@ -532,7 +532,7 @@ class units(object):
 
         a3inv = 1.0 / self.scalefac**3.0
 
-        dens_phys = dens.astype('float32') * self.HubbleParam**2.0 # remove all little h factors
+        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2.0 # remove all little h factors
 
         pressure = u.astype('float32') * ( dens_phys.astype('float32') * a3inv )
         pressure *= (self.gamma-1.0)
@@ -640,7 +640,7 @@ class units(object):
         """ Convert a TimeStep/TimeStepHydro/TimeStepGrav (e.g. an integer times All.Timebase_interval) 
         for a comoving run to a physical time in years. """
         dtime = TimeStep / (np.sqrt(self.H2_z_fact) * self.H0_h1_s)
-        dtime /= self.HubbleParam
+        dtime /= self._sP.HubbleParam
         dtime /= self.s_in_yr
 
         if Gyr: dtime /= 1e9
@@ -686,7 +686,7 @@ class units(object):
         # 48.60 sets the zero-point of 3631 Jy
         return mag
 
-    # --- other ---
+    # --- cosmology ---
 
     def redshiftToAgeFlat(self, z):
         """ Calculate age of the universe [Gyr] at the given redshift (assuming flat cosmology).
@@ -727,6 +727,40 @@ class units(object):
         if len(z) == 1:
             return z[0]
         return z
+
+    def redshiftToComovingDist(self, z):
+        """ Convert redshift z to line of sight distance (in Mpc). Assumes flat."""
+        from scipy.integrate import quad
+        redshifts = np.array(z)
+        if redshifts.ndim == 0: redshifts = np.array([z])
+
+        dist = np.zeros(redshifts.size, dtype='float32')
+        dist.fill(np.nan) # leave negative/nan redshifts unset
+
+        hubble_dist = self.c_cgs / self.H0_h1_s / self.Mpc_in_cm / self._sP.HubbleParam
+
+        def _qfunc(zz, omegaM, omegaL):
+            return 1.0 / np.sqrt((1.0+zz)**2 * (omegaM * (1.0+zz)) + omegaL)
+
+        for i in range(len(dist)):
+            dist[i] = quad(_qfunc, 0.0, redshifts[i], args=(self._sP.omega_m,self._sP.omega_L))[0]
+            dist[i] *= hubble_dist
+
+        return dist
+
+    def redshiftToAngDiamDist(self, z):
+        """ Convert redshift z to angular diameter distance (in Mpc). This equals the 
+        proper/physical transverse distance for theta=1 rad. Assumes flat. Peebles, p.325."""
+        return self.redshiftToComovingDist(z) / (1.0+z)
+
+    def arcsecToAngSizeKpcAtRedshift(self, ang_diam, z):
+        """ Convert an angle in arcseconds to an angular/transverse size (in proper/physical kpc) 
+        at redshift z. Assumes flat cosmology. """
+        dA = self.redshiftToAngDiamDist(z)
+        size_mpc = dA * ang_diam * self.arcsec_in_rad
+        return size_mpc * 1000.0
+
+    # --- other ---
 
     def meanmolwt(self, Y, Z):
         """ Mean molecular weight, from Monaco+ (2007) eqn 14, for hot halo gas.
