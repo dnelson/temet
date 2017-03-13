@@ -762,8 +762,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         # allocate for individual particles
         r = np.zeros( (nPt4Do, nBands, nProj), dtype='float32' )
 
-        # store global (snapshot) indices of particles we process. note that for pSplit != None, the 
-        # concatenation of partInds* will potentially have gaps (e.g. non-subhalo fof stars)
+        # store global (snapshot) indices of particles we process 
         partInds = np.arange(indRange['stars'][0], nPt4Do+indRange['stars'][0], dtype='int64')
         assert partInds.size == nPt4Do
         print(' Total # PT4 particles: %d, processing [%d] now, range [%d - %d]...' % \

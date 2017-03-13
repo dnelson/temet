@@ -1217,8 +1217,9 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
                 r[key] = f[key][()]
         return r
 
-    # convert CSV to HDF5
-    data = np.genfromtxt(path+'.csv',comments='#',delimiter=',',skip_header=1,names=True)
+    # convert CSV to HDF5 (first column is int64, all others are float32)
+    data = np.genfromtxt(path+'.csv',comments='#',delimiter=',',skip_header=1,names=True,
+              dtype="i8,"+",".join(["f4" for dummy in range(22)]))
 
     with h5py.File(path+'.hdf5','w') as f:
         for key in data.dtype.names:
