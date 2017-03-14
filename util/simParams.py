@@ -803,8 +803,11 @@ class simParams:
     def setRedshift(self, redshift=None):
         """ Update sP based on new redshift. """
         self.redshift = redshift
+        assert self.redshift >= 0.0
+
         if self.redshift is not None:
             self.snap = redshiftToSnapNum(sP=self)
+            if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
 
     def setSnap(self, snap=None):
@@ -812,6 +815,8 @@ class simParams:
         self.snap = snap
         if self.snap is not None:
             self.redshift = snapNumToRedshift(sP=self)
+            assert self.redshift >= 0.0
+            if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
 
     def matchedSubhaloID(self, hID=None):

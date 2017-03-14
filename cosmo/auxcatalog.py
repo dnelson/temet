@@ -665,19 +665,23 @@ def _findHalfLightRadius(rad,mags):
     return halfLightRad
 
 def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True, 
-                       sizes=False, indivStarMags=False):
+                       sizes=False, indivStarMags=False, fullSubhaloSpectra=False):
     """ Compute the total band-magnitudes (or instead half-light radii if sizes==True), per subhalo, 
     under the given assumption of an iso(chrone) model, imf model, dust model, and radial restrction. 
     If using a dust model, include multiple projection directions per subhalo. If indivStarMags==True, 
-    then save the magnitudes for every Pt4 (wind->NaN) in all subhalos. """
+    then save the magnitudes for every Pt4 (wind->NaN) in all subhalos. If fullSubhaloSpectra==True, 
+    then save a full spectrum vs wavelength for every subhalo. """
     from cosmo.stellarPop import sps
     from healpy.pixelfunc import nside2npix, pix2vec
     from cosmo.hydrogen import hydrogenMass
     from vis.common import rotationMatrixFromVec, rotateCoordinateArray, momentOfInertiaTensor, \
       rotationMatricesFromInertiaTensor, meanAngMomVector
 
-    if sizes: assert not indivStarMags
-    if indivStarMags: assert not sizes
+    # mutually exclusive options, at most one can be enabled
+    assert sum([sizes,indivStarMags,np.clip(fullSubhaloSpectra,0,1)]) in [0,1]
+
+    # initialize a stellar population interpolator
+    pop = sps(sP, iso, imf, dust)
 
     # which bands? for now, to change, just recompute from scratch
     bands = ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
@@ -688,6 +692,22 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     if indivStarMags: bands = ['sdss_r']
 
     nBands = len(bands)
+
+    if fullSubhaloSpectra:
+        # set nBands to size of wavelength grid within SDSS spectral range
+        sdss_min_ang = 3000.0
+        sdss_max_ang = 10000.0
+        ww = np.where( (pop.wave_ang >= sdss_min_ang) & (pop.wave_ang <= sdss_max_ang) )[0]
+        sdss_min_ind = ww.min()
+        sdss_max_ind = ww.max() + 1
+        nBands = sdss_max_ind - sdss_min_ind
+
+        # only for resolved dust models do we currently calculate full spectra of every star particle
+        assert '_res' in dust
+
+        # if fullSubhaloSpectra == 2, we include the peculiar motions of stars (e.g. veldisp)
+        # in which case the rel_vel here is overwritten on a per subhalo basis below
+        rel_vel_los = None
 
     # which projections?
     nProj = 1
@@ -712,7 +732,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 Nside = Nside.encode('ascii') # for hdf5 attr save
                 projVecs = np.zeros( (nProj-1,3), dtype='float32' ) # derive per subhalo
                 efrDirs = True
-                assert sizes is True
+                assert (sizes is True) or ('_res' in dust) # only cases where efr logic exists for now
             elif Nside == 'z-axis':
                 # single projection in the direction of the z-axis of the simulation box
                 nProj = 1
@@ -722,18 +742,21 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             else:
                 assert 0 # unhandled
 
-    # initialize a stellar population interpolator
-    pop = sps(sP, iso, imf, dust)
-
     # prepare catalog metadata
     desc = "Stellar light emission (total magnitudes) by subhalo"
     if sizes: desc = "Stellar half light radii (code units) by subhalo"
     if indivStarMags: desc = "Star particle individual magnitudes"
-    desc  += ", in multiple rest-frame bands."
+    if fullSubhaloSpectra:
+        desc = "Optical spectra by subhalo, [%d] wavelength points between [%.1f Ang] and [%.1f Ang]." % \
+            (nBands,sdss_min_ang,sdss_max_ang)
+    else:
+        desc  += ", in multiple rest-frame bands."
 
     select = "All Subfind subhalos"
     if indivStarMags: select = "All PartType4 particles in all subhalos"
-    select += " (numProjectionsPer = %d)." % nProj
+    select += " (numProjectionsPer = %d) (%s)." % (nProj, Nside)
+
+    print(' %s\n %s' % (desc,select))
 
     # load group information
     gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType','SubhaloPos'])
@@ -774,16 +797,35 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     r.fill(np.nan)
 
     # radial restriction
-    if rad is not None and isinstance(rad, float):
-        # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
-        rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
-        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
-        radSqMax += rad_pkpc * rad_pkpc
+    radRestrictIn2D = False
+
+    if rad is not None:
+        if isinstance(rad, float):
+            # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
+            rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
+            radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+            radSqMax += rad_pkpc * rad_pkpc
+        elif rad == 'sdss_fiber':
+            # SDSS fiber is 3" diameter, convert to physical radius at this redshift for all z>0
+            # for z=0.0 snapshots only, for this purpose we fake the angular diameter distance at z=0.1
+            fiber_z = sP.redshift if sP.redshift > 0.0 else 0.1
+            fiber_arcsec = 3.0 # note: 2.0 for BOSS, 3.0 for legacy SDSS
+            fiber_diameter = sP.units.arcsecToAngSizeKpcAtRedshift(fiber_arcsec, z=fiber_z)
+            print(' Set SDSS fiber diameter [%.2f pkpc] at redshift [z = %.2f]. NOTE: 2D restriction!' % \
+                (fiber_diameter,fiber_z))
+
+            # convert [pkpc] -> [ckpc/h] (code units) at this redshift
+            fiber_diameter = sP.units.physicalKpcToCodeLength(fiber_diameter)
+
+            radSqMax = np.zeros( nSubsTot, dtype='float32' )
+            radSqMax += (fiber_diameter / 2.0)**2.0
+            radRestrictIn2D = True
 
     # global load of all stars in all groups in snapshot
     starsLoad = ['initialmass','sftime','metallicity']
     if '_res' in dust or rad is not None or sizes is not None: starsLoad += ['pos']
     if sizes: starsLoad += ['mass']
+    if fullSubhaloSpectra == 2: starsLoad += ['vel','masses'] # masses is the current weight for LOS mean vel
 
     stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, indRange=indRange['stars'])
 
@@ -923,7 +965,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             gas['StarFormationRate'] = cosmo.load.snapshotSubset(sP, 'gas', fields=['sfr'], indRange=indRange['gas'])
 
         # outer loop over all subhalos
-        print(' Bands: [%s].' % ', '.join(bands))
+        if not fullSubhaloSpectra: print(' Bands: [%s].' % ', '.join(bands))
 
         for i, subhaloID in enumerate(subhaloIDsTodo):
             print('[%d] subhalo = %d' % (i,subhaloID))
@@ -943,8 +985,25 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             validMask = np.ones( i1-i0, dtype=np.bool )
 
             if rad is not None:
-                rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                      stars['Coordinates'][i0:i1,:], sP )
+                if not radRestrictIn2D:
+                    # apply in 3D
+                    rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
+                                          stars['Coordinates'][i0:i1,:], sP )
+                else:
+                    # apply in 2D projection, limited support for now, just Nside='z-axis'
+                    # otherwise, for any more complex projection, need to apply it here, and anyways 
+                    # for nProj>1, this validMask selection logic becomes projection dependent, so 
+                    # need to move it inside the range(nProj) loop, which is definitely doable
+                    assert Nside == 'z-axis' and nProj == 1 and np.array_equal(projVecs,[[0,0,1]])
+                    p_inds = [0,1] # x,y
+                    pt_2d = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                    pt_2d = [ pt_2d[p_inds[0]], pt_2d[p_inds[1]] ]
+                    vecs_2d = np.zeros( (i1-i0, 2), dtype=stars['Coordinates'].dtype )
+                    vecs_2d[:,0] = stars['Coordinates'][i0:i1,p_inds[0]]
+                    vecs_2d[:,1] = stars['Coordinates'][i0:i1,p_inds[1]]
+
+                    rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+
                 validMask &= (rr <= radSqMax[subhaloID])
 
             validMask &= np.isfinite(stars['GFM_StellarFormationTime'][i0:i1] ) # remove wind
@@ -954,6 +1013,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             if len(wValid) == 0:
                 continue # zero length of particles satisfying radial cut and real stars restriction
 
+            if len(wValid) < 2 and sizes:
+                continue # require at least 2 stars for size calculation
+
             ages_logGyr = stars['GFM_StellarFormationTime'][i0:i1][wValid]
             metals_log  = stars['GFM_Metallicity'][i0:i1][wValid]
             masses_msun = stars['GFM_InitialMass'][i0:i1][wValid]
@@ -962,53 +1024,64 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             assert ages_logGyr.shape == metals_log.shape == masses_msun.shape
             assert pos_stars.shape[0] == ages_logGyr.size and pos_stars.shape[1] == 3
 
+            if fullSubhaloSpectra == 2:
+                # derive mean stellar LOS velocity of selected stars, and LOS peculiar velocities of each
+                # limited support for now, just Nside='z-axis', otherwise for any more complex projection, 
+                # need to apply it here, and anyways for nProj>1, this vel_stars calculation becomes 
+                # projection dependent, so need to move it inside the range(nProj) loop, as above
+                assert Nside == 'z-axis' and nProj == 1 and np.array_equal(projVecs,[[0,0,1]])
+                p_ind = 2 # z
+
+                vel_stars = stars['Velocities'][i0:i1,:][wValid,:]
+                masses_stars = stars['Masses'][i0:i1][wValid]
+
+                vel_stars = sP.units.particleCodeVelocityToKms(vel_stars)
+
+                # mass weighted, this could be light weighted... anyways a change to this represents a 
+                # constant wavelength shift, e.g. is fit out as a residual redshift
+                mean_vel_los = np.average( vel_stars[:,p_ind] , weights=masses_stars )
+
+                rel_vel_los = vel_stars[:,p_ind] - mean_vel_los
+
             # slice starting/ending indices for -gas- local to this subhalo
             i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
             i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
 
             assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
+ 
+            # calculate projection directions for this subhalo
+            projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
 
-            if sizes:
-                # require at least 2 stars for size calculation
-                if len(wValid) < 2:
-                    continue
+            if efrDirs:
+                # construct rotation matrices for each of 'edge-on', 'face-on', and 'random' (z-axis)
+                rHalf = gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
+                shPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
 
-                # calculate projection directions for this subhalo
-                projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
+                             'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
+                             'StarFormationRate' : gas['StarFormationRate'][i0g:i1g] }
+                starsLocal = { 'Masses' : stars['Masses'][i0:i1],
+                               'Coordinates' : np.squeeze(stars['Coordinates'][i0:i1,:]),
+                               'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0:i1] }
 
-                if efrDirs:
-                    # construct rotation matrices for each of 'edge-on', 'face-on', and 'random' (z-axis)
-                    rHalf = gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
-                    shPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                I = momentOfInertiaTensor(sP, gas=gasLocal, stars=starsLocal, rHalf=rHalf, shPos=shPos)
+                rots = rotationMatricesFromInertiaTensor(I)
 
-                    gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
-                                 'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
-                                 'StarFormationRate' : gas['StarFormationRate'][i0g:i1g] }
-                    starsLocal = { 'Masses' : stars['Masses'][i0:i1],
-                                   'Coordinates' : np.squeeze(stars['Coordinates'][i0:i1,:]),
-                                   'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0:i1] }
-
-                    I = momentOfInertiaTensor(sP, gas=gasLocal, stars=starsLocal, rHalf=rHalf, shPos=shPos)
-                    rots = rotationMatricesFromInertiaTensor(I)
-
-                    rotMatrices = [rots['edge-on'], rots['face-on'], rots['edge-on-smallest'],
-                                   rots['edge-on-random'], rots['identity']]
-                    rotMatrices.extend(rotMatrices) # append to itself, now has (5 2d + 5 3d) = 10 elements
+                rotMatrices = [rots['edge-on'], rots['face-on'], rots['edge-on-smallest'],
+                               rots['edge-on-random'], rots['identity']]
+                rotMatrices.extend(rotMatrices) # append to itself, now has (5 2d + 5 3d) = 10 elements
 
             # loop over all different viewing directions
             for projNum in range(nProj):
                 # at least 2 gas cells exist in subhalo?
                 if i1g > i0g+1:
-                    # projection
-                    projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
-
                     # subsets
                     pos     = gas['Coordinates'][i0g:i1g,:]
                     hsml    = 2.5 * gas['Cellsize'][i0g:i1g]
                     mass_nh = gas['Masses'][i0g:i1g]
                     quant_z = gas['GFM_Metallicity'][i0g:i1g]
 
-                    # compute line of sight integrated quantities
+                    # compute line of sight integrated quantities (choose appropriate projection)
                     if efrDirs:
                         N_H, Z_g = pop.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, pos_stars, 
                                                              projCen, rotMatrix=rotMatrices[projNum])
@@ -1062,6 +1135,16 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         # save raw magnitudes per particle (wind/outside subhalos left at NaN)
                         r[saveInds[wValid],bandNum,projNum] = magsLocal[band]
 
+                elif fullSubhaloSpectra:
+                    # request stacked spectrum of all stars, optionally handle doppler velocity shifting
+                    spectrum = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun,
+                                                        ret_full_spectrum=True, rel_vel=rel_vel_los)
+
+                    # unit conversion into SDSS spectra units, and redshift to sP.redshift
+                    spectrum = pop.convertSpecToSDSSUnitsAndRedshift(spectrum)
+
+                    # save spectrum within valid wavelength range
+                    r[i,:,projNum] = spectrum[sdss_min_ind:sdss_max_ind]
                 else:
                     # compute total attenuated stellar luminosity in each band
                     magsLocal = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun)
@@ -1078,7 +1161,15 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
              'subhaloIDs'  : subhaloIDsTodo,
              'partInds'    : partInds}
 
+    if fullSubhaloSpectra:
+        # save wavelength grid and details of redshifting
+        attrs['wavelength'] = pop.wave_ang[sdss_min_ind : sdss_max_ind]
+        attrs['spectraUnits'] = '10^-17 erg/cm^2/s/Ang'.encode('ascii')
+        attrs['spectraLumDistMpc'] = sP.units.redshiftToLumDist( sP.redshift )
+        attrs['spectraFiberDiameterCode'] = fiber_diameter
+
     if '_res' in dust:
+        # save projection details
         attrs['nProj'] = nProj
         attrs['Nside'] = Nside
         attrs['projVecs'] = projVecs
@@ -1710,6 +1801,13 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00', indivStarMags=True),
    'Particle_StellarPhot_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', indivStarMags=True, Nside='z-axis'),
+
+   'Subhalo_SDSSFiberSpectra_NoVel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber', 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
+                                         fullSubhaloSpectra=1, Nside='z-axis'),
+   'Subhalo_SDSSFiberSpectra_Vel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber', 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
+                                         fullSubhaloSpectra=2, Nside='z-axis'),
 
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
    'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),

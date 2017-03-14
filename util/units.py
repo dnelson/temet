@@ -47,7 +47,9 @@ class units(object):
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
 
     # derived constants
-    mag2cgs     = None    # Lsun/Hz to cgs at d=10pc
+    mag2cgs       = None    # Lsun/Hz to cgs [erg/s/cm^2] at d=10pc
+    c_ang_per_sec = None    # speed of light in [Angstroms/sec]
+    c_km_s        = None    # speed of light in [km/s]
 
     # code parameters
     CourantFac  = 0.3     # typical (used only in load:dt_courant)
@@ -73,7 +75,8 @@ class units(object):
     pc_in_cm    = 3.085680e18
     Mpc_in_cm   = 3.085680e24
     kpc_in_km   = 3.085680e16
-    arcsec_in_rad = 4.84814e-6 # 1 arcsecond / radian
+    arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
+    ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
 
     # derived unit conversions
     kmS_in_kpcYr  = None
@@ -106,6 +109,8 @@ class units(object):
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0*np.pi*self.G) #code, z=0
 
         self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
+        self.c_ang_per_sec = self.c_cgs / self.ang_in_cm
+        self.c_km_s = self.c_cgs / 1e5
 
         # derived cosmology parameters
         self.f_b = self._sP.omega_b / self._sP.omega_m
@@ -746,12 +751,22 @@ class units(object):
             dist[i] = quad(_qfunc, 0.0, redshifts[i], args=(self._sP.omega_m,self._sP.omega_L))[0]
             dist[i] *= hubble_dist
 
+        if len(dist) == 1:
+            return dist[0]
         return dist
 
     def redshiftToAngDiamDist(self, z):
         """ Convert redshift z to angular diameter distance (in Mpc). This equals the 
         proper/physical transverse distance for theta=1 rad. Assumes flat. Peebles, p.325."""
         return self.redshiftToComovingDist(z) / (1.0+z)
+
+    def redshiftToLumDist(self, z):
+        """ Convert redshift z to luminosity distance (in Mpc). This then allows the conversion 
+        between luminosity and a flux at that redshift. """
+        if z == 0.0:
+            # absolute, 10 pc [in Mpc]
+            return 10.0/1e6
+        return self.redshiftToComovingDist(z) * (1.0+z)
 
     def arcsecToAngSizeKpcAtRedshift(self, ang_diam, z):
         """ Convert an angle in arcseconds to an angular/transverse size (in proper/physical kpc) 
