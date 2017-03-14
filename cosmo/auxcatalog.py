@@ -596,8 +596,12 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags):
 
             if pSplit[0] == pSplit[1] - 1:
                 invSubs[1] = nSubsTot
-            else:
-                assert invSubs[1] != -1
+            
+            assert invSubs[1] != -1
+
+            if invSubs[1] == invSubs[0]:
+                # split is actually zero size, this is ok
+                return [], {'gas':[0,1],'stars':[0,1]}
 
             subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
             indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
@@ -767,7 +771,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, Nside, indivStarMags)
 
     nSubsDo = len(subhaloIDsTodo)
-    partInds = -1
+    partInds = None
 
     print(' Total # Subhalos: %d, processing [%d] in [%d] bands and [%d] projections...' % \
         (nSubsTot,nSubsDo,nBands,nProj))
@@ -1158,8 +1162,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
              'Selection'   : select.encode('ascii'),
              'bands'       : [b.encode('ascii') for b in bands],
              'dust'        : dust.encode('ascii'),
-             'subhaloIDs'  : subhaloIDsTodo,
-             'partInds'    : partInds}
+             'subhaloIDs'  : subhaloIDsTodo}
+
+    if partInds is not None:
+        attrs['partInds'] = partInds
 
     if fullSubhaloSpectra:
         # save wavelength grid and details of redshifting
@@ -1175,7 +1181,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         attrs['projVecs'] = projVecs
         attrs['modelH'] = modelH
 
-    r = np.squeeze(r) # remove nProj and/or nBands dimensions if unity
+    # remove nProj and/or nBands dimensions if unity (never remove nSubsDo dimension)
+    if r.shape[2] == 1: r = np.squeeze(r, axis=(2))
+    if r.shape[1] == 1: r = np.squeeze(r, axis=(1)) 
 
     return r, attrs
 
