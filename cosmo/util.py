@@ -422,7 +422,20 @@ def periodicDists(pt, vecs, sP, chebyshev=False):
     return dists
 
 def periodicDistsSq(pt, vecs, sP):
-    """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt. """
+    """ As cosmo.util.periodicDists() but specialized, without error checking, and no sqrt. 
+    Works either for 2D or 3D, where the dimensions of pt and vecs should correspond. """
+    if len(pt) == 2:
+        assert vecs.shape[1] == 2
+
+        xDist = vecs[:,0] - pt[0]
+        yDist = vecs[:,1] - pt[1]
+
+        correctPeriodicDistVecs(xDist, sP)
+        correctPeriodicDistVecs(yDist, sP)
+
+        return xDist*xDist + yDist*yDist
+    
+    # fall through to normal 3D case
     xDist = vecs[:,0] - pt[0]
     yDist = vecs[:,1] - pt[1]
     zDist = vecs[:,2] - pt[2]
@@ -465,33 +478,6 @@ def periodicPairwiseDists(pts, sP):
     return dists
 
 # --- other ---
-
-def gasMassesFromIDs(search_ids, sP):
-    """ Return individual gas cell/particle masses given input ID list. """
-    from util.helper import getIDIndexMap
-
-    if sP.snap is None:
-        raise Exception("Need sP.snap")
-
-    h = cosmo.load.snapshotHeader(sP)
-    
-    if sP.trMCPerCell == 0:
-        # SPH case: all particles have constant mass
-        masses = np.zeros( h.NumPart[il.util.partTypeNum('gas')], dtype='float32' )
-        masses += sP.targetGasMass
-    else:
-        # Arepo case: variable gas cell masses
-        ids = cosmo.load.snapshotSubset(sP, partType='gas', fields='ids')
-
-        idIndexMap, minID = getIDIndexMap(ids)
-        inds = idIndexMap[search_ids - minID]
-
-        del ids
-        del idIndexMap
-
-        masses = cosmo.load.snapshotSubset(sP, partType='gas', fields='mass', inds=inds)
-
-    return masses
 
 def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuzz=True,
                                       SubhaloLenType=None, SnapOffsetsSubhalo=None):

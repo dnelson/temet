@@ -12,6 +12,7 @@ import time
 from numba import jit
 from os.path import isfile, expanduser
 from scipy.ndimage import map_coordinates
+from scipy.interpolate import interp1d
 
 from util.helper import logZeroMin, trapsum, iterable
 from util.sphMap import sphMap
@@ -128,6 +129,8 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
         #spectrum_local = np.clip(spectrum_local, 0.0, np.inf) # enforce everywhere positive
         w = np.where(spectrum_local < 0.0)
         spectrum_local[w] = 0.0
+
+        # TODO: support for velocity shift
 
         # accumulate attenuated contribution of this stellar population
         obs_lum += (spectrum_local * masses_msun[i]) * atten
@@ -578,6 +581,38 @@ class sps():
             # pre-divide out Angstroms
             self.trans_normed[band] = trans_val / self.wave_ang
 
+    def convertSpecToSDSSUnitsAndRedshift(self, spec):
+        """ Convert a spectrum from FSPS in [Lsun/Hz] to SDSS units [10^-17 erg/cm^2/s/Ang] and, 
+        if self.sP.redshift > 0, attenuation the spectrum by the luminosity distance and redshift 
+        the wavelength. If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
+        assumed distance of 10pc (i.e. absolute magnitudes). """
+
+        # convert [Lsun/Hz] -> [Lsun/Ang]
+        freq_Hz = self.sP.units.c_ang_per_sec / self.wave_ang # nu = c/lambda
+        spec_perAng = freq_Hz**2 * spec / self.sP.units.c_ang_per_sec # flux_nu = (lambda^2/c) * flux_lambda
+
+        # if z=0 set dL=10pc (absolute), otherwise use the actual redshift, calculate luminosity distance
+        dL = self.sP.units.redshiftToLumDist(self.sP.redshift)
+        dL_cm = dL * self.sP.units.Mpc_in_cm
+
+        # convert [Lsun/Ang] -> [erg/s/Ang] -> [erg/s/cm^2/Ang], i.e. luminosities into fluxes at this dist
+        flux = spec_perAng * (self.sP.units.L_sun / (dL_cm*dL_cm)) / (4.0*np.pi)
+        flux *= 1e17
+
+        # if z>0, redshift the wavelength axis
+        if self.sP.redshift > 0.0:
+            wave_redshifted = self.wave * (1.0 + self.sP.redshift)
+
+            # and interpolate the shifted flux to the old, unshifted wavelength points
+            f = interp1d(wave_redshifted, flux, kind='linear', assume_sorted=True, 
+                         bounds_error=False, fill_value=np.nan)
+
+            flux = f(self.wave)
+
+        # could rebin onto a wavelength grid more like SDSS observations (log wave spaced)
+        # https://github.com/moustakas/impy/blob/master/lib/ppxf/ppxf_util.py
+        return flux
+
     def mags(self, band, ages_logGyr, metals_log, masses_logMsun):
         """ Interpolate table to compute magnitudes in requested band for input stars. """
         assert band.lower() in self.bands
@@ -672,12 +707,15 @@ class sps():
         
         return lums
 
-    def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, ret_indiv=False):
+    def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, 
+                            ret_indiv=False, ret_full_spectrum=False, rel_vel=None):
         """ For a set of stars characterized by their (age,Z,M) values as well as (N_H,Z_g) 
         calculated from the resolved gas distribution, do the Model (C) attenuation on the 
         full spectra, sum together, and convolve the resulting total L(lambda) with the  
         transmission function of multiple bands, returning a dict of magnitudes, one for 
-        each band. """
+        each band. If ret_indiv==True, then the individual magnitudes for every member star are
+        instead returned separately. If ret_full_spectrum==True, the full aggregate spectrum, 
+        summed over all member stars, as a function of wavelength, is instead returned."""
         assert N_H.size == Z_g.size == ages_logGyr.size == metals_log.size == masses_msun.size
         assert N_H.ndim == Z_g.ndim == ages_logGyr.ndim == metals_log.ndim == masses_msun.ndim == 1
 
@@ -691,7 +729,7 @@ class sps():
             # the aggregate spectrum is actually band-independent, get now from JITed helper function
             # band is any member of self.bands, since A_lambda_sol,gamma,f_scattering are all actually 
             # band-independent in this case where self.lambda_nm == self.wave
-            if ret_indiv:
+            if ret_indiv or (rel_vel is not None):
                 obs_lum = _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
                               self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
                               self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
@@ -701,6 +739,39 @@ class sps():
                                   self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
                                   self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
                                   self.metals,self.ages,self.wave_ang,self.spec)
+
+        if ret_full_spectrum and rel_vel is None:
+            # we want an aggregate summed spectrum for all member stars, not all individual spectra
+            assert not ret_indiv
+
+            # early return before any band convolutions (the corresponding wavelengths are self.wave)
+            return obs_lum
+
+        if ret_full_spectrum and rel_vel is not None:
+            # support for an array of rel_vel in [km/s], positive or negative, giving the 
+            # relative velocity of each star particle such that its spectrum should be shifted 
+            # in wavelength space by the appropriate doppler shift, e.g.
+            assert rel_vel.ndim == 1 and rel_vel.size == N_H.size
+            assert obs_lum.ndim == 2
+
+            # allocate 1d spectrum return
+            obs_lum_1d = np.zeros( self.wave.size, dtype='float32' )
+
+            # (lambda_obs/lambda_emit = 1 + peculiar_velocity/c) such that if rel_vel>0 (receeding), 
+            # lambda_obs > lambda_emit, otherwise if rel_vel<0 then lambda_obs < lambda_edit
+            doppler_factor = 1.0 + rel_vel / self.sP.units.c_km_s
+
+            for i in range(rel_vel.size):
+                # create shifted wavelength grid
+                wave_shifted = self.wave * doppler_factor[i]
+
+                # interpolate fluxes onto original grid
+                f = interp1d(wave_shifted, obs_lum[i,:], kind='linear', assume_sorted=True, 
+                             bounds_error=False, fill_value=0.0)
+
+                obs_lum_1d += f(self.wave)
+
+            return obs_lum_1d
 
         for band in bands:
             if '_eff' in self.dustModel:
