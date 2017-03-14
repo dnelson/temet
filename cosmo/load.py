@@ -16,7 +16,7 @@ import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
 from util.helper import iterable, logZeroSafe, curRepoVersion
 
-def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
+def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now """
@@ -26,6 +26,10 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
 
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
+
+    condThresh = 100 # threshold size of any dimension such that we save a condensed auxCat
+    condAxis = 1 # currently only implemented for auxCat.shape = [subhaloIDs,*] (i.e. ndim==2)
+    largeAttrNames = ['subhaloIDs','partInds','wavelength'] # save these as separate datasets, if present
 
     pathStr1 = sP.derivPath + 'auxCat/%s_%03d.hdf5'
     pathStr2 = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5'
@@ -44,6 +48,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
 
         # split the calculation over multiple jobs? check if all chunks already exist
         if pSplit is not None:
+            assert indRange is None # for load only
             auxCatPathSplit = pathStr2 % (field,sP.snap,pSplit[0],pSplit[1])
 
             if isfile(auxCatPathSplit) and not reCalculate:
@@ -60,9 +65,21 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
 
                     # record counts and dataset shape
                     with h5py.File(auxCatPathSplit_i,'r') as f:
-                        allCount += f['subhaloIDs'].size
-                        if 'partInds' in f: allCountPart += f['partInds'].size
                         allShape = f[field].shape
+
+                        if len(allShape) > 1 and allShape[condAxis] > condThresh:
+                            # very high dimensionality auxCat (e.g. full spectra), save only non-nan
+                            assert f[field].ndim == 2
+                            assert 'partInds' not in f or f['partInds'][()] == -1
+
+                            temp_r = f[field][()]
+                            w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )
+                            allCount += len(w[0])
+                            print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
+                        else:
+                            # normal, save full Subhalo size
+                            allCount += f['subhaloIDs'].size
+                            if 'partInds' in f: allCountPart += f['partInds'].size
 
                 if allExist:
                     # all chunks exist, concatenate them now and continue
@@ -85,7 +102,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                     attrs = {}
 
                     new_r.fill(-1.0) # does validly contain nan
-                    subhaloIDs.fill(np.nan)
+                    subhaloIDs.fill(-1)
 
                     print(' Concatenating into shape: ', new_r.shape)
 
@@ -93,15 +110,32 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                         auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
 
                         with h5py.File(auxCatPathSplit_i,'r') as f:
+                            # load
                             length = f[catIndFieldName].size
-                            subhaloIDs[offset : offset+length] = f[catIndFieldName][()]
+                            temp_r = f[field][()]
 
+                            if len(allShape) > 1 and allShape[condAxis] > condThresh:
+                                # condensed, stamp in to dense indices
+                                assert f[field].ndim == 2
+
+                                w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )[0]
+                                length = len(w)
+                                temp_r = temp_r[w,:]
+                                subhaloIDs[offset : offset+length] = f[catIndFieldName][()][w]
+                                subhaloIndsStamp = np.arange(offset,offset+length)
+                            else:
+                                # full, stamp in to indices corresponding to subhalo indices
+                                subhaloIDs[offset : offset+length] = f[catIndFieldName][()]
+                                subhaloIndsStamp = subhaloIDs[offset : offset+length]
+
+                            # save into final array
                             if f[field].ndim == 1:
-                                new_r[subhaloIDs[offset : offset+length]] = f[field][()]
+                                new_r[subhaloIndsStamp] = temp_r
                             if f[field].ndim == 2:
-                                new_r[subhaloIDs[offset : offset+length], :] = f[field][()]
+                                new_r[subhaloIndsStamp, :] = temp_r
                             if f[field].ndim == 3:
-                                new_r[subhaloIDs[offset : offset+length], :, :] = f[field][()]
+                                new_r[subhaloIndsStamp, :, :] = temp_r
+
                             assert f[field].ndim in [1,2,3]
 
                             for attr in f[field].attrs:
@@ -109,7 +143,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
 
                             offset += length
 
-                    assert np.count_nonzero(np.isnan(subhaloIDs)) == 0
+                    assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
                     assert np.count_nonzero(new_r == -1.0) == 0
 
                     # save new auxCat
@@ -139,7 +173,14 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
             #print('Load existing: ['+field+']')
             with h5py.File(auxCatPath,'r') as f:
                 # load data
-                r[field] = f[field][()]
+                if indRange is None:
+                    r[field] = f[field][()]
+                else:
+                    if f[field].ndim == 1: r[field] = f[field][indRange[0]:indRange[1]]
+                    if f[field].ndim == 2: r[field] = f[field][indRange[0]:indRange[1],:]
+                    if f[field].ndim == 3: r[field] = f[field][indRange[0]:indRange[1],:,:]
+                    r[field] = np.squeeze(r[field]) # remove any degenerate dimensions
+                    assert f[field].ndim in [1,2,3]
 
                 # load metadata
                 r[field+'_attrs'] = {}
@@ -147,11 +188,12 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
                     r[field+'_attrs'][attr] = f[field].attrs[attr]
 
                 # load subhaloIDs, partInds if present
-                if 'subhaloIDs' in f:
-                    r['subhaloIDs'] = f['subhaloIDs'][()]
-                if 'partInds' in f:
-                    r['partInds'] = f['partInds'][()]
-
+                for attrName in largeAttrNames:
+                    if attrName in f:
+                        if indRange is None:
+                            r[attrName] = f[attrName][()]
+                        else:
+                            r[attrName] = f[attrName][indRange[0]:indRange[1]]
             continue
 
         # either does not exist yet, or reCalculate requested
@@ -182,7 +224,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False):
             f[field].attrs['CreatedBy']   = getpass.getuser()
             
             for attrName, attrValue in attrs.iteritems():
-                if attrName in ['subhaloIDs','partInds']:
+                if attrName in largeAttrNames:
                     f.create_dataset(attrName, data=r[field+'_attrs'][attrName])
                     continue # typically too large to store as an attribute
                 f[field].attrs[attrName] = attrValue
