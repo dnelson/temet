@@ -19,7 +19,8 @@ from util.helper import iterable, logZeroSafe, curRepoVersion
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
-      searchExists : return None if data is not already computed, i.e. do not calculate right now """
+      searchExists : return None if data is not already computed, i.e. do not calculate right now 
+      indRange     : load only the specified range of data (field as well as e.g. subhaloIDs) """
     from cosmo import auxcatalog
     import datetime
     import getpass
@@ -143,6 +144,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                             offset += length
 
+                            if 'wavelength' in f: attrs['wavelength'] = f['wavelength'][()]
+
                     assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
                     assert np.count_nonzero(new_r == -1.0) == 0
 
@@ -190,6 +193,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 # load subhaloIDs, partInds if present
                 for attrName in largeAttrNames:
                     if attrName in f:
+                        r[attrName + '_size'] = f[attrName].size
+
                         if indRange is None:
                             r[attrName] = f[attrName][()]
                         else:
