@@ -609,6 +609,11 @@ class sps():
 
             flux = f(self.wave)
 
+            # account for (1+z)^2/(1+z) factors from redshifting of photon energies, arrival rates, 
+            # and bandwidth delta_freq, s.t. flux density per unit bandwidth goes as (1+z)
+            # e.g. Peebles 3.87 or MoVdBWhite 10.85
+            flux *= (1.0 + self.sP.redshift)
+
         # could rebin onto a wavelength grid more like SDSS observations (log wave spaced)
         # https://github.com/moustakas/impy/blob/master/lib/ppxf/ppxf_util.py
         return flux
