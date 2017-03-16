@@ -803,7 +803,7 @@ class simParams:
     def setRedshift(self, redshift=None):
         """ Update sP based on new redshift. """
         self.redshift = redshift
-        assert self.redshift >= 0.0
+        if self.redshift is not None: assert self.redshift >= 0.0
 
         if self.redshift is not None:
             self.snap = redshiftToSnapNum(sP=self)

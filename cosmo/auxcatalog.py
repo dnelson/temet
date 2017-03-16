@@ -1863,3 +1863,12 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_QM',op='sum',rad=None)
 
   }
+
+# this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 
+# a single generative function), but are then saved in the same format and so can be loaded normally
+manualFieldNames = \
+[   'Subhalo_SDSSFiberSpectraFits_NoVel-NoRealism_p07c_cf00dust_res_conv_z',
+    'Subhalo_SDSSFiberSpectraFits_Vel-NoRealism_p07c_cf00dust_res_conv_z',
+    'Subhalo_SDSSFiberSpectraFits_NoVel-Realism_p07c_cf00dust_res_conv_z',
+    'Subhalo_SDSSFiberSpectraFits_Vel-Realism_p07c_cf00dust_res_conv_z'
+]
