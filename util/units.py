@@ -45,11 +45,11 @@ class units(object):
     L_sun             = 3.839e33        # solar luminosity [erg/s]
     Msun_in_g         = 1.98892e33      # solar mass [g]
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
+    c_km_s            = 2.9979e5        # speed of light in [km/s]
 
     # derived constants
     mag2cgs       = None    # Lsun/Hz to cgs [erg/s/cm^2] at d=10pc
     c_ang_per_sec = None    # speed of light in [Angstroms/sec]
-    c_km_s        = None    # speed of light in [km/s]
 
     # code parameters
     CourantFac  = 0.3     # typical (used only in load:dt_courant)
@@ -110,7 +110,6 @@ class units(object):
 
         self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
         self.c_ang_per_sec = self.c_cgs / self.ang_in_cm
-        self.c_km_s = self.c_cgs / 1e5
 
         # derived cosmology parameters
         self.f_b = self._sP.omega_b / self._sP.omega_m

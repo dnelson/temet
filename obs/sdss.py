@@ -11,10 +11,28 @@ import time
 import requests
 import os
 
-import matplotlib.pyplot as plt
 import astropy.io.fits as pyfits
+from scipy.interpolate import interp1d
 from prospect.likelihood import lnlike_spec, lnlike_phot, write_log
+from prospect.models import sedmodel
+from prospect.io import write_results
+from prospect.sources import CSPSpecBasis
+from prospect.utils import smoothing
+from prospect import fitting
 from util.helper import pSplitRange
+from cosmo.load import auxCat, groupCatSingle, groupCatHeader
+
+# config (don't change anything...)
+zBin = 'z0.0-0.1'
+sdssCatName = 'sdss_%s.hdf5' % zBin
+sdssSpectraFitsCatName = 'sdss_mcmc_fits_%s' % zBin
+sdssSpecObjIDCatName = 'sdss_objid_specobjid_z0.0-0.5.hdf5'
+mockSpectraAuxcatName = 'Subhalo_SDSSFiberSpectra_%s_p07c_cf00dust_res_conv_z'
+spectraFitsAuxcatName = 'Subhalo_SDSSFiberSpectraFits_%s-%s_p07c_cf00dust_res_conv_z'
+miles_fwhm_aa = 2.54 # spectral resolution of the MILES stellar library (FWHM/Ang)
+sigma_to_fwhm = 2.355
+indModulus = 100 # split individual galaxy results into this many subdirectories
+percentiles = [16,50,84]
 
 def sdss_decompose_specobjid(id):
     """ Convert 64-bit SpecObjID into its parts, returning a dict. DR13 convention. """
@@ -46,17 +64,14 @@ def loadSDSSSpectrum(ind, fits=False):
 
     if not os.path.isdir(savePath): os.mkdir(savePath)
 
-    f1 = basePath + 'sdss_z0.0-0.1.hdf5'
-    f2 = basePath + 'sdss_objid_specobjid_z0.0-0.5.hdf5'
-
     # get target objid
-    with h5py.File(f1,'r') as f:
+    with h5py.File(basePath + sdssCatName,'r') as f:
         objid = f['objid'][ind]
         logMass = f['logMass_gran1'][ind]
         redshift = f['redshift'][ind]
 
     # get matching specobjid
-    with h5py.File(f2,'r') as f:
+    with h5py.File(basePath + sdssSpecObjIDCatName,'r') as f:
         objids = f['objid'][()]
         w = np.where(objids == objid)[0]
         specobjid = f['specobjid'][w[0]]
@@ -69,19 +84,34 @@ def loadSDSSSpectrum(ind, fits=False):
 
     # construct url
     fmt = 'fits' if fits else 'csv'
-    #saveFilename = savePath + '/%d/spec-%04d-%d-%04d.%s' % (p['plate'],p['plate'],p['mjd'],p['fiberid'],fmt)
 
     url_base = 'https://dr13.sdss.org/optical/spectrum/view/data/format=%s/spec=lite?' % fmt
     url = url_base + 'mjd=%d&fiberid=%d&plateid=%d' % (p['mjd'],p['fiberid'],p['plate'])
 
-    # acquire
-    print(' ' + url)
-    req = requests.get(url, headers={})
+    # check for existence, download if does not already exist locally
+    savePath = savePath + '%d/' % p['plate']
+    if not os.path.isdir(savePath): os.mkdir(savePath)
 
-    if req.status_code != 200:
-        print(' WARNING! Response code = %d, skipping!' % req.status_code)
-        return None
+    saveFilename = savePath + 'spec-%04d-%d-%04d.%s' % (p['plate'],p['mjd'],p['fiberid'],fmt)
 
+    if not os.path.isfile(saveFilename):
+        # acquire
+        print(' ' + url)
+        req = requests.get(url, headers={})
+
+        if req.status_code != 200:
+            print(' WARNING! Response code = %d, skipping!' % req.status_code)
+            return None
+
+        # save (fits only for now)
+        if fits:
+            assert 'content-disposition' in req.headers
+            #filename = req.headers['content-disposition'].split("filename=")[1]
+
+            with open(saveFilename, 'wb') as f:
+                f.write(req.content)
+
+    # load
     if not fits:
         # parse csv
         rows = req.text.split('\n')
@@ -98,18 +128,8 @@ def loadSDSSSpectrum(ind, fits=False):
             # ivar = inverse variance (one over simga-squared), is 0.0 for bad pixels that should be ignored
             r['wavelength'][i], r['flux'][i], r['bestfit'][i], r['skyflux'][i] = row.split(',')
     else:
-        # fits, save binary
-        assert 'content-disposition' in req.headers
-        filename = req.headers['content-disposition'].split("filename=")[1]
-
-        subSavePath = savePath + str(p['plate']) + '/'
-        if not os.path.isdir(subSavePath): os.mkdir(subSavePath)
-
-        with open(subSavePath + filename, 'wb') as f:
-            f.write(req.content)
-
-        # reload
-        with pyfits.open(subSavePath + filename) as hdus:
+        # open fits
+        with pyfits.open(saveFilename) as hdus:
             spec = np.array( hdus[1].data )
 
         # return in same format/units as csv, except we now also have ivar and wdisp
@@ -122,24 +142,103 @@ def loadSDSSSpectrum(ind, fits=False):
 
     return r
 
-def _writeLsfFile(spec, miles_fwhm_aa=2.54):
-    """This method takes a spec file and returns the quadrature difference
-    between the instrumental dispersion and the MILES dispersion, in km/s, as a
-    function of wavelength
-    """
-    lightspeed = 2.998e5  # km/s
+def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
+    """ Load a single mock SDSS fiber spectrum from a simulated galaxy, in sP, from a precomputed 
+    auxCat (index ind). If addRealism == True, use a [random] real SDSS fiber spectrum to 
+    convolve the mock with a realistic instrumental resolution, and add realistic noise. If 
+    withVel == True, use the mock spectra which account for peculiar stellar velocity. """
+    basePath = os.path.expanduser('~') + '/obs/'
+
+    velStr = 'Vel' if withVel else 'NoVel'
+    acName = mockSpectraAuxcatName % velStr
+
+    # load mock spectrum
+    spec = auxCat(sP, acName, indRange=[ind,ind+1])
+
+    assert spec['subhaloIDs'].size == 1
+    subhaloID = spec['subhaloIDs'][0]
+
+    # construct return (identical format as loadSDSSSpectrum)
+    stellarMass = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloMassInRadType'][sP.ptNum('stars')]
+    logMass = sP.units.codeMassToLogMsun(stellarMass)
+
+    r = {'ind':ind, 'objid':None, 'specobjid':None, 'logMass':logMass, 'redshift':sP.redshift}
+
+    r['wavelength'] = spec[acName + '_attrs']['wavelength']
+    r['flux'] = spec[acName]
+    r['skyflux'] = None
+    r['bestfit'] = None
+
+    if addRealism:
+        # determine a 'random' index into the SDSS z<0.1 catalog for this ind
+        with h5py.File(basePath + sdssCatName,'r') as f:
+            sdss_cat_size = f['objid'].size
+
+        sdss_cat_index = ind % sdss_cat_size
+
+        # load SDSS spectrum
+        sdss_spec = loadSDSSSpectrum(ind, fits=True)
+
+        # copy SDSS variance and dispersion estimates, interpolating onto the simulated wavelength grid
+        r['ivar']  = interp1d(sdss_spec['wavelength'],sdss_spec['ivar'],kind='linear',bounds_error=False,
+                     fill_value=(sdss_spec['ivar'][0],sdss_spec['ivar'][-1])) (r['wavelength'])
+        r['wdisp'] = interp1d(sdss_spec['wavelength'],sdss_spec['wdisp'],kind='linear',bounds_error=False,
+                     fill_value=(sdss_spec['wdisp'][0],sdss_spec['wdisp'][-1])) (r['wavelength'])
+
+        # calculate the sdss dispersion in Angstroms, as a function of wavelength
+        sigma_aa = sdss_spec['wdisp'] * np.gradient(sdss_spec['wavelength']) # Ang
+        #sigma_v = sP.units.c_km_s * (sigma_aa / sdss_spec['wavelength']) # km/s
+
+        # interpolate the dispersion to the simulated wavelength grid (constant extrapolation)
+        f = interp1d(sdss_spec['wavelength'],sigma_aa,kind='linear',bounds_error=False,
+                     fill_value=(sigma_aa[0],sigma_aa[-1]))
+        smooth_res = f(r['wavelength'])
+
+        # convolve the mock spectrum using sdss wdisp (decrease the resolution to the instrumental res)
+        r['flux'] = smoothing.smoothspec(r['wavelength'], r['flux'], resolution=smooth_res, smoothtype="lsf")
+
+        # clip observed sdss spectrum, no negative values
+        w = np.where(sdss_spec['flux'] > 0.0)
+        sdss_spec['flux'] = np.clip(sdss_spec['flux'], sdss_spec['flux'][w].min()/10, np.inf)
+
+        # add Gaussian noise to the actual flux with the variance taken from ivar
+        sdss_stddev_frac = 1.0/np.sqrt(sdss_spec['ivar']) / sdss_spec['flux']
+
+        f = interp1d(sdss_spec['wavelength'],sdss_stddev_frac,kind='linear',bounds_error=False,
+                     fill_value=(sdss_stddev_frac[0],sdss_stddev_frac[-1]))
+        interp_stddev_frac = f(r['wavelength'])
+        interp_stddev_frac = np.clip(interp_stddev_frac, 0.001, 100.0) # for safety
+
+        rnd_frac = np.random.normal(loc=0.0, scale=interp_stddev_frac)
+
+        r['flux'] += rnd_frac * r['flux'] # add random component
+    else:
+        # we fit a noise-less spectrum at its original (mock stellar library) resolution, need 
+        # to provide a wdisp estimate for MILES (this is constant in wavelength, while disp is 
+        # in units of pixels=dlog(lambda)
+        r['wdisp'] = (miles_fwhm_aa / sigma_to_fwhm) / np.gradient(r['wavelength'])
+
+        # give a non-zero (fake) variance of 5% (roughly characteristic) to avoid over fitting
+        frac_stddev = 0.05
+        r['ivar'] = 1.0/(frac_stddev * r['flux'])**2.0
+
+    return r
+
+def _writeLsfFile(spec, sP):
+    """This method takes a spec file and returns the quadrature difference between the 
+    instrumental dispersion and the MILES dispersion, in km/s, as a function of wavelength. """
     # Get the SDSS instrumental resolution for this plate/mjd/fiber
     wave = spec['wavelength']
     dlam = np.gradient(wave)
     sigma_aa = spec['wdisp'] * dlam
-    sigma_v = lightspeed * (sigma_aa / wave)
+    sigma_v = sP.units.c_km_s * (sigma_aa / wave)
 
     # filter out some places where sdss reports zero dispersion
     good = sigma_v > 0
     wave, sigma_v = wave[good], sigma_v[good]
 
     # Get the miles velocity resolution function
-    sigma_v_miles = lightspeed * miles_fwhm_aa / 2.355 / wave
+    sigma_v_miles = sP.units.c_km_s * miles_fwhm_aa / sigma_to_fwhm / wave
 
     # Get the quadrature difference (zero and negative values are skipped by FSPS)
     dsv = np.sqrt(np.clip(sigma_v**2 - sigma_v_miles**2, 0, np.inf))
@@ -159,9 +258,19 @@ def _writeLsfFile(spec, miles_fwhm_aa=2.54):
 
     print(' WROTE [%s] careful of overlap.' % lname)
 
-def load_obs(ind, run_params):
-    """ Construct observational object with a SDSS spectrum, ready for fitting. """
-    spec = loadSDSSSpectrum(ind=ind, fits=True)
+def load_obs(ind, run_params, doSim=None):
+    """ Construct observational object with a SDSS spectrum, ready for fitting. If doSim is not
+    None, then instead of an actual SDSS spectrum, load and process a mock spectrum instead, in 
+    which case doSim should be a dict having keys 'withVel' and 'addRealism'. """
+    if doSim is not None:
+        spec = loadSimulatedSpectrum(doSim['sP'], ind=ind, 
+            withVel=doSim['withVel'], addRealism=doSim['addRealism'])
+
+        for k in doSim.keys():
+            # append any additional mock details to save into the output
+            run_params[k] = doSim[k]
+    else:
+        spec = loadSDSSSpectrum(ind=ind, fits=True)
 
     # convert [10^-17 erg/cm^2/s/Ang] -> [10^-23 erg/cm^2/s/Hz] since flux_nu = (lambda^2/c) * flux_lambda
     # http://coolwiki.ipac.caltech.edu/index.php/Units, https://en.wikipedia.org/wiki/AB_magnitude
@@ -180,7 +289,7 @@ def load_obs(ind, run_params):
         obs['unc'] = 1.0/np.sqrt(spec['ivar']) * fac
     else:
         print(' Warning: No actual variance.')
-        obs['unc'] = spec['flux'] * 0.05
+        obs['unc'] = spec['flux'] * 0.05 * fac
 
     obs['maggies'] = None # no broadband filter magnitudes
     obs['maggies_unc'] = None # no associated uncertanties
@@ -188,17 +297,21 @@ def load_obs(ind, run_params):
     obs['phot_mask'] = None  # optional, no associated masks
 
     # lsf: such that we convolve the theoretical spectra with the instrument resolution (wave-dependent)
-    _writeLsfFile(spec)
+    from util.simParams import simParams
+    sP = doSim['sP'] if doSim is not None else simParams(res=1820,run='tng') # just for units
+    _writeLsfFile(spec, sP)
 
     # deredshift (fit in rest-frame below)
     obs['wavelength'] /= (1 + spec['redshift'])
     obs['spectrum'] /= (1 + spec['redshift']) # assuming spectrum is now f_nu
 
-    # mask: bad variance, wavelength range, and lines
+    # mask: bad variance
     obs['mask'] = (spec['ivar'] != 0.0)
 
+    # mask: wavelength range
     wavelength_mask = (obs['wavelength'] > run_params['wlo']) & (obs['wavelength'] < run_params['whi'])
 
+    # mask: emission lines
     lines = """3715.0  3735.0  0.0  *[OII]      3726.0
                3720.0  3742.0  0.0  *[OII]      3728.8
                4065.0  4135.0  0.0  *Hdelta     4101.7
@@ -266,9 +379,9 @@ def load_model_params(redshift=None):
         # set the lumdist parameter to get the spectral units (and thus masses) correct. note that, by 
         # having both `lumdist` and `zred` we decouple the redshift from the distance (necessary since 
         # zred represents only the residual redshift in the fitting)
-        from astropy.cosmology import Planck15 as cosmo
-        lumDist = cosmo.luminosity_distance(redshift).value
-        #print(' z=%.4f lumdist=%.4f Mpc' % (redshift,lumDist))
+        from util.simParams import simParams
+        sP = simParams(res=1820,run='tng') # for cosmology
+        lumDist = sP.units.redshiftToLumDist(redshift)
 
         model_params.append({'name': 'lumdist', 'N': 1,
                              'isfree': False,
@@ -525,18 +638,29 @@ def load_model_params(redshift=None):
 
     return model_params
 
-def fitSDSSSpectrum(ind=12345, savePath=None):
-    """ Run MCMC fit against a particular SDSS spectrum. """
+def _indivSavePath(ind, doSim=None):
+    """ Return a save path, for mock if doSim==None, otherwise for SDSS. """
+    if doSim is not None:
+        sP = doSim['sP']
+        basePath = sP.derivPath + '/spectral_fits/snap_%03d/%d/' % (sP.snap,ind % indModulus)
+        fileBase = basePath + 'chains_v%d_r%d_%d' % (doSim['withVel'],doSim['addRealism'],ind)
+    else:
+        basePath = os.path.expanduser('~') + '/obs/mcmc_fits_%s/%d/' % (zBin,ind % indModulus)
+        fileBase = basePath + 'chains_%d' % ind
+
+    fileName = fileBase + '.hdf5'
+    return fileName
+
+def fitSingleSpectrum(ind, doSim=None):
+    """ Run MCMC fit against a particular SDSS spectrum. ind gives the index of the SDSS z<0.1 
+    catalog (if doSim is None), otherwise the index of the sP SDSSFiberSpectra auxCat 
+    (if doSim is not None) in which case the identical fitting procedure is run against a 
+    mock instead of observed spectrum. """
 
     # test: NGC3937 z=0.02221 objid=1237667916491325445 ind=280692
     # plate=2515  mjd=54180 fiber=377 specobjid=2831741964808906752
     # test: NGC5227 z=0.01745 objid=1237651735230545966 ind=49455
     # plate=528   mjd=52022 fiber=137 specobjid=594512843009714176
-
-    from prospect.models import sedmodel
-    from prospect.io import write_results
-    from prospect.sources import CSPSpecBasis
-    from prospect import fitting
 
     # configuration
     run_params = {'verbose':True,
@@ -558,13 +682,10 @@ def fitSDSSSpectrum(ind=12345, savePath=None):
                   }
 
     # load observational spectrum
-    obs = load_obs(ind, run_params)
+    obs = load_obs(ind, run_params, doSim=doSim)
 
     # model
     # default: 7 free parameters: z_red, mass, logzsol, tau, tage, dust1, sigma_smooth
-    # or: 8 free parameters: z_red, mass, logzsol, tau, tage, dust1, dust2, sigma_smooth
-    # (cannot force any dust>0, leads to issues with dust-free early-types? maybe better to 
-    # couple them with a constant ratio instead of letting them float free)
     model_params = load_model_params(redshift=obs['redshift'])
     model = sedmodel.SedModel(model_params)
 
@@ -578,15 +699,14 @@ def fitSDSSSpectrum(ind=12345, savePath=None):
     # setup
     initial_theta = model.rectify_theta(model.initial_theta)
 
-    basePath = savePath if savePath is not None else ''
-    outFileBase = basePath + 'chains_%d' % ind
-    hf = h5py.File(outFileBase + '.hdf5','w')
+    outFileName = _indivSavePath(ind, doSim=doSim)
+    hf = h5py.File(outFileName,'w')
     write_results.write_h5_header(hf, run_params, model)
     write_results.write_obs_to_h5(hf, obs)
 
     # no initial Powell guess
     postkwargs = {}
-    pool = None # MPI
+    pool = None # MPI, disabled
 
     powell_guesses = None
     pdur = 0.0
@@ -604,23 +724,99 @@ def fitSDSSSpectrum(ind=12345, savePath=None):
     edur = time.time() - tstart
     print('done sampling in %.1f sec' % edur)
 
-    # write pickles and hdf5
-    write_results.write_pickles(run_params, model, obs, esampler, powell_guesses,
-                                outroot=outFileBase, toptimize=pdur, tsample=edur,
-                                sampling_initial_center=initial_center,
-                                post_burnin_center=burn_p0,
-                                post_burnin_prob=burn_prob0)
-
+    # write results to hdf5
     write_results.write_hdf5(hf, run_params, model, obs, esampler, powell_guesses,
                              toptimize=pdur, tsample=edur,
                              sampling_initial_center=initial_center,
                              post_burnin_center=burn_p0,
                              post_burnin_prob=burn_prob0)
 
+def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
+    """ Combine and save all of the individual MCMC hdf5 result files, for either the SDSS spectra 
+    sample or for the mock sample of a given sP. Same format as an auxCat. For mock samples, this 
+    file can then be loaded through cosmo.load.auxCat(). Note save size: condensed subhaloIDs only. """
+    import getpass
+    import datetime
+    from util.helper import curRepoVersion
+
+    nFound = 0
+    indRange = [0, nSpec-1]
+
+    if doSim is None:
+        # SDSS: we save in the same format as the mocks, except in ~/obs/
+        field = sdssSpectraFitsCatName
+        outFileName = os.path.expanduser('~') + '/obs/%s.hdf5' % field
+    else:
+        # mocks: we save in the identical format as a normal auxCat
+        sP = doSim['sP']
+        velStr = 'Vel' if doSim['withVel'] else 'NoVel'
+        realStr = 'Realism' if doSim['addRealism'] else 'NoRealism'
+        field = spectraFitsAuxcatName % (velStr,realStr)
+        outFileName = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (field,sP.snap)
+
+    assert not os.path.isfile(outFileName)
+
+    # get metadata from first fit result
+    attrs = {}
+
+    with h5py.File(_indivSavePath(0, doSim=doSim), 'r') as f:
+        nFreeParams = f['sampling']['initial_theta'].size
+
+        for k in ['theta_labels']:
+            attrs[k] = f['sampling'].attrs[k].encode('ascii')
+        for k in ['prospector_version','model_params','run_params']:
+            attrs[k] = f.attrs[k].encode('ascii')
+
+    # allocate, condensed subhalo size, number of free parameters * 3 (for 2 percentiles each)
+    r = np.zeros( (nSpec, nFreeParams, 3), dtype='float32' )
+    r.fill(np.nan)
+
+    print(' Concatenating into shape: ', r.shape)
+
+    # start search
+    for index in np.arange( indRange[0], indRange[1] ):
+        if index % np.max([1,int(nSpec/10.0)]) == 0 and index <= nSpec:
+            print('   %4.1f%%' % (float(index+1)*100.0/nSpec))
+
+        fileName = _indivSavePath(index, doSim=doSim)
+        if not os.path.isfile(fileName):
+            continue
+
+        # load
+        with h5py.File(fileName,'r') as f:
+            chain = f['sampling']['chain'][()]
+        assert chain.ndim == 3 and chain.shape[2] == nFreeParams
+
+        # flatten chain into a linear list of samples, calculate median and percentiles, save
+        samples = chain.reshape( (-1,nFreeParams) )
+        percs = np.percentile(samples, percentiles, axis=0)
+
+        r[index,:,:] = percs.T # (7,3) shape
+        nFound += 1
+
+    # save result
+    print('Total # galaxy spectra: %d, found [%d] with results.' % (nSpec,nFound))
+
+    # save new dataset (or overwrite existing)
+    with h5py.File(outFileName,'w') as f:
+        f.create_dataset(field, data=r)
+
+        if objs is not None:
+            f.create_dataset(objs['name'], data=objs['ids'])
+
+        for attrName, attrValue in attrs.iteritems():
+            f[field].attrs[attrName] = attrValue
+
+        # save metadata and any additional descriptors as attributes
+        f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
+        f[field].attrs['CreatedRev']  = curRepoVersion()
+        f[field].attrs['CreatedBy']   = getpass.getuser()
+
+    print(' Saved new [%s].' % outFileName)
+
 def fitSDSSSpectra(pSplit):
     """ Fit a pSplit work divided segment of the entire z<0.1 SDSS selection. Results are saved 
-    individually, one file per galaxy, which can be concatenated later. """
-    zBin = 'z0.0-0.1'
+    individually, one file per galaxy, in ~/obs/mcmc_fits_{ZBIN}/{DIR}/."""
     f1 = os.path.expanduser('~') + '/obs/sdss_%s.hdf5' % zBin
 
     basePath = os.path.expanduser('~') + '/obs/mcmc_fits_%s/' % zBin
@@ -628,86 +824,164 @@ def fitSDSSSpectra(pSplit):
 
     # get global list of all object IDs of interest
     with h5py.File(f1,'r') as f:
+        objIDs = f['objid'][()]
         nObjIDs = f['objid'].size
         objIDRange = [0, nObjIDs-1]
 
-    # divide range, decide indRange local to this task
-    indRange = pSplitRange( objIDRange, pSplit[1], pSplit[0] )
+    if pSplit is None:
+        # combine now (semi-loose: all the files that exist, need not be all)
+        objs = {'name':'objid', 'ids':objIDs}
 
-    print('Total # galaxies: %d, processing [%d] now, range [%d - %d]...' % \
-        (nObjIDs,indRange[1]-indRange[0]+1,indRange[0],indRange[1]))
+        combineAndSaveSpectralFits(nObjIDs, objs=objs, doSim=None)
+    else:
+        # calculate now: divide range, decide indRange local to this task
+        indRange = pSplitRange( objIDRange, pSplit[1], pSplit[0] )
 
-    # process in a serial loop
-    for index in np.arange( indRange[0], indRange[1] ):
-        savePath = basePath + str(index % 100) + '/'
-        if not os.path.isdir(savePath): os.mkdir(savePath)
+        print('Total # galaxies: %d, processing [%d] now, range [%d - %d]...' % \
+            (nObjIDs,indRange[1]-indRange[0]+1,indRange[0],indRange[1]))
+        
+        # process in a serial loop
+        for index in np.arange( indRange[0], indRange[1] ):
+            savePath = basePath + str(index % indModulus) + '/'
+            if not os.path.isdir(savePath): os.mkdir(savePath)
 
-        import pdb; pdb.set_trace()
+            fitSingleSpectrum(ind=index, doSim=None)
 
-        fitSDSSSpectrum(ind=index, savePath=savePath)
+def fitMockSpectra(sP, pSplit, withVel=False, addRealism=False):
+    """ Fit a pSplit work divided segment of the mock SDSS fiber spectra for this snapshot. 
+    Results are saved individually in {SIM}/data.files/spectral_fits/snap_NNN/DIR/."""
+    doSim = {'sP':sP, 'withVel':withVel, 'addRealism':addRealism}
 
-def plotSingleResult(ind=12345, sps=None):
+    basePath = sP.derivPath + '/spectral_fits/'
+    if not os.path.isdir(basePath): os.mkdir(basePath)
+    basePath += 'snap_%03d/' % sP.snap
+    if not os.path.isdir(basePath): os.mkdir(basePath)
+
+    # get global list of the number of spectra we have
+    velStr = 'Vel' if withVel else 'NoVel'
+    acName = mockSpectraAuxcatName % velStr
+    spec = auxCat(sP, acName, onlyMeta=True)
+    nSpec = spec['subhaloIDs'].size
+
+    if pSplit is None:
+        # combine now (semi-loose: all the files that exist, need not be all)
+        doSim = {'sP':sP, 'withVel':withVel, 'addRealism':addRealism}
+        objs  = {'name':'subhaloIDs', 'ids':spec['subhaloIDs']}
+
+        combineAndSaveSpectralFits(nSpec, objs=objs, doSim=doSim)
+    else:
+        # calculate now: divide range, decide indRange local to this task
+        indRange = pSplitRange( [0, nSpec-1], pSplit[1], pSplit[0] )
+
+        print('Total # galaxy spectra: %d, processing [%d] now, range [%d - %d]...' % \
+            (nSpec,indRange[1]-indRange[0]+1,indRange[0],indRange[1]))
+
+        # process in a serial loop
+        for index in np.arange( indRange[0], indRange[1] ):
+            savePath = basePath + str(index % indModulus) + '/'
+            if not os.path.isdir(savePath): os.mkdir(savePath)
+
+            fitSingleSpectrum(ind=index, doSim=doSim)
+            import pdb; pdb.set_trace()
+
+def plotSingleResult(ind, sps=None, doSim=None):
     """ Load the results of a single MCMC fit, print the answer, render a corner plot of the joint 
     PDFs of all the parameters, and show the original spectrum as well as some ending model spectra. """
+    import matplotlib.pyplot as plt
     import corner
-    from prospect.sources import CSPSpecBasis
-    import prospect.io.read_results as bread
+    import pickle
 
-    fileBase = "chains_%d" % ind #"ngc3937_1489154818"
-    percs = [16,50,84]
+    # mapping from sampling labels to pretty labels
+    new_labels = {'zred':'10$^4$ z$_{\\rm res}$', 
+                  'mass':'M$_\star$ [10$^{10}$ M$_{\\rm sun}$]', 
+                  'logzsol':'log(Z/Z$_{\\rm sun}$)', 
+                  'tau':'$\\tau_{\\rm SFH}$ [Gyr]', 
+                  'tage':'$t_{\\rm age}$ [Gyr]', 
+                  'dust1':'$\\tau_{1}$', 
+                  'sigma_smooth':'$\sigma_{\\rm disp}$ [km/s]'}
 
-    # load pickle
-    res, pr, mod = bread.results_from(fileBase + "_mcmc")
+    # load a mock spectrum fit if doSim is input, otherwise load a SDSS spectrum fit
+    fileName = _indivSavePath(ind, doSim=doSim)
 
     # load chains from hdf5
-    with h5py.File(fileBase + ".hdf5",'r') as f:
+    with h5py.File(fileName,'r') as f:
         chain = f['sampling']['chain'][()]
         wave = f['obs']['wavelength'][()]
         spec = f['obs']['spectrum'][()]
+
+        # variable-length null-terminated ASCII string pickles
+        model_params = pickle.loads(f.attrs['model_params'])
+        run_params = pickle.loads(f.attrs['run_params'])
+        rstate = pickle.loads(f['sampling'].attrs['rstate'])
+
+        # string encoded list
+        theta_labels = f['sampling'].attrs['theta_labels']
+        theta_labels = theta_labels.replace("[","").replace("]","").replace('"',"")
+        theta_labels = theta_labels.split(", ")
+
+        dt_sec = float(f['sampling'].attrs['sampling_duration'])
+
+    # replace labels
+    theta_labels_plot = [new_labels[l] for l in theta_labels]
+
+    if doSim is None:
+        saveStr = 'sdss_%s'% zBin
+    else:
+        saveStr = '%s-%s_v%dr%d' % (doSim['sP'].simName,doSim['sP'].snap,doSim['withVel'],doSim['addRealism'])
+
+    # reconstruct model
+    model = sedmodel.SedModel(model_params)
 
     # flatten chain into a linear list of samples
     ndim = chain.shape[2]
     samples = chain.reshape( (-1,ndim) )
 
     # print median as the answer, as well as standard percentiles
-    percs = np.percentile(samples, percs, axis=0)
-    for i, label in enumerate(res['theta_labels']):
+    percs = np.percentile(samples, percentiles, axis=0)
+    for i, label in enumerate(theta_labels):
         print(label, percs[:,i])
     print('Number of (samples,free_params): ',samples.shape)
 
     # (A) corner plot
     if 1:
-        #quantiles = np.array(percs)/100.0
-        fig = corner.corner(samples, labels=res['theta_labels'])
-        fig.savefig('out_%d_triangle.pdf' % ind)
+        samples_plot = samples.copy()
+        # adjust z_res and Mass for sig figs
+        samples_plot[:,0] *= 1e4 # residual redshift
+        samples_plot[:,1] /= 1e10 # mass
+
+        fig = corner.corner(samples_plot, labels=theta_labels_plot, quantiles=[0.1, 0.5, 0.9], 
+                            show_titles=True, title_kwargs={"fontsize": 13})
+        fig.savefig('fig_mcmcTriangle_%s_%d.pdf' % (saveStr,ind))
         plt.close(fig)
 
     # (B) plot some of the final chain models on top of data
-    if 1:
+    if 0:
+        # hack: needs to be fixed
+        obs = {'wavelength':wave,'filters':[],'logify_spectrum':run_params['logify_spectrum']}
+
+        # start figure
         fig = plt.figure(figsize=(12,8))
         ax = fig.add_subplot(111)
         ax.set_xlabel('$\lambda$ [Angstroms]')
         ax.set_ylabel('$F_\lambda$ [$\mu$Mgy]')
-        ax.set_title('ind=%d logMass=%.1f z=%.3f specobjid=%d' % \
-            (ind,res['obs']['logMass'],res['obs']['redshift'],res['obs']['specobjid']))
+        ax.set_title('ind=%d' % (ind))
         ax.set_ylim([5e-2,5e0])
         ax.set_yscale('log')
 
         # recreate model
         if sps is None:
             sps = CSPSpecBasis(zcontinuous=True,compute_vega_mags=False)
-            #model = sedmodel.SedModel(model_params)
 
         ax.plot(wave, spec*1e6, '-', label='obs')
 
         for i in range(20):
             local_result = samples[i,:]
-            spec, phot, mfrac = mod.mean_model(local_result, obs=res['obs'], sps=sps)
+            spec, phot, mfrac = model.mean_model(local_result, obs=obs, sps=sps)
 
             ax.plot(wave, spec*1e6, '-', color='black', alpha=0.2, label='model %d' % i)
 
         fig.tight_layout()
-        fig.savefig('out_%d_samples.pdf' % ind)
+        fig.savefig('fig_mcmcFinalSamples_%s_%d.pdf' % (saveStr,ind))
         plt.close(fig)
 
 def lnprobfn(theta, model=None, obs=None, sps=None, verbose=True):

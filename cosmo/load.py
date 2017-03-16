@@ -16,11 +16,12 @@ import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
 from util.helper import iterable, logZeroSafe, curRepoVersion
 
-def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None):
+def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now 
-      indRange     : load only the specified range of data (field as well as e.g. subhaloIDs) """
+      indRange     : if a tuple/list, load only the specified range of data (field and  e.g. subhaloIDs)
+      onlyMeta     : load only attributes and coverage information """
     from cosmo import auxcatalog
     import datetime
     import getpass
@@ -41,7 +42,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         mkdir(sP.derivPath + 'auxCat')
 
     for field in iterable(fields):
-        if field not in auxcatalog.fieldComputeFunctionMapping:
+        if field not in auxcatalog.fieldComputeFunctionMapping.keys() + auxcatalog.manualFieldNames:
             raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
         # check for existence of auxiliary catalog file for this dataset
@@ -176,14 +177,15 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             #print('Load existing: ['+field+']')
             with h5py.File(auxCatPath,'r') as f:
                 # load data
-                if indRange is None:
-                    r[field] = f[field][()]
-                else:
-                    if f[field].ndim == 1: r[field] = f[field][indRange[0]:indRange[1]]
-                    if f[field].ndim == 2: r[field] = f[field][indRange[0]:indRange[1],:]
-                    if f[field].ndim == 3: r[field] = f[field][indRange[0]:indRange[1],:,:]
-                    r[field] = np.squeeze(r[field]) # remove any degenerate dimensions
-                    assert f[field].ndim in [1,2,3]
+                if not onlyMeta:
+                    if indRange is None:
+                        r[field] = f[field][()]
+                    else:
+                        if f[field].ndim == 1: r[field] = f[field][indRange[0]:indRange[1]]
+                        if f[field].ndim == 2: r[field] = f[field][indRange[0]:indRange[1],:]
+                        if f[field].ndim == 3: r[field] = f[field][indRange[0]:indRange[1],:,:]
+                        r[field] = np.squeeze(r[field]) # remove any degenerate dimensions
+                        assert f[field].ndim in [1,2,3]
 
                 # load metadata
                 r[field+'_attrs'] = {}
@@ -193,8 +195,6 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 # load subhaloIDs, partInds if present
                 for attrName in largeAttrNames:
                     if attrName in f:
-                        r[attrName + '_size'] = f[attrName].size
-
                         if indRange is None:
                             r[attrName] = f[attrName][()]
                         else:
