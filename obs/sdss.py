@@ -33,6 +33,7 @@ miles_fwhm_aa = 2.54 # spectral resolution of the MILES stellar library (FWHM/An
 sigma_to_fwhm = 2.355
 indModulus = 100 # split individual galaxy results into this many subdirectories
 percentiles = [16,50,84]
+minPerMCMCFit = 27.0 # rough estimate, ~= (0.02sec/60) * (nburn.sum()+niter) * nwalkers
 
 def sdss_decompose_specobjid(id):
     """ Convert 64-bit SpecObjID into its parts, returning a dict. DR13 convention. """
@@ -224,7 +225,7 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
 
     return r
 
-def _writeLsfFile(spec, sP):
+def getLSFSmoothing(spec, sP):
     """This method takes a spec file and returns the quadrature difference between the 
     instrumental dispersion and the MILES dispersion, in km/s, as a function of wavelength. """
     # Get the SDSS instrumental resolution for this plate/mjd/fiber
@@ -249,14 +250,17 @@ def _writeLsfFile(spec, sP):
     # Get the quadrature difference between the instrumental and MILES resolution
     wave, delta_v = wave[good], dsv[good]
 
-    # Write the file
-    lname = os.path.join(os.environ['SPS_HOME'],'data','lsf.dat')
-    with open(lname, 'w') as out:
-        for w, vel in zip(wave, delta_v):
-            out.write('{:4.2f}   {:4.2f}\n'.format(w, vel))
-    out.close()
+    if 0:
+        # Write the file (out of date, now set in memory)
+        lname = os.path.join(os.environ['SPS_HOME'],'data','lsf.dat')
+        with open(lname, 'w') as out:
+            for w, vel in zip(wave, delta_v):
+                out.write('{:4.2f}   {:4.2f}\n'.format(w, vel))
+        out.close()
 
-    print(' WROTE [%s] careful of overlap.' % lname)
+        print(' WROTE [%s] careful of overlap.' % lname)
+
+    return wave, delta_v
 
 def load_obs(ind, run_params, doSim=None):
     """ Construct observational object with a SDSS spectrum, ready for fitting. If doSim is not
@@ -286,7 +290,8 @@ def load_obs(ind, run_params, doSim=None):
     obs['spectrum'] = flux_maggies # units of maggies
 
     if 'ivar' in spec:
-        obs['unc'] = 1.0/np.sqrt(spec['ivar']) * fac
+        with np.errstate(all='ignore'):
+            obs['unc'] = 1.0/np.sqrt(spec['ivar']) * fac
     else:
         print(' Warning: No actual variance.')
         obs['unc'] = spec['flux'] * 0.05 * fac
@@ -299,7 +304,8 @@ def load_obs(ind, run_params, doSim=None):
     # lsf: such that we convolve the theoretical spectra with the instrument resolution (wave-dependent)
     from util.simParams import simParams
     sP = doSim['sP'] if doSim is not None else simParams(res=1820,run='tng') # just for units
-    _writeLsfFile(spec, sP)
+
+    obs['lsf_wave'], obs['lsf_delta_v'] = getLSFSmoothing(spec, sP)
 
     # deredshift (fit in rest-frame below)
     obs['wavelength'] /= (1 + spec['redshift'])
@@ -421,7 +427,7 @@ def load_model_params(redshift=None):
                             'init_disp': 0.2,
                             'units': r'$\log (Z/Z_\odot)$',
                             'prior_function': priors.tophat,
-                            'prior_args': {'mini':-1.5, 'maxi':0.5}})
+                            'prior_args': {'mini':-1.5, 'maxi':0.7}})
 
     # FSPS parameter
     model_params.append({'name': 'tau', 'N': 1,
@@ -663,11 +669,11 @@ def fitSingleSpectrum(ind, doSim=None):
     # plate=528   mjd=52022 fiber=137 specobjid=594512843009714176
 
     # configuration
-    run_params = {'verbose':True,
+    run_params = {'verbose':False,
                   'debug':False,
                   # Fitter parameters
                   'nwalkers':128, # should be N*(nproc-1) where N is an even integer, Nproc=MPI tasks
-                  'nburn':[32, 32, 64, 128],
+                  'nburn':[32, 32, 64, 64, 128, 128],
                   'niter':128, # note: total number of retained samples = niter*nwalkers
                   #'do_powell': False,
                   #'ftol':0.5e-5, 'maxfev':5000,
@@ -681,6 +687,13 @@ def fitSingleSpectrum(ind, doSim=None):
                   'zcontinuous': 1, # 1=continuous metallicity, 0=discretized zmet integers only
                   }
 
+    # already exists?
+    outFileName = _indivSavePath(ind, doSim=doSim)
+
+    if os.path.isfile(outFileName):
+        print(' SKIP: [%d] already exists.' % outFileName)
+        return
+
     # load observational spectrum
     obs = load_obs(ind, run_params, doSim=doSim)
 
@@ -692,14 +705,13 @@ def fitSingleSpectrum(ind, doSim=None):
     # SPS Model
     sps = CSPSpecBasis(zcontinuous=run_params['zcontinuous'],compute_vega_mags=False)
 
-    #assert sps.ssp.libraries[1] == 'miles'
-    #sps.ssp.params['smooth_lsf'] = True
-    #sps.ssp.set_lsf(wave, delta_v) # future dreams
+    assert sps.csp.libraries[1] == 'miles'
+    sps.csp.params['smooth_lsf'] = True
+    sps.csp.set_lsf(obs['lsf_wave'], obs['lsf_delta_v'])
 
     # setup
     initial_theta = model.rectify_theta(model.initial_theta)
 
-    outFileName = _indivSavePath(ind, doSim=doSim)
     hf = h5py.File(outFileName,'w')
     write_results.write_h5_header(hf, run_params, model)
     write_results.write_obs_to_h5(hf, obs)
@@ -836,10 +848,12 @@ def fitSDSSSpectra(pSplit):
     else:
         # calculate now: divide range, decide indRange local to this task
         indRange = pSplitRange( objIDRange, pSplit[1], pSplit[0] )
+        hoursEst = minPerMCMCFit * (indRange[1]-indRange[0]+1) / 60.0
 
         print('Total # galaxies: %d, processing [%d] now, range [%d - %d]...' % \
             (nObjIDs,indRange[1]-indRange[0]+1,indRange[0],indRange[1]))
-        
+        print('Estimated time for this task: %.1f hours (%.1f days)...' % (hoursEst,hoursEst/24))
+
         # process in a serial loop
         for index in np.arange( indRange[0], indRange[1] ):
             savePath = basePath + str(index % indModulus) + '/'
@@ -872,9 +886,11 @@ def fitMockSpectra(sP, pSplit, withVel=False, addRealism=False):
     else:
         # calculate now: divide range, decide indRange local to this task
         indRange = pSplitRange( [0, nSpec-1], pSplit[1], pSplit[0] )
+        hoursEst = minPerMCMCFit * (indRange[1]-indRange[0]+1) / 60.0
 
         print('Total # galaxy spectra: %d, processing [%d] now, range [%d - %d]...' % \
             (nSpec,indRange[1]-indRange[0]+1,indRange[0],indRange[1]))
+        print('Estimated time for this task: %.1f hours (%.1f days)...' % (hoursEst,hoursEst/24))
 
         # process in a serial loop
         for index in np.arange( indRange[0], indRange[1] ):
@@ -882,7 +898,6 @@ def fitMockSpectra(sP, pSplit, withVel=False, addRealism=False):
             if not os.path.isdir(savePath): os.mkdir(savePath)
 
             fitSingleSpectrum(ind=index, doSim=doSim)
-            import pdb; pdb.set_trace()
 
 def plotSingleResult(ind, sps=None, doSim=None):
     """ Load the results of a single MCMC fit, print the answer, render a corner plot of the joint 
@@ -911,7 +926,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
 
         # variable-length null-terminated ASCII string pickles
         model_params = pickle.loads(f.attrs['model_params'])
-        run_params = pickle.loads(f.attrs['run_params'])
+        #run_params = pickle.loads(f.attrs['run_params'])
         rstate = pickle.loads(f['sampling'].attrs['rstate'])
 
         # string encoded list
@@ -928,9 +943,6 @@ def plotSingleResult(ind, sps=None, doSim=None):
         saveStr = 'sdss_%s'% zBin
     else:
         saveStr = '%s-%s_v%dr%d' % (doSim['sP'].simName,doSim['sP'].snap,doSim['withVel'],doSim['addRealism'])
-
-    # reconstruct model
-    model = sedmodel.SedModel(model_params)
 
     # flatten chain into a linear list of samples
     ndim = chain.shape[2]
@@ -959,6 +971,12 @@ def plotSingleResult(ind, sps=None, doSim=None):
         # hack: needs to be fixed
         obs = {'wavelength':wave,'filters':[],'logify_spectrum':run_params['logify_spectrum']}
 
+        # reconstruct model
+        model = sedmodel.SedModel(model_params)
+
+        if sps is None:
+            sps = CSPSpecBasis(zcontinuous=True,compute_vega_mags=False)
+
         # start figure
         fig = plt.figure(figsize=(12,8))
         ax = fig.add_subplot(111)
@@ -967,10 +985,6 @@ def plotSingleResult(ind, sps=None, doSim=None):
         ax.set_title('ind=%d' % (ind))
         ax.set_ylim([5e-2,5e0])
         ax.set_yscale('log')
-
-        # recreate model
-        if sps is None:
-            sps = CSPSpecBasis(zcontinuous=True,compute_vega_mags=False)
 
         ax.plot(wave, spec*1e6, '-', label='obs')
 
