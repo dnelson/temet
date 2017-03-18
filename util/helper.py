@@ -9,6 +9,7 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import collections
+from scipy.optimize import leastsq
 
 # --- utility functions ---
 
@@ -331,6 +332,38 @@ def trapsum(xin,yin):
     assert xin.size >= 2
     nn = xin.size
     return np.sum( np.abs(xin[1:nn-1]-xin[0:nn-2]) * (yin[1:nn-1]+yin[0:nn-2])*0.5 )
+
+def leastsq_fit(func, params_init, args=None):
+    """ Wrap scipy.interpolate.leastsq() by making the error function and handling returns.
+    If args is not None, then the standard errors are also computed, but this ASSUMES that 
+    args[0] is the x data points and args[1] is the y data points. """
+    def error_function(params, x, y, fixed=None):
+        y_fit = func(x, params, fixed)
+        return y_fit - y
+
+    params_best, params_cov, info, errmsg, retcode = \
+      leastsq(error_function, params_init, args=args, full_output=True)
+
+    # estimate errors (unused)
+    params_stddev = np.zeros( len(params_best), dtype='float32' )
+
+    if params_cov is not None and args is not None:
+        # assume first two elements of args are x_data and y_data
+        assert len(args) >= 2 and args[0].shape == args[1].shape
+        x_data, y_data = args[0], args[1]
+
+        # reduced chi^2 (i.e. residual variance)
+        chi2 = np.sum(error_function(params_best, x_data, y_data)**2.0)
+        reduced_chi2 = chi2 / (y_data.size - len(params_best))
+
+        # incorporate into fractional covariance matrix
+        params_cov *= reduced_chi2
+
+        # square root of diagonal elements estimates stddev of each parameter
+        for j in range(len(params_best)):
+            params_stddev[j] = np.abs(np.sqrt( params_cov[j][j] ))
+
+    return params_best, params_stddev
 
 # --- vis ---
 
