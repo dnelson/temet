@@ -1046,9 +1046,9 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
     mag_range = [-0.5, 1.5] #bandMagRange(bands, tight=False)
-    yMinMax   = [0.0,3.0]
+    yMinMax   = [0.0, 4.0]
     mMinMax   = [9.0, 12.0] # log Mstar
-    sMinMax   = [0.0, 0.5] # sigma
+    sMinMax   = [0.0, (mag_range[1]-mag_range[0])/10] # sigma
 
     lw = 2.5
     xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
@@ -1060,6 +1060,9 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
                                       simColorsModel=simColorsModel)
 
+    masses = fits['mStar'] # bin centers
+    methods = ['A','B'] # plot each
+
     # (A) start plot, debugging double gaussians (two plots of 10 panels each to cover 20 bins)
     nCols = 2 * 0.6
     nRows = 5 * 0.6 # 0.6=visual adjust fac
@@ -1070,12 +1073,13 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         #import cosmo.galaxyColor.double_gaussian as modelFunc
         xx = np.linspace(mag_range[0], mag_range[1], 100)
 
-        # load results for a particular method, including the model
-        method = 'A'
-        masses = fits['%s_mstar' % method]
-        params = fits['%s_params' % method]
-
+        # loop over half the mass bins, with a stride of two (one panel per mass bin)
         for i, mass in enumerate(masses[iterNum::2]):
+            # get index of this mass bin in params
+            data_index = np.where(masses == mass)[0][0]
+            print(iterNum,i,data_index,mass)
+
+            # start plot
             ax = fig.add_subplot(5,2,i+1, axisbg=color1)
 
             setAxisColors(ax, color2)
@@ -1084,15 +1088,30 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
 
-            (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+            # load results for a particular method, including the model
+            for j, method in enumerate(methods):
+                params = fits['%s_params' % method]
 
-            y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
-            y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+                (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,data_index]
 
-            ax.plot(xx,y1,'-',color='blue',alpha=0.8,lw=lw,label=mlabel % (mass,mass+fits['binSizeMass']))
-            ax.plot(xx,y2,'-',color='red',alpha=0.8,lw=lw)
-        
-            ax.legend(loc='best')
+                y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
+                y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+
+                ax.plot(xx,y1,linestyles[j],color='blue',alpha=0.8,lw=lw)
+                ax.plot(xx,y2,linestyles[j],color='red',alpha=0.8,lw=lw)
+            
+            # make legend
+            sExtra = []
+            lExtra = []
+
+            for j, method in enumerate(methods):
+                sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) )
+                lExtra.append( 'Method (%s)' % method )
+
+            sExtra.append(plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle=linestyles[j]))
+            lExtra.append(mlabel % (mass,mass+fits['binSizeMass']))
+
+            legend2 = ax.legend(sExtra, lExtra, loc='best')
 
         # finish plot and save
         fig.tight_layout()
@@ -1123,30 +1142,35 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             saveStr = 'A'
             ax.set_ylim([0.0,3.0])
 
-        # load results for a particular method, including the model
-        method = 'A'
-        masses = fits['%s_mstar' % method]
-        params = fits['%s_params' % method]
-
         val_red  = np.zeros( masses.size, dtype='float32' )
         val_blue = np.zeros( masses.size, dtype='float32' )
 
-        for i in range(len(masses)):
-            (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+        # load results for a particular method, including the model
+        for j, method in enumerate(methods):
+            params = fits['%s_params' % method]
 
-            if iterNum == 0:
-                val_blue[i] = sigma1
-                val_red[i] = sigma2
-            if iterNum == 1:
-                val_blue[i] = mu1
-                val_red[i] = mu2
-            if iterNum == 2:
-                val_blue[i] = A1
-                val_red[i] = A2
+            for i in range(len(masses)):
+                (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
 
-        ax.plot(masses,val_blue,'-',color='blue',alpha=0.8,lw=lw)
-        ax.plot(masses,val_red,'-',color='red',alpha=0.8,lw=lw)
+                if iterNum == 0:
+                    val_blue[i] = sigma1
+                    val_red[i] = sigma2
+                if iterNum == 1:
+                    val_blue[i] = mu1
+                    val_red[i] = mu2
+                if iterNum == 2:
+                    val_blue[i] = A1
+                    val_red[i] = A2
+
+            ax.plot(masses,val_blue,'o'+linestyles[j],color='blue',alpha=0.8,lw=lw)
+            ax.plot(masses,val_red,'o'+linestyles[j],color='red',alpha=0.8,lw=lw)
             
+        # make legend
+        sExtra = [ plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) \
+                   for j in range(len(methods)) ]
+        lExtra = [ 'Method (%s)' % m for m in methods ]
+        legend2 = ax.legend(sExtra, lExtra, loc='best')
+
         # finish plot and save
         fig.tight_layout()
         fig.savefig('colorMassPlane-%s_%s_%s_%s_%s.pdf' % \
@@ -1164,24 +1188,31 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     ax.set_ylabel('Red Fraction [in (%s-%s) double Gaussian fit]' % (bands[0],bands[1]))
     ax.set_ylim([0.0,1.0])
 
-    # load results for a particular method, including the model
-    method = 'A'
-    masses = fits['%s_mstar' % method]
-    params = fits['%s_params' % method]
-
     fraction_red = np.zeros( masses.size, dtype='float32' )
 
-    for i in range(len(masses)):
-        (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
-        fraction_red[i] = (A2*sigma2) / (A1*sigma1) # area = A*sigma*sqrt(2pi)
+    # load results for a particular method, including the model
+    for j, method in enumerate(methods):
+        params = fits['%s_params' % method]
 
-    ax.plot(masses,fraction_red,'-',alpha=0.8,lw=lw)
+        for i in range(len(masses)):
+            (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+            fraction_red[i] = (A2*sigma2) / (A1*sigma1) # area = A*sigma*sqrt(2pi)
+
+        ax.plot(masses,fraction_red,linestyles[j],alpha=0.8,lw=lw)
         
+    # make legend
+    sExtra = [ plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) \
+               for j in range(len(methods)) ]
+    lExtra = [ 'Method (%s)' % m for m in methods ]
+    legend2 = ax.legend(sExtra, lExtra, loc='best')
+
     # finish plot and save
     fig.tight_layout()
     fig.savefig('colorMassPlane-RedFrac_%s_%s_%s_%s.pdf' % \
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
+
+    import pdb; pdb.set_trace()
 
 def plots():
     """ Driver (exploration 2D histograms). """
