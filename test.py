@@ -18,6 +18,47 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def checkSublinkIntermediateFiles():
+    """ Check _first* and _second* descendant links. """
+    sP = simParams(res=2500,run='tng')
+    subLinkPath = '/home/extdylan/data/sims.TNG/L205n2500TNG_temp/postprocessing/trees/SubLink/'
+    snaps = cosmo.util.snapNumToRedshift(sP, all=True)
+    print('num snaps: %d' % snaps.size)
+
+    nSubgroups = np.zeros( snaps.size, dtype='int64' )
+
+    print('get subgroup dimensions from actual run')
+    for i in range(snaps.size):
+        sP.setSnap(i)
+        nSubgroups[i] = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+        print(' [%2d] %d' % (i,nSubgroups[i]))
+
+    print('verify sublink')
+    for i in range(50):#snaps.size):
+        print(' [%2d]' % i)
+        if i == 9:
+            continue
+        with h5py.File(subLinkPath + '_first_%03d.hdf5' % i) as f:
+            first_size = f['DescendantIndex'].size
+            first_desc_index_max = f['DescendantIndex'][()].max()
+        with h5py.File(subLinkPath + '_second_%03d.hdf5' % i) as f:
+            second_size = f['DescendantIndex'].size
+            second_desc_index_max = f['DescendantIndex'][()].max()
+
+        if first_size != nSubgroups[i]:
+            print(' FAIL _first_%03d.hdf5 does not correspond' % i)
+        if second_size != nSubgroups[i]:
+            print(' FAIL _second_%03d.hdf5 does not correspond' % i)
+
+        if i < snaps.size-1:
+            if first_desc_index_max >= nSubgroups[i+1]:
+                print(' FAIL _first_%03d.hdf5 points to nonexistent sub' % i)
+        if i < snaps.size-2:
+            if second_desc_index_max >= nSubgroups[i+2]:
+                print(' FAIL _second_%03d.hdf5 points to nonexistent sub' % i)
+
+    import pdb; pdb.set_trace()
+
 def makeSnapSubsetsForMergerTrees():
     """ Copy snapshot chunks reducing to needed fields for tree calculation. """
     nSnaps  = 100
@@ -25,8 +66,8 @@ def makeSnapSubsetsForMergerTrees():
                   'PartType1':['ParticleIDs'],
                   'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
 
-    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/data/sims.TNG/L205n2500TNG_temp/output/snapdir_%03d/'
+    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG_DM/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/data/sims.TNG/L205n2500TNG_DM_temp/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -39,7 +80,7 @@ def makeSnapSubsetsForMergerTrees():
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(31,40):
+    for i in range(0,10): #range(50,61):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 
