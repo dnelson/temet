@@ -36,8 +36,6 @@ def checkSublinkIntermediateFiles():
     print('verify sublink')
     for i in range(50):#snaps.size):
         print(' [%2d]' % i)
-        if i == 9:
-            continue
         with h5py.File(subLinkPath + '_first_%03d.hdf5' % i) as f:
             first_size = f['DescendantIndex'].size
             first_desc_index_max = f['DescendantIndex'][()].max()

@@ -33,7 +33,7 @@ miles_fwhm_aa = 2.54 # spectral resolution of the MILES stellar library (FWHM/An
 sigma_to_fwhm = 2.355
 indModulus = 100 # split individual galaxy results into this many subdirectories
 percentiles = [16,50,84]
-minPerMCMCFit = 27.0 # rough estimate, ~= (0.02sec/60) * (nburn.sum()+niter) * nwalkers
+minPerMCMCFit = 25.0 # rough estimate, ~= (0.02sec/60) * (nburn.sum()+niter) * nwalkers (Odyssey)
 
 def sdss_decompose_specobjid(id):
     """ Convert 64-bit SpecObjID into its parts, returning a dict. DR13 convention. """
@@ -691,7 +691,7 @@ def fitSingleSpectrum(ind, doSim=None):
     outFileName = _indivSavePath(ind, doSim=doSim)
 
     if os.path.isfile(outFileName):
-        print(' SKIP: [%d] already exists.' % outFileName)
+        print(' SKIP: [%s] already exists.' % outFileName)
         return
 
     # load observational spectrum
@@ -998,7 +998,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
         fig.savefig('fig_mcmcFinalSamples_%s_%d.pdf' % (saveStr,ind))
         plt.close(fig)
 
-def lnprobfn(theta, model=None, obs=None, sps=None, verbose=True):
+def lnprobfn(theta, model=None, obs=None, sps=None, verbose=False):
     """ Given a parameter vector theta, return the ln of the posterior. """
     lnp_prior = model.prior_product(theta)
 

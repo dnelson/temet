@@ -1057,11 +1057,15 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     sizefac = 1.0 if not clean else sfclean
 
     # load
+    fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
+                                          simColorsModel=simColorsModel)
+    #import pdb; pdb.set_trace()
+    #fits_obs = None
     fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
                                       simColorsModel=simColorsModel)
 
     masses = fits['mStar'] # bin centers
-    methods = ['A','B'] # plot each
+    methods = ['A','B','C'] # plot each
 
     # (A) start plot, debugging double gaussians (two plots of 10 panels each to cover 20 bins)
     nCols = 2 * 0.6
@@ -1070,7 +1074,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     for iterNum in [0,1]:
         fig = plt.figure(figsize=(figsize[0]*nCols*sizefac,figsize[1]*nRows*sizefac),facecolor=color1)
 
-        #import cosmo.galaxyColor.double_gaussian as modelFunc
         xx = np.linspace(mag_range[0], mag_range[1], 100)
 
         # loop over half the mass bins, with a stride of two (one panel per mass bin)
@@ -1099,6 +1102,18 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
 
                 ax.plot(xx,y1,linestyles[j],color='blue',alpha=0.8,lw=lw)
                 ax.plot(xx,y2,linestyles[j],color='red',alpha=0.8,lw=lw)
+
+                # obs
+                if fits_obs is not None:
+                    params = fits_obs['%s_params' % method]
+
+                    (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,data_index]
+
+                    y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
+                    y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+
+                    ax.plot(xx,y1,linestyles[j],color='black',alpha=0.8,lw=lw)
+                    ax.plot(xx,y2,linestyles[j],color='gray',alpha=0.8,lw=lw)
             
             # make legend
             sExtra = []
@@ -1164,6 +1179,25 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
 
             ax.plot(masses,val_blue,'o'+linestyles[j],color='blue',alpha=0.8,lw=lw)
             ax.plot(masses,val_red,'o'+linestyles[j],color='red',alpha=0.8,lw=lw)
+
+            if fits_obs is not None:
+                params = fits_obs['%s_params' % method]
+
+                for i in range(len(masses)):
+                    (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+
+                    if iterNum == 0:
+                        val_blue[i] = sigma1
+                        val_red[i] = sigma2
+                    if iterNum == 1:
+                        val_blue[i] = mu1
+                        val_red[i] = mu2
+                    if iterNum == 2:
+                        val_blue[i] = A1
+                        val_red[i] = A2
+
+                ax.plot(masses,val_blue,'o'+linestyles[j],color='black',alpha=0.8,lw=lw)
+                ax.plot(masses,val_red,'o'+linestyles[j],color='gray',alpha=0.8,lw=lw) 
             
         # make legend
         sExtra = [ plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) \
@@ -1196,9 +1230,24 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
 
         for i in range(len(masses)):
             (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
-            fraction_red[i] = (A2*sigma2) / (A1*sigma1) # area = A*sigma*sqrt(2pi)
+            integral_1 = A1 * sigma1 * np.sqrt(2*np.pi)
+            integral_2 = A2 * sigma2 * np.sqrt(2*np.pi)
+            print(method,i,masses[i],integral_1+integral_2)
+            fraction_red[i] = (A2*sigma2) / (A1*sigma1+A2*sigma2) # area = A*sigma*sqrt(2pi)
 
-        ax.plot(masses,fraction_red,linestyles[j],alpha=0.8,lw=lw)
+        ax.plot(masses,fraction_red,linestyles[j],color='black',alpha=0.8,lw=lw)
+
+        if fits_obs is not None:
+            params = fits_obs['%s_params' % method]
+
+            for i in range(len(masses)):
+                (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
+                integral_1 = A1 * sigma1 * np.sqrt(2*np.pi)
+                integral_2 = A2 * sigma2 * np.sqrt(2*np.pi)
+                print(method,i,masses[i],integral_1+integral_2)
+                fraction_red[i] = (A2*sigma2) / (A1*sigma1+A2*sigma2) # area = A*sigma*sqrt(2pi)
+
+            ax.plot(masses,fraction_red,linestyles[j],color='green',alpha=0.8,lw=lw)
         
     # make legend
     sExtra = [ plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) \
@@ -1211,8 +1260,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     fig.savefig('colorMassPlane-RedFrac_%s_%s_%s_%s.pdf' % \
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
-
-    import pdb; pdb.set_trace()
 
 def plots():
     """ Driver (exploration 2D histograms). """
