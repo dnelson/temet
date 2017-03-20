@@ -106,7 +106,8 @@ def loadSDSSSpectrum(ind, fits=False):
 
         # save (fits only for now)
         if fits:
-            assert 'content-disposition' in req.headers
+            if 'content-disposition' not in req.headers:
+                return None
             #filename = req.headers['content-disposition'].split("filename=")[1]
 
             with open(saveFilename, 'wb') as f:
@@ -179,6 +180,9 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
 
         # load SDSS spectrum
         sdss_spec = loadSDSSSpectrum(ind, fits=True)
+
+        if sdss_spec is None:
+            return None
 
         # copy SDSS variance and dispersion estimates, interpolating onto the simulated wavelength grid
         r['ivar']  = interp1d(sdss_spec['wavelength'],sdss_spec['ivar'],kind='linear',bounds_error=False,
@@ -266,15 +270,26 @@ def load_obs(ind, run_params, doSim=None):
     """ Construct observational object with a SDSS spectrum, ready for fitting. If doSim is not
     None, then instead of an actual SDSS spectrum, load and process a mock spectrum instead, in 
     which case doSim should be a dict having keys 'withVel' and 'addRealism'. """
-    if doSim is not None:
-        spec = loadSimulatedSpectrum(doSim['sP'], ind=ind, 
-            withVel=doSim['withVel'], addRealism=doSim['addRealism'])
+    tryCount = 0
+    spec = None
 
-        for k in doSim.keys():
-            # append any additional mock details to save into the output
-            run_params[k] = doSim[k]
-    else:
-        spec = loadSDSSSpectrum(ind=ind, fits=True)
+    while spec is None and tryCount < 10:
+        # make a few attempts since we are unreliably fetching data over HTTP
+        if doSim is not None:
+            spec = loadSimulatedSpectrum(doSim['sP'], ind=ind, 
+                withVel=doSim['withVel'], addRealism=doSim['addRealism'])
+
+            for k in doSim.keys():
+                # append any additional mock details to save into the output
+                run_params[k] = doSim[k]
+        else:
+            spec = loadSDSSSpectrum(ind=ind, fits=True)
+
+        tryCount += 1
+        time.sleep(10.0) # wait ten seconds
+
+    if spec is None:
+        return None # failed
 
     # convert [10^-17 erg/cm^2/s/Ang] -> [10^-23 erg/cm^2/s/Hz] since flux_nu = (lambda^2/c) * flux_lambda
     # http://coolwiki.ipac.caltech.edu/index.php/Units, https://en.wikipedia.org/wiki/AB_magnitude
@@ -696,6 +711,10 @@ def fitSingleSpectrum(ind, doSim=None):
 
     # load observational spectrum
     obs = load_obs(ind, run_params, doSim=doSim)
+
+    if obs is None:
+        print(' FAILED TO LOAD_OBS! SKIP [%d].' % outFileName)
+        return
 
     # model
     # default: 7 free parameters: z_red, mass, logzsol, tau, tage, dust1, sigma_smooth
