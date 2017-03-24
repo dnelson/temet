@@ -996,6 +996,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
         print(label, percs[:,i])
     print('Number of (samples,free_params): ',samples.shape)
 
+    # plot prep
     if doSim is None:
         orig_spec = loadSDSSSpectrum(ind, fits=True)
         saveStr = 'sdss_%s'% zBin
@@ -1005,8 +1006,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
     else:
         velStr = 'Vel' if doSim['withVel'] else 'NoVel'
         acName = mockSpectraAuxcatName % velStr
-        spec = auxCat(doSim['sP'], acName, indRange=[ind,ind+1])
-        subhaloID = spec['subhaloIDs'][0]
+        subhaloID = auxCat(doSim['sP'], acName, indRange=[ind,ind+1])['subhaloIDs'][0]
 
         sub = groupCatSingle(doSim['sP'], subhaloID=subhaloID)
         subMassStars = sub['SubhaloMassInRadType'][doSim['sP'].ptNum('stars')]
@@ -1018,6 +1018,22 @@ def plotSingleResult(ind, sps=None, doSim=None):
         label1 = '%s #%d z=%.1f' % (doSim['sP'].simName,ind,doSim['sP'].redshift)
         label2 = 'SubhaloIndex ' + str(subhaloID)
         label3 = 'MT = %.2f MS = %.2f Z = %.2f' % (logMassTot,logMassStars,logMetal)
+
+        # for z=0 simulated spectra, for display, redshift to z=0.1
+        if doSim['sP'].redshift == 0.0:
+            target_z = 0.1
+            dL_old_cm = doSim['sP'].units.redshiftToLumDist(0.0) * doSim['sP'].units.Mpc_in_cm
+            dL_new_cm = doSim['sP'].units.redshiftToLumDist(target_z) * doSim['sP'].units.Mpc_in_cm
+            spec *= (dL_old_cm)**2 / (dL_new_cm)**2
+
+            wave_redshifted = wave * (1.0 + target_z)
+            spec = interp1d(wave_redshifted, spec, kind='linear', assume_sorted=True, 
+                         bounds_error=False, fill_value=np.nan)(wave)
+            spec *= (1.0 + target_z)
+
+        # any negative values (due to noise) which were masked, set to nan for plot
+        w = np.where(spec <= 0.0)
+        spec[w] = np.nan
 
     # corner plot
     samples_plot = samples.copy()
