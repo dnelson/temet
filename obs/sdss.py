@@ -217,6 +217,10 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
         w = np.where(sdss_spec['flux'] > 0.0)
         sdss_spec['flux'] = np.clip(sdss_spec['flux'], sdss_spec['flux'][w].min()/10, np.inf)
 
+        # clip observed ivar, remove zeros (these are masked out anyways in the fitting)
+        w = np.where(sdss_spec['ivar'] == 0.0)
+        sdss_spec['ivar'][w] = np.min(sdss_spec['ivar'][np.where(sdss_spec['ivar']>0.0)])
+
         # add Gaussian noise to the actual flux with the variance taken from ivar
         sdss_stddev_frac = 1.0/np.sqrt(sdss_spec['ivar']) / sdss_spec['flux']
 
@@ -234,7 +238,7 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
         # in units of pixels=dlog(lambda)
         r['wdisp'] = (miles_fwhm_aa / sigma_to_fwhm) / np.gradient(r['wavelength'])
 
-        # give a non-zero (fake) variance of 5% (roughly characteristic) to avoid over fitting
+        # give a non-zero (fake) stddev of 5% (roughly characteristic) to avoid over fitting
         frac_stddev = 0.05
         r['ivar'] = 1.0/(frac_stddev * r['flux'])**2.0
 
@@ -337,8 +341,8 @@ def load_obs(ind, run_params, doSim=None):
     obs['wavelength'] /= (1 + spec['redshift'])
     obs['spectrum'] /= (1 + spec['redshift']) # assuming spectrum is now f_nu
 
-    # mask: bad variance
-    obs['mask'] = (spec['ivar'] != 0.0)
+    # mask: bad variance or negative flux
+    obs['mask'] = ((spec['ivar'] != 0.0) & (spec['flux'] > 0.0))
 
     # mask: wavelength range
     wavelength_mask = (obs['wavelength'] > run_params['wlo']) & (obs['wavelength'] < run_params['whi'])
@@ -891,7 +895,7 @@ def fitSDSSSpectra(pSplit):
 
             fitSingleSpectrum(ind=index, doSim=None)
 
-def fitMockSpectra(sP, pSplit, withVel=False, addRealism=False):
+def fitMockSpectra(sP, pSplit, withVel=True, addRealism=True):
     """ Fit a pSplit work divided segment of the mock SDSS fiber spectra for this snapshot. 
     Results are saved individually in {SIM}/data.files/spectral_fits/snap_NNN/DIR/."""
     doSim = {'sP':sP, 'withVel':withVel, 'addRealism':addRealism}
