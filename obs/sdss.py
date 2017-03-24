@@ -928,7 +928,6 @@ def fitMockSpectra(sP, pSplit, withVel=False, addRealism=False):
             if not os.path.isdir(savePath): os.mkdir(savePath)
 
             fitSingleSpectrum(ind=index, doSim=doSim)
-            import pdb; pdb.set_trace()
 
 def plotSingleResult(ind, sps=None, doSim=None):
     """ Load the results of a single MCMC fit, print the answer, render a corner plot of the joint 
