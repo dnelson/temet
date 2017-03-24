@@ -98,7 +98,11 @@ def loadSDSSSpectrum(ind, fits=False):
     if not os.path.isfile(saveFilename):
         # acquire
         print(' ' + url)
-        req = requests.get(url, headers={})
+        try:
+            req = requests.get(url, headers={}, timeout=10)
+        except requests.exceptions.Timeout:
+            print(' WARNING! Response timeout, skipping!')
+            return None
 
         if req.status_code != 200:
             print(' WARNING! Response code = %d, skipping!' % req.status_code)
@@ -176,13 +180,17 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
         with h5py.File(basePath + sdssCatName,'r') as f:
             sdss_cat_size = f['objid'].size
 
-        sdss_cat_index = ind % sdss_cat_size
-
-        # load SDSS spectrum
-        sdss_spec = loadSDSSSpectrum(ind, fits=True)
+        # load SDSS spectrum and de-redshift (simulated spectrum should be in rest-frame, if we are 
+        # fitting an actual z>0 redshifted simulated spectrum, think through the below again)
+        np.random.seed(ind+424242)
+        sdss_cat_ind = np.random.choice(np.arange(sdss_cat_size))
+        sdss_spec = loadSDSSSpectrum(sdss_cat_ind, fits=True)
 
         if sdss_spec is None:
             return None
+
+        sdss_spec['wavelength'] /= (1 + sdss_spec['redshift'])
+        sdss_spec['flux'] /= (1 + sdss_spec['redshift'])
 
         # copy SDSS variance and dispersion estimates, interpolating onto the simulated wavelength grid
         r['ivar']  = interp1d(sdss_spec['wavelength'],sdss_spec['ivar'],kind='linear',bounds_error=False,
@@ -199,6 +207,9 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
                      fill_value=(sigma_aa[0],sigma_aa[-1]))
         smooth_res = f(r['wavelength'])
 
+        w = np.where(smooth_res <= 0.0) # avoid any catastrophes
+        smooth_res[w] = np.median(smooth_res)
+
         # convolve the mock spectrum using sdss wdisp (decrease the resolution to the instrumental res)
         r['flux'] = smoothing.smoothspec(r['wavelength'], r['flux'], resolution=smooth_res, smoothtype="lsf")
 
@@ -212,7 +223,7 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
         f = interp1d(sdss_spec['wavelength'],sdss_stddev_frac,kind='linear',bounds_error=False,
                      fill_value=(sdss_stddev_frac[0],sdss_stddev_frac[-1]))
         interp_stddev_frac = f(r['wavelength'])
-        interp_stddev_frac = np.clip(interp_stddev_frac, 0.001, 100.0) # for safety
+        interp_stddev_frac = np.clip(interp_stddev_frac, 0.001, 1.0) # do SNR=1 at worst
 
         rnd_frac = np.random.normal(loc=0.0, scale=interp_stddev_frac)
 
@@ -917,13 +928,16 @@ def fitMockSpectra(sP, pSplit, withVel=False, addRealism=False):
             if not os.path.isdir(savePath): os.mkdir(savePath)
 
             fitSingleSpectrum(ind=index, doSim=doSim)
+            import pdb; pdb.set_trace()
 
 def plotSingleResult(ind, sps=None, doSim=None):
     """ Load the results of a single MCMC fit, print the answer, render a corner plot of the joint 
     PDFs of all the parameters, and show the original spectrum as well as some ending model spectra. """
     import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid.inset_locator import inset_axes
     import corner
     import pickle
+    import json
 
     # mapping from sampling labels to pretty labels
     new_labels = {'zred':'10$^4$ z$_{\\rm res}$', 
@@ -945,7 +959,11 @@ def plotSingleResult(ind, sps=None, doSim=None):
 
         # variable-length null-terminated ASCII string pickles
         model_params = pickle.loads(f.attrs['model_params'])
-        #run_params = pickle.loads(f.attrs['run_params'])
+        run_params = f.attrs['run_params']
+        if run_params[0] == '(':
+            run_params = pickle.loads(run_params) # pickled
+        else: 
+            run_params = json.loads(run_params) # json encoded
         rstate = pickle.loads(f['sampling'].attrs['rstate'])
 
         # string encoded list
@@ -958,10 +976,12 @@ def plotSingleResult(ind, sps=None, doSim=None):
     # replace labels
     theta_labels_plot = [new_labels[l] for l in theta_labels]
 
-    if doSim is None:
-        saveStr = 'sdss_%s'% zBin
-    else:
-        saveStr = '%s-%s_v%dr%d' % (doSim['sP'].simName,doSim['sP'].snap,doSim['withVel'],doSim['addRealism'])
+    # fix any model parameter dependency functions
+    for mp in model_params:
+        if 'depends_on' in mp and type(mp['depends_on']) is type([]):
+            import importlib
+            module = importlib.import_module(mp['depends_on'][1])
+            mp['depends_on'] = getattr(module, mp['depends_on'][0])
 
     # flatten chain into a linear list of samples
     ndim = chain.shape[2]
@@ -973,49 +993,103 @@ def plotSingleResult(ind, sps=None, doSim=None):
         print(label, percs[:,i])
     print('Number of (samples,free_params): ',samples.shape)
 
-    # (A) corner plot
-    if 1:
-        samples_plot = samples.copy()
-        # adjust z_res and Mass for sig figs
-        samples_plot[:,0] *= 1e4 # residual redshift
-        samples_plot[:,1] /= 1e10 # mass
+    if doSim is None:
+        orig_spec = loadSDSSSpectrum(ind, fits=True)
+        saveStr = 'sdss_%s'% zBin
+        label1 = 'SDSS #%d z=%.3f' % (ind,orig_spec['redshift'])
+        label2 = 'SpecObjID ' + str(orig_spec['specobjid'])
+        label3 = 'ObjID ' + str(orig_spec['objid'])
+    else:
+        velStr = 'Vel' if doSim['withVel'] else 'NoVel'
+        acName = mockSpectraAuxcatName % velStr
+        spec = auxCat(doSim['sP'], acName, indRange=[ind,ind+1])
+        subhaloID = spec['subhaloIDs'][0]
 
-        fig = corner.corner(samples_plot, labels=theta_labels_plot, quantiles=[0.1, 0.5, 0.9], 
-                            show_titles=True, title_kwargs={"fontsize": 13})
-        fig.savefig('fig_mcmcTriangle_%s_%d.pdf' % (saveStr,ind))
-        plt.close(fig)
+        sub = groupCatSingle(doSim['sP'], subhaloID=subhaloID)
+        subMassStars = sub['SubhaloMassInRadType'][doSim['sP'].ptNum('stars')]
+        logMassStars = doSim['sP'].units.codeMassToLogMsun( subMassStars )
+        logMassTot = doSim['sP'].units.codeMassToLogMsun( sub['SubhaloMass'] )
+        logMetal = doSim['sP'].units.metallicityInSolar( sub['SubhaloStarMetallicity'], log=True )
 
-    # (B) plot some of the final chain models on top of data
-    if 0:
-        # hack: needs to be fixed
-        obs = {'wavelength':wave,'filters':[],'logify_spectrum':run_params['logify_spectrum']}
+        saveStr = '%s-%s_v%dr%d' % (doSim['sP'].simName,doSim['sP'].snap,doSim['withVel'],doSim['addRealism'])
+        label1 = '%s #%d z=%.1f' % (doSim['sP'].simName,ind,doSim['sP'].redshift)
+        label2 = 'SubhaloIndex ' + str(subhaloID)
+        label3 = 'MT = %.2f MS = %.2f Z = %.2f' % (logMassTot,logMassStars,logMetal)
 
-        # reconstruct model
-        model = sedmodel.SedModel(model_params)
+    # corner plot
+    samples_plot = samples.copy()
+    # adjust z_res and Mass for sig figs
+    samples_plot[:,0] *= 1e4 # residual redshift
+    samples_plot[:,1] /= 1e10 # mass
 
-        if sps is None:
-            sps = CSPSpecBasis(zcontinuous=True,compute_vega_mags=False)
+    fig = corner.corner(samples_plot, labels=theta_labels_plot, quantiles=[0.1, 0.5, 0.9], 
+                        show_titles=True, title_kwargs={"fontsize": 13})
 
-        # start figure
-        fig = plt.figure(figsize=(12,8))
-        ax = fig.add_subplot(111)
-        ax.set_xlabel('$\lambda$ [Angstroms]')
-        ax.set_ylabel('$F_\lambda$ [$\mu$Mgy]')
-        ax.set_title('ind=%d' % (ind))
-        ax.set_ylim([5e-2,5e0])
-        ax.set_yscale('log')
+    # reconstruct model
+    model = sedmodel.SedModel(model_params)
 
-        ax.plot(wave, spec*1e6, '-', label='obs')
+    if sps is None:
+        sps = CSPSpecBasis(zcontinuous=True,compute_vega_mags=False)
 
-        for i in range(20):
-            local_result = samples[i,:]
-            spec, phot, mfrac = model.mean_model(local_result, obs=obs, sps=sps)
+    # start spectrum figure
+    left = 0.51
+    bottom = 0.64
+    width = 1 - left - 0.04
+    height = 1 - bottom - 0.02
 
-            ax.plot(wave, spec*1e6, '-', color='black', alpha=0.2, label='model %d' % i)
+    ax = fig.add_axes([left,bottom,width,height])
+    ax.set_xlabel('$\lambda$ [Angstroms]')
+    ax.set_ylabel('$F_\lambda$ [$\mu$Mgy]')
+    ax.set_ylim([5e-2,2e0])
+    ax.set_xlim([3500,9500])
+    ax.set_yscale('log')
 
-        fig.tight_layout()
-        fig.savefig('fig_mcmcFinalSamples_%s_%d.pdf' % (saveStr,ind))
-        plt.close(fig)
+    lw = 1.0
+    nModelsPlot = 3
+
+    # add a number of models
+    np.random.seed(4242424L)
+    random_indices = np.random.choice( np.arange(samples.shape[0]), size=nModelsPlot, replace=False )
+
+    for i in random_indices:
+        obs = {'wavelength':wave,'filters':[],'logify_spectrum':False}
+        spec_model, phot, mfrac = model.mean_model(samples[i,:], obs=obs, sps=sps)
+
+        ax.plot(wave, spec_model*1e6, '-', lw=lw, alpha=0.3)
+
+    # plot input spectrum
+    ax.plot(wave, spec*1e6, '-', lw=lw, color='black', label='Input Spectrum')
+
+    # mark maximum wavelength used for fitting
+    ax.plot([run_params['whi'],run_params['whi']], [1e-1,1.2e0], ':', color='black', alpha=0.5)
+
+    # make inset zoomed-in
+    ax_inset = inset_axes(ax, width='40%', height='40%', loc=4, borderpad=2.4)
+    ax_inset.tick_params(labelsize=13)
+    ax_inset.set_ylabel('$F_\lambda$ [$\mu$Mgy]')
+    ax_inset.set_yscale('log')
+    ax_inset.set_ylim([2.5e-1,5.1e-1])
+    ax_inset.set_xlim([5850,5950])
+
+    # plot models and then input spectrum
+    for i in random_indices:
+        obs = {'wavelength':wave,'filters':[],'logify_spectrum':False}
+        spec_model, phot, mfrac = model.mean_model(samples[i,:], obs=obs, sps=sps)
+        ax_inset.plot(wave, spec_model*1e6, '-', lw=lw*1.5, alpha=0.3)
+
+    ax_inset.plot(wave, spec*1e6, '-', lw=lw*1.5, color='black')
+
+    ax.annotate(label1, xy=(0.61, 0.57), xycoords='figure fraction', fontsize=24, 
+                color='#cccccc', horizontalalignment='left', verticalalignment='top')
+    ax.annotate(label2, xy=(0.61, 0.54), xycoords='figure fraction', fontsize=24, 
+                color='#cccccc', horizontalalignment='left', verticalalignment='top')
+    ax.annotate(label3, xy=(0.61, 0.51), xycoords='figure fraction', fontsize=24, 
+                color='#cccccc', horizontalalignment='left', verticalalignment='top')
+
+    # finish figure
+    ax.legend()
+    fig.savefig('fig_mcmcCornerModel_%s_%d.pdf' % (saveStr,ind))
+    plt.close(fig)
 
 def lnprobfn(theta, model=None, obs=None, sps=None, verbose=False):
     """ Given a parameter vector theta, return the ln of the posterior. """
