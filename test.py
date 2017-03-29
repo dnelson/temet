@@ -28,7 +28,7 @@ def checkSublinkIntermediateFiles():
     nSubgroups = np.zeros( snaps.size, dtype='int64' )
 
     print('get subgroup dimensions from actual run')
-    for i in range(snaps.size):
+    for i in range(51): #range(snaps.size):
         sP.setSnap(i)
         nSubgroups[i] = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
         print(' [%2d] %d' % (i,nSubgroups[i]))
@@ -36,26 +36,61 @@ def checkSublinkIntermediateFiles():
     print('verify sublink')
     for i in range(50):#snaps.size):
         print(' [%2d]' % i)
-        with h5py.File(subLinkPath + '_first_%03d.hdf5' % i) as f:
-            first_size = f['DescendantIndex'].size
-            first_desc_index_max = f['DescendantIndex'][()].max()
-        with h5py.File(subLinkPath + '_second_%03d.hdf5' % i) as f:
-            second_size = f['DescendantIndex'].size
-            second_desc_index_max = f['DescendantIndex'][()].max()
+        if path.isfile(subLinkPath + '_first_%03d.hdf5' % i):
+            with h5py.File(subLinkPath + '_first_%03d.hdf5' % i) as f:
+                first_size = f['DescendantIndex'].size
+                first_desc_index_max = f['DescendantIndex'][()].max()
+            if first_size != nSubgroups[i]:
+                print(' FAIL _first_%03d.hdf5 does not correspond' % i)
+            if i < snaps.size-1:
+                if first_desc_index_max >= nSubgroups[i+1]:
+                    print(' FAIL _first_%03d.hdf5 points to nonexistent sub' % i)
+        else:
+            print('  skip first missing')
 
-        if first_size != nSubgroups[i]:
-            print(' FAIL _first_%03d.hdf5 does not correspond' % i)
-        if second_size != nSubgroups[i]:
-            print(' FAIL _second_%03d.hdf5 does not correspond' % i)
-
-        if i < snaps.size-1:
-            if first_desc_index_max >= nSubgroups[i+1]:
-                print(' FAIL _first_%03d.hdf5 points to nonexistent sub' % i)
-        if i < snaps.size-2:
-            if second_desc_index_max >= nSubgroups[i+2]:
-                print(' FAIL _second_%03d.hdf5 points to nonexistent sub' % i)
+        if path.isfile(subLinkPath + '_second_%03d.hdf5' % i):
+            with h5py.File(subLinkPath + '_second_%03d.hdf5' % i) as f:
+                second_size = f['DescendantIndex'].size
+                second_desc_index_max = f['DescendantIndex'][()].max()
+            if second_size != nSubgroups[i]:
+                print(' FAIL _second_%03d.hdf5 does not correspond' % i)
+            if i < snaps.size-2:
+                if second_desc_index_max >= nSubgroups[i+2]:
+                    print(' FAIL _second_%03d.hdf5 points to nonexistent sub' % i)
+        else:
+            print('  skip second missing')
 
     import pdb; pdb.set_trace()
+
+def makeSnapHeadersForLHaloTree():
+    """ Copy chunk 0 of each snapshot only and the header only (for LHaloTree B-HaloTree). """
+    nSnaps = 100
+
+    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG_DM/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/test/snapdir_%03d/'
+    fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
+    fileTo   = pathTo + 'snap_%03d.%s.hdf5'
+
+    # loop over snapshots
+    for i in range(nSnaps):
+        if not path.isdir(pathTo % i):
+            mkdir(pathTo % i)
+
+        # open destination for writing
+        j = 0
+        fOut = h5py.File(fileTo % (i,i,j), 'w')
+
+        # open origin file for reading
+        assert path.isfile(fileFrom % (i,i,j))
+
+        with h5py.File(fileFrom % (i,i,j),'r') as f:
+            # copy header
+            g = fOut.create_group('Header')
+            for attr in f['Header'].attrs:
+                fOut['Header'].attrs[attr] = f['Header'].attrs[attr]
+
+            fOut.close()
+            print('%s' % fileTo % (i,i,j))
 
 def makeSnapSubsetsForMergerTrees():
     """ Copy snapshot chunks reducing to needed fields for tree calculation. """
