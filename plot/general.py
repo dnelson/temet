@@ -17,6 +17,7 @@ from util import simParams
 from util.helper import loadColorTable, running_median, logZeroSafe, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapshotSubset
 from cosmo.util import periodicDists
+from plot.config import *
 
 def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
@@ -775,6 +776,102 @@ def plotPhaseSpace2D(yAxis):
     cb.ax.set_ylabel('Relative Gas Mass [ log ]')
 
     fig.savefig('phase_%s_z=%.1f_%s_%s.pdf' % (sP.simName,sP.redshift,yAxis,hStr))
+    plt.close(fig)
+
+def plotParticleMedianVsSecondQuant():
+    """ Plot the (median) relation between two particle properties for a single halo, or multiple halos 
+    stacked in e.g. a mass bin, or the whole box. """
+    from cosmo.cloudy import cloudyIon
+
+    yAxis = 'Si-H-ratio'
+    xAxis = 'H_numDens'
+    # currently this is a hard-coded func awaiting generalization
+    assert xAxis == 'H_numDens' and yAxis == 'Si-H-ratio' 
+
+    nBins = 50
+    lw = 3.0
+
+    radMinKpc = 6.0
+    radMaxKpc = 9.0 # physical kpc, or None for none
+
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+    haloID = None # None for fullbox, or integer fof index
+
+    # pick a MW
+    gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupPos'])
+    haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
+
+    haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
+    haloID = haloIDs[6] # random: 3, 4, 5, 6
+
+    # start plot
+    fig = plt.figure(figsize=(14,10))
+    ax = fig.add_subplot(111)
+
+    hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
+    ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
+    ax.set_xlabel('Gas Hydrogen Density [ log cm$^{-3}$ ]')
+
+    # load
+    dens = snapshotSubset(sP, 'gas', 'dens', haloID=haloID)
+    dens = sP.units.codeDensToPhys(dens, cgs=True, numDens=True)
+    H_ratio = snapshotSubset(sP, 'gas', 'metals_H', haloID=haloID)
+
+    sim_xvals = np.log10(dens * H_ratio)
+    xMinMax = [-3.0,3.0]
+
+    if yAxis == 'Si-H-ratio':
+        ion = cloudyIon(sP)
+        SiH_numdens_ratio_solar = ion.solarAbundance('Si')
+
+        Si_ratio = snapshotSubset(sP, 'gas', 'metals_Si', haloID=haloID)
+        SiH_mass_ratio = Si_ratio / H_ratio
+        SiH_numdens_ratio = SiH_mass_ratio * (ion.atomicMass('Hydrogen')/ion.atomicMass('Silicon'))
+        sim_yvals = np.log10(SiH_numdens_ratio) - np.log10(SiH_numdens_ratio_solar)
+        #ax.set_ylabel('M$_{\\rm Si,gas}$ / M$_{\\rm H,gas}$ [ log ]')
+        ax.set_ylabel('[Si/H]$_{\\rm gas}$') # = log(n_Si/n_H)_gas - log(n_Si/n_H)_solar
+        #yMinMax = [-3.0, 0.5]
+
+    # radial restriction
+    if radMaxKpc is not None or radMinKpc is not None:
+        pos = snapshotSubset(sP, 'gas', 'pos', haloID=haloID)
+        haloPos = gc['halos']['GroupPos'][haloID]
+
+        rad = periodicDists(haloPos, pos, sP)
+        rad = sP.units.codeLengthToKpc(rad)
+        if radMinKpc is None:
+            w = np.where( (rad <= radMaxKpc) )
+        elif radMaxKpc is None:
+            w = np.where( (rad > radMinKpc) )
+        else:
+            w = np.where( (rad > radMinKpc) & (rad <= radMaxKpc) )
+
+        sim_xvals = sim_xvals[w]
+        sim_yvals = sim_yvals[w]
+
+        if radMinKpc is not None:
+            hStr += '_rad_gt_%.1fkpc' % radMinKpc
+        if radMaxKpc is not None:
+            hStr += '_rad_lt_%.1fkpc' % radMaxKpc
+
+    # median and 10/90th percentile lines
+    assert sim_xvals.shape == sim_yvals.shape
+    binSize = (xMinMax[1]-xMinMax[0]) / nBins
+
+    xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
+    xm = xm[1:-1]
+    ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
+    sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
+    pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+
+    c = ax._get_lines.prop_cycler.next()['color']
+    ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+
+    # percentile:
+    ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+
+    # colorbar and save
+    fig.savefig('particleMedian_%s_vs_%s_%s_z=%.1f_%s.pdf' % (yAxis,xAxis,sP.simName,sP.redshift,hStr))
     plt.close(fig)
 
 def plotRadialProfile1D(quant='entr'):
