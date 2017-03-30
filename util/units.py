@@ -634,7 +634,7 @@ class units(object):
         """ Given a code metallicity (M_Z/M_total), convert to value with respect to solar. """
         metal_solar = metal.astype('float32') / self.Z_solar
 
-        metal_solar[metal_solar < 0] = 0.0 # clip possibly negative Illustris values at zero
+        metal_solar = np.clip(metal_solar,0.0,np.inf) # clip possibly negative Illustris values at zero
 
         if log:
             return np.log10(metal_solar)

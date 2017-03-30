@@ -69,7 +69,7 @@ def _TNGboxSliceConfig(res):
     if res in [625,1250,2500]:
         # L205
         centerHaloID = 0 # fof
-        nSlicesTot   = 3 # slice depth equal to a fifth, 41 Mpc/h = 60 Mpc
+        nSlicesTot   = 3 # slice depth equal to a fifth, 41 Mpc/h = 60 Mpc (oops I guess a third)
         curSlice     = 0 # offset slice along projection direction?
 
         # adjust for deeper slice

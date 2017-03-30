@@ -134,10 +134,16 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
             # determine unique color
             c = ax._get_lines.prop_cycler.next()['color']
-            # skip second color (pNum=1), reserved for L205n2500, if we do a res or dustModel comparison
+            # skip second color (pNum=1), reserved for L205n2500, if we do a res (x3), dustModel (x3), 
+            # or TNG vs Illlustris (x2) comparison
             if pNum == 1 and (len(sPs) >=3 or len(simColorsModels) >= 3):
                 c = ax._get_lines.prop_cycler.next()['color']
             pNum += 1
+            if (len(sPs) == 2 and sPs[1].simName == 'TNG100-1' and sPs[0].simName == 'Illustris-1'):
+                #if sP.simName == 'Illustris-1': c = '#9467BD' # tableau10 fifth (purple) for Illustris-1
+                #if sP.simName == 'Illustris-1': c = '#8C564B' # tableau10 sixth (brown) for Illustris-1
+                if sP.simName == 'Illustris-1': c = '#D62728' # tableau10 fourth (red) for Illustris-1
+                if sP.simName == 'TNG100-1': c = '#1F77B4' # tableau10 first (blue) for TNG100-1
 
             # load simulation colors
             if simColorsModel[-4:] == '_all':
@@ -259,7 +265,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                             label = label.replace("p07c_cf00dust", "Model B")
                             label = label.replace("p07c_nodust", "Model A")
 
-                        alpha = 0.5 if 'Illustris' in sP.simName else 1.0
+                        alpha = 0.85 if 'Illustris' in sP.simName else 1.0
                         axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
                         if j == 0:
                             axes[i].fill_between(xx, 0.0, yy_sim, color=c, alpha=0.1, interpolate=True)
@@ -1057,10 +1063,10 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     sizefac = 1.0 if not clean else sfclean
 
     # load
-    fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
-                                          simColorsModel=simColorsModel)
+    #fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
+    #                                      simColorsModel=simColorsModel)
     #import pdb; pdb.set_trace()
-    #fits_obs = None
+    fits_obs = None
     fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
                                       simColorsModel=simColorsModel)
 
@@ -1363,7 +1369,7 @@ def paperPlots():
 
     # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
     if 0:
-        sPs = [L75, L75FP] #[L75, L205]
+        sPs = [L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
 
         pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
@@ -1380,14 +1386,15 @@ def paperPlots():
         pdf.close()
 
     # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
-    if 0:
+    if 1:
         sPs = [L75, L205] # L75FP
+        simRedshift = 0.1
 
         pdf = PdfPages('figure3a_stellarAges_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-        plot.globalComp.stellarAges(sPs, pdf, centralsOnly=True)
+        plot.globalComp.stellarAges(sPs, pdf, simRedshift=simRedshift, centralsOnly=True)
         pdf.close()
         pdf = PdfPages('figure3b_massMetallicityStars_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-        plot.globalComp.massMetallicityStars(sPs, pdf)
+        plot.globalComp.massMetallicityStars(sPs, pdf, simRedshift=simRedshift)
         pdf.close()
 
     # figure 4: fullbox demonstratrion projections
@@ -1464,7 +1471,7 @@ def paperPlots():
         pdf.close()
 
     # figure 9: timescale histogram for color transition
-    if 1:
+    if 0:
         sP = L75
         css = 'cen'
         dust = dust_C
