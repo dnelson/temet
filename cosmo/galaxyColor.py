@@ -430,13 +430,10 @@ def _fitCMPlaneMCMC(masses, colors, Tparams, B_params,
     p0[40:60] = B_params[3,:] # red A, 20 of them
     #p0[60:80] = 0.01 # noise nuisance parameters, one per mass bin
 
-    def mcmc_lnprob(theta, x, y, m):
+    def mcmc_lnprob_binned(theta, x, y, m):
         # run four T() functions, get sigma_r,b(Mass) and mu_r,b(Mass)
         # compute all 20 double gaussians, in each mass bin have its 6 parameters
-        lp = 0.0 # mcmc_lnprior(theta)
-        #if not np.isfinite(lp):
-        #    return -np.inf
-
+        lp = 0.0
         nMassBins = len(x)
         lnlike_y = np.zeros( nMassBins, dtype='float32' )
 
@@ -446,22 +443,18 @@ def _fitCMPlaneMCMC(masses, colors, Tparams, B_params,
         mu1 = _T(m, theta[10:15])
         mu2 = _T(m, theta[15:20])
 
+        # prior, 0.0 (no change to likelihood) in general, unless we violate a prior we wish to 
+        # impose, then -np.inf, such that the point is rejected absolutely
+        if (mu1 > mu2).sum() > 0:
+            # if any blue center is larger than the red center, reject this whole theta
+            #lp = -np.inf
+            return -np.inf # this prior is absolute so just return early
+
         # compute independent loglikelihood in each mass bin
         for i in range(nMassBins):
             # pull out the remaining 2 parameters (A_blue, A_red) for this mass bin
             A1, A2 = theta[20+i], theta[40+i]
             y_err = 0.05 #theta[60+i]
-
-            # prior, 0.0 (no change to likelihood) in general, unless we violate a prior we wish to 
-            # impose, then -np.inf, such that the point is rejected absolutely
-            if mu1[i] > mu2[i]:
-                lp = -np.inf
-
-            # https://www.statlect.com/fundamentals-of-statistics/normal-distribution-maximum-likelihood
-            # for non-histogrammed, multiplying the likelihoods of the two gaussians
-            #lnlike_y1 = -A1 - 0.5 * np.sum( ((x[i] - mu1[i]) / sigma1[i])** 2 ) # analytic of 1 gaussian
-            #lnlike_y2 = -A2 - 0.5 * np.sum( ((x[i] - mu2[i]) / sigma2[i])** 2 ) # analytic of 1 gaussian
-            #lnlike_y[i] = lnlike_y1 + lnlike_y2
 
             # histogramed data
             params_double_gaussian = (A1, mu1[i], sigma1[i], A2, mu2[i], sigma2[i])
@@ -474,11 +467,41 @@ def _fitCMPlaneMCMC(masses, colors, Tparams, B_params,
         # all mass bin likelihoods multiplied -> added in the log
         return lp + np.sum(lnlike_y)
 
-    # setup initial parameter guesses (theta0) for all walkers
-    p0_walkers = np.zeros( (nWalkers,nDim), dtype='float32' )
-    np.random.seed(42424242L)
-    for i in range(nWalkers):
-        p0_walkers[i,:] = p0 + np.abs(p0) * np.random.normal(loc=0.0, scale=fracNoiseInit)
+    def mcmc_lnprob_nobin(theta, x, m):
+        # run four T() functions, get sigma_r,b(Mass) and mu_r,b(Mass)
+        # compute all 20 double gaussians, in each mass bin have its 6 parameters
+        lp = 0.0
+        nMassBins = len(x)
+        lnlike_y = np.zeros( nMassBins, dtype='float32' )
+
+        # reconstruct sigma and mu values at each mass bin from the T() functions
+        sigma1 = _T(m, theta[0:5])
+        sigma2 = _T(m, theta[5:10])
+        mu1 = _T(m, theta[10:15])
+        mu2 = _T(m, theta[15:20])
+
+        if (mu1 > mu2).sum() > 0:
+            return -np.inf # this prior is absolute so just return early
+
+        # compute independent loglikelihood in each mass bin
+        for i in range(nMassBins):
+            # pull out the remaining parameter for this mass bin
+            rel_amp_fac = 1.0 #theta[20+i]
+
+            # https://www.statlect.com/fundamentals-of-statistics/normal-distribution-maximum-likelihood
+            # non-histogrammed, multiplying the likelihoods of the two gaussians
+            n = x[i].size
+
+            lnlike_y1 = -rel_amp_fac*0.5*n*np.log(2*np.pi*sigma1[i]**2) - \
+              1.0/(2*sigma1[i]**2) * np.sum( (x[i] - mu1[i])** 2 )
+            lnlike_y2 = -0.5*n*np.log(2*np.pi*sigma2[i]**2) - \
+              1.0/(2*sigma2[i]**2) * np.sum( (x[i] - mu2[i])** 2 )
+            lnlike_y[i] = lnlike_y1 + lnlike_y2
+
+            import pdb; pdb.set_trace()
+
+        # all mass bin likelihoods multiplied -> added in the log
+        return lp + np.sum(lnlike_y)
 
     # make x_data
     m = np.zeros(nBinsMass)
@@ -508,41 +531,95 @@ def _fitCMPlaneMCMC(masses, colors, Tparams, B_params,
         x_data2.append(xx)
         y_data2.append(yy)
 
-    # setup sampler and run a burn-in
-    tstart = time.time()
-    sampler = emcee.EnsembleSampler(nWalkers, nDim, mcmc_lnprob, args=(x_data2, y_data2, m))
+    # bin method:
+    if 1:
+        # setup initial parameter guesses (theta0) for all walkers
+        p0_walkers = np.zeros( (nWalkers,nDim), dtype='float32' )
+        np.random.seed(42424242L)
+        for i in range(nWalkers):
+            p0_walkers[i,:] = p0 + np.abs(p0) * np.random.normal(loc=0.0, scale=fracNoiseInit)
 
-    pos, prob, state = sampler.run_mcmc(p0_walkers, nBurnIn)
-    sampler.reset()
+        # setup sampler and run a burn-in
+        tstart = time.time()
+        sampler = emcee.EnsembleSampler(nWalkers, nDim, mcmc_lnprob_binned, args=(x_data2, y_data2, m))
 
-    # run production chain
-    sampler.run_mcmc(pos, nProdSteps)
+        pos, prob, state = sampler.run_mcmc(p0_walkers, nBurnIn)
+        sampler.reset()
 
-    # ideally between 0.2 and 0.5:
-    mean_acc = np.mean(sampler.acceptance_fraction)
+        # run production chain
+        sampler.run_mcmc(pos, nProdSteps)
 
-    print('done sampling in [%.1f sec] mean acceptance frac: %.2f' % (time.time() - tstart,mean_acc))
+        # ideally between 0.2 and 0.5:
+        mean_acc = np.mean(sampler.acceptance_fraction)
 
-    # calculate medians of production chains as answer
-    samples = sampler.chain.reshape( (-1,nDim) )
+        print('done sampling in [%.1f sec] mean acceptance frac: %.2f' % (time.time() - tstart,mean_acc))
 
-    # print median as the answer, as well as standard percentiles
-    percs = np.percentile(samples, percentiles, axis=0)
-    #for i in range(nDim):
-    #    print(i, percs[:,i], samples[:,i].min(), samples[:,i].max())
+        # calculate medians of production chains as answer
+        samples = sampler.chain.reshape( (-1,nDim) )
 
-    best_params = percs[1,:]
-    assert best_params.size == nDim
+        # print median as the answer, as well as standard percentiles
+        percs = np.percentile(samples, percentiles, axis=0)
+        #for i in range(nDim):
+        #    print(i, percs[:,i], samples[:,i].min(), samples[:,i].max())
 
-    # create return parameters, reconstructing the mu_i and sigma_i from the T() parameters
-    p = np.zeros( (6,nBinsMass), dtype='float32' ) # (A1, mu1, sigma1, A2, mu2, sigma2) (1=blue, 2=red)
-    
-    p[0,:] = best_params[20:40]
-    p[3,:] = best_params[40:60]
-    p[1,:] = _T(m, best_params[10:15])
-    p[4,:] = _T(m, best_params[15:20])
-    p[2,:] = _T(m, best_params[0:5])
-    p[5,:] = _T(m, best_params[5:10])
+        best_params = percs[1,:]
+        assert best_params.size == nDim
+
+        # create return parameters, reconstructing the mu_i and sigma_i from the T() parameters
+        p = np.zeros( (6,nBinsMass), dtype='float32' ) # (A1, mu1, sigma1, A2, mu2, sigma2) (1=blue, 2=red)
+        
+        p[0,:] = best_params[20:40]
+        p[3,:] = best_params[40:60]
+        p[1,:] = _T(m, best_params[10:15])
+        p[4,:] = _T(m, best_params[15:20])
+        p[2,:] = _T(m, best_params[0:5])
+        p[5,:] = _T(m, best_params[5:10])
+
+    # non-binned method:
+    if 1:
+        print('method on x_raw:')
+        # setup initial parameter guesses (theta0) for all walkers
+        nDim = 20 # only sigma and mu T params for red/blue (5*4)
+        p0_walkers = np.zeros( (nWalkers,nDim), dtype='float32' )
+        np.random.seed(42424242L)
+        for i in range(nWalkers):
+            p0_walkers[i,:] = p0[0:nDim] + np.abs(p0[0:nDim]) * np.random.normal(loc=0.0, scale=fracNoiseInit)
+
+        import pdb; pdb.set_trace()
+
+        # setup sampler and run a burn-in
+        tstart = time.time()
+        sampler = emcee.EnsembleSampler(nWalkers, nDim, mcmc_lnprob_nobin, args=(x_data, m))
+
+        pos, prob, state = sampler.run_mcmc(p0_walkers, nBurnIn)
+        sampler.reset()
+
+        # run production chain
+        sampler.run_mcmc(pos, nProdSteps)
+
+        # ideally between 0.2 and 0.5:
+        mean_acc = np.mean(sampler.acceptance_fraction)
+
+        print('done sampling in [%.1f sec] mean acceptance frac: %.2f' % (time.time() - tstart,mean_acc))
+
+        # calculate medians of production chains as answer
+        samples = sampler.chain.reshape( (-1,nDim) )
+
+        # print median as the answer, as well as standard percentiles
+        percs = np.percentile(samples, percentiles, axis=0)
+        for i in range(nDim):
+            print(i, percs[:,i], samples[:,i].min(), samples[:,i].max())
+
+        best_params = percs[1,:]
+        assert best_params.size == nDim
+
+        # create return parameters, reconstructing the mu_i and sigma_i from the T() parameters
+        p2 = np.zeros( (4,nBinsMass), dtype='float32' ) # (mu1, sigma1, mu2, sigma2) (1=blue, 2=red)
+        
+        p2[0,:] = _T(m, best_params[10:15])
+        p2[2,:] = _T(m, best_params[15:20])
+        p2[1,:] = _T(m, best_params[0:5])
+        p2[3,:] = _T(m, best_params[5:10])
 
     # debug plots
     if 0:
@@ -626,7 +703,7 @@ def _fitCMPlaneMCMC(masses, colors, Tparams, B_params,
         fig.savefig('debug_methodC_corner_mu_blue.pdf')
         plt.close(fig)
 
-    return p
+    return p, p2
 
 def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel):
     """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
@@ -667,9 +744,9 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         saveFilename = savePath + "sdss_colorMassPlaneFits_%s_%d-%d_%d-%d.hdf5" % \
           (''.join(bands),xMinMax[0]*10,xMinMax[1]*10,mag_range[0]*10,mag_range[1]*10)
 
-    #print('Note: characterizeColorMassPlane() load currently disabled, always remaking.')
-    #if 0 and isfile(saveFilename):
-    if isfile(saveFilename):
+    print('Note: characterizeColorMassPlane() load currently disabled, always remaking.')
+    if 0 and isfile(saveFilename):
+    #if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             for key in f:
                 r[key] = f[key][()]
@@ -782,7 +859,7 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     # (C) double gaussian fits in 0.1 dex mstar bins, with widths and centers constrained by the 
     # T() function as in Baldry+ 2003, use the previous result as the starting point for a full 
     # simultaneous MCMC fit of all [60 of] the parameters
-    r['C_params'] = _fitCMPlaneMCMC(mstar2_log, gc_colors, Tparams, r['B_params'], **conf)
+    r['C_params'], r['D_params'] = _fitCMPlaneMCMC(mstar2_log, gc_colors, Tparams, r['B_params'], **conf)
 
     # save
     with h5py.File(saveFilename,'w') as f:

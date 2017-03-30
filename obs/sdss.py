@@ -821,7 +821,7 @@ def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
 
     # start search
     for index in np.arange( indRange[0], indRange[1] ):
-        if index % np.max([1,int(nSpec/10.0)]) == 0 and index <= nSpec:
+        if index % np.max([1,int(nSpec/100.0)]) == 0 and index <= nSpec:
             print('   %4.1f%%' % (float(index+1)*100.0/nSpec))
 
         fileName = _indivSavePath(index, doSim=doSim)
@@ -829,8 +829,16 @@ def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
             continue
 
         # load
-        with h5py.File(fileName,'r') as f:
-            chain = f['sampling']['chain'][()]
+        f = h5py.File(fileName,'r')
+
+        if 'sampling' not in f or 'chain' not in f['sampling']:
+            print('CORRUPT, SKIP: %s' % fileName)
+            f.close()
+            continue
+            
+        chain = f['sampling']['chain'][()]
+        f.close()
+
         assert chain.ndim == 3 and chain.shape[2] == nFreeParams
 
         # flatten chain into a linear list of samples, calculate median and percentiles, save
