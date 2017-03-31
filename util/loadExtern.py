@@ -8,7 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
-from util.helper import evenlySample
+from util.helper import evenlySample, running_median
 from os.path import isfile, expanduser
 from scipy import interpolate
 from scipy.signal import savgol_filter
@@ -1227,6 +1227,45 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
     print('Saved: [%s.hdf5]' % path)
 
     return data
+
+def loadSDSSFits(redshiftBounds=[0.0,0.1]):
+    """ Load the fit results of the SDSS fiber spectrum MCMC chains. """
+    from obs.sdss import sdssSpectraFitsCatName, spectralFitQuantities
+    assert redshiftBounds == [0.0,0.1]
+    path1 = expanduser("~") + '/obs/%s.hdf5' % sdssSpectraFitsCatName
+    path2 = expanduser("~") + '/obs/sdss_z0.0-0.1.hdf5'
+    assert isfile(path1) and isfile(path2)
+
+    r = {}
+
+    # load HDF5
+    with h5py.File(path1,'r') as f:
+        for key in f.keys():
+            r[key] = f[key][()]
+            for a in f[key].attrs:
+                r[a] = f[key].attrs[a]
+
+    # load the corresponding stellar masses
+    with h5py.File(path2,'r') as f:
+        r['objid2'] = f['objid'][()]
+        r['logMass'] = f['logMass_gran1'][()]
+        #r['redshift'] = f['redshift'][()]
+
+    # make medians
+    assert np.array_equal(r['objid'],r['objid2'])
+
+    binSize = 0.1 # log stellar mass
+    percentiles = [16,50,84]
+
+    for ind, quantName in enumerate(spectralFitQuantities):
+        vals = np.squeeze(r['sdss_mcmc_fits_z0.0-0.1'][:,ind,1]) # 1 = median
+        w = np.where( np.isfinite(vals) & (r['logMass'] > 6.0) )
+        xm, ym, sm, pm = running_median(r['logMass'][w],vals[w],binSize=binSize,percs=percentiles)
+        r[quantName] = {'xm':xm,'ym':ym,'sm':sm,'pm':pm}
+
+    r['label'] = 'SDSS z<0.1'
+
+    return r
 
 def sfrTxt(sP):
     """ Load and parse sfr.txt. """

@@ -29,6 +29,7 @@ sdssSpectraFitsCatName = 'sdss_mcmc_fits_%s' % zBin
 sdssSpecObjIDCatName = 'sdss_objid_specobjid_z0.0-0.5.hdf5'
 mockSpectraAuxcatName = 'Subhalo_SDSSFiberSpectra_%s_p07c_cf00dust_res_conv_z'
 spectraFitsAuxcatName = 'Subhalo_SDSSFiberSpectraFits_%s-%s_p07c_cf00dust_res_conv_z'
+spectralFitQuantities = ['zred','mass','logzsol','tau','tage','dust1','sigma_smooth']
 miles_fwhm_aa = 2.54 # spectral resolution of the MILES stellar library (FWHM/Ang)
 sigma_to_fwhm = 2.355
 indModulus = 100 # split individual galaxy results into this many subdirectories

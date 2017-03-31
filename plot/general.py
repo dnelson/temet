@@ -663,6 +663,63 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
+    if 'fiber_' in quant:
+        # mock SDSS fiber spectrum MCMC fit quantities
+        # withVel=True, addRealism=True, dustModel=p07c_cf00dust_res_conv, directions=z
+        import json
+        from tracer.tracerMC import match3
+
+        if quant == 'fiber_zred':
+            acInd = 0
+            label = 'Fiber-Fit Residual Redshift'
+            minMax = [-1e-4,1e-4]
+            takeLog = False
+        if quant == 'fiber_mass':
+            acInd = 1
+            label = 'Fiber-Fit Stellar Mass [ log M$_{\\rm sun}$ ]'
+            minMax = [7.0, 12.0]
+        if quant == 'fiber_logzsol':
+            acInd = 2
+            label = 'Fiber-Fit Stellar Metallicity [ log Z$_{\\rm sun}$ ]'
+            minMax = [-2.0,0.5]
+            takeLog = False
+        if quant == 'fiber_tau':
+            acInd = 3
+            label = 'Fiber-Fit $\\tau_{\\rm SFH}$ [ log Gyr ]'
+            minMax = [-1.0,0.5]
+        if quant == 'fiber_tage':
+            acInd = 4
+            label = 'Fiber-Fit t$_{\\rm age,stars}$ [ log Gyr ]'
+            minMax = [-0.5,1.2]
+        if quant == 'fiber_dust1':
+            acInd = 5
+            label = 'Fiber-Fit Dust Parameter $\\tau_1$'
+            minMax = [0.0, 2.0]
+            takeLog = False
+        if quant == 'fiber_sigma_smooth':
+            acInd = 6
+            label = 'Fiber-Fit $\sigma_{\\rm disp}$ [ log km/s ]'
+            minMax = [1.0,2.5]
+
+        acField = 'Subhalo_SDSSFiberSpectraFits_Vel-Realism_p07c_cf00dust_res_conv_z'
+        ac = auxCat(sP, fields=[acField])
+
+        # verify index
+        field_names = json.loads( ac[acField+'_attrs']['theta_labels'] )
+        assert field_names[acInd] == quant.split('fiber_')[1]
+
+        # non-dense in subhaloIDs, crossmatch and leave missing at nan
+        nSubsSnap = groupCatHeader(sP)['Nsubgroups_Total']
+        subhaloIDs_snap = np.arange( nSubsSnap )
+
+        gc_inds, _ = match3(subhaloIDs_snap, ac['subhaloIDs'])
+        assert gc_inds.size == ac['subhaloIDs'].size
+
+        vals = np.zeros( nSubsSnap, dtype='float32' )
+        vals.fill(np.nan)
+
+        vals[gc_inds] = np.squeeze(ac[acField][:,acInd,1]) # last index 1 = median
+
     # return
     assert label is not None
     return vals, label, minMax, takeLog
