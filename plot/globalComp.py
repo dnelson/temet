@@ -753,7 +753,7 @@ def stellarMassFunctionMultiPanel(sPs, pdf, highMassEnd=False, centralsOnly=Fals
                             use30kpc=use30kpc, use30H=use30H, useP10=useP10, 
                             simRedshift=redshift, dataRedshift=redshift, fig_subplot=[fig,ind])
 
-def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
+def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_subplot=[None,None]):
     """ Stellar mass-metallicity relation at z=0. """
     # config
     acMetalFields = ['Subhalo_StellarZ_4pkpc_rBandLumWt']
@@ -803,7 +803,21 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
                          xerr=[k['stellarMassErr'],k['stellarMassErr']], yerr=[k['ZstarsErr'],k['ZstarsErr']],
                          color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='o')
 
-    legend1 = ax.legend([l1,l2,l3], [g['label'],w['label'],k['label']], loc='lower right')
+    lines = [l1,l2,l3]
+    labels = [g['label'],w['label'],k['label']]
+
+    if sdssFiberFits:
+        # load MCMC fits to z<0.1 SDSS sample
+        sdss = loadSDSSFits()
+
+        l4, = ax.plot(sdss['logzsol']['xm'], sdss['logzsol']['ym'], '-', color='red',lw=2.0,alpha=0.7)
+        ax.fill_between(sdss['logzsol']['xm'], sdss['logzsol']['pm'][0,:], sdss['logzsol']['pm'][2,:], 
+                        color='red', interpolate=True, alpha=0.1)
+
+        lines.append(l4)
+        labels.append(sdss['label'])
+
+    legend1 = ax.legend(lines, labels, loc='lower right')
     ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -876,6 +890,29 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
             pm2 = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
             ax.plot(xm[1:-1], ym2[1:-1], linestyles[i+len(acMetalFields)], color=c, lw=3.0)
+
+        # testing
+        if sdssFiberFits and sP.simName == 'TNG100-1':
+            from plot.general import simSubhaloQuantity
+
+            sP.setRedshift(0.0)
+            yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_logzsol')
+            yy = yy[w]
+
+            # only include subhalos with non-nan age entries (e.g. at least 1 real star within radial cut)
+            ww = np.where(np.isfinite(yy))
+            yy_loc = yy[ww]
+            xx_loc = xx[ww]
+
+            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+
+            ym = savgol_filter(ym_i,sKn,sKo)
+            sm = savgol_filter(sm_i,sKn,sKo)
+            pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+
+            label = sP.simName + ' fiber'
+            ax.plot(xm[:-1], ym[:-1], linestyles[0], color='green', lw=3.0, label=label)
+            ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color='green', interpolate=True, alpha=0.25)
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
@@ -1524,7 +1561,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     pdf.savefig()
     plt.close(fig)
 
-def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None,None]):
+def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=False, fig_subplot=[None,None]):
     """ Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25). """
     ageTypes = ['Subhalo_StellarAge_4pkpc_rBandLumWt',
                 'Subhalo_StellarAge_NoRadCut_MassWt',
@@ -1568,7 +1605,21 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
     ax.fill_between(b10['stellarMass'], b10['ageStarsDown'], b10['ageStarsUp'], 
                     color='#333333', interpolate=True, alpha=0.1)
 
-    legend1 = ax.legend([l1,l2], [g05['label'],b10['label']], loc='upper left')
+    lines = [l1,l2]
+    labels = [g05['label'],b10['label']]
+
+    if sdssFiberFits:
+        # load MCMC fits to z<0.1 SDSS sample
+        sdss = loadSDSSFits()
+
+        l3, = ax.plot(sdss['tage']['xm'], sdss['tage']['ym'], '-', color='red',lw=2.0,alpha=0.7)
+        ax.fill_between(sdss['tage']['xm'], sdss['tage']['pm'][0,:], sdss['tage']['pm'][2,:], 
+                        color='red', interpolate=True, alpha=0.1)
+
+        lines.append(l3)
+        labels.append(sdss['label'])
+
+    legend1 = ax.legend(lines, labels, loc='upper left')
     ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -1605,7 +1656,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
         for i, ageType in enumerate(ageTypes):
 
             iters = [0]
-            if clean: iters = [0,1] # show Guidi correction
+            #if clean: iters = [0,1] # show Guidi correction
 
             for i_num in iters:
                 yy = ac[ageType][w]
@@ -1635,6 +1686,29 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, fig_subplot=[None
 
                 if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2) and i == 0 and i_num == 0: # P[10,90]
                     ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.25)
+
+        # testing
+        if sdssFiberFits and sP.simName == 'TNG100-1':
+            from plot.general import simSubhaloQuantity
+
+            sP.setRedshift(0.0)
+            yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_tage')
+            yy = yy[w]
+
+            # only include subhalos with non-nan age entries (e.g. at least 1 real star within radial cut)
+            ww = np.where(np.isfinite(yy))
+            yy_loc = yy[ww]
+            xx_loc = xx[ww]
+
+            xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+
+            ym = savgol_filter(ym_i,sKn,sKo)
+            sm = savgol_filter(sm_i,sKn,sKo)
+            pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+
+            label = sP.simName + ' fiber'
+            ax.plot(xm[:-1], ym[:-1], linestyles[0], color='green', lw=3.0, label=label)
+            ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color='green', interpolate=True, alpha=0.25)
 
     # legend
     handles, labels = ax.get_legend_handles_labels()
