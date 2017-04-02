@@ -187,6 +187,11 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
         sdss_cat_ind = np.random.choice(np.arange(sdss_cat_size))
         sdss_spec = loadSDSSSpectrum(sdss_cat_ind, fits=True)
 
+        while sdss_spec['flux'].sum() == 0.0 or sdss_spec['wdisp'].max() == 0.0:
+            # e.g. unplugged fiber or other catastropic failure, get another
+            sdss_cat_ind += 1
+            sdss_spec = loadSDSSSpectrum(sdss_cat_ind % sdss_cat_size, fits=True)
+
         if sdss_spec is None:
             return None
 
