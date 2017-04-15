@@ -9,7 +9,7 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import collections
-from scipy.optimize import leastsq
+from scipy.optimize import leastsq, least_squares, curve_fit
 
 # --- utility functions ---
 
@@ -334,7 +334,7 @@ def trapsum(xin,yin):
     return np.sum( np.abs(xin[1:nn-1]-xin[0:nn-2]) * (yin[1:nn-1]+yin[0:nn-2])*0.5 )
 
 def leastsq_fit(func, params_init, args=None):
-    """ Wrap scipy.interpolate.leastsq() by making the error function and handling returns.
+    """ Wrap scipy.optimize.leastsq() by making the error function and handling returns.
     If args is not None, then the standard errors are also computed, but this ASSUMES that 
     args[0] is the x data points and args[1] is the y data points. """
     def error_function(params, x, y, fixed=None):
@@ -364,6 +364,22 @@ def leastsq_fit(func, params_init, args=None):
             params_stddev[j] = np.abs(np.sqrt( params_cov[j][j] ))
 
     return params_best, params_stddev
+
+def least_squares_fit(func, params_init, params_bounds, args=None):
+    """ Wrap scipy.optimize.least_squares() using the Trust Region Reflective algorithm for 
+    fitting with (optional) constraints on each parameter. """
+    def error_function(params, x, y, fixed=None):
+        y_fit = func(x, params, fixed)
+        return y_fit - y
+
+    # e.g. two parameters, require that x[1] >= 1.5, and x[0] left unconstrained
+    # (lower bounds, upper bounds)
+    # where each is a scalar or an array of the same size as parameters
+    #bounds2 = ([-np.inf, 1.5], np.inf)
+
+    result = least_squares(error_function, params_init, bounds=params_bounds, args=args, method='trf')
+
+    return result.x
 
 # --- vis ---
 
