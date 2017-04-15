@@ -809,6 +809,7 @@ class simParams:
             self.snap = redshiftToSnapNum(sP=self)
             if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
+        self.data = {}
 
     def setSnap(self, snap=None):
         """ Update sP based on new snapshot. """
@@ -818,6 +819,7 @@ class simParams:
             assert self.redshift >= 0.0
             if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
+        self.data = {}
 
     def matchedSubhaloID(self, hID=None):
         """ Return a subhalo index (into the group catalog) for this simulation given a unique, 

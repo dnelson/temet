@@ -471,7 +471,8 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             for i, bands in enumerate(bandCombos):
 
                 # calculate simulation colors
-                gc_colors, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=bands)
+                gc_colors, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, 
+                                                bands=bands, projs='random')
 
                 # config for this band
                 mag_range = bandMagRange(bands)
@@ -701,7 +702,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     _, zIndTo = closest(savedRedshifts, toRedshift)
     _, zIndFrom = closest(savedRedshifts, sP.redshift)
 
-    assert zIndTo > 0 and zIndTo < snaps.size
+    assert zIndTo > 0 and zIndTo < len(snaps)
     assert snaps[zIndFrom] == sP.snap
 
     sim_colors_from = np.squeeze( sim_colors_evo[:,rndProjInd,zIndFrom] )
@@ -1045,14 +1046,207 @@ def colorTransitionTimescale(sP, cenSatSelect='cen', simColorsModel=defSimColorM
     fig.savefig('figure9_%s_%s_%s.pdf' % (sP.simName,cenSatSelect,simColorsModel))
     plt.close(fig)
 
+def _get_red_blue_2params(params, method, iterNum):
+    """ Helper function for plotting color-mass plane fits. """
+    if 'rel' in method:
+        (mu1, sigma1, mu2, sigma2, A_rel) = params
+        A1 = A_rel
+        A2 = 1.0 - A_rel
+    else:
+        (A1, mu1, sigma1, A2, mu2, sigma2) = params
+
+    if iterNum == 0:
+        val_blue = sigma1
+        val_red = sigma2
+    if iterNum == 1:
+        val_blue = mu1
+        val_red = mu2
+    if iterNum == 2:
+        val_blue = A1
+        val_red = A2
+
+    return val_blue, val_red
+
+def _get_red_blue_errors(errors, method, iterNum, errInds=[1,3]):
+    """ Helper function for plotting color-mass plane fits. """
+    if 'rel' in method:
+        mu1 = errors[errInds,0]
+        sigma1 = errors[errInds,1]
+        mu2 = errors[errInds,2]
+        sigma2 = errors[errInds,3]
+        A1 = errors[errInds,4]
+        A2 = A1
+    else:
+        (A1, mu1, sigma1, A2, mu2, sigma2) = params
+        mu1 = errors[errInds,1]
+        sigma1 = errors[errInds,2]
+        mu2 = errors[errInds,4]
+        sigma2 = errors[errInds,5]
+        A1 = errors[errInds,0]
+        A2 = errors[errInds,3]
+
+    if iterNum == 0:
+        val_blue = sigma1
+        val_red = sigma2
+    if iterNum == 1:
+        val_blue = mu1
+        val_red = mu2
+    if iterNum == 2:
+        val_blue = A1
+        val_red = A2
+
+    return val_blue[0], val_blue[1], val_red[0], val_red[1]
+
+def _get_red_frac(params, method):
+    """ Helper function for plotting color-mass plane fits. """
+    if 'rel' in method:
+        (mu1, sigma1, mu2, sigma2, A_rel) = params
+        #A1 = A_rel * ...
+        fraction_red = 1.0 - A_rel
+    else:
+        (A1, mu1, sigma1, A2, mu2, sigma2) = params
+        integral_1 = A1 * sigma1 * np.sqrt(2*np.pi)
+        integral_2 = A2 * sigma2 * np.sqrt(2*np.pi)
+
+        fraction_red = (A2*sigma2) / (A1*sigma1+A2*sigma2) # area = A*sigma*sqrt(2pi)
+    return fraction_red
+
+def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorModel, pStyle='white'):
+    """ Plot a double panel of the red/blue mu and sigma fits vs stellar mass, simulation(s) vs SDSS. """
+
+    # analysis config
+    cenSatSelect = 'all'
+    method = 'Crel' # MCMC fit with relative amplitudes
+    medianBin = 2 # needs to be int(len(percentiles)/2)
+
+    # visual config
+    xMinMax = [9.0, 12.0] # log Mstar
+    mMinMax = [0.3, 0.9] # mu
+    sMinMax = [0.0, 0.2] # sigma
+
+    xLabel = 'M$_{\star}$ [ log M$_{\\rm sun}$ ]'
+    mLabel = '$\mu_{\\rm red,blue}$ [peak location in (%s-%s) mag]' % (bands[0],bands[1])
+    sLabel = '$\sigma_{\\rm red,blue}$ [width in (%s-%s) mag]' % (bands[0],bands[1])
+
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+    sizefac = 1.0 if not clean else sfclean
+    lw = 2.5
+    alpha = 0.8
+    af = 5.0 # reduce alpha by this factor for low-mass red and high-mass blue
+
+    cBlue = 'blue'
+    cRed = 'red'
+
+    # load obs and sim(s)
+    fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
+                                          simColorsModel=simColorsModel, remakeFlag=False)
+
+    masses = fits_obs['mStar'] # bin centers
+    ind_r = fits_obs['skipNBinsRed']
+    ind_b = fits_obs['skipNBinsBlue']
+
+    fits_sim = []
+    for sP in sPs:
+        fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
+                                          simColorsModel=simColorsModel, remakeFlag=False)
+        assert np.array_equal(fits_obs['mStar'], fits['mStar'])
+        fits_sim.append(fits)
+
+    def _fig_helper(ax, iterNum):
+        val_red  = np.zeros( masses.size, dtype='float32' )
+        val_blue = np.zeros( masses.size, dtype='float32' )
+
+        err_red_down  = np.zeros( masses.size, dtype='float32' )
+        err_red_up    = np.zeros( masses.size, dtype='float32' )
+        err_blue_down = np.zeros( masses.size, dtype='float32' )
+        err_blue_up   = np.zeros( masses.size, dtype='float32' )
+
+        sExtra = []
+        lExtra = []
+
+        # loop over simulations, then obs at the end
+        for sPnum, sP in enumerate(sPs+[None]):
+            if sPnum < len(sPs):
+                # sim
+                fits = fits_sim[sPnum]
+                ls = linestyles[1+sPnum]
+                marker = ['o','s'][sPnum]
+                lExtra.append(sP.simName)
+            else:
+                # obs
+                fits = fits_obs
+                ls = linestyles[0]
+                marker = 'D'
+                lExtra.append('SDSS z<0.1')
+
+            sExtra.append(plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker=marker,linestyle=ls))
+
+            params = fits['%s_errors'%method][medianBin,:,:] # medians
+            errors = fits['%s_errors' % method]
+
+            for i in range(len(masses)):
+                val_blue[i], val_red[i] = _get_red_blue_2params(params[:,i], method, iterNum)
+                err_blue_down[i], err_blue_up[i], err_red_down[i], err_red_up[i] = \
+                  _get_red_blue_errors(errors[:,:,i], method, iterNum)
+
+            ax.plot(masses[:-ind_b],val_blue[:-ind_b],marker+ls,color=cBlue,alpha=alpha,lw=lw)
+            ax.plot(masses[ind_b:],val_blue[ind_b:],marker+ls,color=cBlue,alpha=alpha/af,lw=lw)
+            ax.plot(masses[ind_r:],val_red[ind_r:],marker+ls,color=cRed,alpha=alpha,lw=lw)
+            ax.plot(masses[:ind_r+1],val_red[:ind_r+1],marker+ls,color=cRed,alpha=alpha/af,lw=lw)
+
+            ax.fill_between(masses[:-ind_b], err_blue_down[:-ind_b], err_blue_up[:-ind_b], 
+                facecolor=cBlue, alpha=0.2, interpolate=True)
+            ax.fill_between(masses[ind_b+1:], err_blue_down[ind_b+1:], err_blue_up[ind_b+1:], 
+                facecolor=cBlue, alpha=0.2/af, interpolate=True)
+
+            ax.fill_between(masses[ind_r:], err_red_down[ind_r:], err_red_up[ind_r:], 
+                facecolor=cRed, alpha=0.2, interpolate=True)
+            ax.fill_between(masses[:ind_r+1], err_red_down[:ind_r+1], err_red_up[:ind_r+1], 
+                facecolor=cRed, alpha=0.2/af, interpolate=True)
+
+        # make legends
+        legend2 = ax.legend(sExtra, lExtra, loc='upper left')
+
+    # start figure
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*2),facecolor=color1)
+
+    # top panel: mu_{red,blue}
+    ax = fig.add_subplot(212, axisbg=color1)
+    setAxisColors(ax, color2)
+
+    ax.set_xlim(xMinMax)
+    ax.set_xlabel(xLabel)
+    ax.set_ylabel(mLabel)
+    ax.set_ylim(mMinMax)
+
+    _fig_helper(ax,iterNum=1)
+
+    # bottom panel: sigma_{red,blue}
+    ax = fig.add_subplot(211, axisbg=color1)
+    setAxisColors(ax, color2)
+
+    ax.set_xlim(xMinMax)
+    ax.set_xlabel(xLabel)
+    ax.set_ylabel(sLabel)
+    ax.set_ylim(sMinMax)
+
+    _fig_helper(ax,iterNum=0)
+
+    # finish plot and save
+    zStr = '_z=%.1f' % sP.redshift if sP.redshift > 0.0 else ''
+    fig.tight_layout()
+    fig.savefig('figure4_colorMassPlaneFits-%s_%s_%s_%s_%s%s.pdf' % \
+        (method,'-'.join([sP.simName for sP in sPs]),'-'.join(bands),cenSatSelect,simColorsModel,zStr))
+    plt.close(fig)
+
 def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel, pStyle='white'):
-    """ Plot double gaussian fits in the color-mass plane with different methods. """
+    """ Plot diagnostics of double gaussian fits in the color-mass plane with different methods. """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
     mag_range = [-0.5, 1.5] #bandMagRange(bands, tight=False)
-    yMinMax   = [0.0, 4.0]
+    yMinMax   = [0.0, 4.0] # PDFs
     mMinMax   = [9.0, 12.0] # log Mstar
     sMinMax   = [0.0, (mag_range[1]-mag_range[0])/10] # sigma
 
@@ -1062,25 +1256,45 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     mlabel = '%.2f < M$_{\\rm \star}$ < %.2f'
     sizefac = 1.0 if not clean else sfclean
 
-    # load
+    xx = np.linspace(mag_range[0], mag_range[1], 100)
+
+    # load obs and sim
     #fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
-    #                                      simColorsModel=simColorsModel)
-    #import pdb; pdb.set_trace()
+    #                                      simColorsModel=simColorsModel, remakeFlag=False)
     fits_obs = None
     fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
-                                      simColorsModel=simColorsModel)
+                                      simColorsModel=simColorsModel, remakeFlag=False)
+
+    #import pdb; pdb.set_trace()
 
     masses = fits['mStar'] # bin centers
-    methods = ['A','B','C'] # plot each
+    #methods = ['A','Arel']
+    #methods = ['A','Arel','B','Brel','C','Crel']
+    methods = ['Arel','Brel','Crel']
 
-    # (A) start plot, debugging double gaussians (two plots of 10 panels each to cover 20 bins)
+    def _get_y1_y2(params, method):
+        """ Helper function for plotting color-mass plane fits. """
+        if 'rel' in method:
+            (mu1, sigma1, mu2, sigma2, A_rel) = params
+
+            A1 = A_rel / np.sqrt(2*np.pi) / sigma1
+            A2 = (1.0-A_rel) / np.sqrt(2*np.pi) / sigma2
+            y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
+            y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+        else:
+            (A1, mu1, sigma1, A2, mu2, sigma2) = params
+
+            y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
+            y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+
+        return y1, y2
+
+    # (A) start plot, debugging double gaussians (two plots of 10 panels each to cover 20 mass bins)
     nCols = 2 * 0.6
     nRows = 5 * 0.6 # 0.6=visual adjust fac
 
     for iterNum in [0,1]:
         fig = plt.figure(figsize=(figsize[0]*nCols*sizefac,figsize[1]*nRows*sizefac),facecolor=color1)
-
-        xx = np.linspace(mag_range[0], mag_range[1], 100)
 
         # loop over half the mass bins, with a stride of two (one panel per mass bin)
         for i, mass in enumerate(masses[iterNum::2]):
@@ -1097,14 +1311,15 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
 
+            # histogram which has been fit
+            xx_hist = fits['mColorBins']
+            yy_hist = fits['mHists'][data_index,:]
+            ax.step(xx_hist,yy_hist,where='mid',color='black',alpha=0.7,label='Hist')
+
             # load results for a particular method, including the model
             for j, method in enumerate(methods):
                 params = fits['%s_params' % method]
-
-                (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,data_index]
-
-                y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
-                y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+                y1, y2 = _get_y1_y2(params[:,data_index], method)
 
                 ax.plot(xx,y1,linestyles[j],color='blue',alpha=0.8,lw=lw)
                 ax.plot(xx,y2,linestyles[j],color='red',alpha=0.8,lw=lw)
@@ -1112,11 +1327,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
                 # obs
                 if fits_obs is not None:
                     params = fits_obs['%s_params' % method]
-
-                    (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,data_index]
-
-                    y1 = A1 * np.exp( - (xx - mu1)**2.0 / (2.0 * sigma1**2.0) ) # blue
-                    y2 = A2 * np.exp( - (xx - mu2)**2.0 / (2.0 * sigma2**2.0) ) # red
+                    y1, y2 = _get_y1_y2(params[:,data_index], method)
 
                     ax.plot(xx,y1,linestyles[j],color='black',alpha=0.8,lw=lw)
                     ax.plot(xx,y2,linestyles[j],color='gray',alpha=0.8,lw=lw)
@@ -1132,7 +1343,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             sExtra.append(plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle=linestyles[j]))
             lExtra.append(mlabel % (mass,mass+fits['binSizeMass']))
 
-            legend2 = ax.legend(sExtra, lExtra, loc='best')
+            legend2 = ax.legend(sExtra, lExtra, loc='best',prop={'size':11})
 
         # finish plot and save
         fig.tight_layout()
@@ -1171,17 +1382,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             params = fits['%s_params' % method]
 
             for i in range(len(masses)):
-                (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
-
-                if iterNum == 0:
-                    val_blue[i] = sigma1
-                    val_red[i] = sigma2
-                if iterNum == 1:
-                    val_blue[i] = mu1
-                    val_red[i] = mu2
-                if iterNum == 2:
-                    val_blue[i] = A1
-                    val_red[i] = A2
+                val_blue[i], val_red[i] = _get_red_blue_2params(params[:,i], method, iterNum)
 
             ax.plot(masses,val_blue,'o'+linestyles[j],color='blue',alpha=0.8,lw=lw)
             ax.plot(masses,val_red,'o'+linestyles[j],color='red',alpha=0.8,lw=lw)
@@ -1190,17 +1391,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
                 params = fits_obs['%s_params' % method]
 
                 for i in range(len(masses)):
-                    (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
-
-                    if iterNum == 0:
-                        val_blue[i] = sigma1
-                        val_red[i] = sigma2
-                    if iterNum == 1:
-                        val_blue[i] = mu1
-                        val_red[i] = mu2
-                    if iterNum == 2:
-                        val_blue[i] = A1
-                        val_red[i] = A2
+                    val_blue[i], val_red[i] = _get_red_blue_2params(params[:,i], method, iterNum)
 
                 ax.plot(masses,val_blue,'o'+linestyles[j],color='black',alpha=0.8,lw=lw)
                 ax.plot(masses,val_red,'o'+linestyles[j],color='gray',alpha=0.8,lw=lw) 
@@ -1217,7 +1408,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             (saveStr,sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
         plt.close(fig)
 
-    # (E) start plot, red fraction (ratio of areas/heights?)
+    # (E) start plot, red fraction (ratio of counts in red vs red+blue gaussians)
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
 
     ax = fig.add_subplot(111, axisbg=color1)
@@ -1235,11 +1426,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         params = fits['%s_params' % method]
 
         for i in range(len(masses)):
-            (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
-            integral_1 = A1 * sigma1 * np.sqrt(2*np.pi)
-            integral_2 = A2 * sigma2 * np.sqrt(2*np.pi)
-            print(method,i,masses[i],integral_1+integral_2)
-            fraction_red[i] = (A2*sigma2) / (A1*sigma1+A2*sigma2) # area = A*sigma*sqrt(2pi)
+            fraction_red[i] = _get_red_frac(params[:,i], method)
 
         ax.plot(masses,fraction_red,linestyles[j],color='black',alpha=0.8,lw=lw)
 
@@ -1247,14 +1434,10 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             params = fits_obs['%s_params' % method]
 
             for i in range(len(masses)):
-                (A1, mu1, sigma1, A2, mu2, sigma2) = params[:,i]
-                integral_1 = A1 * sigma1 * np.sqrt(2*np.pi)
-                integral_2 = A2 * sigma2 * np.sqrt(2*np.pi)
-                print(method,i,masses[i],integral_1+integral_2)
-                fraction_red[i] = (A2*sigma2) / (A1*sigma1+A2*sigma2) # area = A*sigma*sqrt(2pi)
+                fraction_red[i] = _get_red_frac(params[:,i], method)
 
             ax.plot(masses,fraction_red,linestyles[j],color='green',alpha=0.8,lw=lw)
-        
+
     # make legend
     sExtra = [ plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) \
                for j in range(len(methods)) ]
@@ -1264,6 +1447,31 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     # finish plot and save
     fig.tight_layout()
     fig.savefig('colorMassPlane-RedFrac_%s_%s_%s_%s.pdf' % \
+        (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
+    plt.close(fig)
+
+    # (F) 2d histogram of counts given the binning setup
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    ax = fig.add_subplot(1,1,1, axisbg=color1)
+
+    setAxisColors(ax, color2)
+    ax.set_ylim(mag_range)
+    ax.set_xlim(fits['xMinMax'])
+    ax.set_ylabel(xlabel)
+    ax.set_xlabel('Stellar Mass [ log Msun ]')
+
+    h2d = fits['mHists'].T
+    from matplotlib.colors import Normalize
+    norm = Normalize(vmin=0.0, vmax=h2d.max(), clip=False)
+    cmap = loadColorTable('plasma')
+
+    h2d_rgb = cmap(norm(h2d))
+    extent = [fits['xMinMax'][0],fits['xMinMax'][1],mag_range[0],mag_range[1]]
+    plt.imshow(h2d_rgb, extent=extent, origin='lower', interpolation='nearest', aspect='auto', 
+               cmap=cmap, norm=norm)
+
+    fig.tight_layout()
+    fig.savefig('colorMassPlane2DHist_%s_%s_%s_%s.pdf' % \
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
 
@@ -1386,24 +1594,30 @@ def paperPlots():
         pdf.close()
 
     # figure 3, stellar ages and metallicities vs mstar (2x1 in a row)
-    if 1:
+    if 0:
         sPs = [L75, L205] # L75FP
         simRedshift = 0.1
+        sdssFiberFits = False
 
         pdf = PdfPages('figure3a_stellarAges_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-        plot.globalComp.stellarAges(sPs, pdf, simRedshift=simRedshift, centralsOnly=True)
+        plot.globalComp.stellarAges(sPs, pdf, simRedshift=simRedshift, sdssFiberFits=sdssFiberFits, centralsOnly=True)
         pdf.close()
         pdf = PdfPages('figure3b_massMetallicityStars_%s.pdf' % '_'.join([sP.simName for sP in sPs]))
-        plot.globalComp.massMetallicityStars(sPs, pdf, simRedshift=simRedshift)
+        plot.globalComp.massMetallicityStars(sPs, pdf, sdssFiberFits=sdssFiberFits, simRedshift=simRedshift)
         pdf.close()
 
-    # figure 4: fullbox demonstratrion projections
+    # figure 4: double gaussian fits, [peak/scatter vs Mstar], red fraction (e.g. Baldry Figs. 5, 6, 8)
+    if 1:
+        sP = L75 #simParams(res=455,run='tng',redshift=0.0) #
+        colorMassPlaneFits(sP)
+
+    # figure 4->5: fullbox demonstratrion projections
     if 0:
         # render each fullbox image used in the composite
         for part in [0,1,2,3,4]:
             vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
-    # figure 5, grid of L205_cen 2d color histos vs. several properties (2x3)
+    # figure 5->6, grid of L205_cen 2d color histos vs. several properties (2x3)
     if 0:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
@@ -1419,7 +1633,7 @@ def paperPlots():
         quantHisto2D(sP, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
         pdf.close()
 
-    # figure 6: slice through 2d histo (one property)
+    # figure 6->7: slice through 2d histo (one property)
     if 0:
         sPs = [L75, L205]
         xQuant = 'color'
@@ -1435,7 +1649,7 @@ def paperPlots():
                      sRange=sRange, cenSatSelect=css)
         pdf.close()
 
-    # figure 7: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
+    # figure 7->8: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
     if 0:
         sPs = [L75, L205]
         xQuant = 'mstar2_log'
@@ -1447,16 +1661,16 @@ def paperPlots():
         quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
         pdf.close()    
 
-    # figure 8: flux arrows in color-mass plane
+    # figure 9: flux arrows in color-mass plane
     if 0:
-        sP = L75
+        sP = L205
         dust = dust_C
         css = 'cen'
         minCount = 1
 
         toRedshift = 0.5
         arrowMethod = 'arrow'
-        pdf = PdfPages('figure8a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+        pdf = PdfPages('figure9a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
         colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
                              minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
@@ -1464,13 +1678,13 @@ def paperPlots():
 
         toRedshift = 0.3
         arrowMethod = 'stream'
-        pdf = PdfPages('figure8b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+        pdf = PdfPages('figure9b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
         colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
                              minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
         pdf.close()
 
-    # figure 9: timescale histogram for color transition
+    # figure 10: timescale histogram for color transition
     if 0:
         sP = L75
         css = 'cen'
@@ -1478,17 +1692,15 @@ def paperPlots():
 
         colorTransitionTimescale(sP, cenSatSelect=css, simColorsModel=dust)
 
-    # figure 10: few N characteristic evolutionary tracks through color-mass 2d plane
+    # figure 11: few N characteristic evolutionary tracks through color-mass 2d plane
 
-    # figure 11: stellar image stamps of galaxies (time evolution of above tracks)
+    # figure 12: stellar image stamps of galaxies (time evolution of above tracks)
 
-    # figure Fig 12: double gaussian fits, [peak/scatter vs Mstar], red fraction (e.g. Baldry Figs. 5, 6, 8)
+    # figure 13: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
 
-    # figure Fig 13: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
+    # figure 14: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
 
-    # figure Fig 14: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
-
-    # figure Fig 15: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
+    # figure 15: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
 
     # appendix figure 1, viewing angle variation (1 panel)
     if 0:
