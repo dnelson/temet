@@ -756,11 +756,14 @@ def stellarMassFunctionMultiPanel(sPs, pdf, highMassEnd=False, centralsOnly=Fals
 def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_subplot=[None,None]):
     """ Stellar mass-metallicity relation at z=0. """
     # config
-    acMetalFields = ['Subhalo_StellarZ_4pkpc_rBandLumWt']
+    acMetalFields = ['Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt',
+                     'Subhalo_StellarZ_SDSSFiber_rBandLumWt',
+                     'Subhalo_StellarZ_4pkpc_rBandLumWt']
     metalFields   = ['SubhaloStarMetallicityHalfRad',
                      'SubhaloStarMetallicity',
                      'SubhaloStarMetallicityMaxRad']
     if clean: metalFields = []
+    if clean: acMetalFields = [acMetalFields[0]]
 
     minNumStars = 1
     if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
@@ -895,7 +898,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
         if sdssFiberFits and sP.simName == 'TNG100-1':
             from plot.general import simSubhaloQuantity
 
-            sP.setRedshift(0.0)
+            sP.setRedshift(0.1)
             yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_logzsol')
             yy = yy[w]
 
@@ -1563,7 +1566,8 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
 
 def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=False, fig_subplot=[None,None]):
     """ Luminosity or mass weighted stellar ages, as a function of Mstar (Vog 14b Fig 25). """
-    ageTypes = ['Subhalo_StellarAge_4pkpc_rBandLumWt',
+    ageTypes = ['Subhalo_StellarAge_SDSSFiber4pkpc_rBandLumWt',
+                'Subhalo_StellarAge_4pkpc_rBandLumWt',
                 'Subhalo_StellarAge_NoRadCut_MassWt',
                 'Subhalo_StellarAge_NoRadCut_rBandLumWt']
     if clean: ageTypes = [ageTypes[0]]
@@ -1691,7 +1695,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         if sdssFiberFits and sP.simName == 'TNG100-1':
             from plot.general import simSubhaloQuantity
 
-            sP.setRedshift(0.0)
+            sP.setRedshift(0.1)
             yy, _, _, _ = simSubhaloQuantity(sP, 'fiber_tage')
             yy = yy[w]
 

@@ -241,6 +241,85 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
 
     return r, attrs
 
+def _radialRestriction(sP, nSubsTot, rad):
+    """ Handle an input 'rad' specification and return the min/max/2d/3d details to apply. """
+    radRestrictIn2D = False
+    radSqMin = np.zeros( nSubsTot, dtype='float32' ) # leave at zero unless modified below
+
+    if isinstance(rad, float):
+        # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
+        rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
+        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax += rad_pkpc * rad_pkpc
+    elif rad is None:
+        # no radial restriction (all particles in subhalo)
+        radSqMax = np.zeros( nSubsTot, dtype='float32' )
+        radSqMax += sP.boxSize**2.0
+    elif rad == 'p10':
+        # load group m200_crit values
+        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        parentM200 = gcLoad['halos'][gcLoad['subhalos']]
+
+        # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
+        r_cut = 27.3 * (parentM200/1e5)**(0.29) / sP.HubbleParam
+        radSqMax = r_cut * r_cut
+    elif rad == '30h':
+        # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
+        rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
+
+        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+
+        ww = np.where(twiceStellarRHalf > rad_pkpc)
+        twiceStellarRHalf[ww] = rad_pkpc
+        radSqMax = twiceStellarRHalf**2.0
+    elif rad == 'r015_1rvir_halo':
+        # classic 'halo' definition, 0.15rvir < r < 1.0rvir (meaningless for non-centrals)
+        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        parentR200 = gcLoad['halos'][gcLoad['subhalos']]
+
+        radSqMax = (1.00 * parentR200)**2
+        radSqMin = (0.15 * parentR200)**2
+    elif rad == '2rhalfstars':
+        # classic Illustris galaxy definition, r < 2*r_{1/2,mass,stars}
+        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+
+        radSqMax = twiceStellarRHalf**2
+    elif rad == '1rhalfstars':
+        # inner galaxy definition, r < 1*r_{1/2,mass,stars}
+        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 1.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+
+        radSqMax = twiceStellarRHalf**2
+    elif rad == 'sdss_fiber':
+        # SDSS fiber is 3" diameter, convert to physical radius at this redshift for all z>0
+        # for z=0.0 snapshots only, for this purpose we fake the angular diameter distance at z=0.1
+        fiber_z = sP.redshift if sP.redshift > 0.0 else 0.1
+        fiber_arcsec = 3.0 # note: 2.0 for BOSS, 3.0 for legacy SDSS
+        fiber_diameter = sP.units.arcsecToAngSizeKpcAtRedshift(fiber_arcsec, z=fiber_z)
+        print(' Set SDSS fiber diameter [%.2f pkpc] at redshift [z = %.2f]. NOTE: 2D restriction!' % \
+            (fiber_diameter,fiber_z))
+
+        # convert [pkpc] -> [ckpc/h] (code units) at this redshift
+        fiber_diameter = sP.units.physicalKpcToCodeLength(fiber_diameter)
+
+        radSqMax = np.zeros( nSubsTot, dtype='float32' )
+        radSqMax += (fiber_diameter / 2.0)**2.0
+        radRestrictIn2D = True
+    elif rad == 'sdss_fiber_4pkpc':
+        # keep old 4pkpc 'fiber radius' approximation but with 2D
+        rad_pkpc = sP.units.physicalKpcToCodeLength(4.0)
+
+        radSqMax = np.zeros( nSubsTot, dtype='float32' )
+        radSqMax += rad_pkpc * rad_pkpc
+        radRestrictIn2D = True
+
+    assert radSqMax.size == nSubsTot
+    assert radSqMin.size == nSubsTot
+
+    return radRestrictIn2D, radSqMin, radSqMax
+
 def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=None):
     """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
@@ -304,57 +383,11 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
     print(' Total # Subhalos: %d, processing [%d] subhalos...' % (nSubsTot,nSubsDo))
 
     # determine radial restriction for each subhalo
-    radSqMin = np.zeros( nSubsTot, dtype='float32' ) # leave at zero unless modified below
+    radRestrictIn2D, radSqMin, radSqMax = _radialRestriction(sP, nSubsTot, rad)
 
-    if isinstance(rad, float):
-        # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
-        rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
-        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
-        radSqMax += rad_pkpc * rad_pkpc
-    elif rad is None:
-        # no radial restriction (all particles in subhalo)
-        radSqMax = np.zeros( nSubsTot, dtype='float32' )
-        radSqMax += sP.boxSize**2.0
-    elif rad == 'p10':
-        # load group m200_crit values
-        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
-        parentM200 = gcLoad['halos'][gcLoad['subhalos']]
-
-        # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
-        r_cut = 27.3 * (parentM200/1e5)**(0.29) / sP.HubbleParam
-        radSqMax = r_cut * r_cut
-    elif rad == '30h':
-        # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
-        rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
-
-        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
-
-        ww = np.where(twiceStellarRHalf > rad_pkpc)
-        twiceStellarRHalf[ww] = rad_pkpc
-        radSqMax = twiceStellarRHalf**2.0
-    elif rad == 'r015_1rvir_halo':
-        # classic 'halo' definition, 0.15rvir < r < 1.0rvir (meaningless for non-centrals)
-        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
-        parentR200 = gcLoad['halos'][gcLoad['subhalos']]
-
-        radSqMax = (1.00 * parentR200)**2
-        radSqMin = (0.15 * parentR200)**2
-    elif rad == '2rhalfstars':
-        # classic Illustris galaxy definition, r < 2*r_{1/2,mass,stars}
-        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
-
-        radSqMax = twiceStellarRHalf**2
-    elif rad == '1rhalfstars':
-        # inner galaxy definition, r < 1*r_{1/2,mass,stars}
-        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 1.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
-
-        radSqMax = twiceStellarRHalf**2
-
-    assert radSqMax.size == nSubsTot
-    assert radSqMin.size == nSubsTot
+    if radRestrictIn2D:
+        Nside = 'z-axis'
+        print(' Requested: radRestrictIn2D! Using hard-coded projection direction of [%s]!' % Nside)
 
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = []
@@ -446,8 +479,26 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=No
         validMask = np.ones( i1-i0, dtype=np.bool )
 
         if rad is not None:
-            rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                  particles['Coordinates'][i0:i1,:], sP )
+
+            if not radRestrictIn2D:
+                # apply in 3D
+                rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
+                                      particles['Coordinates'][i0:i1,:], sP )
+            else:
+                # apply in 2D projection, limited support for now, just Nside='z-axis'
+                # otherwise, for any more complex projection, need to apply it here, and anyways 
+                # for nProj>1, this validMask selection logic becomes projection dependent, so 
+                # need to move it inside the range(nProj) loop, which is definitely doable
+                assert Nside == 'z-axis'
+                p_inds = [0,1] # x,y
+                pt_2d = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                pt_2d = [ pt_2d[p_inds[0]], pt_2d[p_inds[1]] ]
+                vecs_2d = np.zeros( (i1-i0, 2), dtype=particles['Coordinates'].dtype )
+                vecs_2d[:,0] = particles['Coordinates'][i0:i1,p_inds[0]]
+                vecs_2d[:,1] = particles['Coordinates'][i0:i1,p_inds[1]]
+
+                rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+
             validMask &= (rr <= radSqMax[subhaloID])
             validMask &= (rr >= radSqMin[subhaloID])
 
@@ -801,29 +852,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     r.fill(np.nan)
 
     # radial restriction
-    radRestrictIn2D = False
-
-    if rad is not None:
-        if isinstance(rad, float):
-            # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
-            rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
-            radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
-            radSqMax += rad_pkpc * rad_pkpc
-        elif rad == 'sdss_fiber':
-            # SDSS fiber is 3" diameter, convert to physical radius at this redshift for all z>0
-            # for z=0.0 snapshots only, for this purpose we fake the angular diameter distance at z=0.1
-            fiber_z = sP.redshift if sP.redshift > 0.0 else 0.1
-            fiber_arcsec = 3.0 # note: 2.0 for BOSS, 3.0 for legacy SDSS
-            fiber_diameter = sP.units.arcsecToAngSizeKpcAtRedshift(fiber_arcsec, z=fiber_z)
-            print(' Set SDSS fiber diameter [%.2f pkpc] at redshift [z = %.2f]. NOTE: 2D restriction!' % \
-                (fiber_diameter,fiber_z))
-
-            # convert [pkpc] -> [ckpc/h] (code units) at this redshift
-            fiber_diameter = sP.units.physicalKpcToCodeLength(fiber_diameter)
-
-            radSqMax = np.zeros( nSubsTot, dtype='float32' )
-            radSqMax += (fiber_diameter / 2.0)**2.0
-            radRestrictIn2D = True
+    radRestrictIn2D, radSqMin, radSqMax = _radialRestriction(sP, nSubsTot, rad)
+    assert radSqMin.max() == 0.0 # not handled here
 
     # global load of all stars in all groups in snapshot
     starsLoad = ['initialmass','sftime','metallicity']
@@ -1737,8 +1767,16 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='bandLum-sdss_r'),
    'Subhalo_StellarAge_4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarAge_SDSSFiber_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarAge_SDSSFiber4pkpc_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
    'Subhalo_StellarZ_4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad=4.0,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_SDSSFiber_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
 
    'Subhalo_StellarMeanVel' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
