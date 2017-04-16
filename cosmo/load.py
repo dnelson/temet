@@ -127,8 +127,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                                 subhaloIndsStamp = np.arange(offset,offset+length)
                             else:
                                 # full, stamp in to indices corresponding to subhalo indices
-                                subhaloIDs[offset : offset+length] = f[catIndFieldName][()]
-                                subhaloIndsStamp = subhaloIDs[offset : offset+length]
+                                subhaloIndsStamp = f[catIndFieldName][()]
+                                subhaloIDs[subhaloIndsStamp] = subhaloIndsStamp
 
                             # save into final array
                             if f[field].ndim == 1:
