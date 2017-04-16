@@ -49,12 +49,11 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None)
     if simColorsModel == 'snap':
         gc_colors = stellarPhotToSDSSColor( colorData['subhalos'], bands )
     else:
-        # which subhaloIDs do these colors correspond to?
-        if 'subhaloIDs' in colorData:
-            subhaloIDs = colorData['subhaloIDs']
-        else:
-            # could generate with a range() if this came up
-            print(' warning: subhaloIDs not in [%s] auxCat.' % acKey)
+        # which subhaloIDs do these colors correspond to? NOTE: 'subhaloIDs' in colorData is almost 
+        # always corrupt, prior to commit fedf6b (16 Apr 2017), so don't use
+        gcH = groupCatHeader(sP)
+        assert gcH['Nsubgroups_Total'] == colorData[acKey].shape[0] # otherwise need auxCat stored subIDs
+        subhaloIDs = np.arange(colorData[acKey].shape[0])
 
         # band indices
         acBands = list(colorData[acKey+'_attrs']['bands'])
@@ -240,6 +239,7 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
         colors0_mean = colors0.copy()
 
     assert colors0.shape[0] == gcH['Nsubgroups_Total'] == subhaloIDs.size
+    assert np.array_equal(subhaloIDs, np.arange(subhaloIDs.size))
     assert colors0_mean.ndim == 1
 
     w = np.where( np.isfinite(colors0_mean) ) # keep subhalos with non-NaN colors
@@ -281,6 +281,8 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
 
             # map progenitor to its color at this snapshot, and save
             subhaloID_loc = mpbs[subhaloID]['SubfindID'][snapInd]
+            assert subhaloIDs_loc[subhaloID_loc] == subhaloID_loc # otherwise, need to index elsewhere 
+                                                                  # in colors_loc to get subhaloID_loc
 
             colorEvo[j,:,i] = colors_loc[subhaloID_loc]
             shIDEvo[j,i] = subhaloID_loc
@@ -348,7 +350,6 @@ def _fitCMPlaneDoubleGaussian(masses, colors, xMinMax, mag_range, binSizeMass, b
     """ Return the parameters of a full fit to objects in the (color-mass) plane. A double gaussian 
     is fit to each mass bin, histogramming in color, both bin sizes fixed herein. The centers and 
     widths of the Gaussians may be optionally constrained as inputs with fixed. """
-
     if relAmp:
         # only one relative amplitude parameter is fit
         fit_func = _double_gaussian_rel
@@ -422,15 +423,6 @@ def _fitCMPlaneDoubleGaussian(masses, colors, xMinMax, mag_range, binSizeMass, b
                     assert fixed[paramName].size == nBinsMass and fixed[paramName].ndim == 1
                     fixed_loc[pInds[paramName]] = fixed[paramName][i]
 
-            # any fixed fields nan? then e.g. extrapolated _T() values of a sigma or mu were invalid, 
-            # so we skip this bin and don't have any gaussian parameter fits here
-            #skipBin = False
-            #for f in fixed_loc:
-            #    if f is not None and np.isnan(f): skipBin = True
-            #if skipBin:
-            #    print(' nan %s skip massBin %d' % (paramName,i))
-            #    continue
-
         # run fit
         #params_best, _ = leastsq_fit(fit_func, params_guess, args=(x_data,y_data,fixed_loc))
         params_best = least_squares_fit(fit_func, params_guess, params_bounds, args=(x_data,y_data,fixed_loc))
@@ -490,17 +482,11 @@ def _fitCMPlaneDoubleGaussian(masses, colors, xMinMax, mag_range, binSizeMass, b
     return p, p_sch, m, n, y, x_data
 
 def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRed, skipNBinsBlue, 
-                    binSizeMass, binSizeColor, nBinsMass, nBinsColor, relAmp=False, sP_snap=0, **kwargs):
+                    binSizeMass, binSizeColor, nBinsMass, nBinsColor, 
+                    nWalkers, nBurnIn, nProdSteps, fracNoiseInit, percentiles, 
+                    relAmp=False, sP_snap=0, **kwargs):
     """ MCMC based fit in the color-mass plane of the full double gaussian model. """
     import emcee
-
-    # config
-    nWalkers = 200
-    nBurnIn = 400 # 200, 1000
-    nProdSteps = 100 # 50, 100
-    fracNoiseInit = 2e-3 # 1e-3
-    percentiles = [1,10,50,90,99] # middle is used to derive the best-fit for each parameter (e.g. median)
-    assert percentiles[int(len(percentiles)/2)] == 50
 
     # global MCMC fit to all the parameters simultaneously, five for each T() function, per color, 
     # plus 1 or 2 amplitudes per mass bin (=20x2 + 10*2=60)
@@ -677,6 +663,7 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
     p_errors = np.percentile(p_error_accum, percentiles, axis=2)
 
     # create return parameters, reconstructing the mu_i and sigma_i from the best T() parameters
+    # NOTE: these actually are biased since T() is nonlinear, use middle p_errors instead
     p = np.zeros( (nParams,nBinsMass), dtype='float32' ) 
     
     if relAmp:
@@ -797,21 +784,28 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     location, extent, relative numbers, for sP at sP.snap, and save the results. """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
-    # use previous (in redshift) MCMC result as starting point for z>0 method C calculations?
-    startMCMCAtPreviousResult = True
-    startMCMC_snaps = [99,91,84,78,72,67,59,50] # what snapshot sequence?
-
-    # let us also achieve all the analysis necessary for figures 12-15 here at the same time
+    # global analysis config
     mag_range = bandMagRange(bands, tight=False)
     xMinMax = [9.0, 12.0]
 
     binSizeMass = 0.15
     binSizeColor = 0.04 #0.05=20 0.04=25 0.03125=32 0.025=40
 
-    skipNBinsBlue = 9 #9# skip N most-massive mass bins when fitting blue population (methods A,B only)
-    skipNBinsRed = 4 # skip N least-massive mass bins when fitting red population (methods A,B only)
-    assert skipNBinsBlue >= 1 # otherwise logic failure below
+    # method A,B config only
+    skipNBinsBlue = 9 # skip N most-massive mass bins when fitting blue population
+    skipNBinsRed = 4 # skip N least-massive mass bins when fitting red population
 
+    # method C (mcmc) config
+    nWalkers = 200
+    nBurnIn = 2000 # [400], 2000
+    nProdSteps = 200 # [100], 200
+    fracNoiseInit = 2e-3 # 1e-3
+    percentiles = [1,10,50,90,99] # middle is used to derive the best-fit for each parameter (e.g. median)
+
+    startMCMCAtPreviousResult = True # use previous snap MCMC result as starting point for z>0?
+    startMCMC_snaps = [99,91,84,78,72,67,59,50] # what snapshot sequence?
+
+    # model config
     paramInds = {'A_blue':0, 'mu_blue':1, 'sigma_blue':2,
                  'A_red':3,  'mu_red':4,  'sigma_red':5}
 
@@ -822,6 +816,9 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     nBinsColor = int((mag_range[1]-mag_range[0]) / binSizeColor)
 
     conf = locals() # store configuration variables into a dict for passing
+
+    assert skipNBinsBlue >= 1 # otherwise logic failure below
+    assert percentiles[int(len(percentiles)/2)] == 50
 
     # check existence
     r = {}
@@ -840,8 +837,8 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
                 pStr = '_chainf=%d' % startMCMC_snaps[startMCMC_ind]
 
         savePath = sP.derivPath + "/galMstarColor/"
-        saveFilename = savePath + "colorMassPlaneFits_%s_%d_%s_%s%s.hdf5" % \
-          (''.join(bands),sP.snap,cenSatSelect,simColorsModel,pStr)
+        saveFilename = savePath + "colorMassPlaneFits_%s_%d_%s_%s%s_mcmc%d-%d.hdf5" % \
+          (''.join(bands),sP.snap,cenSatSelect,simColorsModel,pStr,nBurnIn,nProdSteps)
     else:
         # obs
         assert cenSatSelect == 'all'
@@ -912,7 +909,7 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         # (B1) choose estimates for initial T() function parameters (only use for iterNum == 0)
         params_guess = [0.05, 0.1, 0.1, 10.0, 1.0]
 
-        for iterNum in range(15):
+        for iterNum in range(20):
             Tparams = {}
 
             # (B2) fit double gaussians, all mass bins
@@ -988,16 +985,12 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
             ###Tparams['sigma_blue'], _ = leastsq_fit(_T, Tparams['sigma_blue'], args=(m,p[pInds['sigma_blue']]))
 
             for key in Tparams:
+                # check for invalid chain starting points and give some heuristic corrections
                 param_vals = _T(m,Tparams[key])
-                if param_vals.max() > 1.0:
-                    print(key,' '.join( ['%.3f'%t for t in Tparams[key]]))
-                    Tparams[key][2] = 0.0
-                    print(key,' '.join( ['%.3f'%t for t in Tparams[key]]))
-                    param_vals = _T(m,Tparams[key])
-                if param_vals.max() > 1.0:
-                    Tparams[key][0] = 1.0
-                    print(key,' '.join( ['%.3f'%t for t in Tparams[key]]))
-                    param_vals = _T(m,Tparams[key])
+                if param_vals.max() > 1.0: Tparams[key][2] = 0.0
+                if param_vals.max() > 1.0: Tparams[key][0] = 1.0
+                if param_vals.min() < 0.0: Tparams[key][1] = -0.212
+                param_vals = _T(m,Tparams[key])
                 assert param_vals.min() > 0.0 and param_vals.max() < 1.0
 
             val_mu_blue = _T(m, Tparams['mu_blue'])
