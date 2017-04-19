@@ -411,7 +411,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ac = auxCat(sP, fields=[fieldName])
         vals = ac[fieldName]
 
-        label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (halo) [$\mu$G]'
+        label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (halo)'
         if not clean: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
         minMax = [-2.0, 1.0]
         if tight: minMax = [-2.2, 1.2]

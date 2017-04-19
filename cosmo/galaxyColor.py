@@ -17,7 +17,7 @@ from util.loadExtern import loadSDSSData
 from util.helper import leastsq_fit, least_squares_fit
 from cosmo.kCorr import kCorrections, coeff
 from cosmo.load import groupCat, groupCatHeader, auxCat
-from cosmo.util import correctPeriodicDistVecs, cenSatSubhaloIndices
+from cosmo.util import correctPeriodicDistVecs, cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.mergertree import loadMPBs
 from plot.config import defSimColorModel
 from plot.general import bandMagRange
@@ -779,10 +779,11 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
     return p, p_errors, best_params
 
 def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel, 
-    remakeFlag=True):
+    nBurnIn=10000, remakeFlag=True):
     """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
     location, extent, relative numbers, for sP at sP.snap, and save the results. """
     assert cenSatSelect in ['all', 'cen', 'sat']
+    from util.simParams import simParams
 
     # global analysis config
     mag_range = bandMagRange(bands, tight=False)
@@ -797,13 +798,18 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
 
     # method C (mcmc) config
     nWalkers = 200
-    nBurnIn = 2000 # [400], 2000
-    nProdSteps = 200 # [100], 200
-    fracNoiseInit = 2e-3 # 1e-3
+    #nBurnIn = 10000 # [400], 2000, 10000
+    if nBurnIn == 400: nProdSteps = 100
+    if nBurnIn == 2000: nProdSteps = 200
+    if nBurnIn == 10000: nProdSteps = 1000
+    assert nBurnIn in [400,2000,10000] # otherwise generalize nProdSteps
+
+    fracNoiseInit = 2e-3
     percentiles = [1,10,50,90,99] # middle is used to derive the best-fit for each parameter (e.g. median)
 
     startMCMCAtPreviousResult = True # use previous snap MCMC result as starting point for z>0?
     startMCMC_snaps = [99,91,84,78,72,67,59,50] # what snapshot sequence?
+    startObsMCMCAtSimResult = True # use z=0.1 simulation result as a starting guess for obs fit?
 
     # model config
     paramInds = {'A_blue':0, 'mu_blue':1, 'sigma_blue':2,
@@ -844,9 +850,11 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         assert cenSatSelect == 'all'
         assert simColorsModel == defSimColorModel
 
+        sStr = '_fsr' if startObsMCMCAtSimResult else ''
+
         savePath = expanduser("~") + "/obs/"
-        saveFilename = savePath + "sdss_colorMassPlaneFits_%s_%d-%d_%d-%d.hdf5" % \
-          (''.join(bands),xMinMax[0]*10,xMinMax[1]*10,mag_range[0]*10,mag_range[1]*10)
+        saveFilename = savePath + "sdss_colorMassPlaneFits_%s_%d-%d_%d-%d_mcmc%d-%d%s.hdf5" % \
+          (''.join(bands),xMinMax[0]*10,xMinMax[1]*10,mag_range[0]*10,mag_range[1]*10,nBurnIn,nProdSteps,sStr)
 
     if not remakeFlag and isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -887,10 +895,28 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         gc_colors = sdss_color[w]
         mstar2_log = sdss_Mstar[w]
 
+    sP_snap = sP.snap if sP is not None else 0
+
+    def _paramDictFromModelCResult(cm_fit, relAmpStr):
+        """ Helper function used below. """
+        r = {}
+        r['sigma_blue'] = cm_fit['C%s_fstate'%relAmpStr][00:05]
+        r['sigma_red'] = cm_fit['C%s_fstate'%relAmpStr][05:10]
+        r['mu_blue'] = cm_fit['C%s_fstate'%relAmpStr][10:15]
+        r['mu_red'] = cm_fit['C%s_fstate'%relAmpStr][15:20]
+
+        if relAmp:
+            r['A_rel'] = cm_fit['C%s_fstate'%relAmpStr][20:40]
+        else:
+            r['A_blue'] = cm_fit['C%s_fstate'%relAmpStr][20:40]
+            r['A_red'] = cm_fit['C%s_fstate'%relAmpStr][40:60]
+
+        return r
+
     # (A) double gaussian fits in 0.1 dex mstar bins, unconstrained (unrelated)
     # Levenberg-Marquadrt non-linear least squares minimization method
     for relAmp in [True]: #[True,False]:
-        print('relAmp: ',relAmp,' sP.snap: ',sP.snap,' sP.redshift:',sP.redshift)
+        print('relAmp: ',relAmp,' sP.snap: ',sP_snap)
         relAmpStr = 'rel' if relAmp else ''
         pInds = paramIndsRel if relAmp else paramInds
 
@@ -1014,21 +1040,21 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
             sP.setSnap(curSnap)
 
             # reconstruct chain_start dictionary
-            chain_start = {}
-            chain_start['sigma_blue'] = fits_prev['C%s_fstate'%relAmpStr][00:05]
-            chain_start['sigma_red'] = fits_prev['C%s_fstate'%relAmpStr][05:10]
-            chain_start['mu_blue'] = fits_prev['C%s_fstate'%relAmpStr][10:15]
-            chain_start['mu_red'] = fits_prev['C%s_fstate'%relAmpStr][15:20]
+            chain_start = _paramDictFromModelCResult(fits_prev, relAmpStr)
 
-            if relAmp:
-                chain_start['A_rel'] = fits_prev['C%s_fstate'%relAmpStr][20:40]
-            else:
-                chain_start['A_blue'] = fits_prev['C%s_fstate'%relAmpStr][20:40]
-                chain_start['A_red'] = fits_prev['C%s_fstate'%relAmpStr][40:60]
+        if sP is None and startObsMCMCAtSimResult:
+            # load simulation result as a reasonable starting point for the observational fit
+            print('loading sim result from L75n1820TNG z=0.1 for obs C')
+            sP = simParams(res=1820,run='tng',redshift=0.1)
+            fits_sim = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
+                                                  simColorsModel=simColorsModel, remakeFlag=False)
+
+            # reconstruct chain_start dictionary
+            chain_start = _paramDictFromModelCResult(fits_sim, relAmpStr)
 
         # run mcmc fit
         r['C%s_params' % relAmpStr], r['C%s_errors' % relAmpStr], r['C%s_fstate' % relAmpStr] = \
-          _fitCMPlaneMCMC(mstar2_log, gc_colors, chain_start, relAmp=relAmp, sP_snap=sP.snap, **conf)
+          _fitCMPlaneMCMC(mstar2_log, gc_colors, chain_start, relAmp=relAmp, sP_snap=sP_snap, **conf)
 
         for i in range(nBinsMass):
             params = r['C%s_params' % relAmpStr][:,i]
@@ -1037,13 +1063,506 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         # (D) simultaneous MCMC fit, where we additionally require that the amplitudes of each of the 
         # red and blue follow a double-schechter function in log(Mstar), in which case there is only 
         # one global 'relative fraction' instead of one A_rel per mass bin
-        # todo
+        # (E) simultaneous MCMC fit, where we additionally require (1+z)^a evolution across redshift 
+        # bins of e.g. the mu_i(Mstar), sigma_i(Mstar), and A_rel(Mstar)
 
     # save
     with h5py.File(saveFilename,'w') as f:
         for key in r:
             f[key] = r[key]
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
+
+    for k in conf: r[k] = conf[k]
+    return r
+
+def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
+                         bands=['g','r'], cenSatSelect='cen', simColorsModel=defSimColorModel):
+    """ Measure the various color boundary crossing times for all galaxies. """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    import matplotlib.pyplot as plt # for debug plots
+
+    # analysis config
+    fit_method = 'Crel' # method/model used to characterize red vs blue populations in the C-M plane
+    cmPlaneCSS = 'all' # which galaxies to use for color-mass plane fits
+    cmPlaneColorModel = defSimColorModel # which simColorsModel to use for color-mass plane fits
+    redBlueMinSepMag = 0.02 # minimum separation between C_blue and C_red boundaries for stability
+
+    #def _plaw1z(x, params, fixed=None):
+    #    """ f(z) = A*z^b powerlaw function for fitting. Note: fixed argument unused. """
+    #    (a,b) = params
+    #    y = a * x**b
+    #    return y
+
+    def _plaw1plusz(x, params, fixed=None):
+        """ f(z) = A*(1+z)^b powerlaw function for fitting. Note: fixed argument unused. """
+        (a,b) = params
+        y = a * (1.0+x)**b
+        return y
+
+    # check existence
+    r = {}
+
+    savePath = sP.derivPath + "/galMstarColor/"
+    saveFilename = savePath + "colorTransitionTimes_%s_%d_%s_%s_maxz=%.1f_fred=%.1f_fblue=%.1f.hdf5" % \
+      (''.join(bands),sP.snap,cenSatSelect,simColorsModel,maxRedshift,f_red,f_blue)
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # [1] load/calculate evolution of simulation colors, cached in sP.data
+    if 'sim_colors_evo' in sP.data:
+        sim_colors_evo, shID_evo, subhalo_ids, evo_snaps = \
+          sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['evo_snaps']
+    else:
+        sim_colors_evo, shID_evo, subhalo_ids, evo_snaps = \
+          calcColorEvoTracks(sP, bands=bands, simColorsModel=simColorsModel)
+        sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['evo_snaps'] = \
+          sim_colors_evo, shID_evo, subhalo_ids, evo_snaps
+
+    redshifts = snapNumToRedshift(sP, evo_snaps)
+    ages = sP.units.redshiftToAgeFlat(redshifts)
+
+    w = np.where(redshifts <= maxRedshift)
+    redshifts = redshifts[w]
+    ages = ages[w]
+    snaps = evo_snaps[w]
+
+    # [2] load color-mass plane characterizations at every snapshot
+    cm_fits = []
+
+    for snap, redshift in zip(snaps,redshifts):
+        sP.setRedshift(redshift)
+        print('load cm-plane fits: snap [%d] z = %.1f' % (snap,redshift))
+        fits_local = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cmPlaneCSS, 
+                                      simColorsModel=cmPlaneColorModel, nBurnIn=nBurnIn, remakeFlag=False)
+        cm_fits.append(fits_local)
+
+    sP.setRedshift(redshifts[0])
+
+    # [3] fit red and blue mu and sigma vs redshift
+    pInds = cm_fits[0]['paramIndsRel'] if 'rel' in fit_method else cm_fits[0]['paramInds']
+    masses = cm_fits[0]['mStar']
+
+    medianBin = int(cm_fits[0][fit_method+'_errors'].shape[0]/2)
+    pVals  = {}
+
+    for pName in pInds.keys():
+        print(pName)
+
+        pVals[pName] = np.zeros( (cm_fits[0]['nBinsMass'], redshifts.size), dtype='float32' )
+        pVals[pName+'_fit'] = np.zeros_like( pVals[pName] )
+        pVals[pName+'_fitp'] = np.zeros( (2,cm_fits[0]['nBinsMass']), dtype='float32' )
+
+        for i, redshift in enumerate(redshifts):
+            pVals[pName][:,i] = cm_fits[i][fit_method+'_errors'][medianBin,pInds[pName],:]
+
+        # fit each mass bin separately in redshift as A*(1+z)^B
+        params_init = [pVals[pName][0,0], 1.0]
+        for i in range(cm_fits[0]['nBinsMass']):
+            x_data = redshifts
+            y_data = pVals[pName][i,:]
+
+            p_fit, p_err = leastsq_fit(_plaw1plusz, params_init, args=(x_data,y_data))
+            params_init = p_fit # use previous for initial guess of next mass bin
+
+            #print(' ',pName,i,masses[i],p_fit)
+
+            pVals[pName+'_fit'][i,:] = _plaw1plusz(x_data, p_fit)
+            pVals[pName+'_fitp'][:,i] = p_fit
+
+        # start plots for the redshift evolution of this parameter and its fit
+        if 0:
+            fig = plt.figure(figsize=(14,10))
+            ax = fig.add_subplot(111)
+
+            ax.set_xlim([9.0,12.0])
+            ax.set_xlabel('M$_{\star}$ [ log M$_{\\rm sun}$ ]')
+            ax.set_ylabel(pName)
+
+            for i, redshift in enumerate(redshifts):
+                yy = pVals[pName][:,i]
+                yy_fit1 = pVals[pName+'_fit'][:,i]
+
+                l, = ax.plot(masses, yy, 'o:', markerfacecolor='none')
+                ax.plot(masses, yy_fit1, 'o-', label='z = %.1f' % redshift, color=l.get_color())
+
+            ax.legend(loc='best')
+
+            # finish plot and save
+            fig.tight_layout()
+            fig.savefig('cmPlaneParamEvoWithFit_%s_%s_%s.pdf' % (sP.simName,fit_method,pName))
+            plt.close(fig)
+
+    # [4] define C_blue and C_red functions
+    def C_redblue(Mstar, redshift):
+        """ Find mu_{red,blue} and sigma_{red,blue} at this (Mstar,z) and derive the red and blue
+        boundaries C_red and C_blue. """
+        w = np.where(Mstar > masses)[0]
+        if len(w):
+            mstar_ind0 = w.max()
+        else:
+            mstar_ind0 = 0 # extrapolation to lower mass than fit
+
+        mstar_ind1 = mstar_ind0 + 1
+
+        if mstar_ind1 == masses.size:
+            # extrapolation to higher mass than fit
+            mstar_ind0 -= 1
+            mstar_ind1 -= 1
+
+        assert mstar_ind0 >= 0 and mstar_ind1 < masses.size
+
+        # linear interpolation in mass
+        C_val = {}
+
+        x0 = masses[mstar_ind0]
+        x1 = masses[mstar_ind1]
+
+        for whichColor in ['red','blue']:
+            mu_0 = _plaw1plusz(redshift, pVals['mu_%s_fitp' % whichColor][:,mstar_ind0])
+            mu_1 = _plaw1plusz(redshift, pVals['mu_%s_fitp' % whichColor][:,mstar_ind1])
+
+            mu = mu_0 + (Mstar-x0) * (mu_1-mu_0)/(x1-x0)
+
+            sigma_0 = _plaw1plusz(redshift, pVals['sigma_%s_fitp' % whichColor][:,mstar_ind0])
+            sigma_1 = _plaw1plusz(redshift, pVals['sigma_%s_fitp' % whichColor][:,mstar_ind1])
+
+            sigma = sigma_0 + (Mstar-x0) * (sigma_1-sigma_0)/(x1-x0)
+
+            # boundary definition
+            if whichColor == 'red':
+                C_val['red'] = mu - f_red * sigma
+            elif whichColor == 'blue':
+                C_val['blue'] = mu + f_blue * sigma
+
+                if C_val['blue'] >= C_val['red'] - redBlueMinSepMag:
+                    C_val['blue'] = C_val['red'] - redBlueMinSepMag
+        
+        return C_val['red'], C_val['blue']
+
+    # plot redshift evolution of C_blue and C_red color boundaries
+    fig = plt.figure(figsize=(14,10))
+    ax = fig.add_subplot(111)
+    ax.set_xlim([9.0,12.0])
+    ax.set_xlabel('M$_{\star}$ [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('C$_{\\rm red}$ (dotted) or C$_{\\rm blue}$ (solid) boundaries')
+    ax.set_ylim([0.3,0.8])
+
+    redshifts_plot = np.linspace(0.0, 1.0, 5)
+    masses_plot = np.linspace(9.0, 12.0, 100)
+
+    for i, redshift in enumerate(redshifts_plot):
+        C_blue = np.zeros( masses_plot.size, dtype='float32')
+        C_red = np.zeros( masses_plot.size, dtype='float32' )
+
+        # derive boundaries at this redshift
+        for j, mass in enumerate(masses_plot):
+            C_red[j], C_blue[j] = C_redblue(mass, redshift)
+
+        l, = ax.plot(masses_plot, C_blue, '-', lw=2.0, label='z = %.1f' % redshift)
+        ax.plot(masses_plot, C_red, ':', lw=2.0, color=l.get_color())
+
+    ax.legend(loc='best')
+
+    # finish plot and save
+    fig.tight_layout()
+    fig.savefig('cmPlaneBoundariesEvo_%s_%s_mcmc%d.pdf' % (sP.simName,fit_method,nBurnIn))
+    plt.close(fig)
+
+    # [5] load stellar masses at all snapshots
+    print('loading stellar masses...')
+    mstar_evo = np.zeros( (subhalo_ids.size, snaps.size), dtype='float32' )
+    mstar_evo.fill(np.nan)
+
+    for i, snap in enumerate(snaps):
+        snapInd = tuple(evo_snaps).index(snap)
+        print(' [%d] snapInd = %d (snapshot = %d z = %.1f): ' % (i,snapInd,snap,redshifts[i]), end='')
+
+        # load the corresponding mstar values at this snapshot
+        sP.setSnap(snap)
+
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+        mstar_log = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+
+        # subhaloIDs in the color evo tracks (index subhalos in groupcat at this snap)
+        colorSHIDs_thisSnap = np.squeeze(shID_evo[:,snapInd])
+
+        w = np.where(colorSHIDs_thisSnap >= 0)[0] # otherwise untracked to this snap
+
+        frac_tracked = float(len(w)) / subhalo_ids.size * 100.0
+        print('total = %d tracked_here = %d (%.2f%%)' % (subhalo_ids.size,len(w),frac_tracked))
+
+        mstar_evo[w,i] = mstar_log[colorSHIDs_thisSnap[w]]
+
+    sP.setRedshift(redshifts[0])
+
+    # boundary helpers
+    def _locateBoundaryCrossing(M0, C0, z0, M1, C1, z1, boundaryType):
+        """ Use an iterative bracketing to locate the exact crossing point (M',C',z') of 
+        mass, color, and redshift where the line connecting (M0,C0,z0) to (M1,C1,z1) 
+        intersects either C_red(M',C',z') or C_blue(M',C',z') according to boundaryType. """
+        assert np.all(np.isfinite([M0,C0,z0,M1,C1,z1]))
+
+        # config
+        errTol = 1e-5
+        maxIter = 50
+
+        # initial bounds
+        z_lower = z0
+        z_upper = z1
+
+        dM_invDeltaZ = (M1 - M0) / (z1-z0)
+        dC_invDeltaZ = (C1 - C0) / (z1-z0)
+
+        for nIter in range(maxIter):
+            # current guess
+            z_guess = 0.5 * (z_lower + z_upper)
+
+            # interpolate stellar mass and color to this redshift
+            Mstar_local = M0 + (z_guess - z0) * dM_invDeltaZ
+            color_local = C0 + (z_guess - z0) * dC_invDeltaZ
+
+            # calculate boundary at this redshift
+            C_red, C_blue = C_redblue(Mstar_local, z_guess)
+            C_threshold = C_red if boundaryType == 'red' else C_blue
+
+            #assert C0 < C_threshold and C1 > C_threshold # right? well just bounded
+
+            # note: z1 > z0, but could have either C0>C1 or C1>C0
+            if color_local < C_threshold:
+                # we are (above), move lower bound up
+                z_upper = z_guess
+            else:
+                # we are (below), move upper bound down
+                z_lower = z_guess
+
+            curError = np.abs(color_local - C_threshold)
+            #print(nIter,z_guess,Mstar_local,color_local,C_threshold,curError)
+            if curError <= errTol:
+                #print(' break')
+                break
+
+        if nIter >= maxIter:
+            print(' warning! nIter == maxIter == %d, final error = %.2f' % (nIter,curError))
+            import pdb; pdb.set_trace()
+
+        return z_guess, Mstar_local
+
+    def _locateCrossingWrap(ind, snapInd, viewInd, boundaryType):
+        """ Wrapper around _locateBoundaryCrossing() to get needed values. """
+        C0 = sim_colors_evo[ind,viewInd,snapInd]
+        C1 = sim_colors_evo[ind,viewInd,snapInd+1]
+        M0 = mstar_evo[ind,snapInd]
+        M1 = mstar_evo[ind,snapInd+1]
+        z0 = redshifts[snapInd]
+        z1 = redshifts[snapInd+1]
+        return _locateBoundaryCrossing(M0, C0, z0, M1, C1, z1, boundaryType)
+
+    # allocate
+    r = {}
+    r['subhalo_ids'] = subhalo_ids
+    r['snaps'] = snaps
+
+    for key in ['z_blue','z_redini','M_blue','M_redini']:
+        r[key] = np.zeros( subhalo_ids.size, dtype='float32' )
+        r[key].fill(np.nan)
+
+    r['N_rejuv'] = np.zeros( subhalo_ids.size, dtype='int16')
+    r['z_rejuv_start'] = {} # dictionaries, keys are subhalo ids
+    r['z_rejuv_stop'] = {} # elements are [] which are appended to
+    r['M_rejuv_start'] = {}
+    r['M_rejuv_stop'] = {}
+
+    # loop over all (todo) viewing directions, since colors are projection-dependent
+    #for viewInd in range(sim_colors_evo.shape[1]):
+    viewInd = 0
+    print('viewInd = 0 (todo)')
+
+    # [6] loop over all analysis snapshots, moving forward in time from z=maxRedshift to z=0
+    for i, snap in enumerate(snaps[::-1]):
+        # get properties at this anapshot
+        snapInd = tuple(snaps).index(snap)
+        redshift = redshifts[snapInd]
+        print('[%d] snapInd = %d snapshot = %d z = %.1f' % (i,snapInd,snap,redshift))
+
+        loc_color = np.squeeze( sim_colors_evo[:,viewInd,snapInd] )
+        loc_mass = np.squeeze( mstar_evo[:,snapInd] )
+
+        w_valid = np.where(np.isfinite(loc_mass) & np.isfinite(loc_color) & (loc_mass > 0.0))
+        n_valid = len(w_valid[0])
+
+        loc_color = loc_color[w_valid]
+        loc_mass = loc_mass[w_valid]
+
+        C_blue = np.zeros( n_valid, dtype='float32')
+        C_red = np.zeros( n_valid, dtype='float32' )
+
+        # compute current red/blue boundaries for the (mass,z) of every galaxy (not easily vectorized)
+        for j in range(n_valid):
+            if j % 20000 == 0: print(' %.1f%%' % (float(j)/n_valid*100.0), end='')
+            assert ~np.isnan(loc_mass[j]) # should have been filtered out
+
+            C_red[j], C_blue[j] = C_redblue(loc_mass[j], redshift)
+        print(' 100%')
+
+        # flag every galaxy as either C<C_blue, C_blue<C<C_red, or C>C_red
+        assert np.count_nonzero(C_blue > C_red) == 0
+        mask = np.zeros( n_valid, dtype='int32' )
+
+        w1 = np.where(loc_color <= C_blue)
+        w2 = np.where((loc_color > C_blue) & (loc_color <= C_red))
+        w3 = np.where(loc_color > C_red)
+
+        print(' num blue = %d green = %d red = %d [total %d of %d]' % \
+            (len(w1[0]),len(w2[0]),len(w3[0]),n_valid,subhalo_ids.size))
+
+        # verify is a full, and disjoint, subset
+        mask[w1] += 1
+        mask[w2] += 1
+        mask[w3] += 1
+        assert mask.min() == 1 and mask.max() == 1
+
+        # save indices of galaxy classification at this snapshot
+        cur_blue_inds = w_valid[0][w1]
+        cur_green_inds = w_valid[0][w2]
+        cur_red_inds = w_valid[0][w3]
+
+        # if we are on the first snapshot, we are done
+        if i == 0:
+            prev_blue_inds = cur_blue_inds
+            prev_green_inds = cur_green_inds
+            prev_red_inds = cur_red_inds
+            continue
+
+        nFailed = {'red':0, 'blue':0, 'green':0}
+
+        # currently red systems
+        tstart = time.time()
+        print(' red...', end='')
+
+        for ind in cur_red_inds:
+            found = 0
+            # previously red: no action
+            if ind in prev_red_inds:
+                found += 1
+
+            # previously green or blue:
+            for prev_ind_set in [prev_green_inds, prev_blue_inds]:
+                if ind in prev_ind_set:
+                    found += 1
+                    if np.isnan(r['z_redini'][ind]):
+                        # record first entrance into the red population
+                        z_cross, M_cross = _locateCrossingWrap(ind, snapInd, viewInd, 'red')
+
+                        r['z_redini'][ind] = z_cross
+                        r['M_redini'][ind] = M_cross
+                    else:
+                        # finished rejuvenation event
+                        assert ind in r['z_rejuv_start'] and ind in r['M_rejuv_start']
+
+                        r['N_rejuv'][ind] += 1
+
+                        if ind not in r['z_rejuv_stop']: r['z_rejuv_stop'][ind] = []
+                        if ind not in r['M_rejuv_stop']: r['M_rejuv_stop'][ind] = []
+
+                        z_cross, M_cross = _locateCrossingWrap(ind, snapInd, viewInd, 'red')
+
+                        r['z_rejuv_stop'][ind].append( z_cross )
+                        r['M_rejuv_stop'][ind].append( M_cross )
+
+            if found == 0: nFailed['red'] += 1
+            assert found <= 1
+
+        print(' %.1f sec' % (time.time() - tstart))
+
+        # currently green systems
+        tstart = time.time()
+        print(' green...', end='')
+
+        for ind in cur_green_inds:
+            found = 0
+            # previously red: record start of rejuvenation event
+            if ind in prev_red_inds:
+                found += 1
+                if ind not in r['z_rejuv_start']: r['z_rejuv_start'][ind] = []
+                if ind not in r['M_rejuv_start']: r['M_rejuv_start'][ind] = []
+
+                z_cross, M_cross = _locateCrossingWrap(ind, snapInd, viewInd, 'red')
+
+                r['z_rejuv_start'][ind].append( z_cross )
+                r['M_rejuv_start'][ind].append( M_cross )
+
+            # previously green: no action
+            if ind in prev_green_inds:
+                found += 1
+
+            # previously blue:
+            if ind in prev_blue_inds:
+                found += 1
+                if np.isnan(r['z_blue'][ind]):
+                    # record first exit from blue population
+                    z_cross, M_cross = _locateCrossingWrap(ind, snapInd, viewInd, 'blue')
+
+                    r['z_blue'][ind] = z_cross
+                    r['M_blue'][ind] = M_cross
+                else:
+                    # e.g. part of a rejuvenation event, no action
+                    pass
+
+            if found == 0: nFailed['green'] += 1
+            assert found <= 1
+
+        print(' %.1f sec' % (time.time() - tstart))
+
+        # currently blue systems
+        tstart = time.time()
+        print(' blue...', end='')
+
+        for ind in cur_blue_inds:
+            found = 0
+            # previously red: record start of rejuvenation event (note this happens either here or 
+            # as above for 'currently green systems', but can only happen in one place)
+            if ind in prev_red_inds:
+                found += 1
+                if ind not in r['z_rejuv_start']: r['z_rejuv_start'][ind] = []
+                if ind not in r['M_rejuv_start']: r['M_rejuv_start'][ind] = []
+
+                z_cross, M_cross = _locateCrossingWrap(ind, snapInd, viewInd, 'red')
+
+                r['z_rejuv_start'][ind].append( z_cross )
+                r['M_rejuv_start'][ind].append( M_cross )
+
+            # previously green: no action
+            if ind in prev_green_inds:
+                found += 1
+
+            # previously blue: no action
+            if ind in prev_blue_inds:
+                found += 1
+
+            if found == 0: nFailed['blue'] += 1
+            assert found <= 1
+
+        # save indices of galaxy classification at this snapshot
+        prev_blue_inds = cur_blue_inds
+        prev_green_inds = cur_green_inds
+        prev_red_inds = cur_red_inds
+
+        print(' %.1f sec' % (time.time() - tstart))
+        print(' failed to locate in previous inds, [red %d] [green %d] [blue %d]' % \
+            (nFailed['red'],nFailed['green'],nFailed['blue']))
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        for key in r:
+            f[key] = r[key]
+    print('Saved: [%s]' % saveFilename.split(savePath)[1])
+
+    import pdb; pdb.set_trace()
 
     for k in conf: r[k] = conf[k]
     return r
