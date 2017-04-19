@@ -15,10 +15,10 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
 
 from util import simParams
-from util.helper import running_median, contourf, logZeroSafe, logZeroNaN, closest, loadColorTable
+from util.helper import running_median, contourf, logZeroSafe, logZeroNaN, closest, loadColorTable, leastsq_fit
 from tracer.tracerMC import match3
 from cosmo.galaxyColor import calcMstarColor2dKDE, calcColorEvoTracks, characterizeColorMassPlane, \
-   loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors
+   loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, colorTransitionTimes
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
@@ -670,7 +670,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     nBins = 12 #or 20
     rndProjInd = 0
 
-    if arrowMethod in ['stream']:
+    if arrowMethod in ['stream','stream_mass']:
         nBins = 30
 
     mag_range = bandMagRange(bands, tight=True)
@@ -879,24 +879,30 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
                       color='black', angles='xy', pivot='tail') # mid,head,tail
 
     # (C): draw streamlines using 2d vector field
-    if arrowMethod in ['stream','comp']:
-
-        # image gives stellar mass growth rate (e.g. dex/Gyr) or color change (e.g. mag/Gyr)
-        #delta_mstar_dex_per_Gyr = delta_x.T / (sP.tage-ageTo)
-        #delta_diag_per_Gyr = np.sqrt( delta_x**2.0 + delta_y**2.0 ).T / (sP.tage-ageTo)
-        delta_mag_per_Gyr = delta_y.T / (sP.tage-ageTo)
+    if arrowMethod in ['stream','stream_mass','comp']:
 
         cmap = loadColorTable('jet', plawScale=1.0, fracSubset=[0.15,0.95])
-        img = ax.imshow(delta_mag_per_Gyr, extent=[xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]], 
+
+        # image gives stellar mass growth rate (e.g. dex/Gyr) or color change (e.g. mag/Gyr)
+        if arrowMethod == 'stream_mass':
+            delta_per_Gyr = delta_x.T / (sP.tage-ageTo)
+            #delta_per_Gyr = np.sqrt( delta_x**2.0 + delta_y**2.0 ).T / (sP.tage-ageTo)
+            vMinMax = [-0.05,0.15]
+            clabel = 'Rate of $M_\star$ Evolution [ log M$_{\\rm sun}$ / Gyr ]'
+        else:
+            delta_per_Gyr = delta_y.T / (sP.tage-ageTo)
+            vMinMax = [-0.06,0.1]
+            clabel = 'Rate of (%s-%s) Evolution [ mag / Gyr ]' % (bands[0],bands[1])
+
+        img = ax.imshow(delta_per_Gyr, extent=[xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]], 
                         alpha=1.0, aspect='auto', origin='lower', interpolation='nearest', cmap=cmap,
-                        vmin=-0.06, vmax=0.1)
+                        vmin=vMinMax[0], vmax=vMinMax[1])
 
         # colorbar
         cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
         cb = plt.colorbar(img, cax=cax, drawedges=False)
 
-        color2 = 'black'
-        clabel = 'Rate of (%s-%s) Evolution [ mag / Gyr ]' % (bands[0],bands[1])
+        color2 = 'black'        
         cb.ax.set_ylabel(clabel, color=color2)
         cb.outline.set_edgecolor(color2)
         cb.ax.yaxis.set_tick_params(color=color2)
@@ -963,88 +969,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
                 (toRedshift,'-'.join(bands),simColorsModel,xQuant,cenSatSelect,minCount), 
                 facecolor=fig.get_facecolor())
         plt.close(fig)
-
-def colorTransitionTimescale(sP, cenSatSelect='cen', simColorsModel=defSimColorModel, pStyle='white'):
-    """ Plot the distribution of 'color transition' timescales (e.g. Delta_t_green). """
-    assert cenSatSelect in ['all', 'cen', 'sat']
-
-    # hard-coded config
-    bands = ['g','r']
-    mag_range = bandMagRange(bands, tight=True)
-
-    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-
-    xMinMax = [0,10] # Gyr
-    yMinMax = [0,1] # histo todo
-    xlabel = '$\Delta t$ [ Gyr ]'
-    ylabel = 'PDF $\int=1$'
-
-    # load/calculate evolution of simulation colors, cached in sP.data
-    if 'sim_colors_evo' in sP.data:
-        sim_colors_evo, shID_evo, subhalo_ids, snaps = \
-          sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['snaps']
-    else:
-        sim_colors_evo, shID_evo, subhalo_ids, snaps = \
-          calcColorEvoTracks(sP, bands=bands, simColorsModel=simColorsModel)
-        sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['snaps'] = \
-          sim_colors_evo, shID_evo, subhalo_ids, snaps
-
-    redshifts = snapNumToRedshift(sP, snaps)
-    ages = sP.units.redshiftToAgeFlat(redshifts)
-
-    # processing at every snapshot we have calculated colors
-    for snapInd, snap in enumerate(snaps):
-        print(snapInd, snap, redshifts[snapInd])
-
-        # load the corresponding mstar values at this snapshot
-        sP.setSnap(snap)
-        mstar2_log, _, xMinMax, _ = simSubhaloQuantity(sP, 'mstar2_log', clean)
-
-        # subhaloIDs in the color evo tracks (can index subhalos in groupcat at this snap)
-        colorSHIDs_thisSnap = shID_evo[:,snapInd]
-
-        # (A) two constant cuts for edges of red and blue populations
-
-        # (B) two constant cuts w/ redshift evolution
-
-        # (C) non-constant (e.g. linear or curvy) cut from literature?
-
-        # (D) edges of double-gaussian fits at this snapshot
-
-        import pdb; pdb.set_trace()
-
-    # two timescales:
-    #  (1) actual physical crossing from blue -> red
-    #  (2) statistical!!, e.g. frequency/fraction of galaxies which leave blue at each time
-    # for each, to define the measurement method requires the cut in the color-mass plane
-    #  #1 requires two cuts, upper and lower, while #2 requires one cut
-    # each cut should be a [optionally Mstar-dependent] (g-r) color value?
-    #  [redshift-dependent]!?
-    # check Schwinski, Trayford
-    # could use any obs (e.g. Baldry) cuts if they exist in (g-r)
-    # otherwise, adopt the general philosophy and define our own cuts by likewise fitting to the 
-    #  color distributions as a function of Mstar/redshift
-
-    import pdb; pdb.set_trace()
-
-    # start plot
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-    ax = fig.add_subplot(111, axisbg=color1)
-
-    setAxisColors(ax, color2)
-
-    ax.set_xlim(xMinMax)
-    ax.set_ylim(yMinMax)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-
-    # todo
-
-    # finish plot and save
-    fig.tight_layout()
-    fig.savefig('figure9_%s_%s_%s.pdf' % (sP.simName,cenSatSelect,simColorsModel))
-    plt.close(fig)
 
 def _get_red_blue_2params(params, method, iterNum):
     """ Helper function for plotting color-mass plane fits. """
@@ -1117,19 +1041,19 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     # analysis config
     cenSatSelect = 'all'
     method = 'Crel' # MCMC fit with relative amplitudes
-    medianBin = 2 # needs to be int(len(percentiles)/2)
+    nBurnIn = 2000 # 400, 2000, 10000
 
     # visual config
     xMinMax = [9.0, 12.0] # log Mstar
     mMinMax = [0.3, 0.9] # mu
-    sMinMax = [0.0, 0.2] # sigma
+    sMinMax = [0.0, 0.16] # sigma
 
     xLabel = 'M$_{\star}$ [ log M$_{\\rm sun}$ ]'
     mLabel = '$\mu_{\\rm red,blue}$ [peak location in (%s-%s) mag]' % (bands[0],bands[1])
     sLabel = '$\sigma_{\\rm red,blue}$ [width in (%s-%s) mag]' % (bands[0],bands[1])
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-    sizefac = 1.0 if not clean else sfclean
+    sizefac = 1.0 if not clean else 0.7
     lw = 2.5
     alpha = 0.8
     af = 5.0 # reduce alpha by this factor for low-mass red and high-mass blue
@@ -1139,7 +1063,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
     # load obs and sim(s)
     fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
-                                          simColorsModel=simColorsModel, remakeFlag=False)
+                                          simColorsModel=simColorsModel, nBurnIn=nBurnIn, remakeFlag=False)
 
     masses = fits_obs['mStar'] # bin centers
     ind_r = fits_obs['skipNBinsRed']
@@ -1148,9 +1072,11 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     fits_sim = []
     for sP in sPs:
         fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
-                                          simColorsModel=simColorsModel, remakeFlag=False)
+                                          simColorsModel=simColorsModel, nBurnIn=nBurnIn, remakeFlag=False)
         assert np.array_equal(fits_obs['mStar'], fits['mStar'])
         fits_sim.append(fits)
+
+    medianBin = int(fits_sim[0][method+'_errors'].shape[0]/2)
 
     def _fig_helper(ax, iterNum):
         val_red  = np.zeros( masses.size, dtype='float32' )
@@ -1205,7 +1131,8 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                 facecolor=cRed, alpha=0.2/af, interpolate=True)
 
         # make legends
-        legend2 = ax.legend(sExtra, lExtra, loc='upper left')
+        loc = 'upper left' if iterNum == 0 else 'lower right'
+        legend2 = ax.legend(sExtra, lExtra, loc=loc)
 
     # start figure
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*2),facecolor=color1)
@@ -1235,8 +1162,8 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     # finish plot and save
     zStr = '_z=%.1f' % sP.redshift if sP.redshift > 0.0 else ''
     fig.tight_layout()
-    fig.savefig('figure4_colorMassPlaneFits-%s_%s_%s_%s_%s%s.pdf' % \
-        (method,'-'.join([sP.simName for sP in sPs]),'-'.join(bands),cenSatSelect,simColorsModel,zStr))
+    fig.savefig('figure4_colorMassPlaneFits-%s_%s_%s_%s_%s%s_mcmc%d.pdf' % \
+        (method,'-'.join([sP.simName for sP in sPs]),'-'.join(bands),cenSatSelect,simColorsModel,zStr,nBurnIn))
     plt.close(fig)
 
 def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel, pStyle='white'):
@@ -1264,8 +1191,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     fits_obs = None
     fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
                                       simColorsModel=simColorsModel, remakeFlag=False)
-
-    #import pdb; pdb.set_trace()
 
     masses = fits['mStar'] # bin centers
     #methods = ['A','Arel']
@@ -1475,6 +1400,53 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
 
+def colorTransitionTimescale(sP, bands=['g','r'], cenSatSelect='cen', simColorsModel=defSimColorModel, pStyle='white'):
+    """ Plot the distribution of 'color transition' timescales (e.g. Delta_t_green). """
+    assert cenSatSelect in ['all', 'cen', 'sat']
+
+    # analysis config
+    maxRedshift = 1.0 # track galaxy color evolution back from sP.redshift to maxRedshift
+    nBurnIn = 2000 # 400, 2000, 10000, e.g. which mcmc results to use
+
+    f_red = 1.0 # mu_red - f_red*sigma_red defines lower boundary for red population
+    f_blue = 1.0 # mu_blue + f_blue*sigma_blue defines upper boundary for blue population
+
+    # visual config
+    mag_range = bandMagRange(bands, tight=True)
+
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+    sizefac = 1.0 if not clean else sfclean
+
+    xMinMax = [0,10] # Gyr
+    mMinMax = [9.0, 12.0] # log Msun
+    yMinMax = [0,1] # histo todo
+    xLabel = '$\Delta t$ [ Gyr ]'
+    yLabel = 'PDF $\int=1$'
+    mLabel = 'M$_{\star}$ [ log M$_{\\rm sun}$ ]'
+
+    # load transition times
+    x = colorTransitionTimes(sP, f_red=f_red, f_blue=f_blue, maxRedshift=maxRedshift, nBurnIn=nBurnIn, 
+        bands=bands, cenSatSelect=cenSatSelect, simColorsModel=simColorsModel)
+
+    # start plot
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    ax = fig.add_subplot(111, axisbg=color1)
+
+    setAxisColors(ax, color2)
+
+    ax.set_xlim(xMinMax)
+    ax.set_ylim(yMinMax)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    # todo
+
+    # finish plot and save
+    fig.tight_layout()
+    fig.savefig('figure9_%s_%s_%s.pdf' % (sP.simName,cenSatSelect,simColorsModel))
+    plt.close(fig)
+
 def plots():
     """ Driver (exploration 2D histograms). """
     sPs = []
@@ -1606,34 +1578,37 @@ def paperPlots():
         plot.globalComp.massMetallicityStars(sPs, pdf, sdssFiberFits=sdssFiberFits, simRedshift=simRedshift)
         pdf.close()
 
-    # figure 4: double gaussian fits, [peak/scatter vs Mstar], red fraction (e.g. Baldry Figs. 5, 6, 8)
-    if 1:
-        sP = L75 #simParams(res=455,run='tng',redshift=0.0) #
-        colorMassPlaneFits(sP)
+    # figure 4: double gaussian fits, [peak/scatter vs Mstar] 2-panel
+    if 0:
+        L75.setRedshift(0.1)
+        sPs = [L75]
+        colorMassPlaneFitSummary(sPs)
+        #for sP in sPs: colorMassPlaneFits(L75)
 
-    # figure 4->5: fullbox demonstratrion projections
+    # figure 5: fullbox demonstratrion projections
     if 0:
         # render each fullbox image used in the composite
         for part in [0,1,2,3,4]:
             vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
-    # figure 5->6, grid of L205_cen 2d color histos vs. several properties (2x3)
+    # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
     if 0:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        params = {'bands':['g','r'], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+        bands = ['g','r']
+        params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
-        pdf = PdfPages('figure5_%s.pdf' % sP.simName)
+        pdf = PdfPages('figure6_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, cQuant='ssfr', fig_subplot=[fig,321], **params)
-        quantHisto2D(sP, pdf, cQuant='Z_gas', fig_subplot=[fig,322], **params)
-        quantHisto2D(sP, pdf, cQuant='fgas2', fig_subplot=[fig,323], **params)
-        quantHisto2D(sP, pdf, cQuant='stellarage', fig_subplot=[fig,324], **params)
-        quantHisto2D(sP, pdf, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
-        quantHisto2D(sP, pdf, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='ssfr', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='Z_gas', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='fgas2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='stellarage', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
         pdf.close()
 
-    # figure 6->7: slice through 2d histo (one property)
+    # figure 7: slice through 2d histo (one property)
     if 0:
         sPs = [L75, L205]
         xQuant = 'color'
@@ -1643,32 +1618,32 @@ def paperPlots():
         css = 'cen'
         quant = 'pratio_halo_masswt'
 
-        pdf = PdfPages('figure6_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
+        pdf = PdfPages('figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
         quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[quant], sQuant=sQuant, 
                      sRange=sRange, cenSatSelect=css)
         pdf.close()
 
-    # figure 7->8: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
+    # figure 8: BH cumegy vs mstar, model line on top (eddington transition to low-state?)
     if 0:
         sPs = [L75, L205]
         xQuant = 'mstar2_log'
         yQuant = 'BH_CumEgy_ratio'
         css = 'cen'
 
-        pdf = PdfPages('figure7_medianTrend_%s_%s-%s_%s.pdf' % \
+        pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
         quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
         pdf.close()    
 
-    # figure 9: flux arrows in color-mass plane
+    # figure 9: flux arrows in color-mass plane (9c unused)
     if 0:
         sP = L205
         dust = dust_C
         css = 'cen'
         minCount = 1
+        toRedshift = 0.3
 
-        toRedshift = 0.5
         arrowMethod = 'arrow'
         pdf = PdfPages('figure9a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
@@ -1676,31 +1651,37 @@ def paperPlots():
                              minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
         pdf.close()
 
-        toRedshift = 0.3
         arrowMethod = 'stream'
         pdf = PdfPages('figure9b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
+            (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
+        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+                             minCount=minCount, simColorsModel=dust, arrowMethod='stream')
+        pdf.close()
+
+        arrowMethod = 'stream_mass'
+        pdf = PdfPages('figure9c_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
         colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
                              minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
         pdf.close()
 
     # figure 10: timescale histogram for color transition
-    if 0:
+    # figure 11: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
+    # figure 12: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
+    # figure 13: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
+    if 1:
         sP = L75
         css = 'cen'
-        dust = dust_C
 
-        colorTransitionTimescale(sP, cenSatSelect=css, simColorsModel=dust)
+        colorTransitionTimescale(sP, cenSatSelect=css, simColorsModel=dust_C)
 
-    # figure 11: few N characteristic evolutionary tracks through color-mass 2d plane
+    # figure 14: stellar image stamps of galaxies (time evolution of above tracks)
+    if 0:
+        pass
 
-    # figure 12: stellar image stamps of galaxies (time evolution of above tracks)
-
-    # figure 13: distribution of initial M* when entering red sequence (crossing color cut) (Q1)
-
-    # figure 14: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
-
-    # figure 15: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
+    # figure 15: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
+    if 0:
+        pass
 
     # appendix figure 1, viewing angle variation (1 panel)
     if 0:
@@ -1728,7 +1709,7 @@ def paperPlots():
         galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
         pdf.close()
 
-    # appendix figure 4, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
+    # appendix figure X, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
     if 0:
         figsize_loc = [figsize[0]*3*0.7, figsize[1]*1*0.75]
 
@@ -1737,13 +1718,4 @@ def paperPlots():
         quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
         quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
         quantHisto2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
-        pdf.close()
-
-    # testing
-    if 0:
-        params = {'bands':['g','r'], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
-
-        pdf = PdfPages('figure_test.pdf')
-        fig = plt.figure(figsize=figsize)
-        quantHisto2D(L75, pdf, cQuant='ssfr', fig_subplot=[fig,111], **params)
         pdf.close()
