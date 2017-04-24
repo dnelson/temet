@@ -1400,11 +1400,11 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
 
-def colorTransitionTimescale(sP, bands=['g','r'], cenSatSelect='cen', simColorsModel=defSimColorModel, pStyle='white'):
+def colorTransitionTimescale(sP, bands=['g','r'], simColorsModel=defSimColorModel, pStyle='white'):
     """ Plot the distribution of 'color transition' timescales (e.g. Delta_t_green). """
-    assert cenSatSelect in ['all', 'cen', 'sat']
 
     # analysis config
+    cenSatSelects = ['all','cen','sat'] # make all plot with each of these 3 separately, and some combined
     maxRedshift = 1.0 # track galaxy color evolution back from sP.redshift to maxRedshift
     nBurnIn = 2000 # 400, 2000, 10000, e.g. which mcmc results to use
 
@@ -1415,37 +1415,283 @@ def colorTransitionTimescale(sP, bands=['g','r'], cenSatSelect='cen', simColorsM
     mag_range = bandMagRange(bands, tight=True)
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-    sizefac = 1.0 if not clean else sfclean
+    sizefac = 1.0 if not clean else 0.7
+    lw = 2.5
+    alpha = 0.9
 
-    xMinMax = [0,10] # Gyr
+    tMinMax = [0.0, 8.0] # Gyr
     mMinMax = [9.0, 12.0] # log Msun
-    yMinMax = [0,1] # histo todo
-    xLabel = '$\Delta t$ [ Gyr ]'
+    zMinMax = [0.0, 1.0] # redshift
+    nBins = 40 # for all 1d histograms
+    pdfMinMaxLog = [1e-3,1.0]
     yLabel = 'PDF $\int=1$'
     mLabel = 'M$_{\star}$ [ log M$_{\\rm sun}$ ]'
+    cssLabels = {'all':'All Galaxies', 'cen':'Centrals Only', 'sat':'Satellites Only'}
+
+    def _lognormal_pdf(x, params, fixed=None):
+        """ Lognormal for fitting. Note fixed is unused. """
+        (mu,sigma) = params
+        A = 1.0 / np.sqrt(2*np.pi) / sigma
+        y = A * np.exp( - (np.log(x) - mu)**2.0 / (2.0 * sigma**2.0) )
+        return y
 
     # load transition times
-    x = colorTransitionTimes(sP, f_red=f_red, f_blue=f_blue, maxRedshift=maxRedshift, nBurnIn=nBurnIn, 
-        bands=bands, cenSatSelect=cenSatSelect, simColorsModel=simColorsModel)
+    evo = colorTransitionTimes(sP, f_red=f_red, f_blue=f_blue, maxRedshift=maxRedshift, nBurnIn=nBurnIn, 
+        bands=bands, simColorsModel=simColorsModel)
 
-    # start plot
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-    ax = fig.add_subplot(111, axisbg=color1)
+    N = evo['subhalo_ids'].size
 
-    setAxisColors(ax, color2)
+    # matching: evo subset <-> full groupcat subhalo sample
+    subhalo_id_map = np.zeros(sP.numSubhalos, dtype='int32')
+    subhalo_id_map[evo['subhalo_ids']] = np.arange(N) # such that subhalo_id_map[subhaloID] = evo index
 
-    ax.set_xlim(xMinMax)
-    ax.set_ylim(yMinMax)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    css_inds = {}
+    css_inds['cen'], css_inds['all'], css_inds['sat'] = cenSatSubhaloIndices(sP)
+    assert cenSatSelects[0] == 'all' # otherwise logic below fails for PDF norms
 
-    # todo
+    # calculate: allocate
+    for k in ['dt_green','dt_rejuv']:
+        evo[k] = np.zeros( N, dtype='float32' )
+        evo[k].fill(np.nan)
 
-    # finish plot and save
-    fig.tight_layout()
-    fig.savefig('figure9_%s_%s_%s.pdf' % (sP.simName,cenSatSelect,simColorsModel))
-    plt.close(fig)
+    sub_snap = {}
+    for k in ['dt_green','dt_rejuv', 'z_blue','M_blue','z_redini','M_redini','N_rejuv']:
+        sub_snap[k] = {}
+
+    # calculate: dt_green
+    ww = np.where( np.isfinite(evo['z_redini']) & np.isfinite(evo['z_blue']) )
+    t_blue_exit = sP.units.redshiftToAgeFlat( evo['z_blue'][ww] )
+    t_red_entry = sP.units.redshiftToAgeFlat( evo['z_redini'][ww] )
+
+    evo['dt_green'][ww] = t_red_entry - t_blue_exit # Gyr
+
+    # calculate: dt_rejuv
+    for subhaloID in evo['z_rejuv_start']:
+        if subhaloID not in evo['z_rejuv_stop']:
+            # never found end of rejuvation event, skip
+            continue
+
+        # loop over possibly multiple events per galaxy
+        for ind in range(len(evo['z_rejuv_start'][subhaloID])):
+            if ind >= len(evo['z_rejuv_stop'][subhaloID]):
+                # end of this event not reached
+                continue
+
+            t_rejuv_start = sP.units.redshiftToAgeFlat( evo['z_rejuv_start'][subhaloID][ind] )
+            t_rejuv_stop = sP.units.redshiftToAgeFlat( evo['z_rejuv_stop'][subhaloID][ind] )
+
+            # store all timescales for all subhalos, unordered, for histogramming
+            if t_rejuv_stop < t_rejuv_start:
+                print(' skip rejuv stop=%.2f start=%.2f' % (t_rejuv_stop,t_rejuv_start))
+                continue
+
+            if ind == 0:
+                # store first timescale for each subhalo for corelations with other quantities
+                evo_index = subhalo_id_map[subhaloID]
+                evo['dt_rejuv'][evo_index] = t_rejuv_stop - t_rejuv_start
+
+    # calculate: dM_green
+
+    # calculate: dM_red
+    # TODO
+
+    # stamp all quantities, arranged as snapshot subhalos
+    for css in cenSatSelects:
+        # cross-match evo subhalo_ids to css ids
+        snap_indices, evo_indices = match3(css_inds[css], evo['subhalo_ids'])
+
+        # allocate and store
+        for k in ['dt_green','dt_rejuv', 'z_blue','M_blue','z_redini','M_redini','N_rejuv']:
+            sub_snap[k][css] = np.zeros( css_inds[css].size, dtype='float32' )
+            sub_snap[k][css].fill(np.nan)
+
+            sub_snap[k][css][snap_indices] = evo[k][evo_indices]
+
+    Mstar = {}
+    gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+    Mstar['all'] = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+    Mstar['cen'] = Mstar['all'][ css_inds['cen'] ]
+    Mstar['sat'] = Mstar['all'][ css_inds['sat'] ]
+
+    # print out some statistics
+    for css in cenSatSelects:
+        print(' [%s]' % css)
+        N_rejuv_loc = sub_snap['N_rejuv'][css]
+
+        for massBin in [[0.0, 15.0], [11.0, 15.0]]:
+            # select in mass bin
+            #wMassBin = np.where((Mstar[css] >= massBin[0]) & (Mstar[css] < massBin[1]))
+            wMassBin = np.where(np.isfinite(N_rejuv_loc) & (Mstar[css] >= massBin[0]) & (Mstar[css] < massBin[1]))
+            nMassBin = len(wMassBin[0])
+
+            for num in range(evo['N_rejuv'].max()+1):
+                count_loc = len( np.where(N_rejuv_loc[wMassBin] == num)[0] )
+                frac_loc = float(count_loc) / nMassBin * 100
+
+                print('  massbin [%.1f %.1f] for N_rejuv=%d we have %7d [of %d] galaxies = %.2f%%' % \
+                    (massBin[0],massBin[1],num,count_loc,nMassBin,frac_loc))
+    
+    for css in cenSatSelects:
+        print(' [%s]' % css)
+        dt_green_loc = sub_snap['dt_green'][css]
+        w = np.where(np.isfinite(dt_green_loc))
+
+        for dt_bin in [[-10,0],[0,1],[1,2],[2,10]]:
+            count_loc = len( np.where((dt_green_loc[w] >= dt_bin[0]) & (dt_green_loc[w] < dt_bin[1]))[0] )
+            frac_loc = float(count_loc) / dt_green_loc[w].size * 100
+
+            print('  for dt_green bin [%5.1f Gyr to %5.1f Gyr] we have %7d [of %d] galaxies = %.2f%%' % \
+                (dt_bin[0],dt_bin[1],count_loc,dt_green_loc.size,frac_loc))
+
+        ww = np.where(dt_green_loc[w] > 0.0)
+        dt_green_loc = dt_green_loc[w][ww]
+
+        ww = np.where(np.isfinite(sub_snap['dt_rejuv'][css]))
+        dt_rejuv_loc = sub_snap['dt_rejuv'][css][ww]
+
+        print('  *dt_green mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
+            (dt_green_loc.mean(), np.median(dt_green_loc), np.std(dt_green_loc), 
+             np.percentile(dt_green_loc,10.0), np.percentile(dt_green_loc,90.0)) )
+        print('  *dt_rejuv mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
+            (dt_rejuv_loc.mean(), np.median(dt_rejuv_loc), np.std(dt_rejuv_loc), 
+             np.percentile(dt_rejuv_loc,10.0), np.percentile(dt_rejuv_loc,90.0)) )
+
+    # all of the below:
+    # [X] 1. global
+    # 2. as a function of z=0 Mstar
+    # 3. as a function of Mstar when leaving blue population
+    # 4. as a function of Mstar when entering red population
+    # 5. as a function of redshift of transition (leaving blue)
+    # 6. as a function of morphology (when?)
+    # 7. as a function of BH cumegy (when?)
+    # 8. as a function of tracers...
+
+    def _fig_helper1(xLabel, xMinMax, fieldName, saveBase):
+        """ Helper for histogram plots, with each of css in a separate plot. """
+        for cenSatSelect in cenSatSelects:
+            fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+            ax = fig.add_subplot(111, axisbg=color1)
+
+            setAxisColors(ax, color2)
+
+            ax.set_xlim(xMinMax)
+            if yscale == 'log': ax.set_ylim(pdfMinMaxLog)
+            ax.set_xlabel(xLabel)
+            ax.set_ylabel(yLabel)
+            ax.set_yscale(yscale)
+
+            # histogram dt_green (split by cenSatSelect)
+            hh = sub_snap[fieldName][cenSatSelect]
+            ww = np.where(np.isfinite(hh))
+
+            yy, xx = np.histogram(hh[ww], bins=nBins, range=xMinMax, density=True)
+            xx = xx[:-1] + 0.5*(xMinMax[1]-xMinMax[0])/nBins
+
+            ax.step(xx,yy,where='mid',lw=lw,alpha=alpha,label=sP.simName)
+
+            # fit lognormal to dt_green and plot
+            params_guess = [0.5, 0.1]
+            params_best, _ = leastsq_fit(_lognormal_pdf, params_guess, args=(xx,yy))
+            print('%s lognormal fit: ' % fieldName,cenSatSelect,params_best)
+
+            xx = np.linspace(xMinMax[0]+1e-6, xMinMax[1], 100)
+            yy = _lognormal_pdf(xx, params_best)
+            ax.plot(xx,yy,':',color='black',lw=lw/2,alpha=alpha)
+
+            #ax.plot(xx,_lognormal_pdf(xx, [0.0,0.7]),':',lw=lw/2,alpha=alpha/2,label='test1')
+            #ax.plot(xx,_lognormal_pdf(xx, [0.0,0.66]),':',lw=lw/2,alpha=alpha/2,label='test2')
+
+            # finish plot and save
+            ax.legend(loc='upper right')
+            fig.tight_layout()
+            fig.savefig('%s_%s_%s_%s_y=%s.pdf' % (saveBase,sP.simName,cenSatSelect,simColorsModel,yscale))
+            plt.close(fig)
+
+    def _fig_helper2(xLabel, xMinMax, fieldName, saveBase):
+        """ Helper for histogram plots with all css combined. """
+        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+        ax = fig.add_subplot(111, axisbg=color1)
+
+        setAxisColors(ax, color2)
+
+        ax.set_xlim(xMinMax)
+        if yscale == 'log': ax.set_ylim(pdfMinMaxLog)
+        ax.set_xlabel(xLabel)
+        ax.set_ylabel(yLabel)
+        ax.set_yscale(yscale)
+
+        # histogram dt_green (split by cenSatSelect)
+        for i, cenSatSelect in enumerate(cenSatSelects):
+            hh = sub_snap[fieldName][cenSatSelect]
+            ww = np.where(np.isfinite(hh))
+
+            if i == 0:
+                # set normalization (such that integral of PDF is one) based on 'all galaxies'
+                binSize = (xMinMax[1]-xMinMax[0])/nBins
+                normFac = 1.0 / (binSize * len(ww[0]))
+
+            yy, xx = np.histogram(hh[ww], bins=nBins, range=xMinMax)
+            yy = yy.astype('float32') * normFac
+            xx = xx[:-1] + 0.5*(xMinMax[1]-xMinMax[0])/nBins
+
+            ax.plot(xx,yy,lw=lw,alpha=alpha,label=cssLabels[cenSatSelect])
+
+        # finish plot and save
+        ax.legend(loc='upper right')
+        fig.tight_layout()
+        fig.savefig('%s_combined_%s_%s_y=%s.pdf' % (saveBase,sP.simName,simColorsModel,yscale))
+        plt.close(fig)
+
+    # for all histograms, make combinations of linear and log axes
+    for yscale in ['linear','log']:
+
+        # (A) histograms of dt_green timescale
+        xLabel = '$\Delta t_{\\rm green}$ [ Gyr ]'
+        fieldName = 'dt_green'
+
+        _fig_helper1(xLabel, tMinMax, fieldName, 'figure10a')
+        _fig_helper2(xLabel, tMinMax, fieldName, 'figure10a')
+
+        # (B) rejuvenation timescales
+        xLabel = '$\Delta t_{\\rm rejuv}$ [ Gyr ]'
+        fieldName = 'dt_rejuv'
+
+        _fig_helper1(xLabel, tMinMax, fieldName, 'figure10b')
+        _fig_helper2(xLabel, tMinMax, fieldName, 'figure10b')
+
+        # (C) distribution of Mstar when leaving blue population, global
+        xLabel = '$M_\star$ at $t_{\\rm blue}$ (Depature from the Blue Population) [ log M$_{\\rm sun}$ ]'
+        fieldName ='M_blue'
+
+        _fig_helper1(xLabel, mMinMax, fieldName, 'figure10c')
+        _fig_helper2(xLabel, mMinMax, fieldName, 'figure10c')
+
+        # (D) distribution of Mstar when entering red population
+        xLabel = '$M_\star$ at $t_{\\rm red,ini}$ (Arrival into the Red Population) [ log M$_{\\rm sun}$ ]'
+        fieldName ='M_redini'
+
+        _fig_helper1(xLabel, mMinMax, fieldName, 'figure10d')
+        _fig_helper2(xLabel, mMinMax, fieldName, 'figure10d')
+
+        # (E) distribution of redshift when leaving blue (within 0<z<1)
+        xLabel = '$t_{\\rm blue}$ (Redshift leaving Blue Population)'
+        fieldName ='z_blue'
+
+        _fig_helper1(xLabel, zMinMax, fieldName, 'figure10e')
+        _fig_helper2(xLabel, zMinMax, fieldName, 'figure10e')
+
+        # (F) distribution of redshift when entering red (within 0<z<1)
+        xLabel = '$t_{\\rm red,ini}$ (Redshift entering Red Population)'
+        fieldName ='z_redini'
+
+        _fig_helper1(xLabel, zMinMax, fieldName, 'figure10f')
+        _fig_helper2(xLabel, zMinMax, fieldName, 'figure10f')
+
+        # (G) delta Mgreen (between leaving blue and entering red)
+        # dM_green
+
+        # (H) delta Mstar between entering red population and z=0
+        # dM_red
 
 def plots():
     """ Driver (exploration 2D histograms). """
@@ -1583,7 +1829,7 @@ def paperPlots():
         L75.setRedshift(0.1)
         sPs = [L75]
         colorMassPlaneFitSummary(sPs)
-        #for sP in sPs: colorMassPlaneFits(L75)
+        #for sP in sPs: colorMassPlaneFits(sP)
 
     # figure 5: fullbox demonstratrion projections
     if 0:
@@ -1670,14 +1916,14 @@ def paperPlots():
     # figure 12: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
     # figure 13: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
     if 1:
-        sP = L75
-        css = 'cen'
+        sP = L75 # L205
+        simColorsModel = 'p07c_cf00dust_rad30pkpc' # Br
+        #simColorsModel = dust_C
+        colorTransitionTimescale(sP, bands=['g','r'], simColorsModel=simColorsModel)
 
-        colorTransitionTimescale(sP, cenSatSelect=css, simColorsModel=dust_C)
-
-    # figure 14: stellar image stamps of galaxies (time evolution of above tracks)
+    # figure 14: stellar image stamps of galaxies (time evolution, red/blue samples)
     if 0:
-        pass
+        vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=True)
 
     # figure 15: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
     if 0:

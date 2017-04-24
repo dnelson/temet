@@ -790,7 +790,7 @@ def plotIonAbundances(res='lg'):
     ct = 'jet'
 
     # data config and load full table
-    elements = ['Oxygen']
+    elements = ['Silicon']
     redshift = 0.0
     gridSize = 3 # 3x3
 

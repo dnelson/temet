@@ -863,8 +863,6 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         for k in conf: r[k] = conf[k]
         return r
 
-    print('Note: characterizeColorMassPlane() load currently disabled, always remaking.')
-
     if sP is not None:
         # load colors
         if 'gc_colors' in sP.data and 'mstar2_log' in sP.data:
@@ -1078,21 +1076,16 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
 def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
                          bands=['g','r'], cenSatSelect='cen', simColorsModel=defSimColorModel):
     """ Measure the various color boundary crossing times for all galaxies. """
-    assert cenSatSelect in ['all', 'cen', 'sat']
-
+    assert cenSatSelect in ['cen'] # actually UNUSED! delete and cleanup (all galaxies are handled)
+    import json
     import matplotlib.pyplot as plt # for debug plots
 
     # analysis config
     fit_method = 'Crel' # method/model used to characterize red vs blue populations in the C-M plane
     cmPlaneCSS = 'all' # which galaxies to use for color-mass plane fits
+    cmPlaneRedshifts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0] # when to load color-mass plane fits
     cmPlaneColorModel = defSimColorModel # which simColorsModel to use for color-mass plane fits
     redBlueMinSepMag = 0.02 # minimum separation between C_blue and C_red boundaries for stability
-
-    #def _plaw1z(x, params, fixed=None):
-    #    """ f(z) = A*z^b powerlaw function for fitting. Note: fixed argument unused. """
-    #    (a,b) = params
-    #    y = a * x**b
-    #    return y
 
     def _plaw1plusz(x, params, fixed=None):
         """ f(z) = A*(1+z)^b powerlaw function for fitting. Note: fixed argument unused. """
@@ -1110,7 +1103,13 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             for key in f:
-                r[key] = f[key][()]
+                if f[key].dtype == 'O':
+                    # json encoded string of a dict (convert string subhaloIDs keys back to int keys)
+                    dd = json.loads(f[key][()])
+                    r[key] = {int(key):val for key,val in dd.items()}
+                else:
+                    # normal ndarray
+                    r[key] = f[key][()]
         return r
 
     # [1] load/calculate evolution of simulation colors, cached in sP.data
@@ -1127,16 +1126,18 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
     ages = sP.units.redshiftToAgeFlat(redshifts)
 
     w = np.where(redshifts <= maxRedshift)
+
     redshifts = redshifts[w]
     ages = ages[w]
     snaps = evo_snaps[w]
 
     # [2] load color-mass plane characterizations at every snapshot
+    cmPlaneRedshifts = np.array(cmPlaneRedshifts)
     cm_fits = []
 
-    for snap, redshift in zip(snaps,redshifts):
+    for redshift in cmPlaneRedshifts:
         sP.setRedshift(redshift)
-        print('load cm-plane fits: snap [%d] z = %.1f' % (snap,redshift))
+        print('load cm-plane fits: snap [%d] z = %.1f' % (sP.snap,redshift))
         fits_local = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cmPlaneCSS, 
                                       simColorsModel=cmPlaneColorModel, nBurnIn=nBurnIn, remakeFlag=False)
         cm_fits.append(fits_local)
@@ -1153,17 +1154,17 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
     for pName in pInds.keys():
         print(pName)
 
-        pVals[pName] = np.zeros( (cm_fits[0]['nBinsMass'], redshifts.size), dtype='float32' )
+        pVals[pName] = np.zeros( (cm_fits[0]['nBinsMass'], cmPlaneRedshifts.size), dtype='float32' )
         pVals[pName+'_fit'] = np.zeros_like( pVals[pName] )
         pVals[pName+'_fitp'] = np.zeros( (2,cm_fits[0]['nBinsMass']), dtype='float32' )
 
-        for i, redshift in enumerate(redshifts):
+        for i, redshift in enumerate(cmPlaneRedshifts):
             pVals[pName][:,i] = cm_fits[i][fit_method+'_errors'][medianBin,pInds[pName],:]
 
         # fit each mass bin separately in redshift as A*(1+z)^B
         params_init = [pVals[pName][0,0], 1.0]
         for i in range(cm_fits[0]['nBinsMass']):
-            x_data = redshifts
+            x_data = cmPlaneRedshifts
             y_data = pVals[pName][i,:]
 
             p_fit, p_err = leastsq_fit(_plaw1plusz, params_init, args=(x_data,y_data))
@@ -1183,7 +1184,7 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
             ax.set_xlabel('M$_{\star}$ [ log M$_{\\rm sun}$ ]')
             ax.set_ylabel(pName)
 
-            for i, redshift in enumerate(redshifts):
+            for i, redshift in enumerate(cmPlaneRedshifts):
                 yy = pVals[pName][:,i]
                 yy_fit1 = pVals[pName+'_fit'][:,i]
 
@@ -1280,7 +1281,7 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
 
     for i, snap in enumerate(snaps):
         snapInd = tuple(evo_snaps).index(snap)
-        print(' [%d] snapInd = %d (snapshot = %d z = %.1f): ' % (i,snapInd,snap,redshifts[i]), end='')
+        print(' [%d] snapInd = %d (snapshot = %d z = %.2f): ' % (i,snapInd,snap,redshifts[i]), end='')
 
         # load the corresponding mstar values at this snapshot
         sP.setSnap(snap)
@@ -1387,7 +1388,7 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
         # get properties at this anapshot
         snapInd = tuple(snaps).index(snap)
         redshift = redshifts[snapInd]
-        print('[%d] snapInd = %d snapshot = %d z = %.1f' % (i,snapInd,snap,redshift))
+        print('[%d] snapInd = %d snapshot = %d z = %.2f' % (i,snapInd,snap,redshift))
 
         loc_color = np.squeeze( sim_colors_evo[:,viewInd,snapInd] )
         loc_mass = np.squeeze( mstar_evo[:,snapInd] )
@@ -1462,7 +1463,10 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
                         r['M_redini'][ind] = M_cross
                     else:
                         # finished rejuvenation event
-                        assert ind in r['z_rejuv_start'] and ind in r['M_rejuv_start']
+                        if ind not in r['z_rejuv_start'] or ind not in r['M_rejuv_start']:
+                            print(' WARNING! ind %d finished rejuv but we missed the start.' % ind)
+                            continue
+                        #assert ind in r['z_rejuv_start'] and ind in r['M_rejuv_start']
 
                         r['N_rejuv'][ind] += 1
 
@@ -1559,10 +1563,11 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
     # save
     with h5py.File(saveFilename,'w') as f:
         for key in r:
-            f[key] = r[key]
+            # json encode dicts to strings, otherwise normal ndarray
+            if type(r[key]) == type({}):
+                f[key] = json.dumps(r[key])
+            else:
+                f[key] = r[key]
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
-    import pdb; pdb.set_trace()
-
-    for k in conf: r[k] = conf[k]
     return r
