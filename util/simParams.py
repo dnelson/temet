@@ -926,8 +926,19 @@ class simParams:
         # load snapshot header for MassTable
         from cosmo.load import snapshotHeader
         h = snapshotHeader(self)
-
         return np.array( h['MassTable'][self.ptNum('dm')], dtype='float32' )
+
+    @property
+    def numHalos(self):
+        """ Return number of FoF halos / groups in the group catalog at this sP.snap. """
+        from cosmo.load import groupCatHeader
+        return groupCatHeader(self)['Ngroups_Total']
+
+    @property
+    def numSubhalos(self):
+        """ Return number of Subfind subhalos in the group catalog at this sP.snap. """
+        from cosmo.load import groupCatHeader
+        return groupCatHeader(self)['Nsubgroups_Total']
 
     # operator overloads
     def __eq__(self, other): 
