@@ -54,26 +54,27 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True):
 
     # defaults (all panel fields that can be specified)
 
-    run        = 'tng'       # run name
-    res        = 1820        # run resolution
-    redshift   = 0.0         # run redshift
-    partType   = 'dm'        # which particle type to project
-    partField  = 'coldens'   # which quantity/field to project for that particle type
-    #valMinMax = [min,max]   # stretch colortable between minimum and maximum field values
-    method     = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
-    nPixels    = 1400        # number of pixels per dimension of images when projecting (960 1400)
-    zoomFac    = 1.0         # [0,1], only in axes, not along projection direction
-    hsmlFac    = 1.0         # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
-    relCenPos  = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
-    absCenPos  = None        # [x,y,z] in simulation coordinates to place at center of image
-    sliceFac   = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
-    axes       = [0,1]       # e.g. [0,1] is x,y
-    labelZ     = False       # label redshift inside (upper right corner) of panel
-    labelScale = False       # label spatial scale with scalebar (upper left of panel)
-    labelSim   = False       # label simulation name (lower right corner) of panel
-    plotHalos  = 20          # plot virial circles for the N most massive halos in the box
-    rotMatrix  = None        # rotation matrix
-    rotCenter  = None        # rotation center
+    run         = 'tng'       # run name
+    res         = 1820        # run resolution
+    redshift    = 0.0         # run redshift
+    partType    = 'dm'        # which particle type to project
+    partField   = 'coldens'   # which quantity/field to project for that particle type
+    #valMinMax  = [min,max]   # stretch colortable between minimum and maximum field values
+    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
+    nPixels     = 1400        # number of pixels per dimension of images when projecting (960 1400)
+    zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
+    hsmlFac     = 1.0         # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
+    relCenPos   = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
+    absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
+    sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
+    axes        = [0,1]       # e.g. [0,1] is x,y
+    labelZ      = False       # label redshift inside (upper right corner) of panel
+    labelScale  = False       # label spatial scale with scalebar (upper left of panel)
+    labelSim    = False       # label simulation name (lower right corner) of panel
+    labelCustom = False         # custom label string to include
+    plotHalos   = 20          # plot virial circles for the N most massive halos in the box
+    rotMatrix   = None        # rotation matrix
+    rotCenter   = None        # rotation center
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
@@ -128,25 +129,26 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     
     # defaults (all panel fields that can be specified)
 
-    run        = 'illustris' # run name
-    res        = 1820        # run resolution
-    partType   = 'dm'        # which particle type to project
-    partField  = 'coldens'   # which quantity/field to project for that particle type
-    #valMinMax = [min,max]   # stretch colortable between minimum and maximum field values
-    method     = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
-    nPixels    = 960         # number of pixels per dimension of images when projecting
-    zoomFac    = 1.0         # [0,1], only in axes, not along projection direction
-    hsmlFac    = 2.5         # multiplier on smoothing lengths for sphMap
-    relCenPos  = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
-    absCenPos  = None        # [x,y,z] in simulation coordinates to place at center of image
-    sliceFac   = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
-    axes       = [0,1]       # e.g. [0,1] is x,y
-    labelZ     = False       # label redshift inside (upper right corner) of panel
-    labelScale = False       # label spatial scale with scalebar (upper left of panel)
-    labelSim   = False       # label simulation name (lower right corner) of panel
-    plotHalos  = 0           # plot virial circles for the N most massive halos in the box
-    rotMatrix  = None        # rotation matrix
-    rotCenter  = None        # rotation center
+    run         = 'illustris' # run name
+    res         = 1820        # run resolution
+    partType    = 'dm'        # which particle type to project
+    partField   = 'coldens'   # which quantity/field to project for that particle type
+    #valMinMax  = [min,max]   # stretch colortable between minimum and maximum field values
+    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
+    nPixels     = 960         # number of pixels per dimension of images when projecting
+    zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
+    hsmlFac     = 2.5         # multiplier on smoothing lengths for sphMap
+    relCenPos   = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
+    absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
+    sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
+    axes        = [0,1]       # e.g. [0,1] is x,y
+    labelZ      = False       # label redshift inside (upper right corner) of panel
+    labelScale  = False       # label spatial scale with scalebar (upper left of panel)
+    labelSim    = False       # label simulation name (lower right corner) of panel
+    labelCustom = False         # custom label string to include
+    plotHalos   = 0           # plot virial circles for the N most massive halos in the box
+    rotMatrix   = None        # rotation matrix
+    rotCenter   = None        # rotation center
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:

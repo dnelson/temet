@@ -10,8 +10,10 @@ from datetime import datetime
 
 from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
+from plot.general import simSubhaloQuantity
 from util.helper import pSplit
-from cosmo.load import groupCat, groupCatSingle
+from cosmo.load import groupCat, groupCatSingle, auxCat
+from cosmo.mergertree import loadMPB
 from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns
 from util import simParams
 
@@ -842,3 +844,135 @@ def zoomEvoMovies(conf):
         maxRedshift  = 100.0
 
     renderSingleHaloFrames(panels, plotConfig, localVars)
+
+def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=False, curPage=None):
+    """ Plot stellar stamps red/blue galaxies around 10^10.5 Msun.
+    If evo==True, then tracked back in time from z=0 to z=2.0 in M steps using the merger tree.
+    If evo==False, then show full NxM panel sample at z=0. In either case, choose blueSample or redSample.
+    If curPage specified, do a paged exploration instead. """
+    from cosmo.galaxyColor import loadSimGalColors
+    from plot.config import defSimColorModel
+    from cosmo.util import redshiftToSnapNum
+
+    # we have chosen by hand for L75n1820TNG z=0 from the massBin = [12.0,12.2] below these two sets
+    # we define blue/red split at (g-r)=0.6 and the disk/spheroid split at kappa_star=0.4
+    blue_z0 = [438297,448732,446548,452577,455335,
+               463062,463649,464576,460692,468590,
+               466436,469315,470617,472457,471740,
+               473004,473349,473898,474813,476487,
+               477179,477677,479174,479117,480230,
+               480441,481126,481300,482169,483370,
+               482869,484771,485441,486590,487244, # 0-35
+               486525,486966,488415,486781,488123,
+               488500,488722,489054,489100,489593,
+               490280,490806,491282,493034,493751,
+               493491,493517,493964,494771,494273,
+               497032,496990,495515,497646,498576,
+               499130,499996,499223,499463,500867,
+               500494,501761,502312,502648,502919] # 35-70
+    red_z0  = [441141,443914,453835,454963,463139,
+               467445,469102,469930,471857,475490,
+               476892,477518,478160,479314,479917,
+               480194,480550,480879,480750,481254,
+               481347,482257,482714,483868,483900,
+               484113,484257,485233,485365,486052,
+               487152,487965,488841,490195,490577, # 0-35
+               490986,491801,492392,492614,493230,
+               494009,495442,496436,497800,499025,
+               499522,500448,502168,502956,502881,
+               502461,503393,504142,505333,507070,
+               508985,515318,517881,511005,510751] # 35-60
+
+    # config
+    run           = 'tng'
+    res           = 1820 
+    rVirFracs     = None
+    method        = 'sphMap'
+    nPixels       = [300,300]
+    axes          = [0,1]
+    labelZ        = False
+    labelSim      = False
+    labelHalo     = 'Mstar'
+    relCoords     = True
+    mpb           = None
+    labelScaleLoc = False
+    rotation      = 'face-on'
+    size          = 60.0 # 30 kpc in each direction from center
+    sizeType      = 'pkpc'
+    partType      = 'stars'
+    partField     = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+    hsmlFac       = 0.5
+
+    evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
+    redshift_init = 0.0
+    nGalaxies     = 35
+    nRowsFig      = 7 # 5 columns, 7 rows
+
+    # load halos of this bin, from this run
+    sP = simParams(res=res, run=run, redshift=redshift_init)
+
+    if curPage is None:
+        if evo is False:
+            # z=0 samples
+            if redSample: shIDs = red_z0[(redSample-1)*nGalaxies:(redSample)*nGalaxies]
+            if blueSample: shIDs = blue_z0[(blueSample-1)*nGalaxies:(blueSample)*nGalaxies]
+
+            redshifts = np.zeros(len(shIDs), dtype='float32') + redshift_init
+        else:
+            # take nRows galaxies from z0 samples, then load their MPBs and get IDs at earlier redshifts
+            assert redSample > 0 or blueSample > 0
+            if redSample: shIDs_z0 = red_z0[(redSample-1)*nRowsFig:(redSample)*nRowsFig]
+            if blueSample: shIDs_z0 = blue_z0[(blueSample-1)*nRowsFig:(blueSample)*nRowsFig]
+
+            evo_snapshots = redshiftToSnapNum(evo_redshifts, sP)
+            shIDs = []
+            redshifts = []
+
+            for shID_z0 in shIDs_z0:
+                # load main progenitor branch
+                mpbLocal = loadMPB(sP, id=shID_z0)
+
+                # append to shIDs and redshifts the 5 evolution steps for this subhalo
+                for evo_snapshot, evo_redshift in zip(evo_snapshots, evo_redshifts):
+                    treeIndex = tuple(mpbLocal['SnapNum']).index(evo_snapshot)
+                    shIDs.append(mpbLocal['SubfindID'][treeIndex])
+                    redshifts.append(evo_redshift)
+
+        saveFilename2 = './figure14_stamps_%s_evo-%d_red-%d_blue-%d_rot-%s.pdf' % \
+          (sP.simName,evo,redSample,blueSample,rotation)
+    else:
+        # paged exploration for picking interesting galaxies, load all and sub-divide
+        numPages = 20
+        massBin  = [12.0, 12.2]
+
+        shIDsAll, _ = selectHalosFromMassBin(sP, [massBin], 1000, massBinInd=0, selType='linear')
+        shIDs = pSplit(shIDsAll, numPages, curPage)[0:nGalaxies]
+        assert shIDs.size == nGalaxies # make sure we have nGalaxies per render
+        saveFilename2 = './figure12_pages_%s_%s_rot=%s_page-%dof%d_hsml%.1f-age1-3-2_size%.1f.pdf' % \
+          (sP.simName,partType,rotation,curPage,numPages,hsmlFac,size)
+
+    # load colors and morphs for custom labeling
+    if not evo:
+        gr_colors_z0, _ = loadSimGalColors(sP, defSimColorModel, bands=['g','r'], projs='random')
+        kappa_stars, _, _, _ = simSubhaloQuantity(sP, 'Krot_oriented_stars2')
+
+    # create panels, one per galaxy
+    panels = []
+    for i, shID in enumerate(shIDs):
+        lCust = ['ID %d z = %.1f' % (shID, redshifts[i])]
+        lScale = False #True if i == 0 else False
+
+        if not evo:
+            detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
+            lCust.append(detailsStr) 
+                           
+        panels.append( {'hInd':shID, 'redshift':redshifts[i], 'labelCustom':lCust, 'labelScale':lScale} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 1200
+        colorbars    = False
+        nRows        = nRowsFig
+        saveFilename = saveFilename2
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
