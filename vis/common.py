@@ -131,7 +131,8 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2):
         #    (clipAboveNumPx,clipAboveToPx,clipAboveNumPx*pxScale,clipAboveToPx*pxScale))
 
     if method is None:
-        print(' hsml clip DISABLED!')
+        pass
+        #print(' hsml clip DISABLED!')
 
     return hsml
 
@@ -203,7 +204,7 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
 
     useStars = True
 
-    if len(gas['Masses']) > 1:
+    if gas['count'] and len(gas['Masses']) > 1:
         rad_gas = periodicDists(shPos, gas['Coordinates'], sP)
         wGas = np.where( (rad_gas <= 0.5*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
 
@@ -478,11 +479,11 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, boxCenter, boxS
                    'jwst_f115w' : [2000, 85000], # green  #[200, 85000]
                    'jwst_f200w': [1000, 75000], # blue  #[100, 75000]
                    \
-                   'sdss_z' : [100, 50000], # red
+                   'sdss_z' : [100, 1000], # red
                    'sdss_i' : [30, 5000], # red
                    'sdss_r' : [30, 6000], # green
                    'sdss_g' : [1, 7000], # blue
-                   'sdss_u' : [5, 15000]} # blue
+                   'sdss_u' : [5, 3000]} # blue
 
         for i in range(3):
             drange = dranges[bands[i]]
@@ -1074,12 +1075,25 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                 # modulate hsml values by hsmlFac
                 hsml *= hsmlFac
 
-                if wMask is not None:
-                    hsml = hsml[wMask]
-
                 if sP.isPartType(partType, 'stars'):
                     pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
-                    hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2)
+                    hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=None) #2
+
+                    if 1:
+                        #print(' custom AGE HSMLFAC MOD!')
+                        # load stellar ages
+                        ages = snapshotSubset(sP, 'stars', 'stellar_age', indRange=indRange)
+                        # ramp such that hsml*=1.0 at <=1Gyr, linear to hsml*=2.0 at >=4 Gyr
+                        age_min = 1.0
+                        age_max = 3.0
+                        max_mod = 2.0
+                        rampFac = np.ones( ages.size, dtype='float32' )
+                        ages = np.clip( (ages-age_min)/(age_max-age_min), 0.0, 1.0 ) * max_mod
+                        rampFac += ages
+                        hsml *= rampFac
+
+                if wMask is not None:
+                    hsml = hsml[wMask]
 
                 # further sub-method specification?
                 maxIntProj = True if '_maxIP' in method else False
@@ -1220,12 +1234,6 @@ def addBoxMarkers(p, conf, ax):
         ax.text( xt, yt, zStr, color='white', alpha=1.0, 
                  size='x-large', ha='left', va='center') # same size as legend text
 
-    if 'labelSim' in p and p['labelSim']:
-        p0 = plt.Line2D((0,0),(0,0), linestyle='')
-
-        legend = ax.legend([p0], [p['sP'].simName], loc='lower right')
-        legend.get_texts()[0].set_color('white')
-
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
@@ -1259,6 +1267,12 @@ def addBoxMarkers(p, conf, ax):
         ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
                  size='x-large', ha='center', va='center') # same size as legend text
 
+    # text in a combined legend?
+    legend_labels = []
+
+    if 'labelSim' in p and p['labelSim']:
+        legend_labels.append( p['sP'].simName )
+
     if 'labelHalo' in p and p['labelHalo']:
         assert p['sP'].hInd is not None
 
@@ -1278,18 +1292,25 @@ def addBoxMarkers(p, conf, ax):
         str1 = "log M$_{\\rm halo}$ = %.1f" % haloMass
         str2 = "log M$_{\\rm star}$ = %.1f" % stellarMass
 
-        p0 = plt.Line2D((0,0),(0,0), linestyle='')
-        p1 = plt.Line2D((0,0),(0,0), linestyle='')
-
         if p['labelHalo'] == 'Mstar':
-            legend = ax.legend([p1], [str2], fontsize='xx-large', loc='lower right')
+            # just Mstar
+            legend_labels.append( str2 )
         else:
             # both Mhalo and Mstar
-            legend = ax.legend([p0,p1], [str1,str2], fontsize='xx-large', loc='lower right')
+            legend_labels.append( str1 )
+            legend_labels.append( str2 )
 
-        for text in legend.get_texts(): text.set_color('white')
-        #legend.get_texts()[0].set_color('white')
-        #legend.get_texts()[1].set_color('white')
+    if 'labelCustom' in p and p['labelCustom']:
+        for label in p['labelCustom']:
+            legend_labels.append( label )
+
+    # draw legend
+    if len(legend_labels):
+        legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
+        legend = ax.legend(legend_lines, legend_labels, fontsize='xx-large', loc='lower left', 
+                           handlelength=0, handletextpad=0)
+
+    for text in legend.get_texts(): text.set_color('white')
 
 def addVectorFieldOverlay(p, conf, ax):
     """ Add quiver or streamline overlay on top to visualization vector field data. """
@@ -1499,8 +1520,8 @@ def renderMultiPanel(panels, conf):
 
     # plot sizing and arrangement
     sizeFac = conf.rasterPx / mpl.rcParams['savefig.dpi']
-    nRows   = np.floor(np.sqrt(len(panels)))
-    nCols   = np.ceil(len(panels) / nRows)
+    nRows   = np.floor(np.sqrt(len(panels))) if not hasattr(conf,'nRows') else conf.nRows 
+    nCols   = np.ceil(len(panels) / nRows) if not hasattr(conf,'nCols') else conf.nCols
     aspect  = nRows/nCols
 
     if conf.plotStyle in ['open','open_black']:

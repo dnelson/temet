@@ -32,7 +32,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
         gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
 
         if gr['GroupFirstSub'] != shID:
-            print('WARNING! Rendering a non-central subhalo, are you sure?')
+            print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
 
         haloVirRad = gr['Group_R_Crit200']
         galHalfMassRad = sh['SubhaloHalfmassRad']
@@ -167,6 +167,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     labelScale  = False         # label spatial scale with scalebar (upper left of panel)
     labelSim    = False         # label simulation name (lower right corner) of panel
     labelHalo   = False         # label halo total mass and stellar mass
+    labelCustom = False         # custom label string to include
     relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
     rotation    = None          # 'face-on', 'edge-on', or None
     mpb         = None          # use None for non-movie/single frame
@@ -248,6 +249,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     labelScale  = False           # label spatial scale with scalebar (upper left of panel)
     labelSim    = False           # label simulation name (lower right corner) of panel
     labelHalo   = False           # label halo total mass and stellar mass
+    labelCustom = False         # custom label string to include
     relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
     rotation    = None            # 'face-on', 'edge-on', or None
 
