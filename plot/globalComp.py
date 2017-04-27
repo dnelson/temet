@@ -11,7 +11,7 @@ from scipy.signal import savgol_filter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.loadExtern import *
-from util.helper import running_median, running_histogram, logZeroSafe
+from util.helper import running_median, running_histogram, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
 from cosmo.util import validSnapList, periodicDists
 from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
@@ -852,7 +852,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
             if clean: iters = [0,1] # add Guidi corrections
 
             for i_num in iters:
-                yy = logZeroSafe( ac[acMetalField][w] / sP.units.Z_solar )
+                yy = logZeroNaN( ac[acMetalField][w] / sP.units.Z_solar )
 
                 if i_num == 1:
                     # apply and plot Guidi+ (2016) correction from Z(Lum-W_fibre) to Z(OBS)
@@ -886,7 +886,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
             # note: Vogelsberger+ (2014a) scales the simulation values by Z_solar=0.02 instead of 
             # correcting the observational Gallazzi/... points, resulting in the vertical shift 
             # with respect to this plot (sim,Gal,Woo all shift up, but I think Kirby is good as is)
-            yy = logZeroSafe( gc['subhalos'][metalField][w] / sP.units.Z_solar )
+            yy = logZeroNaN( gc['subhalos'][metalField][w] / sP.units.Z_solar )
 
             xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,skipZeros=True,percs=[10,25,75,90])
             ym2 = savgol_filter(ym,sKn,sKo)
@@ -1049,7 +1049,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
             wNz = np.where( gc['subhalos'][metalField][w] > 0.0 )
 
             # log (Z_gas/Z_solar)
-            yy = logZeroSafe( gc['subhalos'][metalField][w][wNz] / sP.units.Z_solar )
+            yy = logZeroNaN( gc['subhalos'][metalField][w][wNz] / sP.units.Z_solar )
 
             xm, ym, sm = running_median(xx[wNz],yy,binSize=binSize)
             ym2 = savgol_filter(ym,sKn,sKo)
@@ -1292,9 +1292,9 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
             xx = np.log10(n_HI)
 
             if moment == 0:
-                yy = logZeroSafe(fN_HI, zeroVal=np.nan)
+                yy = logZeroNaN(fN_HI, zeroVal=np.nan)
             if moment == 1:
-                yy = logZeroSafe(fN_HI*n_HI, zeroVal=np.nan)
+                yy = logZeroNaN(fN_HI*n_HI, zeroVal=np.nan)
 
             label = sP.simName if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
@@ -1404,13 +1404,13 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
         xx = np.log10(n_OVI)
 
         if moment == 0:
-            yy_min = logZeroSafe(fN_OVI_min, zeroVal=np.nan)
-            yy_max = logZeroSafe(fN_OVI_max, zeroVal=np.nan)
-            yy = logZeroSafe( 0.5*(fN_OVI_min+fN_OVI_max), zeroVal=np.nan )
+            yy_min = logZeroNaN(fN_OVI_min, zeroVal=np.nan)
+            yy_max = logZeroNaN(fN_OVI_max, zeroVal=np.nan)
+            yy = logZeroNaN( 0.5*(fN_OVI_min+fN_OVI_max), zeroVal=np.nan )
         if moment == 1:
-            yy_min = logZeroSafe(fN_OVI_min*n_OVI, zeroVal=np.nan)
-            yy_max = logZeroSafe(fN_OVI_max*n_OVI, zeroVal=np.nan)
-            yy = logZeroSafe( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI), zeroVal=np.nan )
+            yy_min = logZeroNaN(fN_OVI_min*n_OVI, zeroVal=np.nan)
+            yy_max = logZeroNaN(fN_OVI_max*n_OVI, zeroVal=np.nan)
+            yy = logZeroNaN( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI), zeroVal=np.nan )
 
         ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.2, interpolate=True)
 
@@ -1822,7 +1822,7 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
                 yy = ac[lumType][w]
 
             # unit conversion: [10^-30 erg/s] -> [log erg/s]
-            yy = logZeroSafe(yy.astype('float64') * 1e30)
+            yy = logZeroNaN(yy.astype('float64') * 1e30)
 
             # only include subhalos with non-nan Lum entries
             ww = np.where(np.isfinite(xx) & np.isfinite(yy))

@@ -14,7 +14,7 @@ from os.path import isfile
 
 import illustris_python as il
 from util import simParams
-from util.helper import loadColorTable, running_median, logZeroSafe, logZeroNaN
+from util.helper import loadColorTable, running_median, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 from plot.config import *
@@ -139,7 +139,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         logStr = ''
         if '_log' in quant:
             takeLog = False
-            vals = logZeroSafe(vals)
+            vals = logZeroNaN(vals)
             logStr = 'log '
 
         label = 'M$_{\\rm \star}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'

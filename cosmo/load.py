@@ -14,7 +14,7 @@ from os import mkdir
 
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
-from util.helper import iterable, logZeroSafe, curRepoVersion
+from util.helper import iterable, logZeroNaN, curRepoVersion
 
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
@@ -945,6 +945,6 @@ def snapshotSubset(sP, partType, fields,
         if fieldsOrig[0] == 'tracer_maxent':
             r = sP.units.tracerEntToCGS(r, log=True) # [log cgs] = [log K cm^2]
         if fieldsOrig[0] == 'tracer_maxtemp':
-            r = logZeroSafe(r) # [log Kelvin]
+            r = logZeroNaN(r) # [log Kelvin]
 
     return r

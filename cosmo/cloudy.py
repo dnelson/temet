@@ -15,7 +15,7 @@ from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
 
 from cosmo import hydrogen
-from util.helper import closest, iterable, logZeroSafe, contourf
+from util.helper import closest, iterable, contourf
 from cosmo.load import snapshotSubset, snapHasField
 
 basePath = expanduser("~") + '/code/cloudy.run/'
