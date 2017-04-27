@@ -65,6 +65,8 @@ def contiguousIntSubsets(x):
 
 def logZeroSafe(x, zeroVal=1.0):
     """ Take log10 of input variable or array, keeping zeros at some value. """
+    if np.isfinite(zeroVal):
+        print(' logZeroSafe: This was always ill-advised, migrate towards deleting this function.')
     if not isinstance(x, (int,long,float)) and x.ndim: # array
         # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
         w = np.where(x <= 0.0)
@@ -124,8 +126,9 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
     if binSize is not None:
         nBins = round( (X.max()-minVal) / binSize )
 
+    assert nBins >= 1
     bins = np.linspace(minVal,X.max(), nBins)
-    delta = bins[1]-bins[0]
+    delta = bins[1]-bins[0] if nBins >= 2 else np.inf
 
     running_median = []
     running_std    = []

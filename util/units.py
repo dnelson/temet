@@ -137,7 +137,7 @@ class units(object):
 
     def codeMassToLogMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (log msun). """
-        return logZeroSafe( self.codeMassToMsun(mass) )
+        return logZeroNaN( self.codeMassToMsun(mass) )
 
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
