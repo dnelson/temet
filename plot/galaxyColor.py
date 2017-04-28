@@ -15,7 +15,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
 
 from util import simParams
-from util.helper import running_median, contourf, logZeroSafe, logZeroNaN, closest, loadColorTable, leastsq_fit
+from util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, leastsq_fit
 from tracer.tracerMC import match3
 from cosmo.galaxyColor import calcMstarColor2dKDE, calcColorEvoTracks, characterizeColorMassPlane, \
    loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, colorTransitionTimes
@@ -1400,33 +1400,83 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
 
-def colorTransitionTimescale(sP, bands=['g','r'], simColorsModel=defSimColorModel, pStyle='white'):
+def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorModel, pStyle='white'):
     """ Plot the distribution of 'color transition' timescales (e.g. Delta_t_green). """
 
     # analysis config
-    cenSatSelects = ['all','cen','sat'] # make all plot with each of these 3 separately, and some combined
+    cenSatSelects = ['all','cen','sat'] # make plots with each of these together combined
     maxRedshift = 1.0 # track galaxy color evolution back from sP.redshift to maxRedshift
     nBurnIn = 2000 # 400, 2000, 10000, e.g. which mcmc results to use
 
-    f_red = 1.0 # mu_red - f_red*sigma_red defines lower boundary for red population
+    f_red  = 1.0 # mu_red - f_red*sigma_red defines lower boundary for red population
     f_blue = 1.0 # mu_blue + f_blue*sigma_blue defines upper boundary for blue population
 
-    # visual config
-    mag_range = bandMagRange(bands, tight=True)
+    reqPosDtGreen = True # exclude data contaminated by boundary by requiring dt_green>0
+    mStarRange = [10.5, 12.5] # if not None, only include galaxies with z=0 stellar mass in this bin
 
+    # visual config
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
     sizefac = 1.0 if not clean else 0.7
-    lw = 2.5
-    alpha = 0.9
+    lw      = 2.5
+    alpha   = 0.9
 
-    tMinMax = [0.0, 8.0] # Gyr
-    mMinMax = [9.0, 12.0] # log Msun
-    zMinMax = [0.0, 1.0] # redshift
-    nBins = 40 # for all 1d histograms
-    pdfMinMaxLog = [1e-3,1.0]
-    yLabel = 'PDF $\int=1$'
-    mLabel = 'M$_{\star}$ [ log M$_{\\rm sun}$ ]'
-    cssLabels = {'all':'All Galaxies', 'cen':'Centrals Only', 'sat':'Satellites Only'}
+    tMinMax    = [0.0, 8.0] # Gyr
+    mMinMax    = [9.0, 12.0] # log Msun
+    zMinMax    = [0.0, 1.0] # redshift
+    nBins      = 50 if mStarRange is None else 30 # for all 1d histograms and running medians
+    pdfMinLog  = 1e-3 if mStarRange is None else 4e-2 # set minimum y-axis value for PDFs in log(y)
+
+    cssLabels = {'all':'All Galaxies',
+                 'cen':'Centrals Only',
+                 'sat':'Satellites Only'}
+
+    fieldLabels = {'dt_green':'$\Delta t_{\\rm green}$ [ Gyr ]',
+                   'dt_rejuv':'$\Delta t_{\\rm rejuv}$ [ Gyr ]',
+                   'M_blue'  :'$M_\star$ at $t_{\\rm blue}$ (Depature from the Blue Population) [ log M$_{\\rm sun}$ ]',
+                   'M_redini':'$M_\star$ at $t_{\\rm red,ini}$ (Arrival into the Red Population) [ log M$_{\\rm sun}$ ]',
+                   'z_blue'  :'$t_{\\rm blue}$ (Redshift leaving Blue Population)',
+                   'z_redini':'$t_{\\rm red,ini}$ (Redshift entering Red Population)',
+                   'dM_green':'$\Delta M_{\\rm \star,green}$ (Mass Growth in Green Valley) [ log M$_{\\rm sun}$ ]',
+                   'dM_red'  :'$\Delta M_{\\rm \star,red}$ (Mass Growth within Red Population) [ log M$_{\\rm sun}$ ]',
+                   'dM_redfr':'$\Delta M_{\\rm \star,red}$ / $M_{\\rm \star,z=0}$',
+                   'mstar'   :'$M_{\\rm \star,z=0}$ [ log M$_{\\rm sun}$ ]'}
+
+    fieldLabelsShort = {'dt_green':fieldLabels['dt_green'],
+                        'dt_rejuv':fieldLabels['dt_rejuv'],
+                        'M_blue'  :'$M_\star (t_{\\rm blue})$ [ log M$_{\\rm sun}$ ]',
+                        'M_redini':'$M_\star (t_{\\rm red,ini})$ [ log M$_{\\rm sun}$ ]',
+                        'z_blue'  :'$t_{\\rm blue}$ (Redshift)',
+                        'z_redini':'$t_{\\rm red,ini}$ (Redshift)',
+                        'dM_green':'$\Delta M_{\\rm \star,green}$ [ log M$_{\\rm sun}$ ]',
+                        'dM_red'  :'$\Delta M_{\\rm \star,red}$ [ log M$_{\\rm sun}$ ]',
+                        'dM_redfr':fieldLabels['dM_redfr'],
+                        'mstar'   :fieldLabels['mstar'],
+                        'kappa_stars':'$\kappa_{\\rm \star,rot}  (J_z > 0)$',
+                        'bh_cumegy_ratio':'BH $\int$ E$_{\\rm high}$ / E$_{\\rm low}$ [ log ]'}
+
+    # min/max bounds when the field is the x-axis (or is being histogrammed)
+    fieldMinMax = {'dt_green':tMinMax,
+                   'dt_rejuv':tMinMax,
+                   'M_blue'  :mMinMax,
+                   'M_redini':mMinMax,
+                   'z_blue'  :zMinMax,
+                   'z_redini':zMinMax,
+                   'dM_green':[-1.5,1.5],
+                   'dM_red'  :[-2.0, 2.0],
+                   'dM_redfr':[-1.0,1.0],
+                   'mstar'   :mMinMax}
+
+    # min/max bounds when the field is the y-axis of a median (e.g. we don't see outliers here)
+    fieldMinMaxTight = {'dt_green':[0.0, 5.0],
+                        'dt_rejuv':[0.0, 5.0],
+                        'M_blue'  :mMinMax,
+                        'M_redini':mMinMax,
+                        'z_blue'  :zMinMax,
+                        'z_redini':zMinMax,
+                        'dM_green':[-0.1, 0.3],
+                        'dM_red'  :[-0.1, 0.3],
+                        'dM_redfr':[-0.2,0.4],
+                        'mstar'   :mMinMax}         
 
     def _lognormal_pdf(x, params, fixed=None):
         """ Lognormal for fitting. Note fixed is unused. """
@@ -1436,262 +1486,439 @@ def colorTransitionTimescale(sP, bands=['g','r'], simColorsModel=defSimColorMode
         return y
 
     # load transition times
-    evo = colorTransitionTimes(sP, f_red=f_red, f_blue=f_blue, maxRedshift=maxRedshift, nBurnIn=nBurnIn, 
-        bands=bands, simColorsModel=simColorsModel)
+    data = []
 
-    N = evo['subhalo_ids'].size
+    for sP in sPs:
+        print(sP.simName)
+        evo = colorTransitionTimes(sP, f_red=f_red, f_blue=f_blue, maxRedshift=maxRedshift, nBurnIn=nBurnIn, 
+            bands=bands, simColorsModel=simColorsModel)
 
-    # matching: evo subset <-> full groupcat subhalo sample
-    subhalo_id_map = np.zeros(sP.numSubhalos, dtype='int32')
-    subhalo_id_map[evo['subhalo_ids']] = np.arange(N) # such that subhalo_id_map[subhaloID] = evo index
+        N = evo['subhalo_ids'].size
+        dataKeys = ['dt_green','dt_rejuv','z_blue','M_blue','z_redini','M_redini','N_rejuv',
+                    'dM_red','dM_redfr','dM_green']
 
-    css_inds = {}
-    css_inds['cen'], css_inds['all'], css_inds['sat'] = cenSatSubhaloIndices(sP)
-    assert cenSatSelects[0] == 'all' # otherwise logic below fails for PDF norms
+        # matching: evo subset <-> full groupcat subhalo sample
+        subhalo_id_map = np.zeros(sP.numSubhalos, dtype='int32')
+        subhalo_id_map[evo['subhalo_ids']] = np.arange(N) # such that subhalo_id_map[subhaloID] = evo index
 
-    # calculate: allocate
-    for k in ['dt_green','dt_rejuv']:
-        evo[k] = np.zeros( N, dtype='float32' )
-        evo[k].fill(np.nan)
+        css_inds = {}
+        css_inds['cen'], css_inds['all'], css_inds['sat'] = cenSatSubhaloIndices(sP)
+        assert cenSatSelects[0] == 'all' # otherwise logic below fails for PDF norms
 
-    sub_snap = {}
-    for k in ['dt_green','dt_rejuv', 'z_blue','M_blue','z_redini','M_redini','N_rejuv']:
-        sub_snap[k] = {}
+        # calculate: allocate
+        for k in ['dt_green','dt_rejuv','dM_red','dM_redfr','dM_green']:
+            evo[k] = np.zeros( N, dtype='float32' )
+            evo[k].fill(np.nan)
 
-    # calculate: dt_green
-    ww = np.where( np.isfinite(evo['z_redini']) & np.isfinite(evo['z_blue']) )
-    t_blue_exit = sP.units.redshiftToAgeFlat( evo['z_blue'][ww] )
-    t_red_entry = sP.units.redshiftToAgeFlat( evo['z_redini'][ww] )
+        sub_snap = {}
+        for k in dataKeys:
+            sub_snap[k] = {}
 
-    evo['dt_green'][ww] = t_red_entry - t_blue_exit # Gyr
+        # calculate: dt_green
+        ww = np.where( np.isfinite(evo['z_redini']) & np.isfinite(evo['z_blue']) )
+        t_blue_exit = sP.units.redshiftToAgeFlat( evo['z_blue'][ww] )
+        t_red_entry = sP.units.redshiftToAgeFlat( evo['z_redini'][ww] )
 
-    # calculate: dt_rejuv
-    for subhaloID in evo['z_rejuv_start']:
-        if subhaloID not in evo['z_rejuv_stop']:
-            # never found end of rejuvation event, skip
-            continue
+        evo['dt_green'][ww] = t_red_entry - t_blue_exit # Gyr
 
-        # loop over possibly multiple events per galaxy
-        for ind in range(len(evo['z_rejuv_start'][subhaloID])):
-            if ind >= len(evo['z_rejuv_stop'][subhaloID]):
-                # end of this event not reached
+        # calculate: dt_rejuv
+        for subhaloID in evo['z_rejuv_start']:
+            if subhaloID not in evo['z_rejuv_stop']:
+                # never found end of rejuvation event, skip
                 continue
 
-            t_rejuv_start = sP.units.redshiftToAgeFlat( evo['z_rejuv_start'][subhaloID][ind] )
-            t_rejuv_stop = sP.units.redshiftToAgeFlat( evo['z_rejuv_stop'][subhaloID][ind] )
+            # loop over possibly multiple events per galaxy
+            for ind in range(len(evo['z_rejuv_start'][subhaloID])):
+                if ind >= len(evo['z_rejuv_stop'][subhaloID]):
+                    # end of this event not reached
+                    continue
 
-            # store all timescales for all subhalos, unordered, for histogramming
-            if t_rejuv_stop < t_rejuv_start:
-                print(' skip rejuv stop=%.2f start=%.2f' % (t_rejuv_stop,t_rejuv_start))
-                continue
+                t_rejuv_start = sP.units.redshiftToAgeFlat( evo['z_rejuv_start'][subhaloID][ind] )
+                t_rejuv_stop = sP.units.redshiftToAgeFlat( evo['z_rejuv_stop'][subhaloID][ind] )
 
-            if ind == 0:
-                # store first timescale for each subhalo for corelations with other quantities
-                evo_index = subhalo_id_map[subhaloID]
-                evo['dt_rejuv'][evo_index] = t_rejuv_stop - t_rejuv_start
+                # store all timescales for all subhalos, unordered, for histogramming
+                if t_rejuv_stop < t_rejuv_start:
+                    print(' skip rejuv stop=%.2f start=%.2f' % (t_rejuv_stop,t_rejuv_start))
+                    continue
 
-    # calculate: dM_green
+                if ind == 0:
+                    # store first timescale for each subhalo for corelations with other quantities
+                    evo_index = subhalo_id_map[subhaloID]
+                    evo['dt_rejuv'][evo_index] = t_rejuv_stop - t_rejuv_start
 
-    # calculate: dM_red
-    # TODO
+        # sP.redshift stellar massses and other simulation quantities
+        sim_quants = {'mstar':{}, 'kappa_stars':{}, 'bh_cumegy_ratio':{}}
 
-    # stamp all quantities, arranged as snapshot subhalos
-    for css in cenSatSelects:
-        # cross-match evo subhalo_ids to css ids
-        snap_indices, evo_indices = match3(css_inds[css], evo['subhalo_ids'])
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+        gc_mstar = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
 
-        # allocate and store
-        for k in ['dt_green','dt_rejuv', 'z_blue','M_blue','z_redini','M_redini','N_rejuv']:
-            sub_snap[k][css] = np.zeros( css_inds[css].size, dtype='float32' )
-            sub_snap[k][css].fill(np.nan)
+        ac_kappa, fieldLabels['kappa_stars'], fieldMinMax['kappa_stars'], takeLog = \
+          simSubhaloQuantity(sP, 'Krot_oriented_stars2')
+        fieldMinMaxTight['kappa_stars'] = fieldMinMax['kappa_stars']
+        if takeLog: ac_kappa = logZeroNaN(ac_kappa)
 
-            sub_snap[k][css][snap_indices] = evo[k][evo_indices]
+        ac_bhratio, fieldLabels['bh_cumegy_ratio'], fieldMinMax['bh_cumegy_ratio'], takeLog = \
+          simSubhaloQuantity(sP, 'BH_CumEgy_ratio')
+        fieldMinMaxTight['bh_cumegy_ratio'] = fieldMinMax['bh_cumegy_ratio']
+        if takeLog: ac_bhratio = logZeroNaN(ac_bhratio)
 
-    Mstar = {}
-    gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-    Mstar['all'] = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
-    Mstar['cen'] = Mstar['all'][ css_inds['cen'] ]
-    Mstar['sat'] = Mstar['all'][ css_inds['sat'] ]
+        for css in cenSatSelects:
+            sim_quants['mstar'][css] = gc_mstar[ css_inds[css] ]
+            sim_quants['kappa_stars'][css] = ac_kappa[ css_inds[css] ]
+            sim_quants['bh_cumegy_ratio'][css] = ac_bhratio[ css_inds[css] ]
 
-    # print out some statistics
-    for css in cenSatSelects:
-        print(' [%s]' % css)
-        N_rejuv_loc = sub_snap['N_rejuv'][css]
+        # calculate: dM_green
+        evo['dM_green'] = evo['M_redini'] - evo['M_blue']
 
-        for massBin in [[0.0, 15.0], [11.0, 15.0]]:
-            # select in mass bin
-            #wMassBin = np.where((Mstar[css] >= massBin[0]) & (Mstar[css] < massBin[1]))
-            wMassBin = np.where(np.isfinite(N_rejuv_loc) & (Mstar[css] >= massBin[0]) & (Mstar[css] < massBin[1]))
-            nMassBin = len(wMassBin[0])
+        # calculate: dM_red, dM_redfr (fractional)
+        Mstar_evo = sim_quants['mstar']['all'][evo['subhalo_ids']]
+        ww = np.where( np.isfinite(Mstar_evo) & np.isfinite(evo['M_redini']) )
+        evo['dM_red'][ww] = Mstar_evo[ww] - evo['M_redini'][ww]
 
-            for num in range(evo['N_rejuv'].max()+1):
-                count_loc = len( np.where(N_rejuv_loc[wMassBin] == num)[0] )
-                frac_loc = float(count_loc) / nMassBin * 100
+        evo['dM_redfr'][ww] = (10.0**Mstar_evo[ww] - 10.0**evo['M_redini'][ww]) / 10.0**Mstar_evo[ww]
 
-                print('  massbin [%.1f %.1f] for N_rejuv=%d we have %7d [of %d] galaxies = %.2f%%' % \
-                    (massBin[0],massBin[1],num,count_loc,nMassBin,frac_loc))
-    
-    for css in cenSatSelects:
-        print(' [%s]' % css)
-        dt_green_loc = sub_snap['dt_green'][css]
-        w = np.where(np.isfinite(dt_green_loc))
+        # stamp all quantities, arranged as snapshot subhalos
+        for css in cenSatSelects:
+            # cross-match evo subhalo_ids to css ids
+            snap_indices, evo_indices = match3(css_inds[css], evo['subhalo_ids'])
 
-        for dt_bin in [[-10,0],[0,1],[1,2],[2,10]]:
-            count_loc = len( np.where((dt_green_loc[w] >= dt_bin[0]) & (dt_green_loc[w] < dt_bin[1]))[0] )
-            frac_loc = float(count_loc) / dt_green_loc[w].size * 100
+            # allocate and store split by cen/sat/all selection
+            for k in dataKeys:
+                sub_snap[k][css] = np.zeros( css_inds[css].size, dtype='float32' )
+                sub_snap[k][css].fill(np.nan)
 
-            print('  for dt_green bin [%5.1f Gyr to %5.1f Gyr] we have %7d [of %d] galaxies = %.2f%%' % \
-                (dt_bin[0],dt_bin[1],count_loc,dt_green_loc.size,frac_loc))
+                sub_snap[k][css][snap_indices] = evo[k][evo_indices]
 
-        ww = np.where(dt_green_loc[w] > 0.0)
-        dt_green_loc = dt_green_loc[w][ww]
+        # print out some statistics
+        for css in cenSatSelects:
+            print(' [%s]' % css)
+            N_rejuv_loc = sub_snap['N_rejuv'][css]
 
-        ww = np.where(np.isfinite(sub_snap['dt_rejuv'][css]))
-        dt_rejuv_loc = sub_snap['dt_rejuv'][css][ww]
+            for massBin in [[0.0, 15.0], [11.0, 15.0]]:
+                # select in mass bin
+                wMassBin = np.where( np.isfinite(N_rejuv_loc) & \
+                                     (sim_quants['mstar'][css] >= massBin[0]) & \
+                                     (sim_quants['mstar'][css] < massBin[1]) )
+                nMassBin = len(wMassBin[0])
 
-        print('  *dt_green mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
-            (dt_green_loc.mean(), np.median(dt_green_loc), np.std(dt_green_loc), 
-             np.percentile(dt_green_loc,10.0), np.percentile(dt_green_loc,90.0)) )
-        print('  *dt_rejuv mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
-            (dt_rejuv_loc.mean(), np.median(dt_rejuv_loc), np.std(dt_rejuv_loc), 
-             np.percentile(dt_rejuv_loc,10.0), np.percentile(dt_rejuv_loc,90.0)) )
+                for num in range(evo['N_rejuv'].max()+1):
+                    count_loc = len( np.where(N_rejuv_loc[wMassBin] == num)[0] )
+                    frac_loc = float(count_loc) / nMassBin * 100
 
-    # all of the below:
-    # [X] 1. global
-    # 2. as a function of z=0 Mstar
-    # 3. as a function of Mstar when leaving blue population
-    # 4. as a function of Mstar when entering red population
-    # 5. as a function of redshift of transition (leaving blue)
-    # 6. as a function of morphology (when?)
-    # 7. as a function of BH cumegy (when?)
-    # 8. as a function of tracers...
+                    print('  massbin [%.1f %.1f] for N_rejuv=%d we have %7d [of %d] galaxies = %.2f%%' % \
+                        (massBin[0],massBin[1],num,count_loc,nMassBin,frac_loc))
+        
+        
+        for css in cenSatSelects:
+            print(' [%s]' % css)
+            for fieldName in ['dM_red','dM_redfr','dM_green']:
+                field_loc = sub_snap[fieldName][css]
 
-    def _fig_helper1(xLabel, xMinMax, fieldName, saveBase):
-        """ Helper for histogram plots, with each of css in a separate plot. """
-        for cenSatSelect in cenSatSelects:
-            fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-            ax = fig.add_subplot(111, axisbg=color1)
+                for massBin in [[0.0, 15.0], [0.0, 10.5], [9.0,10.5], [10.5, 15.0], [11.0, 15.0]]:
+                    # select in mass bin
+                    wMassBin = np.where( np.isfinite(field_loc) & \
+                                         (sim_quants['mstar'][css] >= massBin[0]) & \
+                                         (sim_quants['mstar'][css] < massBin[1]) )
 
-            setAxisColors(ax, color2)
+                    field_mb = field_loc[wMassBin]
+                    
+                    print('  massbin [%.1f %.1f] %s mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
+                        (massBin[0],massBin[1],fieldName,field_mb.mean(), np.median(field_mb), np.std(field_mb), 
+                         np.percentile(field_mb,10.0), np.percentile(field_mb,90.0)) )
 
-            ax.set_xlim(xMinMax)
-            if yscale == 'log': ax.set_ylim(pdfMinMaxLog)
-            ax.set_xlabel(xLabel)
-            ax.set_ylabel(yLabel)
-            ax.set_yscale(yscale)
+                    if fieldName == 'dM_redfr':
+                        count_loc = len( np.where(field_mb >= 0.5)[0] )
+                        frac_loc = float(count_loc) / field_mb.size * 100
+                        print('   fraction dM_redfr > 0.5 is %.2f%% [%d of %d]' % (frac_loc,count_loc,field_mb.size))
 
-            # histogram dt_green (split by cenSatSelect)
-            hh = sub_snap[fieldName][cenSatSelect]
-            ww = np.where(np.isfinite(hh))
+        for css in cenSatSelects:
+            print(' [%s]' % css)
+            dt_green_loc = sub_snap['dt_green'][css]
+            w = np.where(np.isfinite(dt_green_loc))
+            
+            for dt_bin in [[-10,0],[0,1],[1,2],[2,10],[4,10]]:
+                count_loc = len( np.where((dt_green_loc[w] >= dt_bin[0]) & (dt_green_loc[w] < dt_bin[1]))[0] )
+                frac_loc = float(count_loc) / dt_green_loc[w].size * 100
 
-            yy, xx = np.histogram(hh[ww], bins=nBins, range=xMinMax, density=True)
-            xx = xx[:-1] + 0.5*(xMinMax[1]-xMinMax[0])/nBins
+                print('  for dt_green bin [%5.1f Gyr to %5.1f Gyr] we have %7d [of %d] galaxies = %.2f%%' % \
+                    (dt_bin[0],dt_bin[1],count_loc,dt_green_loc.size,frac_loc))
 
-            ax.step(xx,yy,where='mid',lw=lw,alpha=alpha,label=sP.simName)
+            ww = np.where(dt_green_loc[w] > 0.0)
+            dt_green_loc = dt_green_loc[w][ww]
 
-            # fit lognormal to dt_green and plot
-            params_guess = [0.5, 0.1]
-            params_best, _ = leastsq_fit(_lognormal_pdf, params_guess, args=(xx,yy))
-            print('%s lognormal fit: ' % fieldName,cenSatSelect,params_best)
+            ww = np.where(np.isfinite(sub_snap['dt_rejuv'][css]))
+            dt_rejuv_loc = sub_snap['dt_rejuv'][css][ww]
 
-            xx = np.linspace(xMinMax[0]+1e-6, xMinMax[1], 100)
-            yy = _lognormal_pdf(xx, params_best)
-            ax.plot(xx,yy,':',color='black',lw=lw/2,alpha=alpha)
+            print('  *dt_green mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
+                (dt_green_loc.mean(), np.median(dt_green_loc), np.std(dt_green_loc), 
+                 np.percentile(dt_green_loc,10.0), np.percentile(dt_green_loc,90.0)) )
+            print('  *dt_rejuv mean = %.2f median = %.2f stddev = %.2f p10,90 = [%.2f, %.2f]' % \
+                (dt_rejuv_loc.mean(), np.median(dt_rejuv_loc), np.std(dt_rejuv_loc), 
+                 np.percentile(dt_rejuv_loc,10.0), np.percentile(dt_rejuv_loc,90.0)) )
 
-            #ax.plot(xx,_lognormal_pdf(xx, [0.0,0.7]),':',lw=lw/2,alpha=alpha/2,label='test1')
-            #ax.plot(xx,_lognormal_pdf(xx, [0.0,0.66]),':',lw=lw/2,alpha=alpha/2,label='test2')
+        for key in sim_quants.keys():
+            sub_snap[key] = sim_quants[key]
 
-            # finish plot and save
-            ax.legend(loc='upper right')
-            fig.tight_layout()
-            fig.savefig('%s_%s_%s_%s_y=%s.pdf' % (saveBase,sP.simName,cenSatSelect,simColorsModel,yscale))
-            plt.close(fig)
+        data.append( sub_snap )
 
-    def _fig_helper2(xLabel, xMinMax, fieldName, saveBase):
+    def _fig_helper(fieldName, yscale, saveBase, plotCSS=cenSatSelects, xLabel=None, xMinMax=None, 
+                    sizeAdjust=1.0):
         """ Helper for histogram plots with all css combined. """
-        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0]*sizefac*sizeAdjust,figsize[1]*sizefac*sizeAdjust),facecolor=color1)
         ax = fig.add_subplot(111, axisbg=color1)
 
-        setAxisColors(ax, color2)
+        if xMinMax is None: xMinMax = fieldMinMax[fieldName]
+        xLabel = fieldLabels[fieldName] if sizeAdjust >= 1.0 else fieldLabelsShort[fieldName]
 
+        setAxisColors(ax, color2)
         ax.set_xlim(xMinMax)
-        if yscale == 'log': ax.set_ylim(pdfMinMaxLog)
+        if yscale == 'log': ax.set_ylim(ymin=pdfMinLog)
         ax.set_xlabel(xLabel)
-        ax.set_ylabel(yLabel)
+        ax.set_ylabel('PDF')
         ax.set_yscale(yscale)
 
-        # histogram dt_green (split by cenSatSelect)
-        for i, cenSatSelect in enumerate(cenSatSelects):
-            hh = sub_snap[fieldName][cenSatSelect]
-            ww = np.where(np.isfinite(hh))
+        yy_max = 0.0
 
-            if i == 0:
-                # set normalization (such that integral of PDF is one) based on 'all galaxies'
-                binSize = (xMinMax[1]-xMinMax[0])/nBins
-                normFac = 1.0 / (binSize * len(ww[0]))
+        # plot, looping over all runs and CSSes
+        for i, sP in enumerate(sPs):
+            c = ax._get_lines.prop_cycler.next()['color']
+            for j, cenSatSelect in enumerate(plotCSS):
+                # load quantity and restrict to histogram range (for correct normalization)
+                hh = data[i][fieldName][cenSatSelect]
+                ww1 = np.where(np.isfinite(hh))
+                hh = hh[ww1]
+                ww2 = np.where( (hh >= xMinMax[0]) & (hh <= xMinMax[1]) )
+                hh = hh[ww2]
 
-            yy, xx = np.histogram(hh[ww], bins=nBins, range=xMinMax)
-            yy = yy.astype('float32') * normFac
-            xx = xx[:-1] + 0.5*(xMinMax[1]-xMinMax[0])/nBins
+                if reqPosDtGreen:
+                    # remove contamination from time boundaries (by requiring dt_green>0)
+                    dt_green = data[i]['dt_green'][cenSatSelect][ww1][ww2]
+                    with np.errstate(invalid='ignore'):
+                        ww3 = np.where(dt_green > 0.0)
+                    hh = hh[ww3]
 
-            ax.plot(xx,yy,lw=lw,alpha=alpha,label=cssLabels[cenSatSelect])
+                if mStarRange is not None:
+                    # only include galaxies in a mstar_z0 bin
+                    mstar_z0 = data[i]['mstar'][cenSatSelect][ww1][ww2]
+                    if reqPosDtGreen: mstar_z0 = mstar_z0[ww3]
+                    with np.errstate(invalid='ignore'):
+                        ww4 = np.where( (mstar_z0 >= mStarRange[0]) & (mstar_z0 < mStarRange[1]) )
+                    hh = hh[ww4]
+
+                if j == 0:
+                    # set normalization (such that integral of PDF is one) based on 'all galaxies'
+                    binSize = (xMinMax[1]-xMinMax[0])/nBins
+                    normFac = 1.0 / (binSize * hh.size)
+
+                yy, xx = np.histogram(hh, bins=nBins, range=xMinMax)
+                yy = yy.astype('float32') * normFac
+                xx = xx[:-1] + 0.5*binSize
+
+                label = sP.simName if j == 0 else ''
+                ax.plot(xx,yy,lw=lw,alpha=alpha,color=c,linestyle=linestyles[j],label=label)
+
+                if fieldName == 'M_redini' and plotCSS == ['cen']:
+                    # for figure 11, add mstar at z=0 for comparison
+                    hh = data[i]['mstar'][cenSatSelect]
+                    ww1 = np.where(np.isfinite(hh))
+                    hh = hh[ww1]
+                    ww2 = np.where( (hh >= xMinMax[0]) & (hh <= xMinMax[1]) )
+                    hh = hh[ww2]
+
+                    if reqPosDtGreen:
+                        # remove contamination from time boundaries (by requiring dt_green>0)
+                        dt_green = data[i]['dt_green'][cenSatSelect][ww1][ww2]
+                        with np.errstate(invalid='ignore'):
+                            ww3 = np.where(dt_green > 0.0)
+                        hh = hh[ww3]
+
+                    if mStarRange is not None:
+                        # only include galaxies in a mstar_z0 bin
+                        mstar_z0 = data[i]['mstar'][cenSatSelect][ww1][ww2]
+                        if reqPosDtGreen: mstar_z0 = mstar_z0[ww3]
+                        with np.errstate(invalid='ignore'):
+                            ww4 = np.where( (mstar_z0 >= mStarRange[0]) & (mstar_z0 < mStarRange[1]) )
+                        hh = hh[ww4]
+
+                    yy, xx = np.histogram(hh, bins=nBins, range=xMinMax)
+                    yy = yy.astype('float32') / (binSize * hh.size)
+                    xx = xx[:-1] + 0.5*binSize
+
+                    alphaFac = 0.7
+                    ax.plot(xx,yy,lw=lw,alpha=alpha*alphaFac,color=c,linestyle=linestyles[2])
+
+                if yy.max() > yy_max: yy_max = yy.max()
+
+                # fit lognormal to dt_green and plot
+                if 0:
+                    params_guess = [0.5, 0.1]
+                    params_best, _ = leastsq_fit(_lognormal_pdf, params_guess, args=(xx,yy))
+                    print('%s lognormal fit: ' % fieldName,cenSatSelect,params_best)
+                    xx = np.linspace(xMinMax[0]+1e-6, xMinMax[1], 100)
+                    yy = _lognormal_pdf(xx, params_best)
+                    ax.plot(xx,yy,':',color='black',lw=lw/2,alpha=alpha)
+
+        if yscale == 'log':
+            ax.set_ylim(ymax=yy_max*1.6)
+            #if fieldName == 'dM_redfr': ax.set_ylim(ymax=yy_max*4.0)
+
+        # legends
+        if sizeAdjust >= 1.0:
+            handles, labels = ax.get_legend_handles_labels() # show simNames plus the css below
+        else:
+            handles, labels = [], [] # skip simNames
+
+        sExtra = []
+        lExtra = []
+        if len(plotCSS) > 1:
+            loc = 'upper right'
+            for j, css in enumerate(plotCSS):
+                sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) )
+                if sizeAdjust >= 1.0:
+                    lExtra.append(cssLabels[css]) # expanded
+                else:
+                    lExtra.append(css.capitalize()) # abbreviated
+        else:
+            labels = [label + ' ' + plotCSS[0].capitalize() for label in labels]
+            if fieldName == 'M_redini':
+                sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=alpha*alphaFac,marker='',linestyle=linestyles[2]) )
+                lExtra.append( '$M_\star (z=0)$ Cen')
+            loc = 'upper left'
+            if fieldName == 'dM_redfr': loc = 'lower left'
+
+        legend1 = ax.legend(handles+sExtra, labels+lExtra, loc=loc)
+        ax.add_artist(legend1)
 
         # finish plot and save
-        ax.legend(loc='upper right')
         fig.tight_layout()
-        fig.savefig('%s_combined_%s_%s_y=%s.pdf' % (saveBase,sP.simName,simColorsModel,yscale))
+        cssStr = '_css-%s' % '-'.join(plotCSS)
+        reqStr = '_req' if reqPosDtGreen else ''
+        msStr = '_mstar-%.1f-%.1f' % (mStarRange[0],mStarRange[1]) if mStarRange is not None else ''
+        fig.savefig('%s%s_%s_%s_y-%s%s%s%s.pdf' % \
+            (saveBase,fieldName,'_'.join([sP.simName for sP in sPs]),simColorsModel,yscale,cssStr,reqStr,msStr),
+            transparent=(sizeAdjust < 1.0)) # leave PDF background transparent for inset
         plt.close(fig)
 
-    # for all histograms, make combinations of linear and log axes
-    for yscale in ['linear','log']:
+    def _fig_helper2(xAxis, yAxis, saveBase='', plotCSS=cenSatSelects, sizeAdjust=1.0):
+        """ Helper for histogram plots with all css combined. """
+        fig = plt.figure(figsize=(figsize[0]*sizefac*sizeAdjust,figsize[1]*sizefac*sizeAdjust),facecolor=color1)
+        ax = fig.add_subplot(111, axisbg=color1)
 
-        # (A) histograms of dt_green timescale
-        xLabel = '$\Delta t_{\\rm green}$ [ Gyr ]'
-        fieldName = 'dt_green'
+        xLabel = fieldLabels[xAxis] if sizeAdjust >= 1.0 else fieldLabelsShort[xAxis]
 
-        _fig_helper1(xLabel, tMinMax, fieldName, 'figure10a')
-        _fig_helper2(xLabel, tMinMax, fieldName, 'figure10a')
+        setAxisColors(ax, color2)
+        ax.set_xlim(fieldMinMax[xAxis])
+        ax.set_ylim(fieldMinMaxTight[yAxis])
+        ax.set_xlabel(xLabel)
+        ax.set_ylabel(fieldLabelsShort[yAxis])
+        ax.set_yscale('linear')
 
-        # (B) rejuvenation timescales
-        xLabel = '$\Delta t_{\\rm rejuv}$ [ Gyr ]'
-        fieldName = 'dt_rejuv'
+        # plot
+        binSize = (fieldMinMax[xAxis][1]-fieldMinMax[xAxis][0])/nBins
 
-        _fig_helper1(xLabel, tMinMax, fieldName, 'figure10b')
-        _fig_helper2(xLabel, tMinMax, fieldName, 'figure10b')
+        for i, sP in enumerate(sPs):
+            c = ax._get_lines.prop_cycler.next()['color']
+            for j, cenSatSelect in enumerate(plotCSS):
+                x_vals = data[i][xAxis][cenSatSelect]
+                y_vals = data[i][yAxis][cenSatSelect]
 
-        # (C) distribution of Mstar when leaving blue population, global
-        xLabel = '$M_\star$ at $t_{\\rm blue}$ (Depature from the Blue Population) [ log M$_{\\rm sun}$ ]'
-        fieldName ='M_blue'
+                ww = np.where( np.isfinite(x_vals) & np.isfinite(y_vals) )
+                x_vals = x_vals[ww]
+                y_vals = y_vals[ww]
 
-        _fig_helper1(xLabel, mMinMax, fieldName, 'figure10c')
-        _fig_helper2(xLabel, mMinMax, fieldName, 'figure10c')
+                if reqPosDtGreen:
+                    # remove contamination from time boundaries (by requiring dt_green>0)
+                    dt_green = data[i]['dt_green'][cenSatSelect][ww]
+                    with np.errstate(invalid='ignore'):
+                        ww2 = np.where(dt_green > 0.0)
+                    x_vals = x_vals[ww2]
+                    y_vals = y_vals[ww2]
 
-        # (D) distribution of Mstar when entering red population
-        xLabel = '$M_\star$ at $t_{\\rm red,ini}$ (Arrival into the Red Population) [ log M$_{\\rm sun}$ ]'
-        fieldName ='M_redini'
+                if mStarRange is not None:
+                    # only include galaxies in a mstar_z0 bin
+                    mstar_z0 = data[i]['mstar'][cenSatSelect][ww]
+                    if reqPosDtGreen: mstar_z0 = mstar_z0[ww2]
+                    with np.errstate(invalid='ignore'):
+                        ww3 = np.where( (mstar_z0 >= mStarRange[0]) & (mstar_z0 < mStarRange[1]) )
+                    x_vals = x_vals[ww3]
+                    y_vals = y_vals[ww3]
 
-        _fig_helper1(xLabel, mMinMax, fieldName, 'figure10d')
-        _fig_helper2(xLabel, mMinMax, fieldName, 'figure10d')
+                if x_vals.size <= 2:
+                    continue
 
-        # (E) distribution of redshift when leaving blue (within 0<z<1)
-        xLabel = '$t_{\\rm blue}$ (Redshift leaving Blue Population)'
-        fieldName ='z_blue'
+                # median of y_vals as a function of x_vals
+                assert x_vals.min() != 0.0 # otherwise check
+                xm, ym, sm, pm = running_median(x_vals,y_vals,binSize=binSize,
+                                                skipZeros=False,percs=[10,25,75,90])
 
-        _fig_helper1(xLabel, zMinMax, fieldName, 'figure10e')
-        _fig_helper2(xLabel, zMinMax, fieldName, 'figure10e')
+                if xm.size > sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
-        # (F) distribution of redshift when entering red (within 0<z<1)
-        xLabel = '$t_{\\rm red,ini}$ (Redshift entering Red Population)'
-        fieldName ='z_redini'
+                label = sP.simName if j == 0 else ''
+                ax.plot(xm[:-1], ym[:-1], linestyles[j], color=c, lw=lw, label=label)
 
-        _fig_helper1(xLabel, zMinMax, fieldName, 'figure10f')
-        _fig_helper2(xLabel, zMinMax, fieldName, 'figure10f')
+                if j > 0:
+                    # show percentile scatter only for 'all galaxies'
+                    continue
+                
+                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.2)
 
-        # (G) delta Mgreen (between leaving blue and entering red)
-        # dM_green
+        # legends
+        if sizeAdjust >= 1.0:
+            handles, labels = ax.get_legend_handles_labels() # show simNames plus the css below
+        else:
+            handles, labels = [], [] # skip simNames
 
-        # (H) delta Mstar between entering red population and z=0
-        # dM_red
+        sExtra = []
+        lExtra = []
+        if len(plotCSS) > 1:
+            for j, css in enumerate(plotCSS):
+                sExtra.append(plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[j]) )
+                if sizeAdjust >= 1.0:
+                    lExtra.append(cssLabels[css]) # expanded
+                else:
+                    lExtra.append(css.capitalize()) # abbreviated
+
+        legend1 = ax.legend(handles+sExtra, labels+lExtra, loc='best')
+        ax.add_artist(legend1)
+
+        # finish plot and save
+        fig.tight_layout()
+        cssStr = 'css-%s' % '-'.join(plotCSS)
+        reqStr = '_req' if reqPosDtGreen else ''
+        msStr = '_mstar-%.1f-%.1f' % (mStarRange[0],mStarRange[1]) if mStarRange is not None else ''
+
+        fig.savefig('%s%s_vs_%s_%s_%s_%s%s%s.pdf' % \
+            (saveBase,yAxis,xAxis,'_'.join([sP.simName for sP in sPs]),simColorsModel,cssStr,reqStr,msStr),
+            transparent=(sizeAdjust < 1.0)) # leave PDF background transparent for inset
+        plt.close(fig)
+
+    # figure 10: color transition timescale histogram
+    _fig_helper('dt_green', 'linear', 'figure10_')
+
+    # figure 11: histogram of Mstar when joining red sequence, inset: Mstar growth in green valley
+    _fig_helper('M_redini', 'linear', 'figure11_', xMinMax=[9.5, 12.0], plotCSS=['cen'])
+    _fig_helper('dM_green', 'log', 'figure11_inset_', xMinMax=[-1.0,1.5], sizeAdjust=0.55)
+
+    # figure 12: color transition timescale as a function of Mstar when joining the red sequence
+    _fig_helper2(xAxis='M_redini', yAxis='dt_green', saveBase='figure12_')
+
+    # figure 13: histogram of delta mstar red restricted to Mstar_z0>11.0, inset: dM_red vs Mstar_z0
+    _fig_helper('dM_redfr', 'log', 'figure13_', xMinMax=[0.0,1.0], plotCSS=['cen'])
+    _fig_helper2(xAxis='mstar', yAxis='dM_redfr', saveBase='figure13_inset_', sizeAdjust=0.55)
+
+    return
+
+    # fully generic exploration (histogram everything, everything vs everything else)
+    for fieldName in fieldLabels.keys():
+        for yscale in ['linear','log']:
+            _fig_helper(fieldName, yscale, saveBase='fig_hist_')
+        for xAxis in fieldLabels.keys():
+            if xAxis == fieldName:
+                continue
+            _fig_helper2(xAxis=xAxis, yAxis=fieldName)
 
 def plots():
     """ Driver (exploration 2D histograms). """
@@ -1793,13 +2020,15 @@ def paperPlots():
     dust_C = 'p07c_cf00dust_res_conv_ns1_rad30pkpc' # one random projection per subhalo
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_rad30pkpc_all' # all projections shown
 
+    bands = ['g','r']
+
     # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
     if 0:
         sPs = [L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
 
         pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
-        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust])
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust])
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
@@ -1841,7 +2070,6 @@ def paperPlots():
     if 0:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        bands = ['g','r']
         params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
         pdf = PdfPages('figure6_%s.pdf' % sP.simName)
@@ -1858,7 +2086,7 @@ def paperPlots():
     if 0:
         sPs = [L75, L205]
         xQuant = 'color'
-        xSpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
+        xSpec  = [ bands, defSimColorModel ] # bands, simColorModel
         sQuant = 'mstar2_log'
         sRange = [10.4,10.6]
         css = 'cen'
@@ -1893,21 +2121,21 @@ def paperPlots():
         arrowMethod = 'arrow'
         pdf = PdfPages('figure9a_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+        colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css, 
                              minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
         pdf.close()
 
         arrowMethod = 'stream'
         pdf = PdfPages('figure9b_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+        colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css, 
                              minCount=minCount, simColorsModel=dust, arrowMethod='stream')
         pdf.close()
 
         arrowMethod = 'stream_mass'
         pdf = PdfPages('figure9c_%s_toz-%.1f_%s_%s_min-%d_%s.pdf' % \
             (sP.simName,toRedshift,css,dust,minCount,arrowMethod))
-        colorFluxArrows2DEvo(sP, pdf, bands=['g','r'], toRedshift=toRedshift, cenSatSelect=css, 
+        colorFluxArrows2DEvo(sP, pdf, bands=bands, toRedshift=toRedshift, cenSatSelect=css, 
                              minCount=minCount, simColorsModel=dust, arrowMethod=arrowMethod)
         pdf.close()
 
@@ -1916,18 +2144,19 @@ def paperPlots():
     # figure 12: as a function of M*ini, the Delta_M* from t_{red,ini} to z=0 (Q2)
     # figure 13: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
     if 1:
-        sP = L75 # L205
-        simColorsModel = 'p07c_cf00dust_rad30pkpc' # Br
-        #simColorsModel = dust_C
-        colorTransitionTimescale(sP, bands=['g','r'], simColorsModel=simColorsModel)
+        sPs = [L75,L205]
+        #simColorsModel = 'p07c_cf00dust_rad30pkpc' # Br
+        simColorsModel = dust_C
+        colorTransitionTimescale(sPs, bands=bands, simColorsModel=simColorsModel)
 
-    # figure 14: stellar image stamps of galaxies (time evolution, red/blue samples)
+    # figures 14-15: stellar image stamps of galaxies (red/blue samples)
     if 0:
-        vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=True)
+        vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
+        vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
 
-    # figure 15: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
+    # figure 16: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
     if 0:
-        pass
+        colorTracksSchematic(L75, bands=bands, simColorsModel=dust_C)
 
     # appendix figure 1, viewing angle variation (1 panel)
     if 0:
@@ -1940,7 +2169,7 @@ def paperPlots():
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
         pdf = PdfPages('appendix2.pdf')
-        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=dusts, stellarMassBins=massBins)
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=dusts, stellarMassBins=massBins)
         pdf.close()
 
     # appendix figure 3, resolution convergence (1x3 1D histos in a column)
@@ -1952,7 +2181,7 @@ def paperPlots():
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
         pdf = PdfPages('appendix3_%s.pdf' % dust)
-        galaxyColorPDF(sPs, pdf, bands=['g','r'], simColorsModels=[dust], stellarMassBins=massBins)
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], stellarMassBins=massBins)
         pdf.close()
 
     # appendix figure X, 2d density histos (3x1 in a row) all_L75, cen_L75, cen_L205
@@ -1961,7 +2190,7 @@ def paperPlots():
 
         pdf = PdfPages('appendix4.pdf')
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
-        quantHisto2D(L75, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
-        quantHisto2D(L205, pdf, ['g','r'], cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
+        quantHisto2D(L75, pdf, bands, cenSatSelect='all', cQuant=None, fig_subplot=[fig,131])
+        quantHisto2D(L75, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
+        quantHisto2D(L205, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
         pdf.close()
