@@ -942,14 +942,22 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
           (sP.simName,evo,redSample,blueSample,rotation)
     else:
         # paged exploration for picking interesting galaxies, load all and sub-divide
-        numPages = 20
-        massBin  = [12.0, 12.2]
+        if 0:
+            baseStr = 'figure12_pages'
+            numPages = 20
+            massBin  = [12.0, 12.2]
+        else:
+            baseStr = 'figure12_pagesHighMass'
+            numPages = 31
+            massBin  = [12.2, 13.5]
 
-        shIDsAll, _ = selectHalosFromMassBin(sP, [massBin], 1000, massBinInd=0, selType='linear')
+        shIDsAll, _ = selectHalosFromMassBin(sP, [massBin], 2000, massBinInd=0, selType='linear')
         shIDs = pSplit(shIDsAll, numPages, curPage)[0:nGalaxies]
+        redshifts = np.zeros(len(shIDs), dtype='float32') + redshift_init
+
         assert shIDs.size == nGalaxies # make sure we have nGalaxies per render
-        saveFilename2 = './figure12_pages_%s_%s_rot=%s_page-%dof%d_hsml%.1f-age1-3-2_size%.1f.pdf' % \
-          (sP.simName,partType,rotation,curPage,numPages,hsmlFac,size)
+        saveFilename2 = './%s_%s_%s_rot=%s_page-%dof%d_hsml%.1f-age1-3-2_size%.1f.pdf' % \
+          (baseStr,sP.simName,partType,rotation,curPage,numPages,hsmlFac,size)
 
     # load colors and morphs for custom labeling
     if not evo:

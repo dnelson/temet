@@ -685,7 +685,7 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
     extent = [xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]]
 
     # statistic reduction (e.g. median, sum, count) color by bin
-    if '_log' not in xQuant: sim_xvals = logZeroSafe(sim_xvals) # xMinMax always corresponds to log values
+    if '_log' not in xQuant: sim_xvals = logZeroNaN(sim_xvals) # xMinMax always corresponds to log values
 
     cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, cStatistic, 
                                                  bins=nBins2D, range=[xMinMax,yMinMax])
