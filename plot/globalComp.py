@@ -14,7 +14,7 @@ from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
 from cosmo.util import validSnapList, periodicDists
-from plot.galaxyColor import galaxyColorPDF, galaxyColor2DPDFs
+from plot.color import galaxyColorPDF, galaxyColor2DPDFs
 from plot.sizes import galaxySizes
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.config import *

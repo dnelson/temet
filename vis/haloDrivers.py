@@ -850,7 +850,7 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
     If evo==True, then tracked back in time from z=0 to z=2.0 in M steps using the merger tree.
     If evo==False, then show full NxM panel sample at z=0. In either case, choose blueSample or redSample.
     If curPage specified, do a paged exploration instead. """
-    from cosmo.galaxyColor import loadSimGalColors
+    from cosmo.color import loadSimGalColors
     from plot.config import defSimColorModel
     from cosmo.util import redshiftToSnapNum
 
