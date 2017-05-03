@@ -10,6 +10,7 @@ binSize = 0.2 # dex in stellar mass/halo mass for median lines
 figsize = (14,10) # (8,6)
 sfclean = 0.8     # sizefac to multiply figsize by if clean == True
 clean   = True    # make visually clean plots with less information
+pStyle  = 'white' # white or black background
 
 linestyles = ['-',':','--','-.'] # typically for analysis variations per run
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)

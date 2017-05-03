@@ -655,7 +655,7 @@ def viewingAngleVariation():
     plt.close(fig)
 
 def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCount=None, 
-      simColorsModel=defSimColorModel, arrowMethod='arrow', fig_subplot=[None,None], pStyle='white'):
+      simColorsModel=defSimColorModel, arrowMethod='arrow', fig_subplot=[None,None]):
     """ Plot 'flux' arrows in the (color,Mstar) 2D plane showing the median evolution of all 
     galaxies in each bin over X Gyrs of time. """
     assert cenSatSelect in ['all', 'cen', 'sat']
@@ -1035,7 +1035,7 @@ def _get_red_frac(params, method):
         fraction_red = (A2*sigma2) / (A1*sigma1+A2*sigma2) # area = A*sigma*sqrt(2pi)
     return fraction_red
 
-def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorModel, pStyle='white'):
+def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorModel):
     """ Plot a double panel of the red/blue mu and sigma fits vs stellar mass, simulation(s) vs SDSS. """
 
     # analysis config
@@ -1166,7 +1166,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         (method,'-'.join([sP.simName for sP in sPs]),'-'.join(bands),cenSatSelect,simColorsModel,zStr,nBurnIn))
     plt.close(fig)
 
-def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel, pStyle='white'):
+def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel):
     """ Plot diagnostics of double gaussian fits in the color-mass plane with different methods. """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
@@ -1400,7 +1400,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
 
-def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorModel, pStyle='white'):
+def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorModel):
     """ Plot the distribution of 'color transition' timescales (e.g. Delta_t_green). """
 
     # analysis config
@@ -1920,7 +1920,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                 continue
             _fig_helper2(xAxis=xAxis, yAxis=fieldName)
 
-def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pStyle='white', pageNum=None):
+def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=None):
     """ Make base for the schematic diagram of the discussion: smoothed contours in the color-mass 
     plane and some individual galaxy evolution tracks. """
 
