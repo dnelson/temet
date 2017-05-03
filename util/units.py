@@ -209,6 +209,10 @@ class units(object):
 
         return self.codeLengthToComovingKpc(x) * self.scalefac # comoving -> physical
 
+    def codeLengthToMpc(self, x):
+        """ Convert length/distance in code units to physical Mpc. """
+        return self.codeLengthToKpc(x) / 1000.0
+
     def physicalKpcToCodeLength(self, x):
         """ Convert a length in [pkpc] to code units [ckpc/h]. """
         assert self._sP.redshift is not None

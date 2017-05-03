@@ -4,5 +4,6 @@ from . import loadExtern
 from . import metaPlots
 from simParams import simParams
 from . import sphMap
+from . import tpcf
 from . import treeSearch
 from units import units

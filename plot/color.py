@@ -1426,10 +1426,6 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     nBins      = 50 if mStarRange is None else 30 # for all 1d histograms and running medians
     pdfMinLog  = 1e-3 if mStarRange is None else 4e-2 # set minimum y-axis value for PDFs in log(y)
 
-    cssLabels = {'all':'All Galaxies',
-                 'cen':'Centrals Only',
-                 'sat':'Satellites Only'}
-
     fieldLabels = {'dt_green':'$\Delta t_{\\rm green}$ [ Gyr ]',
                    'dt_rejuv':'$\Delta t_{\\rm rejuv}$ [ Gyr ]',
                    'M_blue'  :'$M_\star$ at $t_{\\rm blue}$ (Depature from the Blue Population) [ log M$_{\\rm sun}$ ]',
@@ -2338,7 +2334,7 @@ def paperPlots():
     # figure 13: as a function of M*(z=0), the t_{red,ini} PDF (Q3)
     if 0:
         sPs = [L75,L205]
-        simColorsModel = dust_C 'p07c_cf00dust_rad30pkpc' # Br
+        simColorsModel = dust_C #'p07c_cf00dust_rad30pkpc' # Br
         colorTransitionTimescale(sPs, bands=bands, simColorsModel=simColorsModel)
 
     # figures 14-15: stellar image stamps of galaxies (red/blue samples)
