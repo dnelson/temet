@@ -17,3 +17,7 @@ colors     = ['blue','purple','black'] # colors for zoom markers only (cannot va
 
 # the dust model used by default for all colors
 defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
+
+cssLabels = {'all':'All Galaxies',
+             'cen':'Centrals Only',
+             'sat':'Satellites Only'}
