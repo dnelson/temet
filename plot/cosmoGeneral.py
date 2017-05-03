@@ -14,13 +14,13 @@ from matplotlib.colors import Normalize, LogNorm, colorConverter
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile, expanduser
 from scipy.signal import savgol_filter
-from scipy.stats import binned_statistic_2d, gaussian_kde
+from scipy.stats import binned_statistic_2d
 
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
-from cosmo.galaxyColor import loadSimGalColors, calcMstarColor2dKDE
+from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
 from plot.config import *

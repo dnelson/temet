@@ -126,7 +126,7 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
     if binSize is not None:
         nBins = round( (X.max()-minVal) / binSize )
 
-    assert nBins >= 1
+    if nBins <= 0: nBins = 1
     bins = np.linspace(minVal,X.max(), nBins)
     delta = bins[1]-bins[0] if nBins >= 2 else np.inf
 
