@@ -2,6 +2,7 @@ from . import bulletCluster
 from . import clustering
 from . import compareTwoHalos
 from . import cosmoGeneral
+from . import cosmoMisc
 from . import color
 from . import general
 from . import globalComp
