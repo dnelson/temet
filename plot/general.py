@@ -27,7 +27,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
-                   'mhalo_200','mhalo_200_log','mhalo_subfind','mhalo_subfind_log']
+                   'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
+                   'mhalo_subfind','mhalo_subfind_log']
 
     # generally available (auxcat)
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii']
@@ -42,7 +43,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
 
-    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo']
+    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo',
+                   'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']
 
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
@@ -154,19 +156,22 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\\rm \star}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ '+logStr+'M$_{\\rm sun}$ ]'
 
-    if quant in ['mhalo_200','mhalo_200_log','mhalo_subfind','mhalo_subfind_log']:
+    if quant in ['mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
+                 'mhalo_subfind','mhalo_subfind_log']:
         # halo mass
-        if '_200' in quant:
-            # M200crit values, satellites given naN
-            gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-            vals = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit200'][gc['subhalos']] )
+        if '_200' in quant or '_500' in quant:
+            # M200crit or M500crit values, satellites given naN
+            od = 200 if '_200' in quant else 500
+
+            gc = groupCat(sP, fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+            vals = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit%d'%od][gc['subhalos']] )
 
             mask = np.zeros( gc['subhalos'].size, dtype='int16' )
             mask[ gc['halos']['GroupFirstSub'] ] = 1
             wSat = np.where(mask == 0)
             vals[wSat] = np.nan
 
-            mTypeStr = '200,crit'
+            mTypeStr = '%d,crit' % od
 
         if '_subfind' in quant:
             gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
@@ -179,6 +184,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             logStr = 'log '
 
         minMax = [9.0, 15.0]
+        if '_500' in quant: minMax = [11.0, 15.0]
         label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm halo}$ [ '+logStr+'M$_{\\rm sun}$ ]'
 
@@ -744,6 +750,34 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals.fill(np.nan)
 
         vals[gc_inds] = np.squeeze(ac[acField][:,acInd,1]) # last index 1 = median
+
+    if quant in ['p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']:
+        # synchrotron power radio emission model, for different instruments:
+        for instrument in ['SKA','VLA','LOFAR','ASKAP']:
+            if '_%s' % instrument.lower() in quant:
+                instrumentName = instrument
+
+        # model variations
+        specStr, specDesc = '', ''
+        if '_eta43' in quant:
+            specStr = '_eta43'
+            specDesc = ', \eta = 4/3'
+        if '_alpha' in quant:
+            specStr = '_alpha15'
+            specDesc = ', \\alpha = 1.5'
+
+        acField = 'Subhalo_SynchrotronPower_%s%s' % (instrumentName, specStr)
+        ac = auxCat(sP, fields=[acField])
+
+        vals = ac[acField]
+
+        label = 'P$_{\\rm synch, %s%s}$ [ W / Hz ]' % (instrumentName, specDesc)
+        minMax = [18,26]
+        if tight: minMax = [20,26]
+
+        if instrumentName == 'VLA':
+            minMax[0] -= 2 # adjust down for VLA, calibrated for SKA
+            minMax[1] -= 2
 
     # return
     assert label is not None
