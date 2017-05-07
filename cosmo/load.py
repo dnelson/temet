@@ -744,6 +744,12 @@ def snapshotSubset(sP, partType, fields,
             P_B   = sP.units.calcMagneticPressureCGS(b)
             return P_B/P_gas
 
+        # u_B_ke_ratio (linear ratio of magnetic to kinetic energy density)
+        if field.lower() in ['u_b_ke_ratio','magnetic_kinetic_edens_ratio','b_ke_edens_ratio']:
+            u_b = snapshotSubset(sP, partType, 'p_b', **kwargs) # [log K/cm^3]
+            u_ke = snapshotSubset(sP, partType, 'u_ke', **kwargs) # [log K/cm^3]
+            return 10.0**u_b / 10.0**u_ke
+
         # gas pressure [log K/cm^3]
         if field.lower() in ['gas_pres','gas_pressure','p_gas']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
@@ -754,6 +760,12 @@ def snapshotSubset(sP, partType, fields,
         if field.lower() in ['mag_pres','magnetic_pressure','p_b','p_magnetic']:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             return sP.units.calcMagneticPressureCGS(b, log=True)
+
+        # kinetic energy density [erg/cm^3]
+        if field.lower() in ['kinetic_energydens','kinetic_edens','u_ke']:
+            dens_code = snapshotSubset(sP, partType, 'Density', **kwargs)
+            vel_kms = snapshotSubset(sP, partType, 'velmag', **kwargs)
+            return sP.units.calcKineticEnergyDensityCGS(dens_code, vel_kms, log=True)
 
         # total pressure, magnetic plus gas [log K/cm^3]
         if field.lower() in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:

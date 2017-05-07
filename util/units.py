@@ -69,18 +69,20 @@ class units(object):
     scalefac    = None     # a=1/(1+z)
 
     # unit conversions
-    s_in_yr     = 3.155693e7
-    s_in_Myr    = 3.155693e13
-    s_in_Gyr    = 3.155693e16
-    pc_in_cm    = 3.085680e18
-    Mpc_in_cm   = 3.085680e24
-    kpc_in_km   = 3.085680e16
+    s_in_yr       = 3.155693e7
+    pc_in_cm      = 3.085680e18
     arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
 
     # derived unit conversions
+    s_in_Myr      = None
+    s_in_Gyr      = None
+    kpc_in_km     = None
+    Mpc_in_cm     = None
     kmS_in_kpcYr  = None
     kmS_in_kpcGyr = None
+    kpc_in_cm     = None
+    msunKpc3_in_gCm3 = None
     
     def __init__(self, sP=None):
         """ Compute derived and redshift dependent units and values. """
@@ -100,6 +102,17 @@ class units(object):
         # non-cgs units
         self.UnitMass_in_Msun    = self.UnitMass_in_g / self.Msun_in_g
         self.UnitTime_in_yr      = self.UnitTime_in_s / self.s_in_yr
+
+        # derived unit conversions
+        self.s_in_Myr  = self.s_in_yr * 1e6
+        self.s_in_Gyr  = self.s_in_yr * 1e9
+        self.kpc_in_km = self.pc_in_cm * (1e3/1e5)
+        self.Mpc_in_cm = self.pc_in_cm * 1e6
+
+        self.kmS_in_kpcYr     = self.s_in_Myr / self.kpc_in_km / 1e6 # Myr->yr
+        self.kmS_in_kpcGyr    = self.s_in_Myr / self.kpc_in_km * 1e3 # Myr->Gyr
+        self.kpc_in_cm        = self.kpc_in_km * 1e5
+        self.msunKpc3_in_gCm3 = self.Msun_in_g / (self.kpc_in_cm)**3.0
 
         # derived constants (in code units)
         self.H0 = self._sP.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm) / \
@@ -122,10 +135,6 @@ class units(object):
             self.H_z       = self.H0 * np.sqrt(self.H2_z_fact)
             self.rhoCrit_z = self.rhoCrit * self.H2_z_fact
             self.scalefac  = 1.0 / (1+self._sP.redshift)
-
-        # derived unit conversions
-        self.kmS_in_kpcYr  = self.s_in_Myr / self.kpc_in_km / 1e6 # Myr->yr
-        self.kmS_in_kpcGyr = self.s_in_Myr / self.kpc_in_km * 1e3 # Myr->Gyr
 
     # --- unit conversions to/from code units ---
 
@@ -559,14 +568,27 @@ class units(object):
         # input b is PartType0/MagneticField 3-vector (code units)
         b = self.particleCodeBFieldToGauss(b) # to physical Gauss
 
-        # magnetic pressure P_B in CGS units of [dyn/cm^2]
+        # magnetic pressure P_B in CGS units of [dyn/cm^2] (is energy/volume)
         P_B = (b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2]) / (8*np.pi) 
 
         P_B /= self.boltzmann # divide by boltzmann's constant -> [K/cm^3]
 
         if log:
-            P_B = logZeroSafe(P_B)
+            P_B = logZeroNaN(P_B)
         return P_B
+
+    def calcKineticEnergyDensityCGS(self, dens_code, vel_kms, log=False):
+        """ Calculate kinetic energy density (KE/volume = 1/2 * mv^2 / volume) in 'cgs' [K/cm^3] 
+        units, inputs: dens_code in code units, vel_kms in physical km/s. """
+        vel_cm_s = vel_kms * 1e5
+        dens_g_cm3 = self.codeDensToPhys(dens_code, cgs=True, numDens=False)
+
+        u_ke = 0.5 * dens_g_cm3 * vel_cm_s**2 # g/cm/s^2 = [dyn/cm^2] (is energy/volume)
+        u_ke /= self.boltzmann # divide by boltzmann's constant -> [K/cm^3]
+
+        if log:
+            u_ke = logZeroNaN(u_ke)
+        return u_ke
 
     def calcSoundSpeedKmS(self, u, dens, log=False):
         """ Calculate sound speed as sqrt(gamma*Pressure/Density) in physical km/s. """

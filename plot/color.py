@@ -22,7 +22,7 @@ from cosmo.color import calcMstarColor2dKDE, calcColorEvoTracks, characterizeCol
 from cosmo.mergertree import loadMPB
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift, redshiftToSnapNum
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
-from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
+from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from plot.config import *

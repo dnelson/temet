@@ -19,18 +19,22 @@ from cosmo.load import groupCat, groupCatSingle, groupCatHeader, auxCat, snapsho
 from cosmo.util import periodicDists
 from plot.config import *
 
-def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
+def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False, onlyMHD=False):
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
-    # generally availably (groupcat)
+    # generally available (groupcat)
     quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
 
-    if wCounts: quants1 = [None] + quants1
+    # generally available (masses)
+    quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
+                   'mhalo_200','mhalo_200_log','mhalo_subfind','mhalo_subfind_log']
 
     # generally available (auxcat)
-    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii',
-               'bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
-               'bmag_halo_masswt',   'bmag_halo_volwt',   'pratio_halo_masswt', 'pratio_halo_volwt']
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii']
+    quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
+                   'bmag_halo_masswt',   'bmag_halo_volwt', 
+                   'pratio_halo_masswt', 'pratio_halo_volwt', 'pratio_2rhalf_masswt', 
+                   'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']
 
     quants3 = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high','BH_CumEgy_ratio',
                'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
@@ -62,10 +66,15 @@ def quantList(wCounts=True, wTr=True, onlyTr=False, onlyBH=False):
         trQuants.append(trBase + '_mode=smooth_par=bhs')
         trQuants.append(trBase + '_mode=merger_par=stars')
 
-    quantList = quants1 + quants2 + quants3 + quants4 + quants5 + quants_misc
+    # assembly sub-subset of quantities as requested
+    if wCounts: quants1 = [None] + quants1
+
+    quantList = quants1 + quants2 + quants2_mhd + quants3 + quants4 + quants5 + quants_misc
     if wTr: quantList += trQuants
+    if wMasses: quants1 += quants_mass
     if onlyTr: quantList = trQuants
     if onlyBH: quantList = quants3
+    if onlyMHD: quantList = quants2_mhd
 
     return quantList
 
@@ -400,19 +409,35 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$ %s]' % wtStr
             if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
 
-    if quant in ['pratio_halo_masswt','pratio_halo_volwt']:
+    if quant in ['pratio_halo_masswt','pratio_halo_volwt','pratio_2rhalf_masswt', 
+                 'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']:
         # pressure ratio (linear ratio of magnetic to gas pressure) in halo (0.15 < r/rvir < 1.0)
-        # weighted by either gas cell mass or gas cell volume
+        # or galaxy, weighted by either gas cell mass or gas cell volume
+        # or magnetic to kinetic energy ratio (linear ratio of energy density)
         if '_masswt' in quant: wtStr = 'massWt'
         if '_volwt' in quant: wtStr = 'volWt'
+        if 'pratio_' in quant: rtStr = 'Pratio'
+        if 'bke_ratio_' in quant: rtStr = 'uB_uKE_ratio'
 
-        fieldName = 'Subhalo_Pratio_halo_%s' % (wtStr)
+        if '_halo' in quant:
+            selDesc = 'halo'
+            selStr = 'halo'
+        if '_2rhalf' in quant:
+            selDesc = 'ISM'
+            selStr = '2rhalfstars'
+
+        fieldName = 'Subhalo_%s_%s_%s' % (rtStr,selStr,wtStr)
 
         ac = auxCat(sP, fields=[fieldName])
         vals = ac[fieldName]
 
-        label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (halo)'
-        if not clean: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
+        if 'pratio_' in quant: label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (%s)' % selDesc
+        if 'bke_ratio' in quant: label = 'log u$_{\\rm B}$/u$_{\\rm KE}$ (%s gas)' % selDesc
+
+        if not clean:
+            if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$ %s]' % wtStr
+            if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
+
         minMax = [-2.0, 1.0]
         if tight: minMax = [-2.2, 1.2]
 
