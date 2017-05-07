@@ -18,6 +18,29 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def miscGasStats():
+    """ Print out some misc gas stats used in the appendix table of the TNG color flagship paper. """
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+    print(sP.simName)
+
+    gas_dens = cosmo.load.snapshotSubset(sP, 'gas', 'dens')
+    gas_sfr  = cosmo.load.snapshotSubset(sP, 'gas', 'sfr')
+
+    gas_dens = sP.units.codeDensToPhys(gas_dens, cgs=True, numDens=True)
+    w_sf = np.where(gas_sfr > 0.0)
+
+    print('mean sfring gas dens [1/cm^3]: ', gas_dens[w_sf].mean())
+    print('max gas dens [1/cm^3]: ', gas_dens.max())
+
+    gas_dens = None
+
+    gas_rcell = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize')
+    gas_rcell = sP.units.codeLengthToKpc(gas_rcell)
+
+    print('median gas cell radius [pkpc]: ', np.median(gas_rcell))
+    print('mean sfring gas cell radius [pc]: ', gas_rcell[w_sf].mean()*1000)
+    print('minimum gas cell radius [pc]: ', gas_rcell.min()*1000)
+
 def checkSublinkIntermediateFiles():
     """ Check _first* and _second* descendant links. """
     sP = simParams(res=2500,run='tng')
