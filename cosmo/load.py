@@ -761,7 +761,7 @@ def snapshotSubset(sP, partType, fields,
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             return sP.units.calcMagneticPressureCGS(b, log=True)
 
-        # kinetic energy density [erg/cm^3]
+        # kinetic energy density [log erg/cm^3]
         if field.lower() in ['kinetic_energydens','kinetic_edens','u_ke']:
             dens_code = snapshotSubset(sP, partType, 'Density', **kwargs)
             vel_kms = snapshotSubset(sP, partType, 'velmag', **kwargs)
@@ -772,6 +772,18 @@ def snapshotSubset(sP, partType, fields,
             P_B = 10.0**snapshotSubset(sP, partType, 'P_B', **kwargs)
             P_gas = 10.0**snapshotSubset(sP, partType, 'P_gas', **kwargs)
             return np.log10( P_B + P_gas )
+
+        # synchrotron power model [W/Hz]
+        if field.lower() in ['p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']:
+            b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
+            vol = snapshotSubset(sP, partType, 'Volume', **kwargs)
+
+            modelArgs = {}
+            if '_ska' in field: modelArgs['telescope'] = 'SKA'
+            if '_vla' in field: modelArgs['telescope'] = 'VLA'
+            if '_eta43' in field: modelArgs['eta'] = (4.0/3.0)
+            if '_alpha15' in field: modelArgs['alpha'] = 1.5
+            return sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
         # cloudy based ionic mass calculation, if field name has a space in it
         if " " in field:
