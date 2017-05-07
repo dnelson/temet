@@ -1793,10 +1793,19 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Bmag_halo_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='volume'),
+
+   'Subhalo_Pratio_2rhalfstars_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='pres_ratio',op='mean',rad='2rhalfstars',weighting='mass'),
    'Subhalo_Pratio_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='pres_ratio',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Pratio_halo_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='pres_ratio',op='mean',rad='r015_1rvir_halo',weighting='volume'),
+   'Subhalo_uB_uKE_ratio_2rhalfstars_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='B_KE_edens_ratio',op='mean',rad='2rhalfstars',weighting='mass'),
+   'Subhalo_uB_uKE_ratio_halo_massWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='B_KE_edens_ratio',op='mean',rad='r015_1rvir_halo',weighting='mass'),
+   'Subhalo_uB_uKE_ratio_halo_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='B_KE_edens_ratio',op='mean',rad='r015_1rvir_halo',weighting='volume'),
 
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),

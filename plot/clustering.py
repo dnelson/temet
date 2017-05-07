@@ -106,7 +106,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all',
     loadByMass = False
     if colorBins is not None and len(colorBins) > 1:
         loadByColor = True
-    if not loadByColor: loadByMass
+    if not loadByColor: loadByMass = True
     
     if loadByColor:
         # can specify no mstarBin, or a single mstarBin, within which these color bins are applied
@@ -226,8 +226,8 @@ def paperPlots():
           colorBin=None, cType=None, mstarBin=mstarBinDef, mType=mTypeDef)
 
     # figure 2: TNG300 in stellar mass bins at z=0
-    if 0:
-        sPs = [L205]
+    if 1:
+        sPs = [L75]
         saveBase = 'figure2_massbins_'
 
         mstarBins = [[9.5,10.0], [10.5,11.0], [11.5,12.0], [12.0,12.5]]
@@ -237,7 +237,7 @@ def paperPlots():
           colorBins=None, cType=None, mstarBins=mstarBins, mType=mType)
 
     # figure 3: color bins at z=0
-    if 1:
+    if 0:
         sPs = [L205] # L75
 
         colorBins = [[0.2,0.3], [0.3, 0.4], [0.7,1.0]]

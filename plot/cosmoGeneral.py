@@ -22,7 +22,7 @@ from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors
-from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
+from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
 from plot.config import *
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):
@@ -692,13 +692,12 @@ def plots3():
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    bands = ['g','r']
-    xQuant = 'mstar1_log'
+    xQuant = 'mhalo_200_log' #'mstar1_log'
     cenSatSelects = ['cen']
 
-    quants = quantList(onlyBH=True)
+    quants = quantList(onlyMHD=True)
 
     # make plots
     for css in cenSatSelects:
