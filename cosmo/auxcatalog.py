@@ -1750,6 +1750,15 @@ fieldComputeFunctionMapping = \
    'Subhalo_BH_Mass_largest' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_Mass',op='max',rad=None),
 
+   'Subhalo_SynchrotronPower_SKA' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska',op='sum',rad=None),
+   'Subhalo_SynchrotronPower_SKA_eta43' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska_eta43',op='sum',rad=None),
+   'Subhalo_SynchrotronPower_SKA_alpha15' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska_alpha15',op='sum',rad=None),
+   'Subhalo_SynchrotronPower_VLA' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_vla',op='sum',rad=None),
+
    'Subhalo_StellarRotation' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Krot',op='ufunc',rad=None),
    'Subhalo_StellarRotation_2rhalfstars' : \

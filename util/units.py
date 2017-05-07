@@ -34,6 +34,7 @@ class units(object):
     boltzmann         = 1.380650e-16    # cgs (erg/K)
     boltzmann_keV     = 11604505.0      # Kelvin/KeV
     mass_proton       = 1.672622e-24    # cgs
+    mass_electron     = 9.1095e-28      # cgs
     gamma             = 1.666666667     # 5/3
     hydrogen_massfrac = 0.76            # XH (solar)
     helium_massfrac   = 0.24            # Y (solar)
@@ -46,6 +47,8 @@ class units(object):
     Msun_in_g         = 1.98892e33      # solar mass [g]
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
     c_km_s            = 2.9979e5        # speed of light in [km/s]
+    sigma_thomson     = 6.6524e-25      # thomson cross section [cm^2]
+    electron_charge   = 4.8032e-10      # esu [=cm*sqrt(dyne) = g^(1/2)cm^(3/2)s^(-1)]
 
     # derived constants
     mag2cgs       = None    # Lsun/Hz to cgs [erg/s/cm^2] at d=10pc
@@ -73,6 +76,7 @@ class units(object):
     pc_in_cm      = 3.085680e18
     arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
+    erg_in_J      = 1e-7       # 1 erg in joules
 
     # derived unit conversions
     s_in_Myr      = None
@@ -208,7 +212,7 @@ class units(object):
     def codeLengthToComovingKpc(self, x):
         """ Convert length/distance in code units to comoving kpc. """
         x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
-        x_phys *= (3.085678e21/self.UnitLength_in_cm) # account for non-kpc code lengths
+        x_phys *= (self.kpc_in_cm/self.UnitLength_in_cm) # account for non-kpc code lengths
 
         return x_phys
 
@@ -222,12 +226,22 @@ class units(object):
         """ Convert length/distance in code units to physical Mpc. """
         return self.codeLengthToKpc(x) / 1000.0
 
+    def codeVolumeToCm3(self, x):
+        """ Convert a volume [length^3] in code units to physical cm^3 (cgs). """
+        assert self._sP.redshift is not None
+
+        vol_cgs = np.array(x, dtype='float64') / self._sP.HubbleParam**3 # remove little h factors
+        vol_cgs *= self.UnitLength_in_cm**3 # code (kpc or mpc) to cm
+        vol_cgs *= self.scalefac**3 # comoving -> physical
+
+        return vol_cgs
+
     def physicalKpcToCodeLength(self, x):
         """ Convert a length in [pkpc] to code units [ckpc/h]. """
         assert self._sP.redshift is not None
 
         x_comoving = np.array(x, dtype='float32') / self.scalefac
-        x_comoving /= (3.085678e21/self.UnitLength_in_cm) # account for non-kpc code lengths
+        x_comoving /= (self.kpc_in_cm/self.UnitLength_in_cm) # account for non-kpc code lengths
         x_comoving *= self._sP.HubbleParam # add little h factor
 
         return x_comoving
@@ -715,6 +729,57 @@ class units(object):
         # mag2cgs converts from [Lsun/Hz] to cgs [erg/s/cm^2] at d=10pc (definition of absolute mag)
         # 48.60 sets the zero-point of 3631 Jy
         return mag
+
+    def synchrotronPowerPerFreq(self, gas_B, gas_vol, watts_per_hz=True, log=False, 
+          telescope='SKA',   # telescope/observing configurations from Vazza+ (2015) as below
+          eta = 1.0,         # radio between the u_dens in relativistic particles and the magnetic u_dens
+          k = 10,            # energy density ratio between (relativistic) protons and electrons
+          gamma_min = 300,   # lower limit for the Lorentz factor of the electrons
+          gamma_max = 15000, # upper limit for the Lorentz factor of the electrons
+          alpha = 1.7):      # spectral index
+        """ Return synchrotron power per unit frequency for gas cells with inputs gas_B and gas_vol 
+        the magnetic field 3-vector and volume, both in code units. Output units [Watts/Hz]. 
+        Default model parameter assumptions of Xu+ (2012)/Marinacci+ (2017). """
+        assert telescope in ['VLA','LOFAR','ASKAP','SKA']
+
+        # v0 [Mhz], delta_nu [Mhz], beam [arcsec], rms noise [mJy/beam] 
+        telParams = {'VLA'   : [1400, 25, 35, 0.1],
+                     'LOFAR' : [120, 32, 25, 0.25],
+                     'ASKAP' : [1400, 300, 10, 0.01],
+                     'SKA'   : [120, 32, 10, 0.02]}
+
+        nu0, delta_nu, beam, rms = telParams[telescope]
+
+        # calculate magnetic energy density
+        U_B = self.calcMagneticPressureCGS(gas_B) * self.boltzmann # dyne/cm^2
+        Bmag = np.sqrt(U_B * 8 * np.pi) # sqrt(dyne)/cm
+
+        # calculate larmor frequency
+        nuL_Hz = self.electron_charge * Bmag / (2*np.pi*self.mass_electron*self.c_cgs) # 1/s
+        nuL = nuL_Hz / 1e6 # Mhz
+
+        # calculate n_0 normalization
+        gamma_fac = gamma_min**(1-2*alpha) - gamma_max**(1-2*alpha)
+        n_0 = eta/(1+k) * Bmag**2 / (8*np.pi*self.mass_electron*self.c_cgs**2) * (2*alpha-1) / gamma_fac
+
+        # calculate power in erg/s/MHz/cm^3
+        freq_fac = ((nu0+delta_nu/2) / nuL)**(1-alpha) - ((nu0-delta_nu/2) / nuL)**(1-alpha)
+        P_sync = (2.0/3.0) * self.sigma_thomson * self.c_cgs * U_B * n_0 / (delta_nu * (1-alpha)) * freq_fac
+
+        # multiply by gas cell volumes and divide by Hz/Mhz -> [erg/s/Hz]
+        gas_vol_cgs = self.codeVolumeToCm3(gas_vol)
+
+        P_sync = P_sync.astype('float64') * gas_vol_cgs / 1e6
+
+        if watts_per_hz:
+            # convert from erg/s/Hz to W/Hz
+            P_sync *= self.erg_in_J
+
+        P_sync = P_sync.astype('float32')
+
+        if log:
+            return logZeroNaN(P_sync)
+        return P_sync
 
     # --- cosmology ---
 
