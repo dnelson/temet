@@ -18,7 +18,7 @@ def _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
     numPart = pos.shape[0]
     boxHalf = boxSizeSim / 2.0
 
-    # loop over all particles (Note: np.arange() seems to have a huge penalty here instead of range())
+    # loop over all particles
     for i in range(start_ind,stop_ind):
         #print(i)
         pi_0 = pos[i,0]
@@ -46,6 +46,64 @@ def _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
                 k += 1
 
             xi_int[k-1] += 1
+
+    # void return
+
+@jit(nopython=True, nogil=True, cache=True)
+def _reduceQuantsInRad(pos_search, pos_target, rad_search, quants, reduced_quants, 
+                       reduce_type, boxSizeSim, start_ind, stop_ind):
+    """ Core routine for quantReductionInRad(). """
+    numQuants = quants.shape[1]
+    numTarget = pos_target.shape[0]
+    boxHalf = boxSizeSim / 2.0
+
+    rad_search_sq = rad_search * rad_search
+
+    for i in range(start_ind,stop_ind):
+        pi_0 = pos_search[i,0]
+        pi_1 = pos_search[i,1]
+        pi_2 = pos_search[i,2]
+
+        i_save = i - start_ind
+
+        for j in range(0,numTarget):
+            if i == j:
+                continue
+
+            pj_0 = pos_target[j,0]
+            pj_1 = pos_target[j,1]
+            pj_2 = pos_target[j,2]
+
+            # calculate 3d periodic squared distance
+            dx = _NEAREST(pi_0-pj_0,boxHalf,boxSizeSim)
+            if dx > rad_search: continue
+            dy = _NEAREST(pi_1-pj_1,boxHalf,boxSizeSim)
+            if dy > rad_search: continue
+            dz = _NEAREST(pi_2-pj_2,boxHalf,boxSizeSim)
+            if dz > rad_search: continue
+
+            r2 = dx*dx + dy*dy + dz*dz
+
+            # within radial search aperture?
+            if r2 > rad_search_sq:
+                continue
+
+            # MAX
+            if reduce_type == 0:
+                for k in range(0,numQuants):
+                    if quants[j,k] > reduced_quants[i_save,k]:
+                        reduced_quants[i_save,k] = quants[j,k]
+
+            # MIN
+            if reduce_type == 1:
+                for k in range(0,numQuants):
+                    if quants[j,k] < reduced_quants[i_save,k]:
+                        reduced_quants[i_save,k] = quants[j,k]
+
+            # SUM
+            if reduce_type == 2:
+                for k in range(0,numQuants):
+                    reduced_quants[i_save,k] += quants[j,k]
 
     # void return
 
@@ -116,9 +174,8 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
     # else, multithreaded
     # -------------------
     class mapThread(threading.Thread):
-        """ Subclass Thread() to provide local storage (rDens,rQuant) which can be retrieved after 
-            this thread terminates and added to the global return. Note (on Ody2): This technique with this 
-            algorithm has ~94 percent scaling efficiency to 16 threads, drops to ~70 percent at 32. """
+        """ Subclass Thread() to provide local storage (xi_int) which can be retrieved after 
+            this thread terminates and added to the global return. """
         def __init__(self, threadNum, nThreads):
             super(mapThread, self).__init__()
 
@@ -131,7 +188,7 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
 
             self.start_ind, self.stop_ind = pSplitRange( [0,nPts], nThreads, threadNum )
 
-            # make local view of pos (non-self inputs to _calc() appears to prevent GIL release)
+            # make local view of pos (non-self inputs to JITed function appears to prevent GIL release)
             self.pos         = pos
             self.rad_bins_sq = rad_bins_sq
             self.boxSizeSim  = boxSizeSim
@@ -158,6 +215,111 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
     xi = _analytic_estimator(xi_int)
 
     return xi
+
+def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, boxSizeSim, nThreads=16):
+    """ Calculate a reduction operation on one or more quantities for all target points falling within a 3D 
+        periodic search radius of each search point.
+
+      pos_search[N,3] : array of 3-coordinates for the galaxies/points to search from
+      pos_target[M,3] : array of the 3-coordiantes of the galaxies/points to search over
+      rad_search[1]   : single float, 3D search radius (code units)
+      quants[M]/[M,P] : 1d or P-d array of quantities, one per pos_target, to process
+      reduce_op[str]  : one of 'min', 'max', 'sum'
+      boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
+
+      return is reduced_quants[N]/[N,P]
+    """
+    # input sanity checks
+    if pos_search.ndim != 2 or pos_search.shape[1] != 3 or pos_search.shape[0] <= 1:
+        raise Exception('Strange dimensions of pos_search.')
+    if pos_target.ndim != 2 or pos_target.shape[1] != 3 or pos_target.shape[0] <= 1:
+        raise Exception('Strange dimensions of pos_target.')
+    if type(rad_search) != type(1.0):
+        if rad_search.dtype not in [np.float32,np.float64]:
+            raise Exception('Strange type of rad_search.')
+    if pos_search.dtype != np.float32 and pos_search.dtype != np.float64:
+        raise Exception('pos_search not in float32/64')
+    if pos_target.dtype != np.float32 and pos_target.dtype != np.float64:
+        raise Exception('pos_target not in float32/64')
+    if quants.ndim not in [1,2] or (quants.ndim == 2 and quants.shape[0] != pos_target.shape[0]):
+        raise Exception('Strange dimensions of quants.')
+
+    # prepare
+    reduce_op = reduce_op.lower()
+    reduceOps = {'max':0, 'min':1, 'sum':2}
+    assert reduce_op in reduceOps.keys()
+    reduce_type = reduceOps[reduce_op]
+
+    nSearch = pos_search.shape[0]
+    nTarget = pos_target.shape[0]
+    nQuants = quants.shape[1] if quants.ndim == 2 else 1
+
+    # allocate return
+    reduced_quants = np.zeros( (nSearch,nQuants), dtype=quants.dtype )
+    if reduce_op == 'max': reduced_quants.fill(-np.inf)
+    if reduce_op == 'min': reduced_quants.fill(np.inf)
+
+    # single threaded?
+    # ----------------
+    if nThreads == 1:
+        # call JIT compiled kernel
+        start_ind = 0
+        stop_ind = nSearch
+
+        _reduceQuantsInRad(pos_search, pos_target, rad_search, quants, reduced_quants, 
+                           reduce_type, boxSizeSim, start_ind, stop_ind)
+
+        return reduced_quants
+
+    # else, multithreaded
+    # -------------------
+    class mapThread(threading.Thread):
+        """ Subclass Thread() to provide local storage (reduced_quants) which can be retrieved after 
+            this thread terminates and added to the global return. """
+        def __init__(self, threadNum, nThreads):
+            super(mapThread, self).__init__()
+
+            # determine local slice
+            self.threadNum = threadNum
+            self.nThreads  = nThreads
+
+            self.start_ind, self.stop_ind = pSplitRange( [0,nSearch], nThreads, threadNum )
+
+            # allocate local returns as attributes of the function
+            nSearchLocal = self.stop_ind - self.start_ind
+            self.reduced_quants = np.zeros( (nSearchLocal,nQuants), dtype=quants.dtype )
+
+            if reduce_op == 'max': self.reduced_quants.fill(-np.inf)
+            if reduce_op == 'min': self.reduced_quants.fill(np.inf)
+
+            # make local view of pos (non-self inputs to JITed function appears to prevent GIL release)
+            self.pos_search  = pos_search
+            self.pos_target  = pos_target
+            self.rad_search  = rad_search
+            self.quants      = quants
+            self.reduce_type = reduce_type
+            self.boxSizeSim  = boxSizeSim
+
+        def run(self):
+            # call JIT compiled kernel
+            _reduceQuantsInRad(self.pos_search, self.pos_target, self.rad_search, self.quants, 
+                               self.reduced_quants, self.reduce_type, self.boxSizeSim, 
+                               self.start_ind, self.stop_ind)
+
+    # create threads
+    threads = [mapThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
+
+    # launch each thread, detach, and then wait for each to finish
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+        # after each has finished, add its result array to the global
+        reduced_quants[thread.start_ind : thread.stop_ind] = thread.reduced_quants
+
+    return reduced_quants
 
 def benchmark():
     """ Benchmark performance of tpcf(). 
@@ -205,7 +367,7 @@ def benchmark():
     rrBinSizeLog = (np.log10(rMax) - np.log10(rMin)) / numRadBins
     rr = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
 
-    # map and time
+    # calculate and time
     start_time = time.time()
     nLoops = 1
 
@@ -221,3 +383,37 @@ def benchmark():
     fig.tight_layout()
     fig.savefig('benchmark.pdf')
     plt.close(fig)
+
+def benchmark2():
+    """ Benchmark performance of quantReductionInRad(). 100k points, 16 threads in 23 sec."""
+    np.random.seed(424242)
+    import time
+
+    # config
+    radSearch  = 100.0 # code units
+    nSearch    = 50000
+    boxSizeSim = 50000.0
+    nTarget    = nSearch
+    nQuants    = 4
+    reduce_op  = 'max'
+
+    # generate random testing data
+    pos_search = np.random.uniform(low=0.0, high=boxSizeSim, size=(nSearch,3)).astype('float32')
+    pos_target = np.random.uniform(low=0.0, high=boxSizeSim, size=(nTarget,3)).astype('float32')
+    quants     = np.random.uniform(low=0.1, high=1.0, size=(nTarget,nQuants)).astype('float32')
+
+    rsave = None
+    for nThreads in [16,8,4,2,1]:
+        # calculate and time
+        start_time = time.time()
+        nLoops = 1
+
+        for i in np.arange(nLoops):
+            r = quantReductionInRad(pos_search, pos_target, radSearch, quants, reduce_op, 
+                                    boxSizeSim, nThreads=nThreads)
+
+        sec_per = (time.time()-start_time)/nLoops
+        print('2 iterations took [%.3f] sec, nSearch = %d nThreads = %d' % (sec_per,nSearch,nThreads))
+
+        if rsave is None: rsave = r
+        assert np.array_equal(rsave,r)
