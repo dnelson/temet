@@ -237,7 +237,7 @@ class units(object):
         return vol_cgs
 
     def physicalKpcToCodeLength(self, x):
-        """ Convert a length in [pkpc] to code units [ckpc/h]. """
+        """ Convert a length in [pkpc] to code units [typically ckpc/h]. """
         assert self._sP.redshift is not None
 
         x_comoving = np.array(x, dtype='float32') / self.scalefac
@@ -245,6 +245,10 @@ class units(object):
         x_comoving *= self._sP.HubbleParam # add little h factor
 
         return x_comoving
+
+    def physicalMpcToCodeLength(self, x):
+        """ Convert a length in [pMpc] to code units [typically ckpc/h]. """
+        return self.physicalKpcToCodeLength(x*1000.0)
 
     def particleCodeVelocityToKms(self, x):
         """ Convert velocity field (for cells/particles, not group properties) into km/s. """
