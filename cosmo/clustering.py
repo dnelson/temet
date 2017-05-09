@@ -11,12 +11,33 @@ import time
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from scipy.interpolate import interp1d
+from collections import OrderedDict
 
 from cosmo.load import groupCat, groupCatHeader, auxCat
 from plot.general import simSubhaloQuantity
 from cosmo.util import cenSatSubhaloIndices, periodicDistsSq
 from cosmo.color import loadSimGalColors
 from util.tpcf import tpcf, quantReductionInRad
+
+def _covar_matrix(x_avg, x_subs):
+    """ Compute covariance matrix from a jackknife set of samplings x_subs. Slightly different 
+    than normal we use x_avg from the input (i.e. the answer computed from the full spatial 
+    sample) instead of the median of the x_subs. """
+    n = x_avg.size
+    n_subs = x_subs.shape[1]
+
+    covar = np.zeros( (n,n), dtype='float32' )
+    
+    for j in range(n):
+        for k in range(n):
+            covar[j,k] = (n_subs-1.0)/n_subs * \
+              np.sum( (x_subs[k,:]-x_avg[k])*(x_subs[j,:]-x_avg[j]) )
+
+    # normalize and take diagonal entries as standard deviations
+    covar /= n
+    errs = np.sqrt( np.diag(covar) )
+
+    return covar, errs
 
 def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, numRadBins=20, 
       colorBin=None, cType=None, mstarBin=None, mType=None, jackKnifeNumSub=4):
@@ -139,14 +160,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
                     count += 1
 
         # calculate covariance matrix
-        covar = np.zeros( (xi.size, xi.size), dtype='float32' )
-        for j in range(xi.size):
-            for k in range(xi.size):
-                covar[j,k] = (nSubs-1.0)/nSubs * np.sum( (xi_sub[k,:]-xi[k])*(xi_sub[j,:]-xi[j]) )
-
-        # normalize and take standard deivations from the diagonal
-        covar /= xi.size
-        xi_err = np.sqrt( np.diag(covar) )
+        covar, xi_err = _covariance_matrix(xi, xi_sub)
 
     with h5py.File(saveFilename,'w') as f:
         f['rad'] = rad
@@ -154,6 +168,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
         if xi_err is not None:
             f['xi_err'] = xi_err
             f['covar'] = covar
+            f['xi_sub'] = xi_sub
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
     return rad, xi, xi_err, covar
@@ -171,6 +186,18 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     if not isdir(savePath):
         mkdir(savePath)
 
+    # check existence
+    if isfile(saveFilename):
+        r = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+
+        return r
+
+    # calculate
+    print('Calculating new: [%s]...' % saveFilename)
+
     # load and unit conversions
     gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'], 
                       fieldsSubhalos=['SubhaloPos','SubhaloMassInRadType','SubhaloMass','SubhaloGrNr'])
@@ -178,7 +205,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
 
     nSubhalos = gc['header']['Nsubgroups_Total']
 
-    masses = {}
+    masses = OrderedDict()
 
     masses['halo_m200'] = sP.units.codeMassToLogMsun(gc['halos'] )[ gc['subhalos']['SubhaloGrNr'] ]
     masses['mstar2'] = sP.units.codeMassToLogMsun(gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')])
@@ -194,7 +221,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
 
     pos_target = np.squeeze(gc['subhalos']['SubhaloPos'][inds,:])
     
-    rad_code = sP.units.physicalKpcToCodeLength(rad_pkpc)
+    rad_bin_code = np.array([0, sP.units.physicalKpcToCodeLength(rad_pkpc)])
 
     # handle mstar30kpc_min on pos_search if requested
     if mstar30kpc_min is None:
@@ -212,7 +239,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     start_time = time.time()
     print(' start...')
 
-    qred = quantReductionInRad(pos_search, pos_target, rad_code, quants, 'max', sP.boxSize)
+    qred = quantReductionInRad(pos_search, pos_target, rad_bin_code, quants, 'max', sP.boxSize)
 
     sec = (time.time()-start_time)
     print(' took: %.1f sec %.2f min' % (sec,sec/60.0))
@@ -220,7 +247,8 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     r = {}
     for i, key in enumerate(masses):
         r[key] = np.zeros( nSubhalos, dtype=quants.dtype )
-        r[key][wMinMass] = np.squeeze(qred[:,i])
+        r[key].fill(np.nan)
+        r[key][wMinMass] = np.squeeze(qred[:,0,i])
 
     # calculate some useful isolation flags
     flagNames = ['flag_iso_mstar2_max_half','flag_iso_mstar30kpc_max_half','flag_iso_mhalo_lt_12']
@@ -229,20 +257,224 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         r[flagName] = np.zeros( nSubhalos, dtype='int16' )
         r[flagName].fill(-1) # -1 denotes unprocessed, 0 denotes not isolated, 1 denotes isolated
 
+    subhalo_mstar2 = 10.0**masses['mstar2']
+    subhalo_mstar30kpc = 10.0**masses['mstar30kpc']
+    ngb_max_mstar2 = 10.0**r['mstar2']
+    ngb_max_mstar30kpc = 10.0**r['mstar30kpc']
+
     with np.errstate(invalid='ignore'):
-        w = np.where( 10.0**r['mstar2'] < 10.0**masses['mstar2']/2 )
-        r['flag_iso_mstar2_max_half'][w] = 1
+        w1 = np.where( ngb_max_mstar2 <= subhalo_mstar2/2 )
+        w2 = np.where( ngb_max_mstar2 > subhalo_mstar2/2 )
+        r['flag_iso_mstar2_max_half'][w1] = 1
+        r['flag_iso_mstar2_max_half'][w2] = 0
 
-        w = np.where( 10.0**r['mstar30kpc'] < 10.0**masses['mstar30kpc']/2 )
-        r['flag_iso_mstar30kpc_max_half'][w] = 1
+        w1 = np.where( ngb_max_mstar30kpc <= subhalo_mstar30kpc/2 )
+        w2 = np.where( ngb_max_mstar30kpc > subhalo_mstar30kpc/2 )
+        r['flag_iso_mstar30kpc_max_half'][w1] = 1
+        r['flag_iso_mstar30kpc_max_half'][w2] = 0
 
-        print(' [%d] of [%d] processed flagged as isolated according to mstar30kpc.' % \
-            (len(w[0]),pos_search.shape[0]))
+        print(' [%d isolated] and [%d non-isolated] of [%d total] according to mstar30kpc.' % \
+            (len(w1[0]),len(w2[0]),pos_search.shape[0]))
+        assert len(w1[0]) + len(w2[0]) == pos_search.shape[0]
 
-        w = np.where( r['halo_m200'] < 12.0 )
-        r['flag_iso_mhalo_lt_12'][w] = 1
+        w1 = np.where( r['halo_m200'] <= 12.0 )
+        w2 = np.where( r['halo_m200'] > 12.0 )
+        r['flag_iso_mhalo_lt_12'][w1] = 1
+        r['flag_iso_mhalo_lt_12'][w2] = 0
 
     # save
+    with h5py.File(saveFilename,'w') as f:
+        for key in r:
+            f[key] = r[key]
+
+    print('Saved: [%s]' % saveFilename.split(savePath)[1])
+
+    return r
+
+def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=500.0, 
+      colorBin=None, cType=None, mstarBin=None, mType=None, jackKnifeNumSub=4, 
+      cenSatSelectSec='all', colorSplitSec=None):
+    """ Calculate the conformity signal for -isolated- primaries subject to: {colorBin, cType, 
+    mstarBin, mType}. Specifications for these 4 are the same as for 
+    twoPointAutoCorrelationPeriodicCube(). A series of numRadBins are linearly spaced from 
+    radRange[0] to radRange[1] in physical Mpc. cenSatSelect is applied to the secondary sample, 
+    as are {colorSplitSec,cType} which define the red/blue split for secondaries. """
+    assert cenSatSelectSec in ['all','cen','sat']
+    assert colorSplitSec is not None and cType is not None
+    bands, simColorsModel = cType
+
+    savePath = sP.derivPath + "/clustering/"
+
+    saveStr = 'rad-n%d-%.1f-%.1f' % (numRadBins,radRange[0],radRange[1])
+    if colorBin is not None:
+        saveStr += '_color-%s-%.1f-%.1f-%s' % (''.join(bands),colorBin[0],colorBin[1],simColorsModel)
+    if mstarBin is not None:
+        assert mType is not None
+        saveStr += '_mass-%.1f-%.1f-%s' % (mstarBin[0],mstarBin[1],mType)
+    if jackKnifeNumSub is not None:
+        saveStr += '_err-%d' % jackKnifeNumSub
+
+    saveFilename = savePath + "conformity_redfrac_%d_%s_%s.hdf5" % (sP.snap,cenSatSelectSec,saveStr)
+
+    if not isdir(savePath):
+        mkdir(savePath)
+
+    # check existence
+    if isfile(saveFilename):
+        r = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+
+        return r
+
+    # calculate
+    print('Calculating new: [%s]...' % saveFilename)
+
+    # load
+    pos_all = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+    gc_colors, gc_ids = loadSimGalColors(sP, simColorsModel, bands=bands)
+    assert np.array_equal(gc_ids, np.arange(sP.numSubhalos))
+
+    # PRIMARIES: 
+    iso = isolationCriterion3D(sP, rad_pkpc=isolationRadPKpc)
+
+    wIsolated = np.where(iso['flag_iso_mstar30kpc_max_half'] == 1)
+
+    pos_pri = pos_all.copy()
+    if colorBin is not None:
+        # color bin
+        gc_colors_pri = gc_colors[wIsolated]
+
+        with np.errstate(invalid='ignore'):
+            wColor = np.where( (gc_colors_pri >= colorBin[0]) & (gc_colors_pri < colorBin[1]) )
+
+        pos_pri = np.squeeze(pos_pri[wColor,:])
+
+    if mstarBin is not None:
+        # stellar masses bin
+        gc_masses, _, _, _ = simSubhaloQuantity(sP, mType)
+        gc_masses = gc_masses[wIsolated]
+
+        if colorBin is not None:
+            # apply existing color restriction if applicable
+            gc_masses = np.squeeze(gc_masses[wColor])
+
+        with np.errstate(invalid='ignore'):
+            wMass = np.where( (gc_masses >= mstarBin[0]) & (gc_masses < mstarBin[1]) )
+        pos_pri = np.squeeze(pos_pri[wMass,:])
+
+    # SECONDARIES:
+    wSelectSec = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelectSec)
+    pos_sec = np.squeeze(pos_all[wSelectSec,:])
+
+    gc_colors_sec = gc_colors[wSelectSec]
+
+    with np.errstate(invalid='ignore'):
+        wRedSec = np.where( (gc_colors_sec >= colorSplitSec) )
+        wBlueSec = np.where( (gc_colors_sec < colorSplitSec) )
+
+    # generate quants[nSecondaries,2] marked for blue/red
+    quants = np.zeros( (pos_sec.shape[0], 2), dtype='int32' )
+    quants[wBlueSec,0] = 1
+    quants[wRedSec,1] = 1
+
+    # radial bins
+    r = {}
+
+    radialBins = np.linspace( radRange[0], radRange[1], numRadBins+1)
+    radBinSize = (radRange[1] - radRange[0]) / numRadBins
+    radialBins_code = sP.units.physicalMpcToCodeLength(radialBins)
+
+    r['rad'] = (radialBins + radBinSize/2)[:-1]
+
+    # call reduction
+    start_time = time.time()
+    print(' start...')
+
+    quants_reduced = quantReductionInRad(pos_pri, pos_sec, radialBins_code, quants, 'sum', sP.boxSize)
+
+    sec = (time.time()-start_time)
+    print(' took: %.1f sec %.2f min' % (sec,sec/60.0))
+
+    # compute red fraction as equally weighted average across primaries (not first stacked), in each 
+    # case only including bins with at least one secondary (following Bray+ 2015 end of Sec 2.1)
+    def _redfrac_helper(qred):
+        """ Helper function, transform return of quantReductionInRad() to radial profiles of red frac. """
+        redfrac = np.zeros( numRadBins, dtype='float32' )
+        redfrac_stacked = np.zeros( numRadBins, dtype='float32' )
+
+        for i in range(numRadBins):
+            qred_frac = np.zeros( qred.shape[0], dtype='float32' )
+            qred_frac.fill(np.nan)
+
+            # counts (per halo) in this radial bin
+            red_counts = np.squeeze(qred[:,i,1])
+            blue_counts = np.squeeze(qred[:,i,0])
+
+            # avoid division by zero and only count nonzero bins
+            w = np.where( (red_counts+blue_counts) > 0)
+            qred_frac[w] = red_counts[w] / (red_counts[w]+blue_counts[w])
+
+            # halo average
+            redfrac[i] = np.nanmean(qred_frac)
+
+            # stacked
+            redfrac_stacked[i] = red_counts.sum() / (red_counts.sum() + blue_counts.sum())
+
+        return redfrac, redfrac_stacked
+
+    r['redfrac'], r['redfrac_stacked'] = _redfrac_helper(quants_reduced)
+
+    # if requested, calculate NSub^3 additional times for jackknife error estimation
+    if jackKnifeNumSub is not None:
+        nSubs = jackKnifeNumSub**3
+        subSize = sP.boxSize / jackKnifeNumSub
+
+        r['redfrac_sub'] = np.zeros( (numRadBins, nSubs), dtype='float32' )
+        r['redfrac_stacked_sub'] = np.zeros( (numRadBins, nSubs), dtype='float32' )
+        count = 0
+
+        for i in range(jackKnifeNumSub):
+            for j in range(jackKnifeNumSub):
+                for k in range(jackKnifeNumSub):
+                    # define spatial region
+                    x0 = i * subSize
+                    x1 = (i+1) * subSize
+                    y0 = j * subSize
+                    y1 = (j+1) * subSize
+                    z0 = k * subSize
+                    z1 = (k+1) * subSize
+
+                    # exclude this sub-region and create reduced point set
+                    w_pri = np.where( ((pos_pri[:,0] <= x0) | (pos_pri[:,0] > x1)) | \
+                                      ((pos_pri[:,1] <= y0) | (pos_pri[:,1] > y1)) | \
+                                      ((pos_pri[:,2] <= z0) | (pos_pri[:,2] > z1)) )
+                    w_sec = np.where( ((pos_sec[:,0] <= x0) | (pos_sec[:,0] > x1)) | \
+                                      ((pos_sec[:,1] <= y0) | (pos_sec[:,1] > y1)) | \
+                                      ((pos_sec[:,2] <= z0) | (pos_sec[:,2] > z1)) )
+
+                    print(' [%2d] (%d %d %d) x=[%7d,%7d] y=[%7d,%7d] z=[%7d,%7d] keep (%6d pri,%6d sec) points...' % \
+                      (count,i,j,k,x0,x1,y0,y1,z0,z1,len(w_pri[0]),len(w_sec[0])))
+
+                    # calculcate and save counts on this subset
+                    pos_pri_loc = np.squeeze( pos_pri[w_pri,:] )
+                    pos_sec_loc = np.squeeze( pos_sec[w_sec,:] )
+                    quants_loc  = np.squeeze( quants[w_sec,:] )
+
+                    quants_reduced = quantReductionInRad(pos_pri_loc, pos_sec_loc, radialBins_code, 
+                                                         quants_loc, 'sum', sP.boxSize)
+
+                    r['redfrac_sub'][:,count], r['redfrac_stacked_sub'][:,count] = \
+                      _redfrac_helper(quants_reduced)
+
+                    count += 1
+
+        # normalize and take standard deivations from the diagonal
+        r['covar'], r['redfrac_err'] = _covar_matrix(r['redfrac'], r['redfrac_sub'])
+        r['covar_stacked'], r['redfrac_stacked_err'] = \
+          _covar_matrix(r['redfrac_stacked'], r['redfrac_stacked_sub'])
+
     with h5py.File(saveFilename,'w') as f:
         for key in r:
             f[key] = r[key]

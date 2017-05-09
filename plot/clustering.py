@@ -9,18 +9,16 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib.patches import FancyArrowPatch
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib import gridspec
 from collections import OrderedDict
-#from scipy.signal import savgol_filter
 
-#from util import simParams
 from util.helper import running_median, logZeroNaN, sampleColorTable
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
-from cosmo.clustering import twoPointAutoCorrelationPeriodicCube
+from cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
 from plot.general import simSubhaloQuantity, getWhiteBlackColors
 from vis.common import setAxisColors
+from tracer.tracerMC import match3
 from plot.config import *
 
 def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'], 
@@ -82,7 +80,7 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
         facecolor=fig.get_facecolor())
     plt.close(fig)
 
-def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', 
+def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot=False, 
                               colorBins=None, cType=None, mstarBins=None, mType=None, redshiftBins=None):
     """ Plot the galaxy two-point correlation function for a run or multiple runs, showing a range 
     of bins in either color, stellar mass, or redshift (choose one). """
@@ -91,13 +89,20 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all',
     assert redshiftBins is None # not implemented yet
 
     # visual config
-    rMinMax = [0.01, 100.0] # log Mpc
-    yMinMaxes = [[1e-2, 1e5], [5e-1, 5e3], [1e0, 1e3]]
-    ctName = 'jet'
-    lw = 2.5
+    rMinMax    = [-2.0, 2.0] # log Mpc
+    yMinMaxes  = [[-2.0, 6.0], [-1.0, 3.5], [0.0, 3.0]]
+    yMinMaxSub = [0.1, 20]
+    alpha      = 0.9
+    alphaFill  = 0.05
+    lw         = 2.0
 
-    rLabel = 'r [ Mpc ]'
-    yLabel = '$\\xi(r)$  [ real space two-point autocorr ]'
+    ratioSubPlotHSpace = 0.02 # zero for none
+    drawSymbols = True
+    symSize = 7.0
+
+    rLabel = 'r [ log Mpc ]'
+    yLabel = 'log %s$\\xi(r)$'
+    #if not clean: yLabel += '  [ real space two-point autocorr ]'
 
     # load/calculate
     cfs = OrderedDict()
@@ -139,7 +144,13 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all',
     if redshiftBins is not None:
         assert 0
 
-    #cm = sampleColorTable( ctName, np.sum([len(cfs[k]) for k in cfs.keys()]) )
+    # specific color table?
+    cm = None
+
+    if colorBins is not None and len(colorBins) == 1:
+        if '_red' in saveBase: ctName = 'Oranges'
+        if '_blue' in saveBase: ctName = 'Blues'
+        cm = sampleColorTable( ctName, np.sum([len(cfs[k]) for k in cfs.keys()]), bounds=[0.4,1.0] )
 
     # iterate over y-axes: xi(r), r*xi(r), r^2*xi(r)
     for iterNum in [0,1,2]:
@@ -147,20 +158,53 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all',
         color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
         sizefac = sfclean if clean else 1.0
 
-        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-        ax = fig.add_subplot(111, axisbg=color1)
+        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*1.2**ratioSubPlot),facecolor=color1)
+        gs = gridspec.GridSpec(1+ratioSubPlot, 1, height_ratios=[3.5,1])
+        ax = fig.add_subplot(gs[0], axisbg=color1)
         setAxisColors(ax, color2)
 
-        ax.set_xlim(rMinMax)
+        if not ratioSubPlot:
+            ax.set_xlim(rMinMax)
+            ax.set_xlabel(rLabel)
+        else:
+            plt.setp(ax.get_xticklabels(), visible=False)
+
         ax.set_ylim(yMinMaxes[iterNum])
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.set_xlabel(rLabel)
-        ax.set_ylabel(['','r','r$^2$'][iterNum] + yLabel)
+        ax.set_ylabel(yLabel % ['','r','r$^2$'][iterNum])
+
+        # ratio sub-plot on the bottom?
+        if ratioSubPlot:
+            ax_sub = fig.add_subplot(gs[1], axisbg=color1, sharex=ax)
+            ax_sub.set_xlim(rMinMax)
+            ax_sub.set_xlabel(rLabel)
+            ax_sub.set_ylim(yMinMaxSub)
+            ax_sub.set_yscale('log')
+            ax_sub.set_ylabel('$\\xi(r)_{M_i}$ / $\\xi(r)_{M_0}$')
+
+            for yVal in [0.5,1.0,2.0]:
+                ax_sub.plot( rMinMax, [yVal,yVal], ':', color='black', alpha=0.1, lw=1.0)
+
+            # remove last tick label for the second subplot
+            #yticks = ax_sub.yaxis.get_major_ticks()
+            #yticks[-1].label1.set_visible(False)
+
+            # remove vertical space
+            gs.tight_layout(fig)
+
+            ax_points = ax.get_position().get_points()
+            ax_sub_pos = ax_sub.get_position()
+            ax_sub_points = ax_sub_pos.get_points()
+            ax_sub_points[1][1] = ax_points[0][1] - ratioSubPlotHSpace
+            ax_sub_pos.set_points(ax_sub_points)
+            ax_sub.set_position(ax_sub_pos)
+        else:
+            fig.tight_layout()
+
+        yy_max = 0.0
 
         # plot: loop over each bin
         for k, cfBoundSet in enumerate(cfs.keys()):
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = ax._get_lines.prop_cycler.next()['color'] if cm is None else cm[k]
 
             # loop over each run for this bin
             for i, cf in enumerate(cfs[cfBoundSet]):
@@ -174,13 +218,58 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all',
                 if iterNum == 1: yFac = xx[ww]
                 if iterNum == 2: yFac = xx[ww]**2
 
-                l, = ax.plot(xx[ww], yFac*cf['xi'][ww], lw=lw, linestyle=linestyles[i], label=label, color=c)
+                x_plot = logZeroNaN(xx[ww])
+                y_plot = logZeroNaN(yFac * cf['xi'][ww])
 
-                yy0 = yFac*(cf['xi'][ww] - cf['xi_err'][ww]/2)
-                yy1 = yFac*(cf['xi'][ww] + cf['xi_err'][ww]/2)
+                if y_plot.max() > yy_max: yy_max = y_plot.max()
+
+                l, = ax.plot(x_plot, y_plot, lw=lw, linestyle=linestyles[i], alpha=alpha, label=label, color=c)
+
+                if drawSymbols:
+                    yy0 = y_plot - logZeroNaN( yFac*(cf['xi'][ww] - cf['xi_err'][ww]/2) )
+                    yy1 = logZeroNaN( yFac*(cf['xi'][ww] + cf['xi_err'][ww]/2) ) - y_plot
+                    ax.errorbar(x_plot, y_plot, yerr=[yy0,yy1], markerSize=symSize, 
+                         color=l.get_color(), ecolor=l.get_color(), alpha=alpha, capsize=0.0, fmt='o')
 
                 if i == 0:
-                    ax.fill_between(xx[ww], yy0, yy1, color=l.get_color(), interpolate=True, alpha=0.15)
+                    yy0 = logZeroNaN( yFac*(cf['xi'][ww] - cf['xi_err'][ww]/2) )
+                    yy1 = logZeroNaN( yFac*(cf['xi'][ww] + cf['xi_err'][ww]/2) )
+
+                    ax.fill_between(x_plot, yy0, yy1, color=l.get_color(), interpolate=True, alpha=alphaFill)
+
+                # add ratio to sub plot?
+                if not ratioSubPlot:
+                    continue
+
+                if k == 0:
+                    # save
+                    k0_x = x_plot
+                    k0_y = y_plot
+                    k0_yerr = cf['xi_err'][ww]
+                else:
+                    # plot ratio
+                    w0, w = match3(k0_x, x_plot)
+                    assert np.array_equal(k0_x[w0], x_plot[w])
+                    ysub_plot = 10.0**y_plot[w] / 10.0**k0_y[w0]
+                    ax_sub.plot(x_plot[w], ysub_plot, lw=lw, linestyle=linestyles[i], 
+                                label=label, color=c)
+
+                    # add errors in fractional quadrature
+                    k0_frac_err = k0_yerr[w0] / 10.0**k0_y[w0]
+                    sub_frac_err = cf['xi_err'][w] / 10.0**y_plot[w]
+
+                    yerr_sub = np.sqrt( k0_frac_err**2 + sub_frac_err**2 ) * ysub_plot / 2
+
+                    if drawSymbols:
+                        ax_sub.errorbar(x_plot[w], ysub_plot, markerSize=symSize, 
+                             color=l.get_color(), ecolor=l.get_color(), alpha=alpha, capsize=0.0, fmt='o')
+                    if i == 0:
+                        ax_sub.fill_between(x_plot[w], ysub_plot-yerr_sub, ysub_plot+yerr_sub, 
+                            color=l.get_color(), interpolate=True, alpha=alphaFill*2)
+
+
+        # set y maximum
+        ax.set_ylim(ymax=np.ceil(yy_max))
 
         # legends
         loc = 'lower left' if iterNum < 2 else 'upper left'
@@ -192,15 +281,115 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all',
             for i, sP in enumerate(sPs):
                 handles.append(plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[i]) )
                 labels.append(sP.simName)
+            if colorBins is not None and len(colorBins) == 1:
+                handles.append(plt.Line2D( (0,1),(0,0),color='black',lw=0.0,marker='') )
+                if '_red' in saveBase: labels.append('red only') #'red galaxies (g-r > 0.6)'
+                if '_blue' in saveBase: labels.append('blue only') #'blue galaxies (g-r < 0.6)'
 
             legend2 = ax.legend(handles, labels, loc='upper right')
             ax.add_artist(legend2)
 
-        # finish plot
-        fig.tight_layout()
+        #if ratioSubPlot:
+        #    ax_sub.legend()
+
         fig.savefig('%stpcf_%s_%s.pdf' % (saveBase,['xi','rxi','r2xi'][iterNum],
             '_'.join([sP.simName for sP in sPs])), facecolor=fig.get_facecolor())
         plt.close(fig)
+
+def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
+    """ Plot the galaxy two-point correlation function for a run or multiple runs, showing a range 
+    of bins in either color, stellar mass, or redshift (choose one). """
+
+    # analysis config (can move into arguments if desired)
+    colorSplitSec = 0.6
+    cType         = [['g','r'], defSimColorModel]
+    colorBinsPri  = [[0.0, 0.6], [0.6, 1.0]]
+    massBinsPri   = [[10.0,10.5]]
+    mTypePri      = 'mstar_30pkpc_log'
+
+    # visual config
+    rMinMax   = [0.0, 20.0] # Mpc
+    yMinMax   = [0.2, 0.8] # red fraction
+    alpha     = 0.9
+    alphaFill = 0.05
+    lw        = 2.0
+
+    drawSymbols = False
+    symSize = 7.0
+
+    rLabel = 'r [ Mpc ]'
+    yLabel = 'Secondary Red Fraction'
+
+    # load/calculate
+    confs = OrderedDict()
+
+    for massBinPri in massBinsPri:
+        label = '%4.1f < log($M_\star$/M$_{\\rm sun}$) < %4.1f' % (massBinPri[0], massBinPri[1])
+        confs[label] = OrderedDict()
+
+        for colorBinPri in colorBinsPri:
+            conf = conformityRedFrac(sP, colorBin=colorBinPri, cType=cType, mstarBin=massBinPri, 
+                mType=mTypePri, cenSatSelectSec=cenSatSelectSec, colorSplitSec=colorSplitSec)
+
+            colorLabel = '%.1f < (%s-%s) < %.1f' % (colorBinPri[0],cType[0][0],cType[0][1],colorBinPri[1])
+            confs[label][colorLabel] = conf
+
+    # start plot
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+    sizefac = sfclean if clean else 1.0
+
+    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    gs = gridspec.GridSpec(1, 1)
+    ax = fig.add_subplot(gs[0], axisbg=color1)
+    setAxisColors(ax, color2)
+
+    ax.set_xlim(rMinMax)
+    ax.set_xlabel(rLabel)
+    ax.set_ylim(yMinMax)
+    ax.set_ylabel(yLabel)
+
+    fig.tight_layout()
+
+    cm = None
+
+    # loop over each mass bin
+    for k, massSet in enumerate(confs.keys()):
+        c = ax._get_lines.prop_cycler.next()['color'] if cm is None else cm[k]
+
+        # loop over each color (or secondary property in general) split for this mass bin
+        for i, secSet in enumerate(confs[massSet].keys()):
+            rf = confs[massSet][secSet]
+
+            xx = rf['rad']
+            ww = np.where( rf['redfrac'] > 0.0 )
+
+            label = massSet + ' ' + secSet #if i == 0 else ''
+
+            # y-axis multiplier
+            l, = ax.plot(xx[ww], rf['redfrac'][ww], lw=lw, linestyle=linestyles[i], 
+                         alpha=alpha, label=label, color=c)
+
+            if drawSymbols:
+                ax.errorbar(xx[w], rf['redfrac'][ww], yerr=rf['redfrac_error'][ww], markerSize=symSize, 
+                     color=l.get_color(), ecolor=l.get_color(), alpha=alpha, capsize=0.0, fmt='o')
+
+            if i == 0:
+                yy0 = (rf['redfrac'][ww] - rf['redfrac_err'][ww]/2)
+                yy1 = (rf['redfrac'][ww] + rf['redfrac_err'][ww]/2)
+
+                ax.fill_between(xx[ww], yy0, yy1, color=l.get_color(), interpolate=True, alpha=alphaFill)
+
+    # legends
+    legend1 = ax.legend(loc='upper left')
+    ax.add_artist(legend1)
+
+    handles = [plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[i])]
+    labels = [sP.simName]
+    legend2 = ax.legend(handles, labels, loc='upper right')
+    ax.add_artist(legend2)
+
+    fig.savefig('%sconformity_redfrac_%s.pdf' % (saveBase,sP.simName), facecolor=fig.get_facecolor())
+    plt.close(fig)
 
 def paperPlots():
     """ Construct all the final plots for the paper. """
@@ -210,6 +399,7 @@ def paperPlots():
 
     L75   = simParams(res=1820,run='tng',redshift=0.0)
     L205  = simParams(res=2500,run='tng',redshift=0.0)
+    L75_455 = simParams(res=455,run='tng',redshift=0.0)
     L75FP = simParams(res=1820,run='illustris',redshift=0.0)
 
     # unless we are exploring in mass bins, we always apply the following (resolution) cut:
@@ -225,9 +415,13 @@ def paperPlots():
         galaxyTwoPoint(sPs, saveBase=saveBase, cenSatSelects=['all','cen','sat'], 
           colorBin=None, cType=None, mstarBin=mstarBinDef, mType=mTypeDef)
 
+    # figure 1b: binary red/blue split
+
+    # figure 1c: binary low/high mass split
+
     # figure 2: TNG300 in stellar mass bins at z=0
-    if 1:
-        sPs = [L75]
+    if 0:
+        sPs = [L205]
         saveBase = 'figure2_massbins_'
 
         mstarBins = [[9.5,10.0], [10.5,11.0], [11.5,12.0], [12.0,12.5]]
@@ -235,6 +429,23 @@ def paperPlots():
 
         galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', 
           colorBins=None, cType=None, mstarBins=mstarBins, mType=mType)
+
+    # figure 2b: TNG300 in stellar mass bins, red/blue split panels
+    if 0:
+        sPs = [L205]
+        saveBase = 'figure2b_massbins_%s_'
+
+        mstarBins = [[10.0,10.5], [10.5,11.0], [11.0, 11.5], [11.5,12.0], [12.0,12.5]]
+        mType = 'mstar2_log'
+        cType = [['g','r'], defSimColorModel]
+        colorBins = {'blue':[0.0, 0.6], 'red':[0.6, 1.0]}
+
+        for colorName, colorBin in colorBins.iteritems():
+            if colorName == 'blue': mstarBinsLoc = mstarBins[:-1]
+            if colorName == 'red': mstarBinsLoc = mstarBins
+
+            galaxyTwoPointQuantBounds(sPs, saveBase=saveBase % colorName, cenSatSelect='all', ratioSubPlot=True,
+              colorBins=[colorBin], cType=cType, mstarBins=mstarBinsLoc, mType=mType)
 
     # figure 3: color bins at z=0
     if 0:
@@ -247,6 +458,8 @@ def paperPlots():
         galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', 
           colorBins=colorBins, cType=cType, mstarBins=[mstarBinDef], mType=mTypeDef)
 
+    # figure 3b: TNG300 in color bins, low/high mass split panels
+
     # figure 4: redshift evolution
     if 0:
         sPs = []
@@ -257,3 +470,8 @@ def paperPlots():
 
         galaxyTwoPoint(sPs, saveBase=saveBase, cenSatSelects=['all'], 
           colorBin=None, cType=None, mstarBin=mstarBinDef, mType=mTypeDef)
+
+    # figure 5: conformity red fraction
+    if 1:
+        sP = L75#_455
+        conformityWithRedFrac(sP, saveBase='figure5_')

@@ -27,6 +27,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
+                   'mstar_30pkpc','mstar_30pkpc_log',
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                    'mhalo_subfind','mhalo_subfind_log']
 
@@ -153,8 +154,25 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = logZeroNaN(vals)
             logStr = 'log '
 
-        label = 'M$_{\\rm \star}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
+        label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+
+    if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
+        # stellar mass (auxcat based calculations)
+        acField = 'Subhalo_Mass_30pkpc_Stars'
+        ac = auxCat(sP, fields=[acField])
+
+        vals = sP.units.codeMassToMsun(ac[acField])
+
+        logStr = ''
+        if '_log' in quant:
+            takeLog = False
+            vals = logZeroNaN(vals)
+            logStr = 'log '
+
+        minMax = [9.0, 12.0]
+        label = 'M$_{\\rm \star}(<30pkpc)$ [ '+logStr+'M$_{\\rm sun}$ ]'
+        if clean: label = 'M$_{\\rm \star}$ [ '+logStr+'M$_{\\rm sun}$ ]'
 
     if quant in ['mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                  'mhalo_subfind','mhalo_subfind_log']:

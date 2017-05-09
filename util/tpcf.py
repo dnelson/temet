@@ -50,14 +50,16 @@ def _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
     # void return
 
 @jit(nopython=True, nogil=True, cache=True)
-def _reduceQuantsInRad(pos_search, pos_target, rad_search, quants, reduced_quants, 
+def _reduceQuantsInRad(pos_search, pos_target, radial_bins, quants, reduced_quants, 
                        reduce_type, boxSizeSim, start_ind, stop_ind):
     """ Core routine for quantReductionInRad(). """
     numQuants = quants.shape[1]
     numTarget = pos_target.shape[0]
     boxHalf = boxSizeSim / 2.0
 
-    rad_search_sq = rad_search * rad_search
+    radial_bins_sq = np.power(radial_bins, 2.0)
+    radial_bins_sq_max = np.max(radial_bins_sq)
+    radial_bins_max = np.max(radial_bins)
 
     for i in range(start_ind,stop_ind):
         pi_0 = pos_search[i,0]
@@ -67,43 +69,49 @@ def _reduceQuantsInRad(pos_search, pos_target, rad_search, quants, reduced_quant
         i_save = i - start_ind
 
         for j in range(0,numTarget):
-            if i == j:
-                continue
-
             pj_0 = pos_target[j,0]
             pj_1 = pos_target[j,1]
             pj_2 = pos_target[j,2]
 
+            # do not count self if these two samples are the same
+            if pi_0 == pj_0 and pi_1 == pj_1 and pi_2 == pj_2:
+                continue
+
             # calculate 3d periodic squared distance
             dx = _NEAREST(pi_0-pj_0,boxHalf,boxSizeSim)
-            if dx > rad_search: continue
+            if dx > radial_bins_max: continue
             dy = _NEAREST(pi_1-pj_1,boxHalf,boxSizeSim)
-            if dy > rad_search: continue
+            if dy > radial_bins_max: continue
             dz = _NEAREST(pi_2-pj_2,boxHalf,boxSizeSim)
-            if dz > rad_search: continue
+            if dz > radial_bins_max: continue
 
             r2 = dx*dx + dy*dy + dz*dz
 
             # within radial search aperture?
-            if r2 > rad_search_sq:
+            if r2 > radial_bins_sq_max:
                 continue
+
+            # find radial bin index
+            r_ind = 0
+            while r2 > radial_bins_sq[r_ind+1]:
+                r_ind += 1
 
             # MAX
             if reduce_type == 0:
                 for k in range(0,numQuants):
-                    if quants[j,k] > reduced_quants[i_save,k]:
-                        reduced_quants[i_save,k] = quants[j,k]
+                    if quants[j,k] > reduced_quants[i_save,r_ind,k]:
+                        reduced_quants[i_save,r_ind,k] = quants[j,k]
 
             # MIN
             if reduce_type == 1:
                 for k in range(0,numQuants):
-                    if quants[j,k] < reduced_quants[i_save,k]:
-                        reduced_quants[i_save,k] = quants[j,k]
+                    if quants[j,k] < reduced_quants[i_save,r_ind,k]:
+                        reduced_quants[i_save,r_ind,k] = quants[j,k]
 
             # SUM
             if reduce_type == 2:
                 for k in range(0,numQuants):
-                    reduced_quants[i_save,k] += quants[j,k]
+                    reduced_quants[i_save,r_ind,k] += quants[j,k]
 
     # void return
 
@@ -216,27 +224,26 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
 
     return xi
 
-def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, boxSizeSim, nThreads=16):
+def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, boxSizeSim, nThreads=16):
     """ Calculate a reduction operation on one or more quantities for all target points falling within a 3D 
         periodic search radius of each search point.
 
       pos_search[N,3] : array of 3-coordinates for the galaxies/points to search from
       pos_target[M,3] : array of the 3-coordiantes of the galaxies/points to search over
-      rad_search[1]   : single float, 3D search radius (code units)
+      radial_bins[M]  : array of bin edges in radial distance (code units)
       quants[M]/[M,P] : 1d or P-d array of quantities, one per pos_target, to process
       reduce_op[str]  : one of 'min', 'max', 'sum'
       boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
 
-      return is reduced_quants[N]/[N,P]
+      return is reduced_quants[N,M-1]/[N,M-1,P]
     """
     # input sanity checks
     if pos_search.ndim != 2 or pos_search.shape[1] != 3 or pos_search.shape[0] <= 1:
         raise Exception('Strange dimensions of pos_search.')
     if pos_target.ndim != 2 or pos_target.shape[1] != 3 or pos_target.shape[0] <= 1:
         raise Exception('Strange dimensions of pos_target.')
-    if type(rad_search) != type(1.0):
-        if rad_search.dtype not in [np.float32,np.float64]:
-            raise Exception('Strange type of rad_search.')
+    if radial_bins.dtype not in [np.float32,np.float64] or radial_bins.size < 2:
+        raise Exception('Strange type or size of radial_bins.')
     if pos_search.dtype != np.float32 and pos_search.dtype != np.float64:
         raise Exception('pos_search not in float32/64')
     if pos_target.dtype != np.float32 and pos_target.dtype != np.float64:
@@ -254,8 +261,12 @@ def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, b
     nTarget = pos_target.shape[0]
     nQuants = quants.shape[1] if quants.ndim == 2 else 1
 
+    # radial bin(s)
+    rad_bins_sq = np.copy(radial_bins)**2
+    nRadBins = rad_bins_sq.size - 1
+
     # allocate return
-    reduced_quants = np.zeros( (nSearch,nQuants), dtype=quants.dtype )
+    reduced_quants = np.zeros( (nSearch,nRadBins,nQuants), dtype=quants.dtype )
     if reduce_op == 'max': reduced_quants.fill(-np.inf)
     if reduce_op == 'min': reduced_quants.fill(np.inf)
 
@@ -266,7 +277,7 @@ def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, b
         start_ind = 0
         stop_ind = nSearch
 
-        _reduceQuantsInRad(pos_search, pos_target, rad_search, quants, reduced_quants, 
+        _reduceQuantsInRad(pos_search, pos_target, radial_bins, quants, reduced_quants, 
                            reduce_type, boxSizeSim, start_ind, stop_ind)
 
         return reduced_quants
@@ -287,7 +298,7 @@ def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, b
 
             # allocate local returns as attributes of the function
             nSearchLocal = self.stop_ind - self.start_ind
-            self.reduced_quants = np.zeros( (nSearchLocal,nQuants), dtype=quants.dtype )
+            self.reduced_quants = np.zeros( (nSearchLocal,nRadBins,nQuants), dtype=quants.dtype )
 
             if reduce_op == 'max': self.reduced_quants.fill(-np.inf)
             if reduce_op == 'min': self.reduced_quants.fill(np.inf)
@@ -295,14 +306,14 @@ def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, b
             # make local view of pos (non-self inputs to JITed function appears to prevent GIL release)
             self.pos_search  = pos_search
             self.pos_target  = pos_target
-            self.rad_search  = rad_search
+            self.radial_bins = radial_bins
             self.quants      = quants
             self.reduce_type = reduce_type
             self.boxSizeSim  = boxSizeSim
 
         def run(self):
             # call JIT compiled kernel
-            _reduceQuantsInRad(self.pos_search, self.pos_target, self.rad_search, self.quants, 
+            _reduceQuantsInRad(self.pos_search, self.pos_target, self.radial_bins, self.quants, 
                                self.reduced_quants, self.reduce_type, self.boxSizeSim, 
                                self.start_ind, self.stop_ind)
 
@@ -317,7 +328,7 @@ def quantReductionInRad(pos_search, pos_target, rad_search, quants, reduce_op, b
         thread.join()
 
         # after each has finished, add its result array to the global
-        reduced_quants[thread.start_ind : thread.stop_ind] = thread.reduced_quants
+        reduced_quants[thread.start_ind : thread.stop_ind,:,:] = thread.reduced_quants
 
     return reduced_quants
 

@@ -26,6 +26,10 @@ def closest(array, value):
     ind = ( np.abs(array-value) ).argmin()
     return array[ind], ind
 
+def array_equal_nan(a, b):
+    """ As np.array_equal(a,b) but allowing NaN==NaN. """
+    return ((a == b) | (np.isnan(a) & np.isnan(b))).all()
+
 def evenlySample(sequence, num, logSpace=False):
     """ Return num samples from sequence roughly equally spaced. """
     if sequence.size <= num:
@@ -601,7 +605,8 @@ def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """
     from matplotlib.pyplot import cm
     cmap = cm.get_cmap(ctName)
-    return cmap( np.linspace(0,1,num) )
+    if bounds is None: bounds = [0,1]
+    return cmap( np.linspace(bounds[0],bounds[1],num) )
 
 def contourf(*args, **kwargs):
     """ Wrap matplotlib.contourf() for a graphical fix in PDF output. """
