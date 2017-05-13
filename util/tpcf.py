@@ -224,7 +224,7 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
 
     return xi
 
-def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, boxSizeSim, nThreads=16):
+def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, boxSizeSim, nThreads=8):
     """ Calculate a reduction operation on one or more quantities for all target points falling within a 3D 
         periodic search radius of each search point.
 
@@ -238,7 +238,7 @@ def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, 
       return is reduced_quants[N,M-1]/[N,M-1,P]
     """
     # input sanity checks
-    if pos_search.ndim != 2 or pos_search.shape[1] != 3 or pos_search.shape[0] <= 1:
+    if pos_search.ndim != 2 or pos_search.shape[1] != 3:
         raise Exception('Strange dimensions of pos_search.')
     if pos_target.ndim != 2 or pos_target.shape[1] != 3 or pos_target.shape[0] <= 1:
         raise Exception('Strange dimensions of pos_target.')

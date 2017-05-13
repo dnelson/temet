@@ -905,8 +905,8 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
 
     evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
     redshift_init = 0.0
-    nGalaxies     = 35
-    nRowsFig      = 7 # 5 columns, 7 rows
+    nGalaxies     = 35 #(note: set to 45 for talk image)
+    nRowsFig      = 7 # 5 columns, 7 rows (note: set to 9 for talk image)
 
     # load halos of this bin, from this run
     sP = simParams(res=res, run=run, redshift=redshift_init)
