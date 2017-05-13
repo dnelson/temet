@@ -160,7 +160,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
                     count += 1
 
         # calculate covariance matrix
-        covar, xi_err = _covariance_matrix(xi, xi_sub)
+        covar, xi_err = _covar_matrix(xi, xi_sub)
 
     with h5py.File(saveFilename,'w') as f:
         f['rad'] = rad
@@ -462,6 +462,10 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
                     pos_sec_loc = np.squeeze( pos_sec[w_sec,:] )
                     quants_loc  = np.squeeze( quants[w_sec,:] )
 
+                    if pos_pri_loc.ndim == 1:
+                        count += 1
+                        continue
+
                     quants_reduced = quantReductionInRad(pos_pri_loc, pos_sec_loc, radialBins_code, 
                                                          quants_loc, 'sum', sP.boxSize)
 
@@ -482,3 +486,48 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
     return r
+
+def lightcone3DtoSkyCoords(pos, vel, sP, velType):
+    """ Transform pos [Nx3] and vel[Nx3] in code units, representing particle or galaxy positions in the 
+    periodic cube, into (ra,dec,redshift). The observer is assumed to be placed at the origin of the cube, 
+    (0,0,0), and the view direction is right now hardcoded. """
+
+    # comoving distance from observer, removing little h
+    pos = sP.units.codeLengthToComovingKpc(pos)
+
+    rr = np.sqrt( pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2 ) # ckpc
+    xy = np.sqrt( pos[:,0]**2 + pos[:,1]**2 ) # ckpc
+
+    # radial velocity (verify with other methods)
+    ct = pos[:,2] / rr
+    st = np.sqrt(1 - ct**2)
+
+    cp = pos[:,0] / xy
+    sp = pos[:,1] / xy
+    vrad = vel[:,0]*st*cp + vel[:,1]*st*sp + vel[:,2]*ct
+
+    # convert to [km/s], unfortunately depends on where these code velocities came from
+    if velType == 'subhalo':
+        vrad = sP.units.subhaloCodeVelocityToKms(vrad)
+    elif velType == 'group':
+        vrad = sP.units.groupCodeVelocityToKms(vrad)
+    elif velType == 'particle':
+        vrad = sP.units.particleCodeVelocityToKms(vrad)
+
+    # redshift: cosmological plus peculiar
+    z_vals = np.arange(0.0, 2.0, 0.001) # redshifts
+    dists  = sP.units.redshiftToComovingDist(z_vals)
+
+    interpolant_dist_to_z = interp1d(dists, z_vals, kind='cubic')
+    redshift_cosmo = interpolant_dist_to_z(rr)
+
+    redshift = redshift_cosmo + (vrad/sP.units.c_km_s) * (1.0 + redshift_cosmo)
+
+    # transform (x,y) -> (theta,phi) -> (ra,dec)
+    theta = np.arccos( pos[:,2]/rr )
+    phi = np.arctan2( pos[:,1], pos[:,0] )
+
+    dec = theta - np.pi/2
+    ra = phi
+
+    return ra, dec, redshift

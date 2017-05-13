@@ -2172,7 +2172,7 @@ def paperPlots():
             vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
-    if 0:
+    if 1:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
@@ -2259,7 +2259,7 @@ def paperPlots():
         vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
 
     # figure 16: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
-    if 1:
+    if 0:
         colorTracksSchematic(L75, bands=bands)
         #for pageNum in range(0,340): 
         #    colorTracksSchematic(L75, bands=bands, pageNum=pageNum)

@@ -144,6 +144,9 @@ class units(object):
 
     def codeMassToMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (msun). """
+        if not isinstance(mass, np.ndarray): mass = np.array(mass)
+        if mass.size == 1: mass = np.array([mass])
+        
         mass_msun = mass.astype('float32') * (self.UnitMass_in_Msun) / self._sP.HubbleParam
         
         return mass_msun

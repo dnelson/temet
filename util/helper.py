@@ -604,6 +604,14 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """
     from matplotlib.pyplot import cm
+
+    if ctName == 'tableau10':
+        # current custom implementation of name-based color picking from this cm
+        # note: exists in matplotlib 2.0+ as 'tab10'
+        colors = {'blue':'#1F77B4','orange':'#FF7F0E','green':'#2CA02C','red':'#D62728','purple':'#9467BD',
+                  'brown':'#8C564B','pink':'#E377C2','gray':'#BCBD22','yellow':'#17BECF','lightblue':'#7F7F7F'}
+        return [colors[name] for name in num]
+
     cmap = cm.get_cmap(ctName)
     if bounds is None: bounds = [0,1]
     return cmap( np.linspace(bounds[0],bounds[1],num) )
