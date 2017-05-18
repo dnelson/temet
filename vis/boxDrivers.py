@@ -100,7 +100,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
     if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
-    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2'} )
+    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[1.0,7.0]} )
     if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
     if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
     if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
@@ -169,7 +169,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = 2000 # 800, 2000, 8000
-        colorbars  = True
+        colorbars  = False
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)

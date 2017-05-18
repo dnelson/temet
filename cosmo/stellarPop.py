@@ -20,7 +20,7 @@ from vis.common import rotationMatrixFromVec, rotateCoordinateArray
 
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
-    beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec):
+    beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec,calzetti_case):
     """ Helper for sps.dust_tau_model_mag(). Cannot JIT a class member function, so it sits here. """
 
     # accumulate per star attenuated luminosity (wavelength dependent):
@@ -48,10 +48,16 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
         atten *= 0.0
         atten += 1.0 # reset to one
 
-        # leave atten at 1.0 (no change) for tau_lambda->0, and use 1e-5 threshold to avoid
-        # numerical truncation setting atten=0 for tau_lambda~0 (very small)
-        w = np.where(tau_lambda >= 1e-5)
-        atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
+        if calzetti_case == 3:
+            # 'uniform scattering slab'
+            atten[:] = np.exp(-tau_lambda)
+
+        if calzetti_case == 5:
+            # 'internal dust'
+            # leave atten at 1.0 (no change) for tau_lambda->0, and use 1e-5 threshold to avoid
+            # numerical truncation setting atten=0 for tau_lambda~0 (very small)
+            w = np.where(tau_lambda >= 1e-5)
+            atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
 
         # bilinear interpolation: stellar population spectrum
         x = metals_log[i]
@@ -140,7 +146,7 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
 
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
-    beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec):
+    beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec,calzetti_case):
     """ Helper for sps.dust_tau_model_mag(). Cannot JIT a class member function, so it sits here. """
 
     # accumulate per star attenuated luminosity (wavelength dependent):
@@ -168,10 +174,16 @@ def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_
         atten *= 0.0
         atten += 1.0 # reset to one
 
-        # leave atten at 1.0 (no change) for tau_lambda->0, and use 1e-5 threshold to avoid
-        # numerical truncation setting atten=0 for tau_lambda~0 (very small)
-        w = np.where(tau_lambda >= 1e-5)
-        atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
+        if calzetti_case == 3:
+            # 'uniform scattering slab'
+            atten[:] = np.exp(-tau_lambda)
+
+        if calzetti_case == 5:
+            # 'internal dust'
+            # leave atten at 1.0 (no change) for tau_lambda->0, and use 1e-5 threshold to avoid
+            # numerical truncation setting atten=0 for tau_lambda~0 (very small)
+            w = np.where(tau_lambda >= 1e-5)
+            atten[w] = (1 - np.exp(-tau_lambda[w])) / tau_lambda[w]
 
         # bilinear interpolation: stellar population spectrum
         x = metals_log[i]
@@ -263,7 +275,7 @@ class sps():
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
     isoTracks  = ['mist','padova07','parsec','basti','geneva']
     stellarLib = ['miles','basel','csk'] # unused
-    dustModels = ['none','cf00','cf00_res_eff','cf00_res_conv']
+    dustModels = ['none','cf00','cf00_res_eff','cf00_res_conv','cf00_res3_conv']
 
     def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
@@ -449,11 +461,11 @@ class sps():
                 continue # missing transmission data
 
             # get wavelength array
-            if '_res_eff' in self.dustModel:
+            if '_eff' in self.dustModel:
                 # get single (lambda_eff) luminosity attenuation factor for each star
                 lambda_nm = np.array([self.lambda_eff[band]])
 
-            if '_res_conv' in self.dustModel:
+            if '_conv' in self.dustModel:
                 # do full convolution of original stellar spectrum with tau(lambda)
                 #lambda_nm = self.trans_lambda[band] # at the resolution of the transmission function
                 lambda_nm = self.wave # at the resolution of the stellar spectra
@@ -728,6 +740,8 @@ class sps():
         for band in bands:
             assert band in self.bands
 
+        calzetti_case = 3 if '_res3' in self.dustModel else 5
+
         r = {}
 
         if '_conv' in self.dustModel:
@@ -738,12 +752,12 @@ class sps():
                 obs_lum = _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
                               self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
                               self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
-                              self.metals,self.ages,self.wave_ang,self.spec)
+                              self.metals,self.ages,self.wave_ang,self.spec,calzetti_case)
             else:
                 obs_lum = _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
                                   self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
                                   self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
-                                  self.metals,self.ages,self.wave_ang,self.spec)
+                                  self.metals,self.ages,self.wave_ang,self.spec,calzetti_case)
 
         if ret_full_spectrum and rel_vel is None:
             # we want an aggregate summed spectrum for all member stars, not all individual spectra
@@ -786,7 +800,7 @@ class sps():
                 obs_lum = _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,
                               self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
                               self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
-                              self.metals,self.ages,self.wave_ang,self.spec)
+                              self.metals,self.ages,self.wave_ang,self.spec,calzetti_case)
 
             # convolve with band (trapezoidal rule)
             if not ret_indiv:

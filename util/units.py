@@ -229,6 +229,10 @@ class units(object):
         """ Convert length/distance in code units to physical Mpc. """
         return self.codeLengthToKpc(x) / 1000.0
 
+    def codeLengthToComovingMpc(self, x):
+        """ Convert length/distance in code units to comoving Mpc. """
+        return self.codeLengthToComovingKpc(x) / 1000.0
+
     def codeVolumeToCm3(self, x):
         """ Convert a volume [length^3] in code units to physical cm^3 (cgs). """
         assert self._sP.redshift is not None

@@ -1310,7 +1310,7 @@ def addBoxMarkers(p, conf, ax):
         legend = ax.legend(legend_lines, legend_labels, fontsize='xx-large', loc='lower left', 
                            handlelength=0, handletextpad=0)
 
-    for text in legend.get_texts(): text.set_color('white')
+        for text in legend.get_texts(): text.set_color('white')
 
 def addVectorFieldOverlay(p, conf, ax):
     """ Add quiver or streamline overlay on top to visualization vector field data. """

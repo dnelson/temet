@@ -705,7 +705,7 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css))
 
         # all quantities on one multi-panel page:
-        quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
+        #quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
 
         # one page per quantity:
         for yQuant in quants:
