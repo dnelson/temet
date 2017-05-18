@@ -241,7 +241,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
             # loop over each run for this bin
             for i, cf in enumerate(cfs[cfBoundSet]):
-                xx = cf['sP'].units.codeLengthToMpc(cf['rad'])
+                xx = cf['sP'].units.codeLengthToComovingMpc(cf['rad'])
                 ww = np.where( cf['xi'] > 0.0 )
 
                 label = cfBoundSet if i == 0 else ''
@@ -348,7 +348,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
     colorSplitSec = 0.6
     cType         = [['g','r'], defSimColorModel]
     colorBinsPri  = [[0.0, 0.6], [0.6, 1.0]]
-    massBinsPri   = [[9.5,10.0],[10.0,10.5],[10.5,11.0],[11.0,11.5],[11.5,12.0]]
+    massBinsPri   = [[9.5,10.0],[10.0,10.5],[10.5,11.0]]
     mTypePri      = 'mstar_30pkpc_log'
 
     # visual config
@@ -498,20 +498,19 @@ def paperPlots():
           colorBins=None, cType=None, mstarBins=mstarBins, mType=mTypeDef)
 
     # figure 2b: TNG300 in stellar mass bins, red/blue split panels
-    if 1:
+    if 0:
         sPs = [L205]
         saveBase = 'figure2b_massbins_%s_'
 
-        mstarBins = [[9.0,9.5], [10.0,10.5], [11.0, 11.5], [11.5,13.0]]
-        #mstarBins = [[9.0,10.0], [10.0,11.0], [11.0,12.0], [12.0, 13.0]]
+        mstarBins = {'red' : [[9.0,9.5], [10.0,10.5], [11.0, 11.5], [12.0,13.0]],
+                     'blue': [[9.0,9.5], [10.0,10.5], [10.5,11.0], [11.0, 11.5]]}
         colorBins = {'blue':[0.0, 0.6], 'red':[0.6, 1.0]}
 
         for colorName, colorBin in colorBins.iteritems():
-            if colorName == 'blue': mstarBinsLoc = mstarBins[:-1]
-            if colorName == 'red': mstarBinsLoc = mstarBins
 
             galaxyTwoPointQuantBounds(sPs, saveBase=saveBase % colorName, cenSatSelect='all', 
-              ratioSubPlot=True, colorBins=[colorBin], cType=cTypeDef, mstarBins=mstarBinsLoc, mType=mTypeDef)
+              ratioSubPlot=True, colorBins=[colorBin], cType=cTypeDef, mstarBins=mstarBins[colorName], 
+              mType=mTypeDef)
 
     # figure 3: color bins at z=0
     if 0:
@@ -524,7 +523,7 @@ def paperPlots():
           colorBins=colorBins, cType=cTypeDef, mstarBins=[mstarBinDef], mType=mTypeDef)
 
     # figure 3b: TNG300 in color bins, low/high mass split panels
-    if 1:
+    if 0:
         sPs = [L205]
         saveBase = 'figure3b_colorbins_%s_'
 
@@ -539,37 +538,21 @@ def paperPlots():
             galaxyTwoPointQuantBounds(sPs, saveBase=saveBase % mstarName, cenSatSelect='all', 
               ratioSubPlot=True,colorBins=colorBinsLoc, cType=cTypeDef, mstarBins=[mstarBin], mType=mType)
 
-    # figure 4a: redshift evolution (red sample)
+    # figure 4: redshift evolution (red/blue all-Mstar samples)
     if 1:
         sPs = []
-        for redshift in [0.0, 0.5, 1.0, 2.0]:
+        for redshift in [0.0, 0.5, 1.0]:
             sPs.append( simParams(res=2500, run='tng', redshift=redshift) )
 
         saveBase = 'figure4_zevo_red_'
 
         mstarBins = [[9.0,13.0]]
-        colorBins = OrderedDict()
-        colorBins['red (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.6, 1.0]
-
-        galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', ratioSubPlot=True,
-          colorBins=colorBins, cType=cTypeDef, mstarBins=mstarBins, mType=mTypeDef)
-
-    # figure 4b: redshift evolution (blue sample)
-    if 1:
-        sPs = []
-        for redshift in [0.0, 0.5, 1.0, 2.0]:
-            sPs.append( simParams(res=2500, run='tng', redshift=redshift) )
-
-        saveBase = 'figure4_zevo_blue_'
-
-        mstarBins = [[9.0,13.0]]
-        colorBins = OrderedDict()
-        colorBins['blue (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.0, 0.6]
+        colorBins = [[0.0, 0.6], [0.6, 1.0]]
 
         galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', ratioSubPlot=True,
           colorBins=colorBins, cType=cTypeDef, mstarBins=mstarBins, mType=mTypeDef)
 
     # figure 5: conformity red fraction
-    if 1:
+    if 0:
         sP = L75FP
         conformityWithRedFrac(sP, saveBase='figure5_')

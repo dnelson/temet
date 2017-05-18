@@ -31,6 +31,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                    'mhalo_subfind','mhalo_subfind_log']
 
+    quants_rad = ['rhalo_200','rhalo_500']
+
     # generally available (auxcat)
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii']
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
@@ -205,6 +207,29 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if '_500' in quant: minMax = [11.0, 15.0]
         label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm halo}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+
+    if quant in ['rhalo_200','rhalo_500','rhalo_200_log','rhalo_500_log']:
+        # R200crit or R500crit
+        od = 200 if '_200' in quant else 500
+
+        gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+        vals = sP.units.codeLengthToKpc( gc['halos']['Group_R_Crit%d'%od][gc['subhalos']] )
+
+        mask = np.zeros( gc['subhalos'].size, dtype='int16' )
+        mask[ gc['halos']['GroupFirstSub'] ] = 1
+        wSat = np.where(mask == 0)
+        vals[wSat] = np.nan
+
+        mTypeStr = '%d,crit' % od
+
+        if '_log' in quant:
+            takeLog = False
+            vals = logZeroNaN(vals)
+            logStr = 'log '
+
+        minMax = [1.0, 2.5]
+        label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'kpc ]'
+        if clean: label = 'R$_{\\rm halo}$ [ '+logStr+'kpc ]'
 
     if quant in ['mass_ovi','mass_ovii']:
         # total OVI/OVII mass in subhalo
