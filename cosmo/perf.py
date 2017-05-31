@@ -16,6 +16,8 @@ from os import mkdir
 from os import remove, rename
 from glob import glob
 from illustris_python.snapshot import getNumPart
+from scipy.interpolate import interp1d
+from util.helper import closest
 
 def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
     """ Verify existence, permissions, and HDF5 structure of groups, full snaps, subboxes. """
@@ -318,6 +320,39 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
 
     return r
 
+def _cpuEstimateFromOtherRunProfile(sP, cur_a, cur_cpu_mh):
+    """ Helper function, use the profile of CPU_hours(a) from another run to extrapolation a 
+    predicted CPU time curve and total given an input cur_a and cur_cpu_mh. """
+    cpu = loadCpuTxt(sP.arepoPath, keys=['total','time','hatb'], hatbMin=41)
+
+    # include only bigish timesteps
+    w = np.where( cpu['hatb'] >= cpu['hatb'].max()-6 )
+
+    xx = cpu['time'][w]
+    yy = np.squeeze( np.squeeze(cpu['total'])[w,2] )
+    yy = yy / (1e6*60.0*60.0) * cpu['numCPUs'] # Mh
+
+    # not finished? replace last entry with the a=1.0 expectation
+    if xx.max() < 1.0:
+        print(' update a=%.1f [%.2f] to a=1.0 [%.2f]' % (xx[-1],yy[-1],yy[-1] / xx[-1]))
+        yy[-1] = yy[-1] / xx[-1]
+        xx[-1] = 1.0
+
+    # convert to fraction, interpolate to 200 points in scalefac
+    frac = yy / yy.max()
+    f = interp1d(xx,frac)
+
+    scalefac = np.linspace(0.01, 1.0, 200)
+    cpu_frac = f(scalefac)
+
+    # use:
+    _, ind = closest(scalefac, cur_a)
+    new_fracs = cpu_frac / cpu_frac[ind]
+    predicted_cpu_mh = cur_cpu_mh * new_fracs
+    estimated_total_cpu_mh = predicted_cpu_mh.max()
+    
+    return scalefac, predicted_cpu_mh, estimated_total_cpu_mh
+
 def plotCpuTimes():
     """ Plot code time usage fractions from cpu.txt. Note that this function is being automatically 
     run and the resultant plot uploaded to http://www.illustris-project.org/w/images/c/ce/cpu_tng.pdf 
@@ -385,7 +420,7 @@ def plotCpuTimes():
 
         for i,sP in enumerate(sPs):
             # load select datasets from cpu.hdf5
-            if sP.run == 'tng' and sP.res in [910,1820,1080,2160,1250,2500]:
+            if sP.run == 'tng' and sP.res in [1024,910,1820,1080,2160,1250,2500]:
                 hatbMin = 41
             else:
                 hatbMin = 0
@@ -446,6 +481,28 @@ def plotCpuTimes():
                 pLabels.append( 'Predict: %3.1f MHs (Finish: %s)' % (totPredictedMHs,predictedFinishStr))
                 pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=':') )
 
+            # total time prediction based on L75n1820TNG and L25n1024_4503 profiles
+            if plotKey in ['total'] and xx.max() < 0.99 and sP.variant == 'None':
+                sPs_predict = [simParams(res=1820, run='tng'), 
+                               simParams(res=1024, run='tng', variant=4503)]
+                ls = ['--','-.']
+
+                for j, sP_p in enumerate(sPs_predict):
+                    p_a, p_cpu, p_tot = _cpuEstimateFromOtherRunProfile(sP_p, xx.max(), yy.max())
+                    w = np.where(p_a > xx.max())
+
+                    # plot
+                    ax.plot(p_a[w], p_cpu[w], linestyle=ls[j], color=l.get_color())
+
+                    # estimate finish date
+                    remainingRunDays = (p_tot-yy.max()) * 1e6 / (cpu['numCPUs'] * 24.0)
+                    p_date = datetime.now() + timedelta(days=remainingRunDays)
+                    p_str = p_date.strftime('%d %B, %Y')
+                    print(' [w/ %s] Predicted: %.1f million CPUhs (%s)' % (sP_p.simName,p_tot,p_str))
+
+                    pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
+                    pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=ls[j]) )
+
         zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
         axTop = ax.twiny()
         axTickVals = 1/(1 + np.array(zVals) )
@@ -455,18 +512,17 @@ def plotCpuTimes():
         axTop.set_xticklabels(zVals)
         axTop.set_xlabel("Redshift")
 
-        # second legend for predictions
+        # add to legend for predictions
         if len(pLabels) > 0:
             pLabels.append( '(Last Updated: %s)' % datetime.now().strftime('%d %B, %Y'))
             pColors.append( plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-') )
+        else:
+            pLabels = []
+            pColors = []
 
-            loc = 'upper right'
-            if ax.get_yscale() == 'log': loc = 'lower left'
-            legend2 = ax.legend(pColors, pLabels, loc=loc)
-            ax.add_artist(legend2)
-
-        # first legend for sim names
-        ax.legend(loc='best')
+        # make legend, sim names + extra
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles+pColors, labels+pLabels, loc='best', prop={'size':13})
 
         fig.tight_layout()    
         pdf.savefig()
