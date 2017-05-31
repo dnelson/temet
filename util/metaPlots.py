@@ -104,6 +104,13 @@ def plotCpuTimeEstimates():
     cpuhs = []
     finish_dates = []
 
+    # newer additions
+    dates_extra = []
+    cpuhs_tng100 = []
+    finish_dates_tng100 = []
+    cpuhs_1024 = []
+    finish_dates_1024 = []
+
     # load and parse
     readNextAsPredict = False
     iterUntilNextDate = True
@@ -130,14 +137,28 @@ def plotCpuTimeEstimates():
 
         # e.g. "Predicted total time: 104.8 million CPUhs (21 November, 2017)" after "TNG50-1 [total]:*" line
         if readNextAsPredict:
-            assert line[0:21] == 'Predicted total time:'
-            cpuh = float(line.split("time: ")[1].split(" ")[0])
-            finish_date = line.split("(")[1].split(")")[0]
-            finish_date = datetime.strptime(finish_date, date_fmt)
-            cpuhs.append(cpuh)
-            finish_dates.append(finish_date)
-            readNextAsPredict = False
-            iterUntilNextDate = True
+            if 'Predicted total time:' in line:
+                cpuh = float(line.split("time: ")[1].split(" ")[0])
+                finish_date = line.split("(")[1].split(")")[0]
+                finish_date = datetime.strptime(finish_date, date_fmt)
+                cpuhs.append(cpuh)
+                finish_dates.append(finish_date)
+            elif '[w/ TNG100-1] Predicted:' in line:
+                cpuh = float(line.split("Predicted: ")[1].split(" ")[0])
+                finish_date = line.split("(")[1].split(")")[0]
+                finish_date = datetime.strptime(finish_date, date_fmt)
+                cpuhs_tng100.append(cpuh)
+                finish_dates_tng100.append(finish_date)
+                dates_extra.append(dates[-1])
+            elif '[w/ L25n1024_4503] Predicted:' in line:
+                cpuh = float(line.split("Predicted: ")[1].split(" ")[0])
+                finish_date = line.split("(")[1].split(")")[0]
+                finish_date = datetime.strptime(finish_date, date_fmt)
+                cpuhs_1024.append(cpuh)
+                finish_dates_1024.append(finish_date)
+            else:
+                readNextAsPredict = False
+                iterUntilNextDate = True
 
     f.close()
 
@@ -148,13 +169,15 @@ def plotCpuTimeEstimates():
     
     ax.set_xlim(xlim_dates)
     ax.set_ylim([20,140])
-    #ax.set_yscale('log')
     ax.set_xlabel('Date')
     ax.set_ylabel('Estimated Total CPU time [Mh]')
 
     ax.plot_date([start_date,start_date],[30,130],':',lw=lw,color='black')
 
-    ax.plot_date(dates, cpuhs, 'o-', lw=lw, label=runName)
+    ax.plot_date(dates, cpuhs, 'o-', lw=lw, label=runName + ' local fit')
+    ax.plot_date(dates_extra, cpuhs_tng100, 'o-', lw=lw, label=runName + ' w/ TNG100 cpuh(a)')
+    ax.plot_date(dates_extra, cpuhs_1024, 'o-', lw=lw, label=runName + ' w/ L25n1024 cpuh(a)')
+
     ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
     ax.legend()
     fig.autofmt_xdate()
@@ -166,8 +189,10 @@ def plotCpuTimeEstimates():
     ax.set_xlabel('Prediction Date')
     ax.set_ylabel('Estimated Completion Date')
 
-    #ax.plot_date([start_date,start_date],[ylim_dates[0],ylim_dates[1]],':',lw=lw,color='black')
-    ax.plot_date(dates, finish_dates, 'o-', lw=lw, label=runName)
+    ax.plot_date(dates, finish_dates, 'o-', lw=lw, label=runName + ' local fit')
+    ax.plot_date(dates_extra, finish_dates_tng100, 'o-', lw=lw, label=runName + ' w/ TNG100 cpuh(a)')
+    ax.plot_date(dates_extra, finish_dates_1024, 'o-', lw=lw, label=runName + ' w/ L25n1024 cpuh(a)')
+
     ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
     ax.yaxis.set_major_formatter(DateFormatter('%b %Y'))
     ax.legend()
@@ -176,4 +201,3 @@ def plotCpuTimeEstimates():
     fig.tight_layout()
     fig.savefig(fName1)
     plt.close(fig)
-

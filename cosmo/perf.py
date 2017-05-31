@@ -334,7 +334,7 @@ def _cpuEstimateFromOtherRunProfile(sP, cur_a, cur_cpu_mh):
 
     # not finished? replace last entry with the a=1.0 expectation
     if xx.max() < 1.0:
-        print(' update a=%.1f [%.2f] to a=1.0 [%.2f]' % (xx[-1],yy[-1],yy[-1] / xx[-1]))
+        #print(' update a=%.1f [%.2f] to a=1.0 [%.2f]' % (xx[-1],yy[-1],yy[-1] / xx[-1]))
         yy[-1] = yy[-1] / xx[-1]
         xx[-1] = 1.0
 
