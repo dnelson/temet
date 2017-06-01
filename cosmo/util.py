@@ -254,14 +254,109 @@ def snapNumToAgeFlat(sP, snap=None):
 def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, method='LHaloTree'):
     """ Given a set of subhaloInds_from_search in sP_from, find matched subhalos in sP_to.
     Can implement many methods. For now, uses external (pre-generated) postprocessing/SubhaloMatching/ 
-    for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG runs. 
+    for TNG_method runs, or postprocessing/SubhaloMatchingToDark/ for Illustris/TNG to DMO runs, or 
+    postprocessing/SubhaloMatchingToIllustris/ for TNG->Illustris runs.
     Return is an int32 array of the same size as input, where -1 indicates no match. """
     from tracer.tracerMC import match3
     from util.simParams import simParams
 
-    assert method in ['LHaloTree','SubLink']
-    assert sP_from.snap == sP_to.snap
+    assert method in ['LHaloTree','SubLink','Lagrange','Positional']
     assert sP_from != sP_to
+
+    # positional cross-match between two different runs?
+    if method == 'Positional':
+        subhaloInds_from_search = np.array(subhaloInds_from_search)
+        r = np.zeros( subhaloInds_from_search.size, dtype='int32' ) - 1
+        assert sP_to.boxSize == sP_from.boxSize
+
+        # matches which differ by more than this amount are discarded
+        massDeltaMaxDex = 0.3
+
+        # filter subhaloInds_from_search to centrals only (ignore satellites if any requested)
+        cen_inds_to = cenSatSubhaloIndices(sP_to, cenSatSelect='cen')
+        cen_inds_from = cenSatSubhaloIndices(sP_from, cenSatSelect='cen')
+
+        _, ind_from = match3(cen_inds_from, subhaloInds_from_search)
+        subhaloInds_from = subhaloInds_from_search[ind_from]
+
+        # load halo masses and positions from both runs
+        mhalo_to = cosmo.load.groupCat(sP_to, fieldsSubhalos=['mhalo_200_log'])
+        mhalo_from = cosmo.load.groupCat(sP_from, fieldsSubhalos=['mhalo_200_log'])
+
+        pos_from = cosmo.load.groupCat(sP_from, fieldsSubhalos=['SubhaloPos'])['subhalos']
+        pos_to = cosmo.load.groupCat(sP_to, fieldsSubhalos=['SubhaloPos'])['subhalos']
+
+        pos_to_cen = pos_to[cen_inds_to,:]
+
+        # loop over each requested search subhalo
+        for i, subhaloInd_from in enumerate(subhaloInds_from):
+            # calculate distances to all centrals in illustris
+            pos_from_loc = np.squeeze(pos_from[subhaloInd_from,:])
+            dists = periodicDists(pos_from_loc, pos_to_cen, sP_from)
+            pos_to_cen_ind = np.where(dists == dists.min())[0]
+            subhaloInd_to = cen_inds_to[pos_to_cen_ind]
+
+            # pass mass requirement? if not, do not save this match
+            if np.abs( mhalo_from[subhaloInds_from[i]] - mhalo_to[subhaloInd_to] ) > massDeltaMaxDex:
+                continue
+
+            r[ind_from[i]] = subhaloInd_to
+
+        return r
+
+    # are we cross-matching between Illustris and TNG with the Lagrange catalog?
+    if sP_from.run == 'illustris' and sP_to.run == 'tng':
+        assert method == 'Lagrange'
+        assert sP_from.res == sP_to.res == 1820 # otherwise generalize
+
+        matchFilePath = sP_to.postPath + '/SubhaloMatchingToIllustris/'
+        matchFileName = matchFilePath + 'LagrangeMatches_L75n1820TNG_L75n1820FP_%03d.hdf5' % sP_to.snap
+
+        with h5py.File(matchFileName,'r') as f:
+            inds_tng = f['SubhaloIndexFrom'][()]
+            inds_illustris = f['SubhaloIndexTo'][()]
+            score = f['Score'][()]
+
+        r = np.zeros( len(subhaloInds_from_search), dtype='int32' ) - 1
+
+        # instead: pick central with minimum ID (oh my, do something better)
+        cen_inds_to = cenSatSubhaloIndices(sP=sP_to, cenSatSelect='cen')
+        print('Warning: inverse Lagrange mapping, taking most massive centrals (doesnt really work).')
+
+        for i in range(len(subhaloInds_from_search)):
+            w = np.where(inds_illustris == subhaloInds_from_search[i])[0]
+
+            # candidates
+            cand_inds_tng = inds_tng[w]
+
+            # which are centrals? take min ID (most massive)
+            cand_inds_tng, _ = match3(cen_inds_to, cand_inds_tng)
+
+            r[i] = cen_inds_to[cand_inds_tng].min()
+
+        return r
+
+    if sP_from.run == 'tng' and sP_to.run == 'illustris':
+        assert method == 'Lagrange','Positional'
+        r = np.zeros( len(subhaloInds_from_search), dtype='int32' ) - 1
+
+        if method == 'Lagrange':
+            assert sP_from.res == sP_to.res == 1820 # otherwise generalize
+
+            matchFilePath = sP_from.postPath + '/SubhaloMatchingToIllustris/'
+            matchFileName = matchFilePath + 'LagrangeMatches_L75n1820TNG_L75n1820FP_%03d.hdf5' % sP_from.snap
+
+            with h5py.File(matchFileName,'r') as f:
+                inds_tng = f['SubhaloIndexFrom'][()]
+                inds_illustris = f['SubhaloIndexTo'][()]
+                score = f['Score'][()]
+
+            match_inds_source, match_inds_search = match3(inds_tng, subhaloInds_from_search)
+            r[match_inds_search] = inds_illustris[match_inds_source]
+
+        return r
+
+    assert sP_from.snap == sP_to.snap
 
     # are we cross-matching between two non-fiducial sims.rTNG_method runs?
     if sP_from.run == 'tng' and sP_from.variant.isdigit() and \
@@ -272,10 +367,10 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         sP_fid = simParams(res=sP_from.res, run=sP_from.run, redshift=sP_from.redshift, variant=0000)
 
         # what are the matched halos of 'from' in 'fiducial'
-        match_from_fid = crossMatchSubhalosToRun(sP_from, sP_fid, subhaloInds_from_search, method=method)
+        match_from_fid = crossMatchSubhalosBetweenRuns(sP_from, sP_fid, subhaloInds_from_search, method=method)
 
         # what are these match results in 'to'
-        match_to_fid = crossMatchSubhalosToRun(sP_fid, sP_to, match_from_fid, method=method)
+        match_to_fid = crossMatchSubhalosBetweenRuns(sP_fid, sP_to, match_from_fid, method=method)
 
         w = np.where(match_from_fid == -1)
         match_to_fid[w] = -1 # flag any matches which failed first step as complete failures
