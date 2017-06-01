@@ -116,6 +116,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                             length = f[catIndFieldName].size
                             temp_r = f[field][()]
 
+                            if length == 0: continue
+
                             if len(allShape) > 1 and allShape[condAxis] > condThresh:
                                 # condensed, stamp in to dense indices
                                 assert f[field].ndim == 2
@@ -284,11 +286,54 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
     assert sP.snap is not None, "Must specify sP.snap for groupCat() load."
     assert sP.subbox is None, "No groupCat() for subbox snapshots."
 
+    r = {}
+
+    # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Note! Can do >=1 custom fields 
+    # simultaneously, as opposed to snapshotSubset(), but cannot mix custom and standard fields!
+    if fieldsSubhalos is not None:
+        customCount = 0
+
+        for i, field in enumerate(fieldsSubhalos):
+            quant = field.lower()
+
+            # halo mass (m200 or m500) of parent halo, or central subfind mass (in msun or log msun)
+            if quant in ['mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log']:
+                od = 200 if '_200' in quant else 500
+
+                gc = groupCat(sP, fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+                r[field] = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit%d'%od][gc['subhalos']] )
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
+                # satellites given nan
+                mask = np.zeros( gc['subhalos'].size, dtype='int16' )
+                mask[ gc['halos']['GroupFirstSub'] ] = 1
+                wSat = np.where(mask == 0)
+                r[field][wSat] = np.nan
+
+                customCount += 1
+
+            # subhalo mass (in msun or log msun)
+            if quant in ['mhalo_subfind','mhalo_subfind_log']:
+                gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
+                r[field] = sP.units.codeMassToMsun( gc['subhalos'] )
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
+                customCount += 1
+
+        if customCount == 1:
+            # compress and return single field
+            key = r.keys()[0]
+            assert len(r.keys()) == 1
+            return r[key]
+        elif customCount > 1:
+            # return dictionary (no 'subhalos' wrapping)
+            return r
+
     # override path function
     il.groupcat.gcPathOrig = il.groupcat.gcPath
     il.groupcat.gcPath = gcPath
-
-    r = {}
 
     # IDs exist? either read or skip
     with h5py.File(gcPath(sP.simPath,sP.snap),'r') as f:
@@ -756,10 +801,16 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             return sP.units.calcPressureCGS(u, dens, log=True)
 
+        if field.lower() in ['p_gas_linear']:
+            return 10.0**snapshotSubset(sP, partType, 'p_gas', **kwargs)
+
         # magnetic pressure [log K/cm^3]
         if field.lower() in ['mag_pres','magnetic_pressure','p_b','p_magnetic']:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             return sP.units.calcMagneticPressureCGS(b, log=True)
+
+        if field.lower() in ['p_b_linear']:
+            return 10.0**snapshotSubset(sP, partType, 'p_b', **kwargs)
 
         # kinetic energy density [log erg/cm^3]
         if field.lower() in ['kinetic_energydens','kinetic_edens','u_ke']:
