@@ -1883,7 +1883,7 @@ def plots():
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -1894,7 +1894,7 @@ def plots():
     #for i in range(1,11):
     #    sPs.append( simParams(res=256, run='tng', variant='r%03d' % i) )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -1910,13 +1910,12 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant=4602) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_sizes_z4_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_xray_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
-    zZero = 4.0 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_res_conv_efr','sdss_r',False])
-    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_res_conv_efr','sdss_r',False])
+    haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
     pdf.close()
     return
     # END TEST AREA

@@ -168,7 +168,7 @@ def plotCpuTimeEstimates():
     ax = fig.add_subplot(211)
     
     ax.set_xlim(xlim_dates)
-    ax.set_ylim([20,140])
+    ax.set_ylim([50,210])
     ax.set_xlabel('Date')
     ax.set_ylabel('Estimated Total CPU time [Mh]')
 

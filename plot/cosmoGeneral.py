@@ -7,7 +7,7 @@ from builtins import *
 
 import numpy as np
 import h5py
-import pdb
+import copy
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import Normalize, LogNorm, colorConverter
@@ -66,6 +66,16 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
     addUniverseAgeAxis(ax, sP)
 
+def tngModel_chi(M_BH):
+    """ Return chi(M_BH) for the fiducial TNG model parameters. M_BH in Msun. """
+    chi0 = 0.002
+    beta = 2.0
+    chi_max = 0.1
+
+    chi_bh = np.clip( chi0 * (M_BH / 1e8)**beta, 0.0, chi_max )
+
+    return chi_bh
+
 # ------------------------------------------------------------------------------------------------------
 
 def _loadColorOrQuant(sP,xQuant,xSpec):
@@ -91,7 +101,7 @@ def _loadColorOrQuant(sP,xQuant,xSpec):
         saveLabel = '%s_%s_%s' % (xQuant,'-'.join(bands),simColorsModel)                    
     else:
         vals, label, minMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
-        #if sQuant == xQuant: minMax = sRange # compress x range in this case
+        
         if xLog: vals = logZeroNaN(vals)
         #minMax = [np.nanmin(vals), np.nanmax(vals)] # auto
         saveLabel = '%s' % (xQuant)
@@ -125,7 +135,7 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
     medianLine = False
     colorContours = False
 
-    if cQuant is None and cenSatSelect == 'cen':
+    if (cQuant is None and cenSatSelect == 'cen') or yQuant == 'ssfr':
         medianLine = True
     if cenSatSelect == 'cen' and yQuant == 'color': # fig_subplot[0] is not None and cQuant is not None:
         colorContours = True
@@ -141,6 +151,8 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
     # y-axis: load/calculate simulation colors, cached in sP.data
     sim_yvals, ylabel, ySaveLabel, yMinMax = _loadColorOrQuant(sP,yQuant,ySpec)
 
+    if yQuant == 'ssfr': yMinMax = [-3.5,0.0] # temporary override
+
     # c-axis: load properties for color mappings
     if cQuant is None:
         sim_cvals = np.zeros( sim_xvals.size, dtype='float32' )
@@ -152,9 +164,14 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
 
         clabel = 'log N$_{\\rm gal}$'
         cMinMax = [0.0,2.0]
-        if sP.boxSize > 100000: cMinMax = [1.0,2.5]
+        if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
-        sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
+        if cQuant != 'color':
+            sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
+        else:
+            # support for coloring by color with ySpec=[bands,colorModel] indicating cSpec
+            sim_cvals, clabel, _, cMinMax = _loadColorOrQuant(sP,cQuant,ySpec)
+            cLog = False
 
     if sim_cvals is None:
         return # property is not calculated for this run (e.g. expensive auxCat)
@@ -385,6 +402,8 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen',
             # y-axis: load galaxy properties (in histo2D were the color mappings)
             sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
 
+            if yQuant == 'ssfr': yMinMax = [-3.5,0.0] # temporary override
+
             if sim_yvals is None:
                 print('   skip')
                 continue # property is not calculated for this run (e.g. expensive auxCat)
@@ -570,36 +589,51 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
                 ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
         # special case: BH_CumEgy_ratio add theory curve on top from BH model
-        if clean and yQuant == 'BH_CumEgy_ratio':
+        if clean and yQuant in ['BH_CumEgy_ratio','BH_CumEgy_ratioInv']:
             # make a second y-axis on the right
             color2 = '#999999'
-            chi0 = 0.002 # TNG fiducial model
-            beta = 2.0 # TNG fiducial model
-            chi_max = 0.1 # TNG fiducial model
 
-            ax.set_ylim([0.0,6.0])
+            #ax.set_ylim([0.0,6.0])
             ax2 = ax.twinx()
-            ax2.set_ylim([-0.002, 0.11])
-            #ax2.set_yscale('log')
+            #ax2.set_ylim([-0.002, 0.103])
+            ax2.set_ylim([8e-5, 0.12])
+            ax2.set_yscale('log')
+
             ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
             ax2.tick_params('y', which='both', colors=color2)
 
             # need median M_BH as a function of x-axis (e.g. M_star)
-            sim_m_bh, _, _, take_log = simSubhaloQuantity(sP, 'M_BH_actual', clean)
-            sim_m_bh = sim_m_bh[wSelect][wFinite]
-            if not take_log: assert 0 # undo log then
+            for bhIterNum, bhRedshift in enumerate([0.0]):
+                # more than 1 redshift
+                sP_loc = copy.copy(sP)
+                sP_loc.setRedshift(bhRedshift)
 
-            xm_bh, ym_bh, _ = running_median(sim_xvals,sim_m_bh,binSize=binSize,skipZeros=True)
-            w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
-            xm_bh = xm_bh[w]
-            ym_bh = ym_bh[w]
+                sim_x_loc, _, _, take_log2 = simSubhaloQuantity(sP_loc, xQuant, clean)
+                if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
+                sim_m_bh, _, _, take_log2 = simSubhaloQuantity(sP_loc, 'M_BH_actual', clean)
+                if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
 
-            # derive eddington ratio transition as a function of x-axis (e.g. M_star)
-            chi_bh = np.clip( chi0 * (ym_bh / 1e8)**beta, 0.0, chi_max )
-            ax2.plot( xm_bh, chi_bh, '-', lw=lw, color=color2)
+                # same filters as above
+                wSelect = cenSatSubhaloIndices(sP_loc, cenSatSelect=cenSatSelect)
+                sim_x_loc = sim_x_loc[wSelect]
+                sim_m_bh = sim_m_bh[wSelect]
+
+                wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
+                sim_x_loc = sim_x_loc[wFinite]
+                sim_m_bh = sim_m_bh[wFinite]
+
+                xm_bh, ym_bh, _ = running_median(sim_x_loc,sim_m_bh,binSize=binSize*2,skipZeros=True)
+                ym_bh = savgol_filter(ym_bh,sKn,sKo)
+                w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
+                xm_bh = xm_bh[w]
+                ym_bh = ym_bh[w]
+
+                # derive eddington ratio transition as a function of x-axis (e.g. M_star)
+                linestyle = '-' if bhIterNum == 0 else ':'
+                ax2.plot( xm_bh, tngModel_chi(ym_bh), linestyle=linestyle, lw=lw, color=color2)
 
             ax.set_xlim(xMinMax) # fix
-            legendLoc = 'lower left'
+            legendLoc = 'lower right'
 
         # legend
         if i == 0:

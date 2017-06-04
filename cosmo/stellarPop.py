@@ -454,7 +454,7 @@ class sps():
         self.gamma = {}
 
         self.beta = -0.5
-        self.N_H0 = 2.1e21 # neutral hydrogen column density [cm^2]
+        self.N_H0 = 2.1e21 # neutral hydrogen column density [cm^-2]
 
         for band in self.bands:
             if 'suprimecam' in band:

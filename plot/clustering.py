@@ -159,13 +159,13 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
     # specific color table?
     cm = None
 
-    if colorBins is not None and len(colorBins) == 1:
+    if colorBins is not None and len(colorBins) == 1 and len(mstarBins) > 2:
         # many mass bins, separate plots for red and blue samples
         if '_red' in saveBase: ctName = 'Oranges'
         if '_blue' in saveBase: ctName = 'Blues'
         cm = sampleColorTable( ctName, np.sum([len(cfs[k]) for k in cfs.keys()]), bounds=[0.4,1.0] )
 
-    if mstarBins is not None and len(mstarBins) == 1:
+    if mstarBins is not None and len(mstarBins) == 1 and len(colorBins) > 2:
         # many color bins, separate plots for high-mass and low-mass samples
         if '_highmass' in saveBase: ctName = 'Purples'
         if '_lowmass' in saveBase: ctName = 'Greens'
@@ -212,6 +212,9 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
             else:
                 if loadByColor: ax_sub.set_ylabel('$\\xi(r)_{\\rm red}$ / $\\xi(r)_{\\rm blue}$')
                 if loadByMass: ax_sub.set_ylabel('$\\xi(r)_{\\rm high}$ / $\\xi(r)_{\\rm low}$')
+                if len(sPs) > 1:
+                    # multi-redshift
+                    ax_sub.set_ylabel('$\\xi(r)_{z_i}$ / $\\xi(r)_{z=0}$')
 
             for yVal in [0.5,1.0,2.0]:
                 ax_sub.plot( rMinMax, [yVal,yVal], ':', color='black', alpha=0.1, lw=1.0)
@@ -239,7 +242,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
         for k, cfBoundSet in enumerate(cfs.keys()):
             c = ax._get_lines.prop_cycler.next()['color'] if cm is None else cm[k]
 
-            # loop over each run for this bin
+            # loop over each run/redshift for this bin
             for i, cf in enumerate(cfs[cfBoundSet]):
                 xx = cf['sP'].units.codeLengthToComovingMpc(cf['rad'])
                 ww = np.where( cf['xi'] > 0.0 )
@@ -274,7 +277,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
                 if not ratioSubPlot:
                     continue
 
-                if k == 0:
+                if (len(sPs) == 1 and k == 0) or (len(sPs) > 1 and i == 0):
                     # save
                     k0_x = x_plot
                     k0_y = y_plot
@@ -286,7 +289,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
                     ysub_plot = 10.0**y_plot[w] / 10.0**k0_y[w0]
 
                     # inherit color, unless we just have 2 lines (1 ratio) then make it black
-                    c = 'black' if len(cfs) == 2 else c
+                    c = 'black' if (len(cfs) == 2 and len(cfs[cfBoundSet]) == 1) else c
 
                     ax_sub.plot(x_plot[w], ysub_plot, lw=lw, linestyle=linestyles[i], 
                                 label=label, color=c)
@@ -304,7 +307,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
                     if drawSymbols:
                         ax_sub.errorbar(x_plot[w], ysub_plot, markerSize=symSize, 
                              color=c, ecolor=c, alpha=alpha, capsize=0.0, fmt='o')
-                    if i == 0:
+                    if (len(sPs) == 1 and i == 0) or (len(sPs) > 1 and i == 1):
                         ax_sub.fill_between(x_plot[w], ysub_plot-yerr_sub, ysub_plot+yerr_sub, 
                             color=c, interpolate=True, alpha=alphaFill)
 
@@ -321,7 +324,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
             handles, labels = [], []
             for i, sP in enumerate(sPs):
                 handles.append(plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[i]) )
-                labels.append(sP.simName)
+                labels.append(sP.simName + ' z=%.1f' % sP.redshift)
             if colorBins is not None and len(colorBins) == 1:
                 handles.append(plt.Line2D( (0,1),(0,0),color='black',lw=0.0,marker='') )
                 if '_red' in saveBase: labels.append('red only') #'red galaxies (g-r > 0.6)'
@@ -465,7 +468,7 @@ def paperPlots():
         sPs = [L205]
         saveBase = 'figure1b_red_vs_blue_'
 
-        mstarBins = [[9.0,13.0]]
+        mstarBins = [mstarBinDef]
         colorBins = OrderedDict()
         colorBins['blue (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.0, 0.6]
         colorBins['red (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.6, 1.0]
@@ -544,10 +547,12 @@ def paperPlots():
         for redshift in [0.0, 0.5, 1.0]:
             sPs.append( simParams(res=2500, run='tng', redshift=redshift) )
 
-        saveBase = 'figure4_zevo_red_'
+        saveBase = 'figure4_zevo_'
 
-        mstarBins = [[9.0,13.0]]
-        colorBins = [[0.0, 0.6], [0.6, 1.0]]
+        mstarBins = [mstarBinDef]
+        colorBins = OrderedDict()
+        colorBins['blue (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.0, 0.6]
+        colorBins['red (M$_\star$ > 10$^9$ M$_{\\rm sun})$'] = [0.6, 1.0]
 
         galaxyTwoPointQuantBounds(sPs, saveBase=saveBase, cenSatSelect='all', ratioSubPlot=True,
           colorBins=colorBins, cType=cTypeDef, mstarBins=mstarBins, mType=mTypeDef)
