@@ -296,12 +296,18 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
 
-            # halo mass (m200 or m500) of parent halo, or central subfind mass (in msun or log msun)
-            if quant in ['mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log']:
+            # halo mass (m200 or m500) of parent halo, or central subfind mass (in code, msun, or log msun)
+            if quant in ['mhalo_200','mhalo_200_log','mhalo_200_code',
+                         'mhalo_500','mhalo_500_log','mhalo_200_code']:
                 od = 200 if '_200' in quant else 500
 
                 gc = groupCat(sP, fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-                r[field] = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit%d'%od][gc['subhalos']] )
+
+                r[field] = gc['halos']['Group_M_Crit%d'%od][gc['subhalos']]
+
+                if '_code' not in quant:
+                    # conversion: code -> physical units
+                    r[field] = sP.units.codeMassToMsun( r[field] )
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
@@ -317,6 +323,33 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             if quant in ['mhalo_subfind','mhalo_subfind_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
                 r[field] = sP.units.codeMassToMsun( gc['subhalos'] )
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
+                customCount += 1
+
+            # virial radius (r200 or r500) of parent halo
+            if quant in ['rhalo_200','rhalo_200_log','rhalo_500','rhalo_500_log']:
+                od = 200 if '_200' in quant else 500
+
+                gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+                r[field] = sP.units.codeLengthToKpc( gc['halos']['Group_R_Crit%d'%od][gc['subhalos']] )
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
+                # satellites given nan
+                mask = np.zeros( gc['subhalos'].size, dtype='int16' )
+                mask[ gc['halos']['GroupFirstSub'] ] = 1
+                wSat = np.where(mask == 0)
+                r[field][wSat] = np.nan
+
+                customCount += 1
+
+            # virial temperature of parent halo
+            if quant in ['tvir', 'tvir_log']:
+                # get mass with self-call
+                mass = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
+                r[field] = sP.units.codeMassToVirTemp(mass)
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
