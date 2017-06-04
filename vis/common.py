@@ -1533,6 +1533,7 @@ def renderMultiPanel(panels, conf):
 
         # for each panel: paths and render setup
         for i, p in enumerate(panels):
+            if p['boxSizeImg'] is None: continue # blank panel
             # grid projection for image
             grid, config = gridBox(**p)
 
@@ -1643,6 +1644,7 @@ def renderMultiPanel(panels, conf):
 
         # for each panel: paths and render setup
         for i, p in enumerate(panels):
+            if p['boxSizeImg'] is None: continue # blank panel
             # grid projection for image
             grid, config = gridBox(**p)
 

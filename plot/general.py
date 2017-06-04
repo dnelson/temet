@@ -23,7 +23,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
     # generally available (groupcat)
-    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2']
+    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2',
+               'surfdens1_stars', 'surfdens2_stars']
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
@@ -38,9 +39,10 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                    'bmag_halo_masswt',   'bmag_halo_volwt', 
                    'pratio_halo_masswt', 'pratio_halo_volwt', 'pratio_2rhalf_masswt', 
+                   'ptot_gas_halo', 'ptot_b_halo',
                    'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']
 
-    quants3 = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high','BH_CumEgy_ratio',
+    quants3 = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high', 'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
                'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
 
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
@@ -304,6 +306,27 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [0.1, 1.6]
         if tight: minMax = [0.3, 1.2]
 
+    if quant in ['surfdens1_stars','surfdens2_stars']:
+        if '1_' in quant:
+            selStr = 'HalfRad'
+            detailsStr = ', <r_{\star,1/2}'
+        if '2_' in quant:
+            selStr = 'Rad'
+            detailsStr = ', <2r_{\star,1/2}'
+
+        fields = ['SubhaloMassIn%sType' % selStr,'SubhaloHalfmassRadType']
+        gc = groupCat(sP, fieldsSubhalos=fields)
+
+        mass = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassIn%sType'%selStr][:,sP.ptNum('stars')] )
+        size = sP.units.codeLengthToKpc( gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] )
+        if '2_' in quant: size *= 2.0
+
+        vals = mass / (np.pi*size*size)
+        label = '$\Sigma_{\star%s}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]' % detailsStr
+
+        minMax = [6.5, 9.0]
+        if tight: minMax = [7.0, 10.0]
+
     if quant in ['fgas1','fgas2']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
         if quant == 'fgas1': fieldName = 'SubhaloMassInHalfRadType'
@@ -490,6 +513,26 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [-2.0, 1.0]
         if tight: minMax = [-2.2, 1.2]
 
+    if quant in ['ptot_gas_halo','ptot_b_halo']:
+        # total pressure (in K/cm^3) either thermal or magnetic, in the halo (0.15 < r/rvir < 1.0)
+        if '_gas' in quant:
+            selStr = 'gas'
+            label = 'P$_{\\rm tot,gas}$ [ log K/cm^3 ]'
+        if '_b' in quant:
+            selStr = 'B'
+            label = 'P$_{\\rm tot,B}$ [ log K/cm^3 ]'
+
+        fieldName = 'Subhalo_Ptot_%s_halo' % (selStr)
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = ac[fieldName]
+
+        if not clean:
+            label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
+        minMax = [5,7]
+        if tight: minMax = [4,8]
+
     if quant[0:3] == 'tr_':
         # tracer tracks quantity (tr_zacc_mean_mode=smooth)
         from tracer.tracerMC import defParPartTypes
@@ -588,7 +631,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [6.0,9.0]
         if tight: minMax = [6.0,10.0]
 
-    if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio',
+    if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio','BH_CumEgy_ratioInv',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:
         # cumulative energy/mass growth in the low vs high states, and the respective ratios
         if quant == 'BH_CumEgy_ratio':
@@ -596,6 +639,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'BH $\int$ E$_{\\rm injected,high}$ / $\int$ E$_{\\rm injected,low}$ [ log ]'
             minMax = [0.0,4.0]
             if tight: minMax = [0.0,7.0]
+        if quant == 'BH_CumEgy_ratioInv':
+            fields = ['CumEgyInjection_Low','CumEgyInjection_High']
+            label = 'BH $\int$ E$_{\\rm injected,low}$ / $\int$ E$_{\\rm injected,high}$ [ log ]'
+            minMax = [-4.0,0.0]
+            if tight: minMax = [-6.0,0.0]
         if quant == 'BH_CumMass_ratio':
             fields = ['CumMassGrowth_High','CumMassGrowth_Low']
             label = 'BH $\int$ M$_{\\rm growth,high}$ / $\int$ M$_{\\rm growth,low}$ [ log ]'

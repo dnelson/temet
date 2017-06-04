@@ -28,6 +28,9 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
             #shID = sP.matchedSubhaloID()
             shID = sP.hInd # assume direct input of subhalo ID
 
+        if shID == -1 or shID is None: # e.g. a blank panel
+            return None, None, None, None, None, None
+
         sh = groupCatSingle(sP, subhaloID=shID)
         gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
 

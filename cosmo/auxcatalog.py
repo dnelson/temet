@@ -1816,6 +1816,12 @@ fieldComputeFunctionMapping = \
    'Subhalo_uB_uKE_ratio_halo_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='B_KE_edens_ratio',op='mean',rad='r015_1rvir_halo',weighting='volume'),
 
+   'Subhalo_Ptot_gas_halo' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_gas_linear',op='sum',rad='r015_1rvir_halo'),
+   'Subhalo_Ptot_B_halo' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='p_b_linear',op='sum',rad='r015_1rvir_halo'),
+
+
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),
    'Subhalo_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 

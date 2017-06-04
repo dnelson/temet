@@ -121,7 +121,10 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         for simColorsModel in simColorsModels:
 
             print('Color PDF [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
-            sP.setRedshift(simRedshift)
+            if 'Illustris' not in sP.simName:
+                sP.setRedshift(simRedshift)
+            else:
+                print('SKIP SET REDSHIFT! FIX.')
 
             # load fullbox stellar masses
             gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
@@ -258,13 +261,15 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                             label = simColorsModel if i == iLeg and j == loopInds[0] else ''
                         if clean:
                             # replace dust model labels by paper versions
+                            label = label.replace("p07c_cf00dust_res3_conv_ns1_rad30pkpc", "Model D")
                             label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc_all", "Model C (all)")
                             label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc", "Model C")
                             label = label.replace("p07c_cf00dust", "Model B")
                             label = label.replace("p07c_nodust", "Model A")
 
                         alpha = 0.85 if 'Illustris' in sP.simName else 1.0
-                        axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
+                        lw = 2.0 if 'Illustris' in sP.simName else 4.0
+                        axes[i].plot(xx, yy_sim, linestyles[j], label=label, color=c, alpha=alpha, lw=lw)
                         alpha = 0.1 if len(stellarMassBins) >= 4 else 0.05
                         if j == 0:
                             axes[i].fill_between(xx, 0.0, yy_sim, color=c, alpha=alpha, interpolate=True)
@@ -1054,7 +1059,6 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
     sizefac = 1.0 if not clean else 0.7
-    lw = 2.5
     alpha = 0.8
     af = 5.0 # reduce alpha by this factor for low-mass red and high-mass blue
 
@@ -1095,14 +1099,16 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
             if sPnum < len(sPs):
                 # sim
                 fits = fits_sim[sPnum]
-                ls = linestyles[1+sPnum]
+                ls = linestyles[0+sPnum]
                 marker = ['o','s'][sPnum]
+                lw = 3.0
                 lExtra.append(sP.simName)
             else:
                 # obs
                 fits = fits_obs
-                ls = linestyles[0]
-                marker = 'D'
+                ls = linestyles[1]
+                marker = 's'
+                lw = 2.0
                 lExtra.append('SDSS z<0.1')
 
             sExtra.append(plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker=marker,linestyle=ls))
@@ -1424,7 +1430,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     mMinMax    = [9.0, 12.0] # log Msun
     zMinMax    = [0.0, 1.0] # redshift
     nBins      = 50 if mStarRange is None else 30 # for all 1d histograms and running medians
-    pdfMinLog  = 1e-3 if mStarRange is None else 4e-2 # set minimum y-axis value for PDFs in log(y)
+    pdfMinLog  = 1e-3 if mStarRange is None else 7e-2 # set minimum y-axis value for PDFs in log(y)
 
     fieldLabels = {'dt_green':'$\Delta t_{\\rm green}$ [ Gyr ]',
                    'dt_rejuv':'$\Delta t_{\\rm rejuv}$ [ Gyr ]',
@@ -1678,6 +1684,8 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         # plot, looping over all runs and CSSes
         for i, sP in enumerate(sPs):
             c = ax._get_lines.prop_cycler.next()['color']
+            nBinsLoc = nBins if sP.res > 2000 else int(nBins/2)
+
             for j, cenSatSelect in enumerate(plotCSS):
                 # load quantity and restrict to histogram range (for correct normalization)
                 hh = data[i][fieldName][cenSatSelect]
@@ -1700,18 +1708,37 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                     with np.errstate(invalid='ignore'):
                         ww4 = np.where( (mstar_z0 >= mStarRange[0]) & (mstar_z0 < mStarRange[1]) )
                     hh = hh[ww4]
+                    mstar_z0 = mstar_z0[ww4]
 
                 if j == 0:
                     # set normalization (such that integral of PDF is one) based on 'all galaxies'
-                    binSize = (xMinMax[1]-xMinMax[0])/nBins
+                    binSize = (xMinMax[1]-xMinMax[0])/nBinsLoc
                     normFac = 1.0 / (binSize * hh.size)
 
-                yy, xx = np.histogram(hh, bins=nBins, range=xMinMax)
+                yy, xx = np.histogram(hh, bins=nBinsLoc, range=xMinMax)
                 yy = yy.astype('float32') * normFac
                 xx = xx[:-1] + 0.5*binSize
 
                 label = sP.simName if j == 0 else ''
                 ax.plot(xx,yy,lw=lw,alpha=alpha,color=c,linestyle=linestyles[j],label=label)
+
+                if fieldName == 'dM_redfr':
+                    # for figure 13, add Mstar>11.0 also as dotted lines
+                    mStarRangeExtras = [11.0, 12.5]
+                    with np.errstate(invalid='ignore'):
+                        ww5 = np.where( (mstar_z0 >= mStarRangeExtras[0]) & (mstar_z0 < mStarRangeExtras[1]) )
+                    hh = hh[ww5]
+                    mstar_z0 = mstar_z0[ww5]
+
+                    nBinsLoc = int(nBinsLoc*0.6)
+                    binSize = (xMinMax[1]-xMinMax[0])/nBinsLoc
+                    normFac = 1.0 / (binSize * hh.size)
+
+                    yy, xx = np.histogram(hh, bins=nBinsLoc, range=xMinMax)
+                    yy = yy.astype('float32') * normFac
+                    xx = xx[:-1] + 0.5*binSize
+
+                    ax.plot(xx,yy,lw=lw,alpha=alpha,color=c,linestyle=linestyles[j+1])
 
                 if fieldName == 'M_redini' and plotCSS == ['cen']:
                     # for figure 11, add mstar at z=0 for comparison
@@ -1736,7 +1763,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                             ww4 = np.where( (mstar_z0 >= mStarRange[0]) & (mstar_z0 < mStarRange[1]) )
                         hh = hh[ww4]
 
-                    yy, xx = np.histogram(hh, bins=nBins, range=xMinMax)
+                    yy, xx = np.histogram(hh, bins=nBinsLoc, range=xMinMax)
                     yy = yy.astype('float32') / (binSize * hh.size)
                     xx = xx[:-1] + 0.5*binSize
 
@@ -1756,7 +1783,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
         if yscale == 'log':
             ax.set_ylim(ymax=yy_max*1.6)
-            #if fieldName == 'dM_redfr': ax.set_ylim(ymax=yy_max*4.0)
+            if fieldName == 'dM_redfr': ax.set_ylim(ymax=1e1)
 
         # legends
         if sizeAdjust >= 1.0:
@@ -1777,8 +1804,16 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         else:
             labels = [label + ' ' + plotCSS[0].capitalize() for label in labels]
             if fieldName == 'M_redini':
+                # figure 11 additions
                 sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=alpha*alphaFac,marker='',linestyle=linestyles[2]) )
                 lExtra.append( '$M_\star (z=0)$ Cen')
+            if fieldName == 'dM_redfr':
+                # figure 13 additions
+                sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=alpha,marker='',linestyle=linestyles[0]) )
+                sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=alpha,marker='',linestyle=linestyles[1]) )
+                lExtra.append( '$M_{\star,z=0} > 10^{10.5} M_{\\rm sun}$')
+                lExtra.append( '$M_{\star,z=0} > 10^{11.0} M_{\\rm sun}$')
+
             loc = 'upper left'
             if fieldName == 'dM_redfr': loc = 'lower left'
 
@@ -1892,18 +1927,18 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         plt.close(fig)
 
     # figure 10: color transition timescale histogram
-    _fig_helper('dt_green', 'linear', 'figure10_')
+    #_fig_helper('dt_green', 'linear', 'figure10_')
 
     # figure 11: histogram of Mstar when joining red sequence, inset: Mstar growth in green valley
-    _fig_helper('M_redini', 'linear', 'figure11_', xMinMax=[9.5, 12.0], plotCSS=['cen'])
-    _fig_helper('dM_green', 'log', 'figure11_inset_', xMinMax=[-1.0,1.5], sizeAdjust=0.55)
+    #_fig_helper('M_redini', 'linear', 'figure11_', xMinMax=[9.5, 12.0], plotCSS=['cen'])
+    #_fig_helper('dM_green', 'log', 'figure11_inset_', xMinMax=[-1.0,1.5], sizeAdjust=0.55)
 
     # figure 12: color transition timescale as a function of Mstar when joining the red sequence
-    _fig_helper2(xAxis='M_redini', yAxis='dt_green', saveBase='figure12_')
+    #_fig_helper2(xAxis='M_redini', yAxis='dt_green', saveBase='figure12_')
 
-    # figure 13: histogram of delta mstar red restricted to Mstar_z0>11.0, inset: dM_red vs Mstar_z0
+    # figure 13: histogram of delta mstar red restricted to Mstar_z0>limit, inset: dM_red vs Mstar_z0
     _fig_helper('dM_redfr', 'log', 'figure13_', xMinMax=[0.0,1.0], plotCSS=['cen'])
-    _fig_helper2(xAxis='mstar', yAxis='dM_redfr', saveBase='figure13_inset_', sizeAdjust=0.55)
+    #_fig_helper2(xAxis='mstar', yAxis='dM_redfr', saveBase='figure13_inset_', sizeAdjust=0.55)
 
     return
 
@@ -1927,7 +1962,6 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
     trackIDs += [366565,184828] # large dM_red, 427314, 376356, 206226
     trackIDs += [531178] # green valley occupants, 424485
     trackIDs += [146176,170540] # rejuv events, 108012, 154493
-    #trackIDs += [76086] # big Mstar final, little dM_red, 128393
 
     dust_Br   = 'p07c_cf00dust_rad30pkpc' # include as high time resolution
     dust_C    = 'p07c_cf00dust_res_conv_ns1_rad30pkpc' # include as fiducial model
@@ -2124,20 +2158,24 @@ def paperPlots():
     dust_B = 'p07c_cf00dust'
     dust_C = 'p07c_cf00dust_res_conv_ns1_rad30pkpc' # one random projection per subhalo
     dust_C_all = 'p07c_cf00dust_res_conv_ns1_rad30pkpc_all' # all projections shown
+    dust_D = 'p07c_cf00dust_res3_conv_ns1_rad30pkpc' # geometrical model #3
+    dust_D_all = 'p07c_cf00dust_res3_conv_ns1_rad30pkpc' # geometrical model #3, all projections
 
     bands = ['g','r']
 
     # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
     if 0:
+        simRedshift = 0.0
         sPs = [L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
 
         pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
-        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust])
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift)
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
     if 0:
+        simRedshift = 0.0
         sPs = [L75]
         dust = dust_C
 
@@ -2160,7 +2198,7 @@ def paperPlots():
 
     # figure 4: double gaussian fits, [peak/scatter vs Mstar] 2-panel
     if 0:
-        L75.setRedshift(0.1)
+        L75.setRedshift(0.0)
         sPs = [L75]
         colorMassPlaneFitSummary(sPs)
         #for sP in sPs: colorMassPlaneFits(sP)
@@ -2172,7 +2210,7 @@ def paperPlots():
             vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
-    if 1:
+    if 0:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
@@ -2207,7 +2245,7 @@ def paperPlots():
     if 0:
         sPs = [L75, L205]
         xQuant = 'mstar2_log'
-        yQuant = 'BH_CumEgy_ratio'
+        yQuant = 'BH_CumEgy_ratioInv'
         css = 'cen'
 
         pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
@@ -2255,8 +2293,9 @@ def paperPlots():
 
     # figures 14-15: stellar image stamps of galaxies (red/blue samples)
     if 0:
-        vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
-        vis.haloDrivers.tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
+        from vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1)
+        tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1)
 
     # figure 16: schematic / few N characteristic evolutionary tracks through color-mass 2d plane
     if 0:
@@ -2271,7 +2310,7 @@ def paperPlots():
     # appendix figure 2, dust model dependence (1x3 1D histos in a column)
     if 0:
         sPs = [L75]
-        dusts = [dust_C_all, dust_C, dust_B, dust_A]
+        dusts = [dust_D, dust_C_all, dust_C, dust_B, dust_A]
         massBins = ( [9.5,10.0], [10.0,10.5], [10.5,11.0] )
 
         pdf = PdfPages('appendix2.pdf')
@@ -2300,3 +2339,58 @@ def paperPlots():
         quantHisto2D(L75, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,132])
         quantHisto2D(L205, pdf, bands, cenSatSelect='cen', cQuant=None, fig_subplot=[fig,133])
         pdf.close()
+
+    # supplemental figures:
+    # ---------------------
+    if 0:
+        # 6 other properties, 2d histos
+        sP = L205
+        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
+        params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+
+        pdf = PdfPages('supp1_%s.pdf' % sP.simName)
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='surfdens1_stars', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='Z_stars', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='xray_r500', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, yQuant='color', cQuant='size_stars', fig_subplot=[fig,326], **params)
+        pdf.close()
+
+    if 0:
+        # slices of other properties, pratio components
+        sPs = [L75, L205]
+        xQuant = 'color'
+        xSpec  = [ bands, defSimColorModel ] # bands, simColorModel
+        sQuant = 'mstar2_log'
+        sRange = [10.4,10.6]
+        css = 'cen'
+        quants = ['ptot_gas_halo','ptot_b_halo','ssfr','fgas2','Z_gas','Z_stars','bmag_2rhalf_masswt',
+                  'surfdens1_stars','surfdens2_stars','Krot_oriented_stars2','Krot_oriented_gas2',
+                  'xray_r500','size_stars']
+
+        for quant in quants:
+            pdf = PdfPages('supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
+                ('_'.join([sP.simName for sP in sPs]),quant,xQuant,sQuant,sRange[0],sRange[1],css))
+            quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[quant], sQuant=sQuant, 
+                         sRange=sRange, cenSatSelect=css)
+            pdf.close()
+
+    if 0:
+        # star formation main sequence
+        sP = L205
+        figsize_loc = [figsize[0]*1*0.8, figsize[1]*2*0.7]
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+
+        pdf = PdfPages('supp3_%s.pdf' % sP.simName)
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant=None, ySpec=None, fig_subplot=[fig,211], **params)
+        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color', ySpec=[bands,defSimColorModel], fig_subplot=[fig,212], **params)
+        pdf.close()
+
+    if 1:
+        # individual galaxy time evolution tracks, matched TNG <-> Illustris, multiple quantities
+        from plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
+        for candInd in range(10):
+            illustrisVsTNG_RedEvoComp(candInd=candInd)

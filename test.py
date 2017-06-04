@@ -18,6 +18,54 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def lagrangeMatching():
+    """ Test L75n1820TNG -> L75n1820FP matching. """
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+    sP_illustris = simParams(res=1820, run='illustris', redshift=0.0)
+
+    # load matching
+    matchFilePath = sP.postPath + '/SubhaloMatchingToIllustris/'
+    matchFileName = matchFilePath + 'LagrangeMatches_L75n1820TNG_L75n1820FP_%03d.hdf5' % sP.snap
+
+    with h5py.File(matchFileName,'r') as f:
+        inds_tng = f['SubhaloIndexFrom'][()]
+        inds_illustris = f['SubhaloIndexTo'][()]
+        scores = f['Score'][()]
+
+    # get indices of TNG centrals
+    cen_inds_tng = cosmo.util.cenSatSubhaloIndices(sP=sP, cenSatSelect='cen')
+
+    # load stellar masses and positions
+    mstar_illustris = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['SubhaloMassInRadType'])
+    mstar_illustris = sP_illustris.units.codeMassToLogMsun( mstar_illustris['subhalos'][:,4] )
+
+    mstar_tng = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+    mstar_tng = sP.units.codeMassToLogMsun( mstar_tng['subhalos'][:,4] )
+
+    pos_illustris = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['SubhaloPos'])['subhalos']
+    pos_tng = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+
+    # print matches for TNG centrals 0-10, 100-110, 1000-1010
+    doInds = list(range(0,10)) + list(range(100,110)) + list(range(1000,1010))
+    doInds = list(range(70,95))
+
+    for i in doInds:
+        w = np.where(inds_tng == cen_inds_tng[i])[0]
+
+        if not len(w):
+            print(i,cen_inds_tng[i],'tng central not in catalog')
+            continue
+
+        assert len(w) == 1
+        w = w[0]
+
+        ind_tng = inds_tng[w]
+        ind_illustris = inds_illustris[w]
+        score = scores[w]
+
+        print(i,ind_tng,ind_illustris,score,mstar_tng[ind_tng],mstar_illustris[ind_illustris],
+              pos_illustris[ind_illustris,:], pos_tng[ind_tng,:])
+
 def miscGasStats():
     """ Print out some misc gas stats used in the appendix table of the TNG color flagship paper. """
     sP = simParams(res=1820, run='tng', redshift=0.0)

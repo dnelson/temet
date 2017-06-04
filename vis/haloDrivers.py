@@ -6,6 +6,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+import h5py
 from datetime import datetime
 
 from vis.common import savePathDefault
@@ -855,7 +856,7 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
     from cosmo.util import redshiftToSnapNum
 
     # we have chosen by hand for L75n1820TNG z=0 from the massBin = [12.0,12.2] below these two sets
-    # we define blue/red split at (g-r)=0.6 and the disk/spheroid split at kappa_star=0.4
+    # we define blue/red split at (g-r)=0.7 and the disk/spheroid split at kappa_star=0.4 (unused)
     blue_z0 = [438297,448732,446548,452577,455335,
                463062,463649,464576,460692,468590,
                466436,469315,470617,472457,471740,
@@ -870,18 +871,20 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
                497032,496990,495515,497646,498576,
                499130,499996,499223,499463,500867,
                500494,501761,502312,502648,502919] # 35-70
-    red_z0  = [441141,443914,453835,454963,463139,
-               467445,469102,469930,471857,475490,
-               476892,477518,478160,479314,479917,
-               480194,480550,480879,480750,481254,
-               481347,482257,482714,483868,483900,
-               484113,484257,485233,485365,486052,
-               487152,487965,488841,490195,490577, # 0-35
-               490986,491801,492392,492614,493230,
-               494009,495442,496436,497800,499025,
-               499522,500448,502168,502956,502881,
-               502461,503393,504142,505333,507070,
-               508985,515318,517881,511005,510751] # 35-60
+    red_z0  = [441141,443914,453835,421956,440477,
+               497926,491801,460076,496436,475490,
+               498958,451243,478160,479314,479917,
+               502881,461038,467519,469589,473125,
+               481347,482257,505333,483868,482533,
+               484113,484257,480645,485365,486052,
+               487152,489314,488841,508985,510751, # 0-35
+               490986,469102,492392,492614,493230,
+               494009,495442,471857,497800,499025,
+               499522,500448,502168,502956,480194,
+               502461,503393,504142,482714,507070,
+               508985,515318,517881,511005,490577,
+               454963,463139,477518,469930,480550,
+               480879,480750,481254,483900,485233] # 35-70
 
     # config
     run           = 'tng'
@@ -895,7 +898,6 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
     labelHalo     = 'Mstar'
     relCoords     = True
     mpb           = None
-    labelScaleLoc = False
     rotation      = 'face-on'
     size          = 60.0 # 30 kpc in each direction from center
     sizeType      = 'pkpc'
@@ -982,5 +984,70 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
         colorbars    = False
         nRows        = nRowsFig
         saveFilename = saveFilename2
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def vogelsberger_redBlue42(run='illustris', sample='blue'):
+    """ Recreate the 'Vogelsberger+ (2014) sample of 41 red/blue galaxies', either for 
+    Illustris-1 or cross-matched in TNG100-1. """
+    if sample == 'red':
+        illustris_ids = [123773,178998,215567,234535,251933,267605,
+                         299439,310062,326049,344358,359184,378583,
+                         385020,393669,135289,192506,217716,239606,
+                         262030,272551,305959,310951,331451,350144,
+                         372778,382424,386640,393722,154948,195486,
+                         219708,242071,264095,293759,309593,318565,
+                         342383,354524,377255,384031,392429,395125]
+    if sample == 'blue':
+        illustris_ids = [242959,288927,310273,319371,331996,336439,
+                         342103,345367,358785,366034,374531,384734,
+                         386479,391881,261085,300120,312287,324323,
+                         332327,336790,343669,351433,362540,366317,
+                         375386,385795,386720,394285,283832,303990,
+                         313541,326247,332891,339311,344821,352713,
+                         365316,374140,376363,386304,390653,394942]
+
+    # config
+    res         = 1820 
+    redshift    = 0.0
+    rVirFracs   = None
+    method      = 'sphMap'
+    nPixels     = [300,300]
+    axes        = [0,1]
+    labelZ      = False
+    labelSim    = False
+    labelHalo   = 'Mstar'
+    relCoords   = True
+    mpb         = None
+    labelScale  = False
+    rotation    = 'face-on'
+    size        = 60.0 # 30 kpc in each direction from center
+    sizeType    = 'pkpc'
+    partType    = 'stars'
+    partField   = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+    hsmlFac     = 0.5
+    nRowsFig    = 7 # 6 columns, 7 rows
+
+    # which subhalos?
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    if run == 'illustris':
+        subhalo_ids = illustris_ids
+    else:
+        # cross-match and get TNG subhalo IDs
+        sP_illustris = simParams(res=res, run='illustris', redshift=redshift)
+        subhalo_ids = crossMatchSubhalosBetweenRuns(sP_illustris, sP, illustris_ids, method='Positional')
+
+    # create panels, one per galaxy
+    panels = []
+    for i, shID in enumerate(subhalo_ids):                           
+        panels.append( {'hInd':shID, 'labelCustom':['ID %d' % shID]} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 1200
+        colorbars    = False
+        nRows        = nRowsFig
+        saveFilename = './sample42_%s_%s.pdf' % (sample,run)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

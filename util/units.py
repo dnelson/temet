@@ -182,6 +182,19 @@ class units(object):
             Tvir = logZeroSafe(Tvir)
         return Tvir
 
+    def codeBHMassToMdotEdd(self, mass):
+        """ Convert a code mass (of a blackhole) into dM/dt_eddington in Msun/yr. """
+        mass_msun = self.codeMassToMsun(mass)
+
+        eps_r = 0.2 # radiative efficiency, unchanged in Illustris and TNG models
+
+        # Mdot(Edd) = 4*pi*G*M_BH*m_p / (eps_r*sigma_T*c) in Msun/s
+        mdot_edd = 4*np.pi*self.Gravity*mass_msun*self.mass_proton / (eps_r*self.sigma_thomson*self.c_cgs)
+
+        mdot_edd_msun_yr = mdot_edd * self.s_in_yr
+
+        return mdot_edd_msun_yr
+
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
         assert self._sP.redshift is not None
