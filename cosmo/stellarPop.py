@@ -275,7 +275,7 @@ class sps():
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
     isoTracks  = ['mist','padova07','parsec','basti','geneva']
     stellarLib = ['miles','basel','csk'] # unused
-    dustModels = ['none','cf00','cf00_res_eff','cf00_res_conv','cf00_res3_conv']
+    dustModels = ['none','cf00','cf00_res_eff','cf00b_res_conv','cf00_res_conv','cf00_res3_conv']
 
     def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
@@ -351,6 +351,16 @@ class sps():
             dust_type   = 0    # powerlaw taking the above functional form
             dust1       = 0.7  # tau_1
             dust2       = 0.3  # tau_2
+            dust_index  = -0.7 # alpha_2
+            dust1_index = -0.7 # alpha_1
+            dust_tesc   = 7.0  # t_bc
+
+        if self.dust == 'cf00b':
+            # same as 'cf00' except no diffuse/old attenuation (e.g. assume this is separately taken 
+            # into account with a resolved dust computation)
+            dust_type   = 0    # powerlaw taking the above functional form
+            dust1       = 1.0  # tau_1
+            dust2       = 0.0  # tau_2
             dust_index  = -0.7 # alpha_2
             dust1_index = -0.7 # alpha_1
             dust_tesc   = 7.0  # t_bc
