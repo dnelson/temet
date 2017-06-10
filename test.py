@@ -18,6 +18,87 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def checkInfallTime():
+    """ Check infall times. """
+    from tracer.tracerMC import match3
+    from util.helper import closest
+
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+    subhaloID = 131059
+    treeName = 'SubLink'
+
+    vicente_answer = 69 # snapshot
+    kiyun_answer_gyr = 6.35 # lookback Gyr
+
+    # load
+    sh = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+    parent_halo = cosmo.load.groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
+
+    sub_mpb = cosmo.mergertree.loadMPB(sP, subhaloID, treeName=treeName)
+    parent_mpb = cosmo.mergertree.loadMPB(sP, parent_halo['GroupFirstSub'], treeName=treeName)
+
+    ind_par, ind_sub = match3( parent_mpb['SnapNum'], sub_mpb['SnapNum'] )
+
+    # distance
+    parent_r200 = parent_mpb['Group_R_Crit200'][ind_par]
+    parent_pos = parent_mpb['SubhaloPos'][ind_par,:]
+    sub_pos = sub_mpb['SubhaloPos'][ind_sub,:]
+
+    dist = cosmo.util.periodicDists(parent_pos, sub_pos, sP)
+
+    # snap <-> time
+    snapnum = parent_mpb['SnapNum'][ind_par]
+    redshift = cosmo.util.snapNumToRedshift(sP, snap=snapnum)
+    tlookback = sP.units.redshiftToLookbackTime(redshift)
+
+    _, kiyun_answer_ind = closest(tlookback, kiyun_answer_gyr)
+    kiyun_answer = snapnum[kiyun_answer_ind]
+    vicente_answer_ind = np.where(snapnum == vicente_answer)[0]
+    vicente_answer_gyr = tlookback[vicente_answer_ind]
+
+    print(parent_mpb['SnapNum'].size, sub_mpb['SnapNum'].size, ind_par.size, ind_sub.size)
+    print(snapnum[0:10])
+    print('parent r200: ', parent_r200[0:10])
+    print('parent pos: ', parent_pos[0:10,:])
+    print('sub pos: ',sub_pos[0:10,:])
+
+    # what is infall?
+    x = dist/parent_r200
+
+    w = np.where(x <= 1.0)[0]
+    my_answer = snapnum[w.max()]
+    my_answer_gyr = tlookback[w.max()]
+    print('first snapshot inside r200: ',my_answer,' lookback: ',my_answer_gyr)
+
+    # plot
+    fig = plt.figure(figsize=(18,8))
+    ax = fig.add_subplot(121)
+
+    ax.set_xlabel('Snapshot Number')
+    ax.set_ylabel('Radius [ckpc/h]')
+    ax.plot(snapnum, parent_r200, '-', label='parent r200')
+    ax.plot(snapnum, dist, '-', label='parent to sub distance')
+    ax.plot([vicente_answer,vicente_answer],[10,2000], ':',label='Vicente Infall Time')
+    ax.plot([kiyun_answer,kiyun_answer],[10,2000], ':',label='Kiyun Infall Time')
+    ax.plot([my_answer,my_answer],[10,2000],':',label='My Answer')
+    ax.legend()
+
+    ax = fig.add_subplot(122)
+
+    ax.set_xlabel('Lookback Time [Gyr]')
+    ax.set_ylabel('Radius [ckpc/h]')
+    ax.plot(tlookback, parent_r200, '-', label='parent r200')
+    ax.plot(tlookback, dist, '-', label='parent to sub distance')
+    ax.plot([vicente_answer_gyr,vicente_answer_gyr],[10,2000], ':',label='Vicente Infall Time')
+    ax.plot([kiyun_answer_gyr,kiyun_answer_gyr],[10,2000], ':',label='Kiyun Infall Time')
+    ax.plot([my_answer_gyr,my_answer_gyr],[10,2000],':',label='My Answer')
+    ax.legend()
+
+    fig.tight_layout()    
+    fig.savefig('check_%s_snap-%d_subhalo-%d.pdf' % (sP.simName,sP.snap,subhaloID))
+    plt.close(fig)
+
+
 def lagrangeMatching():
     """ Test L75n1820TNG -> L75n1820FP matching. """
     sP = simParams(res=1820, run='tng', redshift=0.0)

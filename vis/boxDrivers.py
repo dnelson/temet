@@ -60,6 +60,7 @@ def _TNGboxSliceConfig(res):
     # L75 configs
     dmMM  = [5.0, 8.5]
     gasMM = [4.3,7.3]
+    starsMM = [1.0, 7.0]
 
     if res in [455,910,1820]:
         # L75
@@ -90,17 +91,17 @@ def _TNGboxSliceConfig(res):
         nSlicesTot = None
         curSlice = None
 
-    return dmMM, gasMM, centerHaloID, nSlicesTot, curSlice
+    return dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice
 
 def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels = []
 
-    dmMM, gasMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
+    dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
 
     if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
     if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
-    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[1.0,7.0]} )
+    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[2.0,6.4]} )
     if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
     if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
     if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
@@ -133,7 +134,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     run        = 'tng'
     redshift   = 0.0
-    nPixels    = 8000 # 800, 2000, 8000
+    nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
@@ -196,7 +197,7 @@ def TNG_colorFlagshipBoxImage(part=0):
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    dmMM, gasMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
+    dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
     sliceFac  = (1.0/nSlicesTot)
 
     if part == 0: # part 0: L205 gas dens

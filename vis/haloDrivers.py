@@ -846,17 +846,19 @@ def zoomEvoMovies(conf):
 
     renderSingleHaloFrames(panels, plotConfig, localVars)
 
-def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=False, curPage=None):
+def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSample=False, 
+                                     evo=False, curPage=None):
     """ Plot stellar stamps red/blue galaxies around 10^10.5 Msun.
     If evo==True, then tracked back in time from z=0 to z=2.0 in M steps using the merger tree.
-    If evo==False, then show full NxM panel sample at z=0. In either case, choose blueSample or redSample.
+    If evo==False, then show full NxM panel sample at z=0.
+    In either case, choose blueSample, redSample, or greenSample.
     If curPage specified, do a paged exploration instead. """
     from cosmo.color import loadSimGalColors
     from plot.config import defSimColorModel
     from cosmo.util import redshiftToSnapNum
 
     # we have chosen by hand for L75n1820TNG z=0 from the massBin = [12.0,12.2] below these two sets
-    # we define blue/red split at (g-r)=0.7 and the disk/spheroid split at kappa_star=0.4 (unused)
+    # we define blue as (g-r)<0.6, red as (g-r)>0.7 and green as 0.5<(g-r)<0.7
     blue_z0 = [438297,448732,446548,452577,455335,
                463062,463649,464576,460692,468590,
                466436,469315,470617,472457,471740,
@@ -885,6 +887,30 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
                508985,515318,517881,511005,490577,
                454963,463139,477518,469930,480550,
                480879,480750,481254,483900,485233] # 35-70
+
+    green_z0 = [415972, 418076, 429041, 429758, 438297, 438453, 445185, 452357,
+               454963, 455058, 459394, 459517, 460008, 460526, 461283, 462010,
+               462141, 463139, 463958, 464669, 466801, 467127, 467445, 467519,
+               468318, 468450, 468508, 468590, 468695, 469102, 469740, 469930,
+               470679, 471109, 471591, 471857, 472418, 472747, 473349, 474271,
+               474437, 474860, 475542, 475722, 476487, 476892, 477031, 477474,
+               477518, 477624, 478452, 478661, 478927, 479411, 479798, 479839,
+               480194, 480550, 480750, 480803, 480879, 481254, 481804, 482006,
+               482054, 482169, 482196, 482714, 482757, 482869, 482987, 483179,
+               483421, 483484, 483900, 484207, 484307, 484715, 484944, 485233,
+               485283, 485326, 485485, 486124, 486186, 486281, 486875, 487042,
+               487152, 487698, 487913, 487965, 488228, 489273, 489356, 489666,
+               489812, 489953, 490109, 490172, 490195, 490238, 490475, 490533,
+               490617, 490661, 490711, 491066, 491282, 491872, 491901, 492092,
+               492125, 492178, 492223, 492947, 493183, 493437, 493575, 493658,
+               493751, 494326, 495442, 495772, 496019, 496244, 496292, 496326,
+               496369, 496757, 496805, 497088, 497176, 497351, 497585, 497964,
+               498031, 498297, 499025, 499113, 499463, 499636, 500239, 500268,
+               500294, 500448, 500725, 501430, 501526, 501604, 501658, 502347,
+               502427, 502595, 502767, 502956, 503393, 503636, 503778, 503951,
+               504000, 504030, 504065, 505793, 505892, 505928, 506063, 506313,
+               506943, 507299, 507361, 507587, 507701, 508156, 509018, 510085,
+               511576, 512330, 514988] # 179
 
     # config
     run           = 'tng'
@@ -918,13 +944,15 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
             # z=0 samples
             if redSample: shIDs = red_z0[(redSample-1)*nGalaxies:(redSample)*nGalaxies]
             if blueSample: shIDs = blue_z0[(blueSample-1)*nGalaxies:(blueSample)*nGalaxies]
+            if greenSample: shIDs = green_z0[(greenSample-1)*nGalaxies:(greenSample)*nGalaxies]
 
             redshifts = np.zeros(len(shIDs), dtype='float32') + redshift_init
         else:
             # take nRows galaxies from z0 samples, then load their MPBs and get IDs at earlier redshifts
-            assert redSample > 0 or blueSample > 0
+            assert redSample > 0 or blueSample > 0 or greenSample > 0
             if redSample: shIDs_z0 = red_z0[(redSample-1)*nRowsFig:(redSample)*nRowsFig]
             if blueSample: shIDs_z0 = blue_z0[(blueSample-1)*nRowsFig:(blueSample)*nRowsFig]
+            if greenSample: shIDs_z0 = green_z0[(greenSample-1)*nRowsFig:(greenSample)*nRowsFig]
 
             evo_snapshots = redshiftToSnapNum(evo_redshifts, sP)
             shIDs = []
@@ -944,11 +972,11 @@ def tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=False, redSample=Fals
           (sP.simName,evo,redSample,blueSample,rotation)
     else:
         # paged exploration for picking interesting galaxies, load all and sub-divide
-        if 0:
+        if 1:
             baseStr = 'figure12_pages'
             numPages = 20
             massBin  = [12.0, 12.2]
-        else:
+        elif 0:
             baseStr = 'figure12_pagesHighMass'
             numPages = 31
             massBin  = [12.2, 13.5]

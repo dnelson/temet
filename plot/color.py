@@ -121,10 +121,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         for simColorsModel in simColorsModels:
 
             print('Color PDF [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
-            if 'Illustris' not in sP.simName:
-                sP.setRedshift(simRedshift)
-            else:
-                print('SKIP SET REDSHIFT! FIX.')
+            sP.setRedshift(simRedshift)
 
             # load fullbox stellar masses
             gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
@@ -2164,20 +2161,22 @@ def paperPlots():
     bands = ['g','r']
 
     # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
-    if 0:
+    if 1:
         simRedshift = 0.0
-        sPs = [L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
+        sPs = [L75] #[L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
+        dust = 'p07c_cf00b_dust_res_conv_ns1_rad30pkpc'
 
         pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
         galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift)
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
-    if 0:
+    if 1:
         simRedshift = 0.0
         sPs = [L75]
         dust = dust_C
+        dust = 'p07c_cf00b_dust_res_conv_ns1_rad30pkpc'
 
         pdf = PdfPages('figure2_%s_%s.pdf' % (sPs[0].simName,dust))
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust, simRedshift=simRedshift)
@@ -2389,7 +2388,7 @@ def paperPlots():
         quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color', ySpec=[bands,defSimColorModel], fig_subplot=[fig,212], **params)
         pdf.close()
 
-    if 1:
+    if 0:
         # individual galaxy time evolution tracks, matched TNG <-> Illustris, multiple quantities
         from plot.compareTwoHalos import illustrisVsTNG_RedEvoComp
         for candInd in range(10):
