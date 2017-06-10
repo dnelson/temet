@@ -847,6 +847,12 @@ class units(object):
             return z[0]
         return z
 
+    def redshiftToLookbackTime(self, z):
+        """ Calculate lookback time from z=0 to redshift in [Gyr], assuming flat cosmology. """
+        tage = self.redshiftToAgeFlat(z)
+        t_z0 = self.redshiftToAgeFlat(0.0)
+        return t_z0 - tage
+
     def redshiftToComovingDist(self, z):
         """ Convert redshift z to line of sight distance (in Mpc). Assumes flat."""
         from scipy.integrate import quad

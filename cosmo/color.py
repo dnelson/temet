@@ -19,7 +19,7 @@ from util.helper import leastsq_fit, least_squares_fit
 from cosmo.kCorr import kCorrections, coeff
 from cosmo.load import groupCat, groupCatHeader, auxCat
 from cosmo.util import correctPeriodicDistVecs, cenSatSubhaloIndices, snapNumToRedshift
-from cosmo.mergertree import loadMPBs
+from cosmo.mergertree import loadMPB, loadMPBs
 from plot.config import defSimColorModel
 from plot.general import bandMagRange
 

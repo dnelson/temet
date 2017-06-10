@@ -736,7 +736,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4'
         #if sP.isPartType(partType,'gas'):   config['ctName'] = 'perula' # methods2
         if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
-        if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
+        if sP.isPartType(partType,'stars'): config['ctName'] = 'copper' # gray
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         if ' ' in partField:
