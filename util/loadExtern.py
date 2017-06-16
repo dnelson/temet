@@ -1175,7 +1175,7 @@ def anderson2015(sP):
     return r
 
 
-def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
+def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
     #   p.objid,
@@ -1203,8 +1203,27 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
     #   JOIN stellarMassPassivePort AS port2 ON port2.specobjid = p.specobjid
     #WHERE
     #   s.z BETWEEN 0.0 and 0.1 # and so on
+   
+    # for petrosian magnitudes:
+    #SELECT
+    #   p.objid,
+    #   p.petroMag_u,p.petroMag_g,p.petroMag_r,p.petroMag_i,p.petroMag_z,
+    #   s.z as redshift,
+    #   gran1.logMass as logMass_gran1,
+    #   gran2.logMass as logMass_gran2
+    #FROM PhotoObj AS p
+    #   JOIN SpecObj AS s ON s.specobjid = p.specobjid
+    #   JOIN stellarMassFSPSGranWideDust AS gran1 ON gran1.specobjid = p.specobjid
+    #   JOIN stellarMassFSPSGranEarlyDust AS gran2 ON gran2.specobjid = p.specobjid
+    #WHERE
+    #   s.z BETWEEN 0.0 and 0.1
+
     assert redshiftBounds == [0.0,0.1]
-    path = expanduser("~") + '/obs/sdss_z0.0-0.1'
+    path_csv = expanduser("~") + '/obs/sdss_z0.0-0.1'
+    nFloatFields = 22
+
+    path = path_csv
+    if petro: path += '_petro'
 
     r = {}
 
@@ -1218,8 +1237,20 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1]):
         return r
 
     # convert CSV to HDF5 (first column is int64, all others are float32)
-    data = np.genfromtxt(path+'.csv',comments='#',delimiter=',',skip_header=1,names=True,
-              dtype="i8,"+",".join(["f4" for dummy in range(22)]))
+    data = np.genfromtxt(path_csv+'.csv',comments='#',delimiter=',',skip_header=1,names=True,
+              dtype="i8,"+",".join(["f4" for _ in range(nFloatFields)]))
+
+    # petrosian instead of cModelMag?
+    if petro:
+        path_csv += '_petro'
+        nFloatFields = 8
+
+        data_p = np.genfromtxt(path_csv+'.csv',comments='#',delimiter=',',skip_header=1,names=True,
+                  dtype="i8,"+",".join(["f4" for _ in range(nFloatFields)]))
+
+        # replace band magnitude fields in data, leave everything else
+        for band in ['u','g','r','i','z']:
+            data[band] = data_p['petroMag_'+band]
 
     with h5py.File(path+'.hdf5','w') as f:
         for key in data.dtype.names:

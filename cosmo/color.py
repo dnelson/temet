@@ -117,12 +117,12 @@ def stellarPhotToSDSSColor(photVector, bands):
 
     raise Exception('Band combination not implemented.')
 
-def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False):
+def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False, petro=False):
     """ Load the SDSS data files and compute a requested color, optionally restricting to a given 
     galaxy redshift range, correcting for extinction, and/or doing a K-correction. """
     assert redshiftRange is None, 'Not implemented.'
 
-    sdss = loadSDSSData()
+    sdss = loadSDSSData(petro=petro)
 
     # extinction correction
     if not eCorrect:
@@ -133,6 +133,9 @@ def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False):
     sdss_color = (sdss[bands[0]]-sdss['extinction_'+bands[0]]) - \
                  (sdss[bands[1]]-sdss['extinction_'+bands[1]])
     sdss_Mstar = sdss['logMass_gran1']
+
+    ww = np.where(sdss['redshift'] == 0.0)[0]
+    assert len(ww) == 0
 
     # K-correction (absolute_M = apparent_m - C - K) (color A-B = m_A-C-K_A-m_B+C+K_B=m_A-m_B+K_B-K_A)
     if kCorrect:
