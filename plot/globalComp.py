@@ -814,7 +814,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
         sdss = loadSDSSFits()
 
         l4, = ax.plot(sdss['logzsol']['xm'], sdss['logzsol']['ym'], '-', color='red',lw=2.0,alpha=0.7)
-        ax.fill_between(sdss['logzsol']['xm'], sdss['logzsol']['pm'][0,:], sdss['logzsol']['pm'][2,:], 
+        ax.fill_between(sdss['logzsol']['xm'], sdss['logzsol']['pm'][1,:], sdss['logzsol']['pm'][3,:], 
                         color='red', interpolate=True, alpha=0.1)
 
         lines.append(l4)
@@ -1617,7 +1617,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         sdss = loadSDSSFits()
 
         l3, = ax.plot(sdss['tage']['xm'], sdss['tage']['ym'], '-', color='red',lw=2.0,alpha=0.7)
-        ax.fill_between(sdss['tage']['xm'], sdss['tage']['pm'][0,:], sdss['tage']['pm'][2,:], 
+        ax.fill_between(sdss['tage']['xm'], sdss['tage']['pm'][1,:], sdss['tage']['pm'][3,:], 
                         color='red', interpolate=True, alpha=0.1)
 
         lines.append(l3)
