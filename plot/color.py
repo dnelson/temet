@@ -28,7 +28,7 @@ from vis.common import setAxisColors
 from plot.config import *
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
-                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None):
+                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, addPetro=False):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
     from util import simParams
 
@@ -43,6 +43,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         stellarMassBins = ( [9.0,9.5],   [9.5,10.0],  [10.0,10.5], 
                             [10.5,11.0], [11.0,11.5], [11.5,12.0] )
     obs_color = '#333333'
+    petro_color = 'purple'
 
     eCorrect = True # True, False
     kCorrect = True # True, False
@@ -108,6 +109,12 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
     w = np.where( (sdss_color >= mag_range[0]) & (sdss_color <= mag_range[1]) )
     sdss_color = sdss_color[w]
     sdss_Mstar = sdss_Mstar[w]
+
+    if addPetro:
+        sdss_c_petro, sdss_m_petro = calcSDSSColors(bands, eCorrect=eCorrect, kCorrect=kCorrect, petro=True)
+        w = np.where( (sdss_c_petro >= mag_range[0]) & (sdss_c_petro <= mag_range[1]) )
+        sdss_c_petro = sdss_c_petro[w]
+        sdss_m_petro = sdss_m_petro[w]
 
     # loop over each fullbox run
     pMaxVals = np.zeros( len(stellarMassBins), dtype='float32' )
@@ -231,6 +238,12 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                     axes[i].plot(xx, yy_obs, '-', color=obs_color, alpha=1.0, lw=3.0)
                     #axes[i].fill_between(xx, 0.0, yy_obs, facecolor=obs_color, alpha=0.1, interpolate=True)
 
+                    if addPetro:
+                        wObs = np.where((sdss_m_petro >= stellarMassBin[0]) & (sdss_m_petro < stellarMassBin[1]))
+                        kde2 = gaussian_kde(sdss_c_petro[wObs], bw_method='scott')
+                        yy_obs = kde2(xx)
+                        axes[i].plot(xx, yy_obs, '-', color=petro_color, alpha=1.0, lw=3.0)
+
                     if len(wBin[0]) <= 1:
                         print(' skip sim kde no data: ',sP.simName,i)
                         continue
@@ -293,6 +306,11 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
     handles, labels = axes[iLeg].get_legend_handles_labels()
     handlesO = [plt.Line2D( (0,1),(0,0),color=obs_color,lw=3.0,marker='',linestyle='-')]
     labelsO  = ['SDSS z<0.1'] # DR12 fspsGranWideDust
+
+    if addPetro:
+        labelsO[0] = 'SDSS z<0.1 cModelMag'
+        handlesO.append(plt.Line2D( (0,1),(0,0),color=petro_color,lw=3.0,marker='',linestyle='-'))
+        labelsO.append('SDSS z<0.1 Petrosian')
 
     legend2 = axes[iLeg].legend(handlesO+handles, labelsO+labels, loc=legendPos)
 
@@ -2165,18 +2183,16 @@ def paperPlots():
         simRedshift = 0.0
         sPs = [L75] #[L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
-        dust = 'p07c_cf00b_dust_res_conv_ns1_rad30pkpc'
 
         pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
-        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift)
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift, addPetro=True)
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
-    if 1:
+    if 0:
         simRedshift = 0.0
         sPs = [L75]
         dust = dust_C
-        dust = 'p07c_cf00b_dust_res_conv_ns1_rad30pkpc'
 
         pdf = PdfPages('figure2_%s_%s.pdf' % (sPs[0].simName,dust))
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust, simRedshift=simRedshift)
