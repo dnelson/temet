@@ -1285,11 +1285,12 @@ def loadSDSSFits(redshiftBounds=[0.0,0.1]):
     # make medians
     assert np.array_equal(r['objid'],r['objid2'])
 
-    binSize = 0.1 # log stellar mass
-    percentiles = [16,50,84]
+    binSize = 0.2 # log stellar mass
+    percentiles = [10,16,50,84,90,40,60]
 
     for ind, quantName in enumerate(spectralFitQuantities):
         vals = np.squeeze(r['sdss_mcmc_fits_z0.0-0.1'][:,ind,1]) # 1 = median
+        if quantName in ['mass']: vals = np.log10(vals)
         w = np.where( np.isfinite(vals) & (r['logMass'] > 6.0) )
         xm, ym, sm, pm = running_median(r['logMass'][w],vals[w],binSize=binSize,percs=percentiles)
         r[quantName] = {'xm':xm,'ym':ym,'sm':sm,'pm':pm}

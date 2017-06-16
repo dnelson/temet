@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import corner
 import pickle
 import json
+from datetime import datetime
 
 from prospect.sources import CSPSpecBasis
 from prospect.models import sedmodel
@@ -20,6 +21,9 @@ from mpl_toolkits.axes_grid.inset_locator import inset_axes
 from obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
 from plot.config import *
 from cosmo.load import auxCat, groupCatSingle, groupCatHeader
+
+from util.loadExtern import loadSDSSFits
+from matplotlib.backends.backend_pdf import PdfPages
 
 def plotSingleResult(ind, sps=None, doSim=None):
     """ Load the results of a single MCMC fit, print the answer, render a corner plot of the joint 
@@ -260,3 +264,50 @@ def talkPlots():
         plotSingleResult(ind_ac[ind], sps=sps, doSim=doSim)
 
     plotMultiSpectra(doSim, ind_ac[multiIndsSim], multiIndsSDSS)
+
+def sdssFitsVsMstar():
+    """ Plot the SDSS fit parameters vs Mstar. """
+
+    # config
+    sdss = loadSDSSFits()
+
+    quants = {'dust1' : ['$\\tau_{1,dust}$',[0.0, 3.0]],
+              'mass'  : ['Fiber M$_\star$ [ log M$_{\\rm sun}$ ]', [8.0, 11.5]],
+              'logzsol' : ['Stellar Metallicity [ Z / Z$_{\\rm sun}$ ]', [-2.0, 1.0]],
+              'tage'    : ['Stellar Age [ Gyr ]', [0.0, 14.0]],
+              'tau'     : ['$\\tau_{SFH}$ [ Gyr ]', [0.0, 5.0]],
+              'sigma_smooth' : ['$\sigma_{\\rm smooth}$ [ km/s ]', [0, 450]],
+              'zred'         : ['z$_{\\rm residual}$', [-2e-3, 2e-3]]}
+
+    # plot setup
+    sizefac = 0.8
+    xlabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
+    xlim = [8.0, 12.0]
+
+    pdf = PdfPages('sdss_fits_z01_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+
+    for quantName, p in quants.iteritems():
+        quantLabel, quantLim = p
+
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+        
+        ax.set_xlim(xlim)
+        ax.set_ylim(quantLim)
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(quantLabel)
+
+        l4, = ax.plot(sdss[quantName]['xm'], sdss[quantName]['ym'], '-', color='green',lw=2.0,alpha=0.7)
+        ax.fill_between(sdss[quantName]['xm'], sdss[quantName]['pm'][0,:], sdss[quantName]['pm'][4,:], 
+                        color='green', interpolate=True, alpha=0.05)
+        ax.fill_between(sdss[quantName]['xm'], sdss[quantName]['pm'][1,:], sdss[quantName]['pm'][3,:], 
+                        color='green', interpolate=True, alpha=0.1)
+        ax.fill_between(sdss[quantName]['xm'], sdss[quantName]['pm'][5,:], sdss[quantName]['pm'][6,:], 
+                        color='green', interpolate=True, alpha=0.2)
+
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
