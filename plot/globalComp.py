@@ -19,9 +19,6 @@ from plot.sizes import galaxySizes
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.config import *
 
-# still overriding figsize for globalComps:
-figsize = (16,9) # (16,9) (8,6) (smf:10.6,7.0)
-
 def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
     """ Stellar mass / halo mass relation, full boxes and zoom points vs. abundance matching lines. """
@@ -210,7 +207,8 @@ def sfrAvgVsRedshift(sPs, pdf):
     massBinColors = ['#333333','#666666','#999999']
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_ylim([8e-3, 5e2])
@@ -359,7 +357,8 @@ def sfrAvgVsRedshift(sPs, pdf):
 def sfrdVsRedshift(sPs, pdf, xlog=True):
     """ Star formation rate density of the universe, vs redshift, vs observational points. """
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_ylim([5e-4, 5e-1])
@@ -406,7 +405,8 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
     assert twiceR or vsHaloMass or vsBulgeMass
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_xlim([8.5, 13.0])
@@ -538,7 +538,8 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
 
     # plot setup
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -958,7 +959,8 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
     metalFields = ['SubhaloGasMetallicitySfrWeighted','SubhaloGasMetallicitySfr']
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     if simRedshift == 0.0:
@@ -1085,7 +1087,8 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     acField = 'Group_Mass_Crit500_Type'
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_xlim([11.0, 15.0])
@@ -1222,7 +1225,8 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
     speciesList = ['nHI_noH2','nHI'] #,'nHI2','nHI3']
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_xlim([17.0, 23.0])
@@ -1326,7 +1330,8 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     speciesList = ['nOVI','nOVI_solar','nOVI_10','nOVI_25']
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_xlim([12.5, 15.5])
@@ -1366,10 +1371,9 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     l4,_,_ =  ax.errorbar(t08['log_NOVI'], t08['log_fOVI'], yerr=t08['log_fOVI_err'],
                xerr=t08['log_NOVI_err'], color='#aaaaaa', ecolor='#aaaaaa', alpha=0.9, capsize=0.0, fmt='o')
 
-    if not clean:
-        labels = [d16['label'],d08['label'],tc08['label'],t08['label']]
-        legend1 = ax.legend([l1,l2,l3,l4], labels, loc='lower left')
-        ax.add_artist(legend1)
+    labels = [d16['label'],d08['label'],tc08['label'],t08['label']]
+    legend1 = ax.legend([l1,l2,l3,l4], labels, loc='lower left')
+    ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
@@ -1404,13 +1408,13 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
         xx = np.log10(n_OVI)
 
         if moment == 0:
-            yy_min = logZeroNaN(fN_OVI_min, zeroVal=np.nan)
-            yy_max = logZeroNaN(fN_OVI_max, zeroVal=np.nan)
-            yy = logZeroNaN( 0.5*(fN_OVI_min+fN_OVI_max), zeroVal=np.nan )
+            yy_min = logZeroNaN(fN_OVI_min)
+            yy_max = logZeroNaN(fN_OVI_max)
+            yy = logZeroNaN( 0.5*(fN_OVI_min+fN_OVI_max) )
         if moment == 1:
-            yy_min = logZeroNaN(fN_OVI_min*n_OVI, zeroVal=np.nan)
-            yy_max = logZeroNaN(fN_OVI_max*n_OVI, zeroVal=np.nan)
-            yy = logZeroNaN( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI), zeroVal=np.nan )
+            yy_min = logZeroNaN(fN_OVI_min*n_OVI)
+            yy_max = logZeroNaN(fN_OVI_max*n_OVI)
+            yy = logZeroNaN( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI) )
 
         ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.2, interpolate=True)
 
@@ -1422,9 +1426,8 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     sExtra = [] #[plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
     lExtra = [] #[str(s) for s in speciesList]
 
-    if not clean:
-        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
-        lExtra += ['[ sims z=%3.1f ]' % simRedshift]
+    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
+    lExtra += ['[ sims z=%3.1f ]' % simRedshift]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -1445,7 +1448,8 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     log_Z_range = [-3.0, 0.0]
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_xlim(log_Z_range)
@@ -1507,7 +1511,8 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     binSizeLogKms = 0.03
 
     # plot setup
-    fig = plt.figure(figsize=figsize)
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     ax.set_xlim([50,350])
@@ -1748,7 +1753,8 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
 
     # plot setup
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize)
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -1910,12 +1916,14 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant=4602) )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_xray_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_ovi_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     # TEST AREA
-    haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
+    #haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
+    nOVIcddf(sPs, pdf) # z=0.2
+    #nOVIcddf(sPs, pdf, moment=1)
     pdf.close()
     return
     # END TEST AREA

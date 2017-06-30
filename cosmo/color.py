@@ -155,12 +155,15 @@ def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False, pe
 
     return sdss_color, sdss_Mstar
 
-def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, sP=None, simColorsModel=None):
+def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range, 
+    sP=None, simColorsModel=None, kCorrected=True):
     """ Quick caching of (slow) 2D KDE calculation of (Mstar,color) plane for SDSS z<0.1 points 
+    if kCorrected==False, then tag filename (assume this is handled prior in calcSDSSColors)
     if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
     if sP is None:
-        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s_%d-%d_%d-%d.hdf5" % \
-          (''.join(bands),Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10)
+        kStr = '' if kCorrected else '_noK'
+        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s_%d-%d_%d-%d%s.hdf5" % \
+          (''.join(bands),Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10,kStr)
         dName = 'kde_obs'
     else:
         assert simColorsModel is not None
@@ -488,7 +491,7 @@ def _fitCMPlaneDoubleGaussian(masses, colors, xMinMax, mag_range, binSizeMass, b
 def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRed, skipNBinsBlue, 
                     binSizeMass, binSizeColor, nBinsMass, nBinsColor, 
                     nWalkers, nBurnIn, nProdSteps, fracNoiseInit, percentiles, 
-                    relAmp=False, sP_snap=0, **kwargs):
+                    relAmp=False, sP_snap=0, newErrors=False, **kwargs):
     """ MCMC based fit in the color-mass plane of the full double gaussian model. """
     import emcee
 
@@ -598,10 +601,21 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
 
         # error estimate
         y_err = np.zeros( yy.size, dtype='float32' )
+
         w = np.where(yy > 0.0)
-        y_err[w] = 1.0 / np.sqrt(yy[w]*binSizeColor*yy.sum())
+
+        if newErrors:
+            # err1: Poisson
+            y_err[w] = np.sqrt(yy[w])
+            # err2: constant
+            #y_err += 0.1
+        else:
+            # previous method
+            y_err[w] = 1.0 / np.sqrt(yy[w]*binSizeColor*yy.sum())
+
         w2 = np.where(y_err == 0.0)
         y_err[w2] = y_err[w].max() * 10.0
+
         inv_sigma2 = 1.0/y_err**2.0
         y_is2.append(inv_sigma2)
 
@@ -783,7 +797,7 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
     return p, p_errors, best_params
 
 def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=defSimColorModel, 
-    nBurnIn=10000, remakeFlag=True):
+    nBurnIn=10000, remakeFlag=True, newErrors=False):
     """ Do double gaussian and other methods to characterize the red and blue populations, e.g. their 
     location, extent, relative numbers, for sP at sP.snap, and save the results. """
     assert cenSatSelect in ['all', 'cen', 'sat']
@@ -835,6 +849,8 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
 
     startMCMC_fromSnap = None
 
+    eStr = '_err1' if newErrors else ''
+
     if sP is not None:
         # sim
         pStr = ''
@@ -847,8 +863,8 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
                 pStr = '_chainf=%d' % startMCMC_snaps[startMCMC_ind]
 
         savePath = sP.derivPath + "/galMstarColor/"
-        saveFilename = savePath + "colorMassPlaneFits_%s_%d_%s_%s%s_mcmc%d-%d.hdf5" % \
-          (''.join(bands),sP.snap,cenSatSelect,simColorsModel,pStr,nBurnIn,nProdSteps)
+        saveFilename = savePath + "colorMassPlaneFits_%s_%d_%s_%s%s_mcmc%d-%d%s.hdf5" % \
+          (''.join(bands),sP.snap,cenSatSelect,simColorsModel,pStr,nBurnIn,nProdSteps,eStr)
     else:
         # obs
         assert cenSatSelect == 'all'
@@ -857,8 +873,9 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
         sStr = '_fsr' if startObsMCMCAtSimResult else ''
 
         savePath = expanduser("~") + "/obs/"
-        saveFilename = savePath + "sdss_colorMassPlaneFits_%s_%d-%d_%d-%d_mcmc%d-%d%s.hdf5" % \
-          (''.join(bands),xMinMax[0]*10,xMinMax[1]*10,mag_range[0]*10,mag_range[1]*10,nBurnIn,nProdSteps,sStr)
+        saveFilename = savePath + "sdss_colorMassPlaneFits_%s_%d-%d_%d-%d_mcmc%d-%d%s%s.hdf5" % \
+          (''.join(bands),xMinMax[0]*10,xMinMax[1]*10,mag_range[0]*10,mag_range[1]*10,
+            nBurnIn,nProdSteps,sStr,eStr)
 
     if not remakeFlag and isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -1038,7 +1055,8 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
             curSnap = sP.snap
             sP.setSnap(startMCMC_fromSnap)
             fits_prev = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
-                                                  simColorsModel=simColorsModel, remakeFlag=False)
+                                                  simColorsModel=simColorsModel, remakeFlag=False, 
+                                                  newErrors=newErrors)
             sP.setSnap(curSnap)
 
             # reconstruct chain_start dictionary
@@ -1046,10 +1064,11 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
 
         if sP is None and startObsMCMCAtSimResult:
             # load simulation result as a reasonable starting point for the observational fit
-            print('loading sim result from L75n1820TNG z=0.1 for obs C')
-            sP = simParams(res=1820,run='tng',redshift=0.1)
+            print('loading sim result from L75n1820TNG z=0.0 for obs C')
+            sP = simParams(res=1820,run='tng',redshift=0.0)
             fits_sim = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
-                                                  simColorsModel=simColorsModel, remakeFlag=False)
+                                                  simColorsModel=simColorsModel, remakeFlag=False,
+                                                  newErrors=newErrors)
 
             # reconstruct chain_start dictionary
             chain_start = _paramDictFromModelCResult(fits_sim, relAmpStr)
@@ -1143,7 +1162,7 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
         sP.setRedshift(redshift)
         print('load cm-plane fits: snap [%d] z = %.1f' % (sP.snap,redshift))
         fits_local = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cmPlaneCSS, 
-                                      simColorsModel=cmPlaneColorModel, nBurnIn=nBurnIn, remakeFlag=False)
+                       simColorsModel=cmPlaneColorModel, nBurnIn=nBurnIn, remakeFlag=False, newErrors=newErrors)
         cm_fits.append(fits_local)
 
     sP.setRedshift(redshifts[0])

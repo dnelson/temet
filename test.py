@@ -18,6 +18,64 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def checkStellarAssemblyMergerMass():
+    """ Check addition to StellarAssembly catalogs. """
+    sP = simParams(res=2500,run='tng',snap=99)
+
+    fName = sP.postPath + 'StellarAssembly/stars_%03d_supp.hdf5' % sP.snap
+
+    with h5py.File(fName,'r') as f:
+        InSitu = f['InSitu'][()]
+        MergerMass = f['MergerMass'][()]
+        MergerSnap = f['MergerSnap'][()]
+
+    w_exsitu = np.where(InSitu == 0)
+
+    if 1:
+        fName2 = sP.postPath + 'StellarAssembly/stars_%03d.hdf5' % sP.snap
+        with h5py.File(fName2,'r') as f:
+            InSitu_prev = f['InSitu'][()]
+        print( sP.simName, np.array_equal(InSitu,InSitu_prev) )
+
+    # plot
+    fig = plt.figure(figsize=(18,8))
+    ax = fig.add_subplot(121)
+
+    ax.set_xlabel('MergerSnap (InSitu==0)')
+    ax.set_ylabel('N$_{\\rm stars}$')
+    ax.hist(MergerSnap[w_exsitu], bins=100, range=[0,99])
+
+    ax = fig.add_subplot(122)
+    ax.set_xlabel('MergerMass [log M$_{\\rm sun}$] (InSitu==0)')
+    ax.set_ylabel('N$_{\\rm stars}$')
+
+    vals = sP.units.codeMassToLogMsun(MergerMass[w_exsitu])
+    vals = vals[np.isfinite(vals)]
+    ax.hist(vals, bins=100)
+
+    fig.tight_layout()    
+    fig.savefig('check_stellarassembly_supp_%s_%d.pdf' % (sP.simName,sP.snap))
+    plt.close(fig)
+
+def checkColorCombos():
+    """ Check (r-i) from color TNG paper. """
+    from cosmo.color import loadSimGalColors
+    from util.helper import array_equal_nan
+
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+
+    simColorsModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
+
+    colorData = loadSimGalColors(sP, simColorsModel)
+    ui, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=['u','i'], projs='random')
+    ur, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=['u','r'], projs='random')
+    ri, _ = loadSimGalColors(sP, simColorsModel, colorData=colorData, bands=['r','i'], projs='random')
+
+    ri2 = ui - ur # u - i - (u - r) = r - i
+    print( array_equal_nan(ri,ri2) )
+    
+    import pdb; pdb.set_trace()
+
 def checkInfallTime():
     """ Check infall times. """
     from tracer.tracerMC import match3
@@ -251,8 +309,10 @@ def makeSnapSubsetsForMergerTrees():
                   'PartType1':['ParticleIDs'],
                   'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
 
-    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG_DM/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/data/sims.TNG/L205n2500TNG_DM_temp/output/snapdir_%03d/'
+    copyFields = {'PartType4':['Coordinates','ParticleIDs']}
+
+    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/data/out/L205n2500TNG/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -265,7 +325,7 @@ def makeSnapSubsetsForMergerTrees():
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(0,10): #range(50,61):
+    for i in range(99,100): #range(50,61):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 

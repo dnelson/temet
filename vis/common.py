@@ -733,10 +733,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4'
-        #if sP.isPartType(partType,'gas'):   config['ctName'] = 'perula' # methods2
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4' # 'perula' (methods2)
         if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
-        if sP.isPartType(partType,'stars'): config['ctName'] = 'copper' # gray
+        if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         if ' ' in partField:

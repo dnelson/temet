@@ -43,7 +43,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']
 
     quants3 = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high', 'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
-               'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']
+               'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio', 'Mdot_BH_edd']
 
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
@@ -92,8 +92,8 @@ def getWhiteBlackColors(pStyle):
     if pStyle == 'white':
         color1 = 'white' # background
         color2 = 'black' # axes etc
-        color3 = '#dddddd' # color bins with only NaNs
-        color4 = '#eeeeee' # color bins with value 0.0
+        color3 = '#777777' # color bins with only NaNs
+        color4 = '#cccccc' # color bins with value 0.0
     if pStyle == 'black':
         color1 = 'black'
         color2 = 'white'
@@ -358,7 +358,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ac = auxCat(sP, fields=[fieldName])
 
         vals = ac[fieldName]
-        label = 'log t$_{\\rm age,stars}$'
+        label = 'log t$_{\\rm age,stars}$ [ Gyr ]'
         if not clean: label += ' [%s]' % ageType
         minMax = [0.0,1.0]
         if tight: minMax = [0.0, 1.2]
@@ -630,6 +630,17 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if quant == 'B_MH_actual': label += ' w/o reservoir'
         minMax = [6.0,9.0]
         if tight: minMax = [6.0,10.0]
+
+    if quant in ['Mdot_BH_edd']:
+        # blackhole mass accretion rate normalized by its eddington rate
+        # (use auxCat calculation of single largest BH in each subhalo)
+        fields = ['Subhalo_BH_Mdot_largest','Subhalo_BH_MdotEdd_largest']
+        label = '\dot{M}_{\\rm BH} / \dot{M}_{\\rm Edd}'
+        minMax = [1e-4, 0.2]
+
+        ac = auxCat(sP, fields=fields)
+
+        vals = ac['Subhalo_BH_Mdot_largest'] / ac['Subhalo_BH_MdotEdd_largest']
 
     if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio','BH_CumEgy_ratioInv',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:

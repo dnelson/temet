@@ -93,8 +93,7 @@ def _TNGboxSliceConfig(res):
 
     return dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice
 
-def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
-    """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
+def _TNGboxFieldConfig(res, conf, thinSlice):
     panels = []
 
     dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
@@ -131,6 +130,12 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
         if conf == 7: panels[0]['valMinMax'] = [3.3, 7.3]; panels[0]['plawScale'] = 1.8 # gas temp
         if conf == 11: panels[0]['valMinMax'] = [28.5,37.0]; # gas xray_lum
         if conf == 12: panels[0]['valMinMax'] = [0, 8]; panels[0]['plawScale'] = 1.6 # gas shocks_machnum
+
+    return panels, centerHaloID, nSlicesTot, curSlice
+
+def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
+    """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
+    panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice)
 
     run        = 'tng'
     redshift   = 0.0
@@ -232,6 +237,58 @@ def TNG_colorFlagshipBoxImage(part=0):
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.pdf' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def TNG_explorerImageSegments(conf=0, taskNum=0):
+    """ Construct image segments which are then split into the pyramids for the TNG explorer 2d. """
+
+    res        = 2500 # TBD
+    nPixels    = 16384 # 2048x4 = 8k (testing), 16384x8 = 131072 (target final size) TBD
+    nPanels    = 64 # 4x4 (testing) TBD
+    hsmlFac    = 2.5 # use for all: gas, dm (TBD: stars)
+
+    run        = 'tng'
+    redshift   = 0.0
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+
+    # field
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice=False)
+
+    # slice positioning
+    relCenPos = None
+    sliceFac  = (1.0/nSlicesTot)
+
+    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+    absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+
+    # panel positioning
+    zoomFac = 1.0 / np.sqrt(nPanels)
+
+    panelSize = sP.boxSize / np.sqrt(nPanels)
+    panelRow = int(np.floor(taskNum / np.sqrt(nPanels)))
+    panelCol = int(taskNum % np.sqrt(nPanels))
+
+    absCenPos[axes[0]] = absCenPos[axes[0]] - sP.boxSize/2 + panelSize/2 + panelSize*panelCol
+    absCenPos[axes[1]] = absCenPos[axes[1]] - sP.boxSize/2 + panelSize/2 + panelSize*panelRow
+
+    print(taskNum, panelRow, panelCol,absCenPos[0],absCenPos[1])
+
+    # render config (global)
+    class plotConfig:
+        plotStyle  = 'edged'
+        rasterPx   = nPixels
+        colorbars  = False
+
+        saveFilename = './boxImageExplorer_%s_%s-%s_%d.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],taskNum)
 
     renderBox(panels, plotConfig, locals())
 
