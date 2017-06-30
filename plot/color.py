@@ -28,7 +28,8 @@ from vis.common import setAxisColors
 from plot.config import *
 
 def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel], 
-                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, addPetro=False):
+                   simRedshift=0.0, splitCenSat=False, cenOnly=False, stellarMassBins=None, 
+                   addPetro=False, minDMFrac=None):
     """ PDF of galaxy colors (by default: (u-i)), with no dust corrections. (Vog 14b Fig 13) """
     from util import simParams
 
@@ -181,6 +182,22 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
             assert gc_colors.size == gc_masses.size
             assert w_all.size == gc_masses.size
 
+            if minDMFrac is not None:
+                subMass = groupCat(sP, fieldsSubhalos=['SubhaloMass','SubhaloMassType'])['subhalos']
+                subDMMassRatio = subMass['SubhaloMassType'][:,sP.ptNum('dm')] / subMass['SubhaloMass']
+
+                #w = np.where(subDMMassRatio < minDMFrac)
+                #print('overall %d of %d fail DM cut' % (w[0].size,subDMMassRatio.size))
+                #gc2 = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
+                #gc_masses2 = sP.units.codeMassToLogMsun( gc2['subhalos'][:,sP.ptNum('stars')] )
+                #w = np.where(gc_masses2 >= 9.0)
+                #subDMMassRatio2 = subDMMassRatio[w]
+                #w = np.where(subDMMassRatio2 < minDMFrac)
+                #print('above 9.0 have %d of %d fail DM cut' % (w[0].size,subDMMassRatio.size))
+
+                if simColorsModel[-4:] == '_all': subDMMassRatio = subDMMassRatio[gc_inds]
+                assert subDMMassRatio.size == gc_masses.size
+
             # selection:
             normFacs = np.zeros( len(stellarMassBins) )
             binSize  = np.zeros( len(stellarMassBins) )
@@ -199,7 +216,20 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                 stellar_mass = gc_masses[w]
                 galaxy_color = gc_colors[w]
 
-                wNotNan = np.isfinite(galaxy_color) # filter out subhalos with e.g. no stars
+                # cut on DM fractions?
+                if minDMFrac is not None:
+                    subDMMassRatio_loc = subDMMassRatio[w]
+                    w_dm = np.where(subDMMassRatio_loc >= minDMFrac)
+                    #print('keep %d of %d' % (w_dm[0].size,subDMMassRatio_loc.size))
+                    #w_check = np.where(subDMMassRatio_loc < minDMFrac)
+                    #print('min mean max color failing: %f %f %f' % ( np.nanmin(galaxy_color[w_check]), 
+                    #    np.nanmean(galaxy_color[w_check]), np.nanmax(galaxy_color[w_check])))
+
+                    stellar_mass = stellar_mass[w_dm]
+                    galaxy_color = galaxy_color[w_dm]
+
+                # filter out subhalos with e.g. no stars
+                wNotNan = np.isfinite(galaxy_color) 
                 galaxy_color = galaxy_color[wNotNan]
                 stellar_mass = stellar_mass[wNotNan]
 
@@ -343,7 +373,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
     bandCombos = [ ['u','i'], ['g','r'], ['r','i'], ['u','r'] ] # rz, iz
 
     eCorrect = True # True, False (for sdss points)
-    kCorrect = True # True, False (for sdss points)
+    kCorrect = False # True, False (for sdss points)
 
     sizefac = 1.0/sfclean if clean else 1.5
 
@@ -424,7 +454,8 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             nBins2D = [50,100]
 
             # (A) create kde of observations
-            xx, yy, kde_obs = calcMstarColor2dKDE(bands, sdss_Mstar, sdss_color, Mstar_range, mag_range)
+            xx, yy, kde_obs = calcMstarColor2dKDE(bands, sdss_Mstar, sdss_color, Mstar_range, mag_range, 
+                                                  kCorrected=kCorrect)
 
             for k in range(kde_obs.shape[0]):
                 kde_obs[k,:] /= kde_obs[k,:].max() # by column normalization
@@ -1062,6 +1093,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     cenSatSelect = 'all'
     method = 'Crel' # MCMC fit with relative amplitudes
     nBurnIn = 2000 # 400, 2000, 10000
+    newErrors = True
 
     # visual config
     xMinMax = [9.0, 12.0] # log Mstar
@@ -1082,7 +1114,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
     # load obs and sim(s)
     fits_obs = characterizeColorMassPlane(None, bands=bands, cenSatSelect=cenSatSelect, 
-                                          simColorsModel=simColorsModel, nBurnIn=nBurnIn, remakeFlag=False)
+                 simColorsModel=simColorsModel, nBurnIn=nBurnIn, remakeFlag=False, newErrors=False)
 
     masses = fits_obs['mStar'] # bin centers
     ind_r = fits_obs['skipNBinsRed']
@@ -1091,7 +1123,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     fits_sim = []
     for sP in sPs:
         fits = characterizeColorMassPlane(sP, bands=bands, cenSatSelect=cenSatSelect, 
-                                          simColorsModel=simColorsModel, nBurnIn=nBurnIn, remakeFlag=False)
+                 simColorsModel=simColorsModel, nBurnIn=nBurnIn, remakeFlag=False, newErrors=newErrors)
         assert np.array_equal(fits_obs['mStar'], fits['mStar'])
         fits_sim.append(fits)
 
@@ -2179,13 +2211,14 @@ def paperPlots():
     bands = ['g','r']
 
     # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
-    if 1:
+    if 0:
         simRedshift = 0.0
         sPs = [L75] #[L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
 
-        pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
-        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift, addPetro=True)
+        pdf = PdfPages('figure1_%s_%s_petro.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
+        galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift, 
+                       addPetro=True)
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
@@ -2194,7 +2227,7 @@ def paperPlots():
         sPs = [L75]
         dust = dust_C
 
-        pdf = PdfPages('figure2_%s_%s.pdf' % (sPs[0].simName,dust))
+        pdf = PdfPages('figure2_%s_%s_noK.pdf' % (sPs[0].simName,dust))
         galaxyColor2DPDFs(sPs, pdf, simColorsModel=dust, simRedshift=simRedshift)
         pdf.close()
 
@@ -2225,7 +2258,7 @@ def paperPlots():
             vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
-    if 0:
+    if 1:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}

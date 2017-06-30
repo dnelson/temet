@@ -216,6 +216,10 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
         w = np.where(smooth_res <= 0.0) # avoid any catastrophes
         smooth_res[w] = np.median(smooth_res)
 
+        # Replace by the quadrature difference with respect to MILES (TBD)
+        #sigma_aa_miles = miles_fwhm_aa / sigma_to_fwhm
+        #smooth_res = np.sqrt(np.clip(smooth_res**2 - sigma_aa_miles**2, 0, np.inf))
+
         # convolve the mock spectrum using sdss wdisp (decrease the resolution to the instrumental res)
         r['flux'] = smoothing.smoothspec(r['wavelength'], r['flux'], resolution=smooth_res, smoothtype="lsf")
 

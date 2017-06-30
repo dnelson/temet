@@ -599,7 +599,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
             ax2.set_ylim([8e-5, 0.12])
             ax2.set_yscale('log')
 
-            ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
+            #ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
+            ax2.set_ylabel('Blackhole Accretion Rate / Eddington Rate', color=color2)
             ax2.tick_params('y', which='both', colors=color2)
 
             # need median M_BH as a function of x-axis (e.g. M_star)
@@ -610,27 +611,34 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
 
                 sim_x_loc, _, _, take_log2 = simSubhaloQuantity(sP_loc, xQuant, clean)
                 if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
-                sim_m_bh, _, _, take_log2 = simSubhaloQuantity(sP_loc, 'M_BH_actual', clean)
-                if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
 
                 # same filters as above
                 wSelect = cenSatSubhaloIndices(sP_loc, cenSatSelect=cenSatSelect)
                 sim_x_loc = sim_x_loc[wSelect]
-                sim_m_bh = sim_m_bh[wSelect]
 
-                wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
-                sim_x_loc = sim_x_loc[wFinite]
-                sim_m_bh = sim_m_bh[wFinite]
+                for bhPropNum, bhPropName in enumerate(['M_BH_actual','Mdot_BH_edd']):
+                    sim_m_bh, _, _, take_log2 = simSubhaloQuantity(sP_loc, bhPropName, clean)
+                    if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
 
-                xm_bh, ym_bh, _ = running_median(sim_x_loc,sim_m_bh,binSize=binSize*2,skipZeros=True)
-                ym_bh = savgol_filter(ym_bh,sKn,sKo)
-                w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
-                xm_bh = xm_bh[w]
-                ym_bh = ym_bh[w]
+                    # same filters as above
+                    sim_m_bh = sim_m_bh[wSelect]
 
-                # derive eddington ratio transition as a function of x-axis (e.g. M_star)
-                linestyle = '-' if bhIterNum == 0 else ':'
-                ax2.plot( xm_bh, tngModel_chi(ym_bh), linestyle=linestyle, lw=lw, color=color2)
+                    wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
+                    sim_x_loc2 = sim_x_loc[wFinite]
+                    sim_m_bh = sim_m_bh[wFinite]
+
+                    xm_bh, ym_bh, _ = running_median(sim_x_loc2,sim_m_bh,binSize=binSize*2,skipZeros=True)
+                    ym_bh = savgol_filter(ym_bh,sKn,sKo)
+                    w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
+                    xm_bh = xm_bh[w]
+                    ym_bh = ym_bh[w]
+
+                    # derive eddington ratio transition as a function of x-axis (e.g. M_star)
+                    linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
+                    if bhPropName == 'M_BH_actual':
+                        ym_bh = tngModel_chi(ym_bh)
+
+                    ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
 
             ax.set_xlim(xMinMax) # fix
             legendLoc = 'lower right'
@@ -675,8 +683,10 @@ def plots():
     xQuant = 'mstar2_log' # mstar2_log, ssfr, M_BH_actual
     cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
+    pStyle = 'black'
 
-    quants = quantList()
+    quants = ['mass_ovi','mass_ovii','xray_r500','p_sync_ska'] #quantList()
+    quants = ['M_BH_actual', 'BH_CumEgy_low', 'BH_CumEgy_high', 'BH_CumEgy_ratio']
 
     for sP in sPs:
         for css in cenSatSelects:
@@ -685,7 +695,7 @@ def plots():
 
             for cQuant in quants:
                 quantHisto2D(sP, pdf, yQuant=yQuant, ySpec=ySpec, xQuant=xQuant, 
-                             cenSatSelect=css, cQuant=cQuant, cStatistic=cs)
+                             cenSatSelect=css, cQuant=cQuant, cStatistic=cs, pStyle=pStyle)
 
             pdf.close()
 
@@ -701,18 +711,19 @@ def plots2():
     sRange = [10.4,10.6]
     cenSatSelects = ['cen']
 
-    quants = quantList(wCounts=False,wTr=False)
-    quantsTr = quantList(wCounts=False,onlyTr=True)
+    quants = ['mass_ovi','mass_ovii','xray_r500','p_sync_ska'] #quantList(wCounts=False,wTr=False)
+    quants = ['M_BH_actual', 'BH_CumEgy_low', 'BH_CumEgy_high', 'BH_CumEgy_ratio']
+    quantsTr = [] #quantList(wCounts=False,onlyTr=True)
 
     for css in cenSatSelects:
         pdf = PdfPages('galaxyColor_1Dslices_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('-'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
 
         # all quantities on one multi-panel page:
-        quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quants, sQuant=sQuant, 
-                     sRange=sRange, cenSatSelect=css, )
-        quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quantsTr, sQuant=sQuant, 
-                     sRange=sRange, cenSatSelect=css)
+        #quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quants, sQuant=sQuant, 
+        #             sRange=sRange, cenSatSelect=css, )
+        #quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quantsTr, sQuant=sQuant, 
+        #             sRange=sRange, cenSatSelect=css)
 
         # one page per quantity:
         for yQuant in quants + quantsTr:

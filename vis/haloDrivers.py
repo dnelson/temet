@@ -847,7 +847,7 @@ def zoomEvoMovies(conf):
     renderSingleHaloFrames(panels, plotConfig, localVars)
 
 def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSample=False, 
-                                     evo=False, curPage=None):
+                                     evo=False, curPage=None, conf=0):
     """ Plot stellar stamps red/blue galaxies around 10^10.5 Msun.
     If evo==True, then tracked back in time from z=0 to z=2.0 in M steps using the merger tree.
     If evo==False, then show full NxM panel sample at z=0.
@@ -925,16 +925,25 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     relCoords     = True
     mpb           = None
     rotation      = 'face-on'
-    size          = 60.0 # 30 kpc in each direction from center
     sizeType      = 'pkpc'
-    partType      = 'stars'
-    partField     = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
-    hsmlFac       = 0.5
+
+    if conf == 0:
+        size          = 60.0 # 30 kpc in each direction from center
+        partType      = 'stars'
+        partField     = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+        hsmlFac       = 0.5
+    if conf == 1:
+        size          = 800.0 # 400 kpc in each direction from center
+        partType      = 'gas'
+        partField     = 'O VI'
+        hsmlFac       = 3.5
+        valMinMax     = [12.0,15.0]
+        rVirFracs     = [1.0]
 
     evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
     redshift_init = 0.0
-    nGalaxies     = 35 #(note: set to 45 for talk image)
-    nRowsFig      = 7 # 5 columns, 7 rows (note: set to 9 for talk image)
+    nGalaxies     = 45 # 35 (note: set to 45 for talk image)
+    nRowsFig      = 9 # 7 (note: set to 9 for talk image)
 
     # load halos of this bin, from this run
     sP = simParams(res=res, run=run, redshift=redshift_init)

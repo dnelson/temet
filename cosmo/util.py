@@ -127,7 +127,9 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         ww = np.where(dloga < 0.8 * dloga_target)[0]
         print('  number snaps below target [%d] spanning [%d-%d]' % (len(ww),ww.min(),ww.max()))
         ww2 = np.where(dloga < 0.8 * 0.5 * dloga_target)[0]
-        assert len(ww2) == 0 # number of timesteps even one jump lower
+
+        #assert len(ww2) == 0 # number of timesteps even one jump lower
+        if len(ww2) > 0: print('  WARNING: %d snaps even one timestep below target' % len(ww2))
 
         # detect contiguous snapshot subsets in this list of integers
         ranges = contiguousIntSubsets(ww)

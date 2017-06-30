@@ -347,6 +347,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
     """ Plot the galaxy two-point correlation function for a run or multiple runs, showing a range 
     of bins in either color, stellar mass, or redshift (choose one). """
 
+    print('NOTE: Conformity analysis incomplete (disagress with Bray for Illustris, needs work/fixes).')
     # analysis config (can move into arguments if desired)
     colorSplitSec = 0.6
     cType         = [['g','r'], defSimColorModel]
