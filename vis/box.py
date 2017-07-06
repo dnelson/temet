@@ -48,7 +48,7 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, **kwargs):
 
     return boxSizeImg, boxCenter, extent
 
-def renderBox(panels, plotConfig, localVars, skipExisting=True):
+def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     """ Driver: render views of a full/fraction of a cosmological box, variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
 
@@ -121,6 +121,8 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True):
         p['nPixels'] = [p['nPixels'],p['nPixels']]
 
     # request render and save
+    if retInfo: return panels
+    
     renderMultiPanel(panels, plotConfig)
 
 def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipExisting=True):
