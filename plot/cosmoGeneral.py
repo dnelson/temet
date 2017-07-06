@@ -17,7 +17,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
 from util import simParams
-from util.helper import running_median, logZeroNaN, loadColorTable
+from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
@@ -235,7 +235,8 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
 
     print(' ',cQuant,sP.simName,ySaveLabel,xQuant,cenSatSelect,cStatistic,minCount)
     if not clean:
-        ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
+        pass
+        #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
     else:
         if cQuant is None:
             cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
@@ -495,11 +496,15 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen',
             fig.savefig('slice1d_%s_%s_%s_%s_%s.pdf' % (xSaveLabel,cQuant,cStatistic,cenSatSelect,minCount))
         plt.close(fig)
 
-def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_subplot=[None,None]):
+def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
+                             sQuant=None, sLowerPercs=None, sUpperPercs=None, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
-    which are overplotted. Multiple yQuants results in a grid. """
+    which are overplotted. Multiple yQuants results in a grid. 
+    If sQuant is not None, then in addition to the median, load this third quantity and split the 
+    subhalos on it according to sLowerPercs, sUpperPercs (above/below the given percentiles), for 
+    each split plotting the sub-sample yQuant again versus xQuant."""
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     nRows = np.floor(np.sqrt(len(yQuants)))
@@ -551,6 +556,16 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
                     sim_xvals = logZeroNaN(sim_xvals)
                 sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
 
+            # splitting on third quantity? load now
+            if sQuant is not None:
+                if 'quantMedian_svals' in sP.data:
+                    sim_svals, slabel = sP.data['sim_xvals'], sP.data['xlabel']              
+                else:
+                    sim_svals, slabel, _, sLog = simSubhaloQuantity(sP, sQuant, clean, tight=True)
+                    if sLog:
+                        sim_svals = logZeroNaN(sim_svals)
+                    sP.data['sim_svals'], sP.data['slabel'] = sim_svals, slabel
+
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
 
@@ -587,6 +602,32 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', fig_
             # percentile:
             if sim_xvals.size >= ptPlotThresh:
                 ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+
+            # slice value?
+            if sQuant is not None:
+                svals_loc = sim_svals[wSelect][wFinite]
+                binSizeS = binSize*2
+
+                if len(sPs) == 1:
+                    # if only one run, use new colors for above and below slices
+                    c = ax._get_lines.prop_cycler.next()['color']
+
+                xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
+                                                    sPercs=sLowerPercs)
+
+                for j, sLowerPerc in enumerate(sLowerPercs):
+                    label = '%s < P[%d]' % (slabel,sLowerPerc)
+                    ax.plot(xm, ymb[j], linestyles[1+j], lw=lw, color=c, label=label)
+
+                if len(sPs) == 1:
+                    c = ax._get_lines.prop_cycler.next()['color']
+
+                xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
+                                                    sPercs=sUpperPercs)
+
+                for j, sUpperPerc in enumerate(sUpperPercs):
+                    label = '%s > P[%d]' % (slabel,sUpperPerc)
+                    ax.plot(xm, yma[j], linestyles[1+j], lw=lw, color=c, label=label)
 
         # special case: BH_CumEgy_ratio add theory curve on top from BH model
         if clean and yQuant in ['BH_CumEgy_ratio','BH_CumEgy_ratioInv']:
@@ -676,22 +717,24 @@ def plots():
     """ Driver (exploration 2D histograms). """
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
-    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'color'
-    ySpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
-    xQuant = 'mstar2_log' # mstar2_log, ssfr, M_BH_actual
+    #yQuant = 'color'
+    #ySpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
+    yQuant = 'mstar_out_100kpc_frac_r200'
+    ySpec  = None
+
+    xQuant = 'mhalo_200_log' # mstar_30pkpc_log, mstar2_log
     cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
-    pStyle = 'black'
+    pStyle = 'white'
 
-    quants = ['mass_ovi','mass_ovii','xray_r500','p_sync_ska'] #quantList()
-    quants = ['M_BH_actual', 'BH_CumEgy_low', 'BH_CumEgy_high', 'BH_CumEgy_ratio']
+    quants = quantList(wTr=True, wMasses=True)
 
     for sP in sPs:
         for css in cenSatSelects:
 
-            pdf = PdfPages('galaxyColor_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,yQuant,xQuant,cs,css))
+            pdf = PdfPages('galaxy_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,yQuant,xQuant,cs,css))
 
             for cQuant in quants:
                 quantHisto2D(sP, pdf, yQuant=yQuant, ySpec=ySpec, xQuant=xQuant, 
@@ -711,9 +754,8 @@ def plots2():
     sRange = [10.4,10.6]
     cenSatSelects = ['cen']
 
-    quants = ['mass_ovi','mass_ovii','xray_r500','p_sync_ska'] #quantList(wCounts=False,wTr=False)
-    quants = ['M_BH_actual', 'BH_CumEgy_low', 'BH_CumEgy_high', 'BH_CumEgy_ratio']
-    quantsTr = [] #quantList(wCounts=False,onlyTr=True)
+    quants = quantList(wCounts=False,wTr=False)
+    quantsTr = quantList(wCounts=False,onlyTr=True)
 
     for css in cenSatSelects:
         pdf = PdfPages('galaxyColor_1Dslices_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
@@ -737,12 +779,17 @@ def plots3():
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    xQuant = 'mhalo_200_log' #'mstar1_log'
+    xQuant = 'mhalo_500_log' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
     cenSatSelects = ['cen']
 
-    quants = quantList(onlyMHD=True)
+    sQuant = None #'mstar_out_100kpc_frac_r200'
+    sLowerPercs = [10,50]
+    sUpperPercs = [90,50]
+
+    quants = quantList(wCounts=False, wTr=True, wMasses=True)
+    quants = ['mstar_30pkpc']
 
     # make plots
     for css in cenSatSelects:
@@ -754,6 +801,7 @@ def plots3():
 
         # one page per quantity:
         for yQuant in quants:
-            quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
+            quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+                                     sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
 
         pdf.close()

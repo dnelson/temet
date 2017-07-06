@@ -8,6 +8,9 @@ from builtins import *
 import numpy as np
 import h5py
 import illustris_python as il
+from os import path
+
+import cosmo
 from scipy.signal import savgol_filter
 from cosmo.util import snapNumToRedshift, correctPeriodicPosBoxWrap
 from util.helper import running_sigmawindow, iterable
@@ -371,3 +374,354 @@ def debugPlot():
         fig.tight_layout()    
         fig.savefig('tree_debug_props_'+str(sP.res)+'.pdf')
         plt.close(fig)    
+
+def stellarMergerContribution(sP):
+    """ Analysis routine for TNG flagship paper on stellar mass content. """
+    from cosmo.util import periodicDistsSq
+
+    # config
+    haloMassBins = [[11.4, 11.6], [11.9, 12.1], [12.4,12.6], [12.9,13.1], 
+                    [13.4,13.6], [13.9, 14.1], [14.3, 14.7]]
+    rad_pkpc = 30.0
+    nHistBins = 50
+    histMinMax = [8.0, 12.0] # log msun
+    threshVals = [0.1, 0.5, 0.9]
+    minHaloMassIndiv = 12.0 # log msun
+    pt = sP.ptNum('stars')
+
+    # check if we saved some results already?
+    r = {}
+    saveFilename = 'stellarMergerData_%s_%d.hdf5' % (sP.simName,sP.snap)
+
+    if path.isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # no, start new calculation: load stellar assembly cat
+    fName = sP.postPath + 'StellarAssembly/stars_%03d_supp.hdf5' % sP.snap
+
+    with h5py.File(fName,'r') as f:
+        InSitu = f['InSitu'][()]
+        MergerMass = f['MergerMass'][()]
+
+    MergerMass = sP.units.codeMassToLogMsun( MergerMass )
+
+    # load stellar particle data
+    stars = cosmo.load.snapshotSubset(sP, 'stars', ['mass','pos','sftime'])
+    assert stars['Masses'].shape == InSitu.shape
+
+    # load groupcat
+    radSqMax = sP.units.physicalKpcToCodeLength(rad_pkpc)**2
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType','SubhaloMass','SubhaloGrNr'])['subhalos']
+    halos = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'])['halos']
+    gc['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+    gc['SubhaloMass'] = sP.units.codeMassToLogMsun( gc['SubhaloMass'] )
+    halo_masses = sP.units.codeMassToLogMsun( halos )
+    halo_masses = halo_masses[ gc['SubhaloGrNr'] ] # re-index to subhalos
+
+    # process centrals only
+    sat_inds = cosmo.util.cenSatSubhaloIndices(sP, cenSatSelect='sat')
+    halo_masses[sat_inds] = np.nan
+
+    # allocate returns
+    binSizeHalf = (histMinMax[1]-histMinMax[0])/nHistBins/2
+
+    r['totalStarMass'] = np.zeros( len(haloMassBins), dtype='float32' )
+    r['mergerMassHisto'] = np.zeros( (len(haloMassBins),nHistBins), dtype='float32' )
+
+    # (A) in halo mass bins
+    for i, haloMassBin in enumerate(haloMassBins):
+        w_sub = np.where( (halo_masses >= haloMassBin[0]) & (halo_masses < haloMassBin[1]) )
+
+        if len(w_sub[0]) == 0:
+            continue # empty mass bin for this simulation
+
+        print(haloMassBin, len(w_sub[0]))
+
+        for subhaloID in w_sub[0]:
+            # get local indices
+            i0 = gc['SubhaloOffsetType'][subhaloID,pt]
+            i1 = i0 + gc['SubhaloLenType'][subhaloID,pt]
+
+            if i1 == i0:
+                continue # zero length of this type
+
+            # radial restrict
+            rr = periodicDistsSq( gc['SubhaloPos'][subhaloID,:], 
+                                  stars['Coordinates'][i0:i1,:], sP )
+
+            w_valid = np.where( (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) & \
+                                 (rr <= radSqMax) & \
+                                 (InSitu[i0:i1] == 0) )
+
+            if len(w_valid[0]) == 0:
+                continue # zero stars
+
+            # local properties
+            loc_masses = stars['Masses'][i0:i1][w_valid]
+            loc_mergermass = MergerMass[i0:i1][w_valid]
+
+            # histogram and save
+            loc_hist, hist_bins = np.histogram( loc_mergermass, bins=nHistBins, range=histMinMax, weights=loc_masses )
+
+            r['totalStarMass'][i] += loc_masses.sum()
+            r['mergerMassHisto'][i,:] += loc_hist
+
+    # (B) individual halos: intersection with threshold values
+    w_sub = np.where( halo_masses >= minHaloMassIndiv )
+
+    nApertures = 4 # <10, <30, >100, all subhalo particles
+
+    r['indivSubhaloIDs'] = w_sub[0]
+    r['indivHaloMasses'] = halo_masses[w_sub]
+    r['indivHisto'] = np.zeros( (len(w_sub[0]),nApertures,len(threshVals)), dtype='float32' )
+    r['indivHisto'].fill(np.nan) # nan value indicates not filled
+
+    print('Processing individuals: ',len(r['indivSubhaloIDs']))
+
+    for i, subhaloID in enumerate(r['indivSubhaloIDs']):
+        # get local indices
+        if i % 100 == 0: print(i)
+        i0 = gc['SubhaloOffsetType'][subhaloID,pt]
+        i1 = i0 + gc['SubhaloLenType'][subhaloID,pt]
+
+        if i1 == i0:
+            continue # zero length of this type
+
+        # radial restrict
+        rr = periodicDistsSq( gc['SubhaloPos'][subhaloID,:], 
+                              stars['Coordinates'][i0:i1,:], sP )
+
+        for apertureIter in range(nApertures):
+            # aperture selections
+            if apertureIter == 0:
+                # < 10 pkpc
+                w_valid = np.where( (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) & \
+                                     (rr <= 10.0) & \
+                                     (InSitu[i0:i1] == 0) )
+            if apertureIter == 1:
+                # < 30 pkpc
+                w_valid = np.where( (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) & \
+                                     (rr <= 30.0) & \
+                                     (InSitu[i0:i1] == 0) )
+            if apertureIter == 2:
+                # > 100 pkpc
+                w_valid = np.where( (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) & \
+                                     (rr >= 100.0) & \
+                                     (InSitu[i0:i1] == 0) )
+            if apertureIter == 3:
+                # all subhalo particles
+                w_valid = np.where( (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) & 
+                                     (InSitu[i0:i1] == 0) )
+
+            if len(w_valid[0]) == 0:
+                continue # zero stars
+
+            # local properties
+            loc_masses = stars['Masses'][i0:i1][w_valid]
+            loc_mergermass = MergerMass[i0:i1][w_valid]
+
+            # histogram
+            loc_hist, hist_bins = np.histogram( loc_mergermass, bins=nHistBins, range=histMinMax, 
+                                                weights=loc_masses )
+
+            # normalized cumulative sum
+            yy = loc_hist / loc_hist.sum()                
+            yy_cum = yy[::-1].cumsum()[::-1] # above a given subhalo mass threshold
+
+            # loop over thresholds, find intersections
+            for threshIter, thresh in enumerate(threshVals):
+                mass_ind = np.where( yy_cum >= thresh )[0]
+                if len(mass_ind) == 0:
+                    continue # never crosses threshold? i.e. no ex-situ stars, no stars, ...
+
+                mass_val = hist_bins[mass_ind.max()] + binSizeHalf
+
+                r['indivHisto'][i,apertureIter,threshIter] = mass_val
+
+    # some extra info to save
+    r['hist_bins'] = hist_bins[:-1] + binSizeHalf
+    r['haloMassBins'] = haloMassBins
+    r['histMinMax'] = histMinMax
+    r['threshVals'] = threshVals
+
+    # save
+    with h5py.File(saveFilename, 'w') as f:
+        for key in r:
+            f[key] = r[key]
+    print('Saved: [%s].' % saveFilename)
+
+    return r
+
+def stellarMergerContributionPlot():
+    """ Driver. """
+    from util.simParams import simParams
+    from plot.config import sKn, sKo
+    from util.helper import running_median
+    from scipy.signal import savgol_filter
+    import matplotlib.pyplot as plt
+    import csv
+
+    sPs = []
+
+    sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
+    sPs.append( simParams(res=2500,run='tng',redshift=0.0) )
+
+    haloBinSize   = 0.1
+    apertureNames = ['< 10 kpc', '< 30 kpc', '> 100 kpc', 'central + ICL']
+    lw = 2.0
+    linestyles = ['-',':']
+    nApertures = 4
+
+    # load
+    md = {}
+    for sP in sPs:
+        md[sP.simName] = stellarMergerContribution(sP)
+
+    histMinMax = md[sPs[0].simName]['histMinMax']
+    hist_bins  = md[sPs[0].simName]['hist_bins']
+
+    # dump text files
+    for i, sP in enumerate(sPs):
+        save = []
+        save.append(hist_bins)
+        for j, haloMassBin in enumerate(md[sP.simName]['haloMassBins']):
+            yy = md[sP.simName]['mergerMassHisto'][j,:]
+            yy /= md[sP.simName]['mergerMassHisto'][j,:].sum()
+            yy_cum = yy[::-1].cumsum()[::-1]
+            save.append(yy_cum)
+
+        massBinStrs = ['halo_%.1f_%.1f' % (mb[0],mb[1]) for mb in md[sP.simName]['haloMassBins']]
+        header = 'subhalo_mass %s' % ' '.join(massBinStrs)
+        np.savetxt('top_panel_%s.txt' % sP.simName, np.array(save).T, fmt='%.5f', header=header)
+
+        save = []
+        for apertureIter in range(nApertures):
+            for threshIter in range(3):
+                x_vals = md[sP.simName]['indivHaloMasses']
+                y_vals = md[sP.simName]['indivHisto'][:,apertureIter,threshIter]
+
+                xm, ym, _, pm = running_median(x_vals,y_vals,binSize=haloBinSize,percs=[16,84])
+                ym = savgol_filter(ym,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+                data = np.zeros( (4,len(xm)), dtype=xm.dtype )
+                data[0,:] = xm
+                data[1,:] = ym
+                data[2,:] = pm[0,:]
+                data[3,:] = pm[1,:]
+
+                filename = 'bottom_%s_aperture=%d_thresh=%.1f.txt' % \
+                  (sP.simName, apertureIter, md[sPs[0].simName]['threshVals'][threshIter])
+                header = '%s\nhalo_m200crit median lower16 upper84' % apertureNames[apertureIter]
+                np.savetxt(filename, data.T, fmt='%.5f', header=header)
+
+    # plot
+    fig = plt.figure(figsize=(10,16))
+
+    # top panel
+    ax = fig.add_subplot(211)
+    ax.set_xlabel('M$_{\\rm stars,progenitor}$ [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('Cumulative Ex-Situ Mass Frac [>= Mass]')
+    ax.set_xlim(histMinMax)
+    ax.set_ylim([0.0,1.0])
+
+    ax.plot(histMinMax, [0.1,0.1], ':', color='black', alpha=0.05)
+    ax.plot(histMinMax, [0.5,0.5], ':', color='black', alpha=0.05)
+    ax.plot(histMinMax, [0.9,0.9], ':', color='black', alpha=0.05)
+
+    colors = []
+    
+    for j, haloMassBin in enumerate(md[sP.simName]['haloMassBins']):
+        c = ax._get_lines.prop_cycler.next()['color']
+        colors.append(c)
+
+        for i, sP in enumerate(sPs):
+
+            alpha = 1.0
+            if (i == 0 and j > 3) or (i == 1 and j < 2):
+                alpha = 0.0 # skip lowest two bins for TNG300, highest 3 bins for TNG100
+
+            yy = md[sP.simName]['mergerMassHisto'][j,:]
+            # if mergermass==nan (originally -1), then we will not sum all 
+            # the weights, such that mergerMassHisto[j,:].sum() <= totalStarMass[j]
+            yy /= md[sP.simName]['mergerMassHisto'][j,:].sum() 
+            
+            yy_cum = yy[::-1].cumsum()[::-1] # above a given subhalo mass threshold
+            #label = '%.1f < M$_{\\rm halo}$ < %.1f' % (haloMassBin[0],haloMassBin[1])
+
+            ax.plot(hist_bins, yy_cum, linestyles[i], lw=lw, color=c, label='', alpha=alpha)
+
+    # legend
+    sExtra = []
+    lExtra = []
+
+    for j, haloMassBin in enumerate(md[sP.simName]['haloMassBins']):
+        label = '%.1f < M$_{\\rm halo}$ < %.1f' % (haloMassBin[0],haloMassBin[1])
+        sExtra.append( plt.Line2D( (0,1),(0,0),color=colors[j],lw=lw,marker='',linestyle='-' ) )
+        lExtra.append( label )
+    for i, sP in enumerate(sPs):
+        sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[i] ) )
+        lExtra.append( sP.simName )
+
+    legend1 = ax.legend(sExtra, lExtra, loc='upper right', fontsize=13)
+    ax.add_artist(legend1)
+
+    # bottom panel
+    ax = fig.add_subplot(212)
+    ax.set_xlabel('M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200,crit}$ ]')
+    ax.set_ylabel('Satellite Progenitor Threshold Mass [ log M$_{\\rm sun}$ ]')
+    ax.set_xlim([12.0,15.0])
+    ax.set_ylim([8.0,12.0])
+
+    colors = []
+    threshInds = [1,2]
+
+    for apertureIter in range(nApertures):
+        c = ax._get_lines.prop_cycler.next()['color']
+        colors.append(c)
+
+        for i, sP in enumerate(sPs):
+            for threshIter in threshInds:
+                x_vals = md[sP.simName]['indivHaloMasses']
+                y_vals = md[sP.simName]['indivHisto'][:,apertureIter,threshIter]
+
+                xm, ym, _, pm = running_median(x_vals,y_vals,binSize=haloBinSize,percs=[16,84])
+
+                ym = savgol_filter(ym,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+                alpha = [0.0,0.3,1.0][threshIter]
+
+                l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, color=c, alpha=alpha)
+
+                if apertureIter > 0 or threshIter == 1 or i > 0:
+                    continue # show percentile scatter only for first aperture
+                
+                ax.fill_between(xm[:-1], pm[0,:-1], pm[-1,:-1], color=c, interpolate=True, alpha=0.1)
+
+    # legend
+    sExtra = []
+    lExtra = []
+
+    for apertureIter in range(nApertures):
+        sExtra.append( plt.Line2D( (0,1),(0,0),color=colors[apertureIter],lw=lw,marker='',linestyle='-' ) )
+        lExtra.append( apertureNames[apertureIter] )
+    for threshIter in threshInds:
+        alpha = [0.0,0.1,1.0][threshIter]
+        sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle='-',alpha=alpha ) )
+        lExtra.append( 'f$_{\\rm ex-situ}$ > %.1f' % md[sPs[0].simName]['threshVals'][threshIter] )
+    for i, sP in enumerate(sPs):
+        sExtra.append( plt.Line2D( (0,1),(0,0),color='black',lw=lw,marker='',linestyle=linestyles[i] ) )
+        lExtra.append( sP.simName )
+
+    legend1 = ax.legend(sExtra, lExtra, loc='upper left', fontsize=13)
+    ax.add_artist(legend1)
+
+    # finish plot
+    fig.tight_layout()    
+    fig.savefig('merger_progmass_%s_%d.pdf' % ('-'.join([sP.simName for sP in sPs]),sP.snap))
+    plt.close(fig)
