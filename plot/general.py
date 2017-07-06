@@ -48,16 +48,20 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
 
-    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo',
+    quants_misc = ['zform_mm5','M_bulge_counter_rot','xray_r500','xray_subhalo',
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']
 
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
+    #         'zform_ma5', 'zform_poly7'
 
-    # L75 only:
-    quants5 = ['zform_mm5', 'fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad']
+    # supplementary catalogs of other people (currently TNG100*/TNG300* only):
+    quants5 = ['fcirc_10re_eps07m', 'massfrac_exsitu', 'massfrac_exsitu_inrad',
+               'mstar_out_10kpc', 'mstar_out_30kpc', 'mstar_out_100kpc', 'mstar_out_2rhalf',
+               'mstar_out_10kpc_frac_r200', 'mstar_out_30kpc_frac_r200',
+               'mstar_out_100kpc_frac_r200', 'mstar_out_2rhalf_frac_r200']
 
-    # unused: 'mgas2', 'mgas1', 'zform_ma5', 'zform_poly7', 'massfrac_insitu', 'massfrac_insitu_inrad'
+    # unused: 'massfrac_insitu', 'massfrac_insitu_inrad'
     #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
 
     # tracer tracks quantities (L75 only):
@@ -121,15 +125,28 @@ def bandMagRange(bands, tight=False):
         if bands == ['i','z']: mag_range = [0.0,0.8]
     return mag_range
 
+def groupOrderedValsToSubhaloOrdered(vals_group, sP):
+    """ For an input array of size equal to the number of FoF groups, re-index these 
+    placing each value into the subhalo index of the group's central. Non-centrals 
+    are left at NaN value. """
+    groupFirstSubs = groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
+    nSubs = groupCatHeader(sP)['Nsubgroups_Total']
+
+    assert groupFirstSubs.shape == vals_group.shape
+
+    vals_sub = np.zeros( nSubs, dtype='float64' )
+    vals_sub.fill(np.nan)
+    vals_sub[groupFirstSubs] = vals_group
+
+    return vals_sub
+
 def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     """ Return a 1D vector of size Nsubhalos, one quantity per subhalo as specified by the string 
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range.
     If clean is True, label is cleaned up for presentation. If tight is true, alternative range is 
-    used (targeted for slice1D instead of histo2D). """
+    used (targeted for slice1D/medians instead of histo2D). """
     label = None
-
-    # todo: generalize log, aperture selection
-    takeLog = True
+    takeLog = True # default
 
     if quant in ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2']:
         # stellar mass (variations)
@@ -304,7 +321,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'r$_{\\rm \star,1/2}$ [ log kpc ]'
         minMax = [0.1, 1.6]
-        if tight: minMax = [0.3, 1.2]
+        if tight: minMax = [0.2, 1.8]
 
     if quant in ['surfdens1_stars','surfdens2_stars']:
         if '1_' in quant:
@@ -409,6 +426,52 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if tight: minMax = [0.0, 0.8]
         takeLog = False
 
+    if quant in ['mstar_out_10kpc', 'mstar_out_30kpc', 'mstar_out_100kpc', 'mstar_out_2rhalf',
+                 'mstar_out_10kpc_frac_r200', 'mstar_out_30kpc_frac_r200',
+                 'mstar_out_100kpc_frac_r200', 'mstar_out_2rhalf_frac_r200']:
+        # load data from ./data.files/pillepich/ files of Annalisa
+        filePath = sP.derivPath + '/pillepich/Group_StellarMasses_%03d.hdf5' % sP.snap
+
+        dNameBase = 'Group/Masses_stars_NoWt_sum'
+        if '_out_10kpc' in quant:
+            dName = '_out_r10kpc'
+            label = '> 10 pkpc'
+        if '_out_30kpc' in quant:
+            dName = '_out_r30kpc'
+            label = '> 30 pkpc'
+        if '_out_100kpc' in quant:
+            dName = '_out_r100kpc'
+            label = '> 100 pkpc'
+        if '_out_2rhalf' in quant:
+            dName = '_out_twicer050stellarmass'
+            label = '> 2r$_{\\rm 1/2,stars}$'
+
+        if '_frac_r200' in quant:
+            # fractional mass in this component, relative to total within r200
+            label = 'Stellar Mass Fraction [log] [r %s / r < r$_{\\rm 200,crit}$]' % label
+            minMax = [-2.0,0.0]
+
+            dNameNorm = '_in_RCrit200'
+        else:
+            # total mass in this component
+            label = 'Stellar Mass [ log M$_{\\rm sun}$ ] [r %s]' % label
+            minMax = [7.0,12.0]
+            if tight: minMax = [7.0,12.0]
+
+        # load
+        with h5py.File(filePath,'r') as f:
+            vals_group = f[dNameBase+dName][()] # in Msun, by group
+
+            if '_frac_r200' in quant:
+                norm_group = f[dNameBase+dNameNorm][()]
+
+                w = np.where(norm_group > 0.0)
+                vals_group[w] /= norm_group[w]
+                w = np.where(norm_group == 0.0)
+                assert vals_group[w].max() == 0.0
+
+        vals = groupOrderedValsToSubhaloOrdered(vals_group, sP)
+
     if quant in ['massfrac_exsitu','massfrac_exsitu_inrad','massfrac_insitu','massfrac_insitu_inrad']:
         # load data from ./postprocessing/StellarAssembly/ catalog of Vicente
         inRadStr = ''
@@ -419,10 +482,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if 'massfrac_exsitu' in quant:
             dName = 'StellarMassExSitu'
-            label = 'Ex Situ Stellar Mass Fraction'
+            label = 'Ex-Situ Stellar Mass Fraction [log]'
         if 'massfrac_insitu' in quant:
             dName = 'StellarMassInSitu'
-            label = 'In Situ Stellar Mass Fraction'
+            label = 'In-Situ Stellar Mass Fraction [log]'
 
         if '_inrad' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
 
@@ -635,8 +698,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # blackhole mass accretion rate normalized by its eddington rate
         # (use auxCat calculation of single largest BH in each subhalo)
         fields = ['Subhalo_BH_Mdot_largest','Subhalo_BH_MdotEdd_largest']
-        label = '\dot{M}_{\\rm BH} / \dot{M}_{\\rm Edd}'
-        minMax = [1e-4, 0.2]
+        label = '$\dot{M}_{\\rm BH} / \dot{M}_{\\rm Edd}$'
+        minMax = [-5.0, -0.5]
 
         ac = auxCat(sP, fields=fields)
 
@@ -784,14 +847,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         # if group-based, expand into array for subhalos, leave non-centrals nan
         if quant == 'xray_r500':
-            groupFirstSubs = groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
-            nSubs = groupCatHeader(sP)['Nsubgroups_Total']
-
-            vals_sub = np.zeros( nSubs, dtype='float64' )
-            vals_sub.fill(np.nan)
-            vals_sub[groupFirstSubs] = vals
-
-            vals = vals_sub
+            vals = groupOrderedValsToSubhaloOrdered(vals, sP)
 
         minMax = [37, 42]
         #if tight: minMax = [38, 45]

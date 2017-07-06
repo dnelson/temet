@@ -123,15 +123,15 @@ def reportMemory():
 
 def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
-    minVal = X.min()
+    minVal = np.nanmin(X)
     if skipZeros:
-        minVal = X[X > 0.0].min()
+        minVal = np.nanmin( X[X > 0.0] )
 
     if binSize is not None:
-        nBins = round( (X.max()-minVal) / binSize )
+        nBins = round( (np.nanmax(X)-minVal) / binSize )
 
     if nBins <= 0: nBins = 1
-    bins = np.linspace(minVal,X.max(), nBins)
+    bins = np.linspace(minVal,np.nanmax(X), nBins)
     delta = bins[1]-bins[0] if nBins >= 2 else np.inf
 
     running_median = []
@@ -146,13 +146,13 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
         # non-empty bin
         if len(w[0]):
             running_median.append( np.nanmedian(Y[w]) )
-            running_std.append( np.std(Y[w]) )
+            running_std.append( np.nanstd(Y[w]) )
             bin_centers.append( np.nanmedian(X[w]) )
 
             # compute percentiles also?
             if percs is not None:
                 for j, perc in enumerate(percs):
-                    running_percs[j].append( np.percentile(Y[w], perc,interpolation='linear') )
+                    running_percs[j].append( np.nanpercentile(Y[w], perc,interpolation='linear') )
 
     bin_centers = np.array(bin_centers)
     running_median = np.array(running_median)
@@ -163,6 +163,59 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
         return bin_centers, running_median, running_std, running_percs
 
     return bin_centers, running_median, running_std
+
+def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs=[25,50,75], percs=[16,84]):
+    """ Create a adaptive median line of a (x,y) point set using some number of bins, where in each 
+    bin only the sub-sample of points obtained by slicing a third value (S) above and/or below one or 
+    more percentile thresholds is used. """
+    minVal = np.nanmin(X)
+    if skipZeros:
+        minVal = np.nanmin( X[X > 0.0] )
+
+    if binSize is not None:
+        nBins = round( (np.nanmax(X)-minVal) / binSize )
+
+    if nBins <= 0: nBins = 1
+    bins = np.linspace(minVal,np.nanmax(X), nBins)
+    delta = bins[1]-bins[0] if nBins >= 2 else np.inf
+
+    bin_centers     = []
+    running_medianA = [[] for p in sPercs]
+    running_medianB = [[] for p in sPercs]
+    running_percsA  = [[] for p in sPercs]
+    running_percsB  = [[] for p in sPercs]
+
+    for i, bin in enumerate(bins):
+        binMax = bin + delta
+        w = np.where((X >= bin) & (X < binMax))
+
+        # non-empty bin
+        if len(w[0]):
+            # slice third quantity
+            slice_perc_vals = np.nanpercentile(S[w], sPercs, interpolation='linear')
+
+            bin_centers.append( np.nanmedian(X[w]) )
+
+            for i, sPerc in enumerate(sPercs):
+                # which points in this bin are above/below threshold percentile (e.g. median)?
+                with np.errstate(invalid='ignore'):
+                    w_sliceA = np.where( S[w] > slice_perc_vals[i] )
+                    w_sliceB = np.where( S[w] <= slice_perc_vals[i] )
+
+                running_medianA[i].append( np.nanmedian(Y[w][w_sliceA]) )
+                running_medianB[i].append( np.nanmedian(Y[w][w_sliceB]) )
+                
+                # compute percentiles also
+                running_percsA[i] = np.nanpercentile(Y[w][w_sliceA], percs, interpolation='linear')
+                running_percsB[i] = np.nanpercentile(Y[w][w_sliceB], percs, interpolation='linear')
+
+    bin_centers = np.array(bin_centers)
+    running_medianA = np.array(running_medianA)
+    running_medianB = np.array(running_medianB)
+    running_percsA = np.array(running_percsA)
+    running_percsB = np.array(running_percsB)
+
+    return bin_centers, running_medianA, running_medianB, running_percsA, running_percsB
 
 def running_sigmawindow(X, Y, windowSize=None):
     """ Create an local/adaptive estimate of the stddev of a (x,y) point set using a sliding 
