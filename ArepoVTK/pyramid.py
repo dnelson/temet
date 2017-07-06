@@ -1,18 +1,24 @@
-# pyramid.py - building image pyramid
-# dnelson
-# may.2014
-# requires: curl -O https://raw.github.com/drj11/pypng/master/code/png.py
+"""
+pyramid.py
+  ArepoVTK/Web: building image pyramids.
+  requires: curl -O https://raw.github.com/drj11/pypng/master/code/png.py
+"""
+#from __future__ import (absolute_import,division,print_function,unicode_literals)
+#from builtins import *
 
 import h5py
 import numpy as np
 import png
 import os.path
+from os import mkdir
+
 import scipy.ndimage
 import colorsys
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+
 
 def rebin(a, shape):
     """ See REBIN() IDL function. """
@@ -757,3 +763,91 @@ def combine4All():
         print("  " + fname_out)
         
         combine4to1(fnames_in,fname_out)
+
+def pyramidTNG(fieldName='gasdens'):
+    """ Combine files for TNG Explorer2D and write out image pyramid files. """
+    from vis.boxDrivers import TNG_explorerImageSegments
+    from vis.common import gridBox
+    from util.helper import loadColorTable
+
+    fileBase = os.path.expanduser("~") + '/data/frames/'
+    nPixels = 16384
+    nPanels = 64 # 8x8
+    confNums = {'gasdens':0}
+
+    # allocate global (64GB or 64GB*3 for pngs)
+    nPanelsPerDim = int(np.sqrt(nPanels))
+    nPxPerDim = nPixels * nPanelsPerDim
+
+    data = np.zeros( (nPxPerDim,nPxPerDim), dtype='float32' )
+
+    # load
+    for i in range(nPanels):
+        # get panel
+        panels = TNG_explorerImageSegments(conf=confNums[fieldName], taskNum=i, retInfo=True)
+        p = panels[0]
+
+        # get grid
+        grid, config = gridBox(**p)
+
+        # stamp
+        panelRow = int(np.floor(i / nPanelsPerDim))
+        panelCol = int(i % nPanelsPerDim)
+
+        i0 = panelRow*nPixels
+        i1 = (panelRow+1)*nPixels
+        j0 = panelCol*nPixels
+        j1 = (panelCol+1)*nPixels
+
+        data[i0:i1,j0:j1] = grid
+
+    # colormap
+    vMM = p['valMinMax'] if 'valMinMax' in p else None
+    plaw = p['plawScale'] if 'plawScale' in p else None
+    if 'plawScale' in config: plaw = config['plawScale']
+    if 'plawScale' in p: plaw = p['plawScale']
+    cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
+    if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
+    cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+
+    # loop over levels, starting at lowest (256px tiles)
+    outPath = fileBase + '/%s/' % fieldName
+    tileSize = 256
+    levelMax = 9
+    levelMin = 0
+
+    for level in range(levelMax,levelMin-1,-1):
+        # if not at lowest (first iteration), downsize array by half its current value
+        print("Level: " + str(level))
+        os.makedirs(outPath + str(level))
+
+        if level != levelMax:
+            data = reduceArray2D(data, 1)
+        
+        # slice array into 256x256 segments
+        nSub = (data.shape)[0] / tileSize
+        
+        for colIndex in range(nSub):
+            os.makedirs(outPath + str(level) + "/" + str(colIndex))
+            print("  col [" + str(colIndex+1) + "] of [" + str(nSub) + "]")
+            
+            for rowIndex in range(nSub):
+                saveFilename = str(level) + "/" + str(colIndex) + "/" + str(rowIndex) + ".png"
+                
+                # get chunk (TMS indexing convention)
+                x0 = ((nSub-1)-rowIndex) * tileSize
+                x1 = ((nSub-1)-rowIndex+1) * tileSize
+                y0 = (colIndex) * tileSize
+                y1 = (colIndex+1) * tileSize
+                
+                array = data[ x0:x1, y0:y1 ]
+                
+                # colormap and save
+                array_normed = (array - vMM[0]) / (vMM[1] - vMM[0])
+                array_rgb = cmap(array_normed)
+                array_rgb = array_rgb[:,:,0:3] # skip alpha channel
+                array_rgb = np.clip( np.round(array_rgb * 255.0), 0, 255 ).astype('uint8') # [0,1] -> [0,255]
+
+                saveImageToPNG(outPath + saveFilename,array_rgb)
+
+    print('Done.')

@@ -139,7 +139,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     run        = 'tng'
     redshift   = 0.0
-    nPixels    = 8000 # 800, 2000, 8000
+    nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
@@ -147,6 +147,11 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     plotHalos  = False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    licMethod = 1
+    licSliceWidth = 5000.0
+    licPartType = 'gas'
+    licPartField = 'vel'
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
@@ -240,7 +245,7 @@ def TNG_colorFlagshipBoxImage(part=0):
 
     renderBox(panels, plotConfig, locals())
 
-def TNG_explorerImageSegments(conf=0, taskNum=0):
+def TNG_explorerImageSegments(conf=0, taskNum=0, retInfo=False):
     """ Construct image segments which are then split into the pyramids for the TNG explorer 2d. """
 
     res        = 2500 # TBD
@@ -289,6 +294,58 @@ def TNG_explorerImageSegments(conf=0, taskNum=0):
 
         saveFilename = './boxImageExplorer_%s_%s-%s_%d.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],taskNum)
+
+    if retInfo: return renderBox(panels, plotConfig, locals(), retInfo=retInfo)
+
+    renderBox(panels, plotConfig, locals())
+
+def oneBox_LIC(res, conf=0, variant=None, thinSlice=False):
+    """ Testing whole-box LIC. """
+    panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice)
+
+    run        = 'tng'
+    redshift   = 0.0
+    nPixels    = 1000 # 800, 2000, 8000
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    # LIC return is [0,1], now inherit colormap from original conf field
+    #panels[0]['valMinMax'] = [0.0, 1.0]
+    ##panels[0]['partField'] = 'vel_x'
+    ##panels[0]['valMinMax'] = [-200,200]
+
+    #panels[0]['valMinMax'][0] += 1.0 # account for thinner slice
+    licMethod = 2 # None, 1, 2
+    licSliceDepth = 5000.0
+    sliceFac = 0.2 # to match to licSliceDepth
+    licPartType = 'gas'
+    licPartField = 'bfield'
+    licPixelFrac = 0.2
+
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    # slice centering
+    sliceStr = ''
+
+    if thinSlice:
+        # do very thin 100 kpc 'slice' instead
+        sliceWidth = sP.units.physicalKpcToCodeLength(100.0)
+        sliceFac = sliceWidth / sP.boxSize
+        sliceStr = '_thinSlice'
+
+    # render config (global)
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels
+        colorbars  = False
+
+        saveFilename = './boxImageLIC_%s_%s-%s_axes%d%d%s.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
 
     renderBox(panels, plotConfig, locals())
 

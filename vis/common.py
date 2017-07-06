@@ -15,6 +15,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage import gaussian_filter
+from vis.lic import line_integral_convolution
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
@@ -1059,7 +1060,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     quant = quant[wMask]
 
             # render
-            if method in ['sphMap','sphMap_global','sphMap_minIP','sphMap_maxIP']:
+            if method in ['sphMap','sphMap_global','sphMap_minIP','sphMap_maxIP','sphMap_LIC']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
                 if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
                     print(' debugging stellarBand-* getHsml() snapHsmlForStars=True')
@@ -1154,6 +1155,57 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
         w = np.where(grid_stellarColDens < 3.0)
         grid_master[w] = 0.0 # black
+
+    # temporary: line integral convolution test
+    if 'licMethod' in kwargs and kwargs['licMethod'] is not None:
+        # temp config
+        vecSliceWidth = kwargs['licSliceDepth']
+        pixelFrac = kwargs['licPixelFrac']
+        field_pt = kwargs['licPartType']
+        field_name = kwargs['licPartField']
+
+        # compress vector grids along third direction to more thin slice
+        boxSizeImgLoc = np.array(boxSizeImg)
+        boxSizeImgLoc[3-axes[0]-axes[1]] = sP.units.physicalKpcToCodeLength(vecSliceWidth)
+
+        # load two grids of vector length in plot-x and plot-y directions
+        vel_field = np.zeros( (nPixels[0], nPixels[1], 2), dtype='float32' )
+        field_x = field_name + '_' + ['x','y','z'][axes[0]]
+        field_y = field_name + '_' + ['x','y','z'][axes[1]]
+
+        vel_field[:,:,0], _ = gridBox(sP, method.split("_LIC")[0], field_pt, field_x, nPixels, axes,
+                                      boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter)
+
+        vel_field[:,:,1], _ = gridBox(sP, method.split("_LIC")[0], field_pt, field_y, nPixels, axes,
+                                      boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter)
+
+        # smoothing kernel
+        from scipy.stats import norm
+        gauss_kernel = norm.pdf(np.linspace(-3, 3, 25*2))
+        # TODO: this 50 should likely scale with nPixels to maintain same image (check)
+        # TODO: Perlin noise
+
+        # create noise field and do LIC
+        np.random.seed(424242)
+
+        if kwargs['licMethod'] == 1:
+            # first is half pixels black, second is 99% pixels black (make into parameter)
+            noise_50 = (np.random.random(nPixels) < pixelFrac)
+
+            grid_master = line_integral_convolution(noise_50, vel_field, gauss_kernel)
+
+        if kwargs['licMethod'] == 2:
+            # noise field biased by the data field, or the data field itself somehow...
+            noise_template = (np.random.random(nPixels) < pixelFrac)
+            noise_50 = noise_template #* grid_master
+
+            lic_output = line_integral_convolution(noise_50, vel_field, gauss_kernel)
+            lic_output = np.clip(lic_output, 1e-8, 1.0)
+
+            # multiple the LIC field [0,1] by the logged, or the linear, actual data field
+            print(lic_output.min(), lic_output.max())
+            #grid_master *= lic_output
+            grid_master = logZeroMin(10.0**grid_master * lic_output)
 
     # smooth down to some resolution by convolving with a Gaussian?
     if smoothFWHM is not None:
