@@ -31,7 +31,7 @@ savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
-colDensityFields = ['coldens','coldens_msunkpc2','HI','HI_segmented','xray','xray_lum']
+colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented','xray','xray_lum']
 totSumFields     = ['mass']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
@@ -684,13 +684,19 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     if partField in ['temp','temperature','ent','entr','entropy','P_gas','P_B']:
         quant = 10.0**quant
 
+    if partField in ['coldens_sq_msunkpc2']:
+        # DM annihilation radiation (see Schaller 2015, Eqn 2 for real units)
+        # load density estimate, square, convert back to effective mass (still col dens like)
+        dm_vol = snapshotSubset(sP, partType, 'subfind_volume', indRange=indRange)
+        mass = (mass / dm_vol)**2.0 * dm_vol
+
     if partField in ['vrad','vrad_vvir']:
         raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
 
     if partField in velLOSFieldNames + velCompFieldNames:
         quant = sP.units.particleCodeVelocityToKms(quant) # could add hubble expansion
 
-    if partField in ['TimebinHydro']: # cast integers to float
+    if partField in ['TimebinHydro','id']: # cast integers to float
         quant = np.float32(quant)
 
     # protect against scalar/0-dimensional (e.g. single particle) arrays
@@ -728,15 +734,20 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         config['label']  = '%s Column Density [log cm$^{-2}$]' % ptStr
         config['ctName'] = 'cubehelix'
 
-    if partField in ['coldens_msunkpc2']:
+    if partField in ['coldens_msunkpc2','coldens_sq_msunkpc2']:
         if partField == 'coldens_msunkpc2':
             grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
+        if partField == 'coldens_sq_msunkpc2':
+            # note: units are fake for now
+            grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
+            config['label'] = 'DM Annihilation Radiation [log GeV$^{-1}$ cm$^{-2}$ s$^{-1}$ kpc$^{-2}$]'
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4' # 'perula' (methods2)
         if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
+
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         if ' ' in partField:
@@ -894,6 +905,22 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
     if 'stellarComp-' in partField:
         print('todo')
         import pdb; pdb.set_trace()
+
+    # all particle types
+    if partField in ['potential']:
+        config['label']  = '%s Gravitational Potential [slog km$^2$/s$^2$]' % ptStr
+        config['ctName'] = 'RdGy_r'
+
+        grid /= sP.scalefac # remove a factor
+        w_neg = np.where(grid <= 0.0)
+        w_pos = np.where(grid > 0.0)
+        grid[w_pos] = logZeroMin( grid[w_pos] )
+        grid[w_neg] = -logZeroMin( -grid[w_neg] )
+
+    if partField in ['id']:
+        config['label']  = '%s Particle ID [log]' % ptStr
+        config['ctName'] = 'afmhot'
+        grid = logZeroMin( grid )
 
     # debugging
     if partField in ['TimeStep']:

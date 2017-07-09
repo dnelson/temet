@@ -785,6 +785,11 @@ def snapshotSubset(sP, partType, fields,
                 
             return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
+        # particle volume (from subfind hsml of N nearest DM particles) [ckpc/h]
+        if field.lower() in ["subfind_vol","subfind_volume"]:
+            hsml = snapshotSubset(sP, partType, 'SubfindHsml', **kwargs)
+            return (4.0/3.0) * np.pi * hsml**3.0
+
         # metallicity in log(solar) units
         if field.lower() in ["metal_solar","z_solar"]:
             metal = snapshotSubset(sP, partType, 'metal', **kwargs) # metal mass / total mass ratio
@@ -921,6 +926,7 @@ def snapshotSubset(sP, partType, fields,
                  [['nh'], 'NeutralHydrogenAbundance'],
                  [['numtr'], 'NumTracers'],
                  [['id','ids'], 'ParticleIDs'],
+                 [['pot'], 'Potential'],
                  [['pres'], 'Pressure'],
                  [['hsml'], 'SmoothingLength'],
                  [['sfr'], 'StarFormationRate'],

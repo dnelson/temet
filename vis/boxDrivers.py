@@ -70,7 +70,7 @@ def _TNGboxSliceConfig(res):
     if res in [625,1250,2500]:
         # L205
         centerHaloID = 0 # fof
-        nSlicesTot   = 3 # slice depth equal to a fifth, 41 Mpc/h = 60 Mpc (oops I guess a third)
+        nSlicesTot   = 3 # slice depth equal to a third, ~68.333 Mpc/h ~ 100.875 Mpc
         curSlice     = 0 # offset slice along projection direction?
 
         # adjust for deeper slice
@@ -122,6 +122,10 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 19: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
     if conf == 20: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
 
+    if conf == 21: panels.append( {'partType':'gas', 'partField':'potential', 'valMinMax':[-5.5,5.5], 'cmapCenVal':0.0} )
+    if conf == 22: panels.append( {'partType':'dm',  'partField':'id'} )
+    if conf == 23: panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-4.0,4.5]} )
+
     # thin slices may need different optimal bounds:
     if thinSlice:
         if conf == 0: panels[0]['valMinMax'] = [2.0, 5.0] # gas coldens_msunkpc2
@@ -139,7 +143,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     run        = 'tng'
     redshift   = 0.0
-    nPixels    = 2000 # 800, 2000, 8000
+    nPixels    = 8000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
@@ -148,10 +152,11 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
-    licMethod = 1
-    licSliceWidth = 5000.0
-    licPartType = 'gas'
-    licPartField = 'vel'
+    # LIC testing:
+    #licMethod = 1
+    #licSliceWidth = 5000.0
+    #licPartType = 'gas'
+    #licPartField = 'vel'
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
@@ -180,7 +185,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = nPixels
-        colorbars  = False
+        colorbars  = True
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)

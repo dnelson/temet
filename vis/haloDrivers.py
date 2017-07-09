@@ -18,24 +18,27 @@ from cosmo.mergertree import loadMPB
 from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns
 from util import simParams
 
-def oneHaloPressureCompAndRatios(shID=0):
-    """ In 3x1 panels compare gas and magnetic pressures and their ratio. """
+def oneHaloSingleField(conf=0, shID=0):
+    """ In a single (or a few) panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    panels.append( {'hInd':shID, 'partField':'P_B', 'valMinMax':[1.0,9.0]} )
-    panels.append( {'hInd':shID, 'partField':'P_gas', 'valMinMax':[1.0,9.0]} )
-    panels.append( {'hInd':shID, 'partField':'pressure_ratio', 'valMinMax':[-4.0,0.0]} )
+    if conf == 0:
+        # magnetic pressure, gas pressure, and their ratio
+        panels.append( {'partType':'gas', 'hInd':shID, 'partField':'P_B', 'valMinMax':[1.0,9.0]} )
+        panels.append( {'partType':'gas', 'hInd':shID, 'partField':'P_gas', 'valMinMax':[1.0,9.0]} )
+        panels.append( {'partType':'gas', 'hInd':shID, 'partField':'pressure_ratio', 'valMinMax':[-4.0,0.0]} )
+        hsmlFac = 2.5
+    if conf == 1:
+        # stellar mass column density
+        panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]} )
+        hsmlFac = 0.5
 
     run        = 'tng'
     res        = 1820
     redshift   = 0.0
-    partType   = 'gas'
     rVirFracs  = [1.0]
     method     = 'sphMap'
-    nPixels    = [960,960]
-    size       = 2.5
-    sizeType   = 'rVirial'
-    hsmlFac    = 2.5
+    nPixels    = [3840,3840]
     axes       = [1,0]
     labelZ     = False
     labelScale = False
@@ -45,11 +48,18 @@ def oneHaloPressureCompAndRatios(shID=0):
     rotation   = None
     mpb        = None
 
+    if 0:
+        size = 2.5
+        sizeType = 'rVirial'
+    if 1:
+        size = 3000.0
+        sizeType = 'pkpc'
+
     class plotConfig:
-        plotStyle    = 'open'
-        rasterPx     = 960
-        colorbars    = True
-        saveFilename = './gasPressureComp_%s_%d_z%.1f_subhalo-%d.pdf' % (run,res,redshift,shID)
+        plotStyle    = 'edged'
+        rasterPx     = nPixels[0]
+        colorbars    = False
+        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_subhalo-%d.png' % (conf,run,res,redshift,shID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
