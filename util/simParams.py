@@ -234,6 +234,7 @@ class simParams:
             dmStr = '_DM' if '_dm' in run else ''
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
+            #self.arepoPath  = self.basePath + 'data/out/L'+bs+'n'+str(res)+runStr+dmStr+'/'
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.saveTag    = 'iP'

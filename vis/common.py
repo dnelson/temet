@@ -743,7 +743,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
             grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
             config['label'] = 'DM Annihilation Radiation [log GeV$^{-1}$ cm$^{-2}$ s$^{-1}$ kpc$^{-2}$]'
 
-        if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
+        if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4' # 'perula' (methods2)
         if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
