@@ -1733,6 +1733,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_Mass_30pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
+   'Subhalo_Mass_100pkpc_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=100.0),
    'Subhalo_Mass_min_30pkpc_2rhalf_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='30h'),
    'Subhalo_Mass_puchwein10_Stars': \

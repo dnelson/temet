@@ -122,7 +122,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 19: panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[2.5,4.5], 'method':'sphMap_minIP'})
     if conf == 20: panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[200, 1000], 'method':'sphMap_maxIP'} )
 
-    if conf == 21: panels.append( {'partType':'gas', 'partField':'potential', 'valMinMax':[-5.5,5.5], 'cmapCenVal':0.0} )
+    if conf == 21: panels.append( {'partType':'gas', 'partField':'potential', 'valMinMax':[-6.5,6.5], 'cmapCenVal':0.0} )
     if conf == 22: panels.append( {'partType':'dm',  'partField':'id'} )
     if conf == 23: panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-4.0,4.5]} )
 
@@ -185,7 +185,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = nPixels
-        colorbars  = True
+        colorbars  = False
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)

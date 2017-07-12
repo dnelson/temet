@@ -32,11 +32,19 @@ def oneHaloSingleField(conf=0, shID=0):
         # stellar mass column density
         panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]} )
         hsmlFac = 0.5
+    if conf == 2:
+        # dm annihilation signal
+        panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-3.0,5.5]} )
+        hsmlFac = 2.5
+    if conf == 3:
+        # shock mach number
+        hsmlFac = 2.5
+        panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
 
     run        = 'tng'
-    res        = 1820
+    res        = 2500
     redshift   = 0.0
-    rVirFracs  = [1.0]
+    rVirFracs  = None #[1.0]
     method     = 'sphMap'
     nPixels    = [3840,3840]
     axes       = [1,0]
@@ -51,8 +59,11 @@ def oneHaloSingleField(conf=0, shID=0):
     if 0:
         size = 2.5
         sizeType = 'rVirial'
-    if 1:
+    if 0:
         size = 3000.0
+        sizeType = 'pkpc'
+    if 1:
+        size = 4000.0
         sizeType = 'pkpc'
 
     class plotConfig:
@@ -620,11 +631,6 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
 
     shIDs = pages[pageNum]
 
-    # todo: change to manual ID selection below
-    #nGalaxies = 4
-    #shIDs, _ = selectHalosFromMassBin(sP, [[11.5,11.7]], nGalaxies, massBinInd=0, selType='linear')
-    #import pdb; pdb.set_trace()
-
     # crossmatch to other run
     shIDs2 = crossMatchSubhalosBetweenRuns(sP, sP2, shIDs)
     assert shIDs2.min() >= 0 # if any matches failed, we should make a blank panel
@@ -931,7 +937,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     axes          = [0,1]
     labelZ        = False
     labelSim      = False
-    labelHalo     = 'Mstar'
+    labelHalo     = None #'Mstar'
     relCoords     = True
     mpb           = None
     rotation      = 'face-on'
@@ -1021,7 +1027,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
 
         if not evo:
             detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
-            lCust.append(detailsStr) 
+            lCust.append(detailsStr)
                            
         panels.append( {'hInd':shID, 'redshift':redshifts[i], 'labelCustom':lCust, 'labelScale':lScale} )
 
