@@ -121,7 +121,7 @@ def reportMemory():
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
+def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=1):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     minVal = np.nanmin(X)
     if skipZeros:
@@ -139,12 +139,16 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None):
     bin_centers    = []
     if percs is not None: running_percs = [[] for p in percs]
 
+    binLeft = bins[0]
+
     for i, bin in enumerate(bins):
         binMax = bin + delta
-        w = np.where((X >= bin) & (X < binMax))
+        w = np.where((X >= binLeft) & (X < binMax))
 
-        # non-empty bin
-        if len(w[0]):
+        # non-empty bin, or last bin with at least minNumPerBin/2 elements
+        if len(w[0]) >= minNumPerBin or (i == len(bins)-1 and len(w[0]) >= minNumPerBin/2):
+
+            binLeft = binMax
             running_median.append( np.nanmedian(Y[w]) )
             running_std.append( np.nanstd(Y[w]) )
             bin_centers.append( np.nanmedian(X[w]) )

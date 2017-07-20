@@ -6,5 +6,6 @@ from . import cosmoMisc
 from . import color
 from . import general
 from . import globalComp
+from . import oxygen
 from . import sizes
 from config import *

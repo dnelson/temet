@@ -296,7 +296,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
 
-            # halo mass (m200 or m500) of parent halo, or central subfind mass (in code, msun, or log msun)
+            # halo mass (m200 or m500) of parent halo, or central subfind mass [code, msun, or log msun]
             if quant in ['mhalo_200','mhalo_200_log','mhalo_200_code',
                          'mhalo_500','mhalo_500_log','mhalo_200_code']:
                 od = 200 if '_200' in quant else 500
@@ -319,7 +319,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 customCount += 1
 
-            # subhalo mass (in msun or log msun)
+            # subhalo mass [msun or log msun]
             if quant in ['mhalo_subfind','mhalo_subfind_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
                 r[field] = sP.units.codeMassToMsun( gc['subhalos'] )
@@ -328,12 +328,26 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 customCount += 1
 
-            # virial radius (r200 or r500) of parent halo
-            if quant in ['rhalo_200','rhalo_200_log','rhalo_500','rhalo_500_log']:
+            # subhalo stellar mass (<30 pkpc definition, with auxCat) [msun or log msun]
+            if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
+                acField = 'Subhalo_Mass_30pkpc_Stars'
+                ac = auxCat(sP, fields=[acField])
+                r[field] = sP.units.codeMassToMsun( ac[acField] )
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
+                customCount += 1
+
+            # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
+            if quant in ['rhalo_200_code', 'rhalo_200','rhalo_200_log','rhalo_500','rhalo_500_log']:
                 od = 200 if '_200' in quant else 500
 
                 gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-                r[field] = sP.units.codeLengthToKpc( gc['halos']['Group_R_Crit%d'%od][gc['subhalos']] )
+                r[field] = gc['halos']['Group_R_Crit%d'%od][gc['subhalos']]
+
+                if '_code' not in quant:
+                    # conversion: code -> physical units
+                    r[field] = sP.units.codeLengthToKpc( r[field] )
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
@@ -879,6 +893,9 @@ def snapshotSubset(sP, partType, fields,
             element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
             assert sP.isPartType(partType, 'gas')
             assert prop == 'mass'
+
+            #import pdb; pdb.set_trace()
+            # implement caching
 
             from cosmo.cloudy import cloudyIon
             ion = cloudyIon(sP, el=element, redshiftInterp=True)

@@ -16,6 +16,7 @@ from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapH
 from cosmo.util import validSnapList, periodicDists
 from plot.color import galaxyColorPDF, galaxyColor2DPDFs
 from plot.sizes import galaxySizes
+from plot.oxygen import nOVIcddf
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.config import *
 
@@ -1313,121 +1314,6 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
 
     sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
     lExtra += [str(s) for s in speciesList]
-
-    handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
-
-    fig.tight_layout()
-    pdf.savefig()
-    plt.close(fig)
-
-def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
-    """ CDDF (column density distribution function) of O VI in the whole box.
-        (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
-    from util import simParams
-
-    # config
-    speciesList = ['nOVI','nOVI_solar','nOVI_10','nOVI_25']
-
-    # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
-    ax = fig.add_subplot(111)
-    
-    ax.set_xlim([12.5, 15.5])
-    ax.set_xlabel('log N$_{\\rm OVI}$ [ cm$^{-2}$ ]')
-
-    if moment == 0:
-        ax.set_ylim([-17, -11])
-        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
-        if clean:
-            ax.set_ylabel('log f(N$_{\\rm OVI}$) [ cm$^{2}$ ]')
-    if moment == 1:
-        ax.set_ylim([-0.5, 1.5])
-        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
-
-    # observational points
-    d16  = danforth2016()
-    d08  = danforth2008()
-    tc08 = thomChen2008()
-    t08  = tripp2008()
-
-    if moment == 1:
-        d16['log_fOVI']  = np.log10( 10.0**d16['log_fOVI'] * 10.0**d16['log_NOVI'] )
-        d08['log_fOVI']  = np.log10( 10.0**d08['log_fOVI'] * 10.0**d08['log_NOVI'] )
-        tc08['log_fOVI'] = np.log10( 10.0**tc08['log_fOVI'] * 10.0**tc08['log_NOVI'] )
-        t08['log_fOVI']  = np.log10( 10.0**t08['log_fOVI'] * 10.0**t08['log_NOVI'] )
-
-    l1,_,_ = ax.errorbar(d16['log_NOVI'], d16['log_fOVI'], yerr=[d16['log_fOVI_errDown'],d16['log_fOVI_errUp']],
-               xerr=d16['log_NOVI_err'], color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, fmt='s')
-
-    l2,_,_ = ax.errorbar(d08['log_NOVI'], d08['log_fOVI'], yerr=[d08['log_fOVI_errDown'],d08['log_fOVI_errUp']],
-               xerr=d08['log_NOVI_err'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
-
-    l3,_,_ =  ax.errorbar(tc08['log_NOVI'], tc08['log_fOVI'], yerr=tc08['log_fOVI_err'],
-               xerr=[tc08['log_NOVI_errLeft'],tc08['log_NOVI_errRight']], 
-               color='#cccccc', ecolor='#cccccc', alpha=0.9, capsize=0.0, fmt='s')
-
-    l4,_,_ =  ax.errorbar(t08['log_NOVI'], t08['log_fOVI'], yerr=t08['log_fOVI_err'],
-               xerr=t08['log_NOVI_err'], color='#aaaaaa', ecolor='#aaaaaa', alpha=0.9, capsize=0.0, fmt='o')
-
-    labels = [d16['label'],d08['label'],tc08['label'],t08['label']]
-    legend1 = ax.legend([l1,l2,l3,l4], labels, loc='lower left')
-    ax.add_artist(legend1)
-
-    # loop over each fullbox run
-    for sP in sPs:
-        if sP.isZoom:
-            continue
-
-        print('CDDF OVI: '+sP.simName)
-        sP.setRedshift(simRedshift)
-
-        c = ax._get_lines.prop_cycler.next()['color']
-
-        # pre-computed CDDF: first species for sizes
-        ac = auxCat(sP, fields=['Box_CDDF_'+speciesList[0]])
-        n_OVI  = ac['Box_CDDF_'+speciesList[0]][0,:]
-        fN_OVI = ac['Box_CDDF_'+speciesList[0]][1,:]
-
-        # pre-computed CDDF: allocate for max/min bounds of our variations
-        fN_OVI_min = fN_OVI * 0.0 + np.inf
-        fN_OVI_max = fN_OVI * 0.0
-
-        for i, species in enumerate(speciesList):
-            # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box_CDDF_'+species])
-
-            assert np.array_equal(ac['Box_CDDF_'+species][0,:], n_OVI) # require same x-pts
-            fN_OVI = ac['Box_CDDF_'+species][1,:]
-
-            fN_OVI_min = np.nanmin(np.vstack( (fN_OVI_min, fN_OVI) ), axis=0)
-            fN_OVI_max = np.nanmax(np.vstack( (fN_OVI_max, fN_OVI) ), axis=0)
-
-        # plot 'uncertainty' band
-        xx = np.log10(n_OVI)
-
-        if moment == 0:
-            yy_min = logZeroNaN(fN_OVI_min)
-            yy_max = logZeroNaN(fN_OVI_max)
-            yy = logZeroNaN( 0.5*(fN_OVI_min+fN_OVI_max) )
-        if moment == 1:
-            yy_min = logZeroNaN(fN_OVI_min*n_OVI)
-            yy_max = logZeroNaN(fN_OVI_max*n_OVI)
-            yy = logZeroNaN( 0.5*(fN_OVI_min*n_OVI+fN_OVI_max*n_OVI) )
-
-        ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.2, interpolate=True)
-
-        # plot middle line
-        label = sP.simName
-        ax.plot(xx, yy, '-', lw=3.0, color=c, label=label)
-
-    # legend
-    sExtra = [] #[plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    lExtra = [] #[str(s) for s in speciesList]
-
-    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
-    lExtra += ['[ sims z=%3.1f ]' % simRedshift]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
