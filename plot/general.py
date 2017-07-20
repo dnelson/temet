@@ -51,6 +51,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_misc = ['zform_mm5','M_bulge_counter_rot','xray_r500','xray_subhalo',
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']
 
+    quants_color = ['color_C_gr','color_snap_gr','color_C_ur']
+
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
     #         'zform_ma5', 'zform_poly7'
@@ -80,7 +82,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # assembly sub-subset of quantities as requested
     if wCounts: quants1 = [None] + quants1
 
-    quantList = quants1 + quants2 + quants2_mhd + quants3 + quants4 + quants5 + quants_misc
+    quantList = quants1 + quants2 + quants2_mhd + quants3 + quants4 + quants5 + quants_misc + quants_color
     if wTr: quantList += trQuants
     if wMasses: quants1 += quants_mass
     if onlyTr: quantList = trQuants
@@ -671,6 +673,28 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if mode != 'all': label += ' [%s]' % mode
         if not clean:
             if par != 'all': label += ' [%s]' % par
+
+    if quant[0:6] == 'color_':
+        # integrated galaxy colors
+        from cosmo.color import loadSimGalColors
+        
+        modelNames = {'A' :'p07c',
+                      'B' :'p07c_cf00dust',
+                      'Br':'p07c_cf00dust_rad30pkpc',
+                      'C' :'p07c_cf00dust_res_conv_ns1_rad30pkpc',
+                      'snap':'snap'}
+
+        # determine which color model/bands are requested
+        _, model, bands = quant.split("_")
+        simColorsModel = modelNames[model]
+        bands = [bands[0],bands[1]]
+
+        # load
+        vals, subhaloIDs = loadSimGalColors(sP, simColorsModel, bands=bands)
+
+        takeLog = False
+        minMax = bandMagRange(bands,tight=tight)
+        label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
 
     if quant in ['M_BH','M_BH_actual']:
         # either dynamical (particle masses) or "actual" BH masses excluding gas reservoir
