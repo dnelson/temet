@@ -34,7 +34,7 @@ def oneHaloSingleField(conf=0, shID=0):
         hsmlFac = 0.5
     if conf == 2:
         # dm annihilation signal
-        panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-3.0,5.5]} )
+        panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-2.0,5.6]} )
         hsmlFac = 2.5
     if conf == 3:
         # shock mach number

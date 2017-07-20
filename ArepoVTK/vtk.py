@@ -175,18 +175,22 @@ def processMark():
 def processShy():
 
     # config 1820 128k
-    fileBase = "/n/ghernquist/sgenel/Illustris/stellar_images/L75n1820FP/L75n1820FP_s135_75000_75000_kpc_572_pc_tile"
-    fileEnding = '_RGBmat_scaled.hdf5'    
+    #fileBase = "/n/ghernquist/sgenel/Illustris/stellar_images/L75n1820FP/L75n1820FP_s135_75000_75000_kpc_572_pc_tile"
+    #fileEnding = '_RGBmat_scaled.hdf5'    
     #fileBase = "/n/ghernquist/sgenel/Illustris/stellar_images/L75n1820FP/L75n1820FP_s135_75000_75000_kpc_286_pc_tile"
     #fileEnding = '_RGBmat.hdf5'
     
+    # config TNG
+    fileBase = "/home/extdylan/data/frames/shy/L205n2500TNG_s099_205000_205000_kpc_1564_pc_tile"
+    fileEnding = "_RGBmat_scaled.hdf5"
+
     fieldName     = "RGB"
     nThirdDims    = 3 # 3=RGB, 4=RGBA
-    outPath       = 'vtkout_stellar/'
+    outPath       = '/home/extdylan/data/frames/tng_starlight/'
     totNumJobs    = 64 #16 #64 #256
-    tileSize      = 65536 #256
+    tileSize      = 256
     reduceOrder   = 1 # [1-5], 1=bilinear, 3=cubic
-    levelMin      = 9 # 0 for all normal renders, 9=max=only the full image level
+    levelMin      = 0 # 0 for all normal renders, 9=max=only the full image level
     makeFullImage = False
     makePyramid   = True
     
