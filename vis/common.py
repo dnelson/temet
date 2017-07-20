@@ -31,7 +31,8 @@ savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 
 # configure certain behavior types
 volDensityFields = ['density']
-colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented','xray','xray_lum']
+colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
+                    'xray','xray_lum','p_sync_ska']
 totSumFields     = ['mass']
 velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
@@ -748,7 +749,6 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
 
-
     if partField in ['HI','HI_segmented'] or ' ' in partField:
         if ' ' in partField:
             ion = cloudyIon(None)
@@ -766,6 +766,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e30, totKpc2=True ) ) # return 1e30 factor
         config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
+
+    if partField in ['p_sync_ska']:
+        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) )
+        config['label']  = 'Gas Synchrotron Emission, SKA [log W Hz$^{-1}$ kpc$^{-2}$]'
+        config['ctName'] = 'perula'
 
     if 'metals_' in partField:
         # all of GFM_Metals as well as GFM_MetalsTagged (projected as column densities)

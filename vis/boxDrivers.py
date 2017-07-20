@@ -100,7 +100,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
 
     if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
     if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
-    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[2.0,6.4]} )
+    if conf == 2:  panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[2.8,6.5]} ) #[2.0,6.4]
     if conf == 3:  panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
     if conf == 4:  panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-8,1], 'cmapCenVal':-3.0} )
     if conf == 5:  panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
@@ -125,6 +125,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 21: panels.append( {'partType':'gas', 'partField':'potential', 'valMinMax':[-6.5,6.5], 'cmapCenVal':0.0} )
     if conf == 22: panels.append( {'partType':'dm',  'partField':'id'} )
     if conf == 23: panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-4.0,4.5]} )
+    if conf == 24: panels.append( {'partType':'gas', 'partField':'p_sync_ska', 'valMinMax':[-5.0, -2.7]} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:

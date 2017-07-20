@@ -336,7 +336,7 @@ def make_pyramid_all(config):
             continue
             
         # stamp
-        jRow = (config['jobsPerDim']-1) - np.int32(np.floor( i % config['jobsPerDim'] ))
+        jRow = (config['jobsPerDim']-1) - np.int32(np.floor( i % config['jobsPerDim'] ))    
         jCol = np.int32(np.floor( i / config['jobsPerDim'] ))
         
         x0 = config['mDims'][0] * jCol
@@ -350,6 +350,11 @@ def make_pyramid_all(config):
         else:
             globalArray[ x0:x1, y0:y1 ] = array
     
+    # shy for TNG
+    if 1:
+        print('FLIPPING SECOND AXIS')
+        globalArray = np.flip(globalArray, 0)
+ 
     # set all zeros to minimum non-zero value and take log (be careful about memory usage)
     if config['ct'] != None:
         min_val = np.min( globalArray[globalArray > 0.0] )
@@ -764,7 +769,7 @@ def combine4All():
         
         combine4to1(fnames_in,fname_out)
 
-def pyramidTNG(fieldName='gasdens'):
+def pyramidTNG(fieldName='dmvel'):
     """ Combine files for TNG Explorer2D and write out image pyramid files. """
     from vis.boxDrivers import TNG_explorerImageSegments
     from vis.common import gridBox
@@ -773,7 +778,8 @@ def pyramidTNG(fieldName='gasdens'):
     fileBase = os.path.expanduser("~") + '/data/frames/'
     nPixels = 16384
     nPanels = 64 # 8x8
-    confNums = {'gasdens':0}
+    confNums = {'gasdens':0, 'dmdens':1, 'dmannih':23, 'dmvel':15, 'stardens':2, 'gasvel':14, 'gassynch':24,
+                'gastemp':7, 'gasbmag':5, 'gasxray':11, 'gasmachnum':12, 'gasshockdedt':13, 'gashi':16}
 
     # allocate global (64GB or 64GB*3 for pngs)
     nPanelsPerDim = int(np.sqrt(nPanels))
