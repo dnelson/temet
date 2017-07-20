@@ -1545,7 +1545,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     from cosmo.cloudy import cloudyIon
 
     hDensSpecies = ['HI','HI_noH2','HI2','HI3']
-    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar']
+    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII']
 
     if species not in hDensSpecies + zDensSpecies + ['Z']:
         raise Exception('Not implemented.')
@@ -1741,10 +1741,16 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='p10'),
    'Subhalo_Mass_SFingGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass_sfrgt0',op='sum',rad=None),
+
+   'Subhalo_Mass_OV' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
    'Subhalo_Mass_OVI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VI mass',op='sum',rad=None),
    'Subhalo_Mass_OVII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VII mass',op='sum',rad=None),
+   'Subhalo_Mass_OVIII' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='O VIII mass',op='sum',rad=None),
+     
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
    'Subhalo_XrayBolLum_2rhalfstars' : \
@@ -1900,6 +1906,8 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nOVI_10'        : partial(wholeBoxColDensGrid,species='O VI 10'),
    'Box_Grid_nOVI_25'        : partial(wholeBoxColDensGrid,species='O VI 25'),
    'Box_Grid_nOVI_solar'     : partial(wholeBoxColDensGrid,species='O VI solar'),
+   'Box_Grid_nOVII'          : partial(wholeBoxColDensGrid,species='O VII'),
+   'Box_Grid_nOVIII'         : partial(wholeBoxColDensGrid,species='O VIII'),
 
    'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
    'Box_CDDF_nHI2'           : partial(wholeBoxCDDF,species='HI2'),
@@ -1910,6 +1918,8 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
    'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
    'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar'),
+   'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
+   'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
 
    'Subhalo_SubLink_zForm_mm5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
                                          smoothing=['mm',5,'snap']),
