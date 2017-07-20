@@ -608,8 +608,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 svals_loc = sim_svals[wSelect][wFinite]
                 binSizeS = binSize*2
 
-                if len(sPs) == 1:
-                    # if only one run, use new colors for above and below slices
+                if 1 or len(sPs) == 1:
+                    # if only one run, use new colors for above and below slices (currently always do this)
                     c = ax._get_lines.prop_cycler.next()['color']
 
                 xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
@@ -619,15 +619,17 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     label = '%s < P[%d]' % (slabel,sLowerPerc)
                     ax.plot(xm, ymb[j], linestyles[1+j], lw=lw, color=c, label=label)
 
-                if len(sPs) == 1:
+                lsOffset = len(sLowerPercs)
+                if 1 or len(sPs) == 1:
                     c = ax._get_lines.prop_cycler.next()['color']
+                    lsOffset = 0
 
                 xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
                                                     sPercs=sUpperPercs)
 
                 for j, sUpperPerc in enumerate(sUpperPercs):
                     label = '%s > P[%d]' % (slabel,sUpperPerc)
-                    ax.plot(xm, yma[j], linestyles[1+j], lw=lw, color=c, label=label)
+                    ax.plot(xm, yma[j], linestyles[1+j+lsOffset], lw=lw, color=c, label=label)
 
         # special case: BH_CumEgy_ratio add theory curve on top from BH model
         if clean and yQuant in ['BH_CumEgy_ratio','BH_CumEgy_ratioInv']:
@@ -779,22 +781,22 @@ def plots3():
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    xQuant = 'mhalo_500_log' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
     cenSatSelects = ['cen']
 
-    sQuant = None #'mstar_out_100kpc_frac_r200'
+    sQuant = 'color_C_gr' #'mstar_out_100kpc_frac_r200'
     sLowerPercs = [10,50]
     sUpperPercs = [90,50]
 
     quants = quantList(wCounts=False, wTr=True, wMasses=True)
-    quants = ['mstar_30pkpc']
+    quants = ['M_BH_actual']
 
     # make plots
     for css in cenSatSelects:
-        pdf = PdfPages('medianQuants_%s_%s_%s.pdf' % \
-            ('-'.join([sP.simName for sP in sPs]),xQuant,css))
+        pdf = PdfPages('medianQuants_%s_x=%s_%s_slice=%s.pdf' % \
+            ('-'.join([sP.simName for sP in sPs]),xQuant,css,sQuant))
 
         # all quantities on one multi-panel page:
         #quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
