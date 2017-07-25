@@ -18,6 +18,39 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def illustris_api_check():
+    """ Check API. """
+    import requests
+
+    def get(path, params=None):
+        # make HTTP GET request to path
+        headers = {"api-key":"3b1618b0629b21396b8af9cbf76caafa"}
+        r = requests.get(path, params=params, headers=headers)
+
+        # raise exception if response code is not HTTP SUCCESS (200)
+        r.raise_for_status()
+
+        if r.headers['content-type'] == 'application/json':
+            return r.json() # parse json responses automatically
+
+        if 'content-disposition' in r.headers:
+            filename = r.headers['content-disposition'].split("filename=")[1]
+            with open(filename, 'wb') as f:
+                f.write(r.content)
+            return filename # return the filename string
+
+        return r
+
+    base_url = "http://www.illustris-project.org/api/Illustris-1/"
+    sim_metadata = get(base_url)
+    params = {'dm':'Coordinates'}
+    
+    for i in [300]:#range(sim_metadata['num_files_snapshot']):
+        file_url = base_url + "files/snapshot-135." + str(i) + ".hdf5"
+        print(file_url)
+        saved_filename = get(file_url, params)
+        print('done')
+
 def checkStellarAssemblyMergerMass():
     """ Check addition to StellarAssembly catalogs. """
     sP = simParams(res=2500,run='tng',snap=99)
@@ -305,11 +338,12 @@ def makeSnapHeadersForLHaloTree():
 def makeSnapSubsetsForMergerTrees():
     """ Copy snapshot chunks reducing to needed fields for tree calculation. """
     nSnaps  = 100
-    copyFields = {'PartType0':['Masses','StarFormationRate','ParticleIDs'],
+    copyFields = {'PartType0':['Masses','Coordinates','Density','GFM_Metals'],
                   'PartType1':['ParticleIDs'],
                   'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
 
     copyFields = {'PartType4':['Coordinates','ParticleIDs']}
+    copyFields = {'PartType0':['Masses','Coordinates','Density','GFM_Metals','GFM_Metallicity']}
 
     pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG/output/snapdir_%03d/'
     pathTo   = '/home/extdylan/data/out/L205n2500TNG/output/snapdir_%03d/'
@@ -325,7 +359,7 @@ def makeSnapSubsetsForMergerTrees():
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(99,100): #range(50,61):
+    for i in [99]: #range(50,61):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 

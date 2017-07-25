@@ -78,41 +78,7 @@ def tngModel_chi(M_BH):
 
 # ------------------------------------------------------------------------------------------------------
 
-def _loadColorOrQuant(sP,xQuant,xSpec):
-    """ Load either a simulation quantity (xSpec==None) or a color (xSpec=[bands,colorModel]).
-    Return: tuple of (sim_vals,label,saveLabel,minMax). """
-    k = 'sim_' + xQuant + '_'
-
-    if k+'vals' in sP.data:
-        # data already exists in sP cache?
-        vals, label, saveLabel, minMax = \
-          sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'saveLabel'], sP.data[k+'minMax']
-
-        return vals, label, saveLabel, minMax
-
-    # load
-    if xQuant == 'color':
-        bands, simColorsModel = xSpec[0], xSpec[1]
-        vals, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
-
-        label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
-        minMax = bandMagRange(bands, tight=True)
-        if not clean: label += ' %s' % simColorsModel
-        saveLabel = '%s_%s_%s' % (xQuant,'-'.join(bands),simColorsModel)                    
-    else:
-        vals, label, minMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
-        
-        if xLog: vals = logZeroNaN(vals)
-        #minMax = [np.nanmin(vals), np.nanmax(vals)] # auto
-        saveLabel = '%s' % (xQuant)
-
-    # save into sP.data
-    sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'saveLabel'], sP.data[k+'minMax'] = \
-        vals, label, saveLabel, minMax
-          
-    return vals, label, saveLabel, minMax
-
-def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, 
+def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, 
                  cStatistic=None, minCount=None, fig_subplot=[None,None], pStyle='white'):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
@@ -127,7 +93,7 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
     # hard-coded config
     nBins    = 80
     cmap     = loadColorTable('viridis') # plasma
-    colorMed = 'orange'
+    colorMed = 'black'
     lwMed    = 2.0
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
@@ -135,23 +101,21 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
     medianLine = False
     colorContours = False
 
-    if (cQuant is None and cenSatSelect == 'cen') or yQuant == 'ssfr':
+    if cenSatSelect == 'cen':
         medianLine = True
-    if cenSatSelect == 'cen' and yQuant == 'color': # fig_subplot[0] is not None and cQuant is not None:
+    if cQuant is None:
+        colorMed = 'orange'
+
+    if cenSatSelect == 'cen' and 'color_' in yQuant: # fig_subplot[0] is not None and cQuant is not None:
         colorContours = True
 
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
-    if 'sim_xvals' in sP.data:
-        sim_xvals, xlabel, xMinMax = sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax']
-    else:
-        sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
-        if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
-        sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
+    sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
+    if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
 
     # y-axis: load/calculate simulation colors, cached in sP.data
-    sim_yvals, ylabel, ySaveLabel, yMinMax = _loadColorOrQuant(sP,yQuant,ySpec)
-
-    if yQuant == 'ssfr': yMinMax = [-3.5,0.0] # temporary override
+    sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+    if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
 
     # c-axis: load properties for color mappings
     if cQuant is None:
@@ -166,12 +130,8 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
         cMinMax = [0.0,2.0]
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
-        if cQuant != 'color':
-            sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean)
-        else:
-            # support for coloring by color with ySpec=[bands,colorModel] indicating cSpec
-            sim_cvals, clabel, _, cMinMax = _loadColorOrQuant(sP,cQuant,ySpec)
-            cLog = False
+        sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean, tight=False)
+        if yQuant == 'color_C_gr': print('Warning: to reproduce TNG colors paper, set tight=True maybe.')
 
     if sim_cvals is None:
         return # property is not calculated for this run (e.g. expensive auxCat)
@@ -233,7 +193,7 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    print(' ',cQuant,sP.simName,ySaveLabel,xQuant,cenSatSelect,cStatistic,minCount)
+    print(' ',cQuant,sP.simName,ylabel,xQuant,cenSatSelect,cStatistic,minCount)
     if not clean:
         pass
         #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
@@ -319,8 +279,9 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
         ax.plot(xm[:-1], pm2[1,:-1], ':', color=colorMed, lw=lwMed, label='P[10,90]')
         ax.plot(xm[:-1], pm2[-2,:-1], ':', color=colorMed, lw=lwMed)
 
-        l = ax.legend(loc='lower right')
-        for text in l.get_texts(): text.set_color(color2)
+        if not clean:
+            l = ax.legend(loc='lower right')
+            for text in l.get_texts(): text.set_color(color2)
 
     # contours?
     if colorContours:        
@@ -328,8 +289,13 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
         cLevels = [0.75,0.95]
         cAlphas = [0.5,0.8]
 
-        xx, yy, kde_sim = calcMstarColor2dKDE(ySpec[0], sim_xvals, sim_yvals, xMinMax, yMinMax, 
-                                              sP=sP, simColorsModel=ySpec[1])
+        # determine which color model/bands are requested
+        _, model, bands = yQuant.split("_")
+        simColorsModel = colorModelNames[model]
+        bands = [bands[0],bands[1]]
+
+        xx, yy, kde_sim = calcMstarColor2dKDE(bands, sim_xvals, sim_yvals, xMinMax, yMinMax, 
+                                              sP=sP, simColorsModel=simColorsModel)
 
         for k in range(kde_sim.shape[0]):
             kde_sim[k,:] /= kde_sim[k,:].max() # by column normalization
@@ -358,12 +324,11 @@ def quantHisto2D(sP, pdf, yQuant, ySpec, xQuant='mstar2_log', cenSatSelect='cen'
             pdf.savefig(facecolor=fig.get_facecolor())
         else:
             fig.savefig('histo2d_%s_%s_%s_%s_%s_%s.pdf' % \
-                (ySaveLabel,xQuant,cQuant,cStatistic,cenSatSelect,minCount), 
+                (ylabel,xQuant,cQuant,cStatistic,cenSatSelect,minCount), 
                 facecolor=fig.get_facecolor())
         plt.close(fig)
 
-def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
-                 xSpec=None, fig_subplot=[None,None]):
+def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', fig_subplot=[None,None]):
     """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
     sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
     For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
@@ -403,23 +368,18 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen',
             # y-axis: load galaxy properties (in histo2D were the color mappings)
             sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
 
-            if yQuant == 'ssfr': yMinMax = [-3.5,0.0] # temporary override
-
             if sim_yvals is None:
                 print('   skip')
                 continue # property is not calculated for this run (e.g. expensive auxCat)
 
             if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
 
-            # slice values: load fullbox galaxy properties (almost always Mstar)
-            if 'histoSlice_svals' in sP.data:
-                sim_svals = sP.data['histoSlice_svals']
-            else:
-                sim_svals, _, _, _ = simSubhaloQuantity(sP, sQuant, clean)
-                sP.data['histoSlice_svals'] = sim_svals
+            # slice values: load fullbox galaxy property to slice on (e.g. Mstar or Mhalo)
+            sim_svals, _, _, _ = simSubhaloQuantity(sP, sQuant, clean)
 
-            # x-axis: load/calculate x-axis quantity (usually simulation colors), cached in sP.data
-            sim_xvals, xlabel, xSaveLabel, xMinMax = _loadColorOrQuant(sP,xQuant,xSpec)
+            # x-axis: load/calculate x-axis quantity (e.g. simulation colors), cached in sP.data
+            sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+            if xLog is True: sim_xvals = logZeroNaN(sim_xvals)
 
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -493,7 +453,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen',
         if pdf is not None:
             pdf.savefig()
         else:
-            fig.savefig('slice1d_%s_%s_%s_%s_%s.pdf' % (xSaveLabel,cQuant,cStatistic,cenSatSelect,minCount))
+            fig.savefig('slice1d_%s_%s_%s_%s_%s.pdf' % (xlabel,cQuant,cStatistic,cenSatSelect,minCount))
         plt.close(fig)
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
@@ -543,28 +503,16 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if sim_yvals is None:
                 print('   skip')
                 continue # property is not calculated for this run (e.g. expensive auxCat)
-
-            if yLog is True:
-                sim_yvals = logZeroNaN(sim_yvals)
+            if yLog: sim_yvals = logZeroNaN(sim_yvals)
 
             # x-axis: load fullbox galaxy properties
-            if 'quantMedian_xvals' in sP.data:
-                sim_xvals, xlabel, xMinMax = sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax']                
-            else:
-                sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
-                if xLog:
-                    sim_xvals = logZeroNaN(sim_xvals)
-                sP.data['sim_xvals'], sP.data['xlabel'], sP.data['xMinMax'] = sim_xvals, xlabel, xMinMax
+            sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+            if xLog: sim_xvals = logZeroNaN(sim_xvals)
 
             # splitting on third quantity? load now
             if sQuant is not None:
-                if 'quantMedian_svals' in sP.data:
-                    sim_svals, slabel = sP.data['sim_xvals'], sP.data['xlabel']              
-                else:
-                    sim_svals, slabel, _, sLog = simSubhaloQuantity(sP, sQuant, clean, tight=True)
-                    if sLog:
-                        sim_svals = logZeroNaN(sim_svals)
-                    sP.data['sim_svals'], sP.data['slabel'] = sim_svals, slabel
+                sim_svals, slabel, _, sLog = simSubhaloQuantity(sP, sQuant, clean, tight=True)
+                if sLog: sim_svals = logZeroNaN(sim_svals)
 
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -590,12 +538,12 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             # median and 10/90th percentile lines
             binSize = (xMinMax[1]-xMinMax[0]) / nBins
+            if sP.boxSize < 205000.0: binSize *= 2.0
 
             xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-            xm = xm[1:-1]
-            ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
-            sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
-            pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+            ym2 = savgol_filter(ym,sKn,sKo)
+            sm2 = savgol_filter(sm,sKn,sKo)
+            pm2 = savgol_filter(pm,sKn,sKo,axis=1)
 
             ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
 
@@ -721,10 +669,7 @@ def plots():
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    #yQuant = 'color'
-    #ySpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
-    yQuant = 'mstar_out_100kpc_frac_r200'
-    ySpec  = None
+    yQuant = 'mstar_out_100kpc_frac_r200' # 'color_C_gr'
 
     xQuant = 'mhalo_200_log' # mstar_30pkpc_log, mstar2_log
     cs     = 'median_nan'
@@ -739,7 +684,7 @@ def plots():
             pdf = PdfPages('galaxy_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,yQuant,xQuant,cs,css))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, ySpec=ySpec, xQuant=xQuant, 
+                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, 
                              cenSatSelect=css, cQuant=cQuant, cStatistic=cs, pStyle=pStyle)
 
             pdf.close()
@@ -750,8 +695,7 @@ def plots2():
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    xQuant = 'color'
-    xSpec  = [ ['g','r'], defSimColorModel ] # bands, simColorModel
+    xQuant = 'color_C_gr'
     sQuant = 'mstar2_log'
     sRange = [10.4,10.6]
     cenSatSelects = ['cen']
@@ -764,14 +708,14 @@ def plots2():
             ('-'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
 
         # all quantities on one multi-panel page:
-        #quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quants, sQuant=sQuant, 
+        #quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=quants, sQuant=sQuant, 
         #             sRange=sRange, cenSatSelect=css, )
-        #quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=quantsTr, sQuant=sQuant, 
+        #quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=quantsTr, sQuant=sQuant, 
         #             sRange=sRange, cenSatSelect=css)
 
         # one page per quantity:
         for yQuant in quants + quantsTr:
-            quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[yQuant], sQuant=sQuant, 
+            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
                          sRange=sRange, cenSatSelect=css)
 
         pdf.close()
@@ -790,8 +734,8 @@ def plots3():
     sLowerPercs = [10,50]
     sUpperPercs = [90,50]
 
-    quants = quantList(wCounts=False, wTr=True, wMasses=True)
-    quants = ['M_BH_actual']
+    yQuants = quantList(wCounts=False, wTr=True, wMasses=True)
+    yQuants = ['M_BH_actual']
 
     # make plots
     for css in cenSatSelects:
@@ -799,11 +743,16 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css,sQuant))
 
         # all quantities on one multi-panel page:
-        #quantMedianVsSecondQuant(sPs, pdf, yQuants=quants, xQuant=xQuant, cenSatSelect=css)
+        #quantMedianVsSecondQuant(sPs, pdf, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css)
 
-        # one page per quantity:
-        for yQuant in quants:
+        # individual plot per y-quantity:
+        for yQuant in yQuants:
             quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
                                      sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+
+        # individual plot per s-quantity:
+        #for sQuant in sQuants:
+        #    quantMedianVsSecondQuant(sPs, pdf, yQuants=yQuant, xQuant=xQuant, cenSatSelect=css,
+        #                             sQuant=[sQuant], sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
 
         pdf.close()

@@ -100,6 +100,8 @@ class simParams:
             print("Warning: simParams: both redshift and snap specified.")
         if haloInd is not None and subhaloInd is not None:
             raise Exception("Cannot specify both haloInd and subhaloInd.")
+        if variant is not None and not isinstance(variant, basestring):
+            raise Exception("Please specify variant as a string to avoid octal misinterpretation bug.")
 
         # pick run and snapshot
         self.run      = run
@@ -191,6 +193,7 @@ class simParams:
                 self.targetGasMass = 0.0
 
             # defaults
+            method_run_names = {}
             runStr = 'TNG'
             dirStr = 'TNG'
 
@@ -223,6 +226,17 @@ class simParams:
                     dirStr = 'rTNG_method'
                     runStr = '_%s' % self.variant.zfill(4)
 
+                    # real name from method runs CSV file?
+                    run_file = '%s/sims.%s/runs.csv' % (self.basePath,dirStr)
+                    if path.isfile(run_file):
+                        import csv
+
+                        with open(run_file) as f:
+                            lines = f.readlines()
+                        for line in csv.reader(lines,quoting=csv.QUOTE_ALL):
+                            if '_' in line[0]:
+                                method_run_names[line[0]] = line[13]
+                        
                 # L35 or L75 halted runs
                 if self.variant == 'halted':
                     runStr = 'TNG_halted'
@@ -234,7 +248,15 @@ class simParams:
             dmStr = '_DM' if '_dm' in run else ''
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
-            #self.arepoPath  = self.basePath + 'data/out/L'+bs+'n'+str(res)+runStr+dmStr+'/'
+
+            # magny
+            import platform
+            if 'karl' in platform.node():
+                # no mount to /hits/basement
+                if (self.boxSize == 205000 and res == 2500) or (self.boxSize == 35000 and res == 2160):
+                    self.arepoPath  = self.basePath + 'data/out/L'+bs+'n'+str(res)+runStr+dmStr+'/'
+            #end magny
+
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.saveTag    = 'iP'
@@ -242,11 +264,17 @@ class simParams:
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
             if res in res_L35+res_L75+res_L205:
+                # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
                 if res in res_L205: resInd = len(res_L205) - res_L205.index(res)
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
+
+            if res in res_L25:
+                # override method name
+                if self.simName in method_run_names:
+                    self.simName = method_run_names[self.simName]
 
         # iClusters
         if run in ['iClusters']:

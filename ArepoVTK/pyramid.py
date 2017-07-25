@@ -769,7 +769,7 @@ def combine4All():
         
         combine4to1(fnames_in,fname_out)
 
-def pyramidTNG(fieldName='dmvel'):
+def pyramidTNG(fieldName='gassynch'):
     """ Combine files for TNG Explorer2D and write out image pyramid files. """
     from vis.boxDrivers import TNG_explorerImageSegments
     from vis.common import gridBox

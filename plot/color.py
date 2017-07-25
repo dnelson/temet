@@ -2261,23 +2261,23 @@ def paperPlots():
     if 1:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+        yQuant = 'color_C_gr'
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
         pdf = PdfPages('figure6_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='ssfr', fig_subplot=[fig,321], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='Z_gas', fig_subplot=[fig,322], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='fgas2', fig_subplot=[fig,323], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='stellarage', fig_subplot=[fig,324], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='ssfr', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_gas', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='fgas2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='stellarage', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='bmag_2rhalf_masswt', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='pratio_halo_masswt', fig_subplot=[fig,326], **params)
         pdf.close()
 
     # figure 7: slice through 2d histo (one property)
     if 0:
         sPs = [L75, L205]
-        xQuant = 'color'
-        xSpec  = [ bands, defSimColorModel ] # bands, simColorModel
+        xQuant = 'color_C_gr'
         sQuant = 'mstar2_log'
         sRange = [10.4,10.6]
         css = 'cen'
@@ -2285,7 +2285,7 @@ def paperPlots():
 
         pdf = PdfPages('figure7_%s_slice_%s_%s-%.1f-%.1f_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
-        quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[quant], sQuant=sQuant, 
+        quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
                      sRange=sRange, cenSatSelect=css)
         pdf.close()
 
@@ -2394,23 +2394,23 @@ def paperPlots():
         # 6 other properties, 2d histos
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        params = {'ySpec':[bands,defSimColorModel], 'cenSatSelect':'cen', 'cStatistic':'median_nan'}
+        yQuant = 'color_C_gr'
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan'}
 
         pdf = PdfPages('supp1_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='surfdens1_stars', fig_subplot=[fig,321], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='Z_stars', fig_subplot=[fig,322], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='xray_r500', fig_subplot=[fig,325], **params)
-        quantHisto2D(sP, pdf, yQuant='color', cQuant='size_stars', fig_subplot=[fig,326], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='surfdens1_stars', fig_subplot=[fig,321], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Z_stars', fig_subplot=[fig,322], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_stars2', fig_subplot=[fig,323], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='Krot_oriented_gas2', fig_subplot=[fig,324], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='xray_r500', fig_subplot=[fig,325], **params)
+        quantHisto2D(sP, pdf, yQuant=yQuant, cQuant='size_stars', fig_subplot=[fig,326], **params)
         pdf.close()
 
     if 0:
         # slices of other properties, pratio components
         sPs = [L75, L205]
-        xQuant = 'color'
-        xSpec  = [ bands, defSimColorModel ] # bands, simColorModel
+        xQuant = 'color_C_gr'
         sQuant = 'mstar2_log'
         sRange = [10.4,10.6]
         css = 'cen'
@@ -2421,7 +2421,7 @@ def paperPlots():
         for quant in quants:
             pdf = PdfPages('supp2_%s_slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
                 ('_'.join([sP.simName for sP in sPs]),quant,xQuant,sQuant,sRange[0],sRange[1],css))
-            quantSlice1D(sPs, pdf, xQuant=xQuant, xSpec=xSpec, yQuants=[quant], sQuant=sQuant, 
+            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
                          sRange=sRange, cenSatSelect=css)
             pdf.close()
 
@@ -2433,8 +2433,8 @@ def paperPlots():
 
         pdf = PdfPages('supp3_%s.pdf' % sP.simName)
         fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant=None, ySpec=None, fig_subplot=[fig,211], **params)
-        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color', ySpec=[bands,defSimColorModel], fig_subplot=[fig,212], **params)
+        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant=None, fig_subplot=[fig,211], **params)
+        quantHisto2D(sP, pdf, yQuant='ssfr', cQuant='color_C_gr', fig_subplot=[fig,212], **params)
         pdf.close()
 
     if 0:

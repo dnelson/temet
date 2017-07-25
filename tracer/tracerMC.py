@@ -687,6 +687,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     r[field][m,wType] = np.nan
                     continue
 
+                if field in ['metal'] and ptName == 'bhs':
+                    r[field][m,wType] = np.nan
+                    continue
+
                 # specialized properties
                 if field in ['parent_indextype']:
                     # encode the snapshot index of the parent (by type) as well as its type in an int64
