@@ -70,7 +70,8 @@ def contiguousIntSubsets(x):
 def logZeroSafe(x, zeroVal=1.0):
     """ Take log10 of input variable or array, keeping zeros at some value. """
     if np.isfinite(zeroVal):
-        print(' logZeroSafe: This was always ill-advised, migrate towards deleting this function.')
+        pass
+        #print(' logZeroSafe: This was always ill-advised, migrate towards deleting this function.')
     if not isinstance(x, (int,long,float)) and x.ndim: # array
         # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
         w = np.where(x <= 0.0)
@@ -121,7 +122,7 @@ def reportMemory():
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=1):
+def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     minVal = np.nanmin(X)
     if skipZeros:
@@ -168,7 +169,8 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
 
     return bin_centers, running_median, running_std
 
-def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs=[25,50,75], percs=[16,84]):
+def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs=[25,50,75], 
+                       percs=[16,84], minNumPerBin=10):
     """ Create a adaptive median line of a (x,y) point set using some number of bins, where in each 
     bin only the sub-sample of points obtained by slicing a third value (S) above and/or below one or 
     more percentile thresholds is used. """
@@ -189,16 +191,22 @@ def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs
     running_percsA  = [[] for p in sPercs]
     running_percsB  = [[] for p in sPercs]
 
+    binLeft = bins[0]
+
     for i, bin in enumerate(bins):
         binMax = bin + delta
-        w = np.where((X >= bin) & (X < binMax))
+        w = np.where((X >= binLeft) & (X < binMax))
 
         # non-empty bin
-        if len(w[0]):
+        #if len(w[0]):
+        # non-empty bin, or last bin with at least minNumPerBin/2 elements
+        if len(w[0]) >= minNumPerBin or (i == len(bins)-1 and len(w[0]) >= minNumPerBin/2):
             # slice third quantity
             slice_perc_vals = np.nanpercentile(S[w], sPercs, interpolation='linear')
 
             bin_centers.append( np.nanmedian(X[w]) )
+
+            binLeft = binMax
 
             for i, sPerc in enumerate(sPercs):
                 # which points in this bin are above/below threshold percentile (e.g. median)?

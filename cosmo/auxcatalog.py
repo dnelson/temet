@@ -1336,6 +1336,8 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
         assert z_form >= 0.0
         r[i] = z_form
 
+    subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
+    
     attrs = {'Description' : desc.encode('ascii'), 
              'Selection'   : select.encode('ascii'),
              'subhaloIDs'  : subhaloIDsTodo}
@@ -1655,7 +1657,9 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
             mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
                                                                 assumeSolarAbunds=aSA)
-
+            
+            hsml = hsml.astype('float32')
+            mMetal = mMetal.astype('float32')
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=True)
 

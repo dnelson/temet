@@ -146,10 +146,21 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     """ Return a 1D vector of size Nsubhalos, one quantity per subhalo as specified by the string 
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range.
     If clean is True, label is cleaned up for presentation. If tight is true, alternative range is 
-    used (targeted for slice1D/medians instead of histo2D). """
+    used (less restrictive, targeted for y-axes/slice1D/medians instead of histo2D colors). """
     label = None
     takeLog = True # default
 
+    # cached? immediate return
+    k = 'sim_' + quant + '_'
+
+    if k+'vals' in sP.data:
+        # data already exists in sP cache?
+        vals, label, minMax, takeLog = \
+          sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog']
+
+        return vals, label, minMax, takeLog
+
+    # fields:
     if quant in ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2']:
         # stellar mass (variations)
         if 'mstar' in quant:
@@ -224,7 +235,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = logZeroNaN(vals)
             logStr = 'log '
 
-        minMax = [9.0, 15.0]
+        minMax = [11.0, 15.0]
         if '_500' in quant: minMax = [11.0, 15.0]
         label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm halo}$ [ '+logStr+'M$_{\\rm sun}$ ]'
@@ -265,11 +276,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\\rm %s}$[ log M$_{\\rm sun}$ ]' % (speciesStr)
         
         if speciesStr == 'OVI':
-            minMax = [4.6, 7.2]
-            if tight: minMax = [5.0, 8.0]
+            minMax = [5.0, 6.8]
+            if tight: minMax = [4.8, 7.2]
         if speciesStr == 'OVII':
-            minMax = [5.6, 8.6]
-            if tight: minMax = [6.0, 9.0]
+            minMax = [6.0, 7.4]
+            if tight: minMax = [5.6, 8.6]
 
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
@@ -289,7 +300,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
 
         minMax = [-3.0, 0.0]
-        if tight: minMax = [-1.0, 0.0]
+        if tight: minMax = [-3.5, 0.0]
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
@@ -299,7 +310,6 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'log ( Z$_{\\rm stars}$ / Z$_{\\rm sun}$ )'
         if not clean: label += ' (<2r$_{\star,1/2}$)'
         minMax = [-0.5, 0.5]
-        if tight: minMax = [0.1, 0.4]
 
     if quant == 'Z_gas':
         # mass-weighted mean gas metallicity (within 2r1/2stars)
@@ -344,7 +354,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = '$\Sigma_{\star%s}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]' % detailsStr
 
         minMax = [6.5, 9.0]
-        if tight: minMax = [7.0, 10.0]
+        if tight: minMax = [6.5, 9.5]
 
     if quant in ['fgas1','fgas2']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
@@ -377,6 +387,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ac = auxCat(sP, fields=[fieldName])
 
         vals = ac[fieldName]
+        
         label = 'log t$_{\\rm age,stars}$ [ Gyr ]'
         if not clean: label += ' [%s]' % ageType
         minMax = [0.0,1.0]
@@ -389,6 +400,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if ac[fieldName] is None: return [None]*4
 
         vals = ac[fieldName]
+
         label = 'z$_{\\rm form,halo}$'
         if not clean: label += ' [%s]' % zFormType
         minMax = [0.0,3.0]
@@ -523,12 +535,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             selStr = 'SFingGas'
             selDesc = 'ISM'
             minMax = [0.0, 1.5]
-            if tight: minMax = [0.0, 1.8]
+            if tight: minMax = [0.0, 2.0]
         if '_2rhalf' in quant:
             selStr = '2rhalfstars'
             selDesc = 'ISM'
             minMax = [0.0, 1.5]
-            if tight: minMax = [-1.0, 1.8]
+            if tight: minMax = [-1.0, 2.0]
         if '_halo' in quant:
             selStr = 'halo'
             selDesc = 'halo'
@@ -576,7 +588,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0 %s]' % wtStr
 
         minMax = [-2.0, 1.0]
-        if tight: minMax = [-2.2, 1.2]
+        if tight: minMax = [-2.5, 1.5]
 
     if quant in ['ptot_gas_halo','ptot_b_halo']:
         # total pressure (in K/cm^3) either thermal or magnetic, in the halo (0.15 < r/rvir < 1.0)
@@ -677,16 +689,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quant[0:6] == 'color_':
         # integrated galaxy colors
         from cosmo.color import loadSimGalColors
-        
-        modelNames = {'A' :'p07c',
-                      'B' :'p07c_cf00dust',
-                      'Br':'p07c_cf00dust_rad30pkpc',
-                      'C' :'p07c_cf00dust_res_conv_ns1_rad30pkpc',
-                      'snap':'snap'}
 
         # determine which color model/bands are requested
         _, model, bands = quant.split("_")
-        simColorsModel = modelNames[model]
+        simColorsModel = colorModelNames[model]
         bands = [bands[0],bands[1]]
 
         # load
@@ -961,8 +967,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax[0] -= 2 # adjust down for VLA, calibrated for SKA
             minMax[1] -= 2
 
-    # return
+    # cache
     assert label is not None
+
+    k = 'sim_' + quant + '_'
+    sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog'] = \
+        vals, label, minMax, takeLog
+
+    # return
     return vals, label, minMax, takeLog
 
 def plotPhaseSpace2D(yAxis):

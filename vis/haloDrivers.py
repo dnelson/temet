@@ -12,7 +12,7 @@ from datetime import datetime
 from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
 from plot.general import simSubhaloQuantity
-from util.helper import pSplit
+from util.helper import pSplit, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.mergertree import loadMPB
 from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns
@@ -948,6 +948,9 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         partType      = 'stars'
         partField     = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
         hsmlFac       = 0.5
+        colorBar      = False
+        nGalaxies     = 35 # 35 (note: set to 45 for talk image)
+        nRowsFig      = 7 # 7 (note: set to 9 for talk image)
     if conf == 1:
         size          = 800.0 # 400 kpc in each direction from center
         partType      = 'gas'
@@ -955,11 +958,12 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         hsmlFac       = 3.5
         valMinMax     = [12.0,15.0]
         rVirFracs     = [1.0]
+        colorBar      = True
+        nGalaxies     = 30
+        nRowsFig      = 6
 
     evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
     redshift_init = 0.0
-    nGalaxies     = 45 # 35 (note: set to 45 for talk image)
-    nRowsFig      = 9 # 7 (note: set to 9 for talk image)
 
     # load halos of this bin, from this run
     sP = simParams(res=res, run=run, redshift=redshift_init)
@@ -993,16 +997,16 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
                     shIDs.append(mpbLocal['SubfindID'][treeIndex])
                     redshifts.append(evo_redshift)
 
-        saveFilename2 = './figure14_stamps_%s_evo-%d_red-%d_blue-%d_rot-%s.pdf' % \
+        saveFilename2 = './stamps_%s_evo-%d_red-%d_blue-%d_rot-%s.pdf' % \
           (sP.simName,evo,redSample,blueSample,rotation)
     else:
         # paged exploration for picking interesting galaxies, load all and sub-divide
         if 1:
-            baseStr = 'figure12_pages'
+            baseStr = 'pages'
             numPages = 20
             massBin  = [12.0, 12.2]
         elif 0:
-            baseStr = 'figure12_pagesHighMass'
+            baseStr = 'pagesHighMass'
             numPages = 31
             massBin  = [12.2, 13.5]
 
@@ -1018,15 +1022,20 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     if not evo:
         gr_colors_z0, _ = loadSimGalColors(sP, defSimColorModel, bands=['g','r'], projs='random')
         kappa_stars, _, _, _ = simSubhaloQuantity(sP, 'Krot_oriented_stars2')
+        mass_ovi, _, _, _ = simSubhaloQuantity(sP, 'mass_ovi')
+        mass_ovi = logZeroNaN(mass_ovi)
 
     # create panels, one per galaxy
     panels = []
     for i, shID in enumerate(shIDs):
         lCust = ['ID %d z = %.1f' % (shID, redshifts[i])]
-        lScale = False #True if i == 0 else False
+        lScale = True if i == 0 else False
 
         if not evo:
-            detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
+            if conf == 0:
+                detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
+            if conf == 1:
+                detailsStr = '(g-r) = %.2f $M_{\\rm OVI}$ = %.1f' % (gr_colors_z0[shID],mass_ovi[shID])
             lCust.append(detailsStr)
                            
         panels.append( {'hInd':shID, 'redshift':redshifts[i], 'labelCustom':lCust, 'labelScale':lScale} )
@@ -1034,7 +1043,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     class plotConfig:
         plotStyle    = 'edged'
         rasterPx     = 1200
-        colorbars    = False
+        colorbars    = colorBar
         nRows        = nRowsFig
         saveFilename = saveFilename2
 

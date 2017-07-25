@@ -21,3 +21,9 @@ defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'
 cssLabels = {'all':'All Galaxies',
              'cen':'Centrals Only',
              'sat':'Satellites Only'}
+
+colorModelNames = {'A' :'p07c',
+                   'B' :'p07c_cf00dust',
+                   'Br':'p07c_cf00dust_rad30pkpc',
+                   'C' :'p07c_cf00dust_res_conv_ns1_rad30pkpc',
+                   'snap':'snap'}

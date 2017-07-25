@@ -17,7 +17,7 @@ from plot.config import *
 from util.helper import running_median, logZeroNaN, iterable
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.cloudy import cloudyIon
-from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
+from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from cosmo.util import cenSatSubhaloIndices
@@ -138,7 +138,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
     pdf.savefig()
     plt.close(fig)
 
-def cddfRedshiftEvolution(sPs, pdf, moment=0, ions=['OVI','OVII'], redshifts=[0,1,2,3]):
+def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshifts=[0,1,2,3], colorOff=0):
     """ CDDF (column density distribution function) of O VI in the whole box.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
 
@@ -152,7 +152,8 @@ def cddfRedshiftEvolution(sPs, pdf, moment=0, ions=['OVI','OVII'], redshifts=[0,
     ax.set_xlabel('N$_{\\rm oxygen}$ [ log cm$^{-2}$ ]')
 
     if moment == 0:
-        ax.set_ylim([-18, -11])
+        ax.set_ylim([-18, -12])
+        if len(ions) == 1: ax.set_ylim([-19, -11])
         ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm oxygen}$)  [ cm$^{2}$ ]')
         if clean:
             ax.set_ylabel('f(N$_{\\rm oxygen}$) [ log cm$^{2}$ ]')
@@ -161,52 +162,68 @@ def cddfRedshiftEvolution(sPs, pdf, moment=0, ions=['OVI','OVII'], redshifts=[0,
         ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm oxygen}$ f(N$_{\\rm oxygen}$)')
         if clean:
             ax.set_ylabel('N$_{\\rm oxygen}$ $\cdot$ f(N$_{\\rm oxygen}$) [ log ]')
+    if moment == 2:
+        ax.set_ylim([-1.5, 2.2])
+        ax.set_ylabel('CDDF (2$^{\\rm nd}$ moment):  log N$_{\\rm oxygen}^2$ f(N$_{\\rm oxygen}$)')
+        if clean:
+            ax.set_ylabel('[N$_{\\rm oxygen}$$^2$ / 10$^{13}$] $\cdot$ f(N$_{\\rm oxygen}$) [ log ]') 
 
     # loop over each fullbox run
     for sP in sPs:
-        for ion in ions:
+        for j, ion in enumerate(ions):
             print('[%s]: %s' % (ion,sP.simName))
-            c = ax._get_lines.prop_cycler.next()['color']
+
+            if j == 0:
+                for _ in range(colorOff+1):
+                    c = ax._get_lines.prop_cycler.next()['color']
+            else:
+                c = ax._get_lines.prop_cycler.next()['color']
 
             for i, redshift in enumerate(redshifts):
                 sP.setRedshift(redshift)
 
                 # pre-computed CDDF: load at this redshift
                 ac = auxCat(sP, fields=['Box_CDDF_n'+ion])
-                n_ion  = ac['Box_CDDF_n'+ion][0,:]
+                N_ion  = ac['Box_CDDF_n'+ion][0,:]
                 fN_ion = ac['Box_CDDF_n'+ion][1,:]
 
-                xx = np.log10(n_ion)
+                xx = np.log10(N_ion)
 
                 if moment == 0:
                     yy = logZeroNaN( fN_ion )
                 if moment == 1:
-                    yy = logZeroNaN( fN_ion*n_ion )
+                    yy = logZeroNaN( fN_ion*N_ion )
+                if moment == 2:
+                    yy = logZeroNaN( fN_ion*N_ion*(N_ion/1e13) )
 
                 # plot middle line
                 label = '%s %s z=%.1f' % (sP.simName, ion, redshift)
-                if clean: label = '%s' % (ion)
+                if clean: label = ion
+                if clean and len(ions) == 1: label = sP.simName
                 if i > 0: label = ''
+                c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
+
                 ax.plot(xx, yy, lw=lw, color=c, linestyle=linestyles[i], label=label)
 
     # legend
     sExtra = []
     lExtra = []
 
-    if clean:
+    if clean and len(redshifts) > 1:
         for i, redshift in enumerate(redshifts):
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
             lExtra += ['z = %3.1f' % redshift]
 
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
+    loc = 'upper right' if len(ions) > 1 else 'lower left'
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc=loc)
 
     fig.tight_layout()
-    pdf.savefig()
+    fig.savefig(saveName)
     plt.close(fig)
 
 def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], redshift=0.0, cenSatSelect='cen', 
-                           vsHaloMass=True, toAvgColDens=False):
+                           vsHaloMass=True, toAvgColDens=False, colorOff=2):
     """ Plot total [gravitationally bound] mass of various ions, or e.g. cold/hot/total CGM mass, 
     versus halo or stellar mass at a given redshift. If toAvgColDens, then instead of total mass 
     plot average column density computed geometrically as (Mtotal/pi/rvir^2). """
@@ -286,13 +303,18 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], redshift=0.0, cen
                 sm = savgol_filter(sm,sKn,sKo)
                 pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
-            # plot middle line
+            # determine color
             if i == 0:
-                c = ax._get_lines.prop_cycler.next()['color']
+                if j == 0:
+                    for _ in range(colorOff+1):
+                        c = ax._get_lines.prop_cycler.next()['color']
+                else:
+                    c = ax._get_lines.prop_cycler.next()['color']
                 colors.append(c)
             else:
                 c = colors[j]
 
+            # plot median line
             label = ion if i == 0 else ''
             ax.plot(xm, ym, lw=lw, color=c, linestyle=linestyles[i], label=label)
 
@@ -328,49 +350,198 @@ def paperPlots():
 
     # figure 1a, bound mass of O ions vs halo/stellar mass
     if 0:
-        sPs = [TNG100_2, TNG100] # [TNG300, TNG100] #, TNG100_3]
+        sPs = [TNG300, TNG100] #, TNG100_3]
         cenSatSelect = 'cen'
         redshift = 0.0
 
-        saveName = 'ionmasses_vs_halomass_%s_z%d_%s.pdf' % \
-            (cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-        totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
-                               cenSatSelect=cenSatSelect, vsHaloMass=True)
+        for vsHaloMass in [True,False]:
+            massStr = '%smass' % ['stellar','halo'][vsHaloMass]
 
-        saveName = 'ionmasses_vs_stellarmass_%s_z%d_%s.pdf' % \
-            (cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-        totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
-                               cenSatSelect=cenSatSelect, vsHaloMass=False)
+            saveName = 'ions_masses_vs_%s_%s_z%d_%s.pdf' % \
+                (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
+                                   cenSatSelect=cenSatSelect, vsHaloMass=vsHaloMass)
 
-        saveName = 'avgcoldens_vs_halomass_%s_z%d_%s.pdf' % \
-            (cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-        totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
-                               cenSatSelect=cenSatSelect, vsHaloMass=True, toAvgColDens=True)
-
-        saveName = 'avgcoldens_vs_stellarmass_%s_z%d_%s.pdf' % \
-            (cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-        totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
-                               cenSatSelect=cenSatSelect, vsHaloMass=False, toAvgColDens=True)
+            saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
+                (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
+                                   cenSatSelect=cenSatSelect, vsHaloMass=vsHaloMass, toAvgColDens=True)
 
     # figure 2a, CDDF of OVI at z~0 compared to observations
     if 0:
         moment = 0
         simRedshift = 0.2
-        sPs = [TNG100, Illustris, TNG300]
+        sPs = [TNG100, Illustris] #, TNG300]
 
         pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s.pdf' % \
-            (moment,10*simRedshift,'_'.join([sP.simName for sP in sPs])))
+            (10*simRedshift,moment,'_'.join([sP.simName for sP in sPs])))
         nOVIcddf(sPs, pdf, moment=moment, simRedshift=simRedshift)
         pdf.close()
 
-    # figure 2b, CDDF redshift evolution of multiple ions
-    if 1:
+    # figure 2b, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
+    if 0:
         moment = 0
-        sPs = [TNG100, Illustris]
+        sPs = [TNG100] #, Illustris]
         redshifts = [0,1,2,4]
 
-        pdf = PdfPages('cddf_%s_zevo-%s_moment%d_%s.pdf' % \
+        saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
             ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
-             '_'.join([sP.simName for sP in sPs])))
-        cddfRedshiftEvolution(sPs, pdf, moment=moment, ions=ions, redshifts=redshifts)
+             '_'.join([sP.simName for sP in sPs]))
+        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, colorOff=2)
+
+        for i, ion in enumerate(ions):
+            saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
+                (ion, '-'.join(['%d'%z for z in redshifts]), moment, 
+                 '_'.join([sP.simName for sP in sPs]))
+            cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts, colorOff=i+2)
+
+    # figure 3, CDDF at z=0 with physics variants (L25n512)
+    if 0:
+        simRedshift = 0.0
+        moment = 2
+        variants1 = ['0100','0401','0402','0501','0502','0601','0602','0701','0703','0000']
+        variants2 = ['0201','0202','0203','0204','0205','0206','0801','0802','1100','0000']
+        variants3 = ['1000','1001','1002','1003','1004','1005','2002','2101','2102','0000']
+        variants4 = ['2201','2202','2203','3000','3001','3010','3101','3102','3201','0000'] # 2302
+        variantSets = [variants1, variants2, variants3, variants4]
+
+        for i, variants in enumerate(variantSets):
+            sPs = []
+            for variant in variants:
+                sPs.append( simParams(res=512,run='tng',redshift=simRedshift,variant=variant) )
+
+            saveName = 'cddf_ovi_z%02d_moment%d_variants-%d.pdf' % (10*simRedshift,moment,i)
+            cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=['OVI'], redshifts=[simRedshift])
+
+    # figure 4: average radial profiles
+    if 0:
+        pass
+
+    # figure 5: OVI red/blue image samples
+    if 0:
+        from vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
+        tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1, conf=1)
+        tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1, conf=1)
+
+    # figure 6: OVI vs color at fixed stellar/halo mass
+    if 0:
+        sPs = [TNG100, TNG300]
+        css = 'cen'
+        quant = 'mass_ovi'
+        xQuant = 'color_C_gr'
+
+        for iter in [0,1]:
+            if iter == 0:
+                sQuant = 'mstar_30pkpc_log'
+                sRange = [10.4,10.6]
+            if iter == 1:
+                sQuant = 'mhalo_200_log'
+                sRange = [12.0, 12.1]
+
+            pdf = PdfPages('slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
+                ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
+            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
+                         sRange=sRange, cenSatSelect=css)
+            pdf.close()
+
+    # ------------ exploration ------------
+
+    # exploration: OVI average column vs everything at fixed stellar/halo mass
+    if 0:
+        sPs = [TNG100, TNG300]
+        css = 'cen'
+        quant = 'mass_ovi'
+        xQuants = quantList(wCounts=False, wTr=False, wMasses=True)
+
+        for iter in [0,1]:
+            if iter == 0:
+                sQuant = 'mstar_30pkpc_log'
+                sRange = [10.4,10.6]
+            if iter == 1:
+                sQuant = 'mhalo_200_log'
+                sRange = [12.0, 12.1]
+
+            for xQuant in xQuants:
+                pdf = PdfPages('slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
+                    ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
+                quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
+                             sRange=sRange, cenSatSelect=css)
+                pdf.close()
+
+    # exploration: median OVI column vs stellar/halo mass, split by everything else
+    if 0:
+        sPs = [TNG300]
+        simNames = '-'.join([sP.simName for sP in sPs])
+
+        css = 'cen'
+        quants = quantList(wCounts=False, wTr=False, wMasses=True)
+        priQuant = 'mass_ovi'
+        sLowerPercs = [10,50]
+        sUpperPercs = [90,50]
+
+        for xQuant in ['mstar_30pkpc','mhalo_200_log']:
+            # individual plot per y-quantity:
+            pdf = PdfPages('medianTrends_%s_x=%s_%s_slice=%s.pdf' % (simNames,xQuant,css,priQuant))
+            for yQuant in quants:
+                quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+            pdf.close()
+
+            # individual plot per s-quantity:
+            pdf = PdfPages('medianTrends_%s_x=%s_%s_y=%s.pdf' % (simNames,xQuant,css,priQuant))
+            for sQuant in quants:
+                quantMedianVsSecondQuant(sPs, pdf, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+
+            pdf.close()
+
+    # exploration: OVI vs everything else in the median
+    if 0:
+        sPs = [TNG100, TNG300]
+        simNames = '-'.join([sP.simName for sP in sPs])
+
+        css = 'cen'
+        xQuants = quantList(wCounts=False, wTr=False, wMasses=True)
+        yQuant = 'mass_ovi'
+
+        rQuant = 'mhalo_200_log' # only include systems satisfying this restriction
+        rRange = [11.0, 16.0] # restriction range
+
+        # individual plot per y-quantity:
+        pdf = PdfPages('medianTrends_%s_y=%s_vs-all%d_%s_%s_in_%.1f-%.1f.pdf' % \
+            (simNames,yQuant,len(xQuants),css,rQuant,rRange[0],rRange[1]))
+        for xQuant in xQuants:
+            quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[yQuant], sQuant=rQuant, 
+                         sRange=rRange, cenSatSelect=css)
+            # for most quantities, is dominated everywhere by low-mass halos with very small mass_ovi:
+            #quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
         pdf.close()
+
+    # exploration: 2D OVI
+    if 0:
+        sP = TNG300
+        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
+        xQuants = ['mstar_30pkpc_log','mhalo_200_log']
+        cQuant = 'mass_ovi'
+
+        yQuants1 = ['ssfr','surfdens1_stars','fgas2','stellarage','bmag_2rhalf_masswt','pratio_halo_masswt']
+        yQuants2 = ['Z_gas','Z_stars','Krot_oriented_stars2','Krot_oriented_gas2','size_gas','size_stars']
+        yQuants3 = ['color_C_gr','xray_r500','zform_mm5','BH_CumEgy_low','M_BH_actual','filled_below']
+
+        yQuantSets = [yQuants1, yQuants2, yQuants3]
+
+        for i, xQuant in enumerate(xQuants):
+            yQuants3[-1] = xQuants[1-i] # include the other
+
+            for j, yQuants in enumerate(yQuantSets):
+                params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
+
+                pdf = PdfPages('histo2d_x=%s_set-%d_%s.pdf' % (xQuant,j,sP.simName))
+                fig = plt.figure(figsize=figsize_loc)
+                quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[2], fig_subplot=[fig,323], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[3], fig_subplot=[fig,324], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
+                pdf.close()

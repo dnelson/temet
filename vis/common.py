@@ -1319,6 +1319,7 @@ def addBoxMarkers(p, conf, ax):
 
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
+        if conf.rasterPx >= 1000: scaleBarLen *= 2 # 20% of plot width if going to be visually small
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
         scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units (kpc)
 
@@ -1341,14 +1342,25 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 
-        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(0.03 * 960.0/conf.rasterPx) # upper left
-        x1 = x0 + (scaleBarLen * p['sP'].HubbleParam) # actually plot size in code units (e.g. ckpc/h)
-        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.03 * 960.0/conf.rasterPx)
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.06 * 960.0/conf.rasterPx)
+        size = 'x-large'
+        lw = 2.0
+        y_off = 0.03
+        yt_frac = 0.06
 
-        ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=2.0, alpha=1.0)
+        if conf.rasterPx >= 1000:
+            size = int(conf.rasterPx / 100.0 * 5)
+            lw = 4.0
+            y_off = 0.06
+            yt_frac = size/1000.0 * 2.3
+
+        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx) # upper left
+        x1 = x0 + (scaleBarLen * p['sP'].HubbleParam) # actually plot size in code units (e.g. ckpc/h)
+        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx)
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(yt_frac * 960.0/conf.rasterPx)
+
+        ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
         ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
-                 size='x-large', ha='center', va='center') # same size as legend text
+                 size=size, ha='center', va='center') # same font-size as colorbar/legend
 
     # text in a combined legend?
     legend_labels = []
@@ -1555,8 +1567,12 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
+    size = 'x-large'
+    if conf.rasterPx >= 1000:
+        size = int(conf.rasterPx / 100.0 * 5)
+
     cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
-             size='x-large', ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+             size=size, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
 
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
@@ -1565,15 +1581,15 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
 
     cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
-        color=colorsB[0], size='x-large', ha='left', va='center', transform=cax.transAxes)
+        color=colorsB[0], size=size, ha='left', va='center', transform=cax.transAxes)
     cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
-        color=colorsB[1], size='x-large', ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[1], size=size, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
-        color=colorsB[2], size='x-large', ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[2], size=size, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
-        color=colorsB[3], size='x-large', ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[3], size=size, ha='center', va='center', transform=cax.transAxes)
     cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
-        color=colorsB[4], size='x-large', ha='right', va='center', transform=cax.transAxes)
+        color=colorsB[4], size=size, ha='right', va='center', transform=cax.transAxes)
 
 def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
