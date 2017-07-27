@@ -549,12 +549,15 @@ def getEvoSnapList(sP, toRedshift=None, snapStep=1):
 
     return snaps, redshifts
 
-def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None):
+def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None, 
+                   saveFilename=None):
     """ For a given set of tracerIDs at sP.redshift, walk through snapshots either forwards or backwards 
         until reaching toRedshift. At each snapshot, re-locate the tracers and record trFields as a 
         time sequence (from fluid_properties). Then, locate their parents at each snapshot and record 
         parFields (from valid snapshot fields). For gas fields (e.g. temp), if the tracer is in a parent of 
-        a different type at that snapshot, record NaN. If the tracer is in a BH, set Velocity=0 as a flag. """
+        a different type at that snapshot, record NaN. If the tracer is in a BH, set Velocity=0 as a flag. 
+        If saveFilename specified, then we save inside this function one snapshot at a time (avoid large 
+        memory allocation, and can be restarted). Otherwise, return for external save. """
 
     # create inverse sort indices for tracerSearchIDs
     sortIndsSearch = np.argsort(tracerSearchIDs)
@@ -569,20 +572,53 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     r = { 'snaps'     : snaps, 
           'redshifts' : redshifts }
 
+    # prepare save file (actually saved one snap at a time within tracersTimeEvo)
+    if saveFilename is not None:
+        if not isfile(saveFilename):
+            done = np.zeros( len(snaps), dtype='int32' )
+            with h5py.File(saveFilename,'w') as f:
+                for key in r:
+                    f[key] = r[key]
+                f['done'] = done
+            print('Started new save file: [%s]' % saveFilename.split("/")[-1])
+        else:
+            with h5py.File(saveFilename,'r') as f:
+                done = f['done'][()]
+            print('Restarting: [%s] [numDone = %d]' % (saveFilename.split("/")[-1],done.sum()))
+
     for field in parFields+trFields:
         # hardcode some dtypes and dimensionality for now
         dtype = 'float32'
         if field in d_int_fields.keys(): dtype = d_int_fields[field]
 
+        # memory allocation
+        numAllocSnaps = len(snaps) if saveFilename is None else 1 # 1 vs global memory allocation
+
         if field in n_3d_fields:
-            r[field] = np.zeros( (len(snaps),tracerSearchIDs.size,3), dtype=dtype )
+            r[field] = np.zeros( (numAllocSnaps,tracerSearchIDs.size,3), dtype=dtype )
         else:
-            r[field] = np.zeros( (len(snaps),tracerSearchIDs.size), dtype=dtype )
+            r[field] = np.zeros( (numAllocSnaps,tracerSearchIDs.size), dtype=dtype )
+
+        # file pre-allocation? if we are saving herein, and not restarting
+        if saveFilename is not None and done.sum() == 0:
+            print('Allocating field to: [%s]' % saveFilename.split("/")[-1])
+            with h5py.File(saveFilename) as f:
+                if field in n_3d_fields:
+                    dset = f.create_dataset(field, (len(snaps),tracerSearchIDs.size,3), dtype=dtype)
+                else:
+                    dset = f.create_dataset(field, (len(snaps),tracerSearchIDs.size), dtype=dtype)
 
     # walk through snapshots
     for m, snap in enumerate(snaps):
         sP.setSnap(snap)
         print(' ['+str(sP.snap).zfill(3)+'] z = '+str(sP.redshift))
+
+        if saveFilename is not None:
+            if done[m]:
+                print('  Skip, already in save file.')
+                continue
+            saveSnapInd = m
+            m = 0 # write over previous snapshot in r[], and save in this loop
 
         # for the tracers we search for: get their indices at this snapshot
         tracerIDsLocal  = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
@@ -801,6 +837,20 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     ww = np.where(subhaloIDs_target < 0)[0]
                     if len(ww):
                         r[field][m,wType[ww]] = np.nan
+
+            # internal saving of this field? do so now, and mark this snapshot as done
+            if saveFilename is not None:
+                with h5py.File(saveFilename) as f:
+                    f['done'][saveSnapInd] = 1
+                    done[saveSnapInd] = 1
+
+                    if r[field].ndim == 2:
+                        f[field][saveSnapInd,:] = r[field][m,:]
+                    else:
+                        f[field][saveSnapInd,:,:] = r[field][m,:,:]
+
+                print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
+
 
     sP.setSnap(startSnap)
     return r
@@ -1182,33 +1232,42 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
     # single load requested? do now and return
     if isfile(saveFilename):
         r = {}
-        with h5py.File(saveFilename,'r') as f:
-            for k1 in f:
 
-                if isinstance(f[k1], h5py.Dataset):
-                    # we have a dataset, full or subset read?
-                    if indRange is None:
-                        # read full dataset
-                        r[k1] = f[k1][()]
-                    else:
-                        if f[k1].ndim == 1:
-                            # read full dataset for 1D (e.g. redshifts)
+        done = 1
+        with h5py.File(saveFilename,'r') as f:
+            # restartable? check if we are done, otherwise continue calculation
+            if 'done' in f:
+                done = f['done'][()].min()
+
+        if done:
+            # skip all of this and fall through to computation if any snapshots are not yet done
+            with h5py.File(saveFilename,'r') as f:
+
+                for k1 in f:
+                    if isinstance(f[k1], h5py.Dataset):
+                        # we have a dataset, full or subset read?
+                        if indRange is None:
+                            # read full dataset
                             r[k1] = f[k1][()]
                         else:
-                            # read partial dataset for 2D (shape is [Nsnaps,Ntr])
-                            assert len(indRange) in [2,3]
-                            if len(indRange) == 2:
-                                r[k1] = f[k1][:, indRange[0]:indRange[1]]
+                            if f[k1].ndim == 1:
+                                # read full dataset for 1D (e.g. redshifts)
+                                r[k1] = f[k1][()]
                             else:
-                                r[k1] = f[k1][indRange[2], indRange[0]:indRange[1]]
+                                # read partial dataset for 2D (shape is [Nsnaps,Ntr])
+                                assert len(indRange) in [2,3]
+                                if len(indRange) == 2:
+                                    r[k1] = f[k1][:, indRange[0]:indRange[1]]
+                                else:
+                                    r[k1] = f[k1][indRange[2], indRange[0]:indRange[1]]
 
-                    continue
+                        continue
 
-                # handle meta: nested Halo/TracerLength/gas type structure
-                for k2 in f[k1]:
-                    for k3 in f[k1][k2]:
-                        r[k1+'_'+k2+'_'+k3] = f[k1][k2][k3][()]
-        return r
+                    # handle meta: nested Halo/TracerLength/gas type structure
+                    for k2 in f[k1]:
+                        for k3 in f[k1][k2]:
+                            r[k1+'_'+k2+'_'+k3] = f[k1][k2][k3][()]
+            return r
 
     if indRange is not None:
         print('Warning: globalAllTracersTimeEvo() returning None, indRange input but [%s] does not exist.' % saveFilename)
@@ -1254,18 +1313,19 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
             trVals['Subhalo/TracerLength/'+key] = trCounts[key]
             trVals['Subhalo/TracerOffset/'+key] = trOffsets[key]
 
+        # save
+        with h5py.File(saveFilename,'w') as f:
+            for key in trVals:
+                f[key] = trVals[key]
+
+        print('Saved: [%s]' % saveFilename.split(savePath)[1])
+
     else:
+        # saved inside tracersTimeEvo() one snapshot at a time, can be restarted
         if 'tracer_' in field: # trField
-            trVals = tracersTimeEvo(sP, trIDs, [field], [], mpb=mpb)
+            trVals = tracersTimeEvo(sP, trIDs, [field], [], mpb=mpb, saveFilename=saveFilename)
         else: # parField
-            trVals = tracersTimeEvo(sP, trIDs, [], [field], mpb=mpb)
-
-    # save tracks
-    with h5py.File(saveFilename,'w') as f:
-        for key in trVals:
-            f[key] = trVals[key]
-
-    print('Saved: [%s]' % saveFilename.split(savePath)[1])
+            trVals = tracersTimeEvo(sP, trIDs, [], [field], mpb=mpb, saveFilename=saveFilename)
 
     return trVals
 
