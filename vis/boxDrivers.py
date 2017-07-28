@@ -127,9 +127,9 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 22: panels.append( {'partType':'dm',  'partField':'id'} )
     if conf == 23: panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-4.0,4.5]} )
     if conf == 24: panels.append( {'partType':'gas', 'partField':'p_sync_ska', 'valMinMax':[-5.0, -2.7]} )
-    if conf == 25: panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[9, 16]} )
-    if conf == 26: panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[9, 16]} )
-    if conf == 27: panels.append( {'partType':'gas', 'partField':'O VIII', 'valMinMax':[9, 16]} )
+    if conf == 25: panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[11, 15]} )
+    if conf == 26: panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
+    if conf == 27: panels.append( {'partType':'gas', 'partField':'O VIII', 'valMinMax':[11, 16]} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:

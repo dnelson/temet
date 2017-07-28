@@ -1547,7 +1547,15 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     from util.sphMap import sphMapWholeBox
     from cosmo.cloudy import cloudyIon
 
-    hDensSpecies = ['HI','HI_noH2','HI2','HI3']
+    # adjust projection depth
+    projDepthCode = sP.boxSize
+
+    if '_depth10' in species:
+        projDepthCode = 10000.0 # 10 Mpc/h
+        species = species.split("_depth10")[0]  
+
+    # check
+    hDensSpecies = ['HI','HI_noH2']
     zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII']
 
     if species not in hDensSpecies + zDensSpecies + ['Z']:
@@ -1566,16 +1574,11 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     else:
         boxGridSize = boxGridSizeHI
 
-    # DEBUG
-    if species == 'HI2':
-        boxGridSize = 1.0 # test, 50% smaller
-    if species == 'HI3':
-        boxGridSize = 0.5 # test, x3 smaller
+    # adjust grid size
     if species == 'O VI 10':
         boxGridSize = 10.0 # test, x2 bigger
     if species == 'O VI 25':
         boxGridSize = 2.5 # test, x2 smaller
-    # END DEBUG
 
     boxGridDim = round(sP.boxSize / boxGridSize)
     chunkSize = int(h['NumPart'][sP.ptNum('gas')] / nChunks)
@@ -1640,7 +1643,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
             # grid gas mHI using SPH kernel, return in units of [10^10 Msun * h / ckpc^2]
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mHI, quant=None, 
-                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True)
+                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=1.0)
 
             r += ri
 
@@ -1658,23 +1661,27 @@ def wholeBoxColDensGrid(sP, pSplit, species):
             mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
                                                                 assumeSolarAbunds=aSA)
             
+            # determine projection depth fraction
+            boxWidthFrac = sP.boxSize / projDepthCode
+
+            # project
             hsml = hsml.astype('float32')
             mMetal = mMetal.astype('float32')
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
-                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True)
+                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=boxWidthFrac)
 
             r += ri
 
         if species == 'Z':
             # grid total gas mass using SPH kernel, return in units of [10^10 Msun / h]
             rMi = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=gas['Masses'], quant=None, 
-                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False)
+                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False, sliceFac=1.0)
 
             # grid total gas metal mass
             mMetal = gas['Masses'] * gas['GFM_Metallicity']
 
             rZi = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
-                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False)
+                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False, sliceFac=1.0)
 
             rM += rMi
             rZ += rZi
@@ -1716,10 +1723,11 @@ def wholeBoxCDDF(sP, pSplit, species):
     select = "Binning min: [%g] max: [%g] size: [%g]." % (binMinMax[0], binMinMax[1], binSize)
 
     # load
-    ac = auxCat(sP, fields=['Box_Grid_n'+species])
+    acField = 'Box_Grid_n'+species
+    ac = auxCat(sP, fields=[acField])
 
     # calculate
-    fN, n = calculateCDDF(ac['Box_Grid_n'+species], binMinMax[0], binMinMax[1], binSize, sP)
+    fN, n = calculateCDDF(ac[acField], binMinMax[0], binMinMax[1], binSize, sP)
 
     rr = np.vstack( (n,fN) )
     attrs = {'Description' : desc.encode('ascii'), 
@@ -2235,11 +2243,8 @@ fieldComputeFunctionMapping = \
                                          fullSubhaloSpectra=2, Nside='z-axis'),
 
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
-   'Box_Grid_nHI2'           : partial(wholeBoxColDensGrid,species='HI2'),
-   'Box_Grid_nHI3'           : partial(wholeBoxColDensGrid,species='HI3'),
    'Box_Grid_nHI_noH2'       : partial(wholeBoxColDensGrid,species='HI_noH2'),
    'Box_Grid_Z'              : partial(wholeBoxColDensGrid,species='Z'),
-
    'Box_Grid_nOVI'           : partial(wholeBoxColDensGrid,species='O VI'),
    'Box_Grid_nOVI_10'        : partial(wholeBoxColDensGrid,species='O VI 10'),
    'Box_Grid_nOVI_25'        : partial(wholeBoxColDensGrid,species='O VI 25'),
@@ -2248,16 +2253,26 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nOVIII'         : partial(wholeBoxColDensGrid,species='O VIII'),
 
    'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
-   'Box_CDDF_nHI2'           : partial(wholeBoxCDDF,species='HI2'),
-   'Box_CDDF_nHI3'           : partial(wholeBoxCDDF,species='HI3'),
    'Box_CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
-
    'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
    'Box_CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
    'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
    'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar'),
    'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
    'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
+
+   'Box_Grid_nOVI_depth10'           : partial(wholeBoxColDensGrid,species='O VI_depth10'),
+   'Box_Grid_nOVI_10_depth10'        : partial(wholeBoxColDensGrid,species='O VI 10_depth10'),
+   'Box_Grid_nOVI_25_depth10'        : partial(wholeBoxColDensGrid,species='O VI 25_depth10'),
+   'Box_Grid_nOVI_solar_depth10'     : partial(wholeBoxColDensGrid,species='O VI solar_depth10'),
+   'Box_Grid_nOVII_depth10'          : partial(wholeBoxColDensGrid,species='O VII_depth10'),
+   'Box_Grid_nOVIII_depth10'         : partial(wholeBoxColDensGrid,species='O VIII_depth10'),
+   'Box_CDDF_nOVI_depth10'           : partial(wholeBoxCDDF,species='OVI_depth10'),
+   'Box_CDDF_nOVI_10_depth10'        : partial(wholeBoxCDDF,species='OVI_10_depth10'),
+   'Box_CDDF_nOVI_25_depth10'        : partial(wholeBoxCDDF,species='OVI_25_depth10'),
+   'Box_CDDF_nOVI_solar_depth10'     : partial(wholeBoxCDDF,species='OVI_solar_depth10'),
+   'Box_CDDF_nOVII_depth10'          : partial(wholeBoxCDDF,species='OVII_depth10'),
+   'Box_CDDF_nOVIII_depth10'         : partial(wholeBoxCDDF,species='OVIII_depth10'),
 
    'Subhalo_SubLink_zForm_mm5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
                                          smoothing=['mm',5,'snap']),
