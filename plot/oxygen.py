@@ -97,7 +97,10 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
 
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box_CDDF_'+species])
+            ac = auxCat(sP, fields=['Box_CDDF_'+species], searchExists=True)
+            if ac['Box_CDDF_'+species] is None:
+                print(' skip: %s %s' % (sP.simName,species))
+                continue
 
             assert np.array_equal(ac['Box_CDDF_'+species][0,:], n_OVI) # require same x-pts
             fN_OVI = ac['Box_CDDF_'+species][1,:]
@@ -222,7 +225,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     fig.savefig(saveName)
     plt.close(fig)
 
-def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], redshift=0.0, cenSatSelect='cen', 
+def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen', redshift=0.0, 
                            vsHaloMass=True, toAvgColDens=False, colorOff=2):
     """ Plot total [gravitationally bound] mass of various ions, or e.g. cold/hot/total CGM mass, 
     versus halo or stellar mass at a given redshift. If toAvgColDens, then instead of total mass 
@@ -247,7 +250,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], redshift=0.0, cen
 
     if toAvgColDens:
         ax.set_ylim([12.0, 16.0])
-        ax.set_ylabel('Average Column Density $<N_{\\rm oxygen}>$ [ log cm$^2$ ]')
+        ax.set_ylabel('Average Column Density $<N_{\\rm oxygen}>$ [ log cm$^{-2}$ ]')
     else:
         ax.set_ylim([5.0, 9.0])
         ax.set_ylabel('Total Bound Gas Mass [ log M$_{\\rm sun}$ ]')
@@ -256,9 +259,8 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], redshift=0.0, cen
     colors = []
 
     for i, sP in enumerate(sPs):
-        sP.setRedshift(redshift)
-
         # load halo masses and CSS
+        sP.setRedshift(redshift)
         xx = groupCat(sP, fieldsSubhalos=[massField])
 
         cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -338,6 +340,182 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], redshift=0.0, cen
     fig.savefig(saveName)
     plt.close(fig)
 
+def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelect='cen', projDim='3D'):
+    """ Plot average/stacked radial number/mass density profiles for a series of halo or 
+    stellar mass bins. One or more ions, one or more runs, at a given redshift. """
+    from tracer.tracerMC import match3
+
+    binSize = 0.2 # log mass
+    percs = [10,90]
+
+    haloMassBins = [[11.4,11.6], [12.0,12.2]]
+    stellarMassBins = None
+    radRelToVirRad = False
+    massDensity = False
+
+    # plot setup
+    lw = 3.0
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    ax = fig.add_subplot(111)
+    
+    if radRelToVirRad:
+        ax.set_xlim([-2.0, 2.0])
+        ax.set_xlabel('Radius / Virial Radius [ log ]')
+    else:
+        ax.set_xlim([0.0, 4.0])
+        ax.set_xlabel('Radius [ log pkpc ]')
+
+    if '3D' in projDim:
+        # 3D mass/number density
+        if massDensity:
+            ax.set_ylim([-20.0,5.0])
+            ax.set_ylabel('Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-3}$ ]')
+        else:
+            ax.set_ylim([-20.0, -5.0])
+            ax.set_ylabel('Number Density $n_{\\rm oxygen}$ [ log cm$^{-3}$ ]')
+    else:
+        # 2D mass/column density
+        if massDensity:
+            ax.set_ylim([-20.0,5.0])
+            ax.set_ylabel('Column Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-2}$ ]')
+        else:
+            ax.set_ylim([5.0, 15.0])
+            ax.set_ylabel('Column Number Density $n_{\\rm oxygen}$ [ log cm$^{-2}$ ]')
+
+    # init
+    ionData = cloudyIon(None)
+    colors = []
+
+    if haloMassBins is not None:
+        massField = 'mhalo_200_log'
+        massBins = haloMassBins
+    else:
+        massField = 'mstar_30pkpc_log'
+        massBins = stellarMassBins
+
+    # loop over each fullbox run
+    for i, sP in enumerate(sPs):
+        # load halo/stellar masses and CSS
+        sP.setRedshift(redshift)
+        masses = groupCat(sP, fieldsSubhalos=[massField])
+
+        cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+        masses = masses[cssInds]
+
+        if radRelToVirRad:
+            # load virial radii
+            rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
+            rad = rad[cssInds]
+
+        for j, ion in enumerate(ions):
+            print('[%s]: %s' % (ion,sP.simName))
+
+            # load and apply CSS
+            fieldName = 'Subhalo_RadProfile%s_Global_%s_Mass' % (projDim,ion)
+
+            for iter in [0,1]:
+                ac = auxCat(sP, fields=[fieldName])
+                if ac[fieldName] is None: continue
+
+                # DEBUG
+                if iter == 1:
+                    print('debug acCheck')
+                    fieldNameCheck = fieldName.replace("Global","Subfind")
+                    acCheck = auxCat(sP, fields=[fieldNameCheck])
+                    assert np.array_equal(ac['subhaloIDs'], acCheck['subhaloIDs'])
+                    ac = acCheck # override
+                    fieldName = fieldNameCheck
+                    i += 1 # change linestyle
+                # END DEBUG
+
+                # crossmatch 'subhaloIDs' to cssInds
+                ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
+                ac[fieldName] = ac[fieldName][ac_inds,:]
+                masses_loc = masses[css_inds]
+                if radRelToVirRad: rad_loc = rad[css_inds]
+
+                # unit conversions: mass per bin to (space mass density) or (space number density)
+                yy = ac[fieldName]
+                if ac[fieldName].ndim == 2:
+                    yy /= ac[fieldName+'_attrs']['bin_volumes_code']
+                else:
+                    for radType in range(ac[fieldName].shape[2]):
+                        yy[:,:,radType] /= ac[fieldName+'_attrs']['bin_volumes_code']
+
+                if '3D' in projDim:
+                    if massDensity:
+                        # from [code mass / code length^3] -> [g/cm^3]
+                        yy = sP.units.codeDensToPhys(yy, cgs=True)
+                    else:
+                        # from [code mass / code length^3] -> [ions/cm^3]
+                        assert ion[0] == 'O' # oxygen
+                        yy = sP.units.codeDensToPhys(yy, cgs=True, numDens=True) 
+                        yy /= ionData.atomicMass(ion[0]) # [H atoms/cm^3] to [ions/cm^3]
+                else:
+                    assert 0 # 2D todo
+
+                # loop over mass bins
+                for k, massBin in enumerate(massBins):
+                    # select
+                    w = np.where( (masses_loc >= massBin[0]) & (masses_loc < massBin[1]) )
+
+                    print('[%d] %.1f - %.1f : %d' % (k,massBin[0],massBin[1],len(w[0])))
+
+                    # sum and calculate percentiles in each radial bin
+                    if yy.ndim == 3:
+                        radType = 0
+                        print('hardcoded plotting radType=0 (all)')
+                        yy_local = np.squeeze( yy[w,:,radType] )
+                    else:
+                        yy_local = np.squeeze( yy[w,:] )
+
+                    yy_mean = np.sum( yy_local, axis=0 ) / len(w[0])
+                    yp = np.nanpercentile( yy_local, percs, axis=0 )
+
+                    yy_mean = logZeroNaN(yy_mean)
+
+                    # radial bins: normalize to rvir if requested
+                    if radRelToVirRad:
+                        avg_rvir_code = np.nanmedian( rad_loc[w] )
+                        rr = 10.0**ac[fieldName+'_attrs']['rad_bins_code'] / avg_rvir_code
+                        rr = np.log10(rr)
+                        import pdb; pdb.set_trace()
+                    else:
+                        rr = ac[fieldName+'_attrs']['rad_bins_pkpc']
+                        rr = np.log10(rr)
+
+                    # determine color
+                    if i == 0:
+                        c = ax._get_lines.prop_cycler.next()['color']
+                        colors.append(c)
+                    else:
+                        c = colors[j]
+
+                    # plot median line
+                    label = '%1.f < mass < %.1f' % (massBin[0],massBin[1]) if i == 0 else ''
+                    ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[i], label=label)
+
+                    if i == 0:
+                        # show percentile scatter only for first run
+                        ax.fill_between(rr, yp[0,:], yp[-1,:], color=c, interpolate=True, alpha=0.2)
+
+    # legend
+    sExtra = []
+    lExtra = []
+
+    if clean:
+        for i, sP in enumerate(sPs):
+            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+            lExtra += ['%s' % sP.simName]
+
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+
+    fig.tight_layout()
+    fig.savefig(saveName)
+    plt.close(fig)
+
 def paperPlots():
     """ Construct all the final plots for the paper. """
     TNG100 = simParams(res=1820,run='tng',redshift=0.0)
@@ -348,7 +526,13 @@ def paperPlots():
 
     ions = ['OVI','OVII','OVIII'] # whenever we are not just doing OVI
 
-    # figure 1a, bound mass of O ions vs halo/stellar mass
+    # figure 1: full box composite image
+    if 0:
+        vis.boxDrivers.TNG_oxygenBoxImage()
+        for conf in [0,1]:
+            vis.haloDrivers.TNG_oxygenHalosImages(conf=conf)
+
+    # figure 2, bound mass of O ions vs halo/stellar mass
     if 0:
         sPs = [TNG300, TNG100] #, TNG100_3]
         cenSatSelect = 'cen'
@@ -359,29 +543,29 @@ def paperPlots():
 
             saveName = 'ions_masses_vs_%s_%s_z%d_%s.pdf' % \
                 (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-            totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
-                                   cenSatSelect=cenSatSelect, vsHaloMass=vsHaloMass)
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+                redshift=redshift, vsHaloMass=vsHaloMass)
 
             saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
                 (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-            totalIonMassVsHaloMass(sPs, saveName, ions=ions, redshift=redshift, 
-                                   cenSatSelect=cenSatSelect, vsHaloMass=vsHaloMass, toAvgColDens=True)
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+                redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
 
-    # figure 2a, CDDF of OVI at z~0 compared to observations
-    if 0:
+    # figure 3a, CDDF of OVI at z~0 compared to observations
+    if 1:
         moment = 0
         simRedshift = 0.2
-        sPs = [TNG100, Illustris] #, TNG300]
+        sPs = [TNG100, TNG300, Illustris]
 
         pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s.pdf' % \
             (10*simRedshift,moment,'_'.join([sP.simName for sP in sPs])))
         nOVIcddf(sPs, pdf, moment=moment, simRedshift=simRedshift)
         pdf.close()
 
-    # figure 2b, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
+    # figure 3b, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
     if 0:
         moment = 0
-        sPs = [TNG100] #, Illustris]
+        sPs = [TNG100]
         redshifts = [0,1,2,4]
 
         saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
@@ -395,15 +579,20 @@ def paperPlots():
                  '_'.join([sP.simName for sP in sPs]))
             cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts, colorOff=i+2)
 
-    # figure 3, CDDF at z=0 with physics variants (L25n512)
+    # figure 4, CDDF at z=0 with physics variants (L25n512)
     if 0:
         simRedshift = 0.0
         moment = 2
         variants1 = ['0100','0401','0402','0501','0502','0601','0602','0701','0703','0000']
         variants2 = ['0201','0202','0203','0204','0205','0206','0801','0802','1100','0000']
         variants3 = ['1000','1001','1002','1003','1004','1005','2002','2101','2102','0000']
-        variants4 = ['2201','2202','2203','3000','3001','3010','3101','3102','3201','0000'] # 2302
-        variantSets = [variants1, variants2, variants3, variants4]
+        variants4 = ['2201','2202','2203','0000','3000','3001','3002','3010','3100','0000'] #2302
+        variants5 = ['3101','3102','3201','3202','0000','3301','3302','3303','3304','0000'] #3203
+        variants6 = ['3401','3402','3403','3404','0000','3502','0000','0000','3603','0000'] #3501,3601,3602
+        variants7 = ['3701','3702','3801','3802','3901','3902','4000','4100','4301','0000']
+        variants8 = ['4401','4402','4410','0000','0000','4420','4501','4502','4503','0000'] #4411,4412
+        variants9 = ['4504','4506','0000','0000','4302','1200','1301','1302','0000','0000'] #4601,4602,5003
+        variantSets = [variants1,variants2,variants3,variants4,variants5,variants6,variants7,variants8,variants9]
 
         for i, variants in enumerate(variantSets):
             sPs = []
@@ -413,17 +602,29 @@ def paperPlots():
             saveName = 'cddf_ovi_z%02d_moment%d_variants-%d.pdf' % (10*simRedshift,moment,i)
             cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=['OVI'], redshifts=[simRedshift])
 
-    # figure 4: average radial profiles
+    # figure 5: average radial profiles
+    if 0:
+        redshift = 0.0
+        sPs = [simParams(res=256,run='tng',redshift=0.0,variant='0000')] # debug
+        ions = ['OVI']
+        cenSatSelect = 'cen'
+        projDim = '3D' # '2Dz'
+
+        simNames = '_'.join([sP.simName for sP in sPs])
+        saveName = 'radprofiles_%s_%s_%s_z%02d_%s.pdf' % (projDim,'-'.join(ions),simNames,redshift,cenSatSelect)
+        stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, cenSatSelect='cen')
+
+    # figure 6: 2pcf
     if 0:
         pass
 
-    # figure 5: OVI red/blue image samples
+    # figure 7: OVI red/blue image samples
     if 0:
         from vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
         tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1, conf=1)
         tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1, conf=1)
 
-    # figure 6: OVI vs color at fixed stellar/halo mass
+    # figure 8: OVI vs color at fixed stellar/halo mass
     if 0:
         sPs = [TNG100, TNG300]
         css = 'cen'
@@ -444,6 +645,14 @@ def paperPlots():
                          sRange=sRange, cenSatSelect=css)
             pdf.close()
 
+    # figure 9: 2d histos
+    if 0:
+        pass
+
+    # figure 10: mock COS-Halos samples, N_OVI vs impact parameter and vs sSFR bimodality
+    if 0:
+        pass
+
     # ------------ exploration ------------
 
     # exploration: OVI average column vs everything at fixed stellar/halo mass
@@ -460,13 +669,13 @@ def paperPlots():
             if iter == 1:
                 sQuant = 'mhalo_200_log'
                 sRange = [12.0, 12.1]
-
+            
+            pdf = PdfPages('slices_%s_x=all_%s-%.1f-%.1f_%s.pdf' % \
+                ('_'.join([sP.simName for sP in sPs]),sQuant,sRange[0],sRange[1],css))
             for xQuant in xQuants:
-                pdf = PdfPages('slice_%s_%s_%s-%.1f-%.1f_%s.pdf' % \
-                    ('_'.join([sP.simName for sP in sPs]),xQuant,sQuant,sRange[0],sRange[1],css))
                 quantSlice1D(sPs, pdf, xQuant=xQuant, yQuants=[quant], sQuant=sQuant, 
                              sRange=sRange, cenSatSelect=css)
-                pdf.close()
+            pdf.close()
 
     # exploration: median OVI column vs stellar/halo mass, split by everything else
     if 0:

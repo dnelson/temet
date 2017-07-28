@@ -10,9 +10,10 @@ import cosmo.load
 from functools import partial
 
 from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
-  inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs
-from util.helper import logZeroMin, logZeroNaN
-from util.helper import pSplit as pSplitArr, pSplitRange
+  inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs, \
+  cenSatSubhaloIndices
+from util.helper import logZeroMin, logZeroNaN, logZeroSafe
+from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -1554,8 +1555,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
     # config
     h = snapshotHeader(sP)
-
-    nChunks = np.max( [4, int(h['NumPart'][sP.ptNum('gas')]**(1.0/3.0) / 10.0)] )
+    nChunks = numPartToChunkLoadSize( h['NumPart'][sP.ptNum('gas')] )
     axes    = [0,1] # x,y projection
     
     # info
@@ -1726,6 +1726,340 @@ def wholeBoxCDDF(sP, pSplit, species):
              'Selection'   : select.encode('ascii')}
 
     return rr, attrs
+
+def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=None, proj2Daxis=None):
+    """ Compute a radial profile (either total/sum or weighted mean) of a particle property (e.g. mass) 
+        for those particles of a given type. If scope=='global', then all snapshot particles are used, 
+        and we do the accumulation in a chunked snapshot load. If scope=='fof' or 'subhalo' then restrict 
+        to FoF/subhalo particles only, respectively, and do a restricted load according to pSplit.
+        Weighting is currently unsupported, but in the future e.g. mass weighted mean temperature 
+        profiles would be possible. If proj2Daxis is None, do 3D profiles, otherwise specify integer 
+        coordinate axis in [0,1,2] to project along.
+    """
+    from scipy.stats import binned_statistic
+
+    assert op in ['sum','mean','median','count']
+    assert weighting is None # not implemented in binned_statistic approach yet
+
+    radMin = 0.0 # log code units
+    radMax = 4.0 # log code units
+    radNumBins = 100
+    numProfTypes = 4 if scope == 'global' else 1 # all, self-halo, other-halo, diffuse (or just self)
+    minHaloMass = 10.8 # log m200crit
+    cenSatSelect = 'cen'
+
+    # determine ptRestriction
+    ptRestriction = None
+
+    if ptType == 'stars':
+        ptRestriction = 'real_stars'
+
+    if '_sfrgt0' in ptProperty:
+        ptProperty, ptRestriction = ptProperty.split("_") # takes the form ptProp_sfrgt0
+
+    # config
+    ptLoadType = sP.ptNum(ptType)
+
+    desc   = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] with [%d] bins." % \
+      (ptProperty,ptType,radMin,radMax,radNumBins)
+    if ptRestriction is not None:
+        desc += " (restriction = %s). " % ptRestriction
+    if weighting is not None:
+        desc += " (weighting = %s). " % weighting
+    if proj2Daxis is not None:
+        desc += " (2D projection axis = %d)." % proj2Daxis
+        if proj2Daxis == 0: p_inds = [1,2]
+        if proj2Daxis == 1: p_inds = [0,2]
+        if proj2Daxis == 2: p_inds = [0,1]
+
+    desc  +=" (scope = %s). " % scope
+    select = "Subhalos [%s] above a min m200crit halo mass of [%.1f]." % (cenSatSelect,minHaloMass)
+
+    # load group information and make selection
+    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType'])['subhalos']
+    gc['header'] = cosmo.load.groupCatHeader(sP)
+
+    nChunks = 1 # chunk load disabled by default
+
+    # need for scope=='subhalo' and scope=='global' (for self/other halo terms)
+    gc['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+
+    if scope == 'fof':
+        # replace 'SubhaloLenType' and 'SubhaloOffsetType' by parent FoF group values (for both cen/sat)
+        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+        GroupOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+        import pdb; pdb.set_trace() # todo
+    if scope == 'global':
+        # enable chunk loading
+        h = cosmo.load.snapshotHeader(sP)
+        nChunks = numPartToChunkLoadSize( h['NumPart'][sP.ptNum(ptType)] )
+        chunkSize = int(h['NumPart'][sP.ptNum(ptType)] / nChunks)
+
+    nSubsTot = gc['header']['Nsubgroups_Total']
+    subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
+
+    # css select
+    cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    subhaloIDsTodo = subhaloIDsTodo[cssInds]
+
+    # halo mass select
+    if minHaloMass is not None:
+        halo_masses = cosmo.load.groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+        halo_masses = halo_masses[cssInds]
+        wSelect = np.where( halo_masses >= minHaloMass )
+
+        subhaloIDsTodo = subhaloIDsTodo[wSelect]
+
+    nSubsTot = subhaloIDsTodo.size
+
+    if scope == 'global':
+        # default particle load range is set inside chunkLoadLoop
+        print(' Total # Snapshot Load Chunks: '+str(nChunks)+' ('+str(chunkSize)+' particles per load)')
+        indRange = None
+        prevMaskInd = 0
+
+        if pSplit is not None:
+            # subdivide subhaloIDsTodo directly
+            subhaloIDsTodo = pSplitArr(subhaloIDsTodo, pSplit[1], pSplit[0])
+    else:
+        # if no task parallelism (pSplit), set default particle load ranges
+        indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+
+        if pSplit is not None:
+            # subdivide the global [variable ptType!] particle set, then map this back into a division of 
+            # subhalo IDs which will be better work-load balanced among tasks
+            gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
+
+            invSubs = inverseMapPartIndicesToSubhaloIDs(sP, gasSplit, ptType, debug=True, flagFuzz=False)
+
+            if pSplit[0] == pSplit[1] - 1:
+                invSubs[1] = gc['header']['Nsubgroups_Total']
+            else:
+                assert invSubs[1] != -1
+
+            # we process a sparse set of subhalo ids, so intersect with the previous (mass/css) selection
+            subhaloIDsSpanned = np.arange( invSubs[0], invSubs[1] )
+            subhaloIDsTodo = np.intersect1d( subhaloIDsTodo, subhaloIDsSpanned )
+            indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+
+        indRange = indRange[ptType] # choose index range for the requested particle type
+
+    nSubsDo = len(subhaloIDsTodo)
+
+    # info
+    print(' ' + desc)
+    print(' ' + select)
+    print(' Total # Subhalos: %d, in mass bin [%d], processing [%d] subhalos now...' % \
+        (gc['header']['Nsubgroups_Total'],nSubsTot,nSubsDo))
+
+    # determine radial binning
+    rad_bin_edges = np.linspace(radMin,radMax,radNumBins) # bin edges, including inner and outer boundary
+    rad_bin_edges = np.hstack([radMin-1.0,rad_bin_edges]) # include an inner bin complete to r=0
+
+    rbins_sq = np.log10( (10.0**rad_bin_edges)**2 ) # we work in squared distances for speed
+    rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
+    rad_bins_pkpc = sP.units.codeLengthToKpc( 10.0**rad_bins_code )
+
+    radMaxSqCode = (10.0**radMax)**2
+
+    # bin (spherical shells in 3D, circular annuli in 2D) volumes/areas [code units]
+    r_outer = 10.0**rad_bin_edges[1:]
+    r_inner = 10.0**rad_bin_edges[:-1]
+    r_inner[0] = 0.0
+
+    bin_volumes_code = 4.0/3.0 * np.pi * (r_outer**3.0 - r_inner**3.0)
+    bin_areas_code = np.pi * (r_outer**2.0 - r_inner**2.0) # 2D annuli e.g. if proj2Daxis is not None
+
+    # allocate, NaN indicates not computed except for mass where 0 will do
+    r = np.zeros( (nSubsDo,radNumBins,numProfTypes), dtype='float32' )
+    r = np.squeeze(r)
+
+    if op not in ['sum']:
+        r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
+
+    # global load of all particles of [ptType] in snapshot
+    fieldsLoad = ['pos']
+
+    if ptRestriction == 'real_stars':
+        fieldsLoad.append('sftime')
+    if ptRestriction == 'sfrgt0':
+        fieldsLoad.append('sfr')
+
+    # so long as scope is not 'global', load the full particle set we need for these subhalos now
+    if scope != 'global':
+        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
+
+        particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
+        assert particles[ptProperty].ndim == 1
+
+        if 'count' not in particles:
+            particles['count'] = particles[ particles.keys()[0] ].shape[0]
+
+        # load weights
+        if weighting is not None:
+            assert weighting in ['mass','volume']
+            assert op not in ['sum'] # meaningless
+
+            # use particle masses or volumes (linear) as weights
+            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, indRange=indRange)
+
+            assert particles['weights'].ndim == 1 and particles['weights'].size == particles['count']
+
+    # chunk load: loop (possibly just once if chunk load is disabled)
+    for chunkNum in range(nChunks):
+
+        # load chunk now (we are simply accumulating, so no need to load everything at once)
+        if scope == 'global':
+            # calculate load indices (snapshotSubset is inclusive on last index, make sure we get to the end)
+            indRange = [chunkNum*chunkSize, (chunkNum+1)*chunkSize-1]
+            if chunkNum == nChunks-1: indRange[1] = h['NumPart'][ptLoadType]-1
+            print('  [%2d] %9d - %d' % (chunkNum,indRange[0],indRange[1]))
+
+            particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, 
+                                                 indRange=indRange)
+
+            particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], 
+                                                              indRange=indRange)
+
+            assert particles[ptProperty].ndim == 1
+            assert 'count' in particles
+            assert weighting is None # load not implemented
+
+        indRangeSize = indRange[1] - indRange[0] + 1 # size of load
+
+        if scope == 'global':
+            # make mask corresponding to particles in all subhalos (other-halo term)
+            subhalo_particle_mask = np.zeros( indRangeSize, dtype='int16' )
+
+            # loop from where we previously stopped, to the end of all subhalos
+            for i in range(prevMaskInd,gc['header']['Nsubgroups_Total']):
+                ind0 = gc['SubhaloOffsetType'][i,ptLoadType] - indRange[0]
+                ind1 = ind0 + gc['SubhaloLenType'][i,ptLoadType]
+
+                # out of loaded chunk, stop for now
+                if ind0 > indRangeSize:
+                    break
+
+                # clip indices to be local to this loaded chunk
+                ind0 = np.max([ind0, 0])
+                ind1 = np.min([ind1, indRangeSize])
+
+                # stamp
+                subhalo_particle_mask[ind0:ind1] = 1
+
+            prevMaskInd = i - 1
+
+        # loop over subhalos
+        printFac = 100.0 if sP.res > 512 else 10.0
+        for i, subhaloID in enumerate(subhaloIDsTodo):
+            if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
+                print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+
+            # slice starting/ending indices for stars local to this subhalo/FoF
+            i0 = 0
+            i1 = particles['count'] # set default i1 to full chunk size for 'global' scope
+
+            if scope in ['subhalo','fof']:
+                i0 = gc['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
+                i1 = i0 + gc['SubhaloLenType'][subhaloID,ptLoadType]
+
+                assert i0 >= 0 and i1 <= indSpan
+
+                if i1 == i0:
+                    continue # zero length of this type
+
+            # use squared radii and sq distance function
+            validMask = np.ones( i1-i0, dtype=np.bool )
+
+            if proj2Daxis is None:
+                # apply in 3D
+                rr = periodicDistsSq( gc['SubhaloPos'][subhaloID,:], particles['Coordinates'][i0:i1,:], sP )
+            else:
+                # apply in 2D projection, along the specified axis
+                pt_2d = gc['SubhaloPos'][subhaloID,:]
+                pt_2d = [ pt_2d[p_inds[0]], pt_2d[p_inds[1]] ]
+                vecs_2d = np.zeros( (i1-i0, 2), dtype=particles['Coordinates'].dtype )
+                vecs_2d[:,0] = particles['Coordinates'][i0:i1,p_inds[0]]
+                vecs_2d[:,1] = particles['Coordinates'][i0:i1,p_inds[1]]
+
+                rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+
+            validMask &= (rr <= radMaxSqCode)
+
+            if ptRestriction == 'real_stars':
+                validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
+
+            if ptRestriction == 'sfrgt0':
+                validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
+
+            wValid = np.where(validMask)
+
+            if len(wValid[0]) == 0:
+                continue # zero length of particles satisfying radial cut and restriction
+
+            # log(radius), with any zero value set to small (included in first bin)
+            loc_rr_log = logZeroSafe( rr[wValid], zeroVal=radMin-1.0 )
+            loc_val    = particles[ptProperty][i0:i1][wValid]
+            #loc_wt    = particles['weights'][i0:i1][wValid] if weighting is not None else 1.0
+
+            # weighted histogram (or other op) of r_log distances
+            if scope == 'global':
+                # (1) all
+                result, _, _ = binned_statistic(loc_rr_log, loc_val, statistic=op, bins=rbins_sq)
+                r[i,:,0] += result
+
+                # (2) self-halo
+                ind_sub_0 = gc['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
+                ind_sub_1 = ind_sub_0 + gc['SubhaloLenType'][subhaloID,ptLoadType]
+                ind_sub_0 = np.max([ind_sub_0, 0])
+                ind_sub_1 = np.min([ind_sub_1, indRangeSize])
+
+                # update mask to specifically mark this halo (do not include in the other-halo term)
+                subhalo_particle_mask[ind_sub_0:ind_sub_1] = 2
+                loc_mask = subhalo_particle_mask[wValid]
+
+                w = np.where(loc_mask == 2)
+
+                if len(w[0]):
+                    # this subhalo at least partially in the currently loaded data
+                    #sub_rr_log = loc_rr_log[ind_sub_0:ind_sub_1]
+                    #sub_val = loc_val[ind_sub_0:ind_sub_1]
+                    result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
+                    r[i,:,1] += result
+
+                # (3) other-halo
+                w = np.where(loc_mask == 1)
+
+                if len(w[0]):
+                    result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
+                    r[i,:,2] += result
+
+                subhalo_particle_mask[ind_sub_0:ind_sub_1] = 1 # restore
+
+                # (4) diffuse
+                w = np.where(loc_mask == 0)
+
+                if len(w[0]):
+                    result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
+                    r[i,:,3] += result
+            else:
+                # subhalo/fof scope, we have only the self-term available
+                result, _, _ = binned_statistic(loc_rr_log, loc_val, statistic=op, bins=rbins_sq)
+                r[i,:] += result
+
+    attrs = {'Description' : desc.encode('ascii'),
+             'Selection'   : select.encode('ascii'),
+             'ptType'      : ptType.encode('ascii'),
+             'ptProperty'  : ptProperty.encode('ascii'),
+             'weighting'   : str(weighting).encode('ascii'),
+             'rad_bins_code'    : rad_bins_code,
+             'rad_bins_pkpc'    : rad_bins_pkpc,
+             'rad_bin_edges'    : rad_bin_edges,
+             'bin_volumes_code' : bin_volumes_code,
+             'bin_areas_code'   : bin_areas_code,
+             'subhaloIDs'       : subhaloIDsTodo}
+
+    return r, attrs
 
 # this dictionary contains a mapping between all auxCatalogs and their generating functions, where the 
 # first sP,pSplit inputs are stripped out with a partial func and the remaining arguments are hardcoded
@@ -1947,8 +2281,32 @@ fieldComputeFunctionMapping = \
    'Subhalo_BH_CumMassGrowth_Low' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_RM',op='sum',rad=None),
    'Subhalo_BH_CumMassGrowth_High' : \
-     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_QM',op='sum',rad=None)
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_QM',op='sum',rad=None),
 
+   'Subhalo_RadProfile3D_Global_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global'),
+   'Subhalo_RadProfile3D_Subfind_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='subfind'),
+   'Subhalo_RadProfile3D_Fof_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='fof'),
+   'Subhalo_RadProfile2Dz_Global_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global',proj2Daxis=2),
+   'Subhalo_RadProfile2Dz_Subfind_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='subfind',proj2Daxis=2),
+   'Subhalo_RadProfile3D_Global_OVII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII mass',op='sum',scope='global'),
+   'Subhalo_RadProfile3D_Global_OVIII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII mass',op='sum',scope='global'),
+   'Subhalo_RadProfile3D_Global_Gas_O_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass_O',op='sum',scope='global'),
+   'Subhalo_RadProfile3D_Global_Gas_Metal_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass',op='sum',scope='global'),
+   'Subhalo_RadProfile3D_Global_Gas_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='mass',op='sum',scope='global'),
+   'Subhalo_RadProfile3D_Global_Stars_Mass' : \
+     partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global'),
+   'Subhalo_RadProfile2Dz_Global_Stars_Mass' : \
+     partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global',proj2Daxis=2),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 

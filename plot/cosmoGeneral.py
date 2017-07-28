@@ -270,14 +270,15 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         binSizeMed = (xMinMax[1]-xMinMax[0]) / nBins * 2
 
         xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSizeMed,percs=[5,10,25,75,90,95])
-        ym2 = savgol_filter(ym,sKn,sKo)
-        sm2 = savgol_filter(sm,sKn,sKo)
-        pm2 = savgol_filter(pm,sKn,sKo,axis=1)
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+            sm = savgol_filter(sm,sKn,sKo)
+            pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-        ax.plot(xm[:-1], ym2[:-1], '-', color=colorMed, lw=lwMed, label='median')
+        ax.plot(xm[:-1], ym[:-1], '-', color=colorMed, lw=lwMed, label='median')
 
-        ax.plot(xm[:-1], pm2[1,:-1], ':', color=colorMed, lw=lwMed, label='P[10,90]')
-        ax.plot(xm[:-1], pm2[-2,:-1], ':', color=colorMed, lw=lwMed)
+        ax.plot(xm[:-1], pm[1,:-1], ':', color=colorMed, lw=lwMed, label='P[10,90]')
+        ax.plot(xm[:-1], pm[-2,:-1], ':', color=colorMed, lw=lwMed)
 
         if not clean:
             l = ax.legend(loc='lower right')
@@ -371,14 +372,21 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             if sim_yvals is None:
                 print('   skip')
                 continue # property is not calculated for this run (e.g. expensive auxCat)
-
             if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
 
             # slice values: load fullbox galaxy property to slice on (e.g. Mstar or Mhalo)
             sim_svals, _, _, _ = simSubhaloQuantity(sP, sQuant, clean)
 
+            if sim_svals is None:
+                print('   skip')
+                continue
+
             # x-axis: load/calculate x-axis quantity (e.g. simulation colors), cached in sP.data
             sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+
+            if sim_xvals is None:
+                print('   skip')
+                continue
             if xLog is True: sim_xvals = logZeroNaN(sim_xvals)
 
             # central/satellite selection?
@@ -419,16 +427,16 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             binSize = (xMinMax[1]-xMinMax[0]) / nBins
 
             xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-            xm = xm[1:-1]
-            ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
-            sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
-            pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+            if xm.size > sKn:
+                ym = savgol_filter(ym,sKn,sKo)
+                sm = savgol_filter(sm,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-            ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+            ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=sP.simName)
 
             # percentile band:
             if sim_xvals.size >= ptPlotThresh:
-                ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+                ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
         # legend
         if i == 0:
@@ -512,6 +520,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             # splitting on third quantity? load now
             if sQuant is not None:
                 sim_svals, slabel, _, sLog = simSubhaloQuantity(sP, sQuant, clean, tight=True)
+                if sim_svals is None:
+                    print('   skip')
+                    continue
                 if sLog: sim_svals = logZeroNaN(sim_svals)
 
             # central/satellite selection?
@@ -541,15 +552,16 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if sP.boxSize < 205000.0: binSize *= 2.0
 
             xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-            ym2 = savgol_filter(ym,sKn,sKo)
-            sm2 = savgol_filter(sm,sKn,sKo)
-            pm2 = savgol_filter(pm,sKn,sKo,axis=1)
+            if xm.size > sKn:
+                ym = savgol_filter(ym,sKn,sKo)
+                sm = savgol_filter(sm,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-            ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+            ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=sP.simName)
 
             # percentile:
             if sim_xvals.size >= ptPlotThresh:
-                ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+                ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
             # slice value?
             if sQuant is not None:
