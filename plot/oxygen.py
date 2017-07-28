@@ -22,13 +22,16 @@ from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQua
 from vis.common import setAxisColors
 from cosmo.util import cenSatSubhaloIndices
 
-def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
+def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
     from util.loadExtern import danforth2008, danforth2016, thomChen2008, tripp2008
 
     # config
     speciesList = ['nOVI','nOVI_solar','nOVI_10','nOVI_25']
+    if boxDepth10:
+        for i in range(len(speciesList)):
+            speciesList[i] += '_depth10'
 
     # plot setup
     sizefac = 1.0 if not clean else sfclean
@@ -97,13 +100,18 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2):
 
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box_CDDF_'+species], searchExists=True)
-            if ac['Box_CDDF_'+species] is None:
+            acField = 'Box_CDDF_'+species
+
+            if sP.simName in ['Illustris-1','TNG300-1'] and i > 0:
+                continue # skip expensive variations we won't use for the oxygen paper
+
+            ac = auxCat(sP, fields=[acField], searchExists=True)
+            if ac[acField] is None:
                 print(' skip: %s %s' % (sP.simName,species))
                 continue
 
             assert np.array_equal(ac['Box_CDDF_'+species][0,:], n_OVI) # require same x-pts
-            fN_OVI = ac['Box_CDDF_'+species][1,:]
+            fN_OVI = ac[acField][1,:]
 
             fN_OVI_min = np.nanmin(np.vstack( (fN_OVI_min, fN_OVI) ), axis=0)
             fN_OVI_max = np.nanmax(np.vstack( (fN_OVI_max, fN_OVI) ), axis=0)
@@ -486,7 +494,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         rr = np.log10(rr)
 
                     # determine color
-                    if i == 0:
+                    if i == 0 and iter == 0:
                         c = ax._get_lines.prop_cycler.next()['color']
                         colors.append(c)
                     else:
@@ -552,14 +560,15 @@ def paperPlots():
                 redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
 
     # figure 3a, CDDF of OVI at z~0 compared to observations
-    if 1:
+    if 0:
         moment = 0
         simRedshift = 0.2
+        boxDepth10 = True # use 10 Mpc/h projection depth
         sPs = [TNG100, TNG300, Illustris]
 
-        pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s.pdf' % \
-            (10*simRedshift,moment,'_'.join([sP.simName for sP in sPs])))
-        nOVIcddf(sPs, pdf, moment=moment, simRedshift=simRedshift)
+        pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s_%s.pdf' % \
+            (10*simRedshift,moment,'_'.join([sP.simName for sP in sPs]),'_10Mpch' if boxDepth10 else ''))
+        nOVIcddf(sPs, pdf, moment=moment, simRedshift=simRedshift, boxDepth10=boxDepth10)
         pdf.close()
 
     # figure 3b, CDDF redshift evolution of multiple ions (combined panel, and individual panels)

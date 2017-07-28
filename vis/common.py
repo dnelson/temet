@@ -757,6 +757,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
+        if partField == 'O VII': config['ctName'] = 'magma'
+        if partField == 'O VIII': config['ctName'] = 'inferno'
 
     if partField == 'HI_segmented':
         config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
