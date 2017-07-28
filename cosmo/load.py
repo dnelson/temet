@@ -41,6 +41,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
     if not isdir(sP.derivPath + 'auxCat'):
         mkdir(sP.derivPath + 'auxCat')
 
+    nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
+
     for field in iterable(fields):
         if field not in auxcatalog.fieldComputeFunctionMapping.keys() + auxcatalog.manualFieldNames:
             raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
@@ -118,14 +120,23 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                             if length == 0: continue
 
-                            if len(allShape) > 1 and allShape[condAxis] > condThresh:
-                                # condensed, stamp in to dense indices
-                                assert f[field].ndim == 2
+                            if len(allShape) > 1 and allShape[condAxis] >= condThresh:
+                                # want to condense, stamp in to dense indices
+                                subhaloIDsToSave = f[catIndFieldName][()]
 
-                                w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )[0]
-                                length = len(w)
-                                temp_r = temp_r[w,:]
-                                subhaloIDs[offset : offset+length] = f[catIndFieldName][()][w]
+                                if f[field].ndim == 2 and 'Subhalo_SDSSFiberSpectra' in field:
+                                    # splits saved all subhalos (sdss spectra)
+                                    #assert 'Subhalo_SDSSFiberSpectra' in field # otherwise check
+                                    w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )[0]
+                                    length = len(w)
+                                    temp_r = temp_r[w,:]
+                                    subhaloIDsToSave = subhaloIDsToSave[w]
+
+                                if f[field].ndim == 3:
+                                    # splits saved a subset of subhalos
+                                    assert 'Subhalo_RadProfile' in field # otherwise check why we are here
+
+                                subhaloIDs[offset : offset+length] = subhaloIDsToSave
                                 subhaloIndsStamp = np.arange(offset,offset+length)
                             else:
                                 # full, stamp in to indices corresponding to subhalo indices
@@ -901,6 +912,21 @@ def snapshotSubset(sP, partType, fields,
             ion = cloudyIon(sP, el=element, redshiftInterp=True)
             masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
             masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
+
+            return masses
+
+        # metal mass (total or by species): convert fractions to masses
+        if "metalmass" in field.lower():
+            assert sP.isPartType(partType, 'gas') or sP.isPartType(partType, 'stars')
+
+            fracFieldName = "metal" # total metal mass
+            if "_" in field: # e.g. "metalmass_O" or "metalmass_Mg"
+                fracFieldName = "metals_" + split(field,"_")[1].capitalize()
+
+            masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
+            masses *= snapshotSubset(sP, partType, fracFieldName, **kwargs)
+
+            import pdb; pdb.set_trace()
 
             return masses
 

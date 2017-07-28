@@ -269,7 +269,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
-        ac = auxCat(sP, fields=[fieldName], searchExists=True)
+        ac = auxCat(sP, fields=[fieldName])
         if ac[fieldName] is None: return [None]*4
         vals = sP.units.codeMassToMsun(ac[fieldName])
 
@@ -446,6 +446,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # load data from ./data.files/pillepich/ files of Annalisa
         filePath = sP.derivPath + '/pillepich/Group_StellarMasses_%03d.hdf5' % sP.snap
 
+        if not isfile(filePath):
+            return [None]*4 # does not exist
+
         dNameBase = 'Group/Masses_stars_NoWt_sum'
         if '_out_10kpc' in quant:
             dName = '_out_r10kpc'
@@ -577,7 +580,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_%s_%s_%s' % (rtStr,selStr,wtStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = auxCat(sP, fields=[fieldName], searchExists=True)
         vals = ac[fieldName]
 
         if 'pratio_' in quant: label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (%s)' % selDesc
@@ -601,7 +604,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Ptot_%s_halo' % (selStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = auxCat(sP, fields=[fieldName], searchExists=True)
         vals = ac[fieldName]
 
         if not clean:

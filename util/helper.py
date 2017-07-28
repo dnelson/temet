@@ -120,6 +120,12 @@ def reportMemory():
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1024.0**3 # GB
 
+def numPartToChunkLoadSize(numPart):
+    """ For a given snapshot size, in terms of total particle count, decide on a good 
+    chunk loading size for a reasonable compute/memory balance. """
+    nChunks = np.max( [4, int(numPart**(1.0/3.0) / 10.0)] )
+    return nChunks
+
 # --- general algorithms ---
 
 def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10):
