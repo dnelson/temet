@@ -227,6 +227,14 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP, pSplit)
         r[field+'_attrs'] = attrs
 
+        # include subhaloIDs, partInds if present
+        for attrName in largeAttrNames:
+            if attrName in attrs:
+                if indRange is None:
+                    r[attrName] = attrs[attrName]
+                else:
+                    r[attrName] = attrs[attrName][indRange[0]:indRange[1]]
+
         # save new dataset (or overwrite existing)
         with h5py.File(savePath,'w') as f:
             f.create_dataset(field, data=r[field])
