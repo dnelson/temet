@@ -321,24 +321,22 @@ def _radialRestriction(sP, nSubsTot, rad):
 
     return radRestrictIn2D, radSqMin, radSqMax
 
-def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, weighting=None, scope='subfind'):
+def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, 
+                           ptRestriction=None, weighting=None, scope='subfind'):
     """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
         kpc, or as a string specifying a particular model for a variable cut radius). 
-        Restricted to subhalo particles only.
+        Restricted to subhalo particles only if scope=='subfind' (default), or FoF particles if scope=='fof'.
+        ptRestriction applies a further cut to which particles are included (None, 'sfrgt0', 'sfreq0').
     """
     assert op in ['sum','mean','max','ufunc']
     assert scope in ['subfind','fof']
     if op == 'func': assert ptProperty in ['Krot']
 
     # determine ptRestriction
-    ptRestriction = None
-
     if ptType == 'stars':
+        assert ptRestriction is None # otherwise we have a collision
         ptRestriction = 'real_stars'
-
-    if '_sfrgt0' in ptProperty:
-        ptProperty, ptRestriction = ptProperty.split("_") # takes the form ptProp_sfrgt0
 
     # config
     ptLoadType = sP.ptNum(ptType)
@@ -1745,7 +1743,8 @@ def wholeBoxCDDF(sP, pSplit, species):
 
     return rr, attrs
 
-def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=None, proj2D=None):
+def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=None, 
+                        proj2D=None, ptRestriction=None):
     """ Compute a radial profile (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type. If scope=='global', then all snapshot particles are used, 
         and we do the accumulation in a chunked snapshot load. Self/other halo terms are decided based 
@@ -1772,13 +1771,9 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     cenSatSelect = 'cen'
 
     # determine ptRestriction
-    ptRestriction = None
-
     if ptType == 'stars':
+        assert ptRestriction is None # otherwise we have a collision
         ptRestriction = 'real_stars'
-
-    if '_sfrgt0' in ptProperty:
-        ptProperty, ptRestriction = ptProperty.split("_") # takes the form ptProp_sfrgt0
 
     # config
     ptLoadType = sP.ptNum(ptType)
@@ -2156,7 +2151,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_puchwein10_Stars': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='p10'),
    'Subhalo_Mass_SFingGas' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass_sfrgt0',op='sum',rad=None),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestriction='sfrgt0'),
 
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
@@ -2169,6 +2164,19 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_OVIII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VIII mass',op='sum',rad=None),
      
+   'Subhalo_Mass_AllGas_Oxygen' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad=None),
+   'Subhalo_Mass_AllGas_Metal' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None),
+   'Subhalo_Mass_AllGas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None),
+   'Subhalo_Mass_SF0Gas_Oxygen' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad=None,ptRestriction='sfreq0'),
+   'Subhalo_Mass_SF0Gas_Metal' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestriction='sfreq0'),
+   'Subhalo_Mass_SF0Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestriction='sfreq0'),
+
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
    'Subhalo_XrayBolLum_2rhalfstars' : \
@@ -2221,9 +2229,9 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
 
    'Subhalo_Bmag_SFingGas_massWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_sfrgt0',op='mean',rad=None,weighting='mass'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='mass',ptRestriction='sfrgt0'),
    'Subhalo_Bmag_SFingGas_volWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag_sfrgt0',op='mean',rad=None,weighting='volume'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='volume',ptRestriction='sfrgt0'),
    'Subhalo_Bmag_2rhalfstars_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='2rhalfstars',weighting='mass'),
    'Subhalo_Bmag_2rhalfstars_volWt' : \

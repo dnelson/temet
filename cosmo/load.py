@@ -14,7 +14,7 @@ from os import mkdir
 
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
-from util.helper import iterable, logZeroNaN, curRepoVersion
+from util.helper import iterable, logZeroNaN, curRepoVersion, pSplitRange, numPartToChunkLoadSize
 
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
@@ -710,6 +710,74 @@ def groupCatOffsetListIntoSnap(sP):
 
     return r    
 
+def _ionLoadHelper(sP, partType, field, kwargs):
+    """ Helper to load (with particle level caching) ionization computed values for gas cells. """
+    element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
+    assert sP.isPartType(partType, 'gas')
+    assert prop == 'mass'
+
+    indRangeOrig = kwargs['indRange']
+
+    # caching
+    useCache = True
+
+    if useCache:
+        cacheFile = sP.derivPath + 'cached_%s_%s_%d.hdf5' % (partType,field.replace(" ","-"),sP.snap)
+        indRangeAll = [0, snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] ]
+
+        if not isfile(cacheFile):
+            # compute for indRange == None (whole snapshot) with a reasonable pSplit
+            nChunks = numPartToChunkLoadSize(indRangeAll[1])
+            print('Creating [%s] for [%d] particles in [%d] chunks.' % \
+                (cacheFile.split(sP.derivPath)[1], indRangeAll[1], nChunks) )
+
+            # create file and init ionization calculator
+            with h5py.File(cacheFile, 'w') as f:
+                dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
+
+            from cosmo.cloudy import cloudyIon
+            ion = cloudyIon(sP, el=element, redshiftInterp=True)
+
+            # process chunked
+            for i in range(nChunks):
+                indRangeLocal = pSplitRange(indRangeAll, nChunks, i)
+
+                # indRange is inclusive for snapshotSubset(), so skip saving the very last 
+                # element, which is included in the next return of pSplitRange()
+                indRangeLocal[1] -= 1
+                kwargs['indRange'] = indRangeLocal
+
+                if indRangeLocal[0] == indRangeLocal[1]:
+                    continue # we are done
+
+                masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
+                masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
+
+                with h5py.File(cacheFile) as f:
+                    f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = masses
+
+                print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))
+            print('Saved: [%s].' % cacheFile.split(sP.derivPath)[1])
+
+        # load from existing cache
+        print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
+
+        with h5py.File(cacheFile, 'r') as f:
+            assert f['field'].size == indRangeAll[1]
+            if indRangeOrig is None:
+                masses = f['field'][()]
+            else:
+                masses = f['field'][indRangeOrig[0] : indRangeOrig[1]]
+
+    else:
+        # old, don't create or use cache
+        from cosmo.cloudy import cloudyIon
+        ion = cloudyIon(sP, el=element, redshiftInterp=True)
+        masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
+        masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
+
+    return masses
+
 def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
                    mdi=None, sq=True, haloSubset=False):
@@ -901,32 +969,18 @@ def snapshotSubset(sP, partType, fields,
 
         # cloudy based ionic mass calculation, if field name has a space in it
         if " " in field:
-            element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
-            assert sP.isPartType(partType, 'gas')
-            assert prop == 'mass'
-
-            #import pdb; pdb.set_trace()
-            # implement caching
-
-            from cosmo.cloudy import cloudyIon
-            ion = cloudyIon(sP, el=element, redshiftInterp=True)
-            masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
-            masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
-
-            return masses
+            return _ionLoadHelper(sP, partType, field, kwargs)
 
         # metal mass (total or by species): convert fractions to masses
         if "metalmass" in field.lower():
             assert sP.isPartType(partType, 'gas') or sP.isPartType(partType, 'stars')
 
-            fracFieldName = "metal" # total metal mass
+            fracFieldName = "metal" # e.g. "metalmass" = total metal mass
             if "_" in field: # e.g. "metalmass_O" or "metalmass_Mg"
-                fracFieldName = "metals_" + split(field,"_")[1].capitalize()
+                fracFieldName = "metals_" + field.split("_")[1].capitalize()
 
             masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
             masses *= snapshotSubset(sP, partType, fracFieldName, **kwargs)
-
-            import pdb; pdb.set_trace()
 
             return masses
 
