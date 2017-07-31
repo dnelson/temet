@@ -714,7 +714,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     """ Helper to load (with particle level caching) ionization computed values for gas cells. """
     element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
     assert sP.isPartType(partType, 'gas')
-    assert prop == 'mass'
+    assert prop in ['mass','frac']
 
     indRangeOrig = kwargs['indRange']
 
@@ -750,11 +750,13 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 if indRangeLocal[0] == indRangeLocal[1]:
                     continue # we are done
 
-                masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
-                masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
+                # either ionization fractions, or total mass in the ion
+                values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
+                if prop == 'mass':
+                    values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
 
                 with h5py.File(cacheFile) as f:
-                    f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = masses
+                    f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values
 
                 print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))
             print('Saved: [%s].' % cacheFile.split(sP.derivPath)[1])
@@ -765,18 +767,20 @@ def _ionLoadHelper(sP, partType, field, kwargs):
         with h5py.File(cacheFile, 'r') as f:
             assert f['field'].size == indRangeAll[1]
             if indRangeOrig is None:
-                masses = f['field'][()]
+                values = f['field'][()]
             else:
-                masses = f['field'][indRangeOrig[0] : indRangeOrig[1]]
+                values = f['field'][indRangeOrig[0] : indRangeOrig[1]+1]
 
     else:
         # old, don't create or use cache
         from cosmo.cloudy import cloudyIon
         ion = cloudyIon(sP, el=element, redshiftInterp=True)
-        masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
-        masses *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
 
-    return masses
+        values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
+        if prop == 'mass':
+            values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+
+    return values
 
 def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
