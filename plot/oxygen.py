@@ -348,18 +348,25 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     fig.savefig(saveName)
     plt.close(fig)
 
-def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelect='cen', projDim='3D'):
+def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelect='cen', projDim='3D',
+                          radRelToVirRad=False, massDensity=False, haloMassBins=None, stellarMassBins=None,
+                          combine2Halo=False):
     """ Plot average/stacked radial number/mass density profiles for a series of halo or 
-    stellar mass bins. One or more ions, one or more runs, at a given redshift. """
+    stellar mass bins. One or more ions, one or more runs, at a given redshift. Specify one of 
+    haloMassBins or stellarMassBins. If radRelToVirRad, then [r/rvir] instead of [pkpc]. If 
+    massDensity, then [g/cm^3] instead of [1/cm^3]. If combine2Halo, then combine the other-halo and 
+    diffuse terms. """
     from tracer.tracerMC import match3
 
+    # config
     binSize = 0.2 # log mass
     percs = [10,90]
 
-    haloMassBins = [[11.4,11.6], [12.0,12.2]]
-    stellarMassBins = None
-    radRelToVirRad = False
-    massDensity = False
+    fieldTypes = ['GlobalFoF'] # Global, Subfind, GlobalFoF, SubfindGlobal
+
+    fieldNames = []
+    for fieldType in fieldTypes:
+        fieldNames.append( 'Subhalo_RadProfile%s_'+fieldType+'_%s_Mass' )
 
     # plot setup
     lw = 3.0
@@ -377,10 +384,10 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     if '3D' in projDim:
         # 3D mass/number density
         if massDensity:
-            ax.set_ylim([-20.0,5.0])
+            ax.set_ylim([-37.0,-30.0])
             ax.set_ylabel('Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-3}$ ]')
         else:
-            ax.set_ylim([-20.0, -5.0])
+            ax.set_ylim([-15.0, -7.0])
             ax.set_ylabel('Number Density $n_{\\rm oxygen}$ [ log cm$^{-3}$ ]')
     else:
         # 2D mass/column density
@@ -394,6 +401,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     # init
     ionData = cloudyIon(None)
     colors = []
+    rvirs = []
 
     if haloMassBins is not None:
         massField = 'mhalo_200_log'
@@ -411,45 +419,34 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
         masses = masses[cssInds]
 
-        if radRelToVirRad:
-            # load virial radii
-            rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
-            rad = rad[cssInds]
+        # load virial radii
+        rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
+        rad = rad[cssInds]
 
         for j, ion in enumerate(ions):
             print('[%s]: %s' % (ion,sP.simName))
 
             # load and apply CSS
-            fieldName = 'Subhalo_RadProfile%s_Global_%s_Mass' % (projDim,ion)
-
-            for iter in [0,1]:
+            for fieldName in fieldNames:
+                fieldName = fieldName % (projDim,ion)
                 ac = auxCat(sP, fields=[fieldName])
                 if ac[fieldName] is None: continue
-
-                # DEBUG
-                if iter == 1:
-                    print('debug acCheck')
-                    fieldNameCheck = fieldName.replace("Global","Subfind")
-                    acCheck = auxCat(sP, fields=[fieldNameCheck])
-                    assert np.array_equal(ac['subhaloIDs'], acCheck['subhaloIDs'])
-                    ac = acCheck # override
-                    fieldName = fieldNameCheck
-                    i += 1 # change linestyle
-                # END DEBUG
 
                 # crossmatch 'subhaloIDs' to cssInds
                 ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
                 ac[fieldName] = ac[fieldName][ac_inds,:]
                 masses_loc = masses[css_inds]
-                if radRelToVirRad: rad_loc = rad[css_inds]
+                rad_loc = rad[css_inds]
 
                 # unit conversions: mass per bin to (space mass density) or (space number density)
                 yy = ac[fieldName]
                 if ac[fieldName].ndim == 2:
                     yy /= ac[fieldName+'_attrs']['bin_volumes_code']
+                    nRadTypes = 1
                 else:
                     for radType in range(ac[fieldName].shape[2]):
                         yy[:,:,radType] /= ac[fieldName+'_attrs']['bin_volumes_code']
+                    nRadTypes = 4
 
                 if '3D' in projDim:
                     if massDensity:
@@ -470,55 +467,128 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                     print('[%d] %.1f - %.1f : %d' % (k,massBin[0],massBin[1],len(w[0])))
 
-                    # sum and calculate percentiles in each radial bin
-                    if yy.ndim == 3:
-                        radType = 0
-                        print('hardcoded plotting radType=0 (all)')
-                        yy_local = np.squeeze( yy[w,:,radType] )
-                    else:
-                        yy_local = np.squeeze( yy[w,:] )
-
-                    yy_mean = np.sum( yy_local, axis=0 ) / len(w[0])
-                    yp = np.nanpercentile( yy_local, percs, axis=0 )
-
-                    yy_mean = logZeroNaN(yy_mean)
-
                     # radial bins: normalize to rvir if requested
-                    if radRelToVirRad:
-                        avg_rvir_code = np.nanmedian( rad_loc[w] )
-                        rr = 10.0**ac[fieldName+'_attrs']['rad_bins_code'] / avg_rvir_code
+                    avg_rvir_code = np.nanmedian( rad_loc[w] )
+                    if i == 0 and j == 0: rvirs.append( avg_rvir_code )
+
+                    # sum and calculate percentiles in each radial bin
+                    for radType in range(nRadTypes):
+                        if yy.ndim == 3:
+                            yy_local = np.squeeze( yy[w,:,radType] )
+
+                            # combine diffuse into other-halo term, and skip separate line?
+                            if combine2Halo and radType == 2:
+                                yy_local += np.squeeze( yy[w,:,radType+1] )
+                            if combine2Halo and radType == 3:
+                                continue
+                        else:
+                            yy_local = np.squeeze( yy[w,:] )
+
+                        yy_mean = np.sum( yy_local, axis=0 ) / len(w[0])
+                        yp = np.nanpercentile( yy_local, percs, axis=0 )
+
+                        if radRelToVirRad:
+                            rr = 10.0**ac[fieldName+'_attrs']['rad_bins_code'] / avg_rvir_code
+                        else:
+                            rr = ac[fieldName+'_attrs']['rad_bins_pkpc']
+
+                        # for low res runs, combine the inner bins which are poorly sampled
+                        if sP.boxSize == 25000.0:
+                            nInner = int( 20 / (sP.res/256) )
+                            rInner = np.mean( rr[0:nInner] )
+
+                            yy_mean[yy_mean == 0.0] = np.nan
+                            yInner = np.nanmedian( yy_mean[0:nInner] )
+                            yy_mean = np.hstack( [yInner,yy_mean[nInner:]] )
+
+                            yp2 = yp[:,nInner-1:] # right size
+                            yp[yp == 0.0] = np.nan
+                            for dim in range(yp2.shape[0]):                                
+                                yp2[dim,0] = np.nanmedian( yp[dim,0:nInner] )
+                            yp = yp2
+
+                            rr = np.hstack( [rInner,rr[nInner:]] )
+
+                        # log both axes
+                        yy_mean = logZeroNaN(yy_mean)
+                        yp = logZeroNaN(yp)
                         rr = np.log10(rr)
-                        import pdb; pdb.set_trace()
-                    else:
-                        rr = ac[fieldName+'_attrs']['rad_bins_pkpc']
-                        rr = np.log10(rr)
 
-                    # determine color
-                    if i == 0 and iter == 0:
-                        c = ax._get_lines.prop_cycler.next()['color']
-                        colors.append(c)
-                    else:
-                        c = colors[j]
+                        # determine color
+                        if i == 0 and radType == 0:
+                            c = ax._get_lines.prop_cycler.next()['color']
+                            colors.append(c)
+                        else:
+                            c = colors[k]
 
-                    # plot median line
-                    label = '%1.f < mass < %.1f' % (massBin[0],massBin[1]) if i == 0 else ''
-                    ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[i], label=label)
+                        # plot median line
+                        label = '%.1f < $M_{\\rm halo}$ < %.1f' \
+                          % (massBin[0],massBin[1]) if (i == 0 and radType == 0) else ''
+                        ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[radType], label=label)
 
-                    if i == 0:
-                        # show percentile scatter only for first run
-                        ax.fill_between(rr, yp[0,:], yp[-1,:], color=c, interpolate=True, alpha=0.2)
+                        # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
+                        yrvir = ax.get_ylim()
+                        yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.3
+                        yrvir[1] -= 0.5 * k
+
+                        if not radRelToVirRad:
+                            xrvir = np.log10( [avg_rvir_code, avg_rvir_code] )
+                            textStr = 'R$_{\\rm vir}$'               
+                        else:
+                            rvir_300pkpc_ratio = avg_rvir_code / sP.units.physicalKpcToCodeLength(300.0)
+                            xrvir = np.log10( [rvir_300pkpc_ratio, rvir_300pkpc_ratio] )
+                            textStr = '300 pKpc'
+
+                        ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
+                        ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
+                                alpha=0.1, rotation=90)
+
+                        if i == 0 and radType == 0:
+                            # show percentile scatter only for first run
+                            ax.fill_between(rr, yp[0,:], yp[-1,:], color=c, interpolate=True, alpha=0.2)
+
+    # gray resolution band at small radius
+    resBandPKpc = 2.0 * sPs[0].gravSoft
+    yOff = 0.3
+    xOff = 0.02
+    textOpts = {'ha':'right', 'va':'bottom', 'rotation':90, 'color':'#555555', 'alpha':0.2}
+
+    yy = np.array(ax.get_ylim())
+    xx = np.array(ax.get_xlim())
+
+    if not radRelToVirRad:
+        ax.text(xx[1]-xOff,yy[0]+yOff,"%d Mpc" % (10.0**xx[1]/1000.0), **textOpts)
+
+        xx[1] = np.log10(resBandPKpc) # log [pkpc]
+        ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1)
+        ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
+    else:
+        minMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[0]) / 1000.0
+        maxMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[-1]) / 1000.0
+        ax.text(xx[1]-xOff, yy[0]+yOff, "%d Mpc $\sim$ %d Mpc" % (minMpc,maxMpc), **textOpts)
+
+        for k, massBin in enumerate(massBins):
+            xx[1] = np.log10(resBandPKpc / sP.units.codeLengthToKpc(rvirs[k]))
+            ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1+0.01*k)
+            if k == 0:
+                ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
 
     # legend
     sExtra = []
     lExtra = []
 
     if clean:
-        for i, sP in enumerate(sPs):
+        if len(sPs) > 1:
+            for i, sP in enumerate(sPs):
+                sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+                lExtra += ['%s' % sP.simName]
+        for i in range(nRadTypes - int(combine2Halo)):
+            names = ['total','self (1-halo)','other (2-halo)','diffuse']
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
-            lExtra += ['%s' % sP.simName]
+            lExtra += ['%s' % names[i]]
 
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
 
     fig.tight_layout()
     fig.savefig(saveName)
@@ -612,16 +682,25 @@ def paperPlots():
             cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=['OVI'], redshifts=[simRedshift])
 
     # figure 5: average radial profiles
-    if 0:
+    if 1:
         redshift = 0.0
         sPs = [simParams(res=256,run='tng',redshift=0.0,variant='0000')] # debug
         ions = ['OVI']
         cenSatSelect = 'cen'
-        projDim = '3D' # '2Dz'
+        haloMassBins = [[10.9,11.1], [11.4,11.6], [12.0,12.2]]
+        projSpecs = ['3D'] #,'2Dz_2Mpc']:
+        massDensity = False
+        radRelToVirRad = False
+        combine2Halo = True
 
         simNames = '_'.join([sP.simName for sP in sPs])
-        saveName = 'radprofiles_%s_%s_%s_z%02d_%s.pdf' % (projDim,'-'.join(ions),simNames,redshift,cenSatSelect)
-        stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, cenSatSelect='cen')
+
+        for projDim in projSpecs:    
+            saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
+              (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
+            stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
+                                  radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
+                                  haloMassBins=haloMassBins, combine2Halo=combine2Halo)
 
     # figure 6: 2pcf
     if 0:
