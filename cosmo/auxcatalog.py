@@ -1671,7 +1671,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
                                                                 assumeSolarAbunds=aSA)
             
             # determine projection depth fraction
-            boxWidthFrac = sP.boxSize / projDepthCode
+            boxWidthFrac = projDepthCode / sP.boxSize
 
             # project
             hsml = hsml.astype('float32')
