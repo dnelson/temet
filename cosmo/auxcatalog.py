@@ -513,9 +513,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
         if ptRestriction == 'real_stars':
             validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
-
         if ptRestriction == 'sfrgt0':
             validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
+        if ptRestriction == 'sfreq0':
+            validMask &= (particles['StarFormationRate'][i0:i1] == 0.0)
 
         wValid = np.where(validMask)
 
@@ -2010,9 +2011,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             prevMaskInd = i - 1
 
         # loop over subhalos
-        printFac = 100.0 if sP.res > 512 else 10.0
         for i, subhaloID in enumerate(subhaloIDsTodo):
-            if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
+            if i % np.max([1,int(nSubsDo/10.0)]) == 0 and i <= nSubsDo:
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
             # slice starting/ending indices for stars local to this subhalo/FoF
@@ -2046,7 +2046,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
                 # enforce depth restriction
                 if proj2Ddepth is not None:
-                    dist_projDir = particles['Coordinates'][i0:i1,p_inds[2]]
+                    dist_projDir = particles['Coordinates'][i0:i1,p_inds[2]].copy() # careful of view
                     dist_projDir -= gc['SubhaloPos'][subhaloID,p_inds[2]]
                     correctPeriodicDistVecs(dist_projDir, sP)
                     validMask &= (np.abs(dist_projDir) <= proj2D_halfDepth)
@@ -2059,9 +2059,10 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             if ptRestriction == 'real_stars':
                 validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
-
             if ptRestriction == 'sfrgt0':
                 validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
+            if ptRestriction == 'sfreq0':
+                validMask &= (particles['StarFormationRate'][i0:i1] == 0.0)
 
             wValid = np.where(validMask)
 
@@ -2080,14 +2081,17 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 r[i,:,0] += result
 
                 # (2) self-halo
-                ind_sub_0 = gc['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
-                ind_sub_1 = ind_sub_0 + gc['SubhaloLenType'][subhaloID,ptLoadType]
+                restoreSelf = False
+                if gc['SubhaloLenType'][subhaloID,ptLoadType]:
+                    is0 = gc['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
+                    is1 = is0 + gc['SubhaloLenType'][subhaloID,ptLoadType]
 
-                # update mask to specifically mark this halo (do not include in the other-halo term)
-                if ind_sub_0 >= 0 and ind_sub_1 < indRangeSize:
-                    ind_sub_0 = np.max([ind_sub_0, 0])
-                    ind_sub_1 = np.min([ind_sub_1, indRangeSize])
-                    subhalo_particle_mask[ind_sub_0:ind_sub_1] = 2
+                    # update mask to specifically mark this halo (do not include in the other-halo term)
+                    if not ((is0 < 0 and is1 <= 0) or (is0 >= indRangeSize and is1 > indRangeSize)):
+                        is0 = np.max([is0, 0])
+                        is1 = np.min([is1, indRangeSize])
+                        subhalo_particle_mask[is0:is1] = 2
+                        restoreSelf = True
 
                 # extract mask portion corresponding to current valid particle selection
                 loc_mask = subhalo_particle_mask[wValid]
@@ -2106,8 +2110,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                     result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
                     r[i,:,2] += result
 
-                if ind_sub_0 >= 0 and ind_sub_1 < indRangeSize:
-                    subhalo_particle_mask[ind_sub_0:ind_sub_1] = 1 # restore
+                if restoreSelf:
+                    subhalo_particle_mask[is0:is1] = 1 # restore
 
                 # (4) diffuse
                 w = np.where(loc_mask == 0)
@@ -2386,12 +2390,18 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='subfind_global'), 
    'Subhalo_RadProfile3D_Subfind_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='subfind'),
-   'Subhalo_RadProfile3D_Fof_OVI_Mass' : \
+   'Subhalo_RadProfile3D_FoF_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='fof'),
+
    'Subhalo_RadProfile2Dz_2Mpc_Global_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global',proj2D=[2,2000]),
+   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global_fof',proj2D=[2,2000]),
    'Subhalo_RadProfile2Dz_2Mpc_Subfind_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='subfind',proj2D=[2,2000]),
+   'Subhalo_RadProfile2Dz_2Mpc_FoF_OVI_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='fof',proj2D=[2,2000]),
+
    'Subhalo_RadProfile3D_Global_OVII_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII mass',op='sum',scope='global'),
    'Subhalo_RadProfile3D_Global_OVIII_Mass' : \

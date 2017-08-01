@@ -363,6 +363,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     percs = [10,90]
 
     fieldTypes = ['GlobalFoF'] # Global, Subfind, GlobalFoF, SubfindGlobal
+    ##if '2D' in projDim: fieldTypes = ['Subfind'] # debugging only
 
     fieldNames = []
     for fieldType in fieldTypes:
@@ -392,10 +393,10 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     else:
         # 2D mass/column density
         if massDensity:
-            ax.set_ylim([-20.0,5.0])
+            ax.set_ylim([-12.0,-6.0])
             ax.set_ylabel('Column Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-2}$ ]')
         else:
-            ax.set_ylim([5.0, 15.0])
+            ax.set_ylim([11.0, 16.0])
             ax.set_ylabel('Column Number Density $n_{\\rm oxygen}$ [ log cm$^{-2}$ ]')
 
     # init
@@ -440,32 +441,37 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                 # unit conversions: mass per bin to (space mass density) or (space number density)
                 yy = ac[fieldName]
+
+                if '3D' in projDim:
+                    normField = 'bin_volumes_code'
+                    unitConversionFunc = sP.units.codeDensToPhys
+                else:
+                    normField = 'bin_areas_code' # 2D
+                    unitConversionFunc = sP.units.codeColDensToPhys
+
                 if ac[fieldName].ndim == 2:
-                    yy /= ac[fieldName+'_attrs']['bin_volumes_code']
+                    yy /= ac[fieldName+'_attrs'][normField]
                     nRadTypes = 1
                 else:
                     for radType in range(ac[fieldName].shape[2]):
-                        yy[:,:,radType] /= ac[fieldName+'_attrs']['bin_volumes_code']
+                        yy[:,:,radType] /= ac[fieldName+'_attrs'][normField]
                     nRadTypes = 4
 
-                if '3D' in projDim:
-                    if massDensity:
-                        # from [code mass / code length^3] -> [g/cm^3]
-                        yy = sP.units.codeDensToPhys(yy, cgs=True)
-                    else:
-                        # from [code mass / code length^3] -> [ions/cm^3]
-                        assert ion[0] == 'O' # oxygen
-                        yy = sP.units.codeDensToPhys(yy, cgs=True, numDens=True) 
-                        yy /= ionData.atomicMass(ion[0]) # [H atoms/cm^3] to [ions/cm^3]
+                if massDensity:
+                    # from e.g. [code mass / code length^3] -> [g/cm^3]
+                    yy = unitConversionFunc(yy, cgs=True)
                 else:
-                    assert 0 # 2D todo
+                    # from e.g. [code mass / code length^3] -> [ions/cm^3]
+                    assert ion[0] == 'O' # oxygen
+                    yy = unitConversionFunc(yy, cgs=True, numDens=True) 
+                    yy /= ionData.atomicMass(ion[0]) # [H atoms/cm^3] to [ions/cm^3]
 
                 # loop over mass bins
                 for k, massBin in enumerate(massBins):
                     # select
                     w = np.where( (masses_loc >= massBin[0]) & (masses_loc < massBin[1]) )
 
-                    print('[%d] %.1f - %.1f : %d' % (k,massBin[0],massBin[1],len(w[0])))
+                    print(' %s [%d] %.1f - %.1f : %d' % (projDim,k,massBin[0],massBin[1],len(w[0])))
 
                     # radial bins: normalize to rvir if requested
                     avg_rvir_code = np.nanmedian( rad_loc[w] )
@@ -484,9 +490,6 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         else:
                             yy_local = np.squeeze( yy[w,:] )
 
-                        yy_mean = np.sum( yy_local, axis=0 ) / len(w[0])
-                        yp = np.nanpercentile( yy_local, percs, axis=0 )
-
                         if radRelToVirRad:
                             rr = 10.0**ac[fieldName+'_attrs']['rad_bins_code'] / avg_rvir_code
                         else:
@@ -497,22 +500,22 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                             nInner = int( 20 / (sP.res/256) )
                             rInner = np.mean( rr[0:nInner] )
 
-                            yy_mean[yy_mean == 0.0] = np.nan
-                            yInner = np.nanmedian( yy_mean[0:nInner] )
-                            yy_mean = np.hstack( [yInner,yy_mean[nInner:]] )
-
-                            yp2 = yp[:,nInner-1:] # right size
-                            yp[yp == 0.0] = np.nan
-                            for dim in range(yp2.shape[0]):                                
-                                yp2[dim,0] = np.nanmedian( yp[dim,0:nInner] )
-                            yp = yp2
-
+                            for dim in range(yy_local.shape[0]):
+                                yy_local[dim,nInner-1] = np.nanmedian( yy_local[dim,0:nInner] )
+                            yy_local = yy_local[:,nInner-1:]
                             rr = np.hstack( [rInner,rr[nInner:]] )
+
+                        yy_mean = np.sum( yy_local, axis=0 ) / len(w[0])
+                        yp = np.nanpercentile( yy_local, percs, axis=0 )
 
                         # log both axes
                         yy_mean = logZeroNaN(yy_mean)
                         yp = logZeroNaN(yp)
                         rr = np.log10(rr)
+
+                        if rr.size > sKn:
+                            yy_mean = savgol_filter(yy_mean,sKn,sKo)
+                            yp = savgol_filter(yp,sKn,sKo,axis=1) # P[10,90]
 
                         # determine color
                         if i == 0 and radType == 0:
@@ -528,8 +531,8 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                         # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
                         yrvir = ax.get_ylim()
-                        yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.3
-                        yrvir[1] -= 0.5 * k
+                        yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.25
+                        yrvir[1] -= 0.4 * k
 
                         if not radRelToVirRad:
                             xrvir = np.log10( [avg_rvir_code, avg_rvir_code] )
@@ -537,7 +540,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         else:
                             rvir_300pkpc_ratio = avg_rvir_code / sP.units.physicalKpcToCodeLength(300.0)
                             xrvir = np.log10( [rvir_300pkpc_ratio, rvir_300pkpc_ratio] )
-                            textStr = '300 pKpc'
+                            textStr = '300 kpc'
 
                         ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
                         ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
@@ -684,23 +687,24 @@ def paperPlots():
     # figure 5: average radial profiles
     if 1:
         redshift = 0.0
-        sPs = [simParams(res=256,run='tng',redshift=0.0,variant='0000')] # debug
+        sPs = [simParams(res=512,run='tng',redshift=0.0,variant='0000')] # debug
         ions = ['OVI']
         cenSatSelect = 'cen'
         haloMassBins = [[10.9,11.1], [11.4,11.6], [12.0,12.2]]
-        projSpecs = ['3D'] #,'2Dz_2Mpc']:
-        massDensity = False
-        radRelToVirRad = False
+        projSpecs = ['3D','2Dz_2Mpc']
         combine2Halo = True
 
         simNames = '_'.join([sP.simName for sP in sPs])
 
-        for projDim in projSpecs:    
-            saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
-              (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
-            stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
-                                  radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
-                                  haloMassBins=haloMassBins, combine2Halo=combine2Halo)
+        for massDensity in [True,False]:
+            for radRelToVirRad in [True,False]:
+                for projDim in projSpecs:
+
+                    saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
+                      (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
+                    stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
+                                          radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
+                                          haloMassBins=haloMassBins, combine2Halo=combine2Halo)
 
     # figure 6: 2pcf
     if 0:
