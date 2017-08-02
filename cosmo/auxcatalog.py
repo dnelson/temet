@@ -1668,7 +1668,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
                                                                     assumeSolarAbunds=True)
             else:
                 # default (use cached ion masses)
-                mMetal = cosmo.load.snapshot(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
+                mMetal = cosmo.load.snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
             
             # determine projection depth fraction
             boxWidthFrac = projDepthCode / sP.boxSize
@@ -1735,8 +1735,10 @@ def wholeBoxCDDF(sP, pSplit, species):
     acField = 'Box_Grid_n'+species
     ac = auxCat(sP, fields=[acField])
 
+    depthFrac = 10000.0/sP.boxSize if '_depth10' in species else 1.0
+
     # calculate
-    fN, n = calculateCDDF(ac[acField], binMinMax[0], binMinMax[1], binSize, sP)
+    fN, n = calculateCDDF(ac[acField], binMinMax[0], binMinMax[1], binSize, sP, depthFrac=depthFrac)
 
     rr = np.vstack( (n,fN) )
     attrs = {'Description' : desc.encode('ascii'), 
