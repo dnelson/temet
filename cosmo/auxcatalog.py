@@ -1639,7 +1639,6 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         # calculate smoothing size (V = 4/3*pi*h^3)
         vol = gas['Masses'] / gas['Density']
         hsml = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
-        #hsml = getHsmlForPartType(sP, 'gas', indRange=indRange) # duplicate loading
 
         if species in hDensSpecies:
             # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
@@ -1663,12 +1662,13 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
             ion = cloudyIon(sP, el=element, redshiftInterp=True)
 
-            aSA = False
             if len(species.split()) == 3 and species.split()[2] == 'solar':
-                aSA = True # assume solar abundances
-
-            mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
-                                                                assumeSolarAbunds=aSA)
+                # assume solar abundances
+                mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
+                                                                    assumeSolarAbunds=True)
+            else:
+                # default (use cached ion masses)
+                mMetal = cosmo.load.snapshot(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
             
             # determine projection depth fraction
             boxWidthFrac = projDepthCode / sP.boxSize
