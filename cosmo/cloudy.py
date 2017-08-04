@@ -776,7 +776,7 @@ def plotUVB():
     fig.savefig('uvb.pdf')
     plt.close(fig)
 
-def plotIonAbundances(res='lg'):
+def plotIonAbundances(res='lg', elements=['Oxygen']):
     """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
@@ -790,7 +790,6 @@ def plotIonAbundances(res='lg'):
     ct = 'jet'
 
     # data config and load full table
-    elements = ['Silicon']
     redshift = 0.0
     gridSize = 3 # 3x3
 
