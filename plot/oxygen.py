@@ -14,7 +14,7 @@ from os.path import isfile
 
 from util import simParams
 from plot.config import *
-from util.helper import running_median, logZeroNaN, iterable
+from util.helper import running_median, logZeroNaN, iterable, contourf
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.cloudy import cloudyIon
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
@@ -701,6 +701,61 @@ def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0
     fig.savefig(saveName)
     plt.close(fig)
 
+def oxygenAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
+    """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 
+    Metal is metallicity in [log Solar]. """
+    
+    # visual config
+    abund_range = [-6.0,0.0]
+    nContours = 30
+    ctName = 'plasma' #'CMRmap'
+
+    # plot setup
+    sizefac = 0.7
+    fig = plt.figure(figsize=[figsize[0]*sizefac*(len(ionNums)*0.9), figsize[1]*sizefac])
+    
+    # load
+    ion = cloudyIon(sP=simParams(res=455,run='tng'),res='lg',redshiftInterp=True)
+
+    for i, ionNum in enumerate(ionNums):
+        # panel setup
+        ax = fig.add_subplot(1,len(ionNums),i+1)
+        ax.set_xlim(ion.range['temp'])
+        ax.set_ylim(ion.range['dens'])
+        ax.set_xlabel('Temperature [ log K ]')
+        ax.set_ylabel('Density [ log cm$^{-3}$ ]') # hydrogen number density
+
+        # make 2D array from slices
+        x = ion.grid['temp']
+        y = ion.grid['dens']
+        XX, YY = np.meshgrid(x, y, indexing='ij')
+
+        z = np.zeros( (x.size, y.size), dtype='float32' )
+        for j, dens in enumerate(y):
+            _, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
+            z[:,j] = ionFrac
+
+        z = np.clip(z, abund_range[0], abund_range[1]-0.1)
+
+        # contour plot
+        V = np.linspace(abund_range[0], abund_range[1], nContours)
+        c = contourf(XX, YY, z, V, cmap=ctName) #vmin=abund_range[0], vmax=abund_range[1], 
+
+        labelText = ion.elementNameToSymbol(element) + ion.numToRoman(ionNum)
+        ax.text(x[0]+0.2, y[-1]-0.4,labelText, va='top', ha='left', color='white', fontsize='40')
+
+    # colorbar on last panel only
+    fig.tight_layout()
+
+    fig.subplots_adjust(right=0.93)
+    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.821])
+    cb = fig.colorbar(c, cax=cbar_ax)
+    cb.ax.set_ylabel('Abundance Fraction [ log ]')
+    cb.set_ticks( np.linspace(abund_range[0],abund_range[1],int(np.abs(abund_range[0]))+1) ) 
+
+    fig.savefig(saveName)
+    plt.close(fig)
+
 # -------------------------------------------------------------------------------------------------
 
 def paperPlots():
@@ -813,7 +868,7 @@ def paperPlots():
                                           haloMassBins=haloMassBins, combine2Halo=combine2Halo)
 
     # figure 6: 2pcf
-    if 1:
+    if 0:
         redshift = 0.0
         sPs = [TNG100, TNG300]
         sPs = [simParams(res=128,run='tng',redshift=0.0,variant='0000')] # debug
@@ -865,6 +920,18 @@ def paperPlots():
     # figure 10: mock COS-Halos samples, N_OVI vs impact parameter and vs sSFR bimodality
     if 0:
         pass
+
+    # figure (appendix?): ionization data for OVI, OVII, and OVIII
+    if 1:
+        element = 'Oxygen'
+        ionNums = [6,7,8]
+        redshift = 0.0
+        metal = -1.0 # log solar
+
+        saveName = 'abundance_fractions_%s_%s_z%d_Z%d.pdf' % \
+          (element, '-'.join([str(i) for i in ionNums]),redshift*100,10**metal * 1000)
+
+        oxygenAbundFracs2DHistos(saveName, element=element, ionNums=ionNums, redshift=redshift, metal=metal)
 
     # ------------ exploration ------------
 
@@ -967,3 +1034,8 @@ def paperPlots():
                 quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
                 quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
                 pdf.close()
+
+    # exploration: cloudy ionization table
+    if 0:
+        from cosmo.cloudy import plotIonAbundances
+        plotIonAbundances(elements=['Oxygen'])
