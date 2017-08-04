@@ -68,10 +68,11 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
+    axesInMpc   = False       # if showing axes, label with 'Mpc' instead of 'ckpc/h'
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel)
     labelSim    = False       # label simulation name (lower right corner) of panel
-    labelCustom = False         # custom label string to include
+    labelCustom = False       # custom label string to include
     plotHalos   = 20          # plot virial circles for the N most massive halos in the box
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
@@ -144,10 +145,11 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
+    axesInMpc   = False       # if showing axes, label with 'Mpc' instead of 'ckpc/h'
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel)
     labelSim    = False       # label simulation name (lower right corner) of panel
-    labelCustom = False         # custom label string to include
+    labelCustom = False       # custom label string to include
     plotHalos   = 0           # plot virial circles for the N most massive halos in the box
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center

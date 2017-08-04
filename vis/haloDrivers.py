@@ -15,7 +15,8 @@ from plot.general import simSubhaloQuantity
 from util.helper import pSplit, logZeroNaN
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.mergertree import loadMPB
-from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns
+from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns, \
+                       cenSatSubhaloIndices
 from util import simParams
 
 def oneHaloSingleField(conf=0, shID=0):
@@ -464,9 +465,9 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None,
     and then use the SubhaloMatching catalog to pick the matched halos in this run. """
     run       = 'tng'
     res       = 1024
-    redshift  = 3.0
+    redshift  = 0.0
     #variant   = 4503 #0010 #0000
-    massBin   = [12.0, 14.0]
+    massBin   = [11.8, 14.0]
     nGalaxies = 15
     selType   = 'random'
 
@@ -1050,8 +1051,9 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def vogelsberger_redBlue42(run='illustris', sample='blue'):
-    """ Recreate the 'Vogelsberger+ (2014) sample of 41 red/blue galaxies', either for 
-    Illustris-1 or cross-matched in TNG100-1. """
+    """ Recreate the 'Vogelsberger+ (2014) sample of 42 red/blue galaxies', either for 
+    Illustris-1 or cross-matched in TNG100-1. Or, if sample=='guinevere', same for the 
+    Milky Way mass sample of Kauffmann+ (2016). """
     if sample == 'red':
         illustris_ids = [123773,178998,215567,234535,251933,267605,
                          299439,310062,326049,344358,359184,378583,
@@ -1068,6 +1070,21 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
                          375386,385795,386720,394285,283832,303990,
                          313541,326247,332891,339311,344821,352713,
                          365316,374140,376363,386304,390653,394942]
+    if sample == 'guinevere':
+        illustris_ids = [127229,129772,140596,175439,185232,203460,245224,248848,287571,293191,
+                         315318,344090,345729,348898,349346,349485,353174,355725,357194,358170,
+                         359796,364332,368113,371865,371954,372133,408152, 73669, 86191,140594,
+                         152865,175438,198180,200655,214814,224437,257809,291078,302606,308748,
+                         330182,335588,339047,340308,340843,346523,351433,354318,354955,356087,
+                         356527,360773,361188,362406,366108,368309,376968,383095,392952,412138,
+                         358362,359699,360972,362079,363972,366624,369080,369185,371429,373348,
+                         373841,373936,374803,377918,380950,383237,384490,389428,389986,390393,
+                         390653,391958,392904,393815,395537,397847,399779,403411,408163,409443,
+                         413363,227855,255101,267947,268841,317208,326247,348189,356427,360070,
+                         362540,364905,368528,368955,374140,375386,375705,377719,379309,380301,
+                         380894,384734,384785,385878,385916,389570,390300,394067,394757,398436,
+                         398470,330939,348302,357902,359699,395537,408877,409564,413363,413821,
+                         418247,424081,424496,430099,432733,458329]
 
     # config
     res         = 1820 
@@ -1089,27 +1106,49 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
     partField   = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
     hsmlFac     = 0.5
     nRowsFig    = 7 # 6 columns, 7 rows
+    matchMethod = 'PositionalAll' # Lagrange
 
     # which subhalos?
     sP = simParams(res=res, run=run, redshift=redshift)
+    sP_illustris = simParams(res=res, run='illustris', redshift=redshift)
 
     if run == 'illustris':
         subhalo_ids = illustris_ids
     else:
-        # cross-match and get TNG subhalo IDs
-        sP_illustris = simParams(res=res, run='illustris', redshift=redshift)
-        subhalo_ids = crossMatchSubhalosBetweenRuns(sP_illustris, sP, illustris_ids, method='Positional')
+        # cross-match and get TNG subhalo IDs        
+        subhalo_ids = crossMatchSubhalosBetweenRuns(sP_illustris, sP, illustris_ids, method=matchMethod)
+
+    if sample == 'guinevere':
+        # verify which are centrals
+        nRowsFig = 8
+        pri_inds = cenSatSubhaloIndices(sP_illustris, cenSatSelect='cen')
+
+        from tracer.tracerMC import match3
+        i1, i2 = match3(np.array(illustris_ids,dtype='int32'), pri_inds)
+        cen_flags = np.zeros( len(illustris_ids), dtype='int16' )
+        cen_flags[i1] = 1
+
+        if run != 'illustris':
+            # write out text-file with matches
+            header = '# Illustris-1 z=0 subhalo_id, %s z=0 subhalo_id, is_central_in_illustris' % run
+            np.savetxt('out.txt', np.vstack([illustris_ids,subhalo_ids,cen_flags]).T, 
+                       header=header, fmt='%d', delimiter=", ")
 
     # create panels, one per galaxy
     panels = []
-    for i, shID in enumerate(subhalo_ids):                           
-        panels.append( {'hInd':shID, 'labelCustom':['ID %d' % shID]} )
+    for i, shID in enumerate(subhalo_ids):
+
+        cenSatStr = ''
+        if sample == 'guinevere' and run == 'illustris':
+            cenSatStr = ' (SAT)' if cen_flags[i] == 0 else ''
+
+        panels.append( {'hInd':shID, 'labelCustom':['ID %d%s' % (shID,cenSatStr)]} )
 
     class plotConfig:
         plotStyle    = 'edged'
-        rasterPx     = 1200
+        rasterPx     = 600
         colorbars    = False
         nRows        = nRowsFig
-        saveFilename = './sample42_%s_%s.pdf' % (sample,run)
+        saveFilename = './sampleMatched_%s_%s_%s.pdf' % (sample,run,matchMethod)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

@@ -204,6 +204,10 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
     else:
         assert all(v is not None for v in [gas,stars,rHalf,shPos])
 
+    if not gas['count'] and not stars['count']:
+        print('Warning! momentOfInteriaTensor() no stars or gas in subhalo...')
+        return np.identity(3)
+
     useStars = True
 
     if gas['count'] and len(gas['Masses']) > 1:
@@ -638,8 +642,13 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         element = partField.split()[0]
         ionNum  = partField.split()[1]
 
-        ion = cloudyIon(sP, el=element, redshiftInterp=True)
-        mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
+        if 1:
+            # use cache
+            mass = snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
+        else:
+            # previous (always calculate on the fly)
+            ion = cloudyIon(sP, el=element, redshiftInterp=True)
+            mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
@@ -1252,46 +1261,79 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
+    def _addCirclesHelper(p, ax, pos, radii, numToAdd):
+        """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
+        countAdded = 0
+        gcInd = 0
+
+        while countAdded < numToAdd:
+            xyzPos = pos[gcInd,:][ [p['axes'][0], p['axes'][1], 3-p['axes'][0]-p['axes'][1]] ]
+            xyzDist = xyzPos - p['boxCenter']
+            correctPeriodicDistVecs(xyzDist, p['sP'])
+            xyzDistAbs = np.abs(xyzDist)
+
+            # in bounds?
+            if ( (xyzDistAbs[0] <= p['boxSizeImg'][0]/2) & \
+                 (xyzDistAbs[1] <= p['boxSizeImg'][1]/2) & \
+                 (xyzDistAbs[2] <= p['boxSizeImg'][2]/2) ):
+                # draw and count
+                countAdded += 1
+
+                xPos = pos[gcInd,p['axes'][0]]
+                yPos = pos[gcInd,p['axes'][1]]
+                rad  = radii[gcInd] * 1.0
+
+                # our plot coordinate system is true simulation coordinates, except without 
+                # any periodicity, e.g. relative to boxCenter but restored (negatives or >boxSize ok)
+                if xPos > p['extent'][1]: xPos -= p['boxSizeImg'][0]
+                if yPos > p['extent'][3]: yPos -= p['boxSizeImg'][1]
+                if xPos < p['extent'][0]: xPos += p['boxSizeImg'][0]
+                if yPos < p['extent'][2]: yPos += p['boxSizeImg'][1]
+
+                if 'relCoords' in p and p['relCoords']:
+                    xPos = xyzDist[0]
+                    yPos = xyzDist[1]
+
+                if p['axesInMpc']:
+                    xPos = p['sP'].units.codeLengthToMpc(xPos)
+                    yPos = p['sP'].units.codeLengthToMpc(yPos)
+                    rad  = p['sP'].units.codeLengthToMpc(rad)
+
+                c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+                ax.add_artist(c)
+
+            gcInd += 1
+            if gcInd >= radii.size:
+                print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,numToAdd))
+                break
+
     if 'plotHalos' in p and p['plotHalos'] > 0:
         # plotting N most massive halos in visible area
         h = groupCatHeader(p['sP'])
 
         if h['Ngroups_Total'] > 0:
-            gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'], skipIDs=True)
+            gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'])['halos']
 
-            countAdded = 0
-            gcInd = 0
-            while countAdded < p['plotHalos']:
-                xyzPos = gc['halos']['GroupPos'][gcInd,:]
-                xyzDist = xyzPos - p['boxCenter']
-                correctPeriodicDistVecs(xyzDist, p['sP'])
-                xyzDist = np.abs(xyzDist)
+            _addCirclesHelper(p, ax, gc['GroupPos'], gc['Group_R_Crit200'], p['plotHalos'])
 
-                # in bounds?
-                if ( (xyzDist[0] <= p['boxSizeImg'][0]/2) & \
-                     (xyzDist[1] <= p['boxSizeImg'][1]/2) & \
-                     (xyzDist[2] <= p['boxSizeImg'][2]/2) ):
-                    # draw and count
-                    countAdded += 1
+    if 'plotSubhalos' in p and p['plotSubhalos'] > 0:
+        # plotting N most massive child subhalos in visible area
+        h = groupCatHeader(p['sP'])
 
-                    xPos = gc['halos']['GroupPos'][gcInd,p['axes'][0]]
-                    yPos = gc['halos']['GroupPos'][gcInd,p['axes'][1]]
-                    rad  = gc['halos']['Group_R_Crit200'][gcInd] * 1.0
+        if h['Ngroups_Total'] > 0:
+            haloInd = groupCatSingle(p['sP'], subhaloID=p['hInd'])['SubhaloGrNr']
+            halo = groupCatSingle(p['sP'], haloID=haloInd)
 
-                    # our plot coordinate system is true simulation coordinates, except without 
-                    # any periodicity, e.g. relative to boxCenter but restored (negatives or >boxSize ok)
-                    if xPos > p['extent'][1]: xPos -= p['boxSizeImg'][0]
-                    if yPos > p['extent'][3]: yPos -= p['boxSizeImg'][1]
-                    if xPos < p['extent'][0]: xPos += p['boxSizeImg'][0]
-                    if yPos < p['extent'][2]: yPos += p['boxSizeImg'][1]
+            if halo['GroupFirstSub'] != p['hInd']:
+                print('Warning: Rendering subhalo circles around a non-central subhalo!')
+        
+            subInds = np.arange( halo['GroupFirstSub']+1, halo['GroupFirstSub']+halo['GroupNsubs'] )
 
-                    c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
-                    ax.add_artist(c)
+            gc = groupCat(p['sP'], fieldsSubhalos=['SubhaloPos','SubhaloHalfmassRad'])['subhalos']
+            gc['SubhaloPos'] = gc['SubhaloPos'][subInds,:]
+            gc['SubhaloHalfmassRad'] = gc['SubhaloHalfmassRad'][subInds]
 
-                gcInd += 1
-                if gcInd >= h['Ngroups_Total']:
-                    print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,p['plotHalos']))
-                    break
+            _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
 
     if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius
@@ -1302,8 +1344,28 @@ def addBoxMarkers(p, conf, ax):
             xPos = 0.0
             yPos = 0.0
 
+        if p['axesInMpc']:
+            xPos = p['sP'].units.codeLengthToMpc(xPos)
+            yPos = p['sP'].units.codeLengthToMpc(yPos)
+
         for rVirFrac in p['rVirFracs']:
-            rad  = rVirFrac * p['haloVirRad']
+            rad = rVirFrac
+
+            if p['fracsType'] == 'rVirial':
+                rad *= p['haloVirRad']
+            if p['fracsType'] == 'rHalfMass':
+                rad *= p['galHalfMass']
+            if p['fracsType'] == 'rHalfMassStars':
+                rad *= p['galHalfMassStars']
+                if rad == 0.0:
+                    print('Warning: Drawing frac [%.1f %s] is zero, use halfmass.' % (rVirFrac,p['fracsType']))
+                    rad = rVirFrac * p['galHalfMass']
+            if p['fracsType'] == 'codeUnits':
+                rad *= 1.0
+            if p['fracsType'] == 'pkpc':
+                rad = p['sP'].units.physicalKpcToCodeLength(rad)
+
+            if p['axesInMpc']: rad = p['sP'].units.codeLengthToMpc(rad)
 
             c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
             ax.add_artist(c)
@@ -1359,6 +1421,9 @@ def addBoxMarkers(p, conf, ax):
         x1 = x0 + (scaleBarLen * p['sP'].HubbleParam) # actually plot size in code units (e.g. ckpc/h)
         yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx)
         yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(yt_frac * 960.0/conf.rasterPx)
+
+        if p['axesInMpc']:
+            print('Likely need a coordinate fix here.')
 
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
         ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
@@ -1644,8 +1709,10 @@ def renderMultiPanel(panels, conf):
             sP = p['sP']
             idStr = ' (id=' + str(sP.hInd) + ')' if not sP.isZoom and sP.hInd is not None else ''
             ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
-            ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' [ ckpc/h ]')
-            ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' [ ckpc/h ]')
+
+            axStr = '[ ckpc/h ]' if not p['axesInMpc'] else '[ Mpc ]'
+            ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' ' + axStr)
+            ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' ' + axStr)
 
             setAxisColors(ax, color2)
 
@@ -1659,8 +1726,8 @@ def renderMultiPanel(panels, conf):
                 new_1 = np.transpose( np.dot(p['rotMatrix'], old_1) )
                 new_2 = np.transpose( np.dot(p['rotMatrix'], old_2) )
 
-                ax.set_xlabel( 'rotated: %4.2fx %4.2fy %4.2fz  [ ckpc/h ]' % (new_1[0], new_1[1], new_1[2]))
-                ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz  [ ckpc/h ]' % (new_2[0], new_2[1], new_2[2]))
+                ax.set_xlabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_1[0], new_1[1], new_1[2], axStr))
+                ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_2[0], new_2[1], new_2[2], axStr))
 
             # color mapping and place image
             vMM = p['valMinMax'] if 'valMinMax' in p else None
@@ -1674,7 +1741,9 @@ def renderMultiPanel(panels, conf):
             #cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
             #grid = np.ma.array(grid, mask=np.isnan(grid))
 
-            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=1.0)
+            pExtent = p['extent'] if not p['axesInMpc'] else p['sP'].units.codeLengthToMpc(p['extent'])
+            plt.imshow(grid, extent=pExtent, cmap=cmap, aspect=1.0)
+
             ax.autoscale(False)
             if 'valMinMax' in p and cmap is not None:
                 plt.clim( p['valMinMax'] )

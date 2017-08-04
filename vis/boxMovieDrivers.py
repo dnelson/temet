@@ -147,3 +147,49 @@ def Illustris_1_4subboxes_gasdens_movie(curTask=0, numTasks=1):
 
     renderBox(panels, plotConfig, locals())
     #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def planetarium_TychoBrahe_frames(curTask=0, numTasks=1, conf=0):
+    """ Render a movie comparing Illustris-1 and L75n1820TNG subbox0, one quantity side by side. """
+    panels = []
+
+    run        = 'tng' # 'illustris'
+    variant    = 'subbox0'
+    zoomFac    = 0.99
+    res        = 1820
+    method     = 'sphMap'
+    nPixels    = 1920
+    labelSim   = True
+    axes       = [0,1] # x,y
+    labelScale = False
+    labelZ     = False
+    labelSim   = False
+
+    if conf == 0:
+        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
+    if conf == 1:
+        panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+    if conf == 2:
+        panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
+    if conf == 3:
+        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
+    if conf == 4:
+        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    if conf == 5:
+        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+    if conf == 6:
+        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1000]} )
+    if conf == 7:
+        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
+
+    class plotConfig:
+        savePath  = '/home/extdylan/data2/frames/tycho/'
+        plotStyle = 'edged_black'
+        rasterPx  = 1920
+        colorbars = False
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
+        maxNSnaps = 2700 # 90 seconds at 30 fps
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)

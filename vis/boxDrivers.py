@@ -10,9 +10,11 @@ from datetime import datetime
 
 from vis.common import savePathDefault
 from vis.box import renderBox, renderBoxFrames
+from vis.halo import renderSingleHalo
 from util.helper import pSplit
 from util import simParams
-from cosmo.load import groupCatSingle
+from cosmo.load import groupCatSingle, groupCat
+from cosmo.util import periodicDists
 
 def realizations(conf=1):
     """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
@@ -198,7 +200,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     renderBox(panels, plotConfig, locals())
 
 def TNG_colorFlagshipBoxImage(part=0):
-    """ Create the parts of the fullbox demonstrate image for the galaxy colors L75/L205 flagship paper. """
+    """ Create the parts of the fullbox demonstration image for the galaxy colors L75/L205 flagship paper. """
     panels = []
 
     run        = 'tng'
@@ -254,6 +256,116 @@ def TNG_colorFlagshipBoxImage(part=0):
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
 
     renderBox(panels, plotConfig, locals())
+
+def TNG_oxygenPaperImages(part=0):
+    """ Create the parts of the fullbox demonstration image for the TNG oxygen paper. """
+    panels = []
+
+    run        = 'tng'
+    redshift   = 0.0
+    res        = 1820
+    nPixels    = 2000
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    axesInMpc  = True
+    hsmlFac    = 2.5
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    if part == 0:
+        # part 0: TNG100 full box OVII
+        _, _, _, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
+        sliceFac  = (1.0/nSlicesTot)
+
+        # slice centering
+        relCenPos = None
+        
+        saveStr = '_fof-%d_%dof%d' % (centerHaloID,curSlice,nSlicesTot)
+        absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+        absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+
+        plotHalos = 100
+        panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
+
+    if part == 1:
+        # part 1: cluster halo scale OVIII (halo #22)
+        haloID = 22
+        shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+
+        rVirFracs    = [1.0]
+        size         = 3.5
+        sizeType     = 'rVirial'
+        nPixels      = [nPixels,nPixels] #[int(nPixels/2),int(nPixels/2)]
+        relCoords    = True
+        axes         = [1,2]
+        plotSubhalos = 50
+        method       = 'sphMap_global'
+
+        saveStr = '_fof-%d_shid-%d_size-%.1f_%s' % (haloID,shID,size,sizeType)
+
+        panels.append( {'partType':'gas', 'partField':'O VIII', 'hInd':shID, 'valMinMax':[13.5, 15.8]} )
+
+    if part == 2:
+        # part 2: galaxy halo scale OVI
+        haloID = 22
+        halo = groupCatSingle(sP, haloID=haloID)
+        
+        nPixels   = [int(nPixels/2),int(nPixels/2)]
+        relCoords = True
+        axes      = [1,2]
+        method    = 'sphMap_global'
+
+        # (A) pick a satellite of this cluster
+        haloSubInds = np.arange( halo['GroupFirstSub'], halo['GroupFirstSub']+halo['GroupNsubs'] )
+        ##subMstar = groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log'])[haloSubInds]
+        ##subRadRvir = groupCat(sP, fieldsSubhalos=['rdist_rvir'])[haloSubInds]
+        #subMstar:   [ 11.852, 10.90, 10.69, 10.31, 10.41, 10.74, 10.65, 10.41, 9.75, 10.34]
+        #subRadRvir: [ 0.0,    1.53,  2.16,  1.91,  0.73,  0.17,  0.67,  1.23,  1.67,  0.79]
+        #shID = haloSubInds[1]
+
+        #rVirFracs = [1.0,2.0,5.0]
+        #fracsType = 'rHalfMass'
+        #size      = 10.0
+        #sizeType  = 'rHalfMass'
+
+        # (B) pick a central (optionally nearby to this cluster?)
+        #subPos = groupCat(sP, fieldsSubhalos=['SubhaloPos'], sq=True)
+        #subHaloMass = groupCat(sP, fieldsSubhalos=['mhalo_200_log'], sq=True)
+        #dist = periodicDists( subPos[halo['GroupFirstSub'],:], subPos, sP )
+        #w = np.where( (subHaloMass > 11.9) & (subHaloMass < 12.6) & (dist < (size+1.0)*halo['Group_R_Crit200']) )
+        #w = np.where( (subHaloMass > 12.4) & (subHaloMass < 12.5) )
+        shID = [376544,378745,380751,383723,389704,389917,393336,394241,395882,396851,397568,400694][9]
+
+        sh = groupCatSingle(sP, subhaloID=shID)
+        halo = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
+        mstar = sP.units.codeMassToLogMsun(sh['SubhaloMassType'][4])
+        mhalo = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])
+        print(mstar,mhalo)
+
+        rVirFracs = [1.0]
+        size      = 3.0
+        sizeType  = 'rVirial'
+        axes      = [0,2]
+
+        saveStr = '_shid-%d_size-%.1f_%s' % (shID,size,sizeType)
+
+        panels.append( {'partType':'gas', 'partField':'O VI', 'hInd':shID, 'valMinMax':[12.8, 15.4]} )
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = 1800 if part == 0 else 900
+        colorbars  = True
+
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.pdf' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],saveStr)
+
+    if part == 0:
+        renderBox(panels, plotConfig, locals())
+    else:
+        renderSingleHalo(panels, plotConfig, locals())
 
 def TNG_explorerImageSegments(conf=0, taskNum=0, retInfo=False):
     """ Construct image segments which are then split into the pyramids for the TNG explorer 2d. """
