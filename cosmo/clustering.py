@@ -8,16 +8,18 @@ from builtins import *
 import numpy as np
 import h5py
 import time
+import glob
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from scipy.interpolate import interp1d
 from collections import OrderedDict
 
-from cosmo.load import groupCat, groupCatHeader, auxCat
+from cosmo.load import groupCat, groupCatHeader, auxCat, snapshotSubset
 from plot.general import simSubhaloQuantity
 from cosmo.util import cenSatSubhaloIndices, periodicDistsSq
 from cosmo.color import loadSimGalColors
 from util.tpcf import tpcf, quantReductionInRad
+from util.helper import pSplitRange
 
 def _covar_matrix(x_avg, x_subs):
     """ Compute covariance matrix from a jackknife set of samplings x_subs. Slightly different 
@@ -122,7 +124,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
         (nPts,calc_time_sec,calc_time_sec/60.0,calc_time_sec/3600.0,calc_time_sec/3600.0/24.0))
 
     # calculate two-point correlation function
-    xi = tpcf(pos, radialBins, sP.boxSize)
+    xi, _, _ = tpcf(pos, radialBins, sP.boxSize)
 
     # if requested, calculate NSub^3 additional tpcf for jackknife error estimation
     xi_err = None
@@ -156,7 +158,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
 
                     # calculcate and save tpcf
                     pos_loc = np.squeeze(pos[w,:])
-                    xi_sub[:,count] = tpcf(pos_loc, radialBins, sP.boxSize)
+                    xi_sub[:,count], _, _ = tpcf(pos_loc, radialBins, sP.boxSize)
                     count += 1
 
         # calculate covariance matrix
@@ -172,6 +174,134 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
     print('Saved: [%s]' % saveFilename.split(savePath)[1])
 
     return rad, xi, xi_err, covar
+
+def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
+    """ Calculate the [weighted] two-point auto-correlation function in a periodic cube geometry. 
+    Instead of per-subhalo/galaxy, this is a per-particle based calculation. Given the 
+    prohibitive expense, we do this with a Monte Carlo sampling of the first term of the 
+    particle-particle tpcf, saving intermediate results which are then accumulated as available.
+    If pSplit==None and no partial files exist, full/single compute and return.
+    If pSplit!=None and the requested partial file exists, concatenate all and return intermediate result.
+    if pSplit!=None and the requested partial file does not exist, then run a partial computation and save."""
+
+    minRad = 2.0 # ckpc/h
+    maxRad = 20000.0 # ckpc/h
+    numRadBins = 40
+
+    savePath = sP.derivPath + "/clustering/"
+    saveStr = '%s_%s_rad-%d-%d-%d' % (partType,partField.replace(" ","-"),numRadBins,minRad,maxRad)
+    if pSplit is not None:
+        saveStr += '_split-%d-of-%d' % (pSplit[0],pSplit[1])
+    saveFilename = savePath + "tpcfp_%d_%s.hdf5" % (sP.snap,saveStr)
+
+    if not isdir(savePath):
+        mkdir(savePath)
+
+    # check existence of single (non-pSplit) computation
+    if isfile(saveFilename) and pSplit is None:
+        with h5py.File(saveFilename,'r') as f:
+            rad = f['rad'][()]
+            xi  = f['xi'][()]
+            covar = f['covar'][()] if 'covar' in f else None
+            xi_err = f['xi_err'][()] if 'xi_err' in f else None
+
+        return rad, xi, xi_err, covar
+
+    # check if there are any pSplit* files, if so concatenate them on the fly and return
+    if isfile(saveFilename) and pSplit is not None:
+        fileSearch = saveFilename.replace("_split-%d" % pSplit[0], "_split-*")
+        files = glob.glob(fileSearch)
+        print('twoPointAutoCorrelationParticle() computing result from [%d] partial files...' % len(files))
+
+        DD_sub = np.zeros( (numRadBins-1, len(files)), dtype='float32' )
+        RR_sub = np.zeros( (numRadBins-1, len(files)), dtype='float32' )
+
+        for i, file in enumerate(files):
+            with h5py.File(file,'r') as f:
+                rad = f['rad'][()]
+                DD_sub[:,i] = f['DD'][()]
+                RR_sub[:,i] = f['RR'][()]
+
+        # recompute with accumulated numerator/denominators with the natural estimator
+        DD = np.sum(DD_sub, axis=1)
+        RR = np.sum(RR_sub, axis=1)
+        xi = DD/RR - 1.0
+
+        # calculate a covariance matrix from our sub-samples
+        xi_sub = np.zeros( (numRadBins-1, len(files)), dtype='float32' )
+        for i in range(len(files)):
+            xi_sub[:,i] = (DD - DD_sub[:,i]) / (RR - RR_sub[:,i]) - 1.0
+        covar, xi_err = _covar_matrix(xi, xi_sub)
+
+        # "permanently" save into non-split result file?
+        saveFilename = fileSearch.replace("_split-*-of-%d" % pSplit[1], "")
+        if not isfile(saveFilename):
+            with h5py.File(saveFilename,'w') as f:
+                f['rad'] = rad
+                f['xi'] = xi
+                f['covar'] = covar
+                f['xi_err'] = xi_err
+
+            frac = float(len(files)) / pSplit[1] * 100.0
+            print('Saved: [%s]' % saveFilename.split(savePath)[1])
+            print('NOTE: PARTIAL ONLY! [%d] of [%d] splits, [%.2f%%].' % (len(files),pSplit[1],frac))
+
+        return rad, xi, xi_err, covar
+
+    # radial bins
+    maxRad = sP.boxSize/2
+    radialBins = np.logspace( np.log10(minRad), np.log10(maxRad), numRadBins)
+
+    rrBinSizeLog = (np.log10(maxRad) - np.log10(minRad)) / numRadBins
+    rad = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
+
+    # load
+    pos = snapshotSubset(sP, partType, 'pos')
+    weights = snapshotSubset(sP, partType, partField)
+
+    w = np.where(weights < 0.0)
+    weights[w] = 0.0 # non-negative
+    assert np.count_nonzero(np.isfinite(weights)) == weights.size # finite
+    weights /= weights.mean() # adjust mean to unity for better floating point accumulation accuracy
+
+    # partial split?
+    if pSplit is not None:
+        shuffleSelectInd = pSplit[0]
+        numProcs = pSplit[1]
+        splitSize = np.ceil( weights.size / numProcs )
+
+        # take a contiguous chunk, but randomly permute the piece of the snapshot we handle
+        np.random.seed(424242L)
+        splitInds = np.arange( numProcs )
+        np.random.shuffle(splitInds)
+        curProc = splitInds[shuffleSelectInd]
+
+        indRangeLoc = pSplitRange( [0,weights.size], numProcs, curProc )
+
+        pos2 = pos[indRangeLoc[0]:indRangeLoc[1],:]
+        weights2 = weights[indRangeLoc[0]:indRangeLoc[1]]
+    else:
+        pos2 = pos
+        weights2 = weights
+
+    # quick time estimate
+    nPts1 = pos.shape[0]
+    nPts2 = pos2.shape[0]
+    calc_sec = float(nPts1*nPts2)/1e10 * 600.0 / 16.0
+    print(' nPts = %d x %d (~%d^2), estimated time = %.1f sec (%.1f min) (%.2f hours) (%.2f days)' % \
+        (nPts1,nPts2,np.sqrt(nPts1*nPts2),calc_sec,calc_sec/60.0,calc_sec/3600.0,calc_sec/3600.0/24.0))
+
+    # calculate weighted two-point [cross] correlation function
+    xi, DD, RR = tpcf(pos, radialBins, sP.boxSize, weights=weights, pos2=pos2, weights2=weights2)
+
+    with h5py.File(saveFilename,'w') as f:
+        f['rad'] = rad
+        f['xi'] = xi
+        f['DD'] = DD
+        f['RR'] = RR
+    print('Saved: [%s]' % saveFilename.split(savePath)[1])
+
+    return rad, xi, None, None
 
 def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     """ For every subhalo, record the maximum nearby subhalo mass (a few types) which falls within 

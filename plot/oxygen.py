@@ -348,6 +348,33 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     fig.savefig(saveName)
     plt.close(fig)
 
+def _resolutionLineHelper(ax, sP, radRelToVirRad=False):
+    """ Helper: add some resolution lines at small radius. """
+    resBandPKpc = 2.0 * sP.gravSoft
+    yOff = 0.15
+    xOff = 0.02
+    textOpts = {'ha':'right', 'va':'bottom', 'rotation':90, 'color':'#555555', 'alpha':0.2}
+
+    yy = np.array(ax.get_ylim())
+    xx = np.array(ax.get_xlim())
+
+    if not radRelToVirRad:
+        ax.text(xx[1]-xOff,yy[0]+yOff,"%d Mpc" % (10.0**xx[1]/1000.0), **textOpts)
+
+        xx[1] = np.log10(resBandPKpc) # log [pkpc]
+        ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1)
+        ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
+    else:
+        minMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[0]) / 1000.0
+        maxMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[-1]) / 1000.0
+        ax.text(xx[1]-xOff, yy[0]+yOff, "%d Mpc $\sim$ %d Mpc" % (minMpc,maxMpc), **textOpts)
+
+        for k, massBin in enumerate(massBins):
+            xx[1] = np.log10(resBandPKpc / sP.units.codeLengthToKpc(rvirs[k]))
+            ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1+0.01*k)
+            if k == 0:
+                ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
+
 def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelect='cen', projDim='3D',
                           radRelToVirRad=False, massDensity=False, haloMassBins=None, stellarMassBins=None,
                           combine2Halo=False):
@@ -551,30 +578,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                             ax.fill_between(rr, yp[0,:], yp[-1,:], color=c, interpolate=True, alpha=0.2)
 
     # gray resolution band at small radius
-    resBandPKpc = 2.0 * sPs[0].gravSoft
-    yOff = 0.3
-    xOff = 0.02
-    textOpts = {'ha':'right', 'va':'bottom', 'rotation':90, 'color':'#555555', 'alpha':0.2}
-
-    yy = np.array(ax.get_ylim())
-    xx = np.array(ax.get_xlim())
-
-    if not radRelToVirRad:
-        ax.text(xx[1]-xOff,yy[0]+yOff,"%d Mpc" % (10.0**xx[1]/1000.0), **textOpts)
-
-        xx[1] = np.log10(resBandPKpc) # log [pkpc]
-        ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1)
-        ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
-    else:
-        minMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[0]) / 1000.0
-        maxMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[-1]) / 1000.0
-        ax.text(xx[1]-xOff, yy[0]+yOff, "%d Mpc $\sim$ %d Mpc" % (minMpc,maxMpc), **textOpts)
-
-        for k, massBin in enumerate(massBins):
-            xx[1] = np.log10(resBandPKpc / sP.units.codeLengthToKpc(rvirs[k]))
-            ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1+0.01*k)
-            if k == 0:
-                ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
+    _resolutionLineHelper(ax, sPs[0], radRelToVirRad)
 
     # legend
     sExtra = []
@@ -597,6 +601,108 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     fig.savefig(saveName)
     plt.close(fig)
 
+def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, colorOff=0):
+    """ Plot the real-space 3D two point correlation function of e.g. OVI mass. """
+    from cosmo.clustering import twoPointAutoCorrelationParticle
+
+    # visual config
+    lw = 3.0
+    alphaFill = 0.15
+    drawError = True
+    symSize = 7.0
+    alpha = 1.0
+
+    # quick helper mapping from ions[] inputs to snapshotSubset() particle field names
+    ionNameToPartFieldMap = {'OVI':'O VI mass','OVII':'O VII mass','OVIII':'O VIII mass',
+                             'O':'metalmass_O','Z':'metalmass','gas':'mass','bhmass':'BH_Mass'}
+
+    # plot setup
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([0.0, 4.0])
+    ax.set_xlabel('Radius [ log pkpc ]')
+
+    ax.set_ylim([-2.0,4.0])
+    if order == 1: ax.set_ylim([0.0,6.0])
+    if order == 2: ax.set_ylim([1.0,9.0])
+    if ions[0] == 'bhmass' and order == 0: ax.set_ylim([-1.0,5.0])
+    ionStr = '_{\\rm %s}'%ions[0] if len(ions) == 1 else ''
+    ax.set_ylabel('%s$\\xi%s(r)$ [ log ]' % (['','r','r$^2$'][order],ionStr))
+
+    # loop over each particle type/property
+    for j, ion in enumerate(ions):
+        if j == 0:
+            for _ in range(colorOff+1):
+                c = ax._get_lines.prop_cycler.next()['color']
+        else:
+            c = ax._get_lines.prop_cycler.next()['color']
+
+        if ion == 'bhmass':
+            partType = 'bh'
+        else:
+            partType = 'gas'
+        partField = ionNameToPartFieldMap[ion]
+
+        # loop over each fullbox run
+        for i, sP in enumerate(sPs):
+            print('[%s]: %s' % (ion,sP.simName))
+            sP.setRedshift(redshift)
+
+            # load tpcf
+            rad, xi, xi_err, _ = twoPointAutoCorrelationParticle(sP, partType=partType, partField=partField)
+
+            xx = sP.units.codeLengthToKpc(rad)
+            xx = rad
+            ww = np.where( xi > 0.0 )
+
+            # y-axis multiplier
+            if order == 0: yFac = 1.0
+            if order == 1: yFac = xx[ww]
+            if order == 2: yFac = xx[ww]**2
+
+            x_plot = logZeroNaN(xx[ww])
+            y_plot = logZeroNaN(yFac * xi[ww])
+
+            label = ion if i == 0 else ''
+            l, = ax.plot(x_plot, y_plot, lw=lw, linestyle=linestyles[i], label=label, color=c, alpha=alpha)
+
+            # todo, symbols, bands, etc
+            if xi_err is not None and drawError:
+                if 1:
+                    yy0 = y_plot - logZeroNaN( yFac*(xi[ww] - xi_err[ww]/2) )
+                    yy1 = logZeroNaN( yFac*(xi[ww] + xi_err[ww]/2) ) - y_plot
+                    ax.errorbar(x_plot, y_plot, yerr=[yy0,yy1], markerSize=symSize, 
+                         color=l.get_color(), ecolor=l.get_color(), alpha=alphaFill*2, capsize=0.0, fmt='o')
+
+                if 0:
+                    yy0 = logZeroNaN( yFac*(xi[ww] - xi_err[ww]/2) )
+                    yy1 = logZeroNaN( yFac*(xi[ww] + xi_err[ww]/2) )
+
+                    ax.fill_between(x_plot, yy0, yy1, color=l.get_color(), interpolate=True, alpha=alphaFill)
+
+    # gray resolution band at small radius
+    _resolutionLineHelper(ax, sPs[0])
+
+    # legend
+    sExtra = []
+    lExtra = []
+
+    if len(sPs) > 1:
+        for i, sP in enumerate(sPs):
+            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+            lExtra += ['%s' % sP.simName]
+
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='best')
+
+    fig.tight_layout()
+    fig.savefig(saveName)
+    plt.close(fig)
+
+# -------------------------------------------------------------------------------------------------
+
 def paperPlots():
     """ Construct all the final plots for the paper. """
     TNG100 = simParams(res=1820,run='tng',redshift=0.0)
@@ -609,9 +715,9 @@ def paperPlots():
 
     # figure 1: full box composite image
     if 0:
-        vis.boxDrivers.TNG_oxygenBoxImage()
-        for conf in [0,1]:
-            vis.haloDrivers.TNG_oxygenHalosImages(conf=conf)
+        from vis.boxDrivers import TNG_oxygenPaperImages
+        for part in [0,1,2]:
+            TNG_oxygenPaperImages(part=part)
 
     # figure 2, bound mass of O ions vs halo/stellar mass
     if 0:
@@ -637,9 +743,9 @@ def paperPlots():
         moment = 0
         simRedshift = 0.2
         boxDepth10 = True # use 10 Mpc/h projection depth
-        sPs = [TNG100, TNG300, Illustris]
+        sPs = [TNG100, TNG100_2, TNG100_3, Illustris] # TNG300
 
-        pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s_%s.pdf' % \
+        pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s%s.pdf' % \
             (10*simRedshift,moment,'_'.join([sP.simName for sP in sPs]),'_10Mpch' if boxDepth10 else ''))
         nOVIcddf(sPs, pdf, moment=moment, simRedshift=simRedshift, boxDepth10=boxDepth10)
         pdf.close()
@@ -670,10 +776,10 @@ def paperPlots():
         variants3 = ['1000','1001','1002','1003','1004','1005','2002','2101','2102','0000']
         variants4 = ['2201','2202','2203','0000','3000','3001','3002','3010','3100','0000'] #2302
         variants5 = ['3101','3102','3201','3202','0000','3301','3302','3303','3304','0000'] #3203
-        variants6 = ['3401','3402','3403','3404','0000','3502','0000','0000','3603','0000'] #3501,3601,3602
+        variants6 = ['3403','3404','0000','3502','3401','3402','0000','0000','3603','0000'] #3501,3601,3602
         variants7 = ['3701','3702','3801','3802','3901','3902','4000','4100','4301','0000']
         variants8 = ['4401','4402','4410','0000','0000','4420','4501','4502','4503','0000'] #4411,4412
-        variants9 = ['4504','4506','0000','0000','4302','1200','1301','1302','0000','0000'] #4601,4602,5003
+        variants9 = ['4504','4506','0000','0000','4302','1200','1301','1302','0000','5003'] #4601,4602
         variantSets = [variants1,variants2,variants3,variants4,variants5,variants6,variants7,variants8,variants9]
 
         for i, variants in enumerate(variantSets):
@@ -685,7 +791,7 @@ def paperPlots():
             cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=['OVI'], redshifts=[simRedshift])
 
     # figure 5: average radial profiles
-    if 1:
+    if 0:
         redshift = 0.0
         sPs = [simParams(res=512,run='tng',redshift=0.0,variant='0000')] # debug
         ions = ['OVI']
@@ -707,8 +813,23 @@ def paperPlots():
                                           haloMassBins=haloMassBins, combine2Halo=combine2Halo)
 
     # figure 6: 2pcf
-    if 0:
-        pass
+    if 1:
+        redshift = 0.0
+        sPs = [TNG100, TNG300]
+        sPs = [simParams(res=128,run='tng',redshift=0.0,variant='0000')] # debug
+        ions = ['OVI','OVII','OVIII','O','Z','gas']
+
+        # compute time for one split:
+        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
+        # for nSplits=100000, should finish each in 3 days (nThreads=32) (each has 60,000 cells)
+        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
+        # todo: 2x1 panel: (A) z=0 metal mass, oxygen mass, OVI, OVII, OVIII, (B) redshift evo OVI
+
+        for order in [0,1,2]:
+            saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
+              (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
+
+            oxygenTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
 
     # figure 7: OVI red/blue image samples
     if 0:
