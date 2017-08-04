@@ -13,14 +13,15 @@ from util.sphMap import _NEAREST
 from scipy.special import gamma
 
 @jit(nopython=True, nogil=True, cache=True)
-def _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
+def _calcTPCFBinned(pos, pos2, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
     """ Core routine for tpcf(), see below. """
-    numPart = pos.shape[0]
+    numPart = pos2.shape[0]
     boxHalf = boxSizeSim / 2.0
+
+    radial_bins_max = np.max(rad_bins_sq[:-1]) # skip inf
 
     # loop over all particles
     for i in range(start_ind,stop_ind):
-        #print(i)
         pi_0 = pos[i,0]
         pi_1 = pos[i,1]
         pi_2 = pos[i,2]
@@ -29,9 +30,9 @@ def _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
             if i == j:
                 continue
 
-            pj_0 = pos[j,0]
-            pj_1 = pos[j,1]
-            pj_2 = pos[j,2]
+            pj_0 = pos2[j,0]
+            pj_1 = pos2[j,1]
+            pj_2 = pos2[j,2]
 
             # calculate 3d periodic squared distance
             dx = _NEAREST(pi_0-pj_0,boxHalf,boxSizeSim)
@@ -46,6 +47,48 @@ def _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):
                 k += 1
 
             xi_int[k-1] += 1
+
+    # void return
+
+@jit(nopython=True, nogil=True, cache=True)
+def _calcTPCFBinnedWeighted(pos, weights, pos2, weights2, rad_bins_sq, boxSizeSim, xi_float, start_ind, stop_ind):
+    """ Core routine for tpcf(), see below. """
+    numPart = pos2.shape[0]
+    boxHalf = boxSizeSim / 2.0
+
+    rad_bins_sq_max = np.max(rad_bins_sq[:-1]) # skip inf
+
+    # loop over all particles
+    for i in range(start_ind,stop_ind):
+        pi_0 = pos[i,0]
+        pi_1 = pos[i,1]
+        pi_2 = pos[i,2]
+
+        for j in range(0,numPart):
+            if i == j:
+                continue
+
+            pj_0 = pos2[j,0]
+            pj_1 = pos2[j,1]
+            pj_2 = pos2[j,2]
+
+            # calculate 3d periodic squared distance
+            dx = _NEAREST(pi_0-pj_0,boxHalf,boxSizeSim)
+            if dx > rad_bins_sq_max: continue
+            dy = _NEAREST(pi_1-pj_1,boxHalf,boxSizeSim)
+            if dy > rad_bins_sq_max: continue
+            dz = _NEAREST(pi_2-pj_2,boxHalf,boxSizeSim)
+            if dz > rad_bins_sq_max: continue
+
+            r2 = dx*dx + dy*dy + dz*dz
+            if r2 > rad_bins_sq_max: continue
+
+            # find histogram bin and accumulate
+            k = 1
+            while r2 > rad_bins_sq[k]:
+                k += 1
+
+            xi_float[k-1] += (weights[i]*weights2[j])
 
     # void return
 
@@ -115,26 +158,50 @@ def _reduceQuantsInRad(pos_search, pos_target, radial_bins, quants, reduced_quan
 
     # void return
 
-def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
+def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nThreads=16):
     """ Calculate and simultaneously histogram the results of a two-point auto correlation function, 
     by computing all the pairwise (periodic) distances in pos. 3D only. 
 
       pos[N,3]      : array of 3-coordinates for the galaxies/points
       radialBins[M] : array of (inner) bin edges in radial distance (code units)
       boxSizeSim[1] : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      weights[N]    : if not None, then use these scalars for a weighted correlation function
+      pos2[L,3]     : if not None, then cross-correlation instead of auto, of pos vs. pos1
+      weights2[L]   : must be None if weights is None, and vice versa
 
-      return is xi(r) of size M-1, where xi[i] is the (DD/RR-1) value computed between radialBins[i:i+1]
+      return is xi(r),DD,RR where xi[i]=(DD/RR-1) is computed between radialBins[i:i+1] (size == M-1)
     """
     # input sanity checks
     if pos.ndim != 2 or pos.shape[1] != 3 or pos.shape[0] <= 1:
         raise Exception('Strange dimensions of pos.')
     if radialBins.ndim != 1 or radialBins.size < 2:
         raise Exception('Strange dimensions of radialBins.')
-    if pos.dtype != np.float32 and pos.dtype != np.float64:
+    if pos.dtype not in [np.float32, np.float64]:
         raise Exception('pos not in float32/64')
+    if weights is not None:
+        assert weights.size == pos.shape[0]
+        assert weights.min() >= 0.0 # all finite and non-negative
+        meanWeight = np.mean(weights)
+        xi_dtype = 'float64'
+    else:
+        meanWeight = 1.0
+        xi_dtype = 'int64'
+
+    # cross-correlation sanity checks
+    if pos2 is not None:
+        if weights is not None: assert weights2 is not None
+        if pos2.ndim != 2 or pos2.shape[1] != 3 or pos2.shape[0] <= 1:
+            raise Exception('Strange dimensions of pos2.')
+        if pos2.dtype not in [np.float32, np.float64]:
+            raise Exception('pos2 not in float32/64')
+    else:
+        assert weights2 is None
+        pos2 = pos # views
+        weights2 = weights
 
     # square radial bins
     nPts = pos.shape[0]
+    nPts2 = pos2.shape[0]
     rad_bins_sq = np.copy(radialBins)**2
     cutFirst = False
 
@@ -150,20 +217,26 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
         vol_enclosed = 4.0 / 3 * np.pi * np.sqrt(rad_bins_sq[:-1])**3.0 # spheres
         bin_volume = np.diff(vol_enclosed) # spherical shells
 
-        mean_num_dens = float(nPts)**2 / boxSizeSim**3.0 # N^2 / V_box
-        RR_counts = bin_volume * mean_num_dens
+        # if e.g. pos is the whole sample (or the larger part), this will be less noisy:
+        meanWeight2 = meanWeight #if pos2 is None else np.mean(weights2)
+
+        mean_num_dens = float(nPts*nPts2) / boxSizeSim**3.0 * (meanWeight*meanWeight2) # N^2 / V_box
+        RR = bin_volume * mean_num_dens
 
         # xi = DD / RR - 1.0
-        xi = xi_int[:-1].astype('float32') / RR_counts - 1.0
+        DD = xi_int[:-1].astype('float32').copy()
+        xi = DD / RR - 1.0
 
         # user did not start with a 0.0 inner bin edge, so throw this first bin out
         if cutFirst:
             xi = xi[1:]
+            DD = DD[1:]
+            RR = RR[1:]
 
-        return xi
+        return xi, DD, RR
 
     # allocate return
-    xi_int = np.zeros( rad_bins_sq.size - 1, dtype='int64' )
+    xi_int = np.zeros( rad_bins_sq.size - 1, dtype=xi_dtype )
 
     # single threaded?
     # ----------------
@@ -172,12 +245,15 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
         start_ind = 0
         stop_ind = nPts
 
-        _calcTPCFBinned(pos, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind)
+        if weights is not None:
+            _calcTPCFBinnedWeighted(pos, weights, pos2, weights2, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind)
+        else:
+            _calcTPCFBinned(pos, pos2, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind)
 
         # transform integer counts into the correlation function with an analytic estimate for RR
-        xi = _analytic_estimator(xi_int)
+        xi, DD, RR = _analytic_estimator(xi_int)
 
-        return xi
+        return xi, DD, RR
 
     # else, multithreaded
     # -------------------
@@ -198,13 +274,20 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
 
             # make local view of pos (non-self inputs to JITed function appears to prevent GIL release)
             self.pos         = pos
+            self.weights     = weights
+            self.pos2        = pos2
+            self.weights2    = weights2
             self.rad_bins_sq = rad_bins_sq
             self.boxSizeSim  = boxSizeSim
 
         def run(self):
             # call JIT compiled kernel
-            _calcTPCFBinned(self.pos, self.rad_bins_sq, self.boxSizeSim, 
-                            self.xi_int, self.start_ind, self.stop_ind)
+            if weights is not None:
+                _calcTPCFBinnedWeighted(self.pos, self.weights, self.pos2, self.weights2, 
+                    self.rad_bins_sq, self.boxSizeSim, self.xi_int, self.start_ind, self.stop_ind)
+            else:
+                _calcTPCFBinned(self.pos, self.pos2, self.rad_bins_sq, self.boxSizeSim, 
+                                self.xi_int, self.start_ind, self.stop_ind)
 
     # create threads
     threads = [mapThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
@@ -220,9 +303,9 @@ def tpcf(pos, radialBins, boxSizeSim, nThreads=16):
         xi_int += thread.xi_int
 
     # transform integer counts into the correlation function with an analytic estimate for RR
-    xi = _analytic_estimator(xi_int)
+    xi, DD, RR = _analytic_estimator(xi_int)
 
-    return xi
+    return xi, DD, RR
 
 def quantReductionInRad(pos_search, pos_target, radial_bins, quants, reduce_op, boxSizeSim, nThreads=8):
     """ Calculate a reduction operation on one or more quantities for all target points falling within a 3D 
@@ -342,58 +425,46 @@ def benchmark():
     import time
 
     # config
-    nThreads = 16
     rMin = 10.0 # kpc/h
     numRadBins = 40
 
-    fig = plt.figure(figsize=(10,7))
-    ax = fig.add_subplot(111)
-    ax.set_xlabel('r [kpc/h]')
-    ax.set_ylabel('$\\xi(r)$')
-    ax.set_xscale('log')
+    nLoops = 2 # for each configuration
+    nThreadsTest = [8,16,32,64]
+    nPtsTest = [50000] # if None, load actual sim data
 
-    #for nThreads in [8,16,32]:
-    #for nPts in [1000,8000,16000]:
+    for nThreads in nThreadsTest:
+        for nPts in nPtsTest:
+            # config data
+            if nPts is not None:
+                # generate random testing data
+                class sP:
+                    boxSize = 100.0
 
-    # config data
-    if 0:
-        # generate random testing data
-        class sP:
-            boxSize = 100.0
+                pos = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype('float32')
+                weights = np.random.uniform(low=0.0, high=1.0, size=(nPts)).astype('float32')
+                #sP.boxSize = 20.0 # reduce max bin to leverage early termination
+            else:
+                # load some galaxies in a box
+                sP = simParams(res=256, run='tng', redshift=0.0, variant='0000')
+                pos = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+                nPts = pos.shape[0]
+                weights = None
 
-        nPts = 1500
-        pos = np.random.uniform(low=0.0, high=sP.boxSize, size=(nPts,3)).astype('float32')
+            # make radial bin edges
+            rMax = sP.boxSize/2
+            radialBins = np.logspace( np.log10(rMin), np.log10(rMax), numRadBins)
 
-    if 1:
-        # load some gas in a box
-        sP = simParams(res=512, run='tng', redshift=0.0, variant=0000)
-        pos = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
-        nPts = pos.shape[0]
-        ax.set_yscale('log')
+            rrBinSizeLog = (np.log10(rMax) - np.log10(rMin)) / numRadBins
+            rr = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
 
-    # make radial bin edges
-    rMax = sP.boxSize/2 # boxSize/2
-    radialBins = np.logspace( np.log10(rMin), np.log10(rMax), numRadBins)
+            # calculate and time
+            start_time = time.time()
 
-    rrBinSizeLog = (np.log10(rMax) - np.log10(rMin)) / numRadBins
-    rr = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
+            for i in np.arange(nLoops):
+                xi = tpcf(pos, radialBins, sP.boxSize, weights=weights, nThreads=nThreads)
 
-    # calculate and time
-    start_time = time.time()
-    nLoops = 1
-
-    for i in np.arange(nLoops):
-        xi = tpcf(pos, radialBins, sP.boxSize, nThreads=nThreads)
-
-    sec_per = (time.time()-start_time)/nLoops
-    print('2 iterations took [%.3f] sec, nPts = %d nThreads = %d' % (sec_per,nPts,nThreads))
-
-    ax.plot(rr, xi, '-', label='N = %d' % nPts)
-
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig('benchmark.pdf')
-    plt.close(fig)
+            sec_per = (time.time()-start_time)/nLoops
+            print('[%s] iterations took [%.3f] sec, nPts = %d nThreads = %d' % (nLoops,sec_per,nPts,nThreads))
 
 def benchmark2():
     """ Benchmark performance of quantReductionInRad(). 100k points, 16 threads in 23 sec."""
