@@ -34,7 +34,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
         sh = groupCatSingle(sP, subhaloID=shID)
         gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
 
-        if gr['GroupFirstSub'] != shID:
+        if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial':
             print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
 
         haloVirRad = gr['Group_R_Crit200']
@@ -69,6 +69,8 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
             haloVirRad = mpb['sm']['rvir'][ind[0]]
             boxCenter = mpb['sm']['pos'][ind[0],:]
             boxCenter = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
+            galHalfMassRad = mpb['SubhaloHalfmassRad'][ind[0]]
+            galHalfMassRadStars = mpb['SubhaloHalfmassRadType'][ind[0],sP.ptNum('stars')]
 
     # convert size into code units
     if sizeType == 'rVirial':
@@ -137,7 +139,8 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
             rotMatrices = rotationMatricesFromInertiaTensor(I)
             rotMatrix = rotMatrices[rotation]
 
-    return boxSizeImg, boxCenter, extent, haloVirRad, rotMatrix, rotCenter
+    return boxSizeImg, boxCenter, extent, haloVirRad, \
+           galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter
 
 def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     """ Render view(s) of a single halo in one plot, with a variable number of panels, comparing 
@@ -145,20 +148,22 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
 
     # defaults (all panel fields that can be specified)
 
-    hInd        = 0              # zoom halo index
-    run         = 'illustris'    # run name
-    res         = 1820           # run resolution
-    redshift    = 0.0            # run redshift
+    hInd        = 0             # zoom halo index, or subhalo (subfind) index in periodic box
+    run         = 'illustris'   # run name
+    res         = 1820          # run resolution
+    redshift    = 0.0           # run redshift
     partType    = 'gas'         # which particle type to project
-    partField   = 'temp'         # which quantity/field to project for that particle type
+    partField   = 'temp'        # which quantity/field to project for that particle type
     #valMinMax  = [min,max]     # stretch colortable between minimum and maximum field values
     rVirFracs   = [1.0]         # draw circles at these fractions of a virial radius
+    fracsType   = 'rVirial'     # if not rVirial, draw circles at fractions of another quant, same as sizeType
     method      = 'sphMap'      # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     hsmlFac     = 2.5           # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
+    axesInMpc   = False         # if showing axes, label with 'Mpc' instead of 'ckpc/h'
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None          # stretch vector field visualizaton between these bounds (None=automatic)
@@ -171,6 +176,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     labelSim    = False         # label simulation name (lower right corner) of panel
     labelHalo   = False         # label halo total mass and stellar mass
     labelCustom = False         # custom label string to include
+    plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
     rotation    = None          # 'face-on', 'edge-on', or None
     mpb         = None          # use None for non-movie/single frame
@@ -216,7 +222,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
 
         # add imaging config for single halo view
         p['boxSizeImg'], p['boxCenter'], p['extent'], \
-        p['haloVirRad'], p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
+        p['haloVirRad'], p['galHalfMass'], p['galHalfMassStars'], \
+        p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
     # request render and save
     renderMultiPanel(panels, plotConfig)
@@ -235,12 +242,14 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     partField   = 'temp'          # which quantity/field to project for that particle type
     #valMinMax  = [min,max]       # stretch colortable between minimum and maximum field values
     rVirFracs   = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
+    fracsType   = 'rVirial'     # if not rVirial, draw circles at fractions of another quant, same as sizeType
     method      = 'sphMap'        # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     hsmlFac     = 2.5             # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
+    axesInMpc   = False           # if showing axes, label with 'Mpc' instead of 'ckpc/h'
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'             # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None            # stretch vector field visualizaton between these bounds (None=automatic)
@@ -252,7 +261,8 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     labelScale  = False           # label spatial scale with scalebar (upper left of panel)
     labelSim    = False           # label simulation name (lower right corner) of panel
     labelHalo   = False           # label halo total mass and stellar mass
-    labelCustom = False         # custom label string to include
+    labelCustom = False           # custom label string to include
+    plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
     rotation    = None            # 'face-on', 'edge-on', or None
 
@@ -316,7 +326,8 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
 
             # add imaging config for single halo view using MPB
             p['boxSizeImg'], p['boxCenter'], p['extent'], \
-            p['haloVirRad'], p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
+            p['haloVirRad'], p['galHalfMass'], p['galHalfMassStars'], \
+            p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
         # request render and save
         plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + '_%03d.png' % (frameNum)

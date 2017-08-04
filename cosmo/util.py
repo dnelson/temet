@@ -262,11 +262,11 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
     from tracer.tracerMC import match3
     from util.simParams import simParams
 
-    assert method in ['LHaloTree','SubLink','Lagrange','Positional']
+    assert method in ['LHaloTree','SubLink','Lagrange','Positional','PositionalAll']
     assert sP_from != sP_to
 
     # positional cross-match between two different runs?
-    if method == 'Positional':
+    if method in ['Positional','PositionalAll']:
         subhaloInds_from_search = np.array(subhaloInds_from_search)
         r = np.zeros( subhaloInds_from_search.size, dtype='int32' ) - 1
         assert sP_to.boxSize == sP_from.boxSize
@@ -275,8 +275,9 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         massDeltaMaxDex = 0.3
 
         # filter subhaloInds_from_search to centrals only (ignore satellites if any requested)
-        cen_inds_to = cenSatSubhaloIndices(sP_to, cenSatSelect='cen')
-        cen_inds_from = cenSatSubhaloIndices(sP_from, cenSatSelect='cen')
+        css = 'cen' if method == 'Positional' else 'all'
+        cen_inds_to = cenSatSubhaloIndices(sP_to, cenSatSelect=css)
+        cen_inds_from = cenSatSubhaloIndices(sP_from, cenSatSelect=css)
 
         _, ind_from = match3(cen_inds_from, subhaloInds_from_search)
         subhaloInds_from = subhaloInds_from_search[ind_from]
@@ -748,6 +749,6 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
     if cenSatSelect is None:
         return w1, w2, w3
 
-    if cenSatSelect == 'cen': return w1
-    if cenSatSelect == 'sat': return w3
-    if cenSatSelect == 'all': return w2
+    if cenSatSelect in ['cen','pri','primary','central','centrals']: return w1
+    if cenSatSelect in ['sat','sec','secondary','satellite','satellites']: return w3
+    if cenSatSelect in ['all','both']: return w2

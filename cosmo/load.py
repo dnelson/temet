@@ -294,13 +294,14 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
 
     raise Exception("No group catalog found.")
 
-def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None):
+def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None, sq=False):
     """ Load HDF5 fof+subfind group catalog for a given snapshot.
                          
        readIDs=1 : by default, skip IDs since we operate under the group ordered snapshot assumption, but
                    if this flag is set then read IDs and include them (if they exist)
        skipIDs=1 : acknowledge we are working with a STOREIDS type .hdf5 group cat and don't warn
        fields*   : read only a subset fields from the catalog
+       sq        : squeeze single field return into a numpy array instead of within a dict
     """
     assert sP.snap is not None, "Must specify sP.snap for groupCat() load."
     assert sP.subbox is None, "No groupCat() for subbox snapshots."
@@ -378,6 +379,24 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 customCount += 1
 
+            # radial distance to parent halo [code, pkpc, log pkpc, r200frac] (centrals will have 0)
+            if quant in ['rdist_code','rdist','rdist_log','rdist_rvir']:
+                from cosmo.util import periodicDists
+                gc = groupCat(sP, fieldsHalos=['GroupPos','Group_R_Crit200'], 
+                                  fieldsSubhalos=['SubhaloPos','SubhaloGrNr'])
+
+                parInds = gc['subhalos']['SubhaloGrNr']
+                r[field] = periodicDists( gc['halos']['GroupPos'][parInds,:], 
+                                          gc['subhalos']['SubhaloPos'], sP)
+
+                if quant in ['rdist','rdist_log']:
+                    r[field] = sP.units.codeLengthToKpc( r[field] )
+
+                if '_rvir' in quant: r[field] /= gc['halos']['Group_R_Crit200'][parInds]
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
+                customCount += 1
+
             # virial temperature of parent halo
             if quant in ['tvir', 'tvir_log']:
                 # get mass with self-call
@@ -395,6 +414,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             return r[key]
         elif customCount > 1:
             # return dictionary (no 'subhalos' wrapping)
+            assert sq is False
             return r
 
     # override path function
@@ -445,6 +465,17 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             if iterable(fieldsHalos)[0] == 'GroupFirstSub':
                 assert len(iterable(fieldsHalos)) == 1
                 r['halos'] = r['halos'].astype('int32')
+
+    if sq:
+        # remove 'halos'/'subhalos' subdict, and field subdict
+        assert fieldsSubhalos is None or fieldsHalos is None
+
+        if fieldsSubhalos is not None: r = r['subhalos']
+        if fieldsHalos is not None: r = r['halos']
+
+        if isinstance(r,dict):
+            assert len(r.keys()) == 1
+            r = r[ r.keys()[0] ]
 
     return r
 
