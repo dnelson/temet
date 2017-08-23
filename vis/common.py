@@ -1109,6 +1109,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
                     print(' debugging stellarBand-* getHsml() snapHsmlForStars=True')
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange, snapHsmlForStars=True)
 
+                    #print(' debugging stellarBand-* getHsml() snapHsmlForStars=FALSE (tina only, disable!)')
+                    #hsml = getHsmlForPartType(sP, partType, indRange=indRange, snapHsmlForStars=False)
+
                     #print(' debugging stellarBand-* getHsml() with nNGB=16 and OVERRIDE hsmlFac(res).')
                     #hsml = getHsmlForPartType(sP, partType, nNGB=16, indRange=indRange)
                     #hsmlFac = sP.res/512.0 # match sizes roughly to 512 sizes
@@ -1729,18 +1732,21 @@ def renderMultiPanel(panels, conf):
                 ax.set_xlabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_1[0], new_1[1], new_1[2], axStr))
                 ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_2[0], new_2[1], new_2[2], axStr))
 
-            # color mapping and place image
+            # color mapping (handle defaults and overrides)
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
             if 'plawScale' in p: plaw = p['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
-            cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+            ctName = p['ctName'] if 'ctName' in p else config['ctName']
+
+            cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
            
             #cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
             #grid = np.ma.array(grid, mask=np.isnan(grid))
 
+            # place image
             pExtent = p['extent'] if not p['axesInMpc'] else p['sP'].units.codeLengthToMpc(p['extent'])
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect=1.0)
 
@@ -1833,15 +1839,18 @@ def renderMultiPanel(panels, conf):
             ax.set_axis_off()
             setAxisColors(ax, color2)
 
-            # color mapping and place image
+            # color mapping (handle defaults and overrides)
             vMM = p['valMinMax'] if 'valMinMax' in p else None
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
             if 'plawScale' in p: plaw = p['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
-            cmap = loadColorTable(config['ctName'], valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+            ctName = p['ctName'] if 'ctName' in p else config['ctName']
 
+            cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+
+            # place image
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal')
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
             if 'valMinMax' in p and cmap is not None:

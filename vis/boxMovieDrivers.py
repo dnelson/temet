@@ -163,6 +163,7 @@ def planetarium_TychoBrahe_frames(curTask=0, numTasks=1, conf=0):
     labelScale = False
     labelZ     = False
     labelSim   = False
+    ctName     = 'gray' # all grayscale
 
     if conf == 0:
         panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
@@ -182,7 +183,7 @@ def planetarium_TychoBrahe_frames(curTask=0, numTasks=1, conf=0):
         panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
     class plotConfig:
-        savePath  = '/home/extdylan/data2/frames/tycho/'
+        savePath  = '/home/extdylan/data/frames_tycho/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = False

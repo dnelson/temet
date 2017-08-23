@@ -10,6 +10,128 @@ import h5py
 from os import path, mkdir
 import glob
 
+def groupCutoutFromSnap(run='tng'):
+    """ Create a [full] subhalo/fof cutout from a snapshot (as would be done by the Web API). """
+    from util.simParams import simParams
+    import cosmo
+
+    sP = simParams(res=1820,run=run,redshift=0.0)
+    ptTypes = ['gas','dm','bhs','stars']
+
+    # subhaloIDs
+    samplePath = '/home/extdylan/sims.TNG/L75n1820TNG/data.files/new_mw_sample_fgas.txt'
+    data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
+
+    # subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)
+    if run == 'tng':
+        subhaloIDs = data[:,0]
+    if run == 'illustris':
+        subhaloIDs = data[:,1] # Lagrangian match
+
+    # get list of field names
+    fields = {}
+
+    fileName = cosmo.load.snapPath(sP.simPath, sP.snap, chunkNum=0)
+
+    with h5py.File(fileName,'r') as f:
+        for partType in ptTypes:
+            gName = 'PartType' + str(sP.ptNum(partType))
+            fields[gName] = f[gName].keys()
+
+    # loop over subhalos
+    for subhaloID in subhaloIDs:
+        if subhaloID == -1:
+            print('skip -1')
+            continue
+
+        data = {}
+
+        # load (subhalo restricted)
+        for partType in ptTypes:
+            print(subhaloID,'sub',partType)
+            gName = 'PartType' + str(sP.ptNum(partType))
+
+            data[gName] = cosmo.load.snapshotSubset(sP, partType, fields[gName], subhaloID=subhaloID)
+
+        # write
+        with h5py.File('cutout_%s_%d_subhalo.hdf5' % (sP.simName,subhaloID),'w') as f:
+            for gName in data:
+                g = f.create_group(gName)
+                for field in data[gName]:
+                    g[field] = data[gName][field]
+
+        # get parent fof, load (fof restricted)
+        data = {}
+        subh = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+        haloID = subh['SubhaloGrNr']
+
+        for partType in ptTypes:
+            print(subhaloID,'fof',partType)
+            gName = 'PartType' + str(sP.ptNum(partType))
+
+            data[gName] = cosmo.load.snapshotSubset(sP, partType, fields[gName], haloID=haloID)
+
+        # write
+        with h5py.File('cutout_%s_%d_group.hdf5' % (sP.simName,subhaloID),'w') as f:
+            for gName in data:
+                g = f.create_group(gName)
+                for field in data[gName]:
+                    g[field] = data[gName][field]
+
+def tracerCutoutFromTracerTracksCat():
+    """ Create a subhalo cutout of tracers from the full postprocessing/tracer_tracks/ catalog. """
+    from util.simParams import simParams
+    ptTypes = ['gas','stars','bhs']
+
+    # get subhaloIDs
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+    data = np.genfromtxt(sP.derivPath + 'new_mw_sample_fgas.txt', delimiter=',', dtype='int32')
+    subhaloIDs = data[:,0]
+
+    # list of tracer quantities we know
+    catBasePath = sP.postPath + 'tracer_tracks/*.hdf5'
+    cats = {}
+
+    for catPath in glob.glob(catBasePath):
+        catName = catPath.split("99_")[-1].split(".hdf5")[0]
+        cats[catName] = catPath
+
+    # load offset/length from meta
+    offs = {}
+    lens = {}
+    with h5py.File(cats['meta'],'r') as f:
+        for ptType in ptTypes:
+            offs[ptType] = f['Subhalo']['TracerOffset'][ptType][()]
+            lens[ptType] = f['Subhalo']['TracerLength'][ptType][()]
+
+    # loop over subhaloIDs
+    for subhaloID in subhaloIDs:
+        data = {}
+        for ptType in ptTypes: data[ptType] = {}
+
+        # load from each existing cat
+        for catName, catPath in cats.iteritems():
+            if 'meta.hdf5' in catPath: continue
+            print(' ',subhaloID,catName)
+
+            with h5py.File(catPath,'r') as f:
+                for ptType in ptTypes:
+                    start = offs[ptType][subhaloID]
+                    length = lens[ptType][subhaloID]
+                    data[ptType][catName] = f[catName][:, start:start+length]
+
+                snaps = f['snaps'][()]
+                redshifts = f['redshifts'][()]
+
+        # write
+        with h5py.File('tracers_%s_%d_subhalo.hdf5' % (sP.simName,subhaloID),'w') as f:
+            for ptType in ptTypes:
+                g = f.create_group(ptType)
+                for field in data[ptType]:
+                    g[field] = data[ptType][field]
+            f['snaps'] = snaps
+            f['redshifts'] = redshifts
+
 def makeSnapHeadersForLHaloTree():
     """ Copy chunk 0 of each snapshot only and the header only (for LHaloTree B-HaloTree). """
     nSnaps = 100

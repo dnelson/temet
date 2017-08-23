@@ -358,6 +358,34 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 customCount += 1
 
+            # central flag (1 if central, 0 if not)
+            if quant in ['central_flag','cen_flag','is_cen','is_central']:
+                gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
+
+                # satellites given zero
+                r[field] = np.zeros( gc['header']['Nsubgroups_Total'], dtype='int16' )
+                r[field][ gc['halos'] ] = 1
+
+                customCount += 1
+
+            # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars)
+            if quant in ['ssfr','ssfr_gyr']:
+                gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
+                mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+
+                # set mstar=0 subhalos to nan 
+                w = np.where(mstar == 0.0)[0]
+                if len(w):
+                    mstar[w] = 1.0
+                    gc['subhalos']['SubhaloSFRinRad'][w] = np.nan
+
+                r[field] = gc['subhalos']['SubhaloSFRinRad'] / mstar
+
+                if '_gyr' in quant:
+                    r[field] *= 1e9 # 1/yr to 1/Gyr
+
+                customCount += 1
+
             # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
             if quant in ['rhalo_200_code', 'rhalo_200','rhalo_200_log','rhalo_500','rhalo_500_log']:
                 od = 200 if '_200' in quant else 500
