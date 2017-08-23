@@ -1121,12 +1121,7 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
     if sample == 'guinevere':
         # verify which are centrals
         nRowsFig = 8
-        pri_inds = cenSatSubhaloIndices(sP_illustris, cenSatSelect='cen')
-
-        from tracer.tracerMC import match3
-        i1, i2 = match3(np.array(illustris_ids,dtype='int32'), pri_inds)
-        cen_flags = np.zeros( len(illustris_ids), dtype='int16' )
-        cen_flags[i1] = 1
+        cen_flags = groupCat(sP, fieldsSubhalos=['cen_flag'])
 
         if run != 'illustris':
             # write out text-file with matches
