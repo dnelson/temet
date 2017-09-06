@@ -311,7 +311,6 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
     # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Note! Can do >=1 custom fields 
     # simultaneously, as opposed to snapshotSubset(), but cannot mix custom and standard fields!
     if fieldsSubhalos is not None:
-        customCount = 0
 
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
@@ -337,16 +336,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 wSat = np.where(mask == 0)
                 r[field][wSat] = np.nan
 
-                customCount += 1
-
             # subhalo mass [msun or log msun]
             if quant in ['mhalo_subfind','mhalo_subfind_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
                 r[field] = sP.units.codeMassToMsun( gc['subhalos'] )
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
-
-                customCount += 1
 
             # subhalo stellar mass (<30 pkpc definition, with auxCat) [msun or log msun]
             if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
@@ -356,8 +351,6 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
-                customCount += 1
-
             # central flag (1 if central, 0 if not)
             if quant in ['central_flag','cen_flag','is_cen','is_central']:
                 gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
@@ -366,12 +359,23 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field] = np.zeros( gc['header']['Nsubgroups_Total'], dtype='int16' )
                 r[field][ gc['halos'] ] = 1
 
-                customCount += 1
+            # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
+            if quant in ['isolated3d_mstar_30pkpc_max_in_300pkpc']:
+                from cosmo.clustering import isolationCriterion3D
 
-            # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars)
-            if quant in ['ssfr','ssfr_gyr']:
+                ic3d = isolationCriterion3D(sP, 300.0) #defaults: cenSatSelect='all', mstar30kpc_min=9.0
+
+                r[field] = ic3d['flag_iso_mstar30kpc_max']
+
+            # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars) (optionally Mstar in 30pkpc)
+            if quant in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr',
+                         'ssfr_log','ssfr_gyr_log','ssfr_30pkpc_log','ssfr_30pkpc_gyr_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
                 mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+
+                # replace stellar masses with auxcat values within constant aperture, if requested
+                if '_30pkpc' in quant:
+                    mstar = groupCat(sP, fieldsSubhalos=['mstar_30pkpc'])
 
                 # set mstar=0 subhalos to nan 
                 w = np.where(mstar == 0.0)[0]
@@ -383,8 +387,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 if '_gyr' in quant:
                     r[field] *= 1e9 # 1/yr to 1/Gyr
-
-                customCount += 1
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
             # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
             if quant in ['rhalo_200_code', 'rhalo_200','rhalo_200_log','rhalo_500','rhalo_500_log']:
@@ -405,8 +408,6 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 wSat = np.where(mask == 0)
                 r[field][wSat] = np.nan
 
-                customCount += 1
-
             # radial distance to parent halo [code, pkpc, log pkpc, r200frac] (centrals will have 0)
             if quant in ['rdist_code','rdist','rdist_log','rdist_rvir']:
                 from cosmo.util import periodicDists
@@ -423,8 +424,6 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 if '_rvir' in quant: r[field] /= gc['halos']['Group_R_Crit200'][parInds]
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
-                customCount += 1
-
             # virial temperature of parent halo
             if quant in ['tvir', 'tvir_log']:
                 # get mass with self-call
@@ -433,14 +432,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
-                customCount += 1
-
-        if customCount == 1:
+        if len(r) == 1:
             # compress and return single field
             key = r.keys()[0]
             assert len(r.keys()) == 1
             return r[key]
-        elif customCount > 1:
+        elif len(r) > 1:
             # return dictionary (no 'subhalos' wrapping)
             assert sq is False
             return r

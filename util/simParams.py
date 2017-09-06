@@ -255,6 +255,7 @@ class simParams:
                 # no mount to /hits/basement
                 if (self.boxSize == 205000 and res == 2500) or (self.boxSize == 35000 and res == 2160):
                     self.arepoPath  = self.basePath + 'data/out/L'+bs+'n'+str(res)+runStr+dmStr+'/'
+                    print('WARNING: No mount on [karl] to TNG300 or TNG50 data unless manually made...')
             #end magny
 
             self.savPrefix  = 'IP'

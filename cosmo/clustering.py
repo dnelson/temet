@@ -360,8 +360,8 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         pos_search = gc['subhalos']['SubhaloPos']
     else:
         with np.errstate(invalid='ignore'):
-            wMinMass = np.where( masses['mstar30kpc'] >= mstar30kpc_min )
-        print(' reducing [%d] to [%d] subhalo searches...' % (nSubhalos,len(wMinMass[0])))
+            wMinMass = np.where( masses['mstar30kpc'] >= mstar30kpc_min )[0]
+        print(' reducing [%d] to [%d] subhalo searches...' % (nSubhalos,len(wMinMass)))
 
         pos_search = np.squeeze( gc['subhalos']['SubhaloPos'][wMinMass,:] )
 
@@ -372,7 +372,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     qred = quantReductionInRad(pos_search, pos_target, rad_bin_code, quants, 'max', sP.boxSize)
 
     sec = (time.time()-start_time)
-    print(' took: %.1f sec %.2f min' % (sec,sec/60.0))
+    print(' took: %.1f sec (%.2f min)' % (sec,sec/60.0))
 
     r = {}
     for i, key in enumerate(masses):
@@ -380,8 +380,25 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         r[key].fill(np.nan)
         r[key][wMinMass] = np.squeeze(qred[:,0,i])
 
+    # verify
+    nVerify = 10
+    np.random.seed(4242 + wMinMass.size + nVerify)
+    verifyInds = np.random.choice(wMinMass.size, size=nVerify, replace=False)
+
+    for verifyInd in verifyInds:
+        cen_pos = np.squeeze(pos_search[verifyInd,:])
+        dists = periodicDistsSq(cen_pos, pos_target, sP=sP)
+        w = np.where( (dists <= rad_bin_code[-1]**2) & (dists > 0.0) )
+
+        for i, key in enumerate(masses):
+            if np.count_nonzero(~np.isnan(quants[w,i])):
+                assert r[key][wMinMass[verifyInd]] == np.nanmax(quants[w,i])
+            else:
+                assert r[key][wMinMass[verifyInd]] == -np.inf
+
     # calculate some useful isolation flags
-    flagNames = ['flag_iso_mstar2_max_half','flag_iso_mstar30kpc_max_half','flag_iso_mhalo_lt_12']
+    flagNames = ['flag_iso_mstar2_max_half','flag_iso_mstar30kpc_max_half',
+                 'flag_iso_mstar30kpc_max','flag_iso_mhalo_lt_12']
 
     for flagName in flagNames:
         r[flagName] = np.zeros( nSubhalos, dtype='int16' )
@@ -403,7 +420,16 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         r['flag_iso_mstar30kpc_max_half'][w1] = 1
         r['flag_iso_mstar30kpc_max_half'][w2] = 0
 
-        print(' [%d isolated] and [%d non-isolated] of [%d total] according to mstar30kpc.' % \
+        print(' [%d isolated] and [%d non-isolated] of [%d total] according to (0.5)mstar30kpc.' % \
+            (len(w1[0]),len(w2[0]),pos_search.shape[0]))
+        assert len(w1[0]) + len(w2[0]) == pos_search.shape[0]
+
+        w1 = np.where( ngb_max_mstar30kpc <= subhalo_mstar30kpc )
+        w2 = np.where( ngb_max_mstar30kpc > subhalo_mstar30kpc )
+        r['flag_iso_mstar30kpc_max'][w1] = 1
+        r['flag_iso_mstar30kpc_max'][w2] = 0
+
+        print(' [%d isolated] and [%d non-isolated] of [%d total] according to (1.0)mstar30kpc.' % \
             (len(w1[0]),len(w2[0]),pos_search.shape[0]))
         assert len(w1[0]) + len(w2[0]) == pos_search.shape[0]
 
