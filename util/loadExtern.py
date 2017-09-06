@@ -1174,6 +1174,103 @@ def anderson2015(sP):
 
     return r
 
+def werk2013(onlydict=False, tumlinsonOVI=True):
+    """ Load observational COS-Halos data from Werk+ (2013). """
+    path1 = dataBasePath + 'werk/galaxies_werk13.txt'
+    path2 = dataBasePath + 'werk/lines_werk13.txt'
+
+    if tumlinsonOVI: # use OVI columns from Tumlinson+ (2011)
+        path2 = dataBasePath + 'tumlinson/ovi_tumlinson11.txt'
+
+    with open(path1,'r') as f:
+        gal_lines = f.readlines()
+    with open(path2,'r') as f:
+        abs_lines = f.readlines()
+
+    galaxies = {}
+
+    for line in gal_lines:
+        if line[0] == '#': continue
+        name, redshift, R, Mstar, sfr, lim, sfr_err = line.split('\t')
+        is_limit = True if lim == '<' else False
+        # 0.22 is multiplicative correction factor of 0.61
+        # for both, see https://ned.ipac.caltech.edu/level5/March14/Madau/Madau3.html
+        galaxies[name] = {'z':float(redshift),
+                          'R':float(R),
+                          'logM':float(Mstar) - 0.22, # salpeter -> chabrier IMF correction
+                          'sfr':float(sfr) * 0.63, # salpeter -> chabrier SFR correction
+                          'sfr_limit':is_limit, # upper
+                          'sfr_err':float(sfr_err) * 0.63, # propagation
+                          'name':name,
+                          'lines':{}}
+
+    for line in abs_lines:
+        if line[0] == '#': continue
+        name, el, ion, lim, logN, err, flag = line.split('\t')
+        ion = el + ' ' + ion
+        lim = ['=','<','>'].index(lim)
+
+        assert name in galaxies
+        if ion in galaxies[name]:
+            print('skip: [%s] for [%s]' % (ion,name))
+            continue
+
+        # flag: 1 = good, 3 = minorly blended, 5 = non-detection (2sigma upper limit)
+        # 9 = saturated, and 11 = blended and saturated
+        galaxies[name]['lines'][ion] = {'line_limit':int(lim), # 0=exact, 1=upper, 2=lower
+                                        'logN':float(logN),
+                                        'err':float(err),
+                                        'flag':int(flag)} 
+
+    # pull out some flat numpy arrays
+    gals = [g for _, g in galaxies.iteritems() if 'O VI' in g['lines']]
+
+    logM = np.array( [gal['logM'] for gal in gals] )
+    z = np.array( [gal['z'] for gal in gals] )
+    sfr = np.array( [gal['sfr'] for gal in gals] )
+    sfr_err = np.array( [gal['sfr_err'] for gal in gals] )
+    sfr_limit = np.array( [gal['sfr_limit'] for gal in gals] ) # True=upper
+    R = np.array( [gal['R'] for gal in gals] )
+
+    ovi_logN = np.array( [gal['lines']['O VI']['logN'] for gal in gals] )
+    ovi_err = np.array( [gal['lines']['O VI']['err'] for gal in gals] )
+    ovi_limit = np.array( [gal['lines']['O VI']['line_limit'] for gal in gals] ) # 0=exact, 1=upper, 2=lower
+
+    if onlydict:
+        return gals
+
+    return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
+
+def johnson2015(survey='COS-Halos'):
+    """ Load observational data/compendium from Johnson+ (2015). """
+    assert survey in ['COS-Halos','IMACS','SDSS'] # only 3 in datafile
+
+    with open(dataBasePath + 'johnson/j15_table1.txt') as f:
+        lines = f.readlines()
+
+    gals = {}
+
+    for line in lines:
+        if line[0] == '#': continue
+        name,RAJ2000,DEJ2000,zgal,logMstar,Class,Env,Survey,d,d_Rh,\
+          l_logNHI,logNHI,e_logNHI,logNHIu,l_logNHOVI,logNHOVI,e_logNHOVI = line.split('|')
+
+        name = name.strip()
+        zgal = float(zgal)
+        logMstar = float(logMstar)
+        Class = Class.strip()
+        Env = Env.strip()
+        Survey = Survey.strip()
+        d = float(d)
+        d_Rh = float(d_Rh)
+
+        l_logNHOVI = [' ','<','not indicated'].index(l_logNHOVI) # 0=exact, 1=upper
+        logNHOVI = float(logNHOVI) if logNHOVI.strip() != '' else np.nan
+        e_logNHOVI = float(e_logNHOVI) if e_logNHOVI != '\n' else np.nan
+
+        if Survey != survey: continue # only load data points from one dataset at a time
+
+    return gals, logMstar, zgal, d, logNHOVI, e_logNHOVI, l_logNHOVI
 
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """

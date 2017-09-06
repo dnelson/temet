@@ -697,6 +697,50 @@ def contourf(*args, **kwargs):
 
     return cnt
 
+def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
+    """ Plot a quick 1D histogram of an array x and save it to a PDF. """
+    if skipzeros: x = x[x > 0.0]
+
+    # linear (x)
+    x_range = [ np.nanmin(x), np.nanmax(x) ]
+    binSize = (x_range[1] - x_range[0]) / nBins
+    yy_lin, xx_lin = np.histogram(x, bins=nBins, range=x_range, density=norm)
+    xx_lin = xx_lin[:-1] + 0.5*binSize
+
+    # log (x)
+    x = logZeroNaN(x)
+    x_range_log = [ np.nanmin(x), np.nanmax(x) ]
+    binSize = (x_range_log[1] - x_range_log[0]) / nBins
+    yy_log, xx_log = np.histogram(x, bins=nBins, range=x_range_log, density=norm)
+    xx_log = xx_log[:-1] + 0.5*binSize
+
+    # figure
+    figsize = np.array([14,10]) * 0.8 * 2
+    fig = plt.figure(figsize=figsize)
+
+    for i in range(4):
+        ax = fig.add_subplot(2,2,i+1)
+        ax.set_xlabel(['x','log(x)','x','log(x)'][i])
+        ax.set_ylabel(['N','N','log(N)','log(N)'][i])
+
+        if i in [1,3]:
+            x_plot = xx_log
+            y_plot = yy_log
+            ax.set_xlim(x_range_log)
+        else:
+            x_plot = xx_lin
+            y_plot = yy_lin
+            ax.set_xlim(x_range)
+            
+        if i in [2,3]: ax.set_yscale('log')
+
+        ax.plot(x_plot,y_plot, '-', lw=2.5)
+        ax.step(x_plot,y_plot, lw=2.5, where='mid',color='black',alpha=0.5)
+
+    fig.tight_layout()
+    fig.savefig(filename)
+    plt.close(fig)
+
 # --- I/O ---
 
 def curRepoVersion():

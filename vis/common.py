@@ -642,7 +642,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         element = partField.split()[0]
         ionNum  = partField.split()[1]
 
-        if 1:
+        if 0:
             # use cache
             mass = snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
         else:

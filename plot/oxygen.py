@@ -13,14 +13,16 @@ from scipy.signal import savgol_filter
 from os.path import isfile
 
 from util import simParams
+from util.loadExtern import werk2013, johnson2015
 from plot.config import *
-from util.helper import running_median, logZeroNaN, iterable, contourf
+from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable
 from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.cloudy import cloudyIon
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
-from cosmo.util import cenSatSubhaloIndices
+from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum
+
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
@@ -28,6 +30,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     from util.loadExtern import danforth2008, danforth2016, thomChen2008, tripp2008
 
     # config
+    lw = 3.5
     speciesList = ['nOVI','nOVI_solar','nOVI_10','nOVI_25']
     if boxDepth10:
         for i in range(len(speciesList)):
@@ -80,6 +83,9 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     ax.add_artist(legend1)
 
     # loop over each fullbox run
+    prevName = ''
+    lwMod = 0.0
+
     for sP in sPs:
         if sP.isZoom:
             continue
@@ -87,7 +93,14 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
         print('CDDF OVI: '+sP.simName)
         sP.setRedshift(simRedshift)
 
-        c = ax._get_lines.prop_cycler.next()['color']
+        if sP.simName.split("-")[0] == prevName:
+            # decrease line thickness
+            lwMod += 1.0
+        else:
+            # next color
+            c = ax._get_lines.prop_cycler.next()['color']
+            prevName = sP.simName.split("-")[0]
+            lwMod = 0.0
 
         # pre-computed CDDF: first species for sizes
         ac = auxCat(sP, fields=['Box_CDDF_'+speciesList[0]])
@@ -132,14 +145,14 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
 
         # plot middle line
         label = sP.simName
-        ax.plot(xx, yy, '-', lw=3.0, color=c, label=label)
+        ax.plot(xx, yy, '-', lw=lw-lwMod, color=c, label=label)
 
     # legend
     sExtra = [] #[plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
     lExtra = [] #[str(s) for s in speciesList]
 
     if not clean:
-        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,alpha=0.0,marker='')]
+        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=0.0,marker='')]
         lExtra += ['[ sims z=%3.1f ]' % simRedshift]
 
     handles, labels = ax.get_legend_handles_labels()
@@ -149,7 +162,8 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     pdf.savefig()
     plt.close(fig)
 
-def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshifts=[0,1,2,3], colorOff=0):
+def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshifts=[0,1,2,3], 
+                          boxDepth10=False, colorOff=0):
     """ CDDF (column density distribution function) of O VI in the whole box.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
 
@@ -194,9 +208,12 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                 sP.setRedshift(redshift)
 
                 # pre-computed CDDF: load at this redshift
-                ac = auxCat(sP, fields=['Box_CDDF_n'+ion])
-                N_ion  = ac['Box_CDDF_n'+ion][0,:]
-                fN_ion = ac['Box_CDDF_n'+ion][1,:]
+                fieldName = 'Box_CDDF_n'+ion
+                if boxDepth10: fieldName += '_depth10'
+
+                ac = auxCat(sP, fields=[fieldName])
+                N_ion  = ac[fieldName][0,:]
+                fN_ion = ac[fieldName][1,:]
 
                 xx = np.log10(N_ion)
 
@@ -210,7 +227,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                 # plot middle line
                 label = '%s %s z=%.1f' % (sP.simName, ion, redshift)
                 if clean: label = ion
-                if clean and len(ions) == 1: label = sP.simName
+                if clean and len(ions) == 1 and not boxDepth10: label = sP.simName
                 if i > 0: label = ''
                 c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
 
@@ -348,7 +365,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     fig.savefig(saveName)
     plt.close(fig)
 
-def _resolutionLineHelper(ax, sP, radRelToVirRad=False):
+def _resolutionLineHelper(ax, sP, radRelToVirRad=False, rvirs=None, massBins=None, corrMaxBox=False):
     """ Helper: add some resolution lines at small radius. """
     resBandPKpc = 2.0 * sP.gravSoft
     yOff = 0.15
@@ -359,7 +376,8 @@ def _resolutionLineHelper(ax, sP, radRelToVirRad=False):
     xx = np.array(ax.get_xlim())
 
     if not radRelToVirRad:
-        ax.text(xx[1]-xOff,yy[0]+yOff,"%d Mpc" % (10.0**xx[1]/1000.0), **textOpts)
+        if not corrMaxBox:
+            ax.text(xx[1]-xOff,yy[0]+yOff,"%d Mpc" % (10.0**xx[1]/1000.0), **textOpts)
 
         xx[1] = np.log10(resBandPKpc) # log [pkpc]
         ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1)
@@ -367,13 +385,26 @@ def _resolutionLineHelper(ax, sP, radRelToVirRad=False):
     else:
         minMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[0]) / 1000.0
         maxMpc = (10.0**xx[1])*sP.units.codeLengthToKpc(rvirs[-1]) / 1000.0
-        ax.text(xx[1]-xOff, yy[0]+yOff, "%d Mpc $\sim$ %d Mpc" % (minMpc,maxMpc), **textOpts)
+        ax.text(xx[1]-xOff, yy[0]+yOff, "%d Mpc $\\rightarrow$ %d Mpc" % (minMpc,maxMpc), **textOpts)
 
         for k, massBin in enumerate(massBins):
             xx[1] = np.log10(resBandPKpc / sP.units.codeLengthToKpc(rvirs[k]))
             ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#555555', alpha=0.1+0.01*k)
             if k == 0:
                 ax.text(xx[1]-xOff, yy[0]+yOff, "Resolution Limit", **textOpts)
+
+    if corrMaxBox:
+        # show maximum separation scale at which tpcf is trustable (~5 Mpc/h for TNG100, ~20 Mpc/h for TNG300)
+        boxBandPKpc = sP.units.codeLengthToKpc( sP.boxSize / 15.0 ) # default
+        if sP.boxSize == 75000.0: boxBandPKpc = sP.units.codeLengthToKpc( 5000.0 )
+        if sP.boxSize == 205000.0: boxBandPKpc = sP.units.codeLengthToKpc( 5000.0*(50/20) )
+
+        xx = np.array(ax.get_xlim())
+        xx[0] = np.log10(boxBandPKpc)
+
+        ax.fill_between(xx, [yy[0],yy[0]], [yy[1],yy[1]], color='#333333', alpha=0.05)
+        ax.text(xx[0]-xOff, yy[0]+yOff+2.0, "Box Size Limit", **textOpts)
+
 
 def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelect='cen', projDim='3D',
                           radRelToVirRad=False, massDensity=False, haloMassBins=None, stellarMassBins=None,
@@ -386,7 +417,6 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     from tracer.tracerMC import match3
 
     # config
-    binSize = 0.2 # log mass
     percs = [10,90]
 
     fieldTypes = ['GlobalFoF'] # Global, Subfind, GlobalFoF, SubfindGlobal
@@ -415,7 +445,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
             ax.set_ylim([-37.0,-30.0])
             ax.set_ylabel('Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-3}$ ]')
         else:
-            ax.set_ylim([-15.0, -7.0])
+            ax.set_ylim([-14.0, -6.0])
             ax.set_ylabel('Number Density $n_{\\rm oxygen}$ [ log cm$^{-3}$ ]')
     else:
         # 2D mass/column density
@@ -499,6 +529,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                     w = np.where( (masses_loc >= massBin[0]) & (masses_loc < massBin[1]) )
 
                     print(' %s [%d] %.1f - %.1f : %d' % (projDim,k,massBin[0],massBin[1],len(w[0])))
+                    assert len(w[0])
 
                     # radial bins: normalize to rvir if requested
                     avg_rvir_code = np.nanmedian( rad_loc[w] )
@@ -532,7 +563,11 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                             yy_local = yy_local[:,nInner-1:]
                             rr = np.hstack( [rInner,rr[nInner:]] )
 
-                        yy_mean = np.sum( yy_local, axis=0 ) / len(w[0])
+                        # replace zeros by nan so they are not included in percentiles
+                        yy_local[yy_local == 0.0] = np.nan
+
+                        # calculate mean profile and scatter
+                        yy_mean = np.nansum( yy_local, axis=0 ) / len(w[0])
                         yp = np.nanpercentile( yy_local, percs, axis=0 )
 
                         # log both axes
@@ -554,12 +589,18 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         # plot median line
                         label = '%.1f < $M_{\\rm halo}$ < %.1f' \
                           % (massBin[0],massBin[1]) if (i == 0 and radType == 0) else ''
+                        label = '$M_{\\rm halo}$ = %.1f' \
+                          % (0.5*(massBin[0]+massBin[1])) if (i == 0 and radType == 0) else ''
                         ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[radType], label=label)
 
                         # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
                         yrvir = ax.get_ylim()
                         yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.25
-                        yrvir[1] -= 0.4 * k
+
+                        if '3D' in projDim:
+                            yrvir[1] -= 0.4 * k
+                        else:
+                            yrvir[1] -= 0.1 * k
 
                         if not radRelToVirRad:
                             xrvir = np.log10( [avg_rvir_code, avg_rvir_code] )
@@ -578,7 +619,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                             ax.fill_between(rr, yp[0,:], yp[-1,:], color=c, interpolate=True, alpha=0.2)
 
     # gray resolution band at small radius
-    _resolutionLineHelper(ax, sPs[0], radRelToVirRad)
+    _resolutionLineHelper(ax, sPs[0], radRelToVirRad, rvirs=rvirs, massBins=massBins)
 
     # legend
     sExtra = []
@@ -624,9 +665,9 @@ def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0
     ax.set_xlim([0.0, 4.0])
     ax.set_xlabel('Radius [ log pkpc ]')
 
-    ax.set_ylim([-2.0,4.0])
-    if order == 1: ax.set_ylim([0.0,6.0])
-    if order == 2: ax.set_ylim([1.0,9.0])
+    ax.set_ylim([-1.0,6.0])
+    if order == 1: ax.set_ylim([1.0,7.0])
+    if order == 2: ax.set_ylim([1.0,8.0])
     if ions[0] == 'bhmass' and order == 0: ax.set_ylim([-1.0,5.0])
     ionStr = '_{\\rm %s}'%ions[0] if len(ions) == 1 else ''
     ax.set_ylabel('%s$\\xi%s(r)$ [ log ]' % (['','r','r$^2$'][order],ionStr))
@@ -666,24 +707,26 @@ def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0
             y_plot = logZeroNaN(yFac * xi[ww])
 
             label = ion if i == 0 else ''
+            if label == 'O': label = 'O / Z$_{\\rm tot}$'
             l, = ax.plot(x_plot, y_plot, lw=lw, linestyle=linestyles[i], label=label, color=c, alpha=alpha)
 
             # todo, symbols, bands, etc
             if xi_err is not None and drawError:
                 if 1:
-                    yy0 = y_plot - logZeroNaN( yFac*(xi[ww] - xi_err[ww]/2) )
-                    yy1 = logZeroNaN( yFac*(xi[ww] + xi_err[ww]/2) ) - y_plot
+                    yy0 = y_plot - logZeroNaN( yFac*(xi[ww] - 5*xi_err[ww]/2) )
+                    yy1 = logZeroNaN( yFac*(xi[ww] + 5*xi_err[ww]/2) ) - y_plot
                     ax.errorbar(x_plot, y_plot, yerr=[yy0,yy1], markerSize=symSize, 
                          color=l.get_color(), ecolor=l.get_color(), alpha=alphaFill*2, capsize=0.0, fmt='o')
+                    #import pdb; pdb.set_trace()
 
                 if 0:
-                    yy0 = logZeroNaN( yFac*(xi[ww] - xi_err[ww]/2) )
-                    yy1 = logZeroNaN( yFac*(xi[ww] + xi_err[ww]/2) )
+                    yy0 = logZeroNaN( yFac*(xi[ww] - 5*xi_err[ww]/2) )
+                    yy1 = logZeroNaN( yFac*(xi[ww] + 5*xi_err[ww]/2) )
 
                     ax.fill_between(x_plot, yy0, yy1, color=l.get_color(), interpolate=True, alpha=alphaFill)
 
     # gray resolution band at small radius
-    _resolutionLineHelper(ax, sPs[0])
+    _resolutionLineHelper(ax, sPs[0], corrMaxBox=True)
 
     # legend
     sExtra = []
@@ -756,14 +799,393 @@ def oxygenAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshi
     fig.savefig(saveName)
     plt.close(fig)
 
+def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
+    """ Get a matched sample of simulated galaxies which match an observational abs. line dataset. """
+    if datasetName == 'COS-Halos':
+        # load
+        gals, logM, redshift, sfr, sfr_err, sfr_limit, R, _, _, _ = werk2013()
+        logM_err = 0.2 # dex, assumed
+        sfr_err[sfr_limit] = 0.0 # upper limits
+
+        # define how we will create this sample, by matching on what quantities
+        propList = ['mstar_30pkpc_log','ssfr_30pkpc_log','central_flag',
+                    'isolated3d_mstar_30pkpc_max_in_300pkpc']
+
+        # set up required properties and limit types
+        shape = (len(gals), numRealizations)
+
+        props = {}
+        props['mstar_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+        props['ssfr_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+
+        props['central_flag'] = np.zeros( shape, dtype='int16' )
+        props['central_flag'].fill(1) # realization independent, always required
+
+        props['isolated3d_mstar_30pkpc_max_in_300pkpc'] = np.zeros( shape, dtype='int16' )
+        props['isolated3d_mstar_30pkpc_max_in_300pkpc'].fill(1) # realization independent, always required
+
+        limits = {}
+        for propName in propList:
+            # set 0=compute in distance (default), 1=upper limit, 2=lower limit, 3=exact match required
+            limits[propName] = np.zeros( shape, dtype='int16' )
+
+        limits['ssfr_30pkpc_log'][np.where(sfr_limit),:] = 1 # realization independent, upper limit
+        limits['central_flag'][:] = 3 # realization/galaxy indepedent, exact
+        limits['isolated3d_mstar_30pkpc_max_in_300pkpc'][:] = 3 # realization/galaxy indepedent, exact
+
+        # create realizations by adding appropriate noise to obs
+        np.random.seed(424242)
+        for i in range(numRealizations):
+            mass_random_err_log = np.random.normal(loc=0.0, scale=logM_err, size=len(gals))
+            sfr_rnd_err = np.random.normal(loc=0.0, scale=sfr_err, size=len(gals))
+            ssfr = (sfr + sfr_rnd_err) / 10.0**(logM + mass_random_err_log)
+
+            props['mstar_30pkpc_log'][:,i] = logM + mass_random_err_log
+            props['ssfr_30pkpc_log'][:,i] = np.log10( ssfr )
+
+    if datasetName == 'other_todo':
+        assert 0
+
+    # save file exists?
+    saveFilename = sP.derivPath + "obsMatchedSample_%s_%d.hdf5" % (datasetName,numRealizations)
+
+    if isfile(saveFilename):
+        r = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # no, compute now
+    r = {}
+
+    if len(redshift) > 1:
+        # match each galaxy redshift to a simulation snapshot
+        r['snaps'] = redshiftToSnapNum(redshift, sP)
+    else:
+        # match all observed galaxies to the single simulation redshift 'z'
+        r['snaps'] = [ redshiftToSnapNum(redshift, sP) ]
+
+    # save the final subfind IDs we select via matching
+    r['selected_inds'] = np.zeros( shape, dtype='int32' )
+
+    for propName in propList:
+        r[propName] = np.zeros( shape, dtype=props[propName].dtype )
+
+    origSnap = sP.snap
+
+    for snap in np.unique(r['snaps']):
+        # which galaxies correspond to this snap?
+        w_loc = np.where(r['snaps'] == snap)
+        print('[snap %3d] N = %d' % (snap,len(w_loc[0])))
+
+        # load catalog properties at this redshift
+        sP.setSnap(snap)
+        sim_props = groupCat(sP, fieldsSubhalos=propList)
+
+        # loop over observed galaxies
+        for gal_num in w_loc[0]:
+            # loop over requested realizations
+            print(' [%2d] [' % gal_num,end='')
+            for realization in range(numRealizations):
+                # subset of absolutely consistent simulated systems (i.e. handle limits)
+                mask = np.ones( sim_props[propList[0]].size, dtype=np.bool )
+                print('.',end='')
+
+                for propName in propList:
+                    loc_limit = limits[propName][gal_num,realization]
+                    loc_prop_val = props[propName][gal_num,realization]
+
+                    if loc_limit == 1: # upper limit
+                        mask &= (sim_props[propName] < loc_prop_val)
+                    if loc_limit == 2: # lower limit
+                        mask &= (sim_props[propName] > loc_prop_val)
+                    if loc_limit == 3: # exact, i.e. only integer makes sense
+                        mask &= (sim_props[propName] == loc_prop_val)
+
+                w_mask = np.where(mask)
+
+                # L1 norm (Manhattan distance metric) for remaining properties (i.e. handle non-limits)
+                dists = np.zeros( w_mask[0].size )
+
+                for propName in propList:
+                    loc_limit = limits[propName][gal_num,realization]
+                    loc_prop_val = props[propName][gal_num,realization]
+
+                    if loc_limit == 0:
+                        dists += np.abs( sim_props[propName][w_mask] - loc_prop_val )
+
+                # select minimum distance in the space of properties to be matched
+                w_nan = np.isnan(dists)
+                dists[w_nan] = np.nanmax(dists) + 1.0 # filter out nan arising from simulated galaxies
+
+                r['selected_inds'][gal_num,realization] = w_mask[0][ dists.argmin() ]
+
+            # store properties as matched
+            for propName in propList:
+                r[propName][gal_num,:] = sim_props[propName][ r['selected_inds'][gal_num,:] ]
+
+            print(']')
+            print(' [%d] selected_inds = %d, %d...' % \
+                (gal_num,r['selected_inds'][gal_num,0],r['selected_inds'][gal_num,1]))
+
+    sP.setSnap(origSnap)
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        for key in r:
+            f[key] = r[key]
+
+    return r
+
+def cosHalosSimMatchedGalaxySample(sP, saveName):
+    """ Plot the COS-Halos galaxies data, and our mock sample."""
+    from matplotlib import ticker
+    from matplotlib.colors import Normalize, colorConverter
+    from scipy.stats import binned_statistic_2d
+
+    # config
+    detLimitAlpha = 0.6 # alpha transparency for upper/lower limits
+    lw = 3.0
+
+    cmap = loadColorTable('RdYlGn')
+    colorMinMax = [0.1,0.3] # redshift
+    cbarTextSize = 13
+    nBinsHist = 8
+
+    cmap2D = loadColorTable('gray_r')
+    nBinsHist2D = 30
+
+    xlim = [9.5, 11.5] # log mstar [msun]
+    ylim = [-13.0, -9.0] # log ssfr [1/yr]
+
+    # load data
+    gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit = werk2013()
+    log_ssfr = np.log10(sfr/10.0**logM)
+
+    sim_sample = obsMatchedSample(sP, datasetName='COS-Halos')
+
+    # plot geometry setup
+    left = 0.12
+    bottom = 0.12
+    width = 0.64
+    height = 0.66
+    hist_pad = 0.02
+    cbar_pad = 0.03
+
+    rect_scatter = [left, bottom, width, height]
+    rect_hist_top = [left, bottom+height+hist_pad, width, 1.0-height-bottom-hist_pad*2]
+    rect_hist_right = [left+width+hist_pad, bottom, 1.0-left-width-hist_pad*2, height]
+    rect_cbar = [left+cbar_pad, bottom+cbar_pad, 0.03, height/2]
+
+    # plot setup
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+
+    ax = fig.add_axes(rect_scatter)
+
+    ax.set_ylim(ylim)
+    ax.set_ylabel('Galaxy sSFR [ 1/yr ]')
+    ax.set_xlim(xlim)
+    ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]')
+
+    # plot sim 2d histogram in background
+    bbox = ax.get_window_extent()
+    nBins2D = np.array([nBinsHist2D, int(nBinsHist2D*(bbox.height/bbox.width))])
+
+    sim_xvals = sim_sample['mstar_30pkpc_log'].ravel()
+    sim_yvals = sim_sample['ssfr_30pkpc_log'].ravel()
+    sim_cvals = np.zeros( sim_xvals.size )
+
+    cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, 'count', 
+                                                 bins=nBins2D, range=[xlim,ylim])
+
+    cc = cc.T # imshow convention
+    cc2d = cc # logZeroNaN(cc)
+
+    cMinMax = [np.nanmax(cc2d)*0.1, np.nanmax(cc2d)*1.1]
+    norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
+    cc2d_rgb = cmap2D(norm(cc2d))
+
+    cc2d_rgb[cc == 0.0,:] = colorConverter.to_rgba('white') # empty bins
+
+    plt.imshow(cc2d_rgb, extent=[xlim[0],xlim[1],ylim[0],ylim[1]], origin='lower', 
+               interpolation='nearest', aspect='auto')
+
+    # plot obs scatterpoints on top
+    for limitType in [2,1,0]: # upper, lower, exact
+        w = np.where(ovi_limit == limitType)
+
+        label = 'COS-Halos' if limitType == 0 else ''
+        marker = ['o','v','^'][limitType]
+        alpha = 1.0 if limitType == 0 else detLimitAlpha
+
+        s = ax.scatter(logM[w], log_ssfr[w], s=80, marker=marker, c=z[w], label=label, alpha=alpha, 
+                       edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1])
+
+    # top histogram: setup
+    ax_h1 = fig.add_axes(rect_hist_top)
+    ax_h1.set_ylabel('PDF')
+    ax_h1.set_xlabel('')
+    ax_h1.set_xlim(xlim)
+    ax_h1.set_ylim([0,1.5])
+    ax_h1.xaxis.set_major_formatter(ticker.NullFormatter())
+    ax_h1.yaxis.set_major_formatter(ticker.NullFormatter())
+
+    # top histogram: obs and sim
+    c_obs = 'black'
+    c_sim = ax._get_lines.prop_cycler.next()['color']
+
+    ax_h1.hist(logM, bins=nBinsHist, range=xlim, normed=True, histtype='bar', 
+               alpha=0.5, color=c_obs, orientation='vertical', label='COS-Halos')
+
+    ax_h1.hist(sim_xvals, 
+               bins=nBinsHist*4, range=xlim, normed=True, histtype='bar', 
+               alpha=0.5, color=c_sim, orientation='vertical', label=sP.simName)
+
+    ax_h1.legend(loc='upper right', prop={'size':13})
+
+    # right histogram: setup
+    ax_h2 = fig.add_axes(rect_hist_right)
+    ax_h2.set_xlabel('PDF')
+    ax_h2.set_ylabel('')
+    ax_h2.set_ylim(ylim)
+    ax_h2.set_xlim([0,1.0])
+    ax_h2.xaxis.set_major_formatter(ticker.NullFormatter())
+    ax_h2.yaxis.set_major_formatter(ticker.NullFormatter())
+
+    ax_h2.hist(log_ssfr, bins=nBinsHist, range=ylim, normed=True, histtype='bar', 
+               alpha=0.5, color=c_obs, orientation='horizontal', label='COS-Halos')
+
+    ax_h2.hist(sim_yvals, 
+               bins=nBinsHist*4, range=ylim, normed=True, histtype='bar', 
+               alpha=0.5, color=c_sim, orientation='horizontal', label=sP.simName)
+
+    # colorbar
+    cbar_ax = fig.add_axes(rect_cbar)
+    cb = fig.colorbar(s, cax=cbar_ax)
+    cb.locator = ticker.MaxNLocator(nbins=1) # nbins = Nticks+1
+    cb.update_ticks()
+    cb.ax.set_ylabel('Galaxy Redshift', size=cbarTextSize+5)
+
+    # colorbar labels
+    cb.ax.tick_params(labelsize=0)
+    cb.ax.text(0.5, 0.06, '%.1f' % colorMinMax[0], ha='center', va='center', size=cbarTextSize)
+    cb.ax.text(0.5, 0.5, '%.1f' % np.mean(colorMinMax), ha='center', va='center', size=cbarTextSize)
+    cb.ax.text(0.5, 0.94, '%.1f' % colorMinMax[1], ha='center', va='center', size=cbarTextSize)
+
+
+    fig.savefig(saveName)
+    plt.close(fig)
+
+def cosOVIDataPlot(sPs, saveName, ions=['OVI'], radRelToVirRad=False):
+    """ Plot COS-Halos data, and our mock COS-Halos galaxy sample and analysis."""
+
+    # config
+    detLimitAlpha = 0.3 # alpha transparency for upper/lower limits
+    sizefac = 1.0 if not clean else sfclean
+    lw = 3.0
+
+    # load data
+    assert ions == ['OVI'] # otherwise need pull out of gals{}
+    gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit = werk2013()
+    log_ssfr = np.log10(sfr/10.0**logM)
+
+    for iter in [0,1]:
+        # plot setup
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+        
+        if iter == 0:
+            # x axis = impact parameter
+            if radRelToVirRad:
+                ax.set_xlim([0, 2.0])
+                ax.set_xlabel('Projected Distance / Virial Radius')
+            else:
+                ax.set_xlim([0, 200])
+                ax.set_xlabel('Projected Distance [ pkpc ]')
+
+        if iter == 1:
+            # x axis = sSFR
+            ax.set_xlim([-13.0, -9.0])
+            ax.set_xlabel('sSFR [ 1/yr ]')
+
+        ax.set_ylim([12.5, 15.5])
+        ax.set_ylabel('Column Density $N_{\\rm OVI}$ [ log cm$^{-2}$ ]')
+
+        # plot obs
+        cmap = loadColorTable('coolwarm')
+
+        for limitType in [2,1,0]: # upper, lower, exact
+            w = np.where(ovi_limit == limitType)
+
+            label = 'COS-Halos' if limitType == 0 else ''
+            marker = ['o','v','^'][limitType]
+            alpha = 1.0 if limitType == 0 else detLimitAlpha
+
+            if iter == 0:
+                x_vals = R[w]
+                c_vals = log_ssfr[w]
+                c_label = 'sSFR [ log 1/yr ]'
+                colorMinMax = [-12.0, -10.0]
+            if iter == 1:
+                x_vals = log_ssfr[w]
+                c_vals = logM[w]
+                c_label = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+                colorMinMax = [9.0,11.2]
+
+            y_vals = ovi_logN[w]
+
+            s = ax.scatter(x_vals, y_vals, s=80, marker=marker, c=c_vals, label=label, alpha=alpha, 
+                           edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1])
+
+        # loop over each fullbox run (todo)
+        if 0:
+            for i, sP in enumerate(sPs):
+                # load halo/stellar masses and CSS
+                sP.setRedshift(redshift)
+                masses = groupCat(sP, fieldsSubhalos=[massField])
+
+                cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+                masses = masses[cssInds]
+
+                # load virial radii
+                rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
+                rad = rad[cssInds]
+
+        # legend
+        sExtra = []
+        lExtra = []
+
+        if len(sPs) > 1:
+            for i, sP in enumerate(sPs):
+                sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+                lExtra += ['%s' % sP.simName]
+
+        handles, labels = ax.get_legend_handles_labels()
+        legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
+
+        fig.tight_layout()
+
+        # colorbar
+        fig.subplots_adjust(right=0.84)
+        cbar_ax = fig.add_axes([0.86, 0.12, 0.03, 0.84])
+        cb = fig.colorbar(s, cax=cbar_ax)
+        cb.ax.set_ylabel(c_label)
+
+        fig.savefig(saveName.split('.pdf')[0] + '_v%d.pdf' % iter)
+        plt.close(fig)
+
 # -------------------------------------------------------------------------------------------------
 
 def paperPlots():
     """ Construct all the final plots for the paper. """
-    TNG100 = simParams(res=1820,run='tng',redshift=0.0)
-    TNG100_2 = simParams(res=910,run='tng',redshift=0.0)
-    TNG100_3 = simParams(res=455,run='tng',redshift=0.0)
-    TNG300 = simParams(res=2500,run='tng',redshift=0.0)
+    TNG100    = simParams(res=1820,run='tng',redshift=0.0)
+    TNG100_2  = simParams(res=910,run='tng',redshift=0.0)
+    TNG100_3  = simParams(res=455,run='tng',redshift=0.0)
+    TNG300    = simParams(res=2500,run='tng',redshift=0.0)
+    TNG300_2  = simParams(res=1250,run='tng',redshift=0.0)
+    TNG300_2  = simParams(res=625,run='tng',redshift=0.0)
     Illustris = simParams(res=1820,run='illustris',redshift=0.0)
 
     ions = ['OVI','OVII','OVIII'] # whenever we are not just doing OVI
@@ -798,7 +1220,7 @@ def paperPlots():
         moment = 0
         simRedshift = 0.2
         boxDepth10 = True # use 10 Mpc/h projection depth
-        sPs = [TNG100, TNG100_2, TNG100_3, Illustris] # TNG300
+        sPs = [TNG100, TNG100_2, TNG100_3, TNG300, TNG300_2, TNG300_3, Illustris]
 
         pdf = PdfPages('cddf_ovi_z%02d_moment%d_%s%s.pdf' % \
             (10*simRedshift,moment,'_'.join([sP.simName for sP in sPs]),'_10Mpch' if boxDepth10 else ''))
@@ -809,18 +1231,21 @@ def paperPlots():
     if 0:
         moment = 0
         sPs = [TNG100]
+        boxDepth10 = True
         redshifts = [0,1,2,4]
 
         saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
             ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
              '_'.join([sP.simName for sP in sPs]))
-        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, colorOff=2)
+        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, 
+                              boxDepth10=boxDepth10, colorOff=2)
 
         for i, ion in enumerate(ions):
-            saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
+            saveName = 'cddf_%s_zevo-%s_moment%d_%s%s.pdf' % \
                 (ion, '-'.join(['%d'%z for z in redshifts]), moment, 
-                 '_'.join([sP.simName for sP in sPs]))
-            cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts, colorOff=i+2)
+                 '_'.join([sP.simName for sP in sPs]),'_10Mpch' if boxDepth10 else '')
+            cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts, 
+                                  boxDepth10=boxDepth10, colorOff=i+2)
 
     # figure 4, CDDF at z=0 with physics variants (L25n512)
     if 0:
@@ -829,7 +1254,7 @@ def paperPlots():
         variants1 = ['0100','0401','0402','0501','0502','0601','0602','0701','0703','0000']
         variants2 = ['0201','0202','0203','0204','0205','0206','0801','0802','1100','0000']
         variants3 = ['1000','1001','1002','1003','1004','1005','2002','2101','2102','0000']
-        variants4 = ['2201','2202','2203','0000','3000','3001','3002','3010','3100','0000'] #2302
+        variants4 = ['2201','2202','2203','2302','3000','3001','3002','3010','3100','0000']
         variants5 = ['3101','3102','3201','3202','0000','3301','3302','3303','3304','0000'] #3203
         variants6 = ['3403','3404','0000','3502','3401','3402','0000','0000','3603','0000'] #3501,3601,3602
         variants7 = ['3701','3702','3801','3802','3901','3902','4000','4100','4301','0000']
@@ -848,16 +1273,16 @@ def paperPlots():
     # figure 5: average radial profiles
     if 0:
         redshift = 0.0
-        sPs = [simParams(res=512,run='tng',redshift=0.0,variant='0000')] # debug
+        sPs = [TNG100]
         ions = ['OVI']
         cenSatSelect = 'cen'
-        haloMassBins = [[10.9,11.1], [11.4,11.6], [12.0,12.2]]
+        haloMassBins = [[10.9,11.1], [11.4,11.6], [11.9,12.1], [12.4,12.6]]
         projSpecs = ['3D','2Dz_2Mpc']
         combine2Halo = True
 
         simNames = '_'.join([sP.simName for sP in sPs])
 
-        for massDensity in [True,False]:
+        for massDensity in [False]: #[True,False]:
             for radRelToVirRad in [True,False]:
                 for projDim in projSpecs:
 
@@ -870,16 +1295,13 @@ def paperPlots():
     # figure 6: 2pcf
     if 0:
         redshift = 0.0
-        sPs = [TNG100, TNG300]
-        sPs = [simParams(res=128,run='tng',redshift=0.0,variant='0000')] # debug
-        ions = ['OVI','OVII','OVIII','O','Z','gas']
+        sPs = [TNG100] #[TNG100, TNG300]
+        ions = ['OVI','OVII','OVIII','O','gas']
 
         # compute time for one split:
         # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
-        # for nSplits=100000, should finish each in 3 days (nThreads=32) (each has 60,000 cells)
+        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
         # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
-        # todo: 2x1 panel: (A) z=0 metal mass, oxygen mass, OVI, OVII, OVIII, (B) redshift evo OVI
-
         for order in [0,1,2]:
             saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
               (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
@@ -915,14 +1337,35 @@ def paperPlots():
 
     # figure 9: 2d histos
     if 0:
-        pass
+        sP = TNG300
+        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
+        xQuants = ['mstar_30pkpc_log','mhalo_200_log']
+        cQuant = 'mass_ovi'
 
-    # figure 10: mock COS-Halos samples, N_OVI vs impact parameter and vs sSFR bimodality
+        yQuants1 = ['ssfr','surfdens1_stars','fgas2','stellarage','bmag_2rhalf_masswt','pratio_halo_masswt']
+        yQuants2 = ['Z_gas','Z_stars','Krot_oriented_stars2','Krot_oriented_gas2','size_gas','size_stars']
+        yQuants3 = ['color_C_gr','xray_r500','zform_mm5','BH_CumEgy_low','M_BH_actual','filled_below']
+
+        yQuantSets = [yQuants1, yQuants2, yQuants3]
+
+        for i, xQuant in enumerate(xQuants):
+            yQuants3[-1] = xQuants[1-i] # include the other
+
+            for j, yQuants in enumerate(yQuantSets):
+                params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
+
+                pdf = PdfPages('histo2d_x=%s_set-%d_%s.pdf' % (xQuant,j,sP.simName))
+                fig = plt.figure(figsize=figsize_loc)
+                quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[2], fig_subplot=[fig,323], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[3], fig_subplot=[fig,324], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
+                pdf.close()
+
+    # figure 10: ionization data for OVI, OVII, and OVIII
     if 0:
-        pass
-
-    # figure (appendix?): ionization data for OVI, OVII, and OVIII
-    if 1:
         element = 'Oxygen'
         ionNums = [6,7,8]
         redshift = 0.0
@@ -932,6 +1375,22 @@ def paperPlots():
           (element, '-'.join([str(i) for i in ionNums]),redshift*100,10**metal * 1000)
 
         oxygenAbundFracs2DHistos(saveName, element=element, ionNums=ionNums, redshift=redshift, metal=metal)
+
+    # figure 11: mock COS-Halos samples, N_OVI vs impact parameter and vs sSFR bimodality
+    if 1:
+        sPs = [TNG300]
+        saveName = 'coshalos_ovi_%s.pdf' % '_'.join([sP.simName for sP in sPs])
+
+        cosHalosSimMatchedGalaxySample(sPs[0], 'coshalos_sample_%s.pdf' % sPs[0].simName)
+        cosOVIDataPlot(sPs, saveName, ions=['OVI'], radRelToVirRad=False)
+
+    # figure 12: covering fractions, OVI vs obs
+    if 0:
+        pass
+
+    # figure 13: covering fractions, with physics variants (L25n512)
+    if 0:
+        pass
 
     # ------------ exploration ------------
 
@@ -1005,35 +1464,6 @@ def paperPlots():
             # for most quantities, is dominated everywhere by low-mass halos with very small mass_ovi:
             #quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
         pdf.close()
-
-    # exploration: 2D OVI
-    if 0:
-        sP = TNG300
-        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        xQuants = ['mstar_30pkpc_log','mhalo_200_log']
-        cQuant = 'mass_ovi'
-
-        yQuants1 = ['ssfr','surfdens1_stars','fgas2','stellarage','bmag_2rhalf_masswt','pratio_halo_masswt']
-        yQuants2 = ['Z_gas','Z_stars','Krot_oriented_stars2','Krot_oriented_gas2','size_gas','size_stars']
-        yQuants3 = ['color_C_gr','xray_r500','zform_mm5','BH_CumEgy_low','M_BH_actual','filled_below']
-
-        yQuantSets = [yQuants1, yQuants2, yQuants3]
-
-        for i, xQuant in enumerate(xQuants):
-            yQuants3[-1] = xQuants[1-i] # include the other
-
-            for j, yQuants in enumerate(yQuantSets):
-                params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
-
-                pdf = PdfPages('histo2d_x=%s_set-%d_%s.pdf' % (xQuant,j,sP.simName))
-                fig = plt.figure(figsize=figsize_loc)
-                quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[2], fig_subplot=[fig,323], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[3], fig_subplot=[fig,324], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
-                quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
-                pdf.close()
 
     # exploration: cloudy ionization table
     if 0:
