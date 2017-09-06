@@ -467,7 +467,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
     # void return
 
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, 
-           colDens=False, nThreads=8, multi=False, posTarget=None, maxIntProj=False, minIntProj=False):
+           colDens=False, nThreads=16, multi=False, posTarget=None, maxIntProj=False, minIntProj=False):
     """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
         quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
         returned, optionally converted to a column density map if colDens=True. If quant is specified, 

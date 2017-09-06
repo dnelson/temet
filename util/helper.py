@@ -24,7 +24,8 @@ def isUnique(x):
 def closest(array, value):
     """ Return closest element of array to input value. """
     ind = ( np.abs(array-value) ).argmin()
-    return array[ind], ind
+    ind_nd = np.unravel_index( ind, array.shape )
+    return array[ind_nd], ind
 
 def array_equal_nan(a, b):
     """ As np.array_equal(a,b) but allowing NaN==NaN. """
