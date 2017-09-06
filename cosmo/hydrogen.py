@@ -1,6 +1,7 @@
 """
 cosmo/hydrogen.py
   Modeling of the UVB and hydrogen states following Rahmati. Credit to Simeon Bird for many ideas herein.
+  Also full box or halo based analysis of hydrogen/metal content.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -203,4 +204,3 @@ def calculateCDDF(N_GridVals, binMin, binMax, binSize, sP, depthFrac=1.0):
     f_N = F_N / (delta_N * dX * N_GridVals.size) # units of [cm^2]
 
     return f_N, binCen
-    

@@ -22,7 +22,7 @@ from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, 
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum
-from obs.galaxySample import obsMatchedSample
+from obs.galaxySample import obsMatchedSample, addIonColumnPerSystem
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
@@ -943,7 +943,6 @@ def cosOVIDataPlot(sPs, saveName, ions=['OVI'], radRelToVirRad=False):
     """ Plot COS-Halos data, and our mock COS-Halos galaxy sample and analysis."""
 
     # config
-    detLimitAlpha = 0.3 # alpha transparency for upper/lower limits
     sizefac = 1.0 if not clean else sfclean
     lw = 3.0
 
@@ -975,44 +974,54 @@ def cosOVIDataPlot(sPs, saveName, ions=['OVI'], radRelToVirRad=False):
         ax.set_ylabel('Column Density $N_{\\rm OVI}$ [ log cm$^{-2}$ ]')
 
         # plot obs
-        cmap = loadColorTable('coolwarm')
-
         for limitType in [2,1,0]: # upper, lower, exact
             w = np.where(ovi_limit == limitType)
 
             label = 'COS-Halos' if limitType == 0 else ''
             marker = ['o','v','^'][limitType]
-            alpha = 1.0 if limitType == 0 else detLimitAlpha
 
             if iter == 0:
                 x_vals = R[w]
                 c_vals = log_ssfr[w]
                 c_label = 'sSFR [ log 1/yr ]'
                 colorMinMax = [-12.0, -10.0]
+                cmap = loadColorTable('coolwarm_r')
             if iter == 1:
                 x_vals = log_ssfr[w]
                 c_vals = logM[w]
                 c_label = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
                 colorMinMax = [9.0,11.2]
+                cmap = loadColorTable('coolwarm')
 
             y_vals = ovi_logN[w]
 
-            s = ax.scatter(x_vals, y_vals, s=80, marker=marker, c=c_vals, label=label, alpha=alpha, 
+            s = ax.scatter(x_vals, y_vals, s=80, marker=marker, c=c_vals, label=label, alpha=1.0, 
                            edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1])
 
-        # loop over each fullbox run (todo)
-        if 0:
-            for i, sP in enumerate(sPs):
-                # load halo/stellar masses and CSS
-                sP.setRedshift(redshift)
-                masses = groupCat(sP, fieldsSubhalos=[massField])
+        # loop over each fullbox run
+        for i, sP in enumerate(sPs):
+            # load
+            sim_sample = obsMatchedSample(sP, datasetName='COS-Halos')
+            sim_sample = addIonColumnPerSystem(sP, sim_sample, config='COS-Halos')
 
-                cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
-                masses = masses[cssInds]
+            # plot
+            if iter == 0:
+                x_vals = sim_sample['impact_parameter'].ravel()
+                c_vals = sim_sample['ssfr_30pkpc_log'].ravel()
+                c_label = 'sSFR [ log 1/yr ]'
+                colorMinMax = [-12.0, -10.0]
+                cmap = loadColorTable('coolwarm_r')
+            if iter == 1:
+                x_vals = sim_sample['ssfr_30pkpc_log'].ravel()
+                c_vals = sim_sample['mstar_30pkpc_log'].ravel()
+                c_label = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
+                colorMinMax = [9.0,11.2]
+                cmap = loadColorTable('coolwarm')
 
-                # load virial radii
-                rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
-                rad = rad[cssInds]
+            y_vals = sim_sample['column'].ravel()
+
+            s = ax.scatter(x_vals, y_vals, s=10, marker='s', c=c_vals, label=sP.simName, alpha=0.3, 
+                           edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1])
 
         # legend
         sExtra = []
@@ -1240,6 +1249,7 @@ def paperPlots():
     # figure 11: mock COS-Halos samples, N_OVI vs impact parameter and vs sSFR bimodality
     if 1:
         sPs = [TNG100]
+        #sPs = [simParams(res=256,run='tng',redshift=0.0,variant='0000')] # debugging
         saveName = 'coshalos_ovi_%s.pdf' % '_'.join([sP.simName for sP in sPs])
 
         cosHalosSimMatchedGalaxySample(sPs[0], 'coshalos_sample_%s.pdf' % sPs[0].simName)
