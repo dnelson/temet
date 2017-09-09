@@ -692,6 +692,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
         last_sub_groupID = last_sub
 
     # load group offsets
+    snapHeader = cosmo.load.snapshotHeader(sP)
     snapOffsets = cosmo.load.groupCatOffsetListIntoSnap(sP)
     offsets_pt = snapOffsets['snapOffsetsGroup']
 
@@ -708,6 +709,9 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
 
     r = {}
     for ptName in ['gas','dm','stars','bhs']:
+        if snapHeader['NumPart'][sP.ptNum(ptName)] == 0:
+            continue # no particles of this type
+
         # bound upper range using the start of the next group/subhalo, minus one
         r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID+1], sP.ptNum(ptName) ]
         # the final index is inclusive, as in snapshotSubset(), but not as in numpy indexing

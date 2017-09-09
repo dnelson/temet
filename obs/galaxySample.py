@@ -10,16 +10,18 @@ import h5py
 from os.path import isfile, isdir
 from os import mkdir
 
-from util.loadExtern import werk2013
+from util.loadExtern import werk2013, johnson2015
 from cosmo.util import redshiftToSnapNum
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from vis.common import getHsmlForPartType
 from util.sphMap import sphMap
-from util.helper import logZeroNaN, closest
+from util.helper import logZeroNaN, closest, iterable
 from cosmo.cloudy import cloudyIon
 
 def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
     """ Get a matched sample of simulated galaxies which match an observational abs. line dataset. """
+    np.random.seed(424242)
+
     if datasetName == 'COS-Halos':
         # load
         gals, logM, redshift, sfr, sfr_err, sfr_limit, R, _, _, _ = werk2013()
@@ -29,7 +31,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
         # define how we will create this sample, by matching on what quantities
         propList = ['mstar_30pkpc_log','ssfr_30pkpc_log','central_flag',
-                    'isolated3d_mstar_30pkpc_max_in_300pkpc']
+                    'isolated3d,mstar30kpc,max,in_300pkpc']
 
         # set up required properties and limit types
         shape = (len(gals), numRealizations)
@@ -41,8 +43,8 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
         props['central_flag'] = np.zeros( shape, dtype='int16' )
         props['central_flag'].fill(1) # realization independent, always required
 
-        props['isolated3d_mstar_30pkpc_max_in_300pkpc'] = np.zeros( shape, dtype='int16' )
-        props['isolated3d_mstar_30pkpc_max_in_300pkpc'].fill(1) # realization independent, always required
+        props['isolated3d,mstar30kpc,max,in_300pkpc'] = np.zeros( shape, dtype='int16' )
+        props['isolated3d,mstar30kpc,max,in_300pkpc'].fill(1) # realization independent, always required
 
         props['impact_parameter'] = np.zeros( shape, dtype='float32' )
 
@@ -53,10 +55,9 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
         limits['ssfr_30pkpc_log'][np.where(sfr_limit),:] = 1 # realization independent, upper limit
         limits['central_flag'][:] = 3 # realization/galaxy indepedent, exact
-        limits['isolated3d_mstar_30pkpc_max_in_300pkpc'][:] = 3 # realization/galaxy indepedent, exact
+        limits['isolated3d,mstar30kpc,max,in_300pkpc'][:] = 3 # realization/galaxy indepedent, exact
 
         # create realizations by adding appropriate noise to obs
-        np.random.seed(424242)
         for i in range(numRealizations):
             impact_param_random_err = np.random.normal(loc=0.0, scale=R_err, size=len(gals))
             mass_random_err_log = np.random.normal(loc=0.0, scale=logM_err, size=len(gals))
@@ -67,8 +68,88 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
             props['ssfr_30pkpc_log'][:,i] = np.log10( ssfr )
             props['impact_parameter'][:,i] = R + impact_param_random_err
 
-    if datasetName == 'other_todo':
-        assert 0
+    if datasetName == 'eCGM':
+        # load Johnson+ (2015) sample
+        gals, logM, redshift, sfr, sfr_err, sfr_limit, R, _, _, _ = johnson2015()
+        log_ssfr = np.log10(sfr/10.0**logM)
+        env = np.array( [gal['environment'] for gal in gals] ) # 0=I (isolated), 1=NI (not isolated)
+
+        logM_err = 0.25 # dex, assumed
+        R_err = 2.0 # kpc, assumed
+
+        # define how we will create this sample, by matching on what quantities
+        propList = ['mstar_30pkpc_log','ssfr_30pkpc_log','isolated3d,mstar30kpc,max_third,in_500pkpc']
+
+        # set up required properties and limit types
+        shape = (len(gals), numRealizations)
+
+        props = {}
+        props['mstar_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+
+        props['ssfr_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+        props['ssfr_30pkpc_log'].fill(-11.0) # we use as either an upper or lower limit
+
+        w_env = np.where( (env == 0) & (logM > 9.0) ) # set required iso only for 'I' env galaxies with M>9
+        props['isolated3d,mstar30kpc,max_third,in_500pkpc'] = np.zeros( shape, dtype='int16' )
+        props['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env,:].fill(1) # realization independent
+
+        props['impact_parameter'] = np.zeros( shape, dtype='float32' )
+
+        limits = {}
+        for propName in propList:
+            # note only 'mstar_30pkpc_log' used in distance computation
+            limits[propName] = np.zeros( shape, dtype='int16' )
+
+        w_early = np.where(log_ssfr < -11.0)
+        w_late = np.where(log_ssfr > -11.0)
+        limits['ssfr_30pkpc_log'][w_early,:] = 1 # realization independent, upper limit
+        limits['ssfr_30pkpc_log'][w_late,:] = 2 # realization independent, lower limit
+
+        # isolation: galaxy dependent, exact (required either I or NI if Mstar>9.0)
+        limits['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env,:] = 3 
+        w_env2 = np.where( (env == 1) & (logM > 9.0) )
+        limits['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env2,:] = 3
+
+        # create realizations by adding appropriate noise to obs
+        for i in range(numRealizations):
+            impact_param_random_err = np.random.normal(loc=0.0, scale=R_err, size=len(gals))
+            mass_random_err_log = np.random.normal(loc=0.0, scale=logM_err, size=len(gals))
+
+            props['mstar_30pkpc_log'][:,i] = logM + mass_random_err_log
+            props['impact_parameter'][:,i] = R + impact_param_random_err
+
+    if datasetName == 'SimHalos_115-125':
+        # pure theory analysis: all central halos with 10^11.5 < Mhalo/Msun < 10^12.5, one realization each
+        numRealizations = 1
+
+        gc = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+
+        with np.errstate(invalid='ignore'):
+            w_gal = np.where( (gc >= 11.5) & (gc < 12.5) )
+
+        # define how we will create this sample, by matching exact to the chosen sim quantities
+        propList = ['mhalo_200_log']
+
+        # set up required properties and limit types
+        shape = (w_gal[0].size, 1)
+
+        props = {}
+        props['mhalo_200_log'] = np.zeros( shape, dtype='float32' )
+        props['mhalo_200_log'][:,0] = gc[w_gal] # exact copy of actual halo masses
+
+        limits = {}
+        limits['mhalo_200_log'] = np.zeros( shape, dtype='int16' )
+        limits['mhalo_200_log'][:,0] = 3 # all exact
+
+        # copy other parameters of interest
+        _, _, _, _, _, _, R, _, _, _ = werk2013() # will copy impact parameters randomly from COS-Halos
+        redshift = [sP.redshift] # single z=0.0
+
+        for propName in ['mstar_30pkpc_log','ssfr_30pkpc_log','impact_parameter']:
+            props[propName] = np.zeros( shape, dtype='float32' )
+        props['mstar_30pkpc_log'][:,0] = groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log'])[w_gal]
+        props['ssfr_30pkpc_log'][:,0] = groupCat(sP, fieldsSubhalos=['ssfr_30pkpc_log'])[w_gal]
+        props['impact_parameter'][:,0] = np.random.choice(R, size=shape[0], replace=True)
 
     # save file exists?
     saveFilename = sP.derivPath + "obsMatchedSample_%s_%d.hdf5" % (datasetName,numRealizations)
@@ -88,7 +169,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
         r['snaps'] = redshiftToSnapNum(redshift, sP)
     else:
         # match all observed galaxies to the single simulation redshift 'z'
-        r['snaps'] = [ redshiftToSnapNum(redshift, sP) ]
+        r['snaps'] = [redshiftToSnapNum(redshift, sP)] * shape[0]
 
     # save the final subfind IDs we select via matching
     r['selected_inds'] = np.zeros( shape, dtype='int32' )
@@ -108,16 +189,17 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
         # load catalog properties at this redshift
         sP.setSnap(snap)
-        sim_props = groupCat(sP, fieldsSubhalos=propList)
+        sim_props = groupCat(sP, fieldsSubhalos=propList, sq=False)
+        if isinstance(sim_props, np.ndarray): sim_props = {propList[0]:sim_props} # force into dict
 
         # loop over observed galaxies
         for gal_num in w_loc[0]:
             # loop over requested realizations
-            print(' [%2d] [' % gal_num,end='')
+            if numRealizations > 1: print(' [%2d] [' % gal_num,end='')
             for realization in range(numRealizations):
                 # subset of absolutely consistent simulated systems (i.e. handle limits)
                 mask = np.ones( sim_props[propList[0]].size, dtype=np.bool )
-                print('.',end='')
+                if numRealizations > 1: print('.',end='')
 
                 for propName in propList:
                     loc_limit = limits[propName][gal_num,realization]
@@ -131,6 +213,11 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
                         mask &= (sim_props[propName] == loc_prop_val)
 
                 w_mask = np.where(mask)
+
+                if not len(w_mask[0]):
+                    # no galaxies satisfy limits, copy previous
+                    r['selected_inds'][gal_num,realization] = r['selected_inds'][gal_num,realization-1]
+                    continue
 
                 # L1 norm (Manhattan distance metric) for remaining properties (i.e. handle non-limits)
                 dists = np.zeros( w_mask[0].size )
@@ -152,9 +239,9 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
             for propName in propList:
                 r[propName][gal_num,:] = sim_props[propName][ r['selected_inds'][gal_num,:] ]
 
-            print(']')
-            print(' [%d] selected_inds = %d, %d...' % \
-                (gal_num,r['selected_inds'][gal_num,0],r['selected_inds'][gal_num,1]))
+            if numRealizations > 1: print(']')
+            print(' [%2d] selected_inds = %s...' % \
+                (gal_num,','.join(['%s'%d for d in r['selected_inds'][gal_num,0:3]])))
 
     sP.setSnap(origSnap)
 
@@ -163,16 +250,14 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
         for key in r:
             f[key] = r[key]
 
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+
     return r
 
 def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
     """ Compute gridded column densities around a sample of simulated galaxies and attached a 
     single column value to each in analogy to the observational dataset. """
-    if config == 'COS-Halos':
-        # impact parameters
-        #impact_parameters = werk2013()[6]
-        #assert impact_parameters.size == sim_sample['selected_inds'].shape[0]
-
+    if config in ['COS-Halos','SimHalos_115-125']:
         # grid parameters
         partType  = 'gas'
         ionName   = 'O VI'
@@ -183,8 +268,16 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
 
         nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
 
-    if config == 'other_todo':
-        assert 0
+    if config == 'eCGM':
+        # grid parameters (Johnson+ 2015)
+        partType  = 'gas'
+        ionName   = 'O VI'
+        projDepth = 4000.0 # 4 pMpc is (400km/s for H(z) @ z~0.2), i.e. still only half if J15 really +/-200
+        gridSize  = 2600.0 # pkpc, box sidelength
+        gridRes   = 2.0 # pkpc, pixel size
+        axes      = [0,1] # x,y
+
+        nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
 
     # save file exists?
     saveFilename = sP.derivPath + "obsMatchedColumns_%s_%d.hdf5" % (config,sim_sample['selected_inds'].size)
@@ -217,6 +310,7 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
 
     for snap in np.unique(sim_sample['snaps']):
         # which realized galaxies (a unique set) are in this snap?
+        sP.setSnap(snap)
         w_loc = np.where(sim_sample['snaps'] == snap)
 
         inds_all = sim_sample['selected_inds'][w_loc,:].ravel()
@@ -271,22 +365,25 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
                 f['grid'] = grid_d
 
     # create 2d distance mask and in order to select correct distance 'ring'
+    # note: pixel scale is constant in pkpc, variable in code units
     zz = np.indices(nPixels)
     dist_mask = np.sqrt( ((np.flip(zz[1],1) - zz[1])/2)**2 + ((np.flip(zz[0],0) - zz[0])/2)**2 )
-    dist_mask_local = dist_mask * gridRes # for now, constant per halo
+    dist_mask_local = dist_mask * gridRes # for now, constant per halo, pkpc
 
     # loop over the snapshot set again
     for snap in np.unique(sim_sample['snaps']):
         # which realized galaxies (a unique set) are in this snap?
+        sP.setSnap(snap)
         w_loc = np.where(sim_sample['snaps'] == snap)
 
         # all grids now exist, process them to extract single column values per galaxy
         for gal_num in w_loc[0]:
             # loop through realizations and load the grid of each
             inds = np.squeeze( sim_sample['selected_inds'][gal_num,:] )
+            #if inds.ndim == 0: inds = np.reshape()
             print(' [%2d] compute final column for each realization...' % gal_num)
 
-            for realization_num, ind in enumerate(inds):
+            for realization_num, ind in enumerate(iterable(inds)):
                 with h5py.File(_gridFilePath(),'r') as f:
                     grid = f['grid'][()]
 
@@ -311,5 +408,166 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         for key in r:
             f[key] = r[key]
 
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+
     r.update(sim_sample)
+    return r
+
+def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
+    """ Compute gridded column densities around a sample of simulated galaxies and attached a 
+    single column value to each in analogy to the observational dataset. """
+    numRadBins = 100
+    perc_vals = [10,16,38,50,62,84,90]
+    colDensThresholds = [12.5, 13.0, 13.5, 14.0, 14.15, 14.5, 15.0, 15.5, 16.0]
+    gal_subsets = ['all','ssfr_lt_n11','ssfr_gt_n11','mstar_lt_105','mstar_gt_105']
+
+    if config in ['COS-Halos','SimHalos_115-125']:
+        # grid parameters
+        gridSize  = 800.0 # pkpc, box sidelength
+        gridRes   = 2.0 # pkpc, pixel size
+        axes      = [0,1] # x,y
+
+    if config == 'eCGM':
+        # grid parameters (Johnson+ 2015)
+        gridSize  = 2600.0 # pkpc, box sidelength
+        gridRes   = 2.0 # pkpc, pixel size
+        axes      = [0,1] # x,y
+
+    nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
+
+    # grids all exist already?
+    saveFilename0 = sP.derivPath + "obsMatchedColumns_%s_%d.hdf5" % (config,sim_sample['selected_inds'].size)
+
+    if not isfile(saveFilename0):
+        raise Exception("Compute addIonColumnPerSystem() first to calculate all needed grids.")
+
+    # save file exists?
+    saveFilename = sP.derivPath + "obsCoveringFracs_%s_%d_nc%d_np%d.hdf5" % \
+      (config,sim_sample['selected_inds'].size,len(colDensThresholds),len(perc_vals))
+
+    if isfile(saveFilename):
+        r = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    # no, compute now
+    r = {}
+    r['colDensThresholds'] = np.array(colDensThresholds)
+    r['perc_vals'] = np.array(perc_vals)
+
+    shape = sim_sample['selected_inds'].shape
+    numRealizations = sim_sample['column'].shape[1]
+
+    r['galaxies_indiv'] = np.zeros( (shape[0],shape[1],len(colDensThresholds), numRadBins), dtype='float32' )
+
+    for gs in gal_subsets:
+        r['%s_mean' % gs] = np.zeros( (len(colDensThresholds), numRadBins), dtype='float32' )
+        r['%s_stddev' % gs] = np.zeros( (len(colDensThresholds), numRadBins), dtype='float32' )
+        r['%s_percs' % gs] = np.zeros( (len(colDensThresholds), numRadBins, len(perc_vals)), dtype='float32' )
+        r['%s_mean' % gs].fill(np.nan)
+        r['%s_stddev' % gs].fill(np.nan)
+        r['%s_percs' % gs].fill(np.nan)
+
+    origSnap = sP.snap
+
+    def _gridFilePath():
+        gridPath = sP.derivPath + 'grids/%s/' % config
+        gridFile = gridPath + 'snap-%d_ind-%d_axes-%d%d.hdf5' % (snap,ind,axes[0],axes[1])
+        return gridFile
+
+    # create 2d distance mask and in order to select correct distance 'ring'
+    # note: pixel scale is constant in pkpc, variable in code units
+    zz = np.indices(nPixels)
+    dist_mask = np.sqrt( ((np.flip(zz[1],1) - zz[1])/2)**2 + ((np.flip(zz[0],0) - zz[0])/2)**2 )
+    dist_mask_local = dist_mask * gridRes # for now, constant per halo, pkpc
+    dist_mask_local = dist_mask_local.ravel() # flatten
+
+    # setup radial bins
+    radMax = gridSize/2
+    r['radBins'] = np.linspace(gridRes, radMax, numRadBins)
+
+    # save index sets for each radial bin
+    rad_masks = []
+    num_in_rad = []
+
+    for j, radBin in enumerate(r['radBins']):
+        # which pixels -satisfy- the radial cut
+        w_rad = (dist_mask_local < radBin)
+        rad_masks.append(w_rad)
+        num_in_rad.append( np.count_nonzero(w_rad) )
+
+    # loop over the snapshot set again
+    for snap in np.unique(sim_sample['snaps']):
+        # which realized galaxies (a unique set) are in this snap?
+        sP.setSnap(snap)
+        w_loc = np.where(sim_sample['snaps'] == snap)
+
+        # all grids now exist, process them to extract single column values per galaxy
+        for gal_num in w_loc[0]:
+            # loop through realizations and load the grid of each
+            inds = np.squeeze( sim_sample['selected_inds'][gal_num,:] )
+            print(' [%2d] compute covering fractions for each realization...' % gal_num)
+
+            if numRealizations > 1: print(' [', end='')
+            for realization_num, ind in enumerate(iterable(inds)):
+                if numRealizations > 1: print('.',end='')
+                with h5py.File(_gridFilePath(),'r') as f:
+                    grid = f['grid'][()].ravel() # flatten
+
+                # loop over thresholds
+                for i, thresh in enumerate(colDensThresholds):
+                    # which pixels satisfy the threshold alone?
+                    w_covered = (grid >= thresh)
+
+                    # loop over radial distances
+                    for j, radBin in enumerate(r['radBins']):
+                        # combine masks: which [flattened] pixels satisfy both cuts?
+                        num_in_rad_above_thresh = np.count_nonzero(w_covered & rad_masks[j])
+
+                        # save fraction
+                        frac = float( num_in_rad_above_thresh ) / num_in_rad[j]
+                        assert np.isfinite(frac)
+
+                        r['galaxies_indiv'][gal_num,realization_num,i,j] = frac
+            if numRealizations > 1: print(']')
+
+    # compute binned values across all realized galaxies
+    for i, thresh in enumerate(colDensThresholds):
+        for j, radBin in enumerate(r['radBins']):
+            
+            # different subsets of the galaxy sample, including 'all'
+            for gs in gal_subsets:
+                local_vals = r['galaxies_indiv'][:,:,i,j].ravel()
+
+                # update local_vals for this subset
+                if gs in ['ssfr_lt_n11','ssfr_gt_n11']:
+                    ssfr = sim_sample['ssfr_30pkpc_log'].ravel()
+                    with np.errstate(invalid='ignore'):
+                        if gs == 'ssfr_lt_n11': w = np.where((ssfr < -11.0) | np.isnan(ssfr))
+                        if gs == 'ssfr_gt_n11': w = np.where((ssfr >= -11.0))
+                    local_vals = local_vals[w]
+                if gs in ['mstar_lt_105','mstar_gt_105']:
+                    mstar = sim_sample['mstar_30pkpc_log'].ravel()
+                    if gs == 'mstar_lt_105': w = np.where(mstar < 10.5)
+                    if gs == 'mstar_gt_105': w = np.where(mstar >= 10.5)
+                    local_vals = local_vals[w]
+
+                if local_vals.size == 0:
+                    continue
+
+                r['%s_mean' % gs][i,j] = np.mean( local_vals )
+                r['%s_stddev' % gs][i,j] = np.std( local_vals )
+                r['%s_percs' % gs][i,j,:] = np.percentile( local_vals, perc_vals, interpolation='linear')
+
+    sP.setSnap(origSnap)
+
+    # save
+    with h5py.File(saveFilename,'w') as f:
+        for key in r:
+            f[key] = r[key]
+
+    print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+
     return r
