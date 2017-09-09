@@ -99,8 +99,10 @@ def logZeroNaN(x):
 def iterable(x):
     """ Protect against non-list/non-tuple (e.g. scalar or single string) value of x, to guarantee that 
         a for loop can iterate over this object correctly. """
-    if isinstance(x, collections.Iterable) and not isinstance(x, basestring):
-        return x
+    if isinstance(x, np.ndarray) and x.ndim == 0:
+        return np.reshape(x, 1) # scalar to 1d array of 1 element
+    elif isinstance(x, collections.Iterable) and not isinstance(x, basestring):
+        return x        
     else:
         return [x]
 
@@ -630,6 +632,13 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                  'green' : ((0.0, 0.055, 0.055), (0.25, 0.322, 0.322), (0.4,0.898,0.898), (0.55,0.702,0.702), (0.7, 0.557, 0.557), (0.99, 1.0, 1.0), (1.0, 1.0, 1.0)),
                  'blue'  : ((0.0, 0.075, 0.075), (0.25, 0.447, 0.447), (0.4,0.357,0.357), (0.55,0.302,0.302), (0.7, 0.792, 0.792), (0.99, 1.0, 1.0), (1.0, 1.0, 1.0))}
         cmap = LinearSegmentedColormap(ctName, cdict, N=1024)
+
+    if ctName == 'blue_red_t10':
+        # pure blue -> red using the tableau10 colors
+        red_r = 214.0/255 ; red_g = 39.0/255 ; red_b = 40.0/255
+        blue_r = 31.0/255 ; blue_g = 119.0/255 ; blue_b = 180.0/255
+        cm_data = [ [red_r, red_g, red_b], [blue_r, blue_g, blue_b]]
+        cmap = LinearSegmentedColormap.from_list('blue_red_t10', cm_data)
 
     if cmap is None:
         raise Exception('Unrecognized colormap request ['+ctName+'] or not implemented.')
