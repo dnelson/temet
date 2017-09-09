@@ -78,7 +78,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
         return rad, xi, xi_err, covar
 
     # calculate
-    print('Calculating new: [%s]...' % saveFilename)
+    print('Calculating new: [%s]...' % saveFilename.split(sP.basePath)[1])
 
     # get cenSatSelect indices, load and restrict if requested
     wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -326,7 +326,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         return r
 
     # calculate
-    print('Calculating new: [%s]...' % saveFilename)
+    print('Calculating new: [%s]...' % saveFilename.split(sP.basePath)[1])
 
     # load and unit conversions
     gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'], 
@@ -397,7 +397,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
                 assert r[key][wMinMass[verifyInd]] == -np.inf
 
     # calculate some useful isolation flags
-    flagNames = ['flag_iso_mstar2_max_half','flag_iso_mstar30kpc_max_half',
+    flagNames = ['flag_iso_mstar2_max_half','flag_iso_mstar30kpc_max_half','flag_iso_mstar30kpc_max_third',
                  'flag_iso_mstar30kpc_max','flag_iso_mhalo_lt_12']
 
     for flagName in flagNames:
@@ -420,18 +420,15 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
         r['flag_iso_mstar30kpc_max_half'][w1] = 1
         r['flag_iso_mstar30kpc_max_half'][w2] = 0
 
-        print(' [%d isolated] and [%d non-isolated] of [%d total] according to (0.5)mstar30kpc.' % \
-            (len(w1[0]),len(w2[0]),pos_search.shape[0]))
-        assert len(w1[0]) + len(w2[0]) == pos_search.shape[0]
+        w1 = np.where( ngb_max_mstar30kpc <= subhalo_mstar30kpc/3 )
+        w2 = np.where( ngb_max_mstar30kpc > subhalo_mstar30kpc/3 )
+        r['flag_iso_mstar30kpc_max_third'][w1] = 1
+        r['flag_iso_mstar30kpc_max_third'][w2] = 0
 
         w1 = np.where( ngb_max_mstar30kpc <= subhalo_mstar30kpc )
         w2 = np.where( ngb_max_mstar30kpc > subhalo_mstar30kpc )
         r['flag_iso_mstar30kpc_max'][w1] = 1
         r['flag_iso_mstar30kpc_max'][w2] = 0
-
-        print(' [%d isolated] and [%d non-isolated] of [%d total] according to (1.0)mstar30kpc.' % \
-            (len(w1[0]),len(w2[0]),pos_search.shape[0]))
-        assert len(w1[0]) + len(w2[0]) == pos_search.shape[0]
 
         w1 = np.where( r['halo_m200'] <= 12.0 )
         w2 = np.where( r['halo_m200'] > 12.0 )
@@ -485,7 +482,7 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
         return r
 
     # calculate
-    print('Calculating new: [%s]...' % saveFilename)
+    print('Calculating new: [%s]...' % saveFilename.split(sP.basePath)[1])
 
     # load
     pos_all = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']

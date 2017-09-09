@@ -360,12 +360,16 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field][ gc['halos'] ] = 1
 
             # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
-            if quant in ['isolated3d_mstar_30pkpc_max_in_300pkpc']:
+            if 'isolated3d,' in quant:
                 from cosmo.clustering import isolationCriterion3D
 
-                ic3d = isolationCriterion3D(sP, 300.0) #defaults: cenSatSelect='all', mstar30kpc_min=9.0
+                # e.g. 'isolated3d,mstar_30pkpc,max,in_300pkpc'
+                _, quant, max_type, dist = quant.split(',')
+                dist = float( dist.split('in_')[1].split('pkpc')[0] )
 
-                r[field] = ic3d['flag_iso_mstar30kpc_max']
+                ic3d = isolationCriterion3D(sP, dist) #defaults: cenSatSelect='all', mstar30kpc_min=9.0
+
+                r[field] = ic3d['flag_iso_%s_%s' % (quant,max_type)]
 
             # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars) (optionally Mstar in 30pkpc)
             if quant in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr',
@@ -786,8 +790,12 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     useCache = True
 
     if useCache:
-        cacheFile = sP.derivPath + 'cached_%s_%s_%d.hdf5' % (partType,field.replace(" ","-"),sP.snap)
+        cachePath = sP.derivPath + 'cache/'
+        cacheFile = cachePath + 'cached_%s_%s_%d.hdf5' % (partType,field.replace(" ","-"),sP.snap)
         indRangeAll = [0, snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] ]
+
+        if not isdir(cachePath):
+            mkdir(cachePath)
 
         if not isfile(cacheFile):
             # compute for indRange == None (whole snapshot) with a reasonable pSplit

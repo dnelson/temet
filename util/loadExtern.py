@@ -1241,36 +1241,83 @@ def werk2013(onlydict=False, tumlinsonOVI=True):
 
     return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
 
-def johnson2015(survey='COS-Halos'):
-    """ Load observational data/compendium from Johnson+ (2015). """
-    assert survey in ['COS-Halos','IMACS','SDSS'] # only 3 in datafile
-
+def johnson2015(surveys=['IMACS','SDSS']):
+    """ Load observational data/compendium from Johnson+ (2015). Only the given surveys, i.e. 
+    exclude the COS-Halos points which are also included in this table. """
     with open(dataBasePath + 'johnson/j15_table1.txt') as f:
         lines = f.readlines()
 
-    gals = {}
+    # count and allocate
+    nGals = 0
+    for line in lines:
+        for survey in surveys:
+            if survey in line:
+                nGals += 1
+
+    logM = np.zeros( nGals, dtype='float32' )
+    z = np.zeros( nGals, dtype='float32' )
+    sfr = np.zeros( nGals, dtype='float32' ) # set to ssfr -11.5 for Class=Early, -10.5 for Class=Late
+    sfr_err = np.zeros( nGals, dtype='float32' ) # left at zero
+    sfr_limit = np.zeros( nGals, dtype='bool' ) # all false
+    R = np.zeros( nGals, dtype='float32' )
+    ovi_logN = np.zeros( nGals, dtype='float32' )
+    ovi_err = np.zeros( nGals, dtype='float32' )
+    ovi_limit = np.zeros( nGals, dtype='int16' )
+
+    galaxies = {}
+    count = 0
 
     for line in lines:
         if line[0] == '#': continue
         name,RAJ2000,DEJ2000,zgal,logMstar,Class,Env,Survey,d,d_Rh,\
           l_logNHI,logNHI,e_logNHI,logNHIu,l_logNHOVI,logNHOVI,e_logNHOVI = line.split('|')
 
-        name = name.strip()
-        zgal = float(zgal)
-        logMstar = float(logMstar)
-        Class = Class.strip()
-        Env = Env.strip()
-        Survey = Survey.strip()
-        d = float(d)
-        d_Rh = float(d_Rh)
+        if Survey.strip() not in surveys:
+            continue
 
-        l_logNHOVI = [' ','<','not indicated'].index(l_logNHOVI) # 0=exact, 1=upper
-        logNHOVI = float(logNHOVI) if logNHOVI.strip() != '' else np.nan
-        e_logNHOVI = float(e_logNHOVI) if e_logNHOVI != '\n' else np.nan
+        # construct 'quasar_galaxy' name using QSO_RAgalDECgal where 
+        # RA,DEC are truncated to nearest arcsec, sexagesimal with spaces removed
+        name_qso = name.strip()
+        name = name_qso + "_" + RAJ2000.split(".")[0].replace(" ","") + DEJ2000.split(".")[0].replace(" ","")
+        z[count] = float(zgal)
+        logM[count] = float(logMstar)
+        R[count] = float(d)
 
-        if Survey != survey: continue # only load data points from one dataset at a time
+        if Class.strip() == 'Early':
+            sfr[count] = 10.0**logM[count] * 10.0**(-11.5) # msun/yr
+        elif Class.strip() == 'Late':
+            sfr[count] = 10.0**logM[count] * 10.0**(-10.0)
+        else:
+            assert 0
 
-    return gals, logMstar, zgal, d, logNHOVI, e_logNHOVI, l_logNHOVI
+        ovi_limit[count] = [' ','<','not indicated'].index(l_logNHOVI) # 0=exact, 1=upper, 2=lower
+        ovi_logN[count] = float(logNHOVI) if logNHOVI.strip() != '' else np.nan
+        ovi_err[count] = float(e_logNHOVI) if e_logNHOVI != '\n' else np.nan
+
+        # consistent with werk2013() return
+        galaxies[name] = {'z':z[count],
+                          'R':R[count],
+                          'logM':logM[count],
+                          'sfr':sfr[count],
+                          'sfr_limit':sfr_limit[count], # always False
+                          'sfr_err':sfr_err[count], # always zero
+                          'name':name,
+                          'R_Rh':float(d_Rh),
+                          'survey':Survey.strip(),
+                          'environment':['I','NI'].index(Env.strip()), # 0=I (isolated), 1=NI (not isolated)
+                          'lines':{}}
+        galaxies[name]['lines']['O VI'] = {'line_limit':int(ovi_limit[count]), # 0=exact, 1=upper, 2=lower
+                                           'logN':float(ovi_logN[count]),
+                                           'err':float(ovi_err[count]),
+                                           'flag':-1} 
+        count += 1
+
+    assert count == nGals
+
+    # consistent with werk2013() return
+    gals = [g for _, g in galaxies.iteritems()]
+
+    return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
 
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
