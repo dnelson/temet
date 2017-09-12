@@ -129,6 +129,12 @@ def numPartToChunkLoadSize(numPart):
     nChunks = np.max( [4, int(numPart**(1.0/3.0) / 10.0)] )
     return nChunks
 
+def tail(fileName, nLines):
+    """ Wrap linux tail command line utility. """
+    import subprocess
+    lines = subprocess.check_output( ['tail', '-n', str(nLines), fileName] )
+    return lines
+
 # --- general algorithms ---
 
 def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10):
