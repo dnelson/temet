@@ -17,6 +17,7 @@ from os import remove, rename
 from glob import glob
 from scipy.interpolate import interp1d
 from util.helper import closest, tail
+from plot.config import *
 
 def getCpuTxtLastTimestep(filePath):
     """ Parse cpu.txt for last timestep number and number of CPUs/tasks. """
@@ -185,6 +186,162 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
 
     return r
 
+def loadTimebinsTxt(basePath):
+    """ Load and parse Arepo timebins.txt, save into hdf5 format. """
+    filePath = basePath + 'output/timebins.txt'
+
+    saveFilename = basePath + 'data.files/timebins.hdf5'
+    if not isdir(basePath + 'data.files/'):
+        saveFilename = basePath + 'postprocessing/timebins.hdf5'
+
+    r = {}
+
+    cols = None
+
+    def _getTimsbinsLastTimestep():
+        lines = tail(filePath, 30)
+        binNums = []
+        for line in lines.split('\n')[::-1]:
+            if 'Sync-Point ' in line:
+                sp, time, redshift, ss, dloga = line.split(", ")
+                maxStepAvail = int( sp.split(" ")[1] )
+                maxTimeAvail = float( time.split(": ")[1] )
+                break
+            if 'bin=' in line:
+                binNums.append( int( line.split("bin=")[1].split()[0] ) )
+
+        binMin = np.min(binNums) - 10 # leave room in case true minimum not represented in final timestep
+        binMax = np.max(binNums) + 20 # leave room
+        nBins = binMax - binMin + 1
+        return maxStepAvail, maxTimeAvail, nBins, binMin
+
+    # load save if it exists already
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            # check size and ending time
+            maxTimeSaved = f['time'][()].max()
+            maxStepSaved = f['step'][()].max()
+
+            maxStepAvail, maxTimeAvail, _, _ = _getTimsbinsLastTimestep()
+
+            if maxTimeAvail > maxTimeSaved*1.001:
+                # recalc for new data
+                print('recalc [%f to %f] [%d to %d] %s' % \
+                       (maxTimeSaved,maxTimeAvail,maxStepSaved,maxStepAvail,basePath))
+                remove(saveFilename)
+                return loadTimebinsTxt(basePath)
+
+            for key in f:
+                r[key] = f[key][()]
+    else:
+        # determine number of timesteps in file, ~maximum number of bins, and allocate
+        maxSize, lastTime, nBins, binMin = _getTimsbinsLastTimestep()
+
+        print('[%s] maxSize: %d lastTime: %.2f (nBins=%d), loading...' % (basePath, maxSize, lastTime, nBins))
+
+        r['step'] = np.zeros( maxSize, dtype='int32' )
+        r['time'] = np.zeros( maxSize, dtype='float32' )
+        r['bin_num'] = np.zeros( nBins, dtype='int16' ) - 1
+        r['bin_dt'] = np.zeros( nBins, dtype='float32' )
+
+        r['active'] = np.zeros( (nBins,maxSize), dtype='bool' )
+        r['n_grav'] = np.zeros( (nBins,maxSize), dtype='int64' )
+        r['n_hydro'] = np.zeros( (nBins,maxSize), dtype='int64' )
+        r['avg_time'] = np.zeros( (nBins,maxSize), dtype='float32' )
+        r['cpu_frac'] = np.zeros( (nBins,maxSize), dtype='float32' )
+
+        # parse
+        f = open(filePath,'r')
+
+        step = None
+
+        # chunked load
+        while 1:
+            lines = f.readlines(100000)
+            if not lines:
+                break
+
+            for line in lines:
+                line = line.strip()
+                if line == '' or line[0:8] == 'Occupied' or line[0:4] == '----':
+                    continue
+                if line[0:13] == 'Total active:' or line[0:15] == 'PM-Step. Total:':
+                    continue
+
+                # timestep header
+                #Sync-Point 71887, Time: 1, Redshift: 2.22045e-16, Systemstep: 9.25447e-06, Dloga: 9.25451e-06
+                if line[0:10] == 'Sync-Point':
+                    sp, time, redshift, ss, dloga = line.split(", ")
+
+                    step = int( sp.split(" ")[1] ) - 1 # skip 0th step
+                    time = float( time.split(": ")[1] )
+
+                    if step % 10000 == 0:
+                        redshift = 1/time-1.0
+                        print(' [%8d] t=%7.5f z=%6.3f' % (step,time,redshift))
+
+                    # per step
+                    r['step'][step] = step + 1 # actual sync-point number
+                    r['time'][step] = time # scalefactor
+
+                    continue
+
+                # normal line
+                #    bin=42              15          14      0.000018509027               16          15            0.03      7.8%
+                # X  bin=41               1           1      0.000009254513                1           1 <          0.02     11.1%
+                line = line.replace("<","").replace("*","") # delete
+                line = line.replace("bin= ","bin=") # delete space if present
+                line = line.split()
+
+                active = False
+                offset = 0
+                if line[0] == 'X':
+                    active = True
+                    offset = 1
+
+                binNum  = int(line[0+offset][4:])
+                n_grav  = int(line[1+offset])
+                n_hydro = int(line[2+offset])
+                dt      = float(line[3+offset])
+                #cum_grav = int(line[4+offset])
+                #cum_hydro = int(line[5+offset])
+                #A, D flagged using '<' and '*' have been removed
+                avg_time = float(line[6+offset])
+                cpu_frac = float(line[7+offset][:-1]) # remove trailing '%'
+
+                if binNum == 0: continue # dt=0
+
+                saveInd = binNum - binMin
+                assert saveInd >= 0
+
+                # per bin per step
+                r['active'][saveInd,step] = active
+                r['n_grav'][saveInd,step] = n_grav
+                r['n_hydro'][saveInd,step] = n_hydro
+                r['avg_time'][saveInd,step] = avg_time
+                r['cpu_frac'][saveInd,step] = cpu_frac
+
+                # per bin
+                r['bin_num'][saveInd] = binNum
+                r['bin_dt'][saveInd] = dt
+
+        f.close()
+
+        # condense (remove unused timebin spots)
+        w = np.where(r['bin_num'] > 0)[0]
+
+        for key in ['active','n_grav','n_hydro','avg_time','cpu_frac']:
+            r[key] = r[key][w,:]
+        for key in ['bin_num','bin_dt']:
+            r[key] = r[key][w]
+
+        # write into hdf5
+        with h5py.File(saveFilename,'w') as f:
+            for key in r.keys():
+                f[key] = r[key]
+
+    return r
+
 def _cpuEstimateFromOtherRunProfile(sP, cur_a, cur_cpu_mh):
     """ Helper function, use the profile of CPU_hours(a) from another run to extrapolation a 
     predicted CPU time curve and total given an input cur_a and cur_cpu_mh. """
@@ -217,6 +374,19 @@ def _cpuEstimateFromOtherRunProfile(sP, cur_a, cur_cpu_mh):
     estimated_total_cpu_mh = predicted_cpu_mh.max()
     
     return scalefac, predicted_cpu_mh, estimated_total_cpu_mh
+
+def _redshiftAxisHelper(ax):
+    """ Add a redshift axis to the top of a single-panel plot. """
+    zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
+    axTop = ax.twiny()
+    axTickVals = 1/(1 + np.array(zVals) )
+
+    axTop.set_xlim(ax.get_xlim())
+    axTop.set_xticks(axTickVals)
+    axTop.set_xticklabels(zVals)
+    axTop.set_xlabel("Redshift")
+
+    return axTop
 
 def plotCpuTimes():
     """ Plot code time usage fractions from cpu.txt. Note that this function is being automatically 
@@ -368,14 +538,7 @@ def plotCpuTimes():
                     pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
                     pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=ls[j]) )
 
-        zVals = [50.0,10.0,6.0,4.0,3.0,2.0,1.5,1.0,0.75,0.5,0.25,0.0]
-        axTop = ax.twiny()
-        axTickVals = 1/(1 + np.array(zVals) )
-
-        axTop.set_xlim(ax.get_xlim())
-        axTop.set_xticks(axTickVals)
-        axTop.set_xticklabels(zVals)
-        axTop.set_xlabel("Redshift")
+        axTop = _redshiftAxisHelper(ax)
 
         # add to legend for predictions
         if len(pLabels) > 0:
@@ -398,6 +561,114 @@ def plotCpuTimes():
     # if we don't make it here successfully the old pdf will not be corrupted
     if isfile(fName2): remove(fName2)
     rename(fName1,fName2)
+
+def plotTimebins():
+    """ Plot analysis of timebins throughout the course of a run. """
+    from util import simParams
+
+    # run config and load/parse
+    saveBase = expanduser('~') + '/timebins_%s.pdf'
+    numPtsAvg = 500 # average time series down to 1000 total points
+
+    sPs = []
+    sPs.append( simParams(res=128, run='tng', variant='0000') )
+    sPs.append( simParams(res=256, run='tng', variant='0000') )
+    sPs.append( simParams(res=512, run='tng', variant='0000') )
+    sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=2160, run='tng') )
+
+    data = []
+    for sP in sPs:
+        data.append( loadTimebinsTxt(sP.arepoPath) )
+
+    # (A) actual wall-clock time of the smallest timebin ('machine weather')
+    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim([0.0,1.0])
+    ax.set_xlabel('Scale Factor')
+    ax.set_ylabel('Wall-clock for Smallest Timebin [msec]')
+    ax.set_yscale('log')
+
+    # loop over each run
+    for i, sP in enumerate(sPs):
+        # only plot timesteps where this bin was occupied
+        xx = data[i]['time']
+        yy = data[i]['avg_time'] * 1000.0 # msec
+
+        w = np.where(yy == 0.0)
+        yy[w] = np.nan
+        yy = np.nanmin( yy, axis=0 ) # min avg_time per timestep, across any bin
+
+        # average down to 1000 points
+        avgSize = int(np.floor(yy.size / float(numPtsAvg)))
+
+        xx_avg = xx[0: avgSize*numPtsAvg].reshape(-1, avgSize)
+        xx_avg = np.nanmean(xx_avg, axis=1)
+        yy_avg = yy[0: avgSize*numPtsAvg].reshape(-1, avgSize)
+        yy_avg = np.nanmean(yy_avg, axis=1)
+
+        # plot
+        label = sP.simName
+        l, = ax.plot(xx_avg, yy_avg, '-', label=label)
+
+    # make redshift axis, legend and finish
+    _redshiftAxisHelper(ax)
+    ax.legend(loc='best')
+    fig.tight_layout()    
+    fig.savefig(saveBase % 'smallest_msec')
+    plt.close(fig)
+
+    # (B) cpu fraction evolution by timebin, one plot per run
+    for i, sP in enumerate(sPs):
+        # start plot
+        fig = plt.figure(figsize=[figsize[0]*sfclean*1.2, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+
+        ax.set_xlim([0.0,1.0])
+        ax.set_ylim([0,100])
+        ax.set_xlabel('Scale Factor')
+        ax.set_ylabel('CPU Fraction per Timebin [%]')
+
+        # only plot timesteps where this bin was occupied
+        xx = data[i]['time']
+        yy = data[i]['cpu_frac']
+
+        w = np.where(yy == 0.0)
+        yy[w] = np.nan
+
+        # create stack, averaging down to fewer points
+        avgSize = int(np.floor(yy[0,:].size / float(numPtsAvg)))
+
+        yy_stack = np.zeros( (yy.shape[0],numPtsAvg), dtype='float32' )
+        for ind in range(yy.shape[0]):
+            yy_avg = np.squeeze(yy[ind,0: avgSize*numPtsAvg]).reshape(-1, avgSize)
+            yy_stack[ind,:] = np.nanmean(yy_avg, axis=1)
+
+        w = np.where( np.isnan(yy_stack) )
+        yy_stack[w] = 0.0
+
+        # average x-axis down
+        xx_avg = xx[0: avgSize*numPtsAvg].reshape(-1, avgSize)
+        xx_avg = np.nanmean(xx_avg, axis=1)
+
+        # plot
+        labels = [str(bn) for bn in data[i]['bin_num'][::-1]] # reverse
+        yy_stack = np.flip(yy_stack, axis=0) # reverse
+        ax.stackplot(xx_avg, yy_stack, baseline='zero', labels=labels)
+
+        # make redshift axis, legend and finish
+        axTop = _redshiftAxisHelper(ax)
+        fig.tight_layout()
+
+        # shrink current axis by 12%, put a legend to the right of the current axis
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.88, box.height])
+        axTop.set_position([box.x0, box.y0, box.width * 0.88, box.height])
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+        fig.savefig(saveBase % 'cpufrac_stack_%s' % sP.simName)
+        plt.close(fig)
 
 def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
     """ Construct strong (fixed problem size) and weak (Npart scales w/ Ncores) scaling plots 
