@@ -10,6 +10,217 @@ import h5py
 from os import path, mkdir
 import glob
 
+def concatSubboxFilesAndMinify():
+    """ Minify a series of subbox snapshots but removing unwanted fields, and re-save concatenated 
+    into a smaller number of chunks. """
+    from util.helper import pSplitRange
+
+    # config
+    outputPath = '/home/extdylan/sims.TNG/L35n2160TNG/output/'
+    sbNum = 2
+    sbSnapRange = [1200,1201]
+    numChunksSave = 8
+
+    metaGroups = ['Config','Header','Parameters']
+    keepFields = {'PartType0':['Coordinates','Density','ElectronAbundance','EnergyDissipation',
+                               'GFM_Metallicity','InternalEnergy','Machnumber','MagneticField',
+                               'Masses','NeutralHydrogenAbundance','ParticleIDs','StarFormationRate',
+                               'Velocities'],
+                  'PartType1':['Coordinates','ParticleIDs','Velocities'],
+                  'PartType3':['ParentID','TracerID'],
+                  'PartType4':['Coordinates','GFM_InitialMass','GFM_Metallicity','GFM_StellarFormationTime',
+                               'Masses','ParticleIDs','Velocities'],
+                  'PartType5':['BH_BPressure','BH_CumEgyInjection_QM','BH_CumEgyInjection_RM', 
+                               'BH_CumMassGrowth_QM','BH_CumMassGrowth_RM','BH_Density','BH_HostHaloMass',
+                               'BH_Hsml','BH_Mass','BH_Mdot','BH_MdotBondi','BH_MdotEddington','BH_Pressure',
+                               'BH_Progs','BH_U','Coordinates','Masses','ParticleIDs','Potential',
+                               'Velocities']} # all
+
+    # set paths
+    sbBasePath = outputPath + 'subbox%d/' % sbNum
+    saveBasePath = outputPath + 'subbox%d_new/' % sbNum
+
+    if not path.isdir(saveBasePath):
+        mkdir(saveBasePath)
+
+    def _oldChunkPath(snapNum, chunkNum):
+        return sbBasePath + 'snapdir_subbox%d_%03d/snap_subbox%d_%03d.%s.hdf5' % \
+          (sbNum,snapNum,sbNum,snapNum,chunkNum)
+    def _newChunkPath(snapNum, chunkNum):
+        return saveBasePath + 'snapdir_subbox%d_%03d/snap_subbox%d_%03d.%s.hdf5' % \
+          (sbNum,snapNum,sbNum,snapNum,chunkNum)
+
+    # from the first: dtypes, ndims, how many chunks?
+    print('Save configuration:')
+    dtypes = {}
+    ndims = {}
+
+    allDone = False
+    i = 0
+
+    while not allDone:
+        # get dtypes and ndims for each field, but need to find a file that contains each
+        with h5py.File(_oldChunkPath(1199, i),'r') as f:
+            for gName in keepFields.keys():
+                if gName not in f or keepFields[gName][0] not in f[gName]:
+                    continue
+                dtypes[gName] = {}
+                ndims[gName] = {}
+                for field in keepFields[gName]:
+                    dtypes[gName][field] = f[gName][field].dtype
+                    ndims[gName][field] = f[gName][field].ndim
+                    if ndims[gName][field] > 1:
+                        ndims[gName][field] = f[gName][field].shape[1] # actually need shape of 2nd dim
+
+        # all done?
+        allDone = True
+        for gName in keepFields.keys():
+            if gName not in dtypes:
+                allDone = False
+        i += 1
+
+    for gName in keepFields.keys():
+        for field in keepFields[gName]:
+            print(' ',gName, field, dtypes[gName][field], ndims[gName][field])
+
+    numChunks = len( glob.glob(_oldChunkPath(0,'*')) )
+    print('  numChunks: %d' % numChunks)
+
+    for sbSnap in range(sbSnapRange[0], sbSnapRange[1]+1):
+        sbPath = sbBasePath + 'snapdir_subbox%d_%d/' % (sbNum, sbSnap)
+        oldSize = 0.0
+        newSize = 0.0
+
+        # load meta
+        meta = {}
+        with h5py.File(_oldChunkPath(sbSnap, 0),'r') as f:
+            for gName in metaGroups:
+                meta[gName] = {}
+                for attr in f[gName].attrs:
+                    meta[gName][attr] = f[gName].attrs[attr]
+
+        NumPart = meta['Header']['NumPart_Total']
+        assert meta['Header']['NumPart_Total_HighWord'].sum() == 0
+        print('[%4d] NumPart: ' % sbSnap,NumPart)
+
+        # allocate
+        data = {}
+        offsets = {}
+        for gName in keepFields.keys():
+            ptNum = int(gName[-1])
+            # no particles of this type?
+            if NumPart[ptNum] == 0:
+                continue
+
+            data[gName] = {}
+            offsets[gName] = 0
+
+            for field in keepFields[gName]:
+                dtype = dtypes[gName][field]
+
+                # allocate [N] or e.g. [N,3]
+                if ndims[gName][field] == 1:
+                    shape = (NumPart[ptNum])
+                else:
+                    shape = (NumPart[ptNum], ndims[gName][field])
+                data[gName][field] = np.zeros( shape, dtype=dtype )
+
+                if dtype in [np.float32, np.float64]:
+                    data[gName][field].fill(np.nan) # for verification
+
+        # load (requested fields only)
+        print('[%4d] loading   [' % sbSnap, end='')
+        for i in range(numChunks):
+            print('.', end='')
+            oldSize += path.getsize(_oldChunkPath(sbSnap, i)) / 1024.0**3
+
+            with h5py.File(_oldChunkPath(sbSnap, i),'r') as f:
+                for gName in keepFields.keys():
+                    # PartTypeX not in file?
+                    if gName not in f:
+                        continue
+
+                    # load each field of this PartTypeX
+                    for field in keepFields[gName]:
+                        ndim = ndims[gName][field]
+                        off = offsets[gName]
+                        loc_size = f[gName][field].shape[0]
+
+                        #print('  %s off = %8d loc_size = %7d' % (gName,off,loc_size))
+                        if ndim == 1:
+                            data[gName][field][off:off+loc_size] = f[gName][field][()]
+                        else:
+                            data[gName][field][off:off+loc_size,:] = f[gName][field][()]
+
+                    offsets[gName] += loc_size
+        print(']')
+
+        # verify
+        for gName in offsets.keys():
+            ptNum = int(gName[-1])
+            assert offsets[gName] == NumPart[ptNum]
+            for field in data[gName]:
+                if dtypes[gName][field] in [np.float32, np.float64]:
+                    assert np.count_nonzero( np.isnan( data[gName][field] )) == 0
+
+        # write
+        print('[%4d] writing   [' % sbSnap, end='')
+        assert not path.isdir(saveBasePath + 'snapdir_subbox%d_%03d' % (sbNum,sbSnap))
+        mkdir(saveBasePath + 'snapdir_subbox%d_%03d' % (sbNum,sbSnap))
+
+        start = {}
+        stop = {}
+        for gName in keepFields.keys():
+            start[gName] = 0
+            stop[gName] = 0
+
+        for i in range(numChunksSave):
+            # determine split, update header
+            print('.', end='')
+
+            meta['Header']['NumFilesPerSnapshot'] = numChunksSave
+            for gName in keepFields.keys():
+                ptNum = int(gName[-1])
+                if NumPart[ptNum] == 0:
+                    continue
+
+                start[gName], stop[gName] = pSplitRange([0,NumPart[ptNum]], numChunksSave, i)
+
+                assert stop[gName] > start[gName]
+                meta['Header']['NumPart_ThisFile'][ptNum] = stop[gName] - start[gName]
+                #print(i,gName,start[gName],stop[gName])
+
+            with h5py.File(_newChunkPath(sbSnap,i),'w') as f:
+                # save meta
+                for gName in metaGroups:
+                    g = f.create_group(gName)
+                    for attr in meta[gName].keys():
+                        g.attrs[attr] = meta[gName][attr]
+
+                # save data
+                for gName in keepFields.keys():
+                    ptNum = int(gName[-1])
+                    if NumPart[ptNum] == 0:
+                        print(' skip pt %d (write)' % ptNum)
+                        continue
+
+                    g = f.create_group(gName)
+
+                    for field in keepFields[gName]:
+                        ndim = ndims[gName][field]
+
+                        if ndim == 1:
+                            g[field] = data[gName][field][start[gName]:stop[gName]]
+                        else:
+                            g[field] = data[gName][field][start[gName]:stop[gName],:]
+
+            newSize += path.getsize(_newChunkPath(sbSnap, i)) / 1024.0**3
+
+        print(']')
+        print('[%4d] saved (old size = %5.1f GB new size %5.1f GB)' % (i,oldSize,newSize))
+
+    print('Done.')
+
 def groupCutoutFromSnap(run='tng'):
     """ Create a [full] subhalo/fof cutout from a snapshot (as would be done by the Web API). """
     from util.simParams import simParams
