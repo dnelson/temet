@@ -946,10 +946,12 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                         gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
                                      'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
-                                     'StarFormationRate' : gas['StarFormationRate'][i0g:i1g] }
+                                     'StarFormationRate' : gas['StarFormationRate'][i0g:i1g],
+                                     'count' : (i1g - i0g) }
                         starsLocal = { 'Masses' : stars['Masses'][i0:i1],
                                        'Coordinates' : np.squeeze(stars['Coordinates'][i0:i1,:]),
-                                       'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0:i1] }
+                                       'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0:i1],
+                                       'count' : (i1 - i0) }
 
                         I = momentOfInertiaTensor(sP, gas=gasLocal, stars=starsLocal, rHalf=rHalf, shPos=shPos)
                         rots = rotationMatricesFromInertiaTensor(I)
@@ -1639,6 +1641,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         # calculate smoothing size (V = 4/3*pi*h^3)
         vol = gas['Masses'] / gas['Density']
         hsml = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+        hsml = hsml.astype('float32')
 
         if species in hDensSpecies:
             # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
@@ -1674,8 +1677,6 @@ def wholeBoxColDensGrid(sP, pSplit, species):
             boxWidthFrac = projDepthCode / sP.boxSize
 
             # project
-            hsml = hsml.astype('float32')
-            mMetal = mMetal.astype('float32')
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=boxWidthFrac)
 

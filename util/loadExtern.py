@@ -12,6 +12,7 @@ from util.helper import evenlySample, running_median
 from os.path import isfile, expanduser
 from scipy import interpolate
 from scipy.signal import savgol_filter
+from collections import OrderedDict
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 
@@ -1174,8 +1175,18 @@ def anderson2015(sP):
 
     return r
 
-def werk2013(onlydict=False, tumlinsonOVI=True):
+def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False):
     """ Load observational COS-Halos data from Werk+ (2013). """
+    if coveringFractions:
+        # obs data points (werk 2013 table 6)
+        werk13 = {'rad':[ [0,75],[75,160] ]}
+        werk13['all'] = {'cf':[83,69], 'cf_errup':[9,9], 'cf_errdown':[9,17]}
+        werk13['ssfr_lt_n11'] = {'cf':[37,46], 'cf_errup':[24,14], 'cf_errdown':[24,30]}
+        werk13['ssfr_gt_n11'] = {'cf':[96,84], 'cf_errup':[4,9], 'cf_errdown':[4,9]}
+        werk13['mstar_lt_105'] = {'cf':[81+2,96+2], 'cf_errup':[13,4], 'cf_errdown':[13,4]}
+        werk13['mstar_gt_105'] = {'cf':[81,50], 'cf_errup':[13,12], 'cf_errdown':[13,23]}
+        return werk13
+
     path1 = dataBasePath + 'werk/galaxies_werk13.txt'
     path2 = dataBasePath + 'werk/lines_werk13.txt'
 
@@ -1187,7 +1198,7 @@ def werk2013(onlydict=False, tumlinsonOVI=True):
     with open(path2,'r') as f:
         abs_lines = f.readlines()
 
-    galaxies = {}
+    galaxies = OrderedDict()
 
     for line in gal_lines:
         if line[0] == '#': continue
@@ -1241,9 +1252,34 @@ def werk2013(onlydict=False, tumlinsonOVI=True):
 
     return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
 
-def johnson2015(surveys=['IMACS','SDSS']):
+def johnson2015(surveys=['IMACS','SDSS'], coveringFractions=False):
     """ Load observational data/compendium from Johnson+ (2015). Only the given surveys, i.e. 
     exclude the COS-Halos points which are also included in this table. """
+    if coveringFractions:
+        # obs data points (johnson 2015 figure 4 bottom row)
+        j15 = {}
+
+        j15['all'] = {}
+        j15['ssfr_gt_n11'] = {'rad':[0.25,0.68,2.0,5.4], 'rad_left':[0.1,0.5,1.0,3.1],
+                              'rad_right':[0.5,1.0,3.1,10.0],'cf':[1.0,0.94,0.28,0.0], 
+                              'cf_down':[0.9,0.82,0.2,0.0], 'cf_up':[1.0,0.96,0.43,0.03]}
+        j15['ssfr_lt_n11'] = {'rad':[0.34,0.76,1.95,4.6], 'rad_left':[0.22,0.66,1.1,3.3],
+                              'rad_right':[0.45,0.88,2.9,7.0],'cf':[0.62,0.33,0.05,0.0], 
+                              'cf_down':[0.44,0.19,0.03,0.0], 'cf_up':[0.75,0.62,0.14,0.1]}
+        j15['ssfr_lt_n11_I'] = {'rad':[0.25,0.64,1.9,5.1], 'rad_left':[0.1,0.5,1.1,3.3],
+                                'rad_right':[0.5,0.95,2.97,9.7],'cf':[1.0,0.93,0.18,0.0], 
+                                'cf_down':[0.88,0.8,0.12,0.0], 'cf_up':[1.0,0.95,0.35,0.05]}                  
+        j15['ssfr_lt_n11_NI'] = {'rad':[0.35,0.75,2.2,4.95], 'rad_left':[0.22,0.66,1.5,3.7],
+                                'rad_right':[0.45,0.87,2.94,7.0],'cf':[0.57,0.34,0.0,0.0], 
+                                'cf_down':[0.39,0.19,0.0,0.0], 'cf_up':[0.72,0.62,0.09,0.15]}  
+        j15['ssfr_gt_n11_I'] = {'rad':[0.5,2.25,6.03], 'rad_left':[0.16,1.85,3.16],
+                                'rad_right':[0.97,2.62,7.67],'cf':[1.0,0.67,0.0], 
+                                'cf_down':[0.74,0.38,0.0], 'cf_up':[1.0,0.82,0.12]}  
+        j15['ssfr_gt_n11_NI'] = {'rad':[0.28,1.55,3.9], 'rad_left':[0.28,1.1,3.3],
+                                'rad_right':[0.28,2.08,4.5],'cf':[1.0,0.12,0.0], 
+                                'cf_down':[0.4,0.08,0.0], 'cf_up':[1.0,0.32,0.2]} 
+        return j15
+
     with open(dataBasePath + 'johnson/j15_table1.txt') as f:
         lines = f.readlines()
 
@@ -1264,7 +1300,7 @@ def johnson2015(surveys=['IMACS','SDSS']):
     ovi_err = np.zeros( nGals, dtype='float32' )
     ovi_limit = np.zeros( nGals, dtype='int16' )
 
-    galaxies = {}
+    galaxies = OrderedDict()
     count = 0
 
     for line in lines:

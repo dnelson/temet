@@ -14,6 +14,7 @@ from matplotlib.colors import Normalize, colorConverter
 from scipy.signal import savgol_filter
 from os.path import isfile
 from scipy.stats import gaussian_kde
+from functools import partial
 
 from util import simParams
 from util.loadExtern import werk2013, johnson2015
@@ -23,6 +24,7 @@ from cosmo.load import groupCat, groupCatSingle, auxCat
 from cosmo.cloudy import cloudyIon
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
+from plot.cloudy import ionAbundFracs2DHistos
 from vis.common import setAxisColors
 from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum
 from obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
@@ -746,61 +748,6 @@ def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0
     fig.savefig(saveName)
     plt.close(fig)
 
-def oxygenAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
-    """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 
-    Metal is metallicity in [log Solar]. """
-    
-    # visual config
-    abund_range = [-6.0,0.0]
-    nContours = 30
-    ctName = 'plasma' #'CMRmap'
-
-    # plot setup
-    sizefac = 0.7
-    fig = plt.figure(figsize=[figsize[0]*sizefac*(len(ionNums)*0.9), figsize[1]*sizefac])
-    
-    # load
-    ion = cloudyIon(sP=simParams(res=455,run='tng'),res='lg',redshiftInterp=True)
-
-    for i, ionNum in enumerate(ionNums):
-        # panel setup
-        ax = fig.add_subplot(1,len(ionNums),i+1)
-        ax.set_xlim(ion.range['temp'])
-        ax.set_ylim(ion.range['dens'])
-        ax.set_xlabel('Temperature [ log K ]')
-        ax.set_ylabel('Density [ log cm$^{-3}$ ]') # hydrogen number density
-
-        # make 2D array from slices
-        x = ion.grid['temp']
-        y = ion.grid['dens']
-        XX, YY = np.meshgrid(x, y, indexing='ij')
-
-        z = np.zeros( (x.size, y.size), dtype='float32' )
-        for j, dens in enumerate(y):
-            _, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
-            z[:,j] = ionFrac
-
-        z = np.clip(z, abund_range[0], abund_range[1]-0.1)
-
-        # contour plot
-        V = np.linspace(abund_range[0], abund_range[1], nContours)
-        c = contourf(XX, YY, z, V, cmap=ctName) #vmin=abund_range[0], vmax=abund_range[1], 
-
-        labelText = ion.elementNameToSymbol(element) + ion.numToRoman(ionNum)
-        ax.text(x[0]+0.2, y[-1]-0.4,labelText, va='top', ha='left', color='white', fontsize='40')
-
-    # colorbar on last panel only
-    fig.tight_layout()
-
-    fig.subplots_adjust(right=0.93)
-    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.821])
-    cb = fig.colorbar(c, cax=cbar_ax)
-    cb.ax.set_ylabel('Abundance Fraction [ log ]')
-    cb.set_ticks( np.linspace(abund_range[0],abund_range[1],int(np.abs(abund_range[0]))+1) ) 
-
-    fig.savefig(saveName)
-    plt.close(fig)
-
 def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
     """ Plot the COS-Halos (or other observed) galaxies data, and our mock sample."""
     from scipy.stats import binned_statistic_2d
@@ -819,10 +766,12 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
 
     xlim = [9.5, 11.5] # log mstar [msun]
     ylim = [-13.0, -9.0] # log ssfr [1/yr]
+    if config in ['eCGM','eCGMfull']: xlim = [9.0, 11.5]
 
     # load data
     if config == 'COS-Halos': datafunc = werk2013
     if config == 'eCGM': datafunc = johnson2015
+    if config == 'eCGMfull': datafunc = partial(johnson2015, surveys=['IMACS','SDSS','COS-Halos'])
 
     gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit = datafunc()
     log_ssfr = np.log10(sfr/10.0**logM)
@@ -867,7 +816,8 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
                                                  bins=nBins2D, range=[xlim,ylim])
 
     cc = cc.T # imshow convention
-    cc2d = cc # logZeroNaN(cc)
+    cc2d = cc
+    if config in ['eCGM','eCGMfull']: cc2d = logZeroNaN(cc2d)
 
     cMinMax = [np.nanmax(cc2d)*0.1, np.nanmax(cc2d)*1.1]
     norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
@@ -952,6 +902,7 @@ def cosOVIDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
     # load data
     if config == 'COS-Halos': datafunc = werk2013
     if config == 'eCGM': datafunc = johnson2015
+    if config == 'eCGMfull': datafunc = partial(johnson2015, surveys=['IMACS','SDSS','COS-Halos'])
 
     gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit = datafunc()
     log_ssfr = np.log10(sfr/10.0**logM)
@@ -972,9 +923,11 @@ def cosOVIDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
                 assert 0 # not implemented yet
                 ax.set_xlim([0, 2.0])
                 ax.set_xlabel('Projected Distance / Virial Radius')
+                if config in ['eCGM','eCGMfull']: ax.set_xlim([0, 10])
             else:
                 ax.set_xlim([0, 200])
                 ax.set_xlabel('Projected Distance [ pkpc ]')
+                if config in ['eCGM','eCGMfull']: ax.set_xlim([0, 1000])
 
         if iter == 1:
             # x axis = sSFR
@@ -982,6 +935,7 @@ def cosOVIDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
             ax.set_xlabel('sSFR [ 1/yr ]')
 
         ax.set_ylim([12.5, 15.5])
+        if config in ['eCGM','eCGMfull']: ax.set_ylim([11.5, 15.5])
         ax.set_ylabel('Column Density $N_{\\rm OVI}$ [ log cm$^{-2}$ ]')
 
         # plot obs
@@ -1048,14 +1002,15 @@ def cosOVIDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
 def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
     """ Plot COS-Halos N_OVI data, and our mock COS-Halos galaxy sample analysis. Here to the 
     right of the plots we add stacked offset 1d KDEs of each realization vs observed point. """
-
     ylim = [12.5, 15.5]
+    if config in ['eCGM','eCGMfull']: ylim = [11.5, 15.5]
     ylabel = 'Column Density $N_{\\rm OVI}$ [ log cm$^{-2}$ ]'
 
     lw = 2.5
     cbarTextSize = 13
     nKDE1D = 100
     kdeHeightFac = 4.0 # multiplicative horizontal size beyond individual bounds
+    if config in ['eCGM','eCGMfull']: kdeHeightFac = 10.0
 
     # geometry
     left = 0.06
@@ -1074,6 +1029,7 @@ def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
     # load data
     if config == 'COS-Halos': datafunc = werk2013
     if config == 'eCGM': datafunc = johnson2015
+    if config == 'eCGMfull': datafunc = partial(johnson2015, surveys=['IMACS','SDSS','COS-Halos'])
 
     gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit = datafunc()
     log_ssfr = np.log10(sfr/10.0**logM)
@@ -1091,6 +1047,7 @@ def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
         if iter == 0:
             # x axis = impact parameter, color=sSFR
             ax.set_xlim([0, 200])
+            if config in ['eCGM','eCGMfull']: ax.set_xlim([0, 1000])
             ax.set_xlabel('Projected Distance [ pkpc ]')
 
             c_label = 'sSFR [ log 1/Gyr ]'
@@ -1264,22 +1221,27 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
     assert len(ions) == 1
     assert ions[0] == 'OVI'
 
-    # obs data points (werk 2013 table 6)
-    werk13 = {'rad':[ [0,75],[75,160] ]}
-    werk13['all'] = {'cf':[83,69], 'cf_errup':[9,9], 'cf_errdown':[9,17]}
-    werk13['ssfr_lt_n11'] = {'cf':[37,46], 'cf_errup':[24,14], 'cf_errdown':[24,30]}
-    werk13['ssfr_gt_n11'] = {'cf':[96,84], 'cf_errup':[4,9], 'cf_errdown':[4,9]}
-    werk13['mstar_lt_105'] = {'cf':[81+2,96+2], 'cf_errup':[13,4], 'cf_errdown':[13,4]}
-    werk13['mstar_gt_105'] = {'cf':[81,50], 'cf_errup':[13,12], 'cf_errdown':[13,23]}
-
     gsNames = {'all':'All Galaxies',
                'mstar_lt_105':'$M_\star < 10^{10.5} \,$M$_{\!\odot}$',
                'mstar_gt_105':'$M_\star > 10^{10.5} \,$M$_{\!\odot}$',
                'ssfr_lt_n11':'sSFR < 10$^{-11}$ yr$^{-1}$',
-               'ssfr_gt_n11':'sSFR > 10$^{-11}$ yr$^{-1}$'}
+               'ssfr_gt_n11':'sSFR > 10$^{-11}$ yr$^{-1}$',
+               'ssfr_lt_n11_I':'sSFR < 10$^{-11}$ yr$^{-1}$ (I)',
+               'ssfr_lt_n11_NI':'sSFR < 10$^{-11}$ yr$^{-1}$ (NI)',
+               'ssfr_gt_n11_I':'sSFR > 10$^{-11}$ yr$^{-1}$ (I)',
+               'ssfr_gt_n11_NI':'sSFR > 10$^{-11}$ yr$^{-1}$ (NI)'}
 
-    if conf == 0: galaxySets = ['all']
-    if conf == 1: galaxySets = ['ssfr_lt_n11','ssfr_gt_n11','mstar_lt_105','mstar_gt_105']
+    if config == 'COS-Halos':
+        werk13 = werk2013(coveringFractions=True)
+
+        if conf == 0: galaxySets = ['all']
+        if conf == 1: galaxySets = ['ssfr_lt_n11','ssfr_gt_n11','mstar_lt_105','mstar_gt_105']
+    if config in ['eCGM','eCGMfull']:
+        j15 = johnson2015(coveringFractions=True)
+
+        if conf == 0: galaxySets = ['all']
+        if conf == 1: galaxySets = ['ssfr_gt_n11','ssfr_lt_n11']
+        if conf == 2: galaxySets = ['ssfr_gt_n11_I','ssfr_lt_n11_I','ssfr_gt_n11_NI','ssfr_lt_n11_NI']
 
     # plot setup
     lw = 3.0
@@ -1287,8 +1249,12 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
     fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
-    ax.set_xlim([0.0, 400.0])
-    ax.set_xlabel('Impact Parameter [ pkpc ]')
+    if config == 'COS-Halos':
+        ax.set_xlim([0.0, 400.0])
+        ax.set_xlabel('Impact Parameter [ pkpc ]')
+    if config in ['eCGM','eCGMfull']:
+        ax.set_xlim([-1.05, 1.05])
+        ax.set_xlabel('Impact Parameter / Virial Radius [ log ]') 
 
     yLabelExtra = ''
     if len(colDensThresholds) == 1:
@@ -1300,6 +1266,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
     ax.set_ylabel('Covering Fraction $\kappa_{\\rm OVI}$%s' % yLabelExtra)
     if conf == 0: ax.set_ylim([0.0, 1.04])
     if conf == 1: ax.set_ylim([0.1, 1.04])
+    if config in ['eCGM','eCGMfull']: ax.set_ylim([-0.1, 1.04])
 
     # overplot obs
     colors = []
@@ -1321,14 +1288,34 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
                 label = ''
                 if gs != 'all': label = 'Werk+ (2013) ' + gsNames[gs]
                 if gs == 'all':
-                    ax.text(124, 0.78, 'Werk+ (2013)', ha='left', size=18)
-                    ax.text(124, 0.73, 'N$_{\\rm OVI}$ > 10$^{14.15}$ cm$^{-2}$', ha='left', size=18)
+                    ax.text(124, 0.64, 'Werk+ (2013)', ha='left', size=18)
+                    ax.text(124, 0.59, 'N$_{\\rm OVI}$ > 10$^{14.15}$ cm$^{-2}$', ha='left', size=18)
                 if i > 0: label = ''
                 ax.errorbar(x, y/100.0, xerr=xerr, yerr=yerr, fmt='o', 
                             color=c, markersize=11.0, lw=1.6, capthick=1.6, label=label)
 
-    if config == 'eCGM':
-        print('plot some data todo')
+    if config in ['eCGM','eCGMfull']:
+        for j, gs in enumerate( galaxySets ):
+            c = 'black' if j == 0 and len(galaxySets) == 1 else ax._get_lines.prop_cycler.next()['color']
+            colors.append(c)
+
+            if len(j15[gs]) == 0:
+                continue # no data points (all)
+
+            for i in range(len(j15[gs]['rad'])):
+                x = np.log10( j15[gs]['rad'][i] )
+                y = j15[gs]['cf'][i]
+
+                xerr = [x - np.log10( j15[gs]['rad_left'][i] ), np.log10( j15[gs]['rad_right'][i] ) - x]
+                xerr = np.reshape( xerr, (2,1) )
+                yerr = [y - j15[gs]['cf_down'][i], j15[gs]['cf_up'][i] - y]
+                yerr = np.reshape( yerr, (2,1) )
+
+                label = ''
+                if gs != 'all': label = 'Johnson+ (2015) ' + gsNames[gs]
+                if i > 0: label = ''
+                ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', 
+                            color=c, markersize=11.0, lw=1.6, capthick=1.6, label=label)
 
     # loop over each column density threshold (different colors)
     for j, thresh in enumerate(colDensThresholds):
@@ -1352,12 +1339,15 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
             assert thresh in cf['colDensThresholds']
             ind = np.where(cf['colDensThresholds'] == thresh)[0]
 
+            relStr = ''
+            if config in ['eCGM','eCGMfull']: relStr = '_rel'
+
             # different galaxy samples?
             for k, gs in enumerate(galaxySets):
-                xx = cf['radBins']
-                yy = np.squeeze( cf['%s_percs' % gs][ind,:,3] )
-                yy_min = np.squeeze( cf['%s_percs' % gs][ind,:,2] ) # -half sigma
-                yy_max = np.squeeze( cf['%s_percs' % gs][ind,:,4] ) # +half sigma
+                xx = cf['radBins%s' % relStr]
+                yy = np.squeeze( cf['%s_percs%s' % (gs,relStr)][ind,:,3] )
+                yy_min = np.squeeze( cf['%s_percs%s' % (gs,relStr)][ind,:,2] ) # -half sigma
+                yy_max = np.squeeze( cf['%s_percs%s' % (gs,relStr)][ind,:,4] ) # +half sigma
                 assert list(cf['perc_vals'][[3,2,4]]) == [50,38,62] # verify as expected
 
                 # plot middle line
@@ -1366,30 +1356,35 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
                 if len(colDensThresholds) == 1: label = sP.simName
                 if gs != 'all': label += ' (%s)' % gsNames[gs]
                 if i > 0 and len(colDensThresholds) > 1: label = ''
-                c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
-                if len(galaxySets) > 1: c = colors[k]
+                
+                if len(galaxySets) > 1:
+                    c = colors[k]
+                else:
+                    c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
+
                 ls = linestyles[i] if len(colDensThresholds) > 1 else linestyles[0]
 
                 ax.plot(xx, yy, lw=lw, color=c, linestyle=ls, label=label)
 
                 # percentiles
-                if i > 0:
+                if i != len(sPs)-1:
                     continue
 
                 ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.1, interpolate=True)
 
-                if conf == 1 and gs in ['mstar_lt_105','ssfr_gt_n11']:
-                    # +/- 1 sigma lines
-                    yy_min = np.squeeze( cf['%s_percs' % gs][ind,:,1] ) # -1 sigma
-                    yy_max = np.squeeze( cf['%s_percs' % gs][ind,:,5] ) # +1 sigma
-                    assert list(cf['perc_vals'][[1,5]]) == [16,84] # verify as expected
-
-                    ax.plot(xx, yy_min, '-', lw=lw-1, color=c, linestyle=linestyles[i], alpha=0.2)
-                    ax.plot(xx, yy_max, '-', lw=lw-1, color=c, linestyle=linestyles[i], alpha=0.2)
+                #if conf == 1 and sP.simName == 'TNG100-2' and gs in ['mstar_lt_105','ssfr_gt_n11']:
+                #    # +/- 1 sigma lines
+                #    yy_min = np.squeeze( cf['%s_percs%s' % (gs,relStr)][ind,:,1] ) # -1 sigma
+                #    yy_max = np.squeeze( cf['%s_percs%s' % (gs,relStr)][ind,:,5] ) # +1 sigma
+                #    assert list(cf['perc_vals'][[1,5]]) == [16,84] # verify as expected
+                #    ax.plot(xx, yy_min, '-', lw=lw-1, color=c, linestyle=linestyles[i], alpha=0.2)
+                #    ax.plot(xx, yy_max, '-', lw=lw-1, color=c, linestyle=linestyles[i], alpha=0.2)
 
     # legend
     loc = 'upper right' if len(sPs) == 1 else 'lower left'
-    legend2 = ax.legend(loc=loc, ncol=1)
+    prop = {}
+    if config in ['eCGM','eCGMfull']: prop['size'] = 15
+    legend2 = ax.legend(loc=loc, ncol=1, prop=prop)
 
     fig.tight_layout()
     fig.savefig(saveName)
@@ -1594,7 +1589,7 @@ def paperPlots():
         saveName = 'abundance_fractions_%s_%s_z%d_Z%d.pdf' % \
           (element, '-'.join([str(i) for i in ionNums]),redshift*100,10**metal * 1000)
 
-        oxygenAbundFracs2DHistos(saveName, element=element, ionNums=ionNums, redshift=redshift, metal=metal)
+        ionAbundFracs2DHistos(saveName, element=element, ionNums=ionNums, redshift=redshift, metal=metal)
 
     # figure 11: mock COS-Halos samples
     if 0:
@@ -1612,16 +1607,16 @@ def paperPlots():
         
     # figure 13: covering fractions, OVI vs obs (all galaxies, and subsamples)
     if 0:
-        sPs = [TNG100, TNG100_2]
+        sPs = [TNG100] #, TNG100_2]
 
         # All Galaxies
         novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
-        saveName = 'covering_frac_ovi_all_%s.pdf' % '_'.join([sP.simName for sP in sPs])
+        saveName = 'coshalos_covering_frac_%s.pdf' % '_'.join([sP.simName for sP in sPs])
         coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=0)
 
         # sSFR / M* subsets
         novi_vals = [14.15]
-        saveName = 'covering_frac_ovi_subsets_%s.pdf' % '_'.join([sP.simName for sP in sPs])
+        saveName = 'coshalos_covering_frac_subsets_%s.pdf' % '_'.join([sP.simName for sP in sPs])
         coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=1)
 
     # figure 14: covering fractions, with physics variants (L25n512)
@@ -1637,18 +1632,20 @@ def paperPlots():
             coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, 
                                    config='SimHalos_115-125')
 
-    # figures X (appendix?): nums 11-14 repeated for the eCGM dataset instead of COS-Halos
-    if 0:
-        sPs = [TNG100_2, TNG100] # temporary, computing
+    # figure 15: nums 11-14 repeated for the eCGM dataset instead of COS-Halos
+    if 1:
+        sP = TNG100
+        cf = 'eCGMfull' # eCGM
 
-        for i in [0,1]:
-            sP = sPs[i]
-            obsSimMatchedGalaxySamples([sP], 'ecgm_sample_cc%s.pdf'%sP.simName, config='eCGM')
-            cosOVIDataPlotExtended(sP, saveName='ecgm_ovi_cc%s_ext.pdf'%sP.simName, config='eCGM')
+        obsSimMatchedGalaxySamples([sP], '%s_sample_%s.pdf' % (cf,sP.simName), config=cf)
+        cosOVIDataPlot(sP, saveName='%s_ovi_%s.pdf' % (cf,sP.simName), config=cf)
+        cosOVIDataPlotExtended(sP, saveName='%s_ovi_%s_ext.pdf' % (cf,sP.simName), config=cf)
 
-            novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
-            coveringFractionVsDist([sP], 'covering_frac_ecgm_cc%s.pdf'%sP.simName, ions=['OVI'], 
-                colDensThresholds=novi_vals, conf=0)
+        coveringFractionVsDist([sP], '%s_covering_frac_%s.pdf' % (cf,sP.simName), ions=['OVI'], 
+            colDensThresholds=[13.5, 14.0, 14.5, 15.0], config=cf, conf=0)
+        for conf in [1,2]:
+            coveringFractionVsDist([sP], 'covering_frac_%s_%s_conf%d.pdf' % (cf,sP.simName,conf), 
+                ions=['OVI'], colDensThresholds=[13.5], config=cf, conf=conf)
 
     # ------------ exploration ------------
 
