@@ -573,9 +573,10 @@ def plotTimebins():
     sPs = []
     sPs.append( simParams(res=128, run='tng', variant='0000') )
     sPs.append( simParams(res=256, run='tng', variant='0000') )
-    sPs.append( simParams(res=512, run='tng', variant='0000') )
+    #sPs.append( simParams(res=512, run='tng', variant='0000') )
     sPs.append( simParams(res=1820, run='tng') )
     sPs.append( simParams(res=2160, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
 
     data = []
     for sP in sPs:
@@ -586,6 +587,7 @@ def plotTimebins():
     ax = fig.add_subplot(111)
 
     ax.set_xlim([0.0,1.0])
+    ax.set_ylim([1e1,1e5])
     ax.set_xlabel('Scale Factor')
     ax.set_ylabel('Wall-clock for Smallest Timebin [msec]')
     ax.set_yscale('log')
@@ -593,6 +595,8 @@ def plotTimebins():
     # loop over each run
     for i, sP in enumerate(sPs):
         # only plot timesteps where this bin was occupied
+        print(' (A) ', sP.simName)
+
         xx = data[i]['time']
         yy = data[i]['avg_time'] * 1000.0 # msec
 
@@ -600,13 +604,27 @@ def plotTimebins():
         yy[w] = np.nan
         yy = np.nanmin( yy, axis=0 ) # min avg_time per timestep, across any bin
 
-        # average down to 1000 points
-        avgSize = int(np.floor(yy.size / float(numPtsAvg)))
+        # average down to numPtsAvg
+        if 0:
+            # equal in timestep, not so nice
+            avgSize = int(np.floor(yy.size / float(numPtsAvg)))
 
-        xx_avg = xx[0: avgSize*numPtsAvg].reshape(-1, avgSize)
-        xx_avg = np.nanmean(xx_avg, axis=1)
-        yy_avg = yy[0: avgSize*numPtsAvg].reshape(-1, avgSize)
-        yy_avg = np.nanmean(yy_avg, axis=1)
+            xx_avg = xx[0: avgSize*numPtsAvg].reshape(-1, avgSize)
+            xx_avg = np.nanmean(xx_avg, axis=1)
+            yy_avg = yy[0: avgSize*numPtsAvg].reshape(-1, avgSize)
+            yy_avg = np.nanmean(yy_avg, axis=1)
+        if 1:
+            # equal in scalefactor
+            da = ( xx.max() - 0.0 ) / numPtsAvg
+            xx_avg = np.zeros( numPtsAvg, dtype='float32' )
+            yy_avg = np.zeros( numPtsAvg, dtype='float32' )
+
+            for j in range(numPtsAvg):
+                x0 = 0.0 + da*j
+                x1 = x0 + da
+                w = np.where( (xx >= x0) & (xx < x1) )
+                xx_avg[j] = np.nanmean(xx[w])
+                yy_avg[j] = np.nanmean(yy[w])
 
         # plot
         label = sP.simName
@@ -622,6 +640,7 @@ def plotTimebins():
     # (B) cpu fraction evolution by timebin, one plot per run
     for i, sP in enumerate(sPs):
         # start plot
+        print(' (B) ', sP.simName)
         fig = plt.figure(figsize=[figsize[0]*sfclean*1.2, figsize[1]*sfclean])
         ax = fig.add_subplot(111)
 
@@ -638,19 +657,36 @@ def plotTimebins():
         yy[w] = np.nan
 
         # create stack, averaging down to fewer points
-        avgSize = int(np.floor(yy[0,:].size / float(numPtsAvg)))
+        if 0:
+            # equal in timestep, not so nice
+            avgSize = int(np.floor(yy[0,:].size / float(numPtsAvg)))
 
-        yy_stack = np.zeros( (yy.shape[0],numPtsAvg), dtype='float32' )
-        for ind in range(yy.shape[0]):
-            yy_avg = np.squeeze(yy[ind,0: avgSize*numPtsAvg]).reshape(-1, avgSize)
-            yy_stack[ind,:] = np.nanmean(yy_avg, axis=1)
+            yy_stack = np.zeros( (yy.shape[0],numPtsAvg), dtype='float32' )
+            for ind in range(yy.shape[0]):
+                yy_avg = np.squeeze(yy[ind,0: avgSize*numPtsAvg]).reshape(-1, avgSize)
+                yy_stack[ind,:] = np.nanmean(yy_avg, axis=1)
+
+            # average x-axis down
+            xx_avg = xx[0: avgSize*numPtsAvg].reshape(-1, avgSize)
+            xx_avg = np.nanmean(xx_avg, axis=1)
+
+        if 1:
+            # equal in scalefactor
+            da = ( xx.max() - 0.0 ) / numPtsAvg
+            xx_avg = np.zeros( numPtsAvg, dtype='float32' )
+            yy_stack = np.zeros( (yy.shape[0],numPtsAvg), dtype='float32' )
+
+            for j in range(numPtsAvg):
+                x0 = 0.0 + da*j
+                x1 = x0 + da
+                w = np.where( (xx >= x0) & (xx < x1) )
+
+                xx_avg[j] = np.nanmean(xx[w])
+                for ind in range(yy.shape[0]):
+                    yy_stack[ind,j] = np.nanmean(yy[ind,w])
 
         w = np.where( np.isnan(yy_stack) )
         yy_stack[w] = 0.0
-
-        # average x-axis down
-        xx_avg = xx[0: avgSize*numPtsAvg].reshape(-1, avgSize)
-        xx_avg = np.nanmean(xx_avg, axis=1)
 
         # plot
         labels = [str(bn) for bn in data[i]['bin_num'][::-1]] # reverse
@@ -665,7 +701,7 @@ def plotTimebins():
         box = ax.get_position()
         ax.set_position([box.x0, box.y0, box.width * 0.88, box.height])
         axTop.set_position([box.x0, box.y0, box.width * 0.88, box.height])
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), prop={'size':13})
 
         fig.savefig(saveBase % 'cpufrac_stack_%s' % sP.simName)
         plt.close(fig)
