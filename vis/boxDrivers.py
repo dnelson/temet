@@ -132,6 +132,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 25: panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[11, 15]} )
     if conf == 26: panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
     if conf == 27: panels.append( {'partType':'gas', 'partField':'O VIII', 'valMinMax':[11, 16]} )
+    if conf == 28: panels.append( {'partType':'gas', 'partField':'sb_H-alpha', 'valMinMax':[-25.0, -18.0]} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -150,7 +151,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     run        = 'tng'
     redshift   = 0.0
-    nPixels    = 8000 # 800, 2000, 8000
+    nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False

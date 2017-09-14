@@ -23,7 +23,7 @@ from util.helper import loadColorTable, logZeroMin
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.util import periodicDists, correctPeriodicDistVecs, correctPeriodicPosVecs
-from cosmo.cloudy import cloudyIon
+from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
@@ -658,6 +658,17 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
         mass = snapshotSubset(sP, partType, 'xray', indRange=indRange)
 
+    # flux/surface brightness (replace mass)
+    if partField in ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']:
+        # compute line emission flux for each gas cell in [photon/s/cm^2]
+        lineName = partField.split("_")[1]
+        e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
+        lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
+        wavelength = e_interp.lineWavelength(lineName)
+        mass = sP.units.luminosityToFlux(lum, wavelength=wavelength)
+        assert mass.min() >= 0.0
+        assert np.count_nonzero( np.isnan(mass) ) == 0
+
     # single stellar band, replace mass array with linear luminosity of each star particle
     if 'stellarBand-' in partField:
         bands = partField.split("-")[1:]
@@ -680,7 +691,8 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     normCol = False
 
     if partFieldLoad in volDensityFields+colDensityFields+totSumFields or \
-      ' ' in partFieldLoad or 'metals_' in partFieldLoad or 'stellarBand-' in partFieldLoad:
+      ' ' in partFieldLoad or 'metals_' in partFieldLoad or 'stellarBand-' in partFieldLoad or \
+      'sb_' in partFieldLoad:
         # distribute mass and calculate column/volume density grid
         quant = None
 
@@ -715,7 +727,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     return mass, quant, normCol
 
-def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
+def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method=None):
     """ Perform any final unit conversions on grid output and set field-specific plotting configuration. """
     config = {}
 
@@ -796,6 +808,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method=None):
         if '_minIP' in method: config['ctName'] = 'gray' # minIP: do dark on light
         if '_maxIP' in method: config['ctName'] = 'gray_r' # maxIP: do light on dark
         #config['plawScale'] = 1.0
+
+    if 'sb_' in partField:
+        # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec]
+        pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
+        grid = logZeroMin( sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=True) )
+
+        lineName = partField.split("sb_")[1]
+        if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
+        config['label']  = '%s Surface Brightness [log photon s$^{-1}$ cm$^{-2}$ arcsec$^{-2}$]' % lineName
+        config['ctName'] = 'inferno'
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature']:
@@ -979,7 +1001,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
     def emptyReturn():
         print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros( nPixels, dtype='float32' )
-        grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg, method)
+        grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method)
         return grid, config
 
     if h['NumPart'][sP.ptNum(partType)] <= 2:
@@ -1183,7 +1205,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     # handle units and come up with units label
-    grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, method)
+    grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, method)
 
     # temporary: something a bit peculiar here, request an entirely different grid and 
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
@@ -1897,7 +1919,7 @@ def renderMultiPanel(panels, conf):
                                    rowHeight, 0.4, bottomNorm, 0.05)
 
                 # colorbar for the vector field visualization, offset to the right
-                _, vConfig = gridOutputProcess(p['sP'], np.zeros(2), p['vecColorPT'], p['vecColorPF'], 1.0)
+                _, vConfig = gridOutputProcess(p['sP'], np.zeros(2), p['vecColorPT'], p['vecColorPF'], [1,1], 1.0)
                 vConfig['vecMinMax'] = p['vecMinMax']
                 vConfig['ctName'] = p['vecColormap']
 
