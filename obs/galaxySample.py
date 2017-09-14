@@ -50,7 +50,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
         limits = {}
         for propName in propList:
-            # set 0=compute in distance (default), 1=upper limit, 2=lower limit, 3=exact match required
+            # -1=ignore, 0=compute in distance (def.), 1=upper limit, 2=lower limit, 3=exact match required
             limits[propName] = np.zeros( shape, dtype='int16' )
 
         limits['ssfr_30pkpc_log'][np.where(sfr_limit),:] = 1 # realization independent, upper limit
@@ -68,14 +68,20 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
             props['ssfr_30pkpc_log'][:,i] = np.log10( ssfr )
             props['impact_parameter'][:,i] = R + impact_param_random_err
 
-    if datasetName == 'eCGM':
+    if datasetName in ['eCGM', 'eCGMfull']:
         # load Johnson+ (2015) sample
-        gals, logM, redshift, sfr, sfr_err, sfr_limit, R, _, _, _ = johnson2015()
+        if datasetName == 'eCGM':
+            surveys = ['IMACS','SDSS'] # i.e. exclude the COS-Halos data
+        if datasetName == 'eCGMfull':
+            surveys = ['IMACS','SDSS','COS-Halos']
+
+        gals, logM, redshift, sfr, sfr_err, sfr_limit, R, _, _, _ = johnson2015(surveys=surveys)
         log_ssfr = np.log10(sfr/10.0**logM)
         env = np.array( [gal['environment'] for gal in gals] ) # 0=I (isolated), 1=NI (not isolated)
 
         logM_err = 0.25 # dex, assumed
         R_err = 2.0 # kpc, assumed
+        logM_min_for_iso = 9.5 # isolation criteria only enforced above (>2 sigma of logM_err hits 9.0)
 
         # define how we will create this sample, by matching on what quantities
         propList = ['mstar_30pkpc_log','ssfr_30pkpc_log','isolated3d,mstar30kpc,max_third,in_500pkpc']
@@ -89,7 +95,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
         props['ssfr_30pkpc_log'] = np.zeros( shape, dtype='float32' )
         props['ssfr_30pkpc_log'].fill(-11.0) # we use as either an upper or lower limit
 
-        w_env = np.where( (env == 0) & (logM > 9.0) ) # set required iso only for 'I' env galaxies with M>9
+        w_env = np.where( (env == 0) & (logM > logM_min_for_iso) ) # set req iso only for 'I' env gals above M
         props['isolated3d,mstar30kpc,max_third,in_500pkpc'] = np.zeros( shape, dtype='int16' )
         props['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env,:].fill(1) # realization independent
 
@@ -105,10 +111,12 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
         limits['ssfr_30pkpc_log'][w_early,:] = 1 # realization independent, upper limit
         limits['ssfr_30pkpc_log'][w_late,:] = 2 # realization independent, lower limit
 
-        # isolation: galaxy dependent, exact (required either I or NI if Mstar>9.0)
+        # isolation: galaxy dependent, exact (required either I or NI if Mstar>logM_min_for_iso)
         limits['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env,:] = 3 
-        w_env2 = np.where( (env == 1) & (logM > 9.0) )
+        w_env2 = np.where( (env == 1) & (logM > logM_min_for_iso) )
         limits['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env2,:] = 3
+        w_env_unenforced = np.where( (logM <= logM_min_for_iso) )
+        limits['isolated3d,mstar30kpc,max_third,in_500pkpc'][w_env_unenforced,:] = -1
 
         # create realizations by adding appropriate noise to obs
         for i in range(numRealizations):
@@ -268,7 +276,7 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
 
         nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
 
-    if config == 'eCGM':
+    if config in ['eCGM','eCGMfull']:
         # grid parameters (Johnson+ 2015)
         partType  = 'gas'
         ionName   = 'O VI'
@@ -343,6 +351,12 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
 
         # loop over all inds
         for i, ind in enumerate(inds_todo):
+            # already exists?
+            if isfile(_gridFilePath()):
+                print(' skipping   [%3d of %3d] ind = %d, already exists' % (i,len(inds_todo),ind))
+                continue
+            print(' projecting [%3d of %3d] ind = %d' % (i,len(inds_todo),ind))
+
             # configure grid for this galaxy
             boxSizeImg = sP.units.physicalKpcToCodeLength( np.array([gridSize, gridSize, projDepth]) )
             boxCenter  = groupCatSingle(sP, subhaloID=ind)['SubhaloPos']
@@ -351,8 +365,6 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
             boxCenter  = boxCenter[ [axes[0], axes[1], 3-axes[0]-axes[1]] ]
 
             # call projection
-            print(' projecting [%3d of %3d] ind = %d' % (i,len(inds_todo),ind))
-
             grid_d = sphMap( pos=pos, hsml=hsml, mass=mass, quant=None, axes=axes, ndims=3, 
                              boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, boxCen=boxCenter, 
                              nPixels=nPixels, colDens=True, multi=False )
@@ -419,7 +431,9 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
     numRadBins = 100
     perc_vals = [10,16,38,50,62,84,90]
     colDensThresholds = [12.5, 13.0, 13.5, 14.0, 14.15, 14.5, 15.0, 15.5, 16.0]
-    gal_subsets = ['all','ssfr_lt_n11','ssfr_gt_n11','mstar_lt_105','mstar_gt_105']
+
+    shape = sim_sample['selected_inds'].shape
+    numRealizations = sim_sample['column'].shape[1]
 
     if config in ['COS-Halos','SimHalos_115-125']:
         # grid parameters
@@ -427,11 +441,32 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
         gridRes   = 2.0 # pkpc, pixel size
         axes      = [0,1] # x,y
 
-    if config == 'eCGM':
+        gal_subsets = ['all','ssfr_lt_n11','ssfr_gt_n11','mstar_lt_105','mstar_gt_105']
+
+    if config in ['eCGM','eCGMfull']:
         # grid parameters (Johnson+ 2015)
         gridSize  = 2600.0 # pkpc, box sidelength
         gridRes   = 2.0 # pkpc, pixel size
         axes      = [0,1] # x,y
+
+        gal_subsets = ['all','ssfr_lt_n11','ssfr_gt_n11',
+                       'ssfr_lt_n11_I','ssfr_gt_n11_I','ssfr_lt_n11_NI','ssfr_gt_n11_NI']
+
+        # load halo radii (use whatever was derived from the Kravstov AM + Bryan definition procedure)
+        if config == 'eCGM':
+            gals, _, _, _, _, _, R, _, _, _ = johnson2015()
+        if config == 'eCGMfull':
+            gals, _, _, _, _, _, R, _, _, _ = johnson2015(surveys=['IMACS','SDSS','COS-Halos'])
+        assert np.array_equal(R, [gal['R'] for gal in gals]) # verify
+        assert len(gals) == shape[0] # verify
+
+        R_Rh = np.array([gal['R_Rh'] for gal in gals]) # dimensionless ratio
+        halo_Rh = R / R_Rh
+
+        # load observed isolation flag to support 'I' and 'NI' galaxy subsets later
+        env = np.array( [gal['environment'] for gal in gals] ) # 0=I (isolated), 1=NI (not isolated)
+        sim_sample['halo_env'] = np.zeros( shape, dtype='int16' )
+        for i in range(numRealizations): sim_sample['halo_env'][:,i] = env
 
     nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
 
@@ -457,18 +492,17 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
     r['colDensThresholds'] = np.array(colDensThresholds)
     r['perc_vals'] = np.array(perc_vals)
 
-    shape = sim_sample['selected_inds'].shape
-    numRealizations = sim_sample['column'].shape[1]
+    for relStr in ['','_rel']:
+        # iter=0 for pkpc, iter=1 for pkpc normalized by halo virial radii
+        r['galaxies_indiv%s' % relStr] = np.zeros( (shape[0],shape[1],len(colDensThresholds), numRadBins), dtype='float32' )
 
-    r['galaxies_indiv'] = np.zeros( (shape[0],shape[1],len(colDensThresholds), numRadBins), dtype='float32' )
-
-    for gs in gal_subsets:
-        r['%s_mean' % gs] = np.zeros( (len(colDensThresholds), numRadBins), dtype='float32' )
-        r['%s_stddev' % gs] = np.zeros( (len(colDensThresholds), numRadBins), dtype='float32' )
-        r['%s_percs' % gs] = np.zeros( (len(colDensThresholds), numRadBins, len(perc_vals)), dtype='float32' )
-        r['%s_mean' % gs].fill(np.nan)
-        r['%s_stddev' % gs].fill(np.nan)
-        r['%s_percs' % gs].fill(np.nan)
+        for gs in gal_subsets:
+            r['%s_mean%s' % (gs,relStr)] = np.zeros( (len(colDensThresholds), numRadBins), dtype='float32' )
+            r['%s_stddev%s' % (gs,relStr)] = np.zeros( (len(colDensThresholds), numRadBins), dtype='float32' )
+            r['%s_percs%s' % (gs,relStr)] = np.zeros( (len(colDensThresholds), numRadBins, len(perc_vals)), dtype='float32' )
+            r['%s_mean%s' % (gs,relStr)].fill(np.nan)
+            r['%s_stddev%s' % (gs,relStr)].fill(np.nan)
+            r['%s_percs%s' % (gs,relStr)].fill(np.nan)
 
     origSnap = sP.snap
 
@@ -477,89 +511,135 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
         gridFile = gridPath + 'snap-%d_ind-%d_axes-%d%d.hdf5' % (snap,ind,axes[0],axes[1])
         return gridFile
 
-    # create 2d distance mask and in order to select correct distance 'ring'
-    # note: pixel scale is constant in pkpc, variable in code units
-    zz = np.indices(nPixels)
-    dist_mask = np.sqrt( ((np.flip(zz[1],1) - zz[1])/2)**2 + ((np.flip(zz[0],0) - zz[0])/2)**2 )
-    dist_mask_local = dist_mask * gridRes # for now, constant per halo, pkpc
-    dist_mask_local = dist_mask_local.ravel() # flatten
+    # iter=0 bin in pkpc, iter=1 bin in pkpc normalized by halo virial radii
+    for iter in [0,1]:
+        # create 2d distance mask and in order to select correct distance 'ring'
+        # note: pixel scale is constant in pkpc, variable in code units
+        zz = np.indices(nPixels)
+        dist_mask = np.sqrt( ((np.flip(zz[1],1) - zz[1])/2)**2 + ((np.flip(zz[0],0) - zz[0])/2)**2 )
+        dist_mask_local = dist_mask * gridRes # for now, constant per halo, pkpc
+        dist_mask_local = dist_mask_local.ravel() # flatten
 
-    # setup radial bins
-    radMax = gridSize/2
-    r['radBins'] = np.linspace(gridRes, radMax, numRadBins)
+        if iter == 0:
+            # setup radial bins
+            relStr = ''
+            radMax = gridSize/2
+            r['radBins'] = np.linspace(gridRes, radMax, numRadBins)
 
-    # save index sets for each radial bin
-    rad_masks = []
-    num_in_rad = []
+            # save index sets for each radial bin
+            rad_masks = []
+            num_in_rad = []
 
-    for j, radBin in enumerate(r['radBins']):
-        # which pixels -satisfy- the radial cut
-        w_rad = (dist_mask_local < radBin)
-        rad_masks.append(w_rad)
-        num_in_rad.append( np.count_nonzero(w_rad) )
+            for j, radBin in enumerate(r['radBins']):
+                # which pixels -satisfy- the radial cut
+                w_rad = (dist_mask_local < radBin)
+                rad_masks.append(w_rad)
+                num_in_rad.append( np.count_nonzero(w_rad) )
+        if iter == 1:
+            # setup radial bins (log b/rvir)
+            relStr = '_rel'
+            r['radBins_rel'] = np.linspace(-2.0, 1.5, numRadBins)
 
-    # loop over the snapshot set again
-    for snap in np.unique(sim_sample['snaps']):
-        # which realized galaxies (a unique set) are in this snap?
-        sP.setSnap(snap)
-        w_loc = np.where(sim_sample['snaps'] == snap)
+        # loop over the snapshot set again
+        for snap in np.unique(sim_sample['snaps']):
+            # which realized galaxies (a unique set) are in this snap?
+            sP.setSnap(snap)
+            w_loc = np.where(sim_sample['snaps'] == snap)
 
-        # all grids now exist, process them to extract single column values per galaxy
-        for gal_num in w_loc[0]:
-            # loop through realizations and load the grid of each
-            inds = np.squeeze( sim_sample['selected_inds'][gal_num,:] )
-            print(' [%2d] compute covering fractions for each realization...' % gal_num)
+            if iter == 1 and config == 'COS-Halos':
+                # load virial radii of all halos now (we take the mean per galaxy across all 
+                # its realizations and use this uniformly for each realization)
+                halo_Rh = groupCat(sP, 'rhalo_200')
 
-            if numRealizations > 1: print(' [', end='')
-            for realization_num, ind in enumerate(iterable(inds)):
-                if numRealizations > 1: print('.',end='')
-                with h5py.File(_gridFilePath(),'r') as f:
-                    grid = f['grid'][()].ravel() # flatten
+            # all grids now exist, process them to extract single column values per galaxy
+            for gal_num in w_loc[0]:
+                # loop through realizations and load the grid of each
+                inds = np.squeeze( sim_sample['selected_inds'][gal_num,:] )
+                print(' [%2d] compute covering fractions for each realization...' % gal_num)
 
-                # loop over thresholds
-                for i, thresh in enumerate(colDensThresholds):
-                    # which pixels satisfy the threshold alone?
-                    w_covered = (grid >= thresh)
+                if iter == 1:
+                    # galaxy dependent: save index sets for each radial bin
+                    rad_masks = []
+                    num_in_rad = []
 
-                    # loop over radial distances
-                    for j, radBin in enumerate(r['radBins']):
-                        # combine masks: which [flattened] pixels satisfy both cuts?
-                        num_in_rad_above_thresh = np.count_nonzero(w_covered & rad_masks[j])
+                    if config in ['eCGM','eCGMfull']:
+                        local_halo_radius = halo_Rh[gal_num]
+                    if config == 'COS-Halos':
+                        local_halo_radius = np.nanmean( halo_Rh[inds] )
 
-                        # save fraction
-                        frac = float( num_in_rad_above_thresh ) / num_in_rad[j]
-                        assert np.isfinite(frac)
+                    dist_mask_rel_log = np.log10(dist_mask_local / local_halo_radius)
 
-                        r['galaxies_indiv'][gal_num,realization_num,i,j] = frac
-            if numRealizations > 1: print(']')
+                    for j, radBin in enumerate(r['radBins_rel']):
+                        # which pixels -satisfy- the radial cut
+                        w_rad = (dist_mask_rel_log < radBin)
+                        rad_masks.append(w_rad)
+                        num_in_rad.append( np.count_nonzero(w_rad) )
 
-    # compute binned values across all realized galaxies
-    for i, thresh in enumerate(colDensThresholds):
-        for j, radBin in enumerate(r['radBins']):
-            
-            # different subsets of the galaxy sample, including 'all'
-            for gs in gal_subsets:
-                local_vals = r['galaxies_indiv'][:,:,i,j].ravel()
+                if numRealizations > 1: print(' [', end='')
+                for realization_num, ind in enumerate(iterable(inds)):
+                    if numRealizations > 1: print('.',end='')
+                    with h5py.File(_gridFilePath(),'r') as f:
+                        grid = f['grid'][()].ravel() # flatten
 
-                # update local_vals for this subset
-                if gs in ['ssfr_lt_n11','ssfr_gt_n11']:
-                    ssfr = sim_sample['ssfr_30pkpc_log'].ravel()
-                    with np.errstate(invalid='ignore'):
-                        if gs == 'ssfr_lt_n11': w = np.where((ssfr < -11.0) | np.isnan(ssfr))
-                        if gs == 'ssfr_gt_n11': w = np.where((ssfr >= -11.0))
-                    local_vals = local_vals[w]
-                if gs in ['mstar_lt_105','mstar_gt_105']:
-                    mstar = sim_sample['mstar_30pkpc_log'].ravel()
-                    if gs == 'mstar_lt_105': w = np.where(mstar < 10.5)
-                    if gs == 'mstar_gt_105': w = np.where(mstar >= 10.5)
-                    local_vals = local_vals[w]
+                    # loop over thresholds
+                    for i, thresh in enumerate(colDensThresholds):
+                        # which pixels satisfy the threshold alone?
+                        w_covered = (grid >= thresh)
 
-                if local_vals.size == 0:
-                    continue
+                        # loop over radial distances
+                        for j in range(numRadBins):
+                            # combine masks: which [flattened] pixels satisfy both cuts?
+                            num_in_rad_above_thresh = np.count_nonzero(w_covered & rad_masks[j])
 
-                r['%s_mean' % gs][i,j] = np.mean( local_vals )
-                r['%s_stddev' % gs][i,j] = np.std( local_vals )
-                r['%s_percs' % gs][i,j,:] = np.percentile( local_vals, perc_vals, interpolation='linear')
+                            if num_in_rad[j] == 0:
+                                continue
+
+                            # save fraction
+                            frac = float( num_in_rad_above_thresh ) / num_in_rad[j]
+                            assert np.isfinite(frac)
+
+                            r['galaxies_indiv%s' % relStr][gal_num,realization_num,i,j] = frac
+                if numRealizations > 1: print(']')
+
+        # compute binned values across all realized galaxies
+        for i, thresh in enumerate(colDensThresholds):
+            for j in range(numRadBins):
+                
+                # different subsets of the galaxy sample, including 'all'
+                for gs in gal_subsets:
+                    local_vals = r['galaxies_indiv%s' % relStr][:,:,i,j].ravel()
+
+                    # update local_vals for this subset
+                    if gs in ['ssfr_lt_n11','ssfr_gt_n11']:
+                        ssfr = sim_sample['ssfr_30pkpc_log'].ravel()
+                        with np.errstate(invalid='ignore'):
+                            if gs == 'ssfr_lt_n11': w = np.where((ssfr < -11.0) | np.isnan(ssfr))
+                            if gs == 'ssfr_gt_n11': w = np.where((ssfr >= -11.0))
+                        local_vals = local_vals[w]
+
+                    if gs in ['mstar_lt_105','mstar_gt_105']:
+                        mstar = sim_sample['mstar_30pkpc_log'].ravel()
+                        if gs == 'mstar_lt_105': w = np.where(mstar < 10.5)
+                        if gs == 'mstar_gt_105': w = np.where(mstar >= 10.5)
+                        local_vals = local_vals[w]
+
+                    if gs in ['ssfr_lt_n11_I','ssfr_lt_n11_NI','ssfr_gt_n11_I','ssfr_gt_n11_NI']:
+                        ssfr = sim_sample['ssfr_30pkpc_log'].ravel()
+                        env = sim_sample['halo_env'].ravel()
+
+                        with np.errstate(invalid='ignore'):
+                            if gs == 'ssfr_lt_n11_I': w = np.where(((ssfr < -11.0) | np.isnan(ssfr)) & env)
+                            if gs == 'ssfr_gt_n11_I': w = np.where((ssfr >= -11.0) & env)
+                            if gs == 'ssfr_lt_n11_NI': w = np.where(((ssfr < -11.0) | np.isnan(ssfr)) & ~env)
+                            if gs == 'ssfr_gt_n11_NI': w = np.where((ssfr >= -11.0) & ~env)
+                        local_vals = local_vals[w]
+
+                    if local_vals.size == 0:
+                        continue
+
+                    r['%s_mean%s' % (gs,relStr)][i,j] = np.nanmean( local_vals )
+                    r['%s_stddev%s' % (gs,relStr)][i,j] = np.nanstd( local_vals )
+                    r['%s_percs%s' % (gs,relStr)][i,j,:] = np.nanpercentile( local_vals, perc_vals, interpolation='linear')
 
     sP.setSnap(origSnap)
 

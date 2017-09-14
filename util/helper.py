@@ -268,14 +268,14 @@ def running_sigmawindow(X, Y, windowSize=None):
 
 def running_histogram(X, nBins=100, binSize=None, normFac=None, skipZeros=False):
     """ Create a adaptive histogram of a (x) point set using some number of bins. """
-    minVal = X.min()
+    minVal = np.nanmin(X)
     if skipZeros:
-        minVal = X[X > 0.0].min()
+        minVal = np.nanmin( X[X > 0.0] )
 
     if binSize is not None:
-        nBins = round( (X.max()-minVal) / binSize )
+        nBins = round( (np.nanmax(X)-minVal) / binSize )
 
-    bins = np.linspace(minVal,X.max(), nBins)
+    bins = np.linspace(minVal,np.nanmax(X), nBins)
     delta = bins[1]-bins[0]
 
     running_h   = []

@@ -522,6 +522,12 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
     if pos.dtype != np.float32 and pos.dtype != np.float64:
         raise Exception('pos not in float32/64')
+    if hsml.dtype == np.float64:
+        hsml = hsml.astype('float32')
+        print('Warning: sphMap() converting hsml from float64 to float32.')
+    if mass.dtype == np.float64:
+        mass = mass.astype('float32')
+        print('Warning: sphMap() converting mass from float64 to float32.')
     if hsml.dtype != np.float32 or mass.dtype != np.float32:
         raise Exception('hsml/mass not in float32')
     if quant is not None and quant.dtype != np.float32:

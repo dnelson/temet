@@ -1297,9 +1297,9 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
             xx = np.log10(n_HI)
 
             if moment == 0:
-                yy = logZeroNaN(fN_HI, zeroVal=np.nan)
+                yy = logZeroNaN(fN_HI)
             if moment == 1:
-                yy = logZeroNaN(fN_HI*n_HI, zeroVal=np.nan)
+                yy = logZeroNaN(fN_HI*n_HI)
 
             label = sP.simName if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
@@ -1771,22 +1771,15 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=512, run='tng') )
-    #sPs.append( simParams(res=256, run='tng') )
-    #sPs.append( simParams(res=256, run='tng', variant='wmap') )
-
-    #for i in range(1,11):
-    #    sPs.append( simParams(res=256, run='tng', variant='r%03d' % i) )
-
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -1796,23 +1789,16 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    #sPs.append( simParams(res=512, run='tng', variant=0000) )
-    #sPs.append( simParams(res=256, run='tng', variant=0000) )
-    #sPs.append( simParams(res=256, run='tng', variant=4601) )
-    #sPs.append( simParams(res=256, run='tng', variant=4602) )
+    sPs.append( simParams(res=512, run='tng', variant='0010') )
+    sPs.append( simParams(res=512, run='tng', variant='0011') )
+    #sPs.append( simParams(res=256, run='tng', variant='0000') )
+    #sPs.append( simParams(res=256, run='tng', variant='4601') )
+    #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
     # make multipage PDF
-    pdf = PdfPages('globalComps_ovi_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+    pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
     zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
-
-    # TEST AREA
-    #haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
-    nOVIcddf(sPs, pdf) # z=0.2
-    #nOVIcddf(sPs, pdf, moment=1)
-    pdf.close()
-    return
-    # END TEST AREA
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
@@ -1839,7 +1825,7 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 0:
+    if 1:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2
