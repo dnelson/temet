@@ -33,6 +33,7 @@ class units(object):
     # constants
     boltzmann         = 1.380650e-16    # cgs (erg/K)
     boltzmann_keV     = 11604505.0      # Kelvin/KeV
+    planck_erg_s      = 6.626e-27       # Planck constant, [erg*s]
     mass_proton       = 1.672622e-24    # cgs
     mass_electron     = 9.1095e-28      # cgs
     gamma             = 1.666666667     # 5/3
@@ -754,6 +755,48 @@ class units(object):
         # 48.60 sets the zero-point of 3631 Jy
         return mag
 
+    def luminosityToFlux(self, lum, wavelength=None, redshift=None):
+        """ Convert a luminosity in [erg/s] to a flux [photon/s/cm^2] for e.g. line emission at a 
+        given wavelength in [Angstroms] if not None, from a source at the given redshift. 
+        If wavelength is None, then output units are an energy flux e.g. [erg/s/cm^2]."""
+        if redshift is None:
+            redshift = self._sP.redshift
+
+        # flux F = L/(4*pi*d_L^2)*(lambda_L/h/c)*(1+z) in [photon/s/cm^2]
+        d_L_cm = self.redshiftToLumDist(redshift) * self.Mpc_in_cm
+
+        dist_fac = 4 * np.pi * d_L_cm**2.0
+
+        photon_fac = 1.0
+        if wavelength is not None:
+            photon_fac = (wavelength*self.ang_in_cm/self.planck_erg_s/self.c_cgs) * (1.0 + redshift)
+
+        flux = lum / dist_fac * photon_fac
+        return flux
+
+    def fluxToSurfaceBrightness(self, flux, pxDimsCode, arcsec2=True, arcmin2=False, ster=False):
+        """ Convert a flux in e.g. [energy/s/cm^2] or [photon/s/cm^2] into a surface brightness 
+        at a given redshift and for a certain pixel scale. pxDimsCode is a 2-tuple of the x and y 
+        dimensions of the pixel in code units, i.e. [ckpc/h]^2. Output e.g.: [photon/s/cm^2/arcsec^2]. """
+        assert self._sP.redshift is not None
+        # surface brightness SB = F/Omega_px where the solid angle Omega_px = 2*pi*(1-cos(theta/2))
+        #   where theta is the pixel size in radians, note this reduces to Omega_px = 2*pi^2 for 
+        #   small theta, i.e. just the area of a circle, and we instead do the area of the square pixel
+        theta1 = self.codeLengthToArcsecAtRedshift(pxDimsCode[0])
+        theta2 = self.codeLengthToArcsecAtRedshift(pxDimsCode[1])
+        solid_angle = theta1 * theta2 # arcsec^2
+
+        if ster:
+            # convert [arcsec^2] -> [steradian]
+            arcsec2_to_ster = (1/self.arcsec_in_rad)**2.0
+            solid_angle /= arcsec2_to_ster
+
+        if arcmin2:
+            # convert [arcsec^2] -> [arcmin^2]
+            solid_angle /= 3600.0
+
+        return flux / solid_angle
+
     def synchrotronPowerPerFreq(self, gas_B, gas_vol, watts_per_hz=True, log=False, 
           telescope='SKA',   # telescope/observing configurations from Vazza+ (2015) as below
           eta = 1.0,         # radio between the u_dens in relativistic particles and the magnetic u_dens
@@ -878,6 +921,9 @@ class units(object):
     def redshiftToAngDiamDist(self, z):
         """ Convert redshift z to angular diameter distance (in Mpc). This equals the 
         proper/physical transverse distance for theta=1 rad. Assumes flat. Peebles, p.325."""
+        if z == 0.0:
+            # absolute, 10 pc [in Mpc]
+            return 10.0/1e6
         return self.redshiftToComovingDist(z) / (1.0+z)
 
     def redshiftToLumDist(self, z):
@@ -894,6 +940,16 @@ class units(object):
         dA = self.redshiftToAngDiamDist(z)
         size_mpc = dA * ang_diam * self.arcsec_in_rad
         return size_mpc * 1000.0
+
+    def codeLengthToArcsecAtRedshift(self, length_codeunits, z=None):
+        """ Convert a distance in code units (i.e. ckpc/h) to an angular scale in [arcsec] at a 
+        given redshift z. Assumes flat cosmology. """
+        if z is None: z = self._sP.redshift
+
+        dA = self.redshiftToAngDiamDist(z)
+        size_mpc = self.codeLengthToMpc(length_codeunits)
+        ang_size = size_mpc / dA / self.arcsec_in_rad
+        return ang_size
 
     # --- other ---
 

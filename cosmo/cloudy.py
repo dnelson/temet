@@ -20,9 +20,101 @@ from cosmo.load import snapshotSubset, snapHasField
 
 basePath = expanduser("~") + '/code/cloudy.run/'
 
+# proposed emission lines to record:
+lineList = """
+#1259    H  1 911.753A      radiative recombination continuum, i.e. (inf -> n=1) "Lyman limit"
+#1260    H  1 3645.98A      radiative recombination continuum, i.e. (inf -> n=2) "Balmer limit"
+#3552    H  1 1215.67A      H-like, 1 3,   1^2S -   2^2P, (n=2 to n=1) "Lyman-alpha" (first in Lyman-series)
+#3557    H  1 1025.72A      H-like, 1 5,   1^2S -   3^2P, (n=3 to n=1) "Lyman-beta"
+#3562    H  1 972.537A      H-like, 1 8,   1^2S -   4^2P, (n=4 to n=1) "Lyman-gamma"
+#3672    H  1 6562.81A      H-like, 2 5,   2^2S -   3^2P, (n=3 to n=2) "H-alpha" / "Balmer-alpha"
+#3677    H  1 4861.33A      H-like, 2 8,   2^2S -   4^2P, (n=4 to n=2) "H-beta" / "Balmer-beta"
+#3682    H  1 4340.46A      H-like, 2 12,   2^2S -   5^2P, (n=5 to n=2) "H-gamma" / "Balmer-gamma"
+#3687    H  1 4101.73A      H-like, 2 17,   2^2S -   6^2P, (n=6 to n=2) "H-delta" / "Balmer-delta"
+#7487    C  6 33.7372A      H-like, 1 3,   1^2S -   2^2P, in Bertone+ 2010 (highest energy CVI line photon)
+#7795    N  7 24.7807A      H-like, 1 3,   1^2S -   2^2P, in Bertone+ 2010 (")
+#8103    O  8 18.9709A      H-like, 1 3,   1^2S -   2^2P, OVIII (n=2 to n=1) in Bertone+ 2010
+#8108    O  8 16.0067A      H-like, 1 5,   1^2S -   3^2P, OVIII (n=3 to n=1)
+#8113    O  8 15.1767A      H-like, 1 8,   1^2S -   4^2P, OVIII (n=4 to n=1)
+#8148    O  8 102.443A      H-like, 2 5,   2^2S -   3^2P, OVIII (n=3 to n=2)
+#8153    O  8 75.8835A      H-like, 2 8,   2^2S -   4^2P, OVIII (n=4 to n=2)
+#8437    Ne10 12.1375A      H-like, 1 3,   1^2S -   2^2P, in vdV+ 2013
+#8664    Na11 10.0250A      H-like, 1 3,   1^2S -   2^2P
+#8771    Mg12 8.42141A      H-like, 1 3,   1^2S -   2^2P
+#9105    Si14 6.18452A      H-like, 1 3,   1^2S -   2^2P
+#9894    S 16 4.73132A      H-like, 1 3,   1^2S -   2^2P
+#12819   Fe26 1.78177A      H-like, 1 3,   1^2S -   2^2P
+#21954   C  5 40.2678A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
+#21989   C  5 41.4721A      He-like, 1 2,   1^1S -   2^3S
+#23516   N  6 29.5343A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "resonance"
+#24998   O  7 21.8070A      He-like, 1 5,   1^1S -   2^3P_1, in Bertone+ (2010) "intercombination"
+#25003   O  7 21.8044A      He-like, 1 6,   1^1S -   2^3P_2, doublet? or effectively would be blend
+#25008   O  7 21.6020A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
+#25043   O  7 22.1012A      He-like, 1 2,   1^1S -   2^3S, in Bertone+ (2010) "forbidden"
+#26912   Ne 9 13.6987A      He-like, 1 2,   1^1S -   2^3S
+#26867   Ne 9 13.5529A      He-like, 1 5,   1^1S -   2^3P_1
+#26872   Ne 9 13.5500A      He-like, 1 6,   1^1S -   2^3P_2
+#26877   Ne 9 13.4471A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
+#28781   Mg11 9.31434A      He-like, 1 2,   1^1S -   2^3S
+#28736   Mg11 9.23121A      He-like, 1 5,   1^1S -   2^3P_1
+#28741   Mg11 9.22816A      He-like, 1 6,   1^1S -   2^3P_2
+#28746   Mg11 9.16875A      He-like, 1 7,   1^1S -   2^1P_1
+#30650   Si13 6.74039A      He-like, 1 2,   1^1S -   2^3S
+#30605   Si13 6.68828A      He-like, 1 5,   1^1S -   2^3P_1
+#30610   Si13 6.68508A      He-like, 1 6,   1^1S -   2^3P_2
+#30615   Si13 6.64803A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
+#32519   S 15 5.10150A      He-like, 1 2,   1^1S -   2^3S
+#32474   S 15 5.06649A      He-like, 1 5,   1^1S -   2^3P_1
+#32479   S 15 5.06314A      He-like, 1 6,   1^1S -   2^3P_2
+#32484   S 15 5.03873A      He-like, 1 7,   1^1S -   2^1P_1, in Bertone+ (2010) "resonance"
+#37124   Fe25 1.86819A      He-like, 1 2,   1^1S -   2^3S
+#37079   Fe25 1.85951A      He-like, 1 5,   1^1S -   2^3P_1
+#37084   Fe25 1.85541A      He-like, 1 6,   1^1S -   2^3P_2
+#37089   Fe25 1.85040A      He-like, 1 7,   1^1S -   2^1P_1
+#85082   C  3 1908.73A      Stout, 1 3
+#85087   C  3 1906.68A      Stout, 1 4
+#85092   C  3 977.020A      Stout, 1 5, in vdV+ 2013
+#123142  C  4 1550.78A      Chianti, 1 2
+#123147  C  4 1548.19A      Chianti, 1 3, in vdV+ 2013
+#158187  O  6 1037.62A      Chianti, 1 2
+#158192  O  6 1031.91A      Chianti, 1 3
+#158197  O  6 183.937A      Chianti, 2 4
+#158202  O  6 184.117A      Chianti, 3 4
+#161442  S  4 1404.81A      Chianti, 1 3
+#161447  S  4 1423.84A      Chianti, 2 3
+#161452  S  4 1398.04A      Chianti, 1 4, in vdV+ 2013
+#108822  O  2 3728.81A      Stout, 1 2, i.e. JWST/high-z emission line
+#108827  O  2 3726.03A      Stout, 1 3, i.e. JWST/high-z emission line
+#108847  O  3 4931.23A      Stout, 1 4, i.e. JWST/high-z emission line
+#108852  O  3 4958.91A      Stout, 2 4, i.e. JWST/high-z emission line
+#108857  O  3 5006.84A      Stout, 3 4, i.e. JWST/high-z emission line
+#151382  N  2 6527.23A      Chianti, 1 4, i.e. JWST/high-z emission line
+#151387  N  2 6548.05A      Chianti, 2 4, i.e. JWST/high-z emission line
+#151392  N  2 6583.45A      Chianti, 3 4, i.e. JWST/high-z emission line
+#110052  S  2 6730.82A      Stout, 1 2, i.e. JWST/high-z emission line
+#110057  S  2 6716.44A      Stout, 1 3, i.e. JWST/high-z emission line
+#110062  S  2 4076.35A      Stout, 1 4, i.e. JWST/high-z emission line
+#110067  S  2 4068.60A      Stout, 1 5, i.e. JWST/high-z emission line
+#167489  O  6 5291.00A      recombination line, i.e. inf -> n=
+#167490  O  6 2082.00A      recombination line
+#167491  O  6 3434.00A      recombination line
+#167492  O  6 2070.00A      recombination line
+#167493  O  6 1125.00A      recombination line
+#229439  Blnd 2798.00A      Blend: "Mg 2      2795.53A"+"Mg 2      2802.71A"
+#229562  Blnd 1035.00A      Blend: "O  6      1031.91A"+"O  6      1037.62A"
+"""
+
+def getEmissionLines():
+    """ Helper. """
+    lines = lineList.split('\n')[1:-1] # first and last lines are blank in above string
+    emLines = [line[9:22] for line in lines]
+    wavelengths = [float(line[14:21]) for line in lines]
+
+    return emLines, wavelengths
+
 def loadFG11UVB(redshifts=None):
     """ Load the Faucher-Giguerre (2011) UVB at one or more redshifts and convert to CLOUDY units. """
-    basePath = expanduser("~") + '/data/faucher.giguere/UVB_tables/'
+    basePath = expanduser("~") + '/python/data/faucher.giguere/UVB_tables/'
 
     # make sure fields is not a single element
     if isinstance(redshifts, (int,long,float)):
@@ -126,6 +218,13 @@ def makeCloudyConfigFile(gridVals):
     # save request: mean ionization of all elements
     confLines.append( "save last ionization means \"" + gridVals['outputFileName'] + "\"" )
 
+    # save request: line emissivities
+    confLines.append( "save last lines, emissivity, \"" + gridVals['outputFileNameEm'] + "\"")
+    emLines, _ = getEmissionLines()
+    for emLine in emLines:
+        confLines.append(emLine)
+    confLines.append( "end of lines" )
+
     # write config file
     with open(gridVals['inputFileNameAbs'] + '.in','w') as f:
         f.write( '\n'.join(confLines) )
@@ -139,7 +238,8 @@ def runCloudySim(gv, temp):
 
     gv['inputFileName']    = 'input_' + fileNameStr # in cwd of basePath
     gv['inputFileNameAbs'] = gv['basePath'] + 'input_' + fileNameStr
-    gv['outputFileName']   = gv['basePath'] + 'output_' + fileNameStr + '.txt'
+    gv['outputFileName']   = gv['basePath'] + 'output_' + emStr + fileNameStr + '.txt'
+    gv['outputFileNameEm']   = gv['basePath'] + 'output_em_' + fileNameStr + '.txt'
 
     # skip if this output has already been made
     if not isfile(gv['outputFileName']) or getsize(gv['outputFileName']) == 0:
@@ -215,6 +315,7 @@ def runCloudyGrid(redshiftInd, nThreads=61, res='lg'):
     print('Total grid size at this redshift [' + str(redshiftInd+1) + ' of ' + str(redshifts.size) + \
           '] (z=' + str(gv['redshift']) + '): [' + str(nTotGrid) + '] points (launching ' + \
           str(temps.size) + ' threads ' + str(nTotGrid/temps.size) + ' times)')
+    print(' -- doing select line emissivities in addition to ionization states --')
     print('Writing to: ' + gv['basePath'] + '\n')
 
     # loop over densities and metallicities, for each farm out the temp grid to a set of threads
@@ -308,6 +409,86 @@ def collectCloudyOutputs(res='lg'):
         for element in data.keys():
             f[element] = data[element]
             f[element].attrs['NumIons'] = data[element].shape[0]
+
+        # write grid coordinates
+        f.attrs['redshift'] = redshifts
+        f.attrs['dens']     = densities
+        f.attrs['temp']     = temps
+        f.attrs['metal']    = metals
+
+    print('Done.')
+
+def collectCloudyEmissivityOutputs(res='lg'):
+    """ Combine all CLOUDY (line emissivity) outputs for a grid into a master HDF5 table. """
+    zeroValLog = -60.0 # place absolute zeros to 10^-60, as we will log
+    densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
+
+    def parseCloudyEmisFile(basePath,r,d,Z,T):
+        """ Construct file path to a given Cloudy output, load and parse. """
+        basePath = basePath + 'redshift_' + '%04.2f' % r + '/'
+        fileNameStr = "z" + str(r) + "_n" + str(d) + "_Z" + str(Z) + "_T" + str(T)
+        path = basePath + 'output_em_' + fileNameStr + '.txt'
+
+        with open(path,'r') as f:
+            fileContents = f.read()
+
+        fileContents = fileContents.replace("e -","e-") # exponential notation with added space
+
+        fileContents = fileContents.split('\n')
+        assert len(fileContents) == 3 # header, 1 data line, one blank line
+        assert fileContents[0][0] == '#'
+        assert fileContents[2] == ''
+
+        emNames = fileContents[0].split('\t')[1:] # first header value is 'depth'
+        emVals = fileContents[1].split('\t')[1:] # first value is 0.5, 'depth' into geometry
+        emVals = np.array(emVals, dtype='float32') # volume emissivity, erg/cm^3/s
+
+        return emNames, emVals
+
+    # allocate 4D grid per line
+    data = {}
+
+    names, vals = parseCloudyEmisFile(basePath,redshifts[0],densities[0],metals[0],temps[2])
+    names_save, _ = getEmissionLines() #[name.replace(" ","_") for name in names] # element name case
+    assert names == [name.upper() for name in names_save] # same lines and ordering as we requested?
+    names_save = names_replace(" ","_")
+
+    for line in names_save:
+        data[line] = np.zeros( (redshifts.size,densities.size,metals.size,temps.size), dtype='float32' )
+        data[line].fill(np.nan)
+
+    # loop over all outputs
+    for i, r in enumerate(redshifts):
+        print( '[' + str(i+1).zfill(2) + ' of ' + str(redshifts.size).zfill(2) + '] redshift = ' + str(r))
+
+        for j, d in enumerate(densities):
+            print( ' [' + str(j+1).zfill(3) + ' of ' + str(densities.size).zfill(3) + '] dens = ' + str(d))
+
+            for k, Z in enumerate(metals):
+                for l, T in enumerate(temps):
+                    # load and parse
+                    names_local, vals = parseCloudyEmisFile(basePath,r,d,Z,T)
+                    assert names == names_local
+
+                    # save into grid
+                    for lineNum, lineName in enumerate(names_save):
+                        data[lineName][i,j,k,l] = vals[lineNum]
+
+    # enforce zero value and take log
+    for line in data.keys():
+        w = np.where(data[line] > 0.0)
+        data[line][w] = np.log10(data[line][w])
+
+        w = np.where(data[line] == 0.0)
+        data[line][w] = zeroValLog
+
+    # save grid to HDF5
+    saveFile = basePath + 'grid_emissivities_' + res + '.hdf5'
+    print('Write: ' + saveFile)
+
+    with h5py.File(saveFile,'w') as f:
+        for element in data.keys():
+            f[element] = data[element]
 
         # write grid coordinates
         f.attrs['redshift'] = redshifts
@@ -685,3 +866,212 @@ class cloudyIon():
         metal_ion_mass_fraction = metal_mass_fraction * ion_fraction
         
         return metal_ion_mass_fraction
+
+class cloudyEmission():
+    """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
+    lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
+                         'H-alpha'     : 'H  1 6562.81A',
+                         'H-beta'      : 'H  1 1025.72A',
+                         'OVIII'       : 'O  8 18.9709A'}
+
+    def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
+        """ Load the table, optionally only for a given line(s). """
+        if sP is None: return # instantiate only for misc methods
+
+        self.sP = sP
+
+        self.data    = {}
+        self.grid    = {}
+        self.range   = {}
+
+        self.redshiftInterp = redshiftInterp
+        self.order = order # quadcubic interpolation by default (1 = quadlinear)
+
+        with h5py.File(basePath + 'grid_emissivities_' + res + '.hdf5','r') as f:
+            # load 4D line emissivity tables
+            if line is None:
+                lines = f.keys()
+            else:
+                lines = self.resolveLineNames(line)
+                lines = [l.replace(" ","_") for l in iterable(lines)]
+
+            for line in iterable(lines):
+                self.data[line.replace("_"," ")] = f[line.replace("_"," ")][()]
+
+            # load metadata/grid coordinates
+            for attr in dict(f.attrs).keys():
+                self.grid[attr] = f.attrs[attr]
+
+        # not going to be interpolating in redshift?
+        if not redshiftInterp:
+            # select closest redshift, squeeze grids to 4D
+            redshiftSel, redshiftInd = closest(self.grid['redshift'], sP.redshift)
+
+            if np.abs(redshiftSel - sP.redshift) > 0.05:
+                raise Exception('Redshift error too big: [' + str(np.abs(redshiftSel - sP.redshift)) + ']')
+
+            for line in self.data.keys():
+                self.data[line] = np.squeeze( self.data[line][redshiftInd,:,:,:] )
+
+        for field in self.grid.keys():
+            self.range[field] = [ self.grid[field].min(), self.grid[field].max() ]
+
+    def resolveLineNames(self, lines, single=False):
+        """ Map line abbreviations to unambiguous (species,ion,wavelength) triplets, leave inputs
+        which are already full and valid unchanged. """
+        emLines, _ = getEmissionLines()
+
+        validLines = []
+        for line in iterable(lines):
+            if line in emLines:
+                validLines.append(line)
+                continue
+            if line in self.lineAbbreviations:
+                validLines.append(self.lineAbbreviations[line])
+                continue
+            raise Exception("Failed to recognize line [%s]!" % line)
+
+        if single:
+            # verify only a single line was input, and return a string not a list
+            assert len(validLines) == 1
+            return validLines[0]
+
+        return validLines
+
+    def lineWavelength(self, lines):
+        """ Return the [rest, vacuum] wavelength of a line given its name, in [Ang]. """
+        names, wavelengths = getEmissionLines()
+        lines = self.resolveLineNames(lines)
+        inds = [names.index(line) for line in lines]
+
+        if len(lines) == 1: return wavelengths[inds[0]]
+        return [wavelengths[ind] for ind in inds]
+
+    def slice(self, line, redshift=None, dens=None, metal=None, temp=None):
+        """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
+          input can remain None). """
+        if sum(pt is not None for pt in (redshift,dens,metal,temp)) != 3:
+            raise Exception('Must specify 3 of 4 grid positions.')
+        if self.redshiftInterp == False:
+            raise Exception('Redshift has been already removed from table, not implemented.')
+
+        line = self.resolveLineNames(line, single=True)
+
+        # closest array indices
+        _, i0 = closest( self.grid['redshift'], redshift if redshift else 0 )
+        _, i1 = closest( self.grid['dens'], dens if dens else 0 )
+        _, i2 = closest( self.grid['metal'], metal if metal else 0 )
+        _, i3 = closest( self.grid['temp'], temp if temp else 0 )
+
+        if redshift is None:
+            return self.grid['redshift'], self.data[line][:,i1,i2,i3]
+        if dens is None:
+            return self.grid['dens'], self.data[line][i0,:,i2,i3]
+        if metal is None:
+            return self.grid['metal'], self.data[line][i0,i1,:,i3]
+        if temp is None:
+            return self.grid['temp'], self.data[line][i0,i1,i2,:]
+
+    def emis(self, line, dens, metal, temp, redshift=None):
+        """ Interpolate the line emissivity table, return log(volume emissivity [erg/cm^3/s]).
+            Input gas properties can be scalar or np.array(), in which case they must have the same size.
+              line  : name of line (species, ion number, and wavelength triplet) (or abbreviation)
+              dens  : hydrogen number density [log cm^-3]
+              temp  : temperature [log K]
+              metal : metallicity [log solar]
+        """
+        from scipy.ndimage import map_coordinates
+        import time
+
+        line = self.resolveLineNames(line, single=True)
+
+        if redshift is not None and self.redshiftInterp == False:
+            raise Exception('Redshift input for interpolation, but we have selected nearest hyperslice.')
+        if redshift is None and self.redshiftInterp == True:
+            raise Exception('We are interpolating in redshift space, but no redshift specified.')
+        if line not in self.data:
+            raise Exception('Requested line [' + line + '] not in grid.')
+
+        start_time = time.time()
+        # convert input interpolant point into fractional 3D/4D array indices
+        # Note: we are clamping here at [0,size-1], which means that although we never 
+        # extrapolate below (nearest grid edge value is returned), there is no warning given
+        i1 = np.interp( dens,  self.grid['dens'],  np.arange(self.grid['dens'].size) )
+        i2 = np.interp( metal, self.grid['metal'], np.arange(self.grid['metal'].size) )
+        i3 = np.interp( temp,  self.grid['temp'],  np.arange(self.grid['temp'].size) )
+
+        if redshift is None:
+            iND = np.vstack( (i1,i2,i3) )
+        else:
+            i0 = np.interp( redshift, self.grid['redshift'], np.arange(self.grid['redshift'].size) )
+            if isinstance(i0,float):
+                i0 = np.zeros( i1.shape, dtype='float32' ) + i0 # expand scalar into 1D array
+
+            iND = np.vstack( (i0,i1,i2,i3) )
+
+        # do 3D or 4D interpolation on this ion sub-table at the requested order
+        locData = self.data[line]
+
+        emis = map_coordinates( locData, iND, order=self.order, mode='nearest')
+
+        print('Emissivity interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
+
+        return emis
+
+    def calcGasLineLuminosity(self, sP, line, indRange=None, 
+                             assumeSolarAbunds=False, assumeSolarMetallicity=False):
+        """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
+        for gas particles in the whole snapshot, optionally restricted to an indRange. 
+         aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
+         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. """
+        ion = cloudyIon(sP=None)
+        line = self.resolveLineNames(line, single=True)
+
+        # load required gas properties
+        dens = snapshotSubset(sP, 'gas', 'dens', indRange=indRange)
+        dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
+
+        if assumeSolarMetallicity:
+            metal = np.zeros( dens.size, dtype='float32' ) + ion.solar_Z
+        else:
+            assert snapHasField(sP, 'gas', 'GFM_Metallicity')
+            metal = snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
+
+        metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
+
+        temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
+        
+        # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
+        emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)
+
+        # total luminosity of gas cell is (where e_l is the volume emissivity from CLOUDY for line L)
+        #   L_l = e_l(z,Z,T,n) * (mass/rho) * (X_j/X_j_solar) = e_l * cell_volume * (X_j/X_j_solar)
+        #   where X_j is the mass fraction of element j, and e_l has assumed solar abundances
+        element = line[0:2].strip()
+        if element == 'Bl': raise Exception("Handle blend.")
+
+        if assumeSolarAbunds:
+            # use X_j_solar for the mass fraction of this element
+            el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
+        else:
+            # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
+            # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
+            if snapHasField(sP, 'gas', 'GFM_Metals'):
+                assert ion.elementNameToSymbol(element) in sP.metals
+
+                fieldName = "metals_" + ion.elementNameToSymbol(element)
+                el_mass_fraction = snapshotSubset(sP, 'gas', fieldName, indRange=indRange)
+                el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+            else:
+                print('WARNING: line emission but GFM_Metals not available (mini-snap). Assuming solar abundances.')
+                el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
+
+        # load volume and finish calculation
+        volume = snapshotSubset(sP, 'gas', 'vol', indRange=indRange)
+        volume = sP.units.codeVolumeToCm3(volume)
+
+        el_mass_fraction_rel_solar = el_mass_fraction / ion._solarMetalAbundanceMassRatio(element)
+
+        line_lum = emissivity * volume * el_mass_fraction_rel_solar
+        
+        return line_lum
