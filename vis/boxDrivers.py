@@ -132,7 +132,11 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 25: panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[11, 15]} )
     if conf == 26: panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
     if conf == 27: panels.append( {'partType':'gas', 'partField':'O VIII', 'valMinMax':[11, 16]} )
-    if conf == 28: panels.append( {'partType':'gas', 'partField':'sb_H-alpha', 'valMinMax':[-25.0, -18.0]} )
+
+    # testing emission
+    if conf == 28: panels.append( {'partType':'gas', 'partField':'sb_H-alpha', 'valMinMax':[-13.0, -8.0]} )
+    if conf == 29: panels.append( {'partType':'gas', 'partField':'sb_OVIII', 'valMinMax':[-15.0, -10.0]} )
+    if conf == 30: panels.append( {'partType':'gas', 'partField':'sb_O--8-16.0067A', 'valMinMax':[-15.0, -10.0]} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -197,6 +201,62 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def dragonflyHalpha():
+    """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
+
+    #conf = 28 # H-alpha SB
+    conf = 30 # OVIII test
+    res  = 1820 # 128
+    variant = None #'0000'
+
+    run        = 'tng'
+    redshift   = 0.1 #0.1 #0.0
+    nPixels    = 8000 # 800, 2000, 8000
+    axes       = [0,1] # x,y
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+    labelZ     = False
+    labelSim   = False
+    axesUnits  = 'deg'
+    labelScale = True
+
+    # get field config, and adjust colormap bounds for z=0 SB
+    panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice=False)
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    # do very thin 3nm wavelength 'slice' instead (E=hc/lambda) (nu*lambda=c) (E=h*nu)
+    thinStr = ""
+    if 0:
+        deltaNm = 3.0
+        restNm = 653.3 # h-alpha
+        dEfrac = restNm/(restNm-deltaNm) - 1.0
+        dL = dEfrac * sP.units.c_km_s * (1+sP.redshift) / sP.units.H_z # kpc
+        sliceWidth = sP.units.physicalKpcToCodeLength(dL)
+        sliceFac = sliceWidth / sP.boxSize
+        thinStr = "thin_"
+
+    # info:
+    pxSizeCode = sP.boxSize / nPixels
+    pxSizeArcsec = sP.units.codeLengthToAngularSize(pxSizeCode, arcsec=True)
+    print('pixel size: %f arcsec' % pxSizeArcsec)
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = 1500
+        colorbars  = True
+        saveFilename = './boxImage_%s_%s%s-%s_axes%d%d.png' % \
+          (sP.simName,thinStr,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
+
+    #class plotConfig:
+    #    plotStyle  = 'edged' # open, edged
+    #    rasterPx   = nPixels
+    #    colorbars  = False
+    #    saveFilename = './boxImage_%s_%sfull_%s-%s_axes%d%d.png' % \
+    #      (sP.simName,thinStr,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
 
     renderBox(panels, plotConfig, locals())
 
@@ -271,7 +331,7 @@ def TNG_oxygenPaperImages(part=0):
     labelScale = False
     labelSim   = False
     plotHalos  = False
-    axesInMpc  = True
+    axesUnits  = 'mpc'
     hsmlFac    = 2.5
 
     sP = simParams(res=res, run=run, redshift=redshift)

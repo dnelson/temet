@@ -659,9 +659,9 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         mass = snapshotSubset(sP, partType, 'xray', indRange=indRange)
 
     # flux/surface brightness (replace mass)
-    if partField in ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']:
+    if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
         # compute line emission flux for each gas cell in [photon/s/cm^2]
-        lineName = partField.split("_")[1]
+        lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
         e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
         lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
         wavelength = e_interp.lineWavelength(lineName)
@@ -812,11 +812,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
     if 'sb_' in partField:
         # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec]
         pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
-        grid = logZeroMin( sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=True) )
 
-        lineName = partField.split("sb_")[1]
+        arcsec2 = True # choose one
+        ster = False
+
+        grid = logZeroMin( sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster) )
+        uLabel = 'arcsec$^{-2}$'
+        if ster: uLabel = 'ster$^{-1}$'
+
+        lineName = partField.split("sb_")[1].replace("-"," ")
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
-        config['label']  = '%s Surface Brightness [log photon s$^{-1}$ cm$^{-2}$ arcsec$^{-2}$]' % lineName
+        config['label']  = '%s Surface Brightness [log photon s$^{-1}$ cm$^{-2}$ %s]' % (lineName,uLabel)
         config['ctName'] = 'inferno'
 
     # gas: mass-weighted quantities
@@ -1319,10 +1325,11 @@ def addBoxMarkers(p, conf, ax):
                     xPos = xyzDist[0]
                     yPos = xyzDist[1]
 
-                if p['axesInMpc']:
+                if p['axesUnits'] == 'mpc':
                     xPos = p['sP'].units.codeLengthToMpc(xPos)
                     yPos = p['sP'].units.codeLengthToMpc(yPos)
                     rad  = p['sP'].units.codeLengthToMpc(rad)
+                assert p['axesUnits'] not in ['deg','arcmin'] # todo
 
                 c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
                 ax.add_artist(c)
@@ -1369,7 +1376,7 @@ def addBoxMarkers(p, conf, ax):
             xPos = 0.0
             yPos = 0.0
 
-        if p['axesInMpc']:
+        if p['axesUnits'] == 'mpc':
             xPos = p['sP'].units.codeLengthToMpc(xPos)
             yPos = p['sP'].units.codeLengthToMpc(yPos)
 
@@ -1390,7 +1397,7 @@ def addBoxMarkers(p, conf, ax):
             if p['fracsType'] == 'pkpc':
                 rad = p['sP'].units.physicalKpcToCodeLength(rad)
 
-            if p['axesInMpc']: rad = p['sP'].units.codeLengthToMpc(rad)
+            if p['axesUnits'] == 'mpc': rad = p['sP'].units.codeLengthToMpc(rad)
 
             c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
             ax.add_artist(c)
@@ -1437,6 +1444,12 @@ def addBoxMarkers(p, conf, ax):
         yt_frac = 0.06
 
         if conf.rasterPx >= 1000:
+            size = int(conf.rasterPx / 100.0 * 1.5)
+            lw = 3.0
+            y_off = 0.05
+            yt_frac = size/1000.0 * 3.0
+
+        if conf.rasterPx > 2000:
             size = int(conf.rasterPx / 100.0 * 5)
             lw = 4.0
             y_off = 0.06
@@ -1447,8 +1460,19 @@ def addBoxMarkers(p, conf, ax):
         yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx)
         yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(yt_frac * 960.0/conf.rasterPx)
 
-        if p['axesInMpc']:
-            print('Likely need a coordinate fix here.')
+        if p['axesUnits'] in ['deg','arcmin','arcsec']:
+            deg = (p['axesUnits'] == 'deg')
+            amin = (p['axesUnits'] == 'arcmin')
+            asec = (p['axesUnits'] == 'arcsec')
+            x0 = p['sP'].units.codeLengthToAngularSize(x0, deg=deg, arcmin=amin, arcsec=asec)
+            x1 = p['sP'].units.codeLengthToAngularSize(x1, deg=deg, arcmin=amin, arcsec=asec)
+            yy = p['sP'].units.codeLengthToAngularSize(yy, deg=deg, arcmin=amin, arcsec=asec)
+            yt = p['sP'].units.codeLengthToAngularSize(yt, deg=deg, arcmin=amin, arcsec=asec)
+        if p['axesUnits'] == 'mpc':
+            x0 = p['sP'].units.codeLengthToMpc(x0)
+            x1 = p['sP'].units.codeLengthToMpc(x1)
+            yy = p['sP'].units.codeLengthToMpc(yy)
+            yt = p['sP'].units.codeLengthToMpc(yt)
 
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
         ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
@@ -1735,9 +1759,13 @@ def renderMultiPanel(panels, conf):
             idStr = ' (id=' + str(sP.hInd) + ')' if not sP.isZoom and sP.hInd is not None else ''
             ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
 
-            axStr = '[ ckpc/h ]' if not p['axesInMpc'] else '[ Mpc ]'
+            axStrs = {'code':'[ ckpc/h ]', 'mpc':'[ Mpc ]', 'arcmin':'[ arcminutes ]', 'deg':'[ degrees ]'}
+            axStr = axStrs[ p['axesUnits'] ]
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' ' + axStr)
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' ' + axStr)
+            if p['axesUnits'] in ['arcsec','arcmin','deg']:
+                ax.set_xlabel( '$\\alpha$ ' + axStr) # e.g. right ascension
+                ax.set_ylabel( '$\delta$ ' + axStr) # e.g. declination
 
             setAxisColors(ax, color2)
 
@@ -1769,7 +1797,20 @@ def renderMultiPanel(panels, conf):
             #grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
-            pExtent = p['extent'] if not p['axesInMpc'] else p['sP'].units.codeLengthToMpc(p['extent'])
+            if p['axesUnits'] == 'code':
+                pExtent = p['extent'] 
+            if p['axesUnits'] == 'mpc':
+                pExtent = p['sP'].units.codeLengthToMpc(p['extent'])
+            if p['axesUnits'] == 'arcmin':
+                pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], arcmin=True)
+            if p['axesUnits'] == 'deg':
+                if p['sP'].redshift == 0.0: p['sP'].redshift = 0.1
+                pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], deg=True)
+                # shift to arbitrary center at (0,0)
+                if pExtent[0] == 0.0 and pExtent[2] == 0.0:
+                    assert pExtent[1] == pExtent[3] # box, not halo, imaging
+                    pExtent -= pExtent[1]/2
+
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect=1.0)
 
             ax.autoscale(False)

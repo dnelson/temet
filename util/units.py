@@ -782,9 +782,11 @@ class units(object):
         # surface brightness SB = F/Omega_px where the solid angle Omega_px = 2*pi*(1-cos(theta/2))
         #   where theta is the pixel size in radians, note this reduces to Omega_px = 2*pi^2 for 
         #   small theta, i.e. just the area of a circle, and we instead do the area of the square pixel
-        theta1 = self.codeLengthToArcsecAtRedshift(pxDimsCode[0])
-        theta2 = self.codeLengthToArcsecAtRedshift(pxDimsCode[1])
+        theta1 = self.codeLengthToAngularSize(pxDimsCode[0], arcsec=True)
+        theta2 = self.codeLengthToAngularSize(pxDimsCode[1], arcsec=True)
         solid_angle = theta1 * theta2 # arcsec^2
+
+        print('Pixel size: %f arcsec' % theta1)
 
         if ster:
             # convert [arcsec^2] -> [steradian]
@@ -941,14 +943,19 @@ class units(object):
         size_mpc = dA * ang_diam * self.arcsec_in_rad
         return size_mpc * 1000.0
 
-    def codeLengthToArcsecAtRedshift(self, length_codeunits, z=None):
+    def codeLengthToAngularSize(self, length_codeunits, z=None, arcsec=True, arcmin=False, deg=False):
         """ Convert a distance in code units (i.e. ckpc/h) to an angular scale in [arcsec] at a 
-        given redshift z. Assumes flat cosmology. """
+        given redshift z. Assumes flat cosmology. If arcmin or deg is True, then [arcmin] or [deg]. """
         if z is None: z = self._sP.redshift
 
         dA = self.redshiftToAngDiamDist(z)
         size_mpc = self.codeLengthToMpc(length_codeunits)
-        ang_size = size_mpc / dA / self.arcsec_in_rad
+        ang_size = size_mpc / dA / self.arcsec_in_rad # arcsec
+        if arcmin:
+            ang_size /= 60.0
+        if deg:
+            ang_size /= 3600.0
+
         return ang_size
 
     # --- other ---

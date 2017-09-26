@@ -1633,7 +1633,7 @@ def paperPlots():
                                    config='SimHalos_115-125')
 
     # figure 15: nums 11-14 repeated for the eCGM dataset instead of COS-Halos
-    if 1:
+    if 0:
         sP = TNG100
         cf = 'eCGMfull' # eCGM
 
@@ -1644,7 +1644,7 @@ def paperPlots():
         coveringFractionVsDist([sP], '%s_covering_frac_%s.pdf' % (cf,sP.simName), ions=['OVI'], 
             colDensThresholds=[13.5, 14.0, 14.5, 15.0], config=cf, conf=0)
         for conf in [1,2]:
-            coveringFractionVsDist([sP], 'covering_frac_%s_%s_conf%d.pdf' % (cf,sP.simName,conf), 
+            coveringFractionVsDist([sP], '%s_covering_frac_%s_conf%d.pdf' % (cf,sP.simName,conf), 
                 ions=['OVI'], colDensThresholds=[13.5], config=cf, conf=conf)
 
     # ------------ exploration ------------
