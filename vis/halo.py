@@ -163,7 +163,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     hsmlFac     = 2.5           # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
-    axesInMpc   = False         # if showing axes, label with 'Mpc' instead of 'ckpc/h'
+    axesUnits   = 'code'        # code [ckpc/h], Mpc, deg, arcmin
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None          # stretch vector field visualizaton between these bounds (None=automatic)
@@ -249,7 +249,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     hsmlFac     = 2.5             # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
-    axesInMpc   = False           # if showing axes, label with 'Mpc' instead of 'ckpc/h'
+    axesUnits   = 'code'          # code [ckpc/h], Mpc, deg, arcmin
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'             # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None            # stretch vector field visualizaton between these bounds (None=automatic)

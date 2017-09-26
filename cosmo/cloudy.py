@@ -238,7 +238,7 @@ def runCloudySim(gv, temp):
 
     gv['inputFileName']    = 'input_' + fileNameStr # in cwd of basePath
     gv['inputFileNameAbs'] = gv['basePath'] + 'input_' + fileNameStr
-    gv['outputFileName']   = gv['basePath'] + 'output_' + emStr + fileNameStr + '.txt'
+    gv['outputFileName']   = gv['basePath'] + 'output_' + fileNameStr + '.txt'
     gv['outputFileNameEm']   = gv['basePath'] + 'output_em_' + fileNameStr + '.txt'
 
     # skip if this output has already been made
@@ -451,7 +451,6 @@ def collectCloudyEmissivityOutputs(res='lg'):
     names, vals = parseCloudyEmisFile(basePath,redshifts[0],densities[0],metals[0],temps[2])
     names_save, _ = getEmissionLines() #[name.replace(" ","_") for name in names] # element name case
     assert names == [name.upper() for name in names_save] # same lines and ordering as we requested?
-    names_save = names_replace(" ","_")
 
     for line in names_save:
         data[line] = np.zeros( (redshifts.size,densities.size,metals.size,temps.size), dtype='float32' )
@@ -1019,7 +1018,7 @@ class cloudyEmission():
         return emis
 
     def calcGasLineLuminosity(self, sP, line, indRange=None, 
-                             assumeSolarAbunds=False, assumeSolarMetallicity=False):
+                              assumeSolarAbunds=False, assumeSolarMetallicity=False):
         """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
         for gas particles in the whole snapshot, optionally restricted to an indRange. 
          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
