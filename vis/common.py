@@ -660,14 +660,32 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     # flux/surface brightness (replace mass)
     if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
-        # compute line emission flux for each gas cell in [photon/s/cm^2]
+        # zero contribution from SFing gas cells?
+        zeroSfr = False
+        if '_sf0' in partField:
+            partField = partField.split("_sf0")[0]
+            zeroSfr = True
+        if '_ster' in partField: partField = partField.replace("_ster","")
+
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
-        e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
-        lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
-        wavelength = e_interp.lineWavelength(lineName)
-        mass = sP.units.luminosityToFlux(lum, wavelength=wavelength)
-        assert mass.min() >= 0.0
-        assert np.count_nonzero( np.isnan(mass) ) == 0
+
+        # compute line emission flux for each gas cell in [photon/s/cm^2]
+        if 1:
+            # use cache
+            assert not zeroSfr # not implemented in cache
+            mass = snapshotSubset(sP, 'gas', '%s flux' % lineName, indRange=indRange)
+        else:
+            e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
+            lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
+            wavelength = e_interp.lineWavelength(lineName)
+            mass = sP.units.luminosityToFlux(lum, wavelength=wavelength)
+            assert mass.min() >= 0.0
+            assert np.count_nonzero( np.isnan(mass) ) == 0
+
+        if zeroSfr:
+            sfr = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
+            w = np.where(sfr > 0.0)
+            mass[w] = 0.0
 
     # single stellar band, replace mass array with linear luminosity of each star particle
     if 'stellarBand-' in partField:
@@ -771,6 +789,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
 
     if partField in ['HI','HI_segmented'] or ' ' in partField:
+        assert 'sb_' not in partField
         if ' ' in partField:
             ion = cloudyIon(None)
             grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
@@ -813,14 +832,14 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec]
         pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
 
-        arcsec2 = True # choose one
-        ster = False
+        ster = True if '_ster' in partField else False
+        arcsec2 = not ster
 
         grid = logZeroMin( sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster) )
         uLabel = 'arcsec$^{-2}$'
         if ster: uLabel = 'ster$^{-1}$'
 
-        lineName = partField.split("sb_")[1].replace("-"," ")
+        lineName = partField.replace("_ster","").split("sb_")[1].replace("-"," ")
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
         config['label']  = '%s Surface Brightness [log photon s$^{-1}$ cm$^{-2}$ %s]' % (lineName,uLabel)
         config['ctName'] = 'inferno'

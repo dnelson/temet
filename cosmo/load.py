@@ -187,7 +187,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
         # load previously computed values
         if isfile(auxCatPath) and not reCalculate:
-            #print('Load existing: ['+field+']')
+            #print('Load existing: ['+field+'] '+auxCatPath)
             with h5py.File(auxCatPath,'r') as f:
                 # load data
                 if not onlyMeta:
@@ -779,10 +779,16 @@ def groupCatOffsetListIntoSnap(sP):
     return r    
 
 def _ionLoadHelper(sP, partType, field, kwargs):
-    """ Helper to load (with particle level caching) ionization computed values for gas cells. """
-    element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
+    """ Helper to load (with particle level caching) ionization fraction, or total ion mass, 
+    values values for gas cells. Or, total line flux for emission. """
+    if 'flux' in field:
+        lineName, prop = field.rsplit(" ",1)
+        lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
+    else:
+        element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
+
     assert sP.isPartType(partType, 'gas')
-    assert prop in ['mass','frac']
+    assert prop in ['mass','frac','flux']
 
     indRangeOrig = kwargs['indRange']
 
@@ -807,8 +813,12 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             with h5py.File(cacheFile, 'w') as f:
                 dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
 
-            from cosmo.cloudy import cloudyIon
-            ion = cloudyIon(sP, el=element, redshiftInterp=True)
+            from cosmo.cloudy import cloudyIon, cloudyEmission
+            if prop in ['mass','frac']:
+                ion = cloudyIon(sP, el=element, redshiftInterp=True)
+            else:
+                emis = cloudyEmission(sP, line=lineName, redshiftInterp=True)
+                wavelength = emis.lineWavelength(lineName)
 
             # process chunked
             for i in range(nChunks):
@@ -822,10 +832,15 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 if indRangeLocal[0] == indRangeLocal[1]:
                     continue # we are done
 
-                # either ionization fractions, or total mass in the ion
-                values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
-                if prop == 'mass':
-                    values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+                if prop in ['mass','frac']:
+                    # either ionization fractions, or total mass in the ion
+                    values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
+                    if prop == 'mass':
+                        values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+                else:
+                    # emission flux
+                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
+                    values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2]
 
                 with h5py.File(cacheFile) as f:
                     f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values
@@ -845,12 +860,22 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
     else:
         # old, don't create or use cache
-        from cosmo.cloudy import cloudyIon
-        ion = cloudyIon(sP, el=element, redshiftInterp=True)
+        from cosmo.cloudy import cloudyIon, cloudyEmission
+        if prop in ['mass','frac']:
+            ion = cloudyIon(sP, el=element, redshiftInterp=True)
+        else:
+            emis = cloudyEmission(sP, line=lineName, redshiftInterp=True)
+            wavelength = emis.lineWavelength(lineName)
 
-        values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
-        if prop == 'mass':
-            values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+        if prop in ['mass','frac']:
+            # either ionization fractions, or total mass in the ion
+            values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
+            if prop == 'mass':
+                values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+        else:
+            # emission flux
+            lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeOrig)
+            values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2]
 
     return values
 
@@ -1043,7 +1068,7 @@ def snapshotSubset(sP, partType, fields,
             if '_alpha15' in field: modelArgs['alpha'] = 1.5
             return sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
-        # cloudy based ionic mass calculation, if field name has a space in it
+        # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
             return _ionLoadHelper(sP, partType, field, kwargs)
 

@@ -73,11 +73,11 @@ lineList = """
 #37089   Fe25 1.85040A      He-like, 1 7,   1^1S -   2^1P_1
 #85082   C  3 1908.73A      Stout, 1 3
 #85087   C  3 1906.68A      Stout, 1 4
-#85092   C  3 977.020A      Stout, 1 5, in vdV+ 2013
-#123142  C  4 1550.78A      Chianti, 1 2
-#123147  C  4 1548.19A      Chianti, 1 3, in vdV+ 2013
-#158187  O  6 1037.62A      Chianti, 1 2
-#158192  O  6 1031.91A      Chianti, 1 3
+#85092   C  3 977.020A      Stout, 1 5, in vdV+ 2013, in Bertone+ (2010b)
+#123142  C  4 1550.78A      Chianti, 1 2, doublet in Bertone+ (2010b)
+#123147  C  4 1548.19A      Chianti, 1 3, doublet in Bertone+ (2010b), in vdV+ 2013
+#158187  O  6 1037.62A      Chianti, 1 2, "resonance line" (Draine pg.88), doublet in Bertone+ (2010b)
+#158192  O  6 1031.91A      Chianti, 1 3, "resonance line" (Draine pg.88), doublet in Bertone+ (2010b)
 #158197  O  6 183.937A      Chianti, 2 4
 #158202  O  6 184.117A      Chianti, 3 4
 #161442  S  4 1404.81A      Chianti, 1 3
@@ -103,6 +103,13 @@ lineList = """
 #229439  Blnd 2798.00A      Blend: "Mg 2      2795.53A"+"Mg 2      2802.71A"
 #229562  Blnd 1035.00A      Blend: "O  6      1031.91A"+"O  6      1037.62A"
 """
+# missing (for the future):
+#Si  4 1393.755A, doublet in Bertone+ (2010b)
+#Si  4 1402.770A, doublet in Bertone+ (2010b)
+#N   5 1238.821A, doublet in Bertone+ (2010b)
+#N   5 1242.804A, doublet in Bertone+ (2010b)
+#Ne  8 770.409A, doublet in Bertone+ (2010b)
+#Ne  8 780.324, doublet in Bertone+ (2010b)
 
 def getEmissionLines():
     """ Helper. """
@@ -868,9 +875,9 @@ class cloudyIon():
 
 class cloudyEmission():
     """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
-    lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
-                         'H-alpha'     : 'H  1 6562.81A',
-                         'H-beta'      : 'H  1 1025.72A',
+    lineAbbreviations = {'Lyman alpha' : 'H  1 1215.67A',
+                         'H alpha'     : 'H  1 6562.81A',
+                         'H beta'      : 'H  1 1025.72A',
                          'OVIII'       : 'O  8 18.9709A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
