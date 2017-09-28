@@ -622,3 +622,66 @@ def redshiftWikiTable():
     print(len(w))
     for redshift in z[w]:
         pass
+
+def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
+    """ Output latex-syntax table describing the TNG model variations runs. """
+    import csv
+
+    run_file = '/home/extdylan/sims.TNG_method/runs.csv'
+
+    with open(run_file) as f:
+        lines = f.readlines()
+
+    # if variants is a list of lists, flatten
+    if isinstance(variants[0],list):
+        variants = [item for sublist in variants for item in sublist]
+
+    # header
+    if fmt == 'wiki':
+        print('{| class="eoTable2 wikiTable"')
+        print('! run || name || description || 128^3 || 256^3 || 512^3 || ' + \
+              'parameter/option changed || fiducial value || changed value || notes')
+    if fmt == 'latex':
+        print('\\begin{table*}')
+        print('  \\fontsize{8}{8}\selectfont')
+        print('  \caption{Caption here.}')
+        print('  \label{simTable}')
+        print('  \\begin{center}')
+        print('    \\begin{tabular}{rlllll}')
+        print('     \hline\hline')
+        print('     \# & Run Name & Parameter(s) or Option(s) Changed & Fiducial Value & Modified Value & Reference \\\\ \hline')
+
+    count = 1
+    for line in csv.reader(lines,quoting=csv.QUOTE_ALL):
+        if '_' in line[0]:
+            run, prio, largevol, who, stat512, stat256, stat128, recomp, \
+            name, desc, change, val_fiducial, val_changed, notes = line
+            run = run.split("_")[1]
+
+            if stat512 != 'done': continue
+            if variants != 'all':
+                if run not in variants: continue
+
+            if fmt == 'wiki':
+                print('|-')
+                runstat = '{{yes}} || {{yes}} || {{yes}}' # 128, 256, 512
+                print('|| %s || %s || %s || %s || %s || %s || %s || %s' % \
+                    (run,name,desc,runstat,change,val_fiducial,val_changed,notes))
+            if fmt == 'latex':
+                ref = 'W17' if 'BH' in name else 'P17' # needs to be corrected for other cases
+                change = change.replace("_","\_").replace("#","\#")
+                print('     %d & %s & %s & %s & %s & %s \\\\' % \
+                    (count,name,change,val_fiducial,val_changed,ref))
+
+            count += 1
+
+    # footer
+    if fmt == 'wiki':
+        print('|}')
+    if fmt == 'latex':
+        print('    \hline')
+        print('    \end{tabular}')
+        print('  \end{center}')
+        print('\end{table*}')
+
+    import pdb; pdb.set_trace()
