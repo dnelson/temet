@@ -980,15 +980,16 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     # return
     return vals, label, minMax, takeLog
 
-def plotPhaseSpace2D(yAxis):
-    """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box. """
+def plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=None):
+    """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box 
+    (if haloID is None). """
     assert yAxis in ['temp','P_B','P_tot','P_tot_dens','sfr','mass_sfr_dt','mass_sfr_dt_hydro','dt_yr']
 
-    sP = simParams(res=1024, run='tng', redshift=3.0, variant=4503)
-    haloID = None # None for fullbox, or integer fof index
+    #sP = simParams(res=1024, run='tng', redshift=3.0, variant=4503)
+    #haloID = None # None for fullbox, or integer fof index
 
     # start plot
-    fig = plt.figure(figsize=(16,9))
+    fig = plt.figure(figsize=(14,10))
     ax = fig.add_subplot(111)
 
     hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
@@ -1001,8 +1002,8 @@ def plotPhaseSpace2D(yAxis):
     ###dens = sP.units.codeDensToCritRatio(dens, baryon=True, log=False)
     dens = np.log10(dens)
 
-    xMinMax = [-8.0,9.0]
-    #xMinMax = [-2.0,8.0]
+    xMinMax = [-9.0,3.0] # typical fullbox
+    #xMinMax = [-8.0,9.0] # look at very high dens eEOS turnover
 
     mass = snapshotSubset(sP, 'gas', 'mass', haloID=haloID)
 
@@ -1087,8 +1088,12 @@ def plotPhaseSpace2D(yAxis):
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
     cb = plt.colorbar(cax=cax)
     cb.ax.set_ylabel('Relative Gas Mass [ log ]')
+    fig.tight_layout()
 
-    fig.savefig('phase_%s_z=%.1f_%s_%s.pdf' % (sP.simName,sP.redshift,yAxis,hStr))
+    if pdf is not None:
+        pdf.savefig(facecolor=fig.get_facecolor())
+    else:
+        fig.savefig('phase_%s_z=%.1f_%s_%s.pdf' % (sP.simName,sP.redshift,yAxis,hStr))
     plt.close(fig)
 
 def plotParticleMedianVsSecondQuant():
@@ -1475,3 +1480,28 @@ def depletionVsDynamicalTimescale():
         fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
         plt.close(fig)
 
+# -------------------------------------------------------------------------------------------------
+
+def compareRunsPhaseDiagram():
+    """ Driver. Compare a series of runs in a PDF booklet of phase diagrams. """
+    import glob
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    # config
+    yAxis = 'temp'
+
+    # get list of all 512 method runs via filesystem search
+    sP = simParams(res=512,run='tng',redshift=0.0,variant='0000')
+    dirs = glob.glob(sP.arepoPath + '../L25n512_*')
+    variants = sorted([d.rsplit("_",1)[1] for d in dirs])
+
+    # start PDF, add one page per run
+    pdf = PdfPages('compareRunsPhaseDiagram.pdf')
+
+    for variant in variants:
+        sP = simParams(res=512,run='tng',redshift=0.0,variant=variant)
+        if sP.simName == 'DM only': continue
+        print(variant,sP.simName)
+        plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=pdf)
+
+    pdf.close()
