@@ -223,7 +223,7 @@ class simParams:
                     if int(self.variant) == 8: self.variant = '0010' # number 0010 interpreted as octal 8! why.
                     assert int(self.variant) >= 0 and int(self.variant) < 9999
                     assert self.boxSize == 25000.0
-                    dirStr = 'rTNG_method'
+                    dirStr = 'TNG_method'
                     runStr = '_%s' % self.variant.zfill(4)
 
                     # real name from method runs CSV file?
@@ -235,7 +235,7 @@ class simParams:
                             lines = f.readlines()
                         for line in csv.reader(lines,quoting=csv.QUOTE_ALL):
                             if '_' in line[0]:
-                                method_run_names[line[0]] = line[13]
+                                method_run_names[line[0]] = line[8]
                         
                 # L35 or L75 halted runs
                 if self.variant == 'halted':
