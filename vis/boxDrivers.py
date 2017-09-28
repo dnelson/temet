@@ -137,6 +137,8 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 28: panels.append( {'partType':'gas', 'partField':'sb_H-alpha', 'valMinMax':[-13.0, -8.0]} )
     if conf == 29: panels.append( {'partType':'gas', 'partField':'sb_OVIII', 'valMinMax':[-15.0, -10.0]} )
     if conf == 30: panels.append( {'partType':'gas', 'partField':'sb_O--8-16.0067A', 'valMinMax':[-15.0, -10.0]} )
+    if conf == 31: panels.append( {'partType':'gas', 'partField':'sb_Lyman-alpha', 'valMinMax':[-13.0, -8.0]} )
+    if conf == 32: panels.append( {'partType':'gas', 'partField':'sb_O--6-1031.91A_ster', 'valMinMax':[-4.0, 2.0]} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -204,17 +206,22 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     renderBox(panels, plotConfig, locals())
 
-def dragonflyHalpha():
+def dragonflyHalpha(res=1820):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
 
-    #conf = 28 # H-alpha SB
-    conf = 30 # OVIII test
-    res  = 1820 # 128
-    variant = None #'0000'
+    conf = 32 # H-alpha SB (sf0 TEMP)
+    #conf = 31 # Lyman alpha/OVIII test
+
+    if res in [128,256,512]: # testing boxes
+        variant  = '0000'
+        redshift = 0.0
+        nPixels  = 2000
+    else:
+        variant  = None
+        redshift = 0.1
+        nPixels  = 8000
 
     run        = 'tng'
-    redshift   = 0.1 #0.1 #0.0
-    nPixels    = 8000 # 800, 2000, 8000
     axes       = [0,1] # x,y
     plotHalos  = False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
@@ -236,6 +243,7 @@ def dragonflyHalpha():
         dEfrac = restNm/(restNm-deltaNm) - 1.0
         dL = dEfrac * sP.units.c_km_s * (1+sP.redshift) / sP.units.H_z # kpc
         sliceWidth = sP.units.physicalKpcToCodeLength(dL)
+        print('Using [thin] slice width: %.1f code units' % sliceWidth)
         sliceFac = sliceWidth / sP.boxSize
         thinStr = "thin_"
 
@@ -248,15 +256,15 @@ def dragonflyHalpha():
         plotStyle  = 'open' # open, edged
         rasterPx   = 1500
         colorbars  = True
-        saveFilename = './boxImage_%s_%s%s-%s_axes%d%d.png' % \
-          (sP.simName,thinStr,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
+        saveFilename = './boxImage_%s_z%.1f_%s%s-%s_axes%d%d.png' % \
+          (sP.simName,sP.redshift,thinStr,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
 
     #class plotConfig:
     #    plotStyle  = 'edged' # open, edged
     #    rasterPx   = nPixels
     #    colorbars  = False
-    #    saveFilename = './boxImage_%s_%sfull_%s-%s_axes%d%d.png' % \
-    #      (sP.simName,thinStr,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
+    #    saveFilename = './boxImage_%s_z%.1f_%sfull_%s-%s_axes%d%d.png' % \
+    #      (sP.simName,sP.redshift,thinStr,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1])
 
     renderBox(panels, plotConfig, locals())
 
