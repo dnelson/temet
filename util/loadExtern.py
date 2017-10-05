@@ -1355,6 +1355,46 @@ def johnson2015(surveys=['IMACS','SDSS'], coveringFractions=False):
 
     return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
 
+def rossetti17planck():
+    """ Load observational data points from Rosetti+ (2017) Table 1, Planck clusters. """
+    path = dataBasePath + 'rossetti/r17_table1.txt'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    z     = np.zeros( nLines, dtype='float32' )
+    m500  = np.zeros( nLines, dtype='float32' ) # [log msun]
+    c     = np.zeros( nLines, dtype='float32' ) # concentration parameter
+    c_err = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.replace("\\\\","").split(" & ")
+        name.append(line[1])
+        z[i] = float(line[5])
+        m500[i] = float(line[6]) # 10^14 msun
+        c[i] = float(line[7])
+        c_err[i] = float(line[8])
+        i += 1
+
+    r = {'name'  : name,
+         'z'     : z,
+         'm500'  : np.log10(m500 * 1e14), # msun -> log[msun]
+         'c'     : c,
+         'c_err' : c_err,
+         'label' : 'Rossetti+ (2017) Planck Sample'}
+
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
