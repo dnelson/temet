@@ -14,6 +14,7 @@ import h5py
 import illustris_python as il
 
 # dnelson
+import ICs
 import cosmo
 import plot
 import tracer
