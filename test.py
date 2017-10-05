@@ -18,6 +18,95 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def barnes_check1():
+    """ Test plots for Barnes paper. """
+    from util.loadExtern import rossetti17planck
+    data = rossetti17planck()
+
+    # z=0 TNG300-1
+    sP = simParams(res=2500, run='tng', redshift=0.0)
+    m500 = cosmo.load.groupCat(sP, fieldsSubhalos=['mhalo_500_log'])
+    w500 = np.where(10.0**m500 >= 2e14)
+
+    # redshifts
+    zz = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    med_sim = np.zeros( zz.size, dtype='float32' )
+    med_data = np.zeros( zz.size, dtype='float32' )
+
+    for i, z in enumerate(zz):
+        print(z)
+        sPloc = simParams(res=2500, run='tng', redshift=z)
+        m500loc = cosmo.load.groupCat(sPloc, fieldsSubhalos=['mhalo_500'])
+        w = np.where(m500loc >= 2e14)
+        med_sim[i] = np.log10( np.median( m500loc[w] ) )
+        w = np.where( np.abs(data['z'] - z) <= 0.05 )
+        med_data[i] = np.log10( np.median( 10.0**data['m500'][w] ) )
+
+    # plot
+    fig = plt.figure(figsize=(18,8))
+    ax = fig.add_subplot(121)
+
+    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
+    ax.set_ylabel('N$_{\\rm halos}$')
+    label = sP.simName + ' z=%.1f' % sP.redshift + ' "high-mass" (M$_{\\rm halo} > 2*10^{14} M_{\\rm sun}$)'
+    ax.hist(m500[w500], bins=10, range=[14.2,15.2], alpha=0.7, label=label)
+    ax.hist(data['m500'], bins=10, range=[14.2,15.2], alpha=0.7, label=data['label'])
+    ax.legend()
+
+    ax = fig.add_subplot(122)
+    ax.set_xlabel('Redshift')
+    ax.set_xlim([-0.05,0.6])
+    ax.set_ylabel('Median Halo Mass [m500, log M$_{\\rm sun}$]')
+
+    ax.plot(zz, med_sim, '-', marker='o', label=sP.simName)
+    ax.plot(zz, med_data, '-', marker='o', label='Planck Sample')
+    ax.legend(loc='best')
+
+    fig.tight_layout()    
+    fig.savefig('check_halomass.pdf')
+    plt.close(fig)
+
+def barnes_check2():
+    """ Test plots for Barnes paper. """
+    from util.loadExtern import rossetti17planck
+    data = rossetti17planck()
+
+    c_thresh = 0.075 # from Rossetti
+
+    binSize = 0.2
+    binMin = 14.0
+    nBins = 6
+
+    cc_frac = np.zeros(nBins, dtype='float32')
+    mass = np.zeros(nBins, dtype='float32')
+    cc_frac.fill(np.nan)
+
+    for i in range(nBins):
+        mass0 = binMin + binSize*i
+        mass1 = mass0 + binSize
+        mass[i] = (mass0+mass1)/2
+
+        w = np.where( (data['m500'] > mass0) & (data['m500'] <= mass1) )
+        c_vals = data['c'][w]
+        if c_vals.size == 0: continue
+
+        n_below = np.count_nonzero(c_vals < c_thresh)
+        n_above = np.count_nonzero(c_vals >= c_thresh)
+        cc_frac[i] = float(n_above) / (n_above+n_below)
+
+    # plot
+    fig = plt.figure(figsize=(14,10))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
+    ax.set_ylabel('Cool Core Fraction (Planck Obs, Rossetti+ 17 definition)')
+    ax.plot(mass, cc_frac, '-', marker='o', label=data['label'])
+
+    fig.tight_layout()    
+    fig.savefig('check_ccfrac_vs_mass.pdf')
+    plt.close(fig)
+
+
 def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
     """ Verify existence, permissions, and HDF5 structure of groups, full snaps, subboxes. """
     from illustris_python.snapshot import getNumPart
