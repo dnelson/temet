@@ -426,8 +426,8 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
     return r
 
 def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
-    """ Compute gridded column densities around a sample of simulated galaxies and attached a 
-    single column value to each in analogy to the observational dataset. """
+    """ Compute continuous covering fraction vs. impact parameter profiles for the mock samples, 
+    splitting into the same sub-samples as the observations for comparison. """
     numRadBins = 100
     perc_vals = [10,16,38,50,62,84,90]
     colDensThresholds = [12.5, 13.0, 13.5, 14.0, 14.15, 14.5, 15.0, 15.5, 16.0]
@@ -546,10 +546,10 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
             sP.setSnap(snap)
             w_loc = np.where(sim_sample['snaps'] == snap)
 
-            if iter == 1 and config == 'COS-Halos':
+            if iter == 1 and config in ['COS-Halos','SimHalos_115-125']:
                 # load virial radii of all halos now (we take the mean per galaxy across all 
                 # its realizations and use this uniformly for each realization)
-                halo_Rh = groupCat(sP, 'rhalo_200')
+                halo_Rh = groupCat(sP, fieldsSubhalos=['rhalo_200'])
 
             # all grids now exist, process them to extract single column values per galaxy
             for gal_num in w_loc[0]:
@@ -564,7 +564,7 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
 
                     if config in ['eCGM','eCGMfull']:
                         local_halo_radius = halo_Rh[gal_num]
-                    if config == 'COS-Halos':
+                    if config in ['COS-Halos','SimHalos_115-125']:
                         local_halo_radius = np.nanmean( halo_Rh[inds] )
 
                     dist_mask_rel_log = np.log10(dist_mask_local / local_halo_radius)
