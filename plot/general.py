@@ -8,8 +8,10 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from  matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
+from scipy.ndimage.filters import gaussian_filter
 from os.path import isfile
 
 import illustris_python as il
@@ -980,36 +982,51 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     # return
     return vals, label, minMax, takeLog
 
-def plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=None):
+def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf=None,
+                     xMinMaxForce=None, yMinMaxForce=None, contours=None, 
+                     massFracMinMax=[-10.0,0.0], smoothSigma=0.0):
     """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box 
-    (if haloID is None). """
+    (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
+    if more than one, a horizontal multi-panel plot will be made with a single colorbar. If 
+    x[y]MinMaxForce, use these range limits. If contours is not None, draw solid contours at 
+    these levels on top of the 2D histogram image. If smoothSigma is not zero, gaussian smooth 
+    contours at this level. """
+    assert xAxis in ['dens','dens_nH','dens_critratio']
     assert yAxis in ['temp','P_B','P_tot','P_tot_dens','sfr','mass_sfr_dt','mass_sfr_dt_hydro','dt_yr']
 
-    #sP = simParams(res=1024, run='tng', redshift=3.0, variant=4503)
-    #haloID = None # None for fullbox, or integer fof index
+    # config
+    nBinsX = 800
+    nBinsY = 400
+    sizefac = 0.7
 
-    # start plot
-    fig = plt.figure(figsize=(14,10))
-    ax = fig.add_subplot(111)
+    ctNameHisto = 'viridis'
+    contoursColor = 'k' # black
 
-    hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
-    ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
-    ax.set_xlabel('Gas Density [ log cm$^{-3}$ ]')
-
-    # load
+    # load: x-axis
     dens = snapshotSubset(sP, 'gas', 'dens', haloID=haloID)
-    dens = sP.units.codeDensToPhys(dens, cgs=True, numDens=True)
-    ###dens = sP.units.codeDensToCritRatio(dens, baryon=True, log=False)
-    dens = np.log10(dens)
 
     xMinMax = [-9.0,3.0] # typical fullbox
     #xMinMax = [-8.0,9.0] # look at very high dens eEOS turnover
 
-    mass = snapshotSubset(sP, 'gas', 'mass', haloID=haloID)
+    if xAxis == 'dens':
+        dens = sP.units.codeDensToPhys(dens, cgs=True, numDens=True)
+        dens = np.log10(dens)
+        xlabel = 'Gas Density [ log cm$^{-3}$ ]'
+        
+    if xAxis == 'dens_critratio':
+        dens = sP.units.codeDensToCritRatio(dens, baryon=True, log=True)
+        xMinMax = [-6.0, 5.0]
+        xlabel = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$ [ log ]'
 
+    if xAxis == 'dens_nH':
+        dens = sP.units.codeDensToPhys(dens, cgs=True, numDens=True)
+        dens = np.log10( dens * sP.units.hydrogen_massfrac )
+        xlabel = 'Gas Hydrogen Density n$_{\\rm H}$ [ log cm$^{-3}$ ]'
+
+    # load: y-axis
     if yAxis == 'temp':
         yvals = snapshotSubset(sP, 'gas', 'temp', haloID=haloID)
-        ax.set_ylabel('Gas Temperature [ log K ]')
+        ylabel = 'Gas Temperature [ log K ]'
         yMinMax = [2.0, 8.0]
 
     if yAxis == 'P_B':
@@ -1019,19 +1036,19 @@ def plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=None):
 
     if yAxis == 'P_tot':
         yvals = snapshotSubset(sP, 'gas', 'P_tot', haloID=haloID)
-        ax.set_ylabel('Gas Total Pressure [ log K cm$^{-3}$ ]')
+        ylabel = 'Gas Total Pressure [ log K cm$^{-3}$ ]'
         yMinMax = [-15.0, 16.0]
 
     if yAxis == 'P_tot_dens':
         yvals = snapshotSubset(sP, 'gas', 'P_tot', haloID=haloID)
         yvals = np.log10( 10.0**yvals/10.0**dens )
-        ax.set_ylabel('Gas Total Pressure / Gas Density [ log arbitrary units ]')
+        ylabel = 'Gas Total Pressure / Gas Density [ log arbitrary units ]'
         yMinMax = [2.0, 10.0]
 
     if yAxis == 'sfr':
         yvals = snapshotSubset(sP, 'gas', 'sfr', haloID=haloID)
         yvals = np.log10( yvals )
-        ax.set_ylabel('Star Formation Rate [ log M$_{\\rm sun}$ / yr ]')
+        ylabel = 'Star Formation Rate [ log M$_{\\rm sun}$ / yr ]'
         yMinMax = [-5.0, 1.0]
 
     if yAxis == 'mass_sfr_dt':
@@ -1043,7 +1060,7 @@ def plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=None):
         dt_yr = sP.units.codeTimeStepToYears(dt)
         yvals = np.log10( mass / sfr / dt_yr )
 
-        ax.set_ylabel('Gas Mass / SFR / Timestep [ log dimensionless ]')
+        ylabel = 'Gas Mass / SFR / Timestep [ log ]'
         yMinMax = [-2.0,5.0]
 
     if yAxis == 'mass_sfr_dt_hydro':
@@ -1060,40 +1077,87 @@ def plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=None):
         dt_hydro_yr = dt_hydro_s / sP.units.s_in_yr
         yvals = np.log10( mass / sfr / dt_hydro_yr )
 
-        ax.set_ylabel('Gas Mass / SFR / HydroTimestep [ log dimensionless ]')
+        ylabel = 'Gas Mass / SFR / HydroTimestep [ log ]'
         yMinMax = [-2.0,5.0]
 
     if yAxis == 'dt_yr':
         dt = snapshotSubset(sP, 'gas', 'TimeStep', haloID=haloID)
         yvals = np.log10( sP.units.codeTimeStepToYears(dt) )
 
-        ax.set_ylabel('Gas Timestep [ log yr ]')
+        ylabel = 'Gas Timestep [ log yr ]'
         yMinMax = [1.0,6.0]
 
-    nBinsX = 800
-    nBinsY = 400
+    # overrides to default ranges?
+    if xMinMaxForce is not None: xMinMax = xMinMaxForce
+    if yMinMaxForce is not None: yMinMax = yMinMaxForce
 
-    # plot
-    zz, xc, yc = np.histogram2d(dens, yvals, bins=[nBinsX, nBinsY], range=[xMinMax,yMinMax], 
-                                normed=True, weights=mass)
+    # start figure
+    fig = plt.figure(figsize=[figsize[0]*sizefac*(len(weights)*0.9), figsize[1]*sizefac])
 
-    zz = np.transpose(zz)
-    zz = np.log10(zz)
+    # loop over each weight requested
+    for i, wtProp in enumerate(weights):
+        # load: weights
+        weight = snapshotSubset(sP, 'gas', wtProp, haloID=haloID)
 
-    cmap = loadColorTable('viridis')
-    plt.imshow(zz, extent=[xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]], 
-               cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
+        # add panel
+        ax = fig.add_subplot(1,len(weights),i+1)
+
+        if len(weights) == 1: # title
+            hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
+            wtStr = 'Gas ' + wtProp.capitalize()
+            ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        # plot 2D histogram image
+        zz, xc, yc = np.histogram2d(dens, yvals, bins=[nBinsX, nBinsY], range=[xMinMax,yMinMax], 
+                                    normed=True, weights=weight)
+        zz = logZeroNaN(zz.T)
+
+        cmap = loadColorTable(ctNameHisto)
+        norm = Normalize(vmin=massFracMinMax[0], vmax=massFracMinMax[1], clip=False)
+        im = plt.imshow(zz, extent=[xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]], 
+                   cmap=cmap, norm=norm, origin='lower', interpolation='nearest', aspect='auto')
+
+        # plot contours?
+        if contours is not None:
+            zz, xc, yc = np.histogram2d(dens, yvals, bins=[nBinsX/4, nBinsY/4], range=[xMinMax,yMinMax], 
+                                        normed=True, weights=weight)
+            XX, YY = np.meshgrid(xc[:-1], yc[:-1], indexing='ij')
+            zz = logZeroNaN(zz)
+
+            # smooth, ignoring NaNs
+            if smoothSigma > 0:
+                zz1 = zz.copy()
+                zz1[np.isnan(zz)] = 0.0
+                zz1 = gaussian_filter(zz1, smoothSigma)
+                zz2 = 0 * zz.copy() + 1.0
+                zz2[np.isnan(zz)] = 0.0
+                zz2 = gaussian_filter(zz2, smoothSigma)
+                zz = zz1/zz2
+
+            c = plt.contour(XX, YY, zz, contours, colors=contoursColor, linestyles='solid')
+
+        if len(weights) > 1: # text label inside panel
+            wtStr = 'Gas Oxygen Ion Mass'
+            labelText = wtProp.replace(" mass","").replace(" ","")
+            ax.text(xMinMax[0]+0.3, yMinMax[-1]-0.3, labelText, 
+                va='top', ha='left', color='black', fontsize='40')
 
     # colorbar and save
-    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-    cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel('Relative Gas Mass [ log ]')
     fig.tight_layout()
-
+    fig.subplots_adjust(right=0.93)
+    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.821])
+    #cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+    cb = plt.colorbar(im, cax=cbar_ax)
+    cb.ax.set_ylabel('Relative %s [ log ]' % wtStr)
+    
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
     else:
-        fig.savefig('phase_%s_z=%.1f_%s_%s.pdf' % (sP.simName,sP.redshift,yAxis,hStr))
+        fig.savefig('phase_%s_z=%.1f_x-%s_y-%s_wt-%s_h-%s.pdf' % \
+            (sP.simName,sP.redshift,xAxis,yAxis,"-".join([w.replace(" ","") for w in weights]),haloID))
     plt.close(fig)
 
 def plotParticleMedianVsSecondQuant():
@@ -1275,210 +1339,6 @@ def plotRadialProfile1D(quant='entr'):
     ax.legend(loc='best')
     fig.savefig('radProfile_%s_halo%d.pdf' % (quant,haloID))
     plt.close(fig)
-
-def bFieldStrengthComparison():
-    """ Plot histogram of B field magnitude comparing runs etc. """
-    sPs = []
-
-    haloID = None # None for fullbox
-    redshift = 0.5
-    nBins = 100
-    valMinMax = [-7.0,4.0]
-
-    sPs.append( simParams(res=1820, run='tng', redshift=redshift) )
-    sPs.append( simParams(res=910, run='tng', redshift=redshift) )
-    sPs.append( simParams(res=455, run='tng', redshift=redshift) )
-
-    # start plot
-    fig = plt.figure(figsize=(16,9))
-    ax = fig.add_subplot(111)
-
-    hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
-    ax.set_title('z=%.1f %s' % (redshift,hStr))
-    ax.set_xlim(valMinMax)
-    ax.set_xlabel('Magnetic Field Magnitude [ log $\mu$G ]')
-    ax.set_ylabel('N$_{\\rm cells}$ PDF $\int=1$')
-    ax.set_yscale('log')
-
-    for sP in sPs:
-        # load
-        b_mag = snapshotSubset(sP, 'gas', 'bmag', haloID=haloID)
-        b_mag *= 1e6 # Gauss to micro-Gauss
-        b_mag = np.log10(b_mag) # log uG
-
-        # add to plot
-        yy, xx = np.histogram(b_mag, bins=nBins, density=True, range=valMinMax)
-        xx = xx[:-1] + 0.5*(valMinMax[1]-valMinMax[0])/nBins
-
-        ax.plot(xx, yy, label=sP.simName)
-
-    # finish plot
-    ax.legend(loc='best')
-
-    fig.savefig('bFieldStrengthComparison_%s.pdf' % hStr)
-    plt.close(fig)
-
-def depletionVsDynamicalTimescale():
-    """ Andi: depletion vs dynamical timescale.
-      t_dep = M_H2/SFR   M_H2 the cold, star-forming gas or take total gas mass instead
-      t_dyn = r12 / v_rot  r12 the half mass radius of the gaseous disk, v_rot its characteristic rot. vel
-    """
-
-    # config
-    figsize = (14,9)
-    sP = simParams(res=1820,run='illustris',redshift=0.0)
-
-    gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], 
-                      fieldsSubhalos=['SubhaloHalfmassRadType','SubhaloVmax','SubhaloSFR'])
-    ac = auxCat(sP, fields=['Subhalo_Mass_SFingGas','Subhalo_Mass_30pkpc_Stars'])
-
-    # t_dep [Gyr]
-    M_cold = sP.units.codeMassToMsun(ac['Subhalo_Mass_SFingGas'])
-    SFR = gc['subhalos']['SubhaloSFR'] # Msun/yr
-    t_dep = M_cold / SFR / 1e9
-
-    # t_dyn [Gyr]
-    r12 = sP.units.codeLengthToKpc(gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')])
-    v_rot = gc['subhalos']['SubhaloVmax'] * sP.units.kmS_in_kpcGyr
-    t_dyn = r12 / v_rot
-
-    # stellar masses and central selection
-    m_star = sP.units.codeMassToLogMsun(ac['Subhalo_Mass_30pkpc_Stars'])
-
-    w_central = np.where( gc['halos'] >= 0 )
-    
-    centralsMask = np.zeros( gc['subhalos']['count'], dtype=np.int16 )
-    centralsMask[gc['halos'][w_central]] = 1
-
-    centrals = np.where(centralsMask & (SFR > 0.0) & (r12 > 0.0))
-
-    t_dep = t_dep[centrals]
-    t_dyn = t_dyn[centrals]
-    m_star = m_star[centrals]
-
-    # plot config
-    title = sP.simName + ' z=%.1f' % sP.redshift + ' [only centrals with SFR>0 and r12>0]'
-    tDynMinMax = [0,0.2]
-    tDepMinMax = [0,4]
-    mStarMinMax = [9.0,12.0]
-    ratioMinMax = [0,0.05] # tdyn/tdep
-    nBinsX = 200
-    nBinsY = 150
-    binSizeMed = 0.01
-
-    # (A) 2d histogram of t_dep vs. t_dyn for all centrals
-    if 1:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_title(title)
-        ax.set_xlim(tDynMinMax)
-        ax.set_ylim(tDepMinMax)
-        ax.set_xlabel('t$_{\\rm dyn}$ [Gyr]')
-        ax.set_ylabel('t$_{\\rm dep}$ [Gyr]')
-
-        # 2d histo
-        zz, xc, yc = np.histogram2d(t_dyn, t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[tDynMinMax,tDepMinMax], normed=True)
-        zz = np.transpose(zz)
-        zz = np.log10(zz)
-
-        cmap = loadColorTable('viridis')
-        plt.imshow(zz, extent=[tDynMinMax[0],tDynMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
-                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
-
-        # median
-        #xm, ym, sm = running_median(t_dyn,t_dep,binSize=binSizeMed)
-        #ym2 = savgol_filter(ym,3,2)
-        #sm2 = savgol_filter(sm,3,2)
-        #ax.plot(xm[:-1], ym2[:-1], '-', color='black', lw=2.0)
-        #ax.plot(xm[:-1], ym2[:-1]+sm2[:-1], ':', color='black', lw=2.0)
-        #ax.plot(xm[:-1], ym2[:-1]-sm2[:-1], ':', color='black', lw=2.0)
-
-        # colorbar and save
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Number of Galaxies [ log ]')
-
-        fig.tight_layout()
-        fig.savefig('tdyn_vs_tdep_%s_a.pdf' % sP.simName)
-        plt.close(fig)
-
-    # (B) 2d histogram of ratio (t_dep/t_dyn) vs. m_star for all centrals
-    if 1:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_title(title)
-        ax.set_xlim(mStarMinMax)
-        ax.set_ylim(ratioMinMax)
-        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
-        ax.set_ylabel('t$_{\\rm dyn}$ / t$_{\\rm dep}$')
-
-        # 2d histo
-        zz, xc, yc = np.histogram2d(m_star, t_dyn/t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[mStarMinMax,ratioMinMax], normed=True)
-        zz = np.transpose(zz)
-        zz = np.log10(zz)
-
-        cmap = loadColorTable('viridis')
-        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],ratioMinMax[0],ratioMinMax[1]], 
-                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
-
-        # median
-        xm, ym, sm = running_median(m_star,t_dyn/t_dep,binSize=binSizeMed*10)
-        ym2 = savgol_filter(ym,3,2)
-        sm2 = savgol_filter(sm,3,2)
-        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
-
-        # colorbar and save
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Number of Galaxies [ log ]')
-
-        fig.tight_layout()
-        fig.savefig('tdyn_vs_tdep_%s_b.pdf' % sP.simName)
-        plt.close(fig)
-
-    # (C) t_dep vs m_star
-    if 1:
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-
-        ax.set_title(title)
-        ax.set_xlim(mStarMinMax)
-        ax.set_ylim(tDepMinMax)
-        ax.set_xlabel('M$_{\\rm star}$ [ log M$_\odot$ ]')
-        ax.set_ylabel('t$_{\\rm dep}$ [ Gyr ]')
-
-        # 2d histo
-        zz, xc, yc = np.histogram2d(m_star, t_dep, bins=[nBinsX, nBinsY], 
-                                    range=[mStarMinMax,tDepMinMax], normed=True)
-        zz = np.transpose(zz)
-        zz = np.log10(zz)
-
-        cmap = loadColorTable('viridis')
-        plt.imshow(zz, extent=[mStarMinMax[0],mStarMinMax[1],tDepMinMax[0],tDepMinMax[1]], 
-                   cmap=cmap, origin='lower', interpolation='nearest', aspect='auto')
-
-        # median
-        xm, ym, sm = running_median(m_star,t_dep,binSize=binSizeMed*10)
-        ym2 = savgol_filter(ym,3,2)
-        sm2 = savgol_filter(sm,3,2)
-        ax.plot(xm[:-3], ym2[:-3], '-', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]+sm2[:-3], ':', color='black', lw=2.0)
-        ax.plot(xm[:-3], ym2[:-3]-sm2[:-3], ':', color='black', lw=2.0)
-
-        # colorbar and save
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Number of Galaxies [ log ]')
-
-        fig.tight_layout()
-        fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
-        plt.close(fig)
 
 # -------------------------------------------------------------------------------------------------
 

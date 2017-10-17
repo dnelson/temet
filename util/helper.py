@@ -468,6 +468,31 @@ def least_squares_fit(func, params_init, params_bounds, args=None):
 
     return result.x
 
+def reducedChiSq(sim_x, sim_y, data_x, data_y, data_yerr=None, data_yerr_up=None, data_yerr_down=None):
+    """ Helper, computed reduced (i.e.) mean chi squared between a simulation 'line' and observed 
+    relation given by a set of points with errorbars. """
+    from scipy.interpolate import interp1d
+    assert data_yerr is None or (data_yerr_up is None and data_yerr_down is None)
+    assert np.sum([data_yerr_up is None,data_yerr_down is None]) in [0,2] # both or neither
+
+    sim_f = interp1d(sim_x,sim_y,kind='linear')
+    sim_y_at_data_x = sim_f(data_x)
+
+    if data_yerr is not None:
+        data_error = data_yerr
+    else:
+        data_error = data_yerr_down
+        w = np.where(sim_y_at_data_x > data_y)
+        data_error[w] = data_yerr_up[w]
+
+    # weighted squared deviations
+    devs = (sim_y_at_data_x - data_y)**2 / data_error**2
+
+    chi2 = np.sum(devs)
+    chi2v = chi2 / data_x.size
+    
+    return chi2v
+
 # --- vis ---
 
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None):
