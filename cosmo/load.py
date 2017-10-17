@@ -305,6 +305,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
     """
     assert sP.snap is not None, "Must specify sP.snap for groupCat() load."
     assert sP.subbox is None, "No groupCat() for subbox snapshots."
+    assert fieldsSubhalos is not None or fieldsHalos is not None, "Must specify fields type."
 
     r = {}
 
