@@ -20,13 +20,13 @@ from util import simParams
 from util.loadExtern import werk2013, johnson2015
 from plot.config import *
 from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, closest, reducedChiSq
-from cosmo.load import groupCat, groupCatSingle, auxCat
+from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.cloudy import cloudyIon
 from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList, plotPhaseSpace2D
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from plot.cloudy import ionAbundFracs2DHistos
 from vis.common import setAxisColors
-from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum
+from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum, periodicDists
 from obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
 
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
@@ -1433,6 +1433,49 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
     fig.savefig(saveName)
     plt.close(fig)
 
+def milkyWaySampleNumbers():
+    """ Construct our Milky Way sample, and run some small analysis to print a few interesting numbers. """
+    #sP = simParams(res=512,run='tng',redshift=0.0,variant='0000')
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+
+    acFieldName = 'Subhalo_StellarRotation_2rhalfstars'
+    mhalo = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+    ssfr  = groupCat(sP, fieldsSubhalos=['ssfr_gyr_log'])
+    kappa = auxCat(sP, fields=[acFieldName])[acFieldName][:,1]
+
+    # sample selection
+    w = np.where( (mhalo >= 11.85) & (mhalo < 12.28) &\
+                  (ssfr >= -1.3) & (ssfr < -0.3) & \
+                  (kappa >= 0.6) & (kappa < 1.0) )
+
+    print('Sample size: ', len(w[0]))
+
+    # loop info from auxcats
+    fields = ['Subhalo_Mass_250pkpc_Gas','Subhalo_Mass_250pkpc_Stars',
+              'Subhalo_Mass_50pkpc_Gas','Subhalo_Mass_50pkpc_Stars',
+              'Subhalo_Mass_250pkpc_Gas_Global','Subhalo_Mass_250pkpc_Stars_Global']
+    ac = auxCat(sP, fields=fields)
+
+    for field in fields + ['baryon_50','baryon_250','baryon_global_250']:
+
+        if field == 'baryon_50':
+            data = ac['Subhalo_Mass_50pkpc_Gas'] + ac['Subhalo_Mass_50pkpc_Stars']
+        elif field == 'baryon_250':
+            data = ac['Subhalo_Mass_250pkpc_Gas'] + ac['Subhalo_Mass_250pkpc_Stars']
+        elif field == 'baryon_global_250':
+            data = ac['Subhalo_Mass_250pkpc_Gas_Global'] + ac['Subhalo_Mass_250pkpc_Stars_Global']
+        else:
+            data = ac[field]
+
+        if data.size != len(w[0]):
+            data = data[w] # partial auxCat not already computed just on these subhaloIDs
+
+        percs = np.nanpercentile( data, [16,50,84] )
+        percs = sP.units.codeMassToLogMsun(percs)
+        print(field,percs)
+
+    import pdb; pdb.set_trace()
+
 # -------------------------------------------------------------------------------------------------
 
 variants1 = ['0100','0401','0402','0501','0502','0601','0602','0701','0703','0000']
@@ -1621,7 +1664,7 @@ def paperPlots():
             pdf.close()
 
     # figure 10: 2d histos
-    if 0:
+    if 1:
         sP = TNG300
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         xQuants = ['mstar_30pkpc_log','mhalo_200_log']
@@ -1657,7 +1700,7 @@ def paperPlots():
         obsSimMatchedGalaxySamples(sPs, 'coshalos_sample_%s.pdf' % simNames, config='COS-Halos')
 
     # figure 12: COS-Halos: N_OVI vs impact parameter and vs sSFR bimodality
-    if 1:
+    if 0:
         sP = TNG100
 
         #cosOVIDataPlot(sP, saveName='coshalos_ovi_%s.pdf' % sP.simName, config='COS-Halos')
