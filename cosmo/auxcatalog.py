@@ -327,10 +327,12 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only if scope=='subfind' (default), or FoF particles if scope=='fof'.
+        If scope=='global', currently a full non-chunked snapshot load and brute-force distance 
+        computations to all particles for each subhalo.
         ptRestriction applies a further cut to which particles are included (None, 'sfrgt0', 'sfreq0').
     """
     assert op in ['sum','mean','max','ufunc']
-    assert scope in ['subfind','fof']
+    assert scope in ['subfind','fof','global']
     if op == 'func': assert ptProperty in ['Krot']
 
     # determine ptRestriction
@@ -346,7 +348,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         desc += " (restriction = %s). " % ptRestriction
     if weighting is not None:
         desc += " (weighting = %s). " % weighting
-    desc  +=" (only subhalo particles included). "
+    if scope == 'subfind': desc  +=" (only subhalo particles included). "
+    if scope == 'fof': desc  +=" (all parent FoF particles included). "
+    if scope == 'global': desc  +=" (all global particles included). "
     select = "All Subhalos."
 
     # load group information
@@ -368,7 +372,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     # if no task parallelism (pSplit), set default particle load ranges
     indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
-    if pSplit is not None:
+    if pSplit is not None and scope != 'global':
         # subdivide the global [variable ptType!] particle set, then map this back into a division of 
         # subhalo IDs which will be better work-load balanced among tasks
         gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
@@ -384,6 +388,13 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
     indRange = indRange[ptType] # choose index range for the requested particle type
+
+    if scope == 'global':
+        # all tasks, regardless of pSplit or not, do global load (at once, not chunked)
+        h = cosmo.load.snapshotHeader(sP)
+        indRange = [0, h['NumPart'][sP.ptNum(ptType)]-1]
+        i0 = 0 # never changes
+        i1 = indRange[1] # never changes
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -476,8 +487,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
         # slice starting/ending indices for stars local to this FoF
-        i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
-        i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,ptLoadType]
+        if scope != 'global':
+            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
+            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,ptLoadType]
 
         assert i0 >= 0 and i1 <= (indRange[1]-indRange[0]+1)
 
@@ -2183,6 +2195,19 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestriction='sfreq0'),
    'Subhalo_Mass_SF0Gas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestriction='sfreq0'),
+
+   'Subhalo_Mass_50pkpc_Gas': \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=50.0),
+   'Subhalo_Mass_50pkpc_Stars': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=50.0),
+   'Subhalo_Mass_250pkpc_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=250.0),
+   'Subhalo_Mass_250pkpc_Gas_Global' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=250.0,scope='global'),
+   'Subhalo_Mass_250pkpc_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=250.0),
+   'Subhalo_Mass_250pkpc_Stars_Global' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=250.0,scope='global'),
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
