@@ -36,7 +36,7 @@ def plotUsersData():
     convertfunc = lambda x: datetime.strptime(x, '%Y-%m-%d')    
     #dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
     dd = [object] + ['d' for a in col_headers[1:]]
-    data = np.genfromtxt('/n/home07/dnelson/users_data.txt', delimiter=',',\
+    data = np.genfromtxt('/home/extdylan/plot_stats.txt', delimiter=',',\
                         names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=50)
     
     # plot
@@ -62,7 +62,7 @@ def plotUsersData():
     
     #ax.tick_params(axis='both', which='major', labelsize=14)
     #ax.set_axis_bgcolor( (1.0,1.0,1.0) )
-    ax.set_ylim([1,1e9])
+    ax.set_ylim([1,1e10])
     
     launch_date = datetime.strptime('2015-04-01', '%Y-%m-%d')
     ax.plot([launch_date,launch_date],[2,1e4],'-',lw=lw,color='black',alpha=0.8)

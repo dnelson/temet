@@ -13,6 +13,7 @@ from matplotlib import ticker
 from matplotlib.colors import Normalize, colorConverter
 from scipy.signal import savgol_filter
 from scipy.stats import gaussian_kde
+from scipy.interpolate import interp1d
 from os.path import isfile
 from functools import partial
 
@@ -180,7 +181,8 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     # plot setup
     lw = 3.0
     sizefac = 1.0 if not clean else sfclean
-    heightFac = 1.0 if 'main' in saveName else 0.95
+    if len(redshifts) > 1: sizefac *= 0.7
+    heightFac = 1.0 if ('main' in saveName or len(redshifts) > 1) else 0.95
     fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac*heightFac])
     ax = fig.add_subplot(111)
     
@@ -255,42 +257,74 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
             lExtra += ['z = %3.1f' % redshift]
 
     handles, labels = ax.get_legend_handles_labels()
-    loc = 'upper right' if len(ions) > 1 else 'lower left'
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc=loc)
+
+    if len(sPs) == 13: # main variants, split into 2 legends
+        legend1 = ax.legend(handles[0:4], labels[0:4], loc='upper right')
+        ax.add_artist(legend1)
+        legend2 = ax.legend(handles[4:]+sExtra, labels[4:]+lExtra, loc='lower left')
+    else: # default
+        loc = 'upper right' if len(ions) > 1 else 'lower left'
+        legend2 = ax.legend(handles+sExtra, labels+lExtra, loc=loc)
 
     fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 
 def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen', redshift=0.0, 
-                           vsHaloMass=True, toAvgColDens=False, colorOff=2):
+                           vsHaloMass=True, secondTopAxis=False, toAvgColDens=False, colorOff=2):
     """ Plot total [gravitationally bound] mass of various ions, or e.g. cold/hot/total CGM mass, 
     versus halo or stellar mass at a given redshift. If toAvgColDens, then instead of total mass 
-    plot average column density computed geometrically as (Mtotal/pi/rvir^2). """
+    plot average column density computed geometrically as (Mtotal/pi/rvir^2). 
+    If secondTopAxis, add the other (halo/stellar) mass as a secondary top axis, average relation. """
 
     binSize = 0.2 # log mass
+    renames = {'AllGas':'Total Gas / 100','AllGas_Metal':'Total Metals','AllGas_Oxygen':'Total Oxygen'}
+    ionColors = {'AllGas':'#444444','AllGas_Metal':'#777777','AllGas_Oxygen':'#cccccc'}
 
     # plot setup
     lw = 3.0
     sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    heightFac = 1.1 if secondTopAxis else 1.0
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac*heightFac])
     ax = fig.add_subplot(111)
     
+    mHaloLabel = 'M$_{\\rm halo}$ [ < r$_{\\rm 200,crit}$, log M$_{\\rm sun}$ ]'
+    mHaloField = 'mhalo_200_log'
+    mStarLabel = 'M$_{\star}$ [ < 30 pkpc, log M$_{\\rm sun}$ ]'
+    mStarField = 'mstar_30pkpc_log'
+
     if vsHaloMass:
         ax.set_xlim([11.0, 15.0])
-        ax.set_xlabel('M$_{\\rm halo}$ [ < r$_{\\rm 200,crit}$, log M$_{\\rm sun}$ ]')
-        massField = 'mhalo_200_log'
+        ax.set_xlabel(mHaloLabel)
+        massField = mHaloField
     else:
         ax.set_xlim([9.0, 12.0])
-        ax.set_xlabel('M$_{\star}$ [ < 30 pkpc, log M$_{\\rm sun}$ ]')
-        massField = 'mstar_30pkpc_log'
+        ax.set_xlabel(mStarLabel)
+        massField = mStarField
 
     if toAvgColDens:
         ax.set_ylim([12.0, 16.0])
         ax.set_ylabel('Average Column Density $<N_{\\rm oxygen}>$ [ log cm$^{-2}$ ]')
     else:
         ax.set_ylim([5.0, 9.0])
+        if 'AllGas' in ions: ax.set_ylim([4.0, 12.0])
         ax.set_ylabel('Total Bound Gas Mass [ log M$_{\\rm sun}$ ]')
+
+    if secondTopAxis:
+        # add the other mass value as a secondary x-axis on the top of the panel
+        axTop = ax.twiny()
+
+        if vsHaloMass: # x=halo, top=stellar
+            topMassVals = [8.0, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0]
+            axTop.set_xlabel(mStarLabel)
+            topMassField = mStarField
+        else: # x=stellar, top=halo
+            topMassVals = [11.0, 11.5, 12.0, 13.0, 14.0, 15.0]
+            axTop.set_xlabel(mHaloLabel)
+            topMassField = mHaloField
+
+        axTop.set_xlim(ax.get_xlim())
+        axTop.set_xscale(ax.get_xscale())
 
     # loop over each fullbox run
     colors = []
@@ -302,6 +336,18 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
         cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
         xx = xx[cssInds]
+
+        if secondTopAxis and i == 0:
+            # load mass values for top x-axis, construct median relation interpolant, assign values
+            xx_top = groupCat(sP, fieldsSubhalos=[topMassField])
+            xx_top = xx_top[cssInds]
+            xm, ym, _ = running_median(xx_top,xx,binSize=binSize,skipZeros=True,minNumPerBin=10)
+            f = interp1d(xm, ym, kind='linear', bounds_error=False, fill_value='extrapolate')
+
+            axTickVals = f(topMassVals) # values of bottom x-axis for each topMassVals
+
+            axTop.set_xticks(axTickVals)
+            axTop.set_xticklabels(topMassVals)
 
         if toAvgColDens:
             # load virial radii
@@ -332,6 +378,8 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 yy = logZeroNaN(yy)
             else:
                 yy = sP.units.codeMassToLogMsun(ac[fieldName])
+
+            if ion == 'AllGas': yy -= 2.0 # offset!
             
             # calculate median and smooth
             xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,
@@ -344,17 +392,19 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
             # determine color
             if i == 0:
-                if j == 0:
+                if ion in ionColors: # preset color
+                    c = ionColors[ion]
+                else: # cycle
                     for _ in range(colorOff+1):
                         c = ax._get_lines.prop_cycler.next()['color']
-                else:
-                    c = ax._get_lines.prop_cycler.next()['color']
+                    if colorOff > 0: colorOff = 0 # only once
                 colors.append(c)
             else:
                 c = colors[j]
 
             # plot median line
             label = ion if i == 0 else ''
+            if ion in renames.keys() and i == 0: label = renames[ion]
             ax.plot(xm, ym, lw=lw, color=c, linestyle=linestyles[i], label=label)
 
             if i == 0:
@@ -369,9 +419,12 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
         for i, sP in enumerate(sPs):
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
             lExtra += ['%s' % sP.simName]
+        loc = 'upper right' if toAvgColDens else 'lower right'
+        legend1 = ax.legend(sExtra, lExtra, loc=loc)
+        ax.add_artist(legend1)
 
     handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
+    legend2 = ax.legend(handles, labels, loc='upper left')
 
     fig.tight_layout()
     fig.savefig(saveName)
@@ -1089,8 +1142,8 @@ def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
         xtick_vals = np.linspace(0.0, 1.0-(1.0/(len(gals)+2))*(kdeHeightFac-1.5), len(gals)+2)
         ax_right.set_xticks([])
 
-        ax_right.spines["bottom"].set_visible(False)
-        ax_right.spines["top"].set_visible(False)
+        #ax_right.spines["bottom"].set_visible(False)
+        #ax_right.spines["top"].set_visible(False)
 
         # main panel: plot obs
         for limitType in [2,1,0]: # upper, lower, exact (OVI)
@@ -1417,17 +1470,23 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
                 #    ax.plot(xx, yy_max, '-', lw=lw-1, color=c, linestyle=linestyles[i], alpha=0.2)
 
     # legend
+    handles, labels = ax.get_legend_handles_labels()
+
     if config == 'eCGMfull' and conf == 2:
-        prop = {'size':15}
-        handles, labels = ax.get_legend_handles_labels()
+        prop = {'size':15}        
         legend1 = ax.legend(handles[0:4], labels[0:4], loc='upper right', prop=prop)
         legend2 = ax.legend(handles[4:], labels[4:], loc='lower left', prop=prop)
         ax.add_artist(legend1)
     else:
-        loc = 'upper right' if len(sPs) == 1 else 'lower left'
-        prop = {}
-        if config in ['eCGM','eCGMfull']: prop['size'] = 15
-        legend2 = ax.legend(loc=loc, ncol=1, prop=prop)
+        if len(sPs) == 13: # main variants, split into 2 legends
+            legend1 = ax.legend(handles[0:6], labels[0:6], loc='upper right', prop={'size':17})
+            ax.add_artist(legend1)
+            legend2 = ax.legend(handles[6:], labels[6:], loc='lower left', prop={'size':17})
+        else: # default
+            loc = 'upper right' if len(sPs) == 1 else 'lower left'
+            prop = {}
+            if config in ['eCGM','eCGMfull']: prop['size'] = 15
+            legend2 = ax.legend(handles, labels, loc=loc, ncol=1, prop=prop)
 
     fig.tight_layout()
     fig.savefig(saveName)
@@ -1488,6 +1547,8 @@ variants7 = ['3301','3302','3303','3304','3701','3702','3801','3802','3902','000
 variants8 = ['4000','4100','4410','4412','4420','4501','4502','4503','4506','0000']
 variantSets = [variants1,variants2,variants3,variants4,variants5,variants6,variants7,variants8]
 
+variantsMain = ['0501','0502','0801','2002','2302','2102','2202','3000','3001','3010','3404','0010','0000']
+
 def paperPlots():
     """ Construct all the final plots for the paper. """
     TNG100    = simParams(res=1820,run='tng',redshift=0.0)
@@ -1499,8 +1560,6 @@ def paperPlots():
     Illustris = simParams(res=1820,run='illustris',redshift=0.0)
 
     ions = ['OVI','OVII','OVIII'] # whenever we are not just doing OVI
-
-    variantsMain = ['0501','0502','0801','2002','2302','2102','2202','3000','3001','3010','3404','0000']
 
     # figure 1: full box composite image
     if 0:
@@ -1554,22 +1613,23 @@ def paperPlots():
 
     # figure 4, bound mass of O ions vs halo/stellar mass
     if 0:
-        sPs = [TNG300, TNG100] #, TNG100_3]
+        sPs = [TNG300, TNG100]
         cenSatSelect = 'cen'
         redshift = 0.0
+        ionsLoc = ['AllGas','AllGas_Metal','AllGas_Oxygen'] + ions
 
         for vsHaloMass in [True,False]:
             massStr = '%smass' % ['stellar','halo'][vsHaloMass]
 
             saveName = 'ions_masses_vs_%s_%s_z%d_%s.pdf' % \
                 (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-                redshift=redshift, vsHaloMass=vsHaloMass)
+            totalIonMassVsHaloMass(sPs, saveName, ions=ionsLoc, cenSatSelect=cenSatSelect, 
+                redshift=redshift, vsHaloMass=vsHaloMass, secondTopAxis=True)
 
             saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
                 (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
             totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-                redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
+                redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True, secondTopAxis=True)
 
     # figure 5: ionization data for OVI, OVII, and OVIII
     if 0:
@@ -1590,19 +1650,21 @@ def paperPlots():
         yAxis = 'temp'
         weights = ['O VI mass','O VII mass','O VIII mass']
         xMinMax = [-9.0,0.0]
-        yMinMax = [2.5,8.5]
+        yMinMax = [3.0,8.0]
         contours = [-3.0, -2.0, -1.0]
-        massFracMinMax = [-10.0, 0.0]
+        massFracMinMax = [-4.0, 0.0] #[-10.0, 0.0]
+        hideBelow = True
         smoothSigma = 1.0
 
-        plotPhaseSpace2D(sP, yAxis, xAxis=xAxis, weights=weights, haloID=None, massFracMinMax=massFracMinMax,
-                         xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, contours=contours, smoothSigma=smoothSigma)
+        plotPhaseSpace2D(sP, yAxis, xAxis=xAxis, weights=weights, haloID=None, 
+                         massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                         contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
     # figure 6: average radial profiles
     if 0:
         redshift = 0.0
         sPs = [TNG100]
-        ions = ['OVI']
+        ions = ['OVI'] # OVII, OVIII
         cenSatSelect = 'cen'
         haloMassBins = [[10.9,11.1], [11.4,11.6], [11.9,12.1], [12.4,12.6]]
         projSpecs = ['3D','2Dz_2Mpc']
@@ -1664,15 +1726,15 @@ def paperPlots():
             pdf.close()
 
     # figure 10: 2d histos
-    if 1:
+    if 0:
         sP = TNG300
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         xQuants = ['mstar_30pkpc_log','mhalo_200_log']
         cQuant = 'mass_ovi'
 
-        yQuants1 = ['ssfr','surfdens1_stars','fgas2','stellarage','bmag_2rhalf_masswt','pratio_halo_masswt']
-        yQuants2 = ['Z_gas','Z_stars','Krot_oriented_stars2','Krot_oriented_gas2','size_gas','size_stars']
-        yQuants3 = ['color_C_gr','xray_r500','zform_mm5','BH_CumEgy_low','M_BH_actual','filled_below']
+        yQuants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo','mass_z']
+        yQuants2 = ['surfdens1_stars','Z_stars','color_C_gr','size_stars','Krot_oriented_stars2','Krot_oriented_gas2']
+        yQuants3 = ['nh_halo','xray_r500','pratio_halo_masswt','BH_CumEgy_low','M_BH_actual','_dummy_']
 
         yQuantSets = [yQuants1, yQuants2, yQuants3]
 

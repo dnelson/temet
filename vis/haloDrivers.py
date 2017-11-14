@@ -13,7 +13,7 @@ from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
 from plot.general import simSubhaloQuantity
 from util.helper import pSplit, logZeroNaN
-from cosmo.load import groupCat, groupCatSingle, auxCat
+from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.mergertree import loadMPB
 from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns, \
                        cenSatSubhaloIndices
@@ -579,8 +579,8 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
     # change to: if sP.isPartType(partType,'gas'):   config['ctName'] = 'perula' #'magma'
     run       = 'tng'
     res       = 512
-    variant   = 0000 # TNG fiducial
-    matchedToVariant = 0010 # Illustris fiducial
+    variant   = '0000' # TNG fiducial
+    matchedToVariant = '0010' # Illustris fiducial
 
     # stellar composite, 50 kpc/h on a side, include M* label per panel, and scale bar once
     redshift   = 2.0
@@ -944,6 +944,13 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     rotation      = 'face-on'
     sizeType      = 'pkpc'
 
+    # init
+    evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
+    redshift_init = 0.0
+
+    sP = simParams(res=res, run=run, redshift=redshift_init)
+
+    # which plot configuration?
     if conf == 0:
         size          = 60.0 # 30 kpc in each direction from center
         partType      = 'stars'
@@ -952,7 +959,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         colorBar      = False
         nGalaxies     = 35 # 35 (note: set to 45 for talk image)
         nRowsFig      = 7 # 7 (note: set to 9 for talk image)
-    if conf == 1:
+    if conf in [1,2]:
         size          = 800.0 # 400 kpc in each direction from center
         partType      = 'gas'
         partField     = 'O VI'
@@ -962,13 +969,22 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         colorBar      = True
         nGalaxies     = 30
         nRowsFig      = 6
+        method        = 'sphMap_global'
+    if conf == 2:
+        partField     = 'O VI fracmass'
+        valMinMax     = [-5.0, -3.0]
 
-    evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
-    redshift_init = 0.0
+        # global pre-cache of selected fields into memory        
+        if 0:
+            fieldsToCache = ['pos','mass','O VI mass']
+            dataCache = {}
+            for field in fieldsToCache:
+                cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
+                print('Caching [%s] now...' % field)
+                dataCache[cache_key] = snapshotSubset(sP, partType, field)
+            print('All caching done.')
 
     # load halos of this bin, from this run
-    sP = simParams(res=res, run=run, redshift=redshift_init)
-
     if curPage is None:
         if evo is False:
             # z=0 samples
@@ -1035,7 +1051,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         if not evo:
             if conf == 0:
                 detailsStr = '(g-r) = %.2f $\kappa_\star$ = %.2f' % (gr_colors_z0[shID],kappa_stars[shID])
-            if conf == 1:
+            if conf in [1,2]:
                 detailsStr = '(g-r) = %.2f $M_{\\rm OVI}$ = %.1f' % (gr_colors_z0[shID],mass_ovi[shID])
             lCust.append(detailsStr)
                            

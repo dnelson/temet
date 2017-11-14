@@ -106,8 +106,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     if cQuant is None:
         colorMed = 'orange'
 
-    if cenSatSelect == 'cen' and 'color_' in yQuant: # fig_subplot[0] is not None and cQuant is not None:
-        colorContours = True
+    #if cenSatSelect == 'cen' and 'color_' in yQuant: # tng_colors paper, not tng_oxygen paper
+    #    colorContours = True
 
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
     sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)

@@ -19,7 +19,7 @@ from vis.lic import line_integral_convolution
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
-from util.helper import loadColorTable, logZeroMin
+from util.helper import loadColorTable, logZeroMin, logZeroNaN
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
 from cosmo.util import periodicDists, correctPeriodicDistVecs, correctPeriodicPosVecs
@@ -637,12 +637,12 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         elem_mass_frac = snapshotSubset(sP, partType, partField, indRange=indRange)
         mass *= elem_mass_frac
 
-    # metal ion mass (do column densities)
+    # metal ion mass (do column densities) [e.g. "O VI", "O VI mass", "O VI frac", "O VI fracmass"]
     if ' ' in partField:
         element = partField.split()[0]
         ionNum  = partField.split()[1]
 
-        if 0:
+        if 1:
             # use cache
             mass = snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
         else:
@@ -714,7 +714,8 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         # distribute mass and calculate column/volume density grid
         quant = None
 
-        if partFieldLoad in volDensityFields+colDensityFields or ' ' in partFieldLoad:
+        if partFieldLoad in volDensityFields+colDensityFields or \
+        (' ' in partFieldLoad and 'mass' not in partFieldLoad and 'frac' not in partFieldLoad):
             normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
@@ -762,11 +763,19 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         config['label']  = 'Mean %s Volume Density [log cm$^{-3}$]' % ptStr
         config['ctName'] = 'jet'
 
-    # total sum fields
-    if partField == 'mass':
-        grid  = logZeroMin( sP.units.codeMassToLogMsun(grid) )
-        config['label']  = 'Total %s Mass [log M$_{\\rm sun}$]' % ptStr
-        config['ctName'] = 'jet'
+    # total sum fields (also of sub-components e.g. "O VI mass")
+    if partField == 'mass' or ' mass' in partField:
+        grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
+        subStr = ' '+' '.join(partField.split()[:-1]) if ' mass' in partField else ''
+        config['label']  = 'Total %s%s Mass [log M$_{\\rm sun}$]' % (ptStr,subStr)
+        config['ctName'] = 'perula'
+
+    # fractional total sum of sub-component relative to total (note: for now, grid is pure mass)
+    if ' fracmass' in partField:
+        grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
+        compStr = ' '.join(partField.split()[:-1])
+        config['label']  = '%s Mass / Total %s Mass [log]' % (compStr,ptStr)
+        config['ctName'] = 'perula'
 
     # column densities
     if partField == 'coldens':
@@ -788,21 +797,33 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
 
-    if partField in ['HI','HI_segmented'] or ' ' in partField:
+    # hydrogen/metal/ion column densities
+    if (' ' in partField and ' mass' not in partField and ' frac' not in partField):
         assert 'sb_' not in partField
-        if ' ' in partField:
-            ion = cloudyIon(None)
-            grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
+        ion = cloudyIon(None)
+        grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
         if partField == 'O VII': config['ctName'] = 'magma'
-        if partField == 'O VIII': config['ctName'] = 'inferno'
+        if partField == 'O VIII': config['ctName'] = 'plasma'
 
-    if partField == 'HI_segmented':
-        config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
-        config['ctName'] = 'HI_segmented'
+    if 'O6_O8_ratio' in partField:
+        grid  = logZeroMin( grid )
+        config['label']  = 'OVI / OVIII Mass Ratio [log]'
+        config['ctName'] = 'Spectral'
+        config['plawScale'] = 0.6
+
+    if partField in ['HI','HI_segmented']:
+        grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
+
+        if partField == 'HI':
+            config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
+            config['ctName'] = 'viridis'
+        if partField == 'HI_segmented':
+            config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
+            config['ctName'] = 'HI_segmented'
 
     if partField in ['xray','xray_lum']:
         grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e30, totKpc2=True ) ) # return 1e30 factor
@@ -1012,8 +1033,12 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
     _, sbStr, _ = subboxVals(sP.subbox)
 
+    # if loaded/gridded data is the same, just processed differently, don't save twice
+    partFieldSave = partField.replace(' fracmass',' mass')
+    partFieldSave = partFieldSave.replace(' ','_') # convention for filenames
+
     saveFilename = sP.derivPath + 'grids/%s/%s.%s%d.%s.%s.%s.hdf5' % \
-                   (sbStr.replace("_","/"), method, sbStr, sP.snap, partType, partField.replace(' ','_'), m)
+                   (sbStr.replace("_","/"), method, sbStr, sP.snap, partType, partFieldSave, m)
 
     if not isdir(sP.derivPath + 'grids/'):
         mkdir(sP.derivPath + 'grids/')
@@ -1248,6 +1273,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
         w = np.where(grid_stellarColDens < 3.0)
         grid_master[w] = 0.0 # black
+
+    # temporary: similar, fractional total mass sum of a sub-component relative to the full, request 
+    # the 'full' mass grid of this particle type now and normalize
+    if ' fracmass' in partField:
+        grid_totmass, _ = gridBox(sP, method, partType, 'mass', nPixels, axes, 
+                                  boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
+        grid_master = logZeroMin( 10.0**grid_master / 10.0**grid_totmass )
 
     # temporary: line integral convolution test
     if 'licMethod' in kwargs and kwargs['licMethod'] is not None:

@@ -316,7 +316,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
 
-            # halo mass (m200 or m500) of parent halo, or central subfind mass [code, msun, or log msun]
+            # halo mass (m200 or m500) of parent halo [code, msun, or log msun]
             if quant in ['mhalo_200','mhalo_200_log','mhalo_200_code',
                          'mhalo_500','mhalo_500_log','mhalo_200_code']:
                 od = 200 if '_200' in quant else 500
@@ -793,6 +793,14 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
     indRangeOrig = kwargs['indRange']
 
+    # check memory cache (only simplest support at present, for indRange returns of global cache)
+    if indRangeOrig is not None:
+        cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
+        if cache_key in sP.data:
+            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % \
+                (cache_key,indRangeOrig[0],indRangeOrig[1]))
+            return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
+
     # caching
     useCache = True
 
@@ -937,6 +945,18 @@ def snapshotSubset(sP, partType, fields,
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
             return sP.units.UToTemp(u,ne,log=True)
 
+        # temperature (from u,nelec) [linear K]
+        if field.lower() in ["temp_linear"]:
+            u  = snapshotSubset(sP, partType, 'u', **kwargs)
+            ne = snapshotSubset(sP, partType, 'ne', **kwargs)
+            return sP.units.UToTemp(u,ne,log=False)
+
+        # hydrogen number density (from rho) [linear 1/cm^3]
+        if field.lower() in ["nh"]:
+            dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+            dens = sP.units.codeDensToPhys(dens,cgs=True,numDens=True)
+            return sP.units.hydrogen_massfrac * dens # constant 0.76 assumed
+
         # entropy (from u,dens) [log cgs]
         if field.lower() in ["ent", "entr", "entropy"]:
             u    = snapshotSubset(sP, partType, 'u', **kwargs)
@@ -985,7 +1005,7 @@ def snapshotSubset(sP, partType, fields,
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', **kwargs)
             return (4.0/3.0) * np.pi * hsml**3.0
 
-        # metallicity in log(solar) units
+        # metallicity in linear(solar) units
         if field.lower() in ["metal_solar","z_solar"]:
             metal = snapshotSubset(sP, partType, 'metal', **kwargs) # metal mass / total mass ratio
             return sP.units.metallicityInSolar(metal,log=False)
@@ -1073,7 +1093,13 @@ def snapshotSubset(sP, partType, fields,
         if " " in field:
             return _ionLoadHelper(sP, partType, field, kwargs)
 
-        # metal mass (total or by species): convert fractions to masses
+        if "O6_O8_ratio" in field:
+            # non-generalized ion mass ratios
+            oxy6 = snapshotSubset(sP, partType, 'O VI mass', **kwargs)
+            oxy8 = snapshotSubset(sP, partType, 'O VIII mass', **kwargs)
+            return ( oxy6 / oxy8 )
+
+        # metal mass (total or by species): convert fractions to masses [code units]
         if "metalmass" in field.lower():
             assert sP.isPartType(partType, 'gas') or sP.isPartType(partType, 'stars')
 
@@ -1085,6 +1111,16 @@ def snapshotSubset(sP, partType, fields,
             masses *= snapshotSubset(sP, partType, fracFieldName, **kwargs)
 
             return masses
+
+        # metal mass density [linear g/cm^3]
+        if "metaldens" in field.lower():
+            fracFieldName = "metal" # e.g. "metaldens" = total metal mass density
+            if "_" in field: # e.g. "metaldens_O" or "metaldens_Mg"
+                fracFieldName = "metals_" + field.split("_")[1].capitalize()
+
+            dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+            dens = sP.units.codeDensToPhys(dens,cgs=True)
+            return dens * snapshotSubset(sP, partType, fracFieldName, **kwargs)
 
         # GFM_MetalsTagged: ratio of iron mass [linear] produced in SNIa versus SNII
         if field.lower() in ['sn_iaii_ratio_fe']:
@@ -1247,7 +1283,14 @@ def snapshotSubset(sP, partType, fields,
             subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
             subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
 
-    # load
+    # check memory cache (only simplest support at present, for indRange returns of global cache)
+    if len(fields) == 1 and mdi[0] is None and indRange is not None:
+        cache_key = 'snap%d_%s_%s' % (sP.snap,partType,fields[0].replace(" ","_"))
+        if cache_key in sP.data:
+            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % (cache_key,indRange[0],indRange[1]))
+            return sP.data[cache_key][indRange[0]:indRange[1]+1]
+
+    # load from disk
     r = il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq)
 
     # optional unit post-processing
