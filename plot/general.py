@@ -37,7 +37,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_rad = ['rhalo_200','rhalo_500']
 
     # generally available (auxcat)
-    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii']
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_metal']
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                    'bmag_halo_masswt',   'bmag_halo_volwt', 
                    'pratio_halo_masswt', 'pratio_halo_volwt', 'pratio_2rhalf_masswt', 
@@ -51,7 +51,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
 
     quants_misc = ['zform_mm5','M_bulge_counter_rot','xray_r500','xray_subhalo',
-                   'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']
+                   'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla',
+                   'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo']
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur']
 
@@ -265,24 +266,27 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'kpc ]'
         if clean: label = 'R$_{\\rm halo}$ [ '+logStr+'kpc ]'
 
-    if quant in ['mass_ovi','mass_ovii']:
-        # total OVI/OVII mass in subhalo
+    if quant in ['mass_ovi','mass_ovii','mass_z']:
+        # total OVI/OVII/metal mass in subhalo
         speciesStr = quant.split("_")[1].upper()
+        label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
 
+        if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
         ac = auxCat(sP, fields=[fieldName])
         if ac[fieldName] is None: return [None]*4
         vals = sP.units.codeMassToMsun(ac[fieldName])
 
-        label = 'M$_{\\rm %s}$[ log M$_{\\rm sun}$ ]' % (speciesStr)
-        
         if speciesStr == 'OVI':
             minMax = [5.0, 6.8]
             if tight: minMax = [4.8, 7.2]
         if speciesStr == 'OVII':
             minMax = [6.0, 7.4]
             if tight: minMax = [5.6, 8.6]
+        if speciesStr == 'AllGas_Metal':
+            minMax = [7.0, 9.5]
+            if tight: minMax = [6.5, 11.0]
 
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
@@ -972,6 +976,67 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax[0] -= 2 # adjust down for VLA, calibrated for SKA
             minMax[1] -= 2
 
+    if quant in ['nh_2rhalf','nh_halo']:
+        # average hydrogen numdens in halo or <2rhalf (always mass weighted)
+        if '_2rhalf' in quant:
+            selStr = '2rhalfstars'
+            selDesc = 'ISM'
+            minMax = [-2.5, 1.0]
+            if tight: minMax = [-3.0, 1.0]
+        if '_halo' in quant:
+            selStr = 'halo'
+            selDesc = 'halo'
+            minMax = [-4.5, -1.5]
+            if tight: minMax = [-5.5, -1.5]
+
+        fieldName = 'Subhalo_nH_%s_massWt' % (selStr)
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = ac[fieldName] # 1/cm^3
+
+        label = 'log n$_{\\rm H,%s}$  [cm$^{-3}$]' % selDesc
+        if not clean:
+            if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$]'
+            if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
+    if quant in ['gas_vrad_2rhalf','gas_vrad_halo']:
+        # average gas radial velocity in halo or <2rhalf (always mass weighted)
+        if '_2rhalf' in quant:
+            selStr = '2rhalfstars'
+            selDesc = 'ISM'
+            minMax = [-300, 300]
+            if tight: minMax = [-250, 250]
+        if '_halo' in quant:
+            selStr = 'halo'
+            selDesc = 'halo'
+            minMax = [-150, 150]
+            if tight: minMax = [-120, 120]
+
+        fieldName = 'Subhalo_Gas_RadialVel_%s_massWt' % (selStr)
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = ac[fieldName] # physical km/s (negative = inwards)
+        takeLog = False
+
+        label = 'Gas v$_{\\rm rad,%s}$  [km/s]' % selDesc
+        if not clean:
+            if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$]'
+            if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
+    if quant in ['temp_halo']:
+        # average gas temperature in halo (always mass weighted)
+        minMax = [4.0, 8.0]
+        if tight: minMax = [4.5, 7.5]
+
+        fieldName = 'Subhalo_Temp_halo_massWt'
+
+        ac = auxCat(sP, fields=[fieldName])
+        vals = ac[fieldName] # Kelvin
+
+        label = 'Gas T$_{\\rm halo}$  [log K]'
+        if not clean:
+            label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
     # cache
     assert label is not None
 
@@ -984,20 +1049,19 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
 def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf=None,
                      xMinMaxForce=None, yMinMaxForce=None, contours=None, 
-                     massFracMinMax=[-10.0,0.0], smoothSigma=0.0):
+                     massFracMinMax=[-10.0,0.0], hideBelow=False, smoothSigma=0.0):
     """ Plot a 2D phase space plot (gas density on x-axis), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. If 
     x[y]MinMaxForce, use these range limits. If contours is not None, draw solid contours at 
     these levels on top of the 2D histogram image. If smoothSigma is not zero, gaussian smooth 
-    contours at this level. """
-    assert xAxis in ['dens','dens_nH','dens_critratio']
-    assert yAxis in ['temp','P_B','P_tot','P_tot_dens','sfr','mass_sfr_dt','mass_sfr_dt_hydro','dt_yr']
+    contours at this level. If hideBelow, then pixel values below massFracMinMax[0] are left pure white. """
 
     # config
     nBinsX = 800
     nBinsY = 400
     sizefac = 0.7
+    xMinMax = [-9.0,3.0] # typical fullbox, overridden by xMinMaxForce if not none
 
     ctNameHisto = 'viridis'
     contoursColor = 'k' # black
@@ -1005,8 +1069,8 @@ def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf
     # load: x-axis
     dens = snapshotSubset(sP, 'gas', 'dens', haloID=haloID)
 
-    xMinMax = [-9.0,3.0] # typical fullbox
-    #xMinMax = [-8.0,9.0] # look at very high dens eEOS turnover
+    xlabel = None
+    ylabel = None
 
     if xAxis == 'dens':
         dens = sP.units.codeDensToPhys(dens, cgs=True, numDens=True)
@@ -1028,6 +1092,11 @@ def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf
         yvals = snapshotSubset(sP, 'gas', 'temp', haloID=haloID)
         ylabel = 'Gas Temperature [ log K ]'
         yMinMax = [2.0, 8.0]
+
+    if yAxis == 'z_solar':
+        yvals = np.log10( snapshotSubset(sP, 'gas', 'z_solar', haloID=haloID) )
+        ylabel = 'Gas Metallicity [ log Z$_{\\rm sun}$ ]'
+        yMinMax = [-3.5, 1.0]
 
     if yAxis == 'P_B':
         yvals = snapshotSubset(sP, 'gas', 'P_B', haloID=haloID)
@@ -1088,6 +1157,9 @@ def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf
         yMinMax = [1.0,6.0]
 
     # overrides to default ranges?
+    if xlabel is None or ylabel is None:
+        raise Exception('Unrecognized x-axis [%s] or y-axis [%s].' % (xAxis,yAxis))
+
     if xMinMaxForce is not None: xMinMax = xMinMaxForce
     if yMinMaxForce is not None: yMinMax = yMinMaxForce
 
@@ -1110,10 +1182,26 @@ def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
+        # oxygen paper manual fix: remove interpolation wiggles near sharp dropoff
+        if xAxis == 'dens_nH' and yAxis == 'temp' and len(weights) == 3:
+            if wtProp == 'O VI mass':
+                w = np.where( ((dens > -3.7) & (yvals < 5.0)) | ((dens > -3.1) & (yvals < 5.15)) )
+                yvals[w] = 0.0
+            if wtProp == 'O VII mass':
+                w = np.where( ((dens > -4.0) & (yvals < 5.0)) | ((dens > -3.5) & (yvals < 5.15)) )
+                yvals[w] = 0.0
+            if wtProp == 'O VIII mass':
+                w = np.where( ((dens > -4.8) & (yvals < 5.1)) | ((dens > -4.4) & (yvals < 5.3)) )
+                yvals[w] = 0.0
+
         # plot 2D histogram image
         zz, xc, yc = np.histogram2d(dens, yvals, bins=[nBinsX, nBinsY], range=[xMinMax,yMinMax], 
                                     normed=True, weights=weight)
         zz = logZeroNaN(zz.T)
+
+        if hideBelow:
+            w = np.where(zz < massFracMinMax[0])
+            zz[w] = np.nan
 
         cmap = loadColorTable(ctNameHisto)
         norm = Normalize(vmin=massFracMinMax[0], vmax=massFracMinMax[1], clip=False)
@@ -1148,7 +1236,7 @@ def plotPhaseSpace2D(sP, yAxis, xAxis='dens', weights=['mass'], haloID=None, pdf
     # colorbar and save
     fig.tight_layout()
     fig.subplots_adjust(right=0.93)
-    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.821])
+    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.831]) # 0.821
     #cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
     cb = plt.colorbar(im, cax=cbar_ax)
     cb.ax.set_ylabel('Relative %s [ log ]' % wtStr)
@@ -1256,93 +1344,138 @@ def plotParticleMedianVsSecondQuant():
     fig.savefig('particleMedian_%s_vs_%s_%s_z=%.1f_%s.pdf' % (yAxis,xAxis,sP.simName,sP.redshift,hStr))
     plt.close(fig)
 
-def plotRadialProfile1D(quant='entr'):
-    """ Quick radial profile of some quantity vs. radius (FoF restricted). """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
-    haloID = 4
+def plotRadialProfile1D(sPs, subhalo=None, ptType='gas', ptProperty='temp', halo=None):
+    """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
+    (parent FoF particle restricted, using non-caching auxCat functionality). 
+    subhalo is a list, one entry per sPs entry. For each entry of subhalo:
+    If subhalo[i] is a single subhalo ID number, then one halo only. If a list, then median stack.
+    If a dict, then k:v pairs where keys are a string description, and values are subhaloID lists, which 
+    are then overplotted. sPs supports one or multiple runs to be overplotted. 
+    If halo is not None, then use these FoF IDs as inputs instead of Subfind IDs. """
+    from cosmo.auxcatalog import subhaloRadialProfile
+    from tracer.tracerMC import match3
 
-    nBins = 200
-    radMinMax = [-1.0,3.0] # log(pKpc)
+    xlim = [0.0,3.0] # for plot only
+    percs = [10,90]
+    lw = 2.0
+    scope = 'subfind' # fof, subfind
+    ptRestriction = 'sfreq0' # None
+
+    assert ptType == 'gas' # needs full generalization
+    assert subhalo is not None or halo is not None # pick one
+
+    if subhalo is None: subhalo = halo # use halo ids
+    assert len(subhalo) == len(sPs) # one subhalo ID list per sP
+
+    # config
+    ylabel = None
+    ylog = False
+    ylim = None
+
+    if ptProperty == 'P_gas_linear':
+        ylabel = 'Gas Pressure [ log K cm$^{-3}$ ]'
+        ylim = [-1.0,7.0]
+        ylog = True
+
+    if ptProperty == 'dens':
+        ylabel = 'Gas Density [ log cm$^{-3}$ ]'
+        ylim = [-9.0,-1.0]
+        ylog = True
+
+    if ptProperty == 'metaldens':
+        ylabel = 'Gas Metal Mass Density [ log g cm$^{-3}$ ]'
+        ylim = [-32.0,-25.5]
+        ylog = True
+
+    if ptProperty == 'temp_linear':
+        ylabel = 'Gas Temperature [ log K ]'
+        ylim = [4.5, 7.2]
+        ylog = True
+
+    if ptProperty == 'z_solar':
+        ylabel = 'Gas Metallicity [ log Z$_{\\rm sun}$ ]'
+        ylim = [-2.0, 0.7]
+        ylog = True
+
+    if ptProperty == 'Potential':
+        #yvals = snapshotSubset(sP, 'gas', 'Potential', haloID=haloID)
+        #yvals *= sP.units.scalefac
+        ylabel = 'Gravitational Potential [ (km/s)$^2$ ]'
+
+    if ptProperty == 'sfr':
+        ylabel = 'Star Formation Rate [ Msun/yr ]'
+        ylog = True
+
+    if ylabel is None:
+        raise Exception('Unrecognized field [%s %s]' % (ptType,ptProperty))
 
     # start plot
     fig = plt.figure(figsize=(14,10))
     ax = fig.add_subplot(111)
 
-    ax.set_title('%s z=%.1f halo%d' % (sP.simName,sP.redshift,haloID))
-    ax.set_xlabel('Radius [ pKpc ]')
-    ax.set_xlim(10.0**np.array(radMinMax))
-    ax.set_xscale('log')
+    ax.set_xlabel('radius [ log pkpc ]')
+    ax.set_ylabel(ylabel)
+    if xlim is not None: ax.set_xlim(xlim)
+    if ylim is not None: ax.set_ylim(ylim)
 
-    # load
-    halo = groupCatSingle(sP, haloID=haloID)
-    pos = snapshotSubset(sP, 'gas', 'pos', haloID=haloID)
+    # loop over simulations
+    for i, sP in enumerate(sPs):
+        subhaloIDs = subhalo[i] # for this run
 
-    rad = periodicDists(halo['GroupPos'], pos, sP)
-    rad = sP.units.codeLengthToKpc(rad)
-    rad = np.log10(rad)
+        # subhalo is a single number or dict? make a concatenated list
+        if isinstance(subhaloIDs,(int,long)):
+            subhaloIDs = [subhaloIDs]
+        if isinstance(subhaloIDs,dict):
+            subhaloIDs = np.hstack( [subhaloIDs[key] for key in subhaloIDs.keys()])
 
-    # load quant
-    if quant == 'P_gas':
-        yvals = snapshotSubset(sP, 'gas', 'P_gas', haloID=haloID)
-        ax.set_ylabel('Gas Pressure [ log K cm$^{-3}$ ]')
-        ax.set_ylim([1.0,13.0])
+        if halo is not None:
+            # transform fof ids to subhalo ids
+            firstsub = groupCat(sP, fieldsHalos=['GroupFirstSub'])
+            subhaloIDs = firstsub[subhaloIDs]
 
-    if quant == 'dens':
-        yvals = snapshotSubset(sP, 'gas', 'dens', haloID=haloID)
-        yvals = sP.units.codeDensToPhys(yvals, cgs=True, numDens=True)
-        yvals = np.log10(yvals)
-        ax.set_ylabel('Gas Density [ log cm$^{-3}$ ]')
+        # load
+        data, attrs = subhaloRadialProfile(sP, pSplit=None, ptType=ptType, ptProperty=ptProperty, op='mean', 
+                                          scope=scope, weighting=None, subhaloIDsTodo=subhaloIDs, 
+                                          ptRestriction=ptRestriction)
+        assert data.shape[0] == len(subhaloIDs)
 
-    if quant == 'P_tot':
-        yvals = snapshotSubset(sP, 'gas', 'P_tot', haloID=haloID)
-        ax.set_ylabel('Gas Total Pressure [ log K cm$^{-3}$ ]')
-        ax.set_ylim([1.0,13.0])
+        nSamples = 1 if not isinstance(subhalo[i],dict) else len(subhalo[i].keys())
 
-    if quant == 'Potential':
-        yvals = snapshotSubset(sP, 'gas', 'Potential', haloID=haloID)
-        yvals *= sP.units.scalefac
-        ax.set_ylabel('Gravitational Potential [ (km/s)$^2$ ]')
+        for j in range(nSamples):
+            # crossmatch attrs['subhaloIDs'] with subhalo[key] sub-list if needed
+            subIDsLoc = subhalo[i][subhalo[i].keys()[j]] if isinstance(subhalo[i],dict) else subhaloIDs
+            w, _ = match3( attrs['subhaloIDs'], subIDsLoc )
+            assert len(w) == len(subIDsLoc)
 
-    if quant == 'sfr':
-        yvals = snapshotSubset(sP, 'gas', 'sfr', haloID=haloID)
-        ax.set_ylabel('Star Formation Rate [ Msun/yr ]')
-        ax.set_yscale('log')
+            # calculate median radial profile and scatter
+            #yy_mean = np.nansum( data[w,:], axis=0 ) / len(w)
+            yy_mean = np.nanmedian( data[w,:], axis=0 )
+            yp = np.nanpercentile( data[w,:], percs, axis=0 )
 
-    if quant == 'entr':
-        yvals = snapshotSubset(sP, 'gas', 'entr', haloID=haloID)
-        yvals = 10.0**yvals / sP.units.boltzmann_keV # [K cm^2] -> [keV cm^2]
-        ax.set_ylabel('Entropy [ log keV cm$^2$ ]')
-        ax.set_yscale('log')
+            if ylog: yy_mean = logZeroNaN(yy_mean)
+            if ylog: yp = logZeroNaN(yp)
+            rr = logZeroNaN(attrs['rad_bins_pkpc'])
 
-    # plot radial profile of quant
-    yy_mean = np.zeros( nBins, dtype='float32' ) + np.nan
-    yy_med  = np.zeros( nBins, dtype='float32' ) + np.nan
-    xx      = np.zeros( nBins, dtype='float32' )
+            if rr.size > sKn:
+                yy_mean = savgol_filter(yy_mean,sKn,sKo)
+                yp = savgol_filter(yp,sKn,sKo,axis=1) # P[10,90]
 
-    binSize = (radMinMax[1]-radMinMax[0])/nBins
-
-    for i in range(nBins):
-        binStart = radMinMax[0] + i*binSize
-        binEnd   = radMinMax[0] + (i+1)*binSize
-
-        ww = np.where((rad >= binStart) & (rad < binEnd))
-        xx[i] = 10.0**( (binStart+binEnd)/2.0 )
-
-        if len(ww[0]) > 0:
-            yy_mean[i] = np.mean(yvals[ww])
-            yy_med[i]  = np.median(yvals[ww])
-
-    ax.plot(xx, yy_med, label='median')
-    ax.plot(xx, yy_mean, label='mean')
+            sampleDesc = '' if nSamples == 1 else subhalo[i].keys()[j]
+            l, = ax.plot(rr, yy_mean, lw=lw, label='%s %s' % (sP.simName,sampleDesc))
+            if len(sPs) == 1:
+                ax.fill_between(rr, yp[0,:], yp[-1,:], color=l.get_color(), interpolate=True, alpha=0.2)
 
     # finish plot
+    fig.tight_layout()
     ax.legend(loc='best')
-    fig.savefig('radProfile_%s_halo%d.pdf' % (quant,haloID))
+    sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
+    fig.savefig('radProfile_%s_%s_%s_Ns-%d_Nh-%d_scope=%s.pdf' % \
+        (sPstr,ptType,ptProperty,nSamples,len(subhaloIDs),scope))
     plt.close(fig)
 
 # -------------------------------------------------------------------------------------------------
 
-def compareRunsPhaseDiagram():
+def compareRuns_PhaseDiagram():
     """ Driver. Compare a series of runs in a PDF booklet of phase diagrams. """
     import glob
     from matplotlib.backends.backend_pdf import PdfPages
@@ -1365,3 +1498,44 @@ def compareRunsPhaseDiagram():
         plotPhaseSpace2D(sP, yAxis, haloID=None, pdf=pdf)
 
     pdf.close()
+
+def compareRuns_RadProfiles():
+    """ Driver. Compare median radial profile of a quantity, differentiating between two different 
+    types of halos. One run. """
+    from plot.oxygen import variantsMain as variants
+
+    sPs = []
+    subhalos = []
+
+    for variant in variants:
+        sPs.append( simParams(res=512,run='tng',redshift=0.0,variant=variant) )
+
+        mhalo = groupCat(sPs[-1], fieldsSubhalos=['mhalo_200_log'])
+        with np.errstate(invalid='ignore'):
+            w = np.where( (mhalo > 11.5) & (mhalo < 12.5) )
+
+        subhalos.append( w[0] )
+
+    for field in ['metaldens']: #,'dens','temp_linear','P_gas_linear','z_solar']:
+        plotRadialProfile1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
+
+def compareHaloSets_RadProfiles():
+    """ Driver. Compare median radial profile of a quantity, differentiating between two different 
+    types of halos. One run. """
+    sPs = []
+    sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
+
+    mhalo = groupCat(sPs[0], fieldsSubhalos=['mhalo_200_log'])
+    gr,_,_,_ = simSubhaloQuantity(sPs[0], 'color_B_gr')
+
+    with np.errstate(invalid='ignore'):
+        w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr < 0.35) )
+        w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr > 0.65) )
+
+    print( len(w1[0]), len(w2[0]) )
+
+    subhalos = [{'11.8 < M$_{\\rm halo}$ < 12.2, (g-r) < 0.35':w1[0], 
+                 '11.8 < M$_{\\rm halo}$ < 12.2, (g-r) > 0.65':w2[0]}]
+
+    for field in ['metaldens','dens','temp_linear','P_gas_linear','z_solar']:
+        plotRadialProfile1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)

@@ -225,6 +225,12 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
         p['haloVirRad'], p['galHalfMass'], p['galHalfMassStars'], \
         p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
 
+    # attach any cached data to sP (testing)
+    if 'dataCache' in localVars:
+        for key in localVars['dataCache']:
+            for p in panels:
+                p['sP'].data[key] = localVars['dataCache'][key]
+
     # request render and save
     renderMultiPanel(panels, plotConfig)
 

@@ -345,9 +345,11 @@ def TNG_oxygenPaperImages(part=0):
     sP = simParams(res=res, run=run, redshift=redshift)
 
     if part == 0:
-        # part 0: TNG100 full box OVII
-        _, _, _, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
-        sliceFac  = (1.0/nSlicesTot)
+        # part 0: TNG100 full box OVII (15 Mpc depth)
+        _, _, _, centerHaloID, _, _ = _TNGboxSliceConfig(res)
+        sliceFac = sP.units.physicalKpcToCodeLength(15000.0) / sP.boxSize
+        curSlice = 0
+        nSlicesTot = 7
 
         # slice centering
         relCenPos = None
@@ -357,7 +359,8 @@ def TNG_oxygenPaperImages(part=0):
         absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
         plotHalos = 100
-        panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
+        #panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
+        panels.append( {'partType':'gas', 'partField':'O6_O8_ratio', 'valMinMax':[-2.0, 2.0]} )
 
     if part == 1:
         # part 1: cluster halo scale OVIII (halo #22)

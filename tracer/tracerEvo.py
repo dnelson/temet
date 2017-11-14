@@ -59,6 +59,7 @@ def guinevereData():
     subhaloIDs = np.genfromtxt(sPtng.derivPath+'new_mw_sample_fgas.txt',comments='#',delimiter=',',dtype='int32') # TNG (2017)
     subhaloIDs = list(set(subhaloIDs[:,1]).union(set(subhaloIDs[:,2])))
     subhaloIDs.remove(-1) # all unique successful matches in Illustris-1
+    subhaloIDs = np.array(subhaloIDs)
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
 
