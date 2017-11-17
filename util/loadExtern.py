@@ -1395,6 +1395,79 @@ def rossetti17planck():
 
     return r
 
+def cassano13():
+    """ Load observational data points from Cassano+ (2013) Tables 1 and 2, radio/x-ray/SZ clusters. """
+    path1 = dataBasePath + 'cassano/C13_table1.txt'
+    path2 = dataBasePath + 'cassano/C13_table2.txt'
+
+    # load first table
+    with open(path1,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    z     = np.zeros( nLines, dtype='float32' )
+    l500  = np.zeros( nLines, dtype='float32' ) # 0.1-2.4 kev x-ray luminosity within r500 [units = linear 10^44 erg/s ????]
+    y500  = np.zeros( nLines, dtype='float32' ) # Y500 in [ log Mpc^2 ]
+    m500  = np.zeros( nLines, dtype='float32' ) # mass within [log msun]
+    p14   = np.zeros( nLines, dtype='float32' ) # k-corrected radio halo power at 1.4 ghz [units = linear 10^24 W/Hz ????]
+    l500_err = np.zeros( nLines, dtype='float32' )
+    y500_err = np.zeros( nLines, dtype='float32' )
+    m500_err = np.zeros( nLines, dtype='float32' )
+    p14_err  = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split()
+        name.append(line[0])
+        z[i] = float(line[7])
+        l500[i] = float(line[8])
+        l500_err[i] = float(line[9])
+        if line[13][0] == '<': line[13] = line[13][1:] # upper limit, denoted by err == -1.0
+        p14[i] = float(line[13])
+        p14_err[i] = float(line[14])
+        i += 1
+
+    # load second table
+    with open(path2,'r') as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split()
+        index = name.index(line[0])
+        y500[index] = float(line[2])
+        y500_err[index] = float(line[3])
+        m500[index] = float(line[4])
+        m500_err[index] = float(line[5])
+
+    # return only those with known m500
+    w = np.where(m500 > 0.0)
+
+    w_detection = np.where(p14_err > 0.0)
+    p14_logerr = np.zeros( p14_err.size, dtype='float32' ) - 1.0
+    p14_logerr[w_detection] = np.log10((p14[w_detection]+p14_err[w_detection]) * 1e24) - np.log10(p14[w_detection] * 1e24)
+
+    r = {'name'     : np.array(name)[w],
+         'z'        : z[w],
+         'm500'     : m500[w], # log[msun]
+         'm500_err' : m500_err[w], # log[msun]
+         'y500'     : y500[w], # log[Mpc^2]
+         'y500_err' : y500_err[w], # log[Mpc^2]
+         'l500'     : np.log10(l500[w] * 1e44), # ? maybe 10^44 erg/s, return as [log erg/s]
+         'l500_err' : np.log10(l500_err[w] * 1e44), # ? maybe 10^44 erg/s
+         'p14'      : np.log10(p14[w] * 1e24), # ? maybe 10^24 W/Hz, return as [log W/Hz]
+         'p14_err'  : p14_logerr[w], # ? maybe 10^24 W/Hz, return as [log W/Hz]
+         'label' : 'Cassano+ (2013) EGRHS X-ray Flux Limited'}
+
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
