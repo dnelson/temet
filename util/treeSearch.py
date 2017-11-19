@@ -13,7 +13,7 @@ from numba import jit, void, int32
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
-@jit(nopython=True, nogil=True)#, cache=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     """ Helper routine for calcHsml(), see below. """
     pp = 0
@@ -286,11 +286,11 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
 
             no = nextnode[ind] # we need to open the node
 
-    return numNgbWeightedInH
+    return numNgbInH, numNgbWeightedInH
 
 @jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
-                          next_node,length,center,sibling,nextnode):
+                          next_node,length,center,sibling,nextnode,weighted_num):
     """ Helper routine for calcHsml(), see below. """
     left  = 0.0
     right = 0.0
@@ -306,8 +306,12 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
         assert iter_num < 1000 # Convergence failure, too many iterations.
 
-        numNgbInH = _treeSearchNumNgb(xyz,h_guess,NumPart,boxSizeSim,pos,
-                                      next_node,length,center,sibling,nextnode)
+        numNgbInH, numNgbWeightedInH = _treeSearchNumNgb(xyz,h_guess,NumPart,boxSizeSim,pos,
+                                                         next_node,length,center,sibling,nextnode)
+
+        # looking for h enclosing the SPH kernel weighted number, instead of the actual number?
+        if weighted_num:
+            numNgbInH = numNgbWeightedInH
 
         # success
         if numNgbInH > (nNGB-nNGBDev) and numNgbInH <= (nNGB+nNGBDev):
@@ -318,7 +322,7 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
             if right-left < 0.001 * left:
                 break # particle is OK
 
-        if numNgbInH < nNGB-nNGBDev:
+        if numNgbInH < nNGB:#-nNGBDev:
             left = max(h_guess, left)
         else:
             if right != 0.0:
@@ -341,7 +345,7 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
 @jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
-                       next_node,length,center,sibling,nextnode):
+                       next_node,length,center,sibling,nextnode,weighted_num):
     """ Core routine for calcHsml(), see below. """
     numSearch = ind1 - ind0 + 1
     NumPart = pos.shape[0]
@@ -357,14 +361,15 @@ def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
         xyz = posSearch[ind0+i,:]
 
         hsml[i] = _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
-                                        next_node,length,center,sibling,nextnode)
+                                        next_node,length,center,sibling,nextnode,weighted_num)
 
         # use previous result as guess for the next (any spatial ordering will greatly help)
         h_guess = hsml[i]
 
     return hsml
 
-def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treePrec='single', nThreads=8):
+def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
+             treePrec='single', nThreads=8):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
@@ -375,6 +380,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
       nNGB           : number of nearest neighbors to search for in order to define HSML
       nNGBDev        : allowed deviation (+/-) from the requested number of neighbors
       nDims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
+      weighted_num   : if True, search for SPH kernel weighted number of neighbors, instead of real number
+      treePrec       : construct the tree using 'single' or 'double' precision for coordinates
       nThreads       : do multithreaded calculation (on treefind, while tree construction remains serial)
     """
     # input sanity checks
@@ -437,8 +444,9 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
         ind1 = posSearch.shape[0] - 1
 
         hsml = _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
-                                  NextNode,length,center,sibling,nextnode)
+                                  NextNode,length,center,sibling,nextnode,weighted_num)
 
+        print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-build_done_time))
         return hsml
 
     # else, multithreaded
@@ -459,9 +467,10 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
             self.ind1 = inds[-1]
 
             # copy other parameters (non-self inputs to _calc() appears to prevent GIL release)
-            self.nNGB       = nNGB
-            self.nNGBDev    = nNGBDev
-            self.boxSizeSim = boxSizeSim
+            self.nNGB         = nNGB
+            self.nNGBDev      = nNGBDev
+            self.boxSizeSim   = boxSizeSim
+            self.weighted_num = weighted_num
 
             # create views to other arrays
             self.posSearch = posSearch
@@ -476,7 +485,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, treeP
             # call JIT compiled kernel (normQuant=False since we handle this later)
             self.hsml = _treeSearchHsmlSet(self.posSearch,self.ind0,self.ind1,self.nNGB,self.nNGBDev,
                                            self.boxSizeSim,self.pos,self.NextNode,self.length,
-                                           self.center,self.sibling,self.nextnode)
+                                           self.center,self.sibling,self.nextnode,self.weighted_num)
 
     # create threads
     threads = [searchThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
@@ -545,18 +554,49 @@ def checkVsSubfindHsml():
     """ Compare our result vs SubfindHsml output. """
     from util import simParams
     from cosmo.load import snapshotSubset
+    from cosmo.util import periodicDists
     import matplotlib.pyplot as plt
 
-    sP = simParams(res=455,run='tng',redshift=0.0)
+    nNGB = 64
+    nNGBDev = 1
 
-    pos = snapshotSubset(sP, 'gas', 'pos')
-    subfind_hsml = snapshotSubset(sP, 'gas', 'SubfindHsml')
+    sP = simParams(res=128,run='tng',redshift=0.0,variant='0000')
 
-    N = 1e6
+    pos = snapshotSubset(sP, 'dm', 'pos')
+    subfind_hsml = snapshotSubset(sP, 'dm', 'SubfindHsml')
+
+    N = int(1e5)
     subfind_hsml = subfind_hsml[0:N]
-    pos = pos[0:N,:]
+    posSearch = pos[0:N,:]
 
-    hsml = calcHsml(pos, sP.boxSize, nNGB=64, nNGBDev=1)
+    hsml = calcHsml(pos, sP.boxSize, posSearch=posSearch, nNGB=nNGB, nNGBDev=nNGBDev, treePrec='double')
+
+    # check deviations
+    ratio = hsml/subfind_hsml
+    print('ratio, min max mean: ',ratio.min(),ratio.max(),ratio.mean())
+
+    allowed_dev = 2.0*nNGBDev / nNGB # in NGB, not necessarily in hsml
+    w_high = np.where( ratio > (1+allowed_dev) )
+    w_low = np.where( ratio < (1-allowed_dev) )
+
+    print('allowed dev = %.3f (above: %d = %.4f%%) (below: %d = %.4f%%)' % \
+        (allowed_dev,len(w_high[0]),len(w_high[0])/ratio.size,len(w_low[0]),len(w_low[0])/ratio.size))
+
+    # verify
+    checkInds = np.hstack( (np.arange(10),w_high[0][0:10],w_low[0][0:10]) )
+
+    for i in checkInds:
+        dists = periodicDists(posSearch[i,:],pos,sP)
+        dists = np.sort(dists)
+        ww = np.where(dists < hsml[i])
+        ww2 = np.where(dists < subfind_hsml[i])
+        numInHsml = len(ww[0])
+        numInHsmlSnap = len(ww2[0])
+        passMine = (numInHsml >= (nNGB-nNGBDev)) & (numInHsml <= (nNGB+nNGBDev))
+        passSnap = (numInHsmlSnap >= (nNGB-nNGBDev)) & (numInHsmlSnap <= (nNGB+nNGBDev))
+        print('[%2d] hsml: %.3f hsmlSnap: %.3f, myNumInHsml: %d (pass: %s) numInHsmlSnap: %d (pass: %s)' % \
+            (i,hsml[i],subfind_hsml[i],numInHsml,passMine,numInHsmlSnap,passSnap))
+    import pdb; pdb.set_trace()
 
     # plot
     fig = plt.figure(figsize=(20,20))
