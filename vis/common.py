@@ -43,8 +43,9 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
     _, sbStr, _ = subboxVals(sP.subbox)
     irStr = '' if indRange is None else '.%d-%d' % (indRange[0],indRange[1])
     shStr = '' if snapHsmlForStars is False else '.sv'
-    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s%s.hdf5' % \
-                   (sbStr, sP.snap, partType, irStr, shStr)
+    ngStr = '' if nNGB == 64 else '.ngb%d' % nNGB
+    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s%s%s.hdf5' % \
+                   (sbStr, sP.snap, partType, irStr, shStr, ngStr)
 
     if not isdir(sP.derivPath + 'hsml/'):
         mkdir(sP.derivPath + 'hsml/')
@@ -82,8 +83,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
             else:
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
                 treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
-                nNGBDev = int( np.sqrt(nNGB)/4 )
-                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
+                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=1, treePrec=treePrec)
 
         # save
         if useCache:
@@ -94,6 +94,17 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
     return hsml.astype('float32')
 
     raise Exception('Unimplemented partType.')
+
+def defaultHsmlFac(partType, partField):
+    """ Helper, set default hsmlFac for a given partType/partField if not input. """
+    if partType == 'gas':
+        return 2.5 # times cellsize
+    if partType == 'stars':
+        return 1.0 # times nNGB=32 CalcHsml search
+    if partType == 'dm':
+        return 0.5 # times SubfindHsml or nNGB=64 CalcHsml search
+
+    raise Exception('Unrecognized partType [%s].' % partType)
 
 def clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=2):
     """ Clip input stellar HSMLs/sizes to minimum/maximum values. Work in progress. """
@@ -1178,15 +1189,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
             if method in ['sphMap','sphMap_global','sphMap_minIP','sphMap_maxIP','sphMap_LIC']:
                 # particle by particle orthographic splat using standard SPH cubic spline kernel
                 if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
-                    print(' debugging stellarBand-* getHsml() snapHsmlForStars=True')
-                    hsml = getHsmlForPartType(sP, partType, indRange=indRange, snapHsmlForStars=True)
-
-                    #print(' debugging stellarBand-* getHsml() snapHsmlForStars=FALSE (tina only, disable!)')
-                    #hsml = getHsmlForPartType(sP, partType, indRange=indRange, snapHsmlForStars=False)
-
-                    #print(' debugging stellarBand-* getHsml() with nNGB=16 and OVERRIDE hsmlFac(res).')
-                    #hsml = getHsmlForPartType(sP, partType, nNGB=16, indRange=indRange)
-                    #hsmlFac = sP.res/512.0 # match sizes roughly to 512 sizes
+                    hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, snapHsmlForStars=False)
                 else:
                     hsml = getHsmlForPartType(sP, partType, indRange=indRange)
 
@@ -1736,7 +1739,7 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     # label, centered and below/above
     size = 'x-large'
     if conf.rasterPx >= 1000:
-        size = int(conf.rasterPx / 100.0 * 5)
+        size = int(conf.rasterPx / 100.0 * 3)
 
     cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
              size=size, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
@@ -1998,7 +2001,7 @@ def renderMultiPanel(panels, conf):
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:
             heightFac = np.max([1.0/nRows, 0.35])
-            if nRows == 1: heightFac *= 0.5 # reduce
+            if nRows == 1: heightFac *= 1.0 #0.5 # reduce
             if nRows == 2: heightFac *= 1.3 # increase
 
             if 'vecColorbar' not in p or not p['vecColorbar']:

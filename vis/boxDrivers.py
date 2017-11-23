@@ -37,7 +37,6 @@ def realizations(conf=1):
     run        = 'tng'
     res        = 256
     redshift   = 0.0
-    hsmlFac    = 0.5
     nPixels    = 960
     axes       = [0,1] # x,y
     labelZ     = False
@@ -166,12 +165,6 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
-    # LIC testing:
-    #licMethod = 1
-    #licSliceWidth = 5000.0
-    #licPartType = 'gas'
-    #licPartField = 'vel'
-
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
     # slice centering
@@ -225,7 +218,6 @@ def dragonflyHalpha(res=1820):
     axes       = [0,1] # x,y
     plotHalos  = False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
-    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
     labelZ     = False
     labelSim   = False
     axesUnits  = 'deg'
@@ -280,7 +272,6 @@ def TNG_colorFlagshipBoxImage(part=0):
     labelScale = True
     labelSim   = False
     plotHalos  = False
-    hsmlFac    = 2.5
 
     # parts 0,1,2 = L205, parts 3,4 = L75
     if part in [0,1,2]: res = 2500
@@ -340,11 +331,10 @@ def TNG_oxygenPaperImages(part=0):
     labelSim   = False
     plotHalos  = False
     axesUnits  = 'mpc'
-    hsmlFac    = 2.5
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    if part == 0:
+    if part in [0,3]:
         # part 0: TNG100 full box OVII (15 Mpc depth)
         _, _, _, centerHaloID, _, _ = _TNGboxSliceConfig(res)
         sliceFac = sP.units.physicalKpcToCodeLength(15000.0) / sP.boxSize
@@ -359,8 +349,10 @@ def TNG_oxygenPaperImages(part=0):
         absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
         plotHalos = 100
-        #panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
-        panels.append( {'partType':'gas', 'partField':'O6_O8_ratio', 'valMinMax':[-2.0, 2.0]} )
+        if part == 0:
+            panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
+        if part == 3:
+            panels.append( {'partType':'gas', 'partField':'O6_O8_ratio', 'valMinMax':[-2.0, 2.0]} )
 
     if part == 1:
         # part 1: cluster halo scale OVIII (halo #22)
@@ -428,13 +420,13 @@ def TNG_oxygenPaperImages(part=0):
 
     class plotConfig:
         plotStyle  = 'open' # open, edged
-        rasterPx   = 1800 if part == 0 else 900
+        rasterPx   = 1800 if part in [0,3] else 900
         colorbars  = True
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.pdf' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],saveStr)
 
-    if part == 0:
+    if part in [0,3]:
         renderBox(panels, plotConfig, locals())
     else:
         renderSingleHalo(panels, plotConfig, locals())
@@ -442,10 +434,10 @@ def TNG_oxygenPaperImages(part=0):
 def TNG_explorerImageSegments(conf=0, taskNum=0, retInfo=False):
     """ Construct image segments which are then split into the pyramids for the TNG explorer 2d. """
 
-    res        = 2500 # TBD
-    nPixels    = 16384 # 2048x4 = 8k (testing), 16384x8 = 131072 (target final size) TBD
-    nPanels    = 64 # 4x4 (testing) TBD
-    hsmlFac    = 2.5 # use for all: gas, dm (TBD: stars)
+    res        = 2500
+    nPixels    = 16384 # 2048x4 = 8k (testing), 16384x8 = 131072 (target final size)
+    nPanels    = 64 # 8x8
+    hsmlFac    = 2.5 # use for all: gas, dm, stars
 
     run        = 'tng'
     redshift   = 0.0
@@ -506,7 +498,6 @@ def oneBox_LIC(res, conf=0, variant=None, thinSlice=False):
     labelSim   = False
     plotHalos  = False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
-    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
     # LIC return is [0,1], now inherit colormap from original conf field
     #panels[0]['valMinMax'] = [0.0, 1.0]
@@ -578,7 +569,6 @@ def oneBox_multiQuantCollage(variant=0000):
     labelScale = False
     labelSim   = False
     plotHalos  = False
-    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
     # render config (global)
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
@@ -590,6 +580,39 @@ def oneBox_multiQuantCollage(variant=0000):
 
         saveFilename = './boxCollage_%s_z=%.1f_%dpanels_axes%d%d.png' % \
           (sP.simName,sP.redshift,len(panels),axes[0],axes[1])
+
+    renderBox(panels, plotConfig, locals())
+
+def oneBox_redshiftEvoPanels(redshifts=[6.0,2.0,0.8]):
+    """ Create a linear series of redshift evolution panels for one simulation + one quantity. """
+    run        = 'tng'
+    res        = 2160
+    nPixels    = 800
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = True
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap'
+
+    partType   = 'gas'
+    partField  = 'coldens_msunkpc2'
+    valMinMax  = [4.3,7.3]
+
+    panels = []
+    for redshift in redshifts:
+        panels.append( {'redshift':redshift})
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels
+        colorbars  = True
+        nRows      = 1 # single row
+
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d_z=%s.pdf' % \
+          (sP.simName,partType,partField,axes[0],axes[1],'_'.join(['%.1f'%z for z in redshifts]))
 
     renderBox(panels, plotConfig, locals())
 
@@ -609,7 +632,6 @@ def zoom_gasColDens_3res_or_3quant():
     run        = 'zooms'
     redshift   = 2.0
     partType   = 'gas'
-    hsmlFac    = 2.0
     nPixels    = 1400
     axes       = [0,1] # x,y
     labelZ     = True
@@ -627,3 +649,45 @@ def zoom_gasColDens_3res_or_3quant():
         saveFilename = savePathDefault + '%s_FullBoxGasColDens_h%dL%s.pdf' % (run,hInd,Lstr)
 
     renderBox(panels, plotConfig, locals())
+
+def box_slices(curSlice=0):
+    """ Create a series of slices moving through a box (no halo centering). """
+    run        = 'tng'
+    res        = 625
+    redshift   = 9.0
+    nPixels    = 800
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    axesUnits  = 'mpc'
+
+    panels, _, _, _ = _TNGboxFieldConfig(res, conf=1, thinSlice=False)
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    if redshift == 9.0: panels[0]['valMinMax'] += np.array([2.2,-0.2]) # z=9 adjust
+
+    # slicing config
+    nSlicesTot = 10 # ~30 mpc deep each
+    sliceFac  = (1.0/nSlicesTot)
+    sliceStr = 'slice_%d_of_%d' % (curSlice,nSlicesTot)
+
+    relCenPos = None
+    absCenPos = np.array([0.5,0.5,0.5]) * sP.boxSize
+    absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = int(nPixels*1.3)
+        colorbars  = True
+        
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d_%s.pdf' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
+    
+    renderBox(panels, plotConfig, locals())
+
+def box_slices_loop():
+    for i in range(10):
+        box_slices(curSlice=i)

@@ -1881,9 +1881,9 @@ def plots():
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
-    #sPs.append( simParams(res=2160, run='tng') )  
-    #sPs.append( simParams(res=1080, run='tng') )  
-    #sPs.append( simParams(res=540, run='tng') )  
+    sPs.append( simParams(res=2160, run='tng') )  
+    sPs.append( simParams(res=1080, run='tng') )  
+    sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
@@ -1893,17 +1893,31 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
+    if 0:
+        # gauss extension proposal
+        pdf = PdfPages('fig_tng50_sfrd.pdf')
+        sfrdVsRedshift(sPs, pdf, xlog=True)
+        pdf.close()
+        return
+    if 0:
+        # gauss extension proposal
+        pdf = PdfPages('fig_tng50_smf.pdf')
+        redshifts = [0.8,2.0,4.0]
+        stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=redshifts)
+        pdf.close()
+        return
+
     # make multipage PDF
     pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
-    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.8 # change to plot simulations at z>0 against z=0 observational data
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
 
-    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True)
-    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True)
+    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True, redshifts=[1,2,3,6])
+    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True, redshifts=[1,2,3,6])
 
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
@@ -1923,7 +1937,7 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 1:
+    if 0:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2

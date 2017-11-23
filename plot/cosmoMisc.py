@@ -67,19 +67,23 @@ def plotRedshiftSpacings():
 def plotMassFunctions():
     """ Plot DM halo and stellar mass functions comparing multiple boxes, at one redshift. """
     # config
-    mass_ranges = [ [6.6, 16.0], [6.6, 13.0] ] # m_halo, m_star
+    mass_ranges = [ [5.0, 16.0], [4.4, 13.0] ] # m_halo, m_star
     binSize = 0.2
     
     sPs = []
-    sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
-    sPs.append( simParams(res=2500,run='tng',redshift=0.0) )
+    sPs.append( simParams(res=2160,run='tng',redshift=0.8) )
+    #sPs.append( simParams(res=1080,run='tng',redshift=0.8) )
+    #sPs.append( simParams(res=540,run='tng',redshift=0.8) )
+    #sPs.append( simParams(res=270,run='tng',redshift=0.8) )
+    sPs.append( simParams(res=1820,run='tng',redshift=0.8) )
+    sPs.append( simParams(res=2500,run='tng',redshift=0.8) )
 
     # plot setup
     fig = plt.figure(figsize=(18,8))
 
     # halo or stellar mass function
     for j, mass_range in enumerate(mass_ranges):
-        nBins = (mass_range[1]-mass_range[0])/binSize
+        nBins = int((mass_range[1]-mass_range[0])/binSize)
 
         ax = fig.add_subplot(1,2,j+1)
         ax.set_xlim(mass_range)

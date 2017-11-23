@@ -156,6 +156,10 @@ class units(object):
         """ Convert mass from code units (10**10 msun/h) to (log msun). """
         return logZeroNaN( self.codeMassToMsun(mass) )
 
+    def logMsunToCodeMass(self, mass):
+        """ Convert mass in (log msun) to code units. """
+        return (10.0**mass / self.UnitMass_in_Msun * self._sP.HubbleParam)
+
     def codeMassToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert from halo mass in code units to virial temperature in Kelvin, 
             at the specified redshift (Barkana & Loeb (2001) eqn.26). """
@@ -198,27 +202,7 @@ class units(object):
 
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
-        assert self._sP.redshift is not None
-        if not meanmolwt:
-            meanmolwt = self.meanmolwt(Y=0.25, Z=0.0) # default is primordial
-
-        # mass to msun
-        mass_msun = 10.0**mass.astype('float32')
-
-        omega_m_z = self._sP.omega_m * (1+self._sP.redshift)**3.0 / \
-                    ( self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
-                      self._sP.omega_L + \
-                      self._sP.omega_k*(1+self._sP.redshift)**2.0 )
-
-        Delta_c = 18*np.pi**2 + 82*(omega_m_z-1.0) - 39*(omega_m_z-1.0)**2.0
-
-        Tvir = 1.98e4 * (meanmolwt/0.6) * (mass_msun/1e8*self._sP.HubbleParam)**(2.0/3.0) * \
-                        (self._sP.omega_m/omega_m_z * Delta_c / 18.0 / np.pi**2.0)**(1.0/3.0) * \
-                        (1.0 + self._sP.redshift)/10.0 # K
-             
-        if log:
-            Tvir = logZeroSafe(Tvir)
-        return Tvir
+        return self.codeMassToVirTemp( self.logMsunToCodeMass(mass), meanmolwt=meanmolwt, log=log)
 
     def codeTempToLogK(self, temp):
         """ Convert temperature in code units (e.g. tracer temp output) to log Kelvin. """
@@ -688,6 +672,15 @@ class units(object):
         v200 = np.sqrt( self.G * mass / r200 )
 
         return v200.astype('float32')
+
+    def codeMassToVirRad(self, mass):
+        """ Given a total halo mass [in code units], return a virial radius (r200) in physical [kpc]. """
+        assert self._sP.redshift is not None
+
+        r200 = ( self.G * mass / 100.0 / self.H_z**2.0 )**(1.0/3.0)
+        r200 = self.codeLengthToKpc(r200)
+
+        return r200.astype('float32')
 
     def codeM200R200ToV200InKmS(self, m200, r200):
         """ Given a (M200,R200) pair of a FoF group, compute V200 in physical [km/s]. """

@@ -19,59 +19,58 @@ from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosB
                        cenSatSubhaloIndices
 from util import simParams
 
-def oneHaloSingleField(conf=0, shID=0):
+def oneHaloSingleField(conf=0, groupID=None):
     """ In a single (or a few) panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    if conf == 0:
-        # magnetic pressure, gas pressure, and their ratio
-        panels.append( {'partType':'gas', 'hInd':shID, 'partField':'P_B', 'valMinMax':[1.0,9.0]} )
-        panels.append( {'partType':'gas', 'hInd':shID, 'partField':'P_gas', 'valMinMax':[1.0,9.0]} )
-        panels.append( {'partType':'gas', 'hInd':shID, 'partField':'pressure_ratio', 'valMinMax':[-4.0,0.0]} )
-        hsmlFac = 2.5
-    if conf == 1:
-        # stellar mass column density
-        panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]} )
-        hsmlFac = 0.5
-    if conf == 2:
-        # dm annihilation signal
-        panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-2.0,5.6]} )
-        hsmlFac = 2.5
-    if conf == 3:
-        # shock mach number
-        hsmlFac = 2.5
-        panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
-
     run        = 'tng'
-    res        = 2500
+    res        = 1820
     redshift   = 0.0
     rVirFracs  = None #[1.0]
     method     = 'sphMap'
-    nPixels    = [3840,3840]
+    nPixels    = [960,960]
     axes       = [1,0]
     labelZ     = False
-    labelScale = False
+    labelScale = True
     labelSim   = False
-    labelHalo  = False
+    labelHalo  = True
     relCoords  = True
     rotation   = None
     mpb        = None
 
+    sP = simParams(res=res, run=run, redshift=redshift)
+    hInd = groupCatSingle(sP, haloID=groupID)['GroupFirstSub']
+
+    if conf == 0:
+        # magnetic pressure, gas pressure, and their ratio
+        panels.append( {'partType':'gas', 'partField':'P_B', 'valMinMax':[1.0,9.0]} )
+        panels.append( {'partType':'gas', 'partField':'P_gas', 'valMinMax':[1.0,9.0]} )
+        panels.append( {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-4.0,0.0]} )
+    if conf == 1:
+        # stellar mass column density
+        panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]} )
+    if conf == 2:
+        # dm annihilation signal
+        panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-2.0,5.6]} )
+    if conf == 3:
+        # shock mach number
+        panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
+    if conf == 4:
+        # gas column density
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
+
     if 0:
         size = 2.5
         sizeType = 'rVirial'
-    if 0:
-        size = 3000.0
-        sizeType = 'pkpc'
     if 1:
-        size = 4000.0
+        size = 100.0
         sizeType = 'pkpc'
 
     class plotConfig:
-        plotStyle    = 'edged'
+        plotStyle    = 'open'
         rasterPx     = nPixels[0]
-        colorbars    = False
-        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_subhalo-%d.png' % (conf,run,res,redshift,shID)
+        colorbars    = True
+        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_groupID-%d.pdf' % (conf,run,res,redshift,groupID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -94,7 +93,6 @@ def oneHaloGaussProposal():
     nPixels    = [960,960]
     size       = 0.3 # central object
     sizeType   = 'rVirial'
-    hsmlFac    = 2.5
     axes       = [1,0]
     labelZ     = False
     labelScale = False
@@ -143,13 +141,11 @@ def oneGalaxyThreeRotations(conf=0):
     if conf == 0:
         partType  = 'stars'
         partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
-        hsmlFac   = 0.5
 
     if conf == 1:
         partType  = 'gas'
         partField = 'coldens_msunkpc2'
         valMinMax = [6.0, 8.2]
-        hsmlFac   = 2.5
 
     # create panels, one per view
     sPloc = simParams(res=res, run=run, redshift=redshift)
@@ -210,15 +206,15 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
         pF_stars = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
 
         # append panels
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, 'rotation':'face-on', \
+        panels.append( {'partType':'stars', 'partField':pF_stars, 'rotation':'face-on', \
                         'res':resLevel, 'hInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
-        panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', \
                         'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
         #'nPixels':[960,320], \ # reduce vertical size of edge-on panels
-        panels.append( {'partType':'stars', 'hsmlFac':0.5, 'partField':pF_stars, 'rotation':'edge-on', \
+        panels.append( {'partType':'stars', 'partField':pF_stars, 'rotation':'edge-on', \
                         'res':resLevel, 'hInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
-        panels.append( {'partType':'gas', 'hsmlFac':2.5, 'partField':'coldens_msunkpc2', \
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', \
                         'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
 
     class plotConfig:
@@ -267,7 +263,6 @@ def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     nPixels    = [960,960]
     size       = 140.0 # size = 10^2.8 * 0.7 * 2 (match to pm2.0 for Guinevere)
     sizeType   = 'codeUnits'
-    hsmlFac    = 2.5
     axes       = [1,0]
     rotation   = None
 
@@ -328,7 +323,6 @@ def boxHalo_HI():
     rVirFracs  = [1.0] # None
     method     = 'sphMap'
     nPixels    = [960,960]
-    hsmlFac    = 3.0
     rotation   = None
 
     class plotConfig:
@@ -344,19 +338,19 @@ def boxHalo_MultiQuant():
     """ Diagnostic plot, a few quantities of a halo from a periodic box. """
     panels = []
 
-    #panels.append( {'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,7.5]} )
-    #panels.append( {'hsmlFac':1.0, 'partType':'dm', 'partField':'coldens2_msunkpc2', 'valMinMax':[12.0,14.0]} 
+    #panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,7.5]} )
+    #panels.append( {'partType':'dm', 'partField':'coldens2_msunkpc2', 'valMinMax':[12.0,14.0]} 
 
-    panels.append( {'rotation':'edge-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
-    panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
-    panels.append( {'rotation':'edge-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
-    panels.append( {'rotation':'face-on','hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
-    panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
-    panels.append( {'rotation':'face-on','hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'edge-on', 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
+    panels.append( {'rotation':'edge-on', 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'edge-on', 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'face-on', 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,8.4]} )
+    panels.append( {'rotation':'face-on', 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
+    panels.append( {'rotation':'face-on', 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,9.0]} )
 
-    #panels.append( {'hsmlFac':2.5, 'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.4]} )
-    #panels.append( {'hsmlFac':1.0, 'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
-    #panels.append( {'hsmlFac':1.0, 'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
+    #panels.append( {'nPixels':[960,960],  'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.4]} )
+    #panels.append( {'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
+    #panels.append( {'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
 
     hInd       = 362540
     run        = 'illustris'
@@ -367,7 +361,6 @@ def boxHalo_MultiQuant():
     #nPixels    = [1920,1920]
     size       = 2.5 #-50.0
     sizeType   = 'rVirial'
-    #hsmlFac    = 2.5
     #axes       = [1,2]
     #rotation   = None
 
@@ -398,7 +391,6 @@ def zoomHalo_z2_MultiQuant():
     nPixels    = [960,960]
     size       = 2.5
     sizeType   = 'rVirial'
-    hsmlFac    = 2.5
     axes       = [1,0]
     rotation   = None
 
@@ -422,7 +414,6 @@ def tngDwarf_firstNhalos(conf=0):
     nPixels    = [1000,1000]
     size       = 100.0
     sizeType   = 'codeUnits'
-    hsmlFac    = 2.5
     labelZ     = True
     labelScale = True
     labelHalo  = True
@@ -437,7 +428,6 @@ def tngDwarf_firstNhalos(conf=0):
         partType   = 'stars'
         partField  = 'coldens_msunkpc2'
         valMinMax  = [6.5,10.0]
-        #hsmlFac    = 1.0 # when real CalcHsml() is working again
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
@@ -494,13 +484,11 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None,
         partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
         #partField = 'stellarComp-snap_K-snap_B-snap_U'
         #partField = 'stellarComp-sdss_i-sdss_r-sdss_g' #irg # zirgu (red -> blue)
-        hsmlFac = 0.5
 
     if conf == 1:
         partType = 'gas'
         partField = 'coldens_msunkpc2'
         valMinMax = [6.8, 8.8] # for z=3 1024 # [6.0, 8.2] for z=2 512
-        hsmlFac = 2.5
 
     # load halos of this bin, from this run or from the matchedToVariant source run
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
@@ -608,13 +596,11 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
     if conf == 0:
         partType = 'stars'
         partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
-        hsmlFac = 0.5
 
     if conf == 1:
         partType = 'gas'
         partField = 'coldens_msunkpc2'
         valMinMax = [7.2, 8.6]
-        hsmlFac = 2.5
 
     # pick halos from this run and crossmatch
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
@@ -672,7 +658,6 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     nPixels    = [960,960]
     size       = 100.0
     sizeType   = 'codeUnits'
-    hsmlFac    = 2.5
     labelZ     = True
     axes       = [1,0]
     rotation   = None
@@ -685,7 +670,6 @@ def tngCluster_center_timeSeriesPanels(conf=0):
         partType   = 'stars'
         partField  = 'coldens_msunkpc2'
         valMinMax  = [6.5,10.0]
-        hsmlFac    = 1.0
     if conf == 2:
         partType   = 'gas'
         partField  = 'metal_solar'
@@ -694,7 +678,6 @@ def tngCluster_center_timeSeriesPanels(conf=0):
         partType   = 'dm'
         partField  = 'coldens2_msunkpc2'
         valMinMax  = [15.0,16.0]
-        hsmlFac    = 1.0
     if conf == 4:
         partType   = 'gas'
         partField  = 'pressure_ratio'
@@ -729,95 +712,101 @@ def loopTimeSeries():
     for i in range(5):
         tngCluster_center_timeSeriesPanels(conf=i)
 
-def massBinsSample_3x2_EdgeOnFaceOn(conf,haloOrMassBinNum=None):
+def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None):
     """ For a series of mass bins (log Mhalo), take a uniform number of halos from each and 
-    make a 3x2 plot with the top row face-on and the bottom row edge-on. """
-    massBins  = [[13.5,13.8],[13.0,13.1],[12.5,12.6],[12.0,12.1],[11.5,11.6]]
-    numPerBin = 30
+    make either (i) a 3x2 plot with the top row face-on and the bottom row edge-on, one plot per galaxy, or 
+    (ii) montage pages showing many galaxies at once, one per mass bin and quantify. """
+    massBins  = [[12.7,13.0],[12.3,12.5],[12.0,12.1],[11.5,11.6]]
+    numPerBin = 20
 
-    assert haloNum is not None and haloNum < numPerBin*len(massBins)
+    assert haloOrMassBinNum is not None and haloOrMassBinNum < numPerBin*len(massBins)
 
     panels = []
 
-    res        = 1820
-    redshift   = 0.5
+    #res        = 2160
+    redshift   = 1.0
     run        = 'tng'
     rVirFracs  = None
     method     = 'sphMap'
     nPixels    = [960,960]
-    size       = 120.0
+    size       = 80.0
     sizeType   = 'codeUnits'
-    hsmlFac    = 2.5
-    axes       = [1,0]
+    axes       = [0,1]
 
     class plotConfig:
-        plotStyle = 'open_black'
+        plotStyle = 'open'
         rasterPx  = 1400
         colorbars = True
 
     # configure panels
     starsMM = [6.5,10.0] # coldens_msunkpc2
-    gasMM   = [6.5,8.0]
+    gasMM   = [6.5,8.2]
+    gasMMedge = [6.5,8.8]
 
     if conf == 'single_halos':
         # loop over centrals in mass bins, one figure each
         sP = simParams(res=res, run=run, redshift=redshift)
 
-        hID, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=haloNum)
+        hID, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=haloOrMassBinNum)
 
         if hID is None:
             print('Task past bin size, quitting.')
             return
 
-        if binInd >= 4: size = 60.0
+        haloInd = groupCatSingle(sP, subhaloID=hID)['SubhaloGrNr']
+        if binInd >= 2: size = 40.0
 
-        panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelHalo':True} )
+        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelHalo':True} )
+        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
         panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
-        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
-        panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelScale':True} )
-        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
-        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
 
         plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_halo%d_hID-%d_shID-%d.pdf' % \
-                                  (sP.simName,sP.snap,binInd,haloNum,haloInd,hID)
+                                  (sP.simName,sP.snap,binInd,haloOrMassBinNum,haloInd,hID)
 
     if conf == 'halos_combined':
         # combined plot of centrals in mass bins
         sP = simParams(res=res, run=run, redshift=redshift)
 
-        hIDs, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, massBinInd=haloNum)
+        hIDs, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, massBinInd=haloOrMassBinNum)
 
-        if binInd >= 4: size = 60.0
+        if binInd >= 2: size = 40.0
 
         for hID in hIDs:
             if panelNum == 0:
-                panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
             if panelNum == 1:
-                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
             if panelNum == 2: 
-                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
             if panelNum == 3: 
-                panels.append( {'hInd':hID, 'hsmlFac':1.0, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
             if panelNum == 4: 
-                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
             if panelNum == 5: 
-                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.3,0.3]} )
+                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
             if panelNum == 6: 
-                panels.append( {'hInd':hID, 'hsmlFac':1.0, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+                panels.append( {'hInd':hID, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
             if panelNum == 7: 
                 panels.append( {'hInd':hID, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
-        plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_%s-%s.pdf' % \
-                                  (sP.simName,sP.snap,binInd,panels[0]['partType'],panels[0]['partField'])
+        rotStr = '_' + panels[0]['rotation'] if 'rotation' in panels[0] else ''
+        plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_%s-%s%s.pdf' % \
+                                  (sP.simName,sP.snap,binInd,panels[0]['partType'],panels[0]['partField'],rotStr)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
-def loopMassBins(run=None):
+def loopMassBins():
     """ Call another driver function several times, looping over a possible input. """
-    for i in range(30*5):
-        massBinsSample_3x2_EdgeOnFaceOn('single_halos', haloOrMassBinNum=i)
-    for i in range(5):
-        massBinsSample_3x2_EdgeOnFaceOn('halos_combined', haloOrMassBinNum=i, panelNum=run)
+    nMassBins = 4
+    for res in [1080]:
+        for i in range(20*nMassBins):
+            massBinsSample_3x2_EdgeOnFaceOn(res,'single_halos', haloOrMassBinNum=i)
+        for i in range(nMassBins):
+            for j in range(8):
+                massBinsSample_3x2_EdgeOnFaceOn(res,'halos_combined', haloOrMassBinNum=i, panelNum=j)
 
 def zoomEvoMovies(conf):
     """ Configurations to render movies of the sims.zooms2 runs (at ~400 total snapshots). """
@@ -844,7 +833,6 @@ def zoomEvoMovies(conf):
     nPixels    = [1920,1920]
     size       = 3.5
     sizeType   = 'rVirial'
-    hsmlFac    = 2.5
     axes       = [1,0]
     labelSim   = False
     relCoords  = True
@@ -955,7 +943,6 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
         size          = 60.0 # 30 kpc in each direction from center
         partType      = 'stars'
         partField     = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
-        hsmlFac       = 0.5
         colorBar      = False
         nGalaxies     = 35 # 35 (note: set to 45 for talk image)
         nRowsFig      = 7 # 7 (note: set to 9 for talk image)
@@ -1120,7 +1107,6 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
     sizeType    = 'pkpc'
     partType    = 'stars'
     partField   = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
-    hsmlFac     = 0.5
     nRowsFig    = 7 # 6 columns, 7 rows
     matchMethod = 'PositionalAll' # Lagrange
 

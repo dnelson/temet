@@ -16,15 +16,14 @@ def subbox_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing several quantities of a single subbox (4x2 panels, 4K). """
     panels = []
 
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True} )
-    panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
-    panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
-    #panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'stellar_age', 'valMinMax':[2.0,13.0]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1000]} )
-    panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
+    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True} )
+    panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+    panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
+    panels.append( {'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
+    panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+    panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1000]} )
+    panels.append( {'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
     run     = 'tng' #'illustris'
     variant = 'subbox0'
@@ -46,6 +45,33 @@ def subbox_4x2_movie(curTask=0, numTasks=1):
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
+def subbox_2x1_movie(curTask=0, numTasks=1):
+    """ Render a movie comparing two quantities of a single subbox (2x1 panels, 4K). """
+    panels = []
+
+    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.5], 'labelScale':True} )
+    panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelRedshift':True} )
+
+    run     = 'tng'
+    variant = 'subbox2'
+    res     = 2160
+    method  = 'sphMap'
+    nPixels = 1920
+    axes    = [0,1] # x,y
+
+    class plotConfig:
+        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
+        plotStyle = 'edged_black'
+        rasterPx  = 1920
+        colorbars = True
+
+        # movie config
+        minZ      = 1.1
+        maxZ      = 2.0 #50.0 # tng subboxes start at a=0.02
+        #maxNSnaps = 1 #2700 # 90 seconds at 30 fps
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     """ Render a movie comparing Illustris-1 and L75n1820TNG subbox0, one quantity side by side. """
     panels = []
@@ -58,7 +84,6 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     #panels.append( {'run':'tng',       'variant':'subbox1', 'zoomFac':0.99*(5.0/7.5), 'labelZ':True} )
 
     if conf == 1:
-        hsmlFac = 2.5
         partType = 'gas'
         partField = 'coldens_msunkpc2'
         valMinMax = [4.2,7.2]
@@ -86,15 +111,15 @@ def Illustris_vs_TNG_subbox0_4x2_movie(curTask=0, numTasks=1):
     """ Render a movie comparing Illustris-1 (top) and L75n1820TNG subbox0 (bottom), 4 quantities per row. """
     panels = []
 
-    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True, 'labelSim':True} )
-    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'run':'illustris', 'hsmlFac':2.5, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
-    panels.append( {'run':'illustris', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
+    panels.append( {'run':'illustris', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelScale':True, 'labelSim':True} )
+    panels.append( {'run':'illustris', 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    panels.append( {'run':'illustris', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+    panels.append( {'run':'illustris', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
 
-    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelSim':True} )
-    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    panels.append( {'run':'tng', 'hsmlFac':2.5, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
-    panels.append( {'run':'tng', 'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2], 'labelZ':True} )
+    panels.append( {'run':'tng', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2], 'labelSim':True} )
+    panels.append( {'run':'tng', 'partType':'gas', 'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    panels.append( {'run':'tng', 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+    panels.append( {'run':'tng', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2], 'labelZ':True} )
 
     variant = 'subbox0'
     res     = 1820
@@ -166,21 +191,21 @@ def planetarium_TychoBrahe_frames(curTask=0, numTasks=1, conf=0):
     ctName     = 'gray' # all grayscale
 
     if conf == 0:
-        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
+        panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.2]} )
     if conf == 1:
-        panels.append( {'hsmlFac':0.5, 'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
+        panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.5]} )
     if conf == 2:
-        panels.append( {'hsmlFac':0.5, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
+        panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.2]} )
     if conf == 3:
-        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
+        panels.append( {'partType':'gas',   'partField':'bmag_uG', 'valMinMax':[-3.0,1.0]} )
     if conf == 4:
-        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
+        panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
     if conf == 5:
-        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
+        panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,0.4]} )
     if conf == 6:
-        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1000]} )
+        panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[100,1000]} )
     if conf == 7:
-        panels.append( {'hsmlFac':2.5, 'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
+        panels.append( {'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
     class plotConfig:
         savePath  = '/home/extdylan/data/frames_tycho/'

@@ -269,7 +269,7 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         # grid parameters
         partType  = 'gas'
         ionName   = 'O VI'
-        projDepth = sP.units.codeLengthToKpc(2000.0) # pkpc in projection direction, same as rad profiles
+        projDepth = sP.units.codeLengthToKpc(2000.0) # pkpc in projection direction (z=0 conversion), same as rad profiles
         gridSize  = 800.0 # pkpc, box sidelength
         gridRes   = 2.0 # pkpc, pixel size
         axes      = [0,1] # x,y

@@ -397,18 +397,18 @@ def plotCpuTimes():
     # config
     sPs = []
     #sPs.append( simParams(res=1820, run='illustris') )
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=910, run='tng') )
     ##sPs.append( simParams(res=455, run='illustris') )
     ##sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )
 
     sPs.append( simParams(res=2160, run='tng') )
-    sPs.append( simParams(res=2160, run='tng', variant='halted') )
+    #sPs.append( simParams(res=2160, run='tng', variant='halted') )
     #sPs.append( simParams(res=1080, run='tng') )
     #sPs.append( simParams(res=540, run='tng') )
 
@@ -420,6 +420,8 @@ def plotCpuTimes():
     # after Step 6495017
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
                 'gradients','enrich','domain','i_o','restart']
+    plotKeys = ['total']
+    lw = 2.0
 
     # multipage pdf: one plot per value
     #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
@@ -430,7 +432,7 @@ def plotCpuTimes():
     print(' -- run: %s --' % datetime.now().strftime('%d %B, %Y'))
 
     for plotKey in plotKeys:
-        fig = plt.figure(figsize=(14,8))
+        fig = plt.figure(figsize=(12.5,9))
 
         ax = fig.add_subplot(111)
         ax.set_xlim([0.0,1.0])
@@ -443,6 +445,7 @@ def plotCpuTimes():
             ax.set_ylabel('CPU Time ' + plotKey + ' [Mh]')
 
             if plotKey == 'total_log':
+                ax.set_ylabel('Total CPU Time [Mh]')
                 ax.set_yscale('log')
                 plotKey = 'total'
         else:
@@ -474,11 +477,11 @@ def plotCpuTimes():
             if ind in [0,2]:
                 yy = yy / (1e6*60.0*60.0) * cpu['numCPUs']
 
-            l, = ax.plot(xx,yy,label=sP.simName)
+            l, = ax.plot(xx,yy,lw=lw,label=sP.simName)
 
             # total time predictions for runs which aren't yet done
-            if plotKey in ['total'] and xx.max() < 0.99: #ax.get_yscale() == 'log' and 
-                ax.set_ylim([1e-2,100])
+            if plotKey in ['total'] and xx.max() < 0.99: 
+                if ax.get_yscale() == 'log': ax.set_ylim([1e-1,200])
 
                 fac_delta = 0.02
                 xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
@@ -496,30 +499,41 @@ def plotCpuTimes():
 
                 # plot best line
                 w = np.where( xx >= xx.max() - fac_delta )
-                xx = xx[w]
-                yy = yy[w]
+                xx2 = xx[w]
+                yy2 = yy[w]
 
-                yp = np.poly1d( np.polyfit(xx,yy,1) )
+                yp = np.poly1d( np.polyfit(xx2,yy2,1) )
                 xp = np.linspace(xx.max() + 0.25*fac_delta, 1.0)
                 yPredicted = yp(xp)
 
-                ax.plot(xp, yPredicted, linestyle=':', color=l.get_color())
+                ax.plot(xp, yPredicted, lw=lw, linestyle=':', color=l.get_color())
 
                 # estimate finish date
                 totPredictedMHs = yPredicted.max()
-                totRunMHs = yy.max()
+                totRunMHs = yy2.max()
                 remainingRunDays = (totPredictedMHs-totRunMHs) * 1e6 / (cpu['numCPUs'] * 24.0)
                 predictedFinishDate = datetime.now() + timedelta(days=remainingRunDays)
                 predictedFinishStr = predictedFinishDate.strftime('%d %B, %Y')
 
                 print(' Predicted total time: %.1f million CPUhs (%s)' % (totPredictedMHs,predictedFinishStr))
-                pLabels.append( 'Predict: %3.1f MHs (Finish: %s)' % (totPredictedMHs,predictedFinishStr))
+                #pLabels.append( 'Predict: %3.1f MHs (Finish: %s)' % (totPredictedMHs,predictedFinishStr))
+                pLabels.append( 'Predict: %3.1f MHs' % (totPredictedMHs))
                 pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=':') )
+
+                # quick estimate to a specific target redshift
+                if 0:
+                    targetRedshift = 6.0
+                    targetA = 1/(1+targetRedshift)
+                    _, ww = closest(xp,targetA)
+                    print('  * To z = %.3f estimate %.2f Mhs' % (1.0/xp[ww]-1.0,yPredicted[ww]))
+                    _, ww = closest(xx,targetA)
+                    print('  * To z = %.3f estimate %.2f Mhs' % (targetRedshift,yp(targetA)) )
+                    print('  * To z = %.3f estimate %.2f Mhs' % (1.0/xx[ww]-1.0,yy[ww]))
 
             # total time prediction based on L75n1820TNG and L25n1024_4503 profiles
             if plotKey in ['total'] and xx.max() < 0.99 and sP.variant == 'None':
                 sPs_predict = [simParams(res=1820, run='tng'), 
-                               simParams(res=1024, run='tng', variant=4503)]
+                               simParams(res=1024, run='tng', variant='4503')]
                 ls = ['--','-.']
 
                 for j, sP_p in enumerate(sPs_predict):
@@ -527,7 +541,7 @@ def plotCpuTimes():
                     w = np.where(p_a > xx.max())
 
                     # plot
-                    ax.plot(p_a[w], p_cpu[w], linestyle=ls[j], color=l.get_color())
+                    ax.plot(p_a[w], p_cpu[w], lw=lw, linestyle=ls[j], color=l.get_color())
 
                     # estimate finish date
                     remainingRunDays = (p_tot-yy.max()) * 1e6 / (cpu['numCPUs'] * 24.0)
@@ -535,22 +549,24 @@ def plotCpuTimes():
                     p_str = p_date.strftime('%d %B, %Y')
                     print(' [w/ %s] Predicted: %.1f million CPUhs (%s)' % (sP_p.simName,p_tot,p_str))
 
-                    pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
+                    #pLabels.append( ' [w/ %s]: %3.1f MHs (%s)' % (sP_p.simName,p_tot,p_str))
+                    pLabels.append( ' [w/ %s]: %3.1f MHs' % (sP_p.simName,p_tot))
                     pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=ls[j]) )
 
         axTop = _redshiftAxisHelper(ax)
 
         # add to legend for predictions
         if len(pLabels) > 0:
-            pLabels.append( '(Last Updated: %s)' % datetime.now().strftime('%d %B, %Y'))
-            pColors.append( plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-') )
+            pass
+            #pLabels.append( '(Last Updated: %s)' % datetime.now().strftime('%d %B, %Y'))
+            #pColors.append( plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-') )
         else:
             pLabels = []
             pColors = []
 
         # make legend, sim names + extra
         handles, labels = ax.get_legend_handles_labels()
-        ax.legend(handles+pColors, labels+pLabels, loc='best', prop={'size':13})
+        ax.legend(handles+pColors, labels+pLabels, loc='best') #, prop={'size':13})
 
         fig.tight_layout()    
         pdf.savefig()

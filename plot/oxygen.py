@@ -188,6 +188,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     
     ax.set_xlim([12.5, 16.0])
     ax.set_xlabel('N$_{\\rm oxygen}$ [ log cm$^{-2}$ ]')
+    if len(ions) == 1: ax.set_xlabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ions[0])
 
     if moment == 0:
         ax.set_ylim([-18, -12])
@@ -195,16 +196,19 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
         ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm oxygen}$)  [ cm$^{2}$ ]')
         if clean:
             ax.set_ylabel('f(N$_{\\rm oxygen}$) [ log cm$^{2}$ ]')
+            if len(ions) == 1: ax.set_ylabel('f(N$_{\\rm %s}$) [ log cm$^{2}$ ]' % ions[0])
     if moment == 1:
         ax.set_ylim([-2.5, 1.5])
         ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm oxygen}$ f(N$_{\\rm oxygen}$)')
         if clean:
             ax.set_ylabel('N$_{\\rm oxygen}$ $\cdot$ f(N$_{\\rm oxygen}$) [ log ]')
+            if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
     if moment == 2:
         ax.set_ylim([-1.5, 2.2])
         ax.set_ylabel('CDDF (2$^{\\rm nd}$ moment):  log N$_{\\rm oxygen}^2$ f(N$_{\\rm oxygen}$)')
         if clean:
-            ax.set_ylabel('[N$_{\\rm oxygen}$$^2$ / 10$^{13}$] $\cdot$ f(N$_{\\rm oxygen}$) [ log ]') 
+            ax.set_ylabel('[N$_{\\rm oxygen}$$^2$ / 10$^{13}$] $\cdot$ f(N$_{\\rm oxygen}$) [ log ]')
+            if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
 
     # loop over each fullbox run
     for sP in sPs:
@@ -271,7 +275,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     plt.close(fig)
 
 def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen', redshift=0.0, 
-                           vsHaloMass=True, secondTopAxis=False, toAvgColDens=False, colorOff=2):
+                           vsHaloMass=True, secondTopAxis=False, toAvgColDens=False, colorOff=2, toyFacs=None):
     """ Plot total [gravitationally bound] mass of various ions, or e.g. cold/hot/total CGM mass, 
     versus halo or stellar mass at a given redshift. If toAvgColDens, then instead of total mass 
     plot average column density computed geometrically as (Mtotal/pi/rvir^2). 
@@ -280,6 +284,8 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     binSize = 0.2 # log mass
     renames = {'AllGas':'Total Gas / 100','AllGas_Metal':'Total Metals','AllGas_Oxygen':'Total Oxygen'}
     ionColors = {'AllGas':'#444444','AllGas_Metal':'#777777','AllGas_Oxygen':'#cccccc'}
+
+    runToyModel = False # testing Lars' idea
 
     # plot setup
     lw = 3.0
@@ -355,6 +361,52 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
             rad = rad[cssInds]
             ionData = cloudyIon(None)
 
+        if not toAvgColDens and runToyModel:
+            # TEST: toy model for total grav. bound mass
+            from cosmo.cloudy import cloudyIon
+            ion = cloudyIon(sP, el=['Oxygen'])
+
+            #tempFac = 0.6
+            #densFac = 2.0
+            #metalFac = 1.5
+            tempFac, densFac, metalFac = toyFacs
+
+            # load total grav. bound gas mass
+            field = 'Subhalo_Mass_AllGas'
+            tot_gas_mass = auxCat(sP, fields=[field])[field][cssInds]
+
+            field2 = 'Subhalo_Mass_AllGas_Metal' #_Metal, _Oxygen
+            tot_metal_mass = auxCat(sP, fields=[field2])[field2][cssInds]
+
+            # calculate mean metallicity
+            ww = np.where(xx >= 11.0) # min halo mass to consider for mean metal frac
+            mean_metal_frac = np.nanmean(tot_metal_mass[ww] / tot_gas_mass[ww])
+            virMetallicity = mean_metal_frac / ion.solar_Z
+
+            print(' mean metal mass fraction: ',mean_metal_frac)
+            print(' mean virial metallicity in solar units: ',virMetallicity)
+            print(' oxygen to total mass ratio (solar): ',ion._solarMetalAbundanceMassRatio('Oxygen'))
+
+            # assume solar abundance of oxygen, scale to virMetallicity and use to compute total oxy mass
+            oxyMassFracAtFacVirMetallicity = ion._solarMetalAbundanceMassRatio('Oxygen') * metalFac*virMetallicity
+            virTotOxygenMass = tot_gas_mass * oxyMassFracAtFacVirMetallicity # code units
+            yy_toy = {}
+            yy_toy['AllGas_Oxygen'] = sP.units.codeMassToLogMsun(virTotOxygenMass)
+
+            # define temp, dens per halo
+            haloMassesCode = sP.units.logMsunToCodeMass(xx)
+            virTemp = sP.units.codeMassToVirTemp(haloMassesCode*tempFac, log=True) # log K
+            virVolume = (4.0/3.0) * np.pi * sP.units.codeMassToVirRad(haloMassesCode)**3.0
+            virDens = (tot_gas_mass * ion.solar_X) / virVolume # hydrogen, code units
+            virDensPhys = np.log10(sP.units.codeDensToPhys(virDens*densFac, cgs=True, numDens=True)) # log(1/cm^3)
+
+            # run cloudy for each ion, predict total grav. bound ionic mass
+            metal = np.zeros( virTemp.size, dtype='float32') + np.log10(virMetallicity)
+            for ionNum in [6,7,8]:
+                log_ionFrac = ion.frac('Oxygen', ionNum, virDensPhys, metal, virTemp)
+                virTotIonMass = 10.0**log_ionFrac * virTotOxygenMass
+                yy_toy['O' + ion.numToRoman(ionNum)] = sP.units.codeMassToLogMsun(virTotIonMass)
+
         for j, ion in enumerate(ions):
             print('[%s]: %s' % (ion,sP.simName))
 
@@ -411,6 +463,15 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 # show percentile scatter only for 'all galaxies'
                 ax.fill_between(xm, pm[0,:], pm[-1,:], color=c, interpolate=True, alpha=0.2)
 
+            if ion in ['AllGas_Oxygen','OVI','OVII','OVIII']:
+                # TOY PLOT
+                xm, ym, sm, pm = running_median(xx,yy_toy[ion],binSize=binSize,
+                                                skipZeros=True,percs=[10,25,75,90], minNumPerBin=10)
+                ym = savgol_filter(ym,sKn,sKo)
+                sm = savgol_filter(sm,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
+                ax.plot(xm, ym, lw=lw, color=c, linestyle=':')
+
     # legend
     sExtra = []
     lExtra = []
@@ -419,6 +480,10 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
         for i, sP in enumerate(sPs):
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
             lExtra += ['%s' % sP.simName]
+        if runToyModel:
+            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=':',marker='')]
+            lExtra += ['Toy Model, f$_{\\rm T}$=%.1f, f$_{\\rm \\rho}$=%.1f, f$_{\\rm Z}$=%.1f' % \
+                         (tempFac,densFac,metalFac)]
         loc = 'upper right' if toAvgColDens else 'lower right'
         legend1 = ax.legend(sExtra, lExtra, loc=loc)
         ax.add_artist(legend1)
@@ -503,22 +568,24 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         ax.set_xlim([0.0, 4.0])
         ax.set_xlabel('Radius [ log pkpc ]')
 
+    speciesStr = ions[0] if len(ions) == 1 else 'oxygen'
+
     if '3D' in projDim:
         # 3D mass/number density
         if massDensity:
             ax.set_ylim([-37.0,-30.0])
-            ax.set_ylabel('Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-3}$ ]')
+            ax.set_ylabel('Mass Density $\\rho_{\\rm %s}$ [ log g cm$^{-3}$ ]' % speciesStr)
         else:
             ax.set_ylim([-14.0, -6.0])
-            ax.set_ylabel('Number Density $n_{\\rm oxygen}$ [ log cm$^{-3}$ ]')
+            ax.set_ylabel('Number Density $n_{\\rm %s}$ [ log cm$^{-3}$ ]' % speciesStr)
     else:
         # 2D mass/column density
         if massDensity:
             ax.set_ylim([-12.0,-6.0])
-            ax.set_ylabel('Column Mass Density $\\rho_{\\rm oxygen}$ [ log g cm$^{-2}$ ]')
+            ax.set_ylabel('Column Mass Density $\\rho_{\\rm %s}$ [ log g cm$^{-2}$ ]' % speciesStr)
         else:
             ax.set_ylim([11.0, 16.0])
-            ax.set_ylabel('Column Number Density $n_{\\rm oxygen}$ [ log cm$^{-2}$ ]')
+            ax.set_ylabel('Column Number Density $N_{\\rm %s}$ [ log cm$^{-2}$ ]' % speciesStr)
 
     # init
     ionData = cloudyIon(None)
@@ -661,18 +728,21 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         yrvir = ax.get_ylim()
                         yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.25
 
-                        if '3D' in projDim:
-                            yrvir[1] -= 0.4 * k
-                        else:
-                            yrvir[1] -= 0.1 * k
-
                         if not radRelToVirRad:
                             xrvir = np.log10( [avg_rvir_code, avg_rvir_code] )
-                            textStr = 'R$_{\\rm vir}$'               
+                            textStr = 'R$_{\\rm vir}$'
+                            if '3D' in projDim:
+                                yrvir[1] -= 0.4 * k
+                            else:
+                                yrvir[1] -= 0.1 * k
                         else:
-                            rvir_300pkpc_ratio = avg_rvir_code / sP.units.physicalKpcToCodeLength(300.0)
+                            rvir_300pkpc_ratio = sP.units.physicalKpcToCodeLength(300.0) / avg_rvir_code
                             xrvir = np.log10( [rvir_300pkpc_ratio, rvir_300pkpc_ratio] )
                             textStr = '300 kpc'
+                            if '3D' in projDim:
+                                yrvir[1] -= 0.4 * (len(massBins)-k)
+                            else:
+                                yrvir[1] -= 0.1 * (len(massBins)-k)
 
                         ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
                         ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
@@ -1321,7 +1391,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
         werk13 = werk2013(coveringFractions=True)
 
         if conf == 0: galaxySets = ['all']
-        if conf == 1: galaxySets = ['ssfr_lt_n11','ssfr_gt_n11','mstar_lt_105','mstar_gt_105']
+        if conf == 1: galaxySets = ['ssfr_gt_n11','ssfr_lt_n11','mstar_lt_105','mstar_gt_105']
     if config in ['eCGM','eCGMfull']:
         j15 = johnson2015(coveringFractions=True)
 
@@ -1461,6 +1531,19 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
                 ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.1, interpolate=True)
 
+                # add Illustris-1 line to COS-Halos figure?
+                if gs == 'all' and sP.simName == 'TNG100-1' and thresh == 14.15:
+                    print('add')
+                    sP_ill = simParams(res=910,run='tng',redshift=0.0)
+                    sim_sample_ill = obsMatchedSample(sP_ill, datasetName=config)
+                    sim_sample_ill = addIonColumnPerSystem(sP_ill, sim_sample_ill, config=config)
+                    cf_ill = ionCoveringFractions(sP_ill, sim_sample_ill, config=config)
+                    xx = cf_ill['radBins%s' % relStr]
+                    yy = np.squeeze( cf_ill['%s_percs%s' % (gs,relStr)][ind,:,3] )
+                    ax.plot(xx, yy, lw=lw, linestyle='--', color=c)
+                    ax.text(245,0.33,'TNG300',color=c,fontsize=18)
+                    ax.text(345,0.29,'TNG100',color=c,fontsize=18)
+
                 #if conf == 1 and sP.simName == 'TNG100-2' and gs in ['mstar_lt_105','ssfr_gt_n11']:
                 #    # +/- 1 sigma lines
                 #    yy_min = np.squeeze( cf['%s_percs%s' % (gs,relStr)][ind,:,1] ) # -1 sigma
@@ -1535,6 +1618,37 @@ def milkyWaySampleNumbers():
 
     import pdb; pdb.set_trace()
 
+def test_lambda_statistic():
+    """ Test the behavior of the lambda statistic depending on the sim vs obs draws. """
+    # config
+    N_sim = 100
+    loc = 15.0
+    scale = 0.8
+    sim_cols = np.random.normal(loc=loc, scale=scale, size=N_sim)
+    kde = gaussian_kde(sim_cols, bw_method='scott')
+
+    # obs
+    N_obs = 10000
+
+    obs_cols = np.random.normal(loc=loc, scale=scale, size=N_obs) # drawn from same distribution
+    #obs_cols = np.zeros( N_obs, dtype='float32' ) + loc # all exact
+
+    #lim_types = np.zeros( N_obs, dtype='int32' ) # all detections (0=detections, 1=upper lim, 2=lower lim)
+    lim_types = np.random.randint( low=0, high=3, size=N_obs ) # random assortment of limit types
+
+    lambdas = np.zeros( obs_cols.size, dtype='float32' )
+
+    for i in range(obs_cols.size):
+        z1 = kde.integrate_box_1d(-np.inf, obs_cols[i])
+        z2 = kde.integrate_box_1d(obs_cols[i], np.inf)
+
+        if lim_types[i] == 0: lambdas[i] = 2*np.min([z1,z2]) # detection, 2*PDF area more extreme
+        if lim_types[i] == 1: lambdas[i] = z1 # upper limit, PDF area which is consistent
+        if lim_types[i] == 2: lambdas[i] = z2 # lower limit, PDF area which is consistent
+
+    print('mean lambda: ',lambdas.mean())
+    import pdb; pdb.set_trace()
+
 # -------------------------------------------------------------------------------------------------
 
 variants1 = ['0100','0401','0402','0501','0502','0601','0602','0701','0703','0000']
@@ -1561,13 +1675,42 @@ def paperPlots():
 
     ions = ['OVI','OVII','OVIII'] # whenever we are not just doing OVI
 
-    # figure 1: full box composite image
+    # figure 1, 2: full box composite image components, and full box OVI/OVIII ratio
     if 0:
         from vis.boxDrivers import TNG_oxygenPaperImages
-        for part in [0,1,2]:
+        for part in [0,1,2,3]:
             TNG_oxygenPaperImages(part=part)
 
-    # figure 2a, CDDF of OVI at z~0 compared to observations
+    # figure 3a: ionization data for OVI, OVII, and OVIII
+    if 0:
+        element = 'Oxygen'
+        ionNums = [6,7,8]
+        redshift = 0.0
+        metal = -1.0 # log solar
+
+        saveName = 'abundance_fractions_%s_%s_z%d_Z%d.pdf' % \
+          (element, '-'.join([str(i) for i in ionNums]),redshift*100,10**metal * 1000)
+
+        ionAbundFracs2DHistos(saveName, element=element, ionNums=ionNums, redshift=redshift, metal=metal)
+
+    # figure 3b: global box phase-diagrams weighted by gas mass in OVI, OVII, and OVIII
+    if 0:
+        sP = TNG100
+        xAxis = 'dens_nH'
+        yAxis = 'temp'
+        weights = ['O VI mass','O VII mass','O VIII mass']
+        xMinMax = [-9.0,0.0]
+        yMinMax = [3.0,8.0]
+        contours = [-3.0, -2.0, -1.0]
+        massFracMinMax = [-4.0, 0.0] #[-10.0, 0.0]
+        hideBelow = True
+        smoothSigma = 1.0
+
+        plotPhaseSpace2D(sP, yAxis, xAxis=xAxis, weights=weights, haloID=None, 
+                         massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                         contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+
+    # figure 4, CDDF of OVI at z~0 compared to observations
     if 0:
         moment = 0
         simRedshift = 0.2
@@ -1579,7 +1722,7 @@ def paperPlots():
         nOVIcddf(sPs, pdf, moment=moment, simRedshift=simRedshift, boxDepth10=boxDepth10)
         pdf.close()
 
-    # figure 2b, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
+    # figure 5, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
     if 0:
         moment = 0
         sPs = [TNG100]
@@ -1599,7 +1742,7 @@ def paperPlots():
             cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=[ion], redshifts=redshifts, 
                                   boxDepth10=boxDepth10, colorOff=i+2)
 
-    # figure 3, CDDF at z=0 with physics variants (L25n512)
+    # figure 6, CDDF at z=0 with physics variants (L25n512)
     if 0:
         simRedshift = 0.0
         moment = 1
@@ -1611,7 +1754,23 @@ def paperPlots():
         saveName = 'cddf_ovi_z%02d_moment%d_variants-main.pdf' % (10*simRedshift,moment)
         cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=['OVI'], redshifts=[simRedshift])
 
-    # figure 4, bound mass of O ions vs halo/stellar mass
+    # figure 7: 2pcf
+    if 0:
+        redshift = 0.0
+        sPs = [TNG100] #[TNG100, TNG300]
+        ions = ['OVI','OVII','OVIII','O','gas']
+
+        # compute time for one split:
+        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
+        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
+        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
+        for order in [0,1,2]:
+            saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
+              (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
+
+            oxygenTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
+
+    # figure 8, bound mass of O ions vs halo/stellar mass
     if 0:
         sPs = [TNG300, TNG100]
         cenSatSelect = 'cen'
@@ -1631,36 +1790,7 @@ def paperPlots():
             totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
                 redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True, secondTopAxis=True)
 
-    # figure 5: ionization data for OVI, OVII, and OVIII
-    if 0:
-        element = 'Oxygen'
-        ionNums = [6,7,8]
-        redshift = 0.0
-        metal = -1.0 # log solar
-
-        saveName = 'abundance_fractions_%s_%s_z%d_Z%d.pdf' % \
-          (element, '-'.join([str(i) for i in ionNums]),redshift*100,10**metal * 1000)
-
-        ionAbundFracs2DHistos(saveName, element=element, ionNums=ionNums, redshift=redshift, metal=metal)
-
-    # figure 5b: global box phase-diagrams weighted by gas mass in OVI, OVII, and OVIII
-    if 0:
-        sP = TNG100
-        xAxis = 'dens_nH'
-        yAxis = 'temp'
-        weights = ['O VI mass','O VII mass','O VIII mass']
-        xMinMax = [-9.0,0.0]
-        yMinMax = [3.0,8.0]
-        contours = [-3.0, -2.0, -1.0]
-        massFracMinMax = [-4.0, 0.0] #[-10.0, 0.0]
-        hideBelow = True
-        smoothSigma = 1.0
-
-        plotPhaseSpace2D(sP, yAxis, xAxis=xAxis, weights=weights, haloID=None, 
-                         massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
-                         contours=contours, smoothSigma=smoothSigma, hideBelow=True)
-
-    # figure 6: average radial profiles
+    # figure 9: average radial profiles
     if 0:
         redshift = 0.0
         sPs = [TNG100]
@@ -1682,29 +1812,70 @@ def paperPlots():
                                           radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
                                           haloMassBins=haloMassBins, combine2Halo=combine2Halo)
 
-    # figure 7: 2pcf
+
+    # figure 10: mock COS-Halos samples
     if 0:
-        redshift = 0.0
-        sPs = [TNG100] #[TNG100, TNG300]
-        ions = ['OVI','OVII','OVIII','O','gas']
+        sPs = [TNG100, TNG300]
 
-        # compute time for one split:
-        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
-        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
-        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
-        for order in [0,1,2]:
-            saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
-              (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
+        simNames = '_'.join([sP.simName for sP in sPs])
+        obsSimMatchedGalaxySamples(sPs, 'coshalos_sample_%s.pdf' % simNames, config='COS-Halos')
 
-            oxygenTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
+    # figure 11: COS-Halos: N_OVI vs impact parameter and vs sSFR bimodality
+    if 0:
+        sP = TNG100
 
-    # figure 8: OVI red/blue image samples
+        #cosOVIDataPlot(sP, saveName='coshalos_ovi_%s.pdf' % sP.simName, config='COS-Halos')
+        cosOVIDataPlotExtended(sP, saveName='coshalos_ovi_%s_ext.pdf' % sP.simName, config='COS-Halos')
+        
+    # figure 12: covering fractions, OVI vs obs (all galaxies, and subsamples)
+    if 0:
+        sPs = [TNG100] #, TNG100_2]
+
+        # All Galaxies
+        novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
+        saveName = 'coshalos_covering_frac_%s.pdf' % '_'.join([sP.simName for sP in sPs])
+        coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=0)
+
+        # sSFR / M* subsets
+        novi_vals = [14.15]
+        saveName = 'coshalos_covering_frac_subsets_%s.pdf' % '_'.join([sP.simName for sP in sPs])
+        coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=1)
+
+
+    # figure 13: nums 11-14 repeated for the eCGM dataset instead of COS-Halos
+    if 0:
+        sP = TNG100
+        cf = 'eCGMfull' # eCGM
+
+        obsSimMatchedGalaxySamples([sP], '%s_sample_%s.pdf' % (cf,sP.simName), config=cf)
+        cosOVIDataPlot(sP, saveName='%s_ovi_%s.pdf' % (cf,sP.simName), config=cf)
+        cosOVIDataPlotExtended(sP, saveName='%s_ovi_%s_ext.pdf' % (cf,sP.simName), config=cf)
+
+        coveringFractionVsDist([sP], '%s_covering_frac_%s.pdf' % (cf,sP.simName), ions=['OVI'], 
+            colDensThresholds=[13.5, 14.0, 14.5, 15.0], config=cf, conf=0)
+        for conf in [1,2]:
+            coveringFractionVsDist([sP], '%s_covering_frac_%s_conf%d.pdf' % (cf,sP.simName,conf), 
+                ions=['OVI'], colDensThresholds=[13.5], config=cf, conf=conf)
+
+    # figure 14: covering fractions, with main physics variants (L25n512)
+    if 0:
+        novi_vals = [14.0]
+
+        sPs = []
+        for variant in variantsMain:
+            sPs.append( simParams(res=512,run='tng',redshift=0.0,variant=variant) )
+
+        saveName = 'covering_frac_ovi_variants-main.pdf'
+        coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, 
+                               config='SimHalos_115-125')
+
+    # figure 15, 16: OVI red/blue image samples
     if 0:
         from vis.haloDrivers import tngFlagship_galaxyStellarRedBlue
         tngFlagship_galaxyStellarRedBlue(evo=False, redSample=1, conf=1)
         tngFlagship_galaxyStellarRedBlue(evo=False, blueSample=1, conf=1)
 
-    # figure 9: OVI vs color at fixed stellar/halo mass
+    # figure 17: OVI vs color at fixed stellar/halo mass
     if 0:
         sPs = [TNG100, TNG300]
         css = 'cen'
@@ -1725,7 +1896,7 @@ def paperPlots():
                          sRange=sRange, cenSatSelect=css)
             pdf.close()
 
-    # figure 10: 2d histos
+    # figure 18, 19, 20: 2d histos
     if 0:
         sP = TNG300
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
@@ -1753,61 +1924,6 @@ def paperPlots():
                 quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
                 quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
                 pdf.close()
-
-    # figure 11: mock COS-Halos samples
-    if 0:
-        sPs = [TNG100, TNG300]
-
-        simNames = '_'.join([sP.simName for sP in sPs])
-        obsSimMatchedGalaxySamples(sPs, 'coshalos_sample_%s.pdf' % simNames, config='COS-Halos')
-
-    # figure 12: COS-Halos: N_OVI vs impact parameter and vs sSFR bimodality
-    if 0:
-        sP = TNG100
-
-        #cosOVIDataPlot(sP, saveName='coshalos_ovi_%s.pdf' % sP.simName, config='COS-Halos')
-        cosOVIDataPlotExtended(sP, saveName='coshalos_ovi_%s_ext.pdf' % sP.simName, config='COS-Halos')
-        
-    # figure 13: covering fractions, OVI vs obs (all galaxies, and subsamples)
-    if 0:
-        sPs = [TNG100] #, TNG100_2]
-
-        # All Galaxies
-        novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
-        saveName = 'coshalos_covering_frac_%s.pdf' % '_'.join([sP.simName for sP in sPs])
-        coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=0)
-
-        # sSFR / M* subsets
-        novi_vals = [14.15]
-        saveName = 'coshalos_covering_frac_subsets_%s.pdf' % '_'.join([sP.simName for sP in sPs])
-        coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=1)
-
-    # figure 14: covering fractions, with main physics variants (L25n512)
-    if 0:
-        novi_vals = [14.0]
-
-        sPs = []
-        for variant in variantsMain:
-            sPs.append( simParams(res=512,run='tng',redshift=0.0,variant=variant) )
-
-        saveName = 'covering_frac_ovi_variants-main.pdf'
-        coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, 
-                               config='SimHalos_115-125')
-
-    # figure 15: nums 11-14 repeated for the eCGM dataset instead of COS-Halos
-    if 0:
-        sP = TNG100
-        cf = 'eCGMfull' # eCGM
-
-        obsSimMatchedGalaxySamples([sP], '%s_sample_%s.pdf' % (cf,sP.simName), config=cf)
-        cosOVIDataPlot(sP, saveName='%s_ovi_%s.pdf' % (cf,sP.simName), config=cf)
-        cosOVIDataPlotExtended(sP, saveName='%s_ovi_%s_ext.pdf' % (cf,sP.simName), config=cf)
-
-        coveringFractionVsDist([sP], '%s_covering_frac_%s.pdf' % (cf,sP.simName), ions=['OVI'], 
-            colDensThresholds=[13.5, 14.0, 14.5, 15.0], config=cf, conf=0)
-        for conf in [1,2]:
-            coveringFractionVsDist([sP], '%s_covering_frac_%s_conf%d.pdf' % (cf,sP.simName,conf), 
-                ions=['OVI'], colDensThresholds=[13.5], config=cf, conf=conf)
 
     # ------------ appendix ---------------
 
@@ -1914,3 +2030,19 @@ def paperPlots():
     if 0:
         from cosmo.cloudy import plotIonAbundances
         plotIonAbundances(elements=['Oxygen'])
+
+    # figure 4: testing toy model for total mass in different ions
+    if 0:
+        sPs = [TNG300]
+        cenSatSelect = 'cen'
+        ionsLoc = ['AllGas','AllGas_Metal','AllGas_Oxygen'] + ions
+
+        toyFacsList = [ [1.0,1.0,1.0], [0.6,1.5,1.5], [0.8,1.0,1.5], [1.0,1.0,1.5], [1.0,1.0,2.0],
+                        [0.6,1.0,1.5], [0.6,2.0,1.5], [1.5,1.0,1.5], [2.0,1.0,1.5] ]
+
+        for toyFacs in toyFacsList:
+            toyStr = 'toy=%.1f_%.1f_%.1f' % (toyFacs[0],toyFacs[1],toyFacs[2])
+            saveName = 'ions_masses_cen_z0_%s_%s.pdf' % \
+                ('_'.join([sP.simName for sP in sPs]),toyStr)
+            totalIonMassVsHaloMass(sPs, saveName, ions=ionsLoc, cenSatSelect='cen', 
+                redshift=0.0, vsHaloMass=True, secondTopAxis=True, toyFacs=toyFacs)

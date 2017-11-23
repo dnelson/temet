@@ -13,7 +13,7 @@ from numba import jit, void, int32
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
-@jit(nopython=True, nogil=True, cache=True)
+@jit(nopython=True, nogil=True)#, cache=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     """ Helper routine for calcHsml(), see below. """
     pp = 0
@@ -525,7 +525,7 @@ def benchmark():
 
     if 1:
         # load some gas in a box
-        sP = simParams(res=128, run='tracer', redshift=0.0)
+        sP = simParams(res=128, run='tng', redshift=0.0, variant='0000')
         pos = snapshotSubset(sP, 'gas', 'pos')
 
     # config

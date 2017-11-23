@@ -10,7 +10,7 @@ from datetime import datetime
 from os.path import isfile
 
 from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, savePathDefault, \
-                       momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+                       momentOfInertiaTensor, rotationMatricesFromInertiaTensor, defaultHsmlFac
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
@@ -161,7 +161,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
-    hsmlFac     = 2.5           # multiplier on smoothing lengths for sphMap
+    #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
     axesUnits   = 'code'        # code [ckpc/h], Mpc, deg, arcmin
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
@@ -216,6 +216,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
                 continue
             p[cName] = cVal
 
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+
         # add simParams info
         v = p['variant'] if 'variant' in p else None
         p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'], hInd=p['hInd'], variant=v)
@@ -248,12 +250,12 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     partField   = 'temp'          # which quantity/field to project for that particle type
     #valMinMax  = [min,max]       # stretch colortable between minimum and maximum field values
     rVirFracs   = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
-    fracsType   = 'rVirial'     # if not rVirial, draw circles at fractions of another quant, same as sizeType
+    fracsType   = 'rVirial'       # if not rVirial, draw circles at fractions of another quant, same as sizeType
     method      = 'sphMap'        # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
-    hsmlFac     = 2.5             # multiplier on smoothing lengths for sphMap
+    #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
     axesUnits   = 'code'          # code [ckpc/h], Mpc, deg, arcmin
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
@@ -309,6 +311,8 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
                 continue
             p[cName] = cVal
 
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+
         # load MPB once per panel
         v = p['variant'] if 'variant' in p else None
         sP = simParams(res=p['res'], run=p['run'], hInd=p['hInd'], 
@@ -360,7 +364,8 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
 
     # locate # of halos in mass bins (informational only)
     for massBin in massBins:
-        w = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
+        with np.errstate(invalid='ignore'):
+            w = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
         print('selectHalosFromMassBin(): In massBin [%.1f %.1f] have %d halos total.' % \
             (massBin[0],massBin[1],len(w)))
 
@@ -371,7 +376,9 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
         myMassBinInd = massBinInd
 
     myMassBin = massBins[ myMassBinInd ]
-    wMassBinAll = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
+
+    with np.errstate(invalid='ignore'):
+        wMassBinAll = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
 
     #print(gc['halos']['GroupFirstSub'][wMassBinAll])
 
