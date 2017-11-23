@@ -296,6 +296,8 @@ def plotIonAbundances(res='lg', elements=['Oxygen']):
 def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=0.0, metal=-1.0):
     """ Plot 2D histograms of ion abundance fraction in (density,temperature) space at one Z,z. 
     Metal is metallicity in [log Solar]. """
+    from plot.config import figsize
+    from util.simParams import simParams
     
     # visual config
     abund_range = [-6.0,0.0]
@@ -312,10 +314,10 @@ def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=
     for i, ionNum in enumerate(ionNums):
         # panel setup
         ax = fig.add_subplot(1,len(ionNums),i+1)
-        ax.set_xlim(ion.range['temp'])
-        ax.set_ylim(ion.range['dens'])
-        ax.set_xlabel('Temperature [ log K ]')
-        ax.set_ylabel('Density [ log cm$^{-3}$ ]') # hydrogen number density
+        ax.set_ylim(ion.range['temp'])
+        ax.set_xlim(ion.range['dens'])
+        ax.set_ylabel('Gas Temperature [ log K ]')
+        ax.set_xlabel('Gas Hydrogen Density n$_{\\rm H}$ [ log cm$^{-3}$ ]') # hydrogen number density
 
         # make 2D array from slices
         x = ion.grid['temp']
@@ -331,10 +333,11 @@ def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=
 
         # contour plot
         V = np.linspace(abund_range[0], abund_range[1], nContours)
-        c = contourf(XX, YY, z, V, cmap=ctName) #vmin=abund_range[0], vmax=abund_range[1], 
+        ZZ = z #np.flip(z,axis=1)
+        c = contourf(YY, XX, ZZ, V, cmap=ctName)
 
         labelText = ion.elementNameToSymbol(element) + ion.numToRoman(ionNum)
-        ax.text(x[0]+0.2, y[-1]-0.4,labelText, va='top', ha='left', color='white', fontsize='40')
+        ax.text(y[-1]-0.6, x[0]+0.3,labelText, va='bottom', ha='right', color='white', fontsize='40')
 
     # colorbar on last panel only
     fig.tight_layout()

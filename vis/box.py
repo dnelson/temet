@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile
 
-from vis.common import renderMultiPanel, savePathDefault
+from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac
 from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 from util import simParams
@@ -63,12 +63,12 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
-    hsmlFac     = 1.0         # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
+    #hsmlFac     = 1.0        # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
     relCenPos   = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
-    axesUnits   = 'code'      # code [ckpc/h], Mpc, deg, arcmin
+    axesUnits   = 'code'      # code [ckpc/h], mpc, deg, arcmin
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel)
     labelSim    = False       # label simulation name (lower right corner) of panel
@@ -112,6 +112,8 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
                 continue
             p[cName] = cVal
 
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+
         # add simParams info
         v = p['variant'] if 'variant' in p else None
         h = p['hInd'] if 'hInd' in p else None
@@ -119,7 +121,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
 
         # add imaging config for [square render of] whole box
         p['boxSizeImg'], p['boxCenter'], p['extent'] = boxImgSpecs(**p)
-        p['nPixels'] = [p['nPixels'],p['nPixels']]
+        if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
     # request render and save
     if retInfo: return panels
@@ -140,7 +142,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = 960         # number of pixels per dimension of images when projecting
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
-    hsmlFac     = 2.5         # multiplier on smoothing lengths for sphMap
+    #hsmlFac     = 2.5        # multiplier on smoothing lengths for sphMap
     relCenPos   = [0.5,0.5]   # [0-1,0-1] relative coordinates of where to center image, only in axes
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
@@ -191,12 +193,14 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
                 continue
             p[cName] = cVal
 
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+
         v = p['variant'] if 'variant' in p else None
         h = p['hInd'] if 'hInd' in p else None
         p['sP'] = simParams(res=p['res'], run=p['run'], hInd=h, variant=v)
 
         # add imaging config for [square render of] whole box
-        p['nPixels'] = [p['nPixels'],p['nPixels']]
+        if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
     # determine frame sequence
     snapNumLists = multiRunMatchedSnapList(panels, plotConfig.matchUse, maxNum=plotConfig.maxNSnaps, 

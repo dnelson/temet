@@ -874,7 +874,7 @@ class cloudyIon():
         return metal_ion_mass_fraction
 
 class cloudyEmission():
-    """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
+    """ Use pre-computed Cloudy table to derive line emissivities for simulation gas cells. """
     lineAbbreviations = {'Lyman alpha' : 'H  1 1215.67A',
                          'H alpha'     : 'H  1 6562.81A',
                          'H beta'      : 'H  1 1025.72A',

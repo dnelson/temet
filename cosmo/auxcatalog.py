@@ -2234,7 +2234,7 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VII mass',op='sum',rad=None),
    'Subhalo_Mass_OVIII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VIII mass',op='sum',rad=None),
-     
+
    'Subhalo_Mass_AllGas_Oxygen' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad=None),
    'Subhalo_Mass_AllGas_Metal' : \

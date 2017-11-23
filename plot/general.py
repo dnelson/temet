@@ -37,7 +37,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_rad = ['rhalo_200','rhalo_500']
 
     # generally available (auxcat)
-    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_metal']
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z']
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                    'bmag_halo_masswt',   'bmag_halo_volwt', 
                    'pratio_halo_masswt', 'pratio_halo_volwt', 'pratio_2rhalf_masswt', 
@@ -266,12 +266,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'kpc ]'
         if clean: label = 'R$_{\\rm halo}$ [ '+logStr+'kpc ]'
 
-    if quant in ['mass_ovi','mass_ovii','mass_z']:
+    if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo
         speciesStr = quant.split("_")[1].upper()
         label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
 
         if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
+        if speciesStr == 'O': speciesStr = 'AllGas_Oxygen'
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
         ac = auxCat(sP, fields=[fieldName])
@@ -284,6 +285,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if speciesStr == 'OVII':
             minMax = [6.0, 7.4]
             if tight: minMax = [5.6, 8.6]
+        if speciesStr == 'OVIII':
+            minMax = [6.0, 7.4]
+            if tight: minMax = [5.6, 8.6]
+        if speciesStr == 'AllGas_Oxygen':
+            minMax = [6.5, 9.0]
+            if tight: minMax = [6.0, 10.5]
         if speciesStr == 'AllGas_Metal':
             minMax = [7.0, 9.5]
             if tight: minMax = [6.5, 11.0]
@@ -731,7 +738,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if quant == 'B_MH': label += ' w/ reservoir'
             if quant == 'B_MH_actual': label += ' w/o reservoir'
         minMax = [6.0,9.0]
-        if tight: minMax = [6.0,10.0]
+        if tight: minMax = [7.5,8.5] #[6.0,10.0]
 
     if quant in ['Mdot_BH_edd']:
         # blackhole mass accretion rate normalized by its eddington rate
