@@ -9,6 +9,7 @@ import numpy as np
 import h5py
 from os import path, mkdir
 import glob
+import struct
 
 def concatSubboxFilesAndMinify():
     """ Minify a series of subbox snapshots but removing unwanted fields, and re-save concatenated 
@@ -688,4 +689,140 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
         print('  \end{center}')
         print('\end{table*}')
 
-    import pdb; pdb.set_trace()
+def loadMillenniumSubhaloCatalog():
+    """ Load a complete subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation. """
+    basePath = '/home/extdylan/sims.millennium/Millennium1/output/'
+    snap = 63
+
+    header_bytes = 20
+
+    def _chunkPath(snap, chunkNum):
+        return basePath + 'groups_%03d/sub_tab_%03d.%s' % (snap,snap,chunkNum)
+
+    nChunks = len( glob.glob(_chunkPath(snap,'*')) )
+    print('Found [%d] chunks for snapshot [%03d], loading...' % (nChunks,snap))
+
+    # reader header of first chunk
+    with open(_chunkPath(snap,0),'rb') as f:
+        header = f.read(4*5)
+
+    NGroups    = struct.unpack('i', header[0:4])[0]
+    NIds       = struct.unpack('i', header[4:8])[0]
+    TotNGroups = struct.unpack('i', header[8:12])[0]
+    NFiles     = struct.unpack('i', header[12:16])[0]
+    NSubs      = struct.unpack('i', header[16:20])[0]
+
+    assert NFiles == nChunks
+
+    # no TotNSubs stored...
+    TotNSubs = 0
+    TotNGroupsCheck = 0
+
+    for i in range(nChunks):
+        with open(_chunkPath(snap,i),'rb') as f:
+            header  = f.read(4*5)
+            NGroups = struct.unpack('i', header[0:4])[0]
+            NSubs   = struct.unpack('i', header[16:20])[0]
+
+            TotNSubs += NSubs
+            TotNGroupsCheck += NGroups
+
+    print('Total: [%d] groups, [%d] subhalos, reading...' % (TotNGroups,TotNSubs))
+
+    assert TotNGroupsCheck == TotNGroups
+
+    # allocate
+    NSubsPerHalo   = np.zeros( TotNGroups, dtype='int32' )
+    FirstSubOfHalo = np.zeros( TotNGroups, dtype='int32' )
+
+    SubLen         = np.zeros( TotNSubs, dtype='int32' )
+    SubOffset      = np.zeros( TotNSubs, dtype='int32' )
+    SubParentHalo  = np.zeros( TotNSubs, dtype='int32' )
+
+    Halo_M_Mean200 = np.zeros( TotNGroups, dtype='float32' )
+    Halo_R_Mean200 = np.zeros( TotNGroups, dtype='float32' )
+    Halo_M_Crit200 = np.zeros( TotNGroups, dtype='float32' )
+    Halo_R_Crit200 = np.zeros( TotNGroups, dtype='float32' )
+    Halo_M_TopHat200 = np.zeros( TotNGroups, dtype='float32' )
+    Halo_R_TopHat200 = np.zeros( TotNGroups, dtype='float32' )
+
+    SubPos         = np.zeros( (TotNSubs,3), dtype='float32' )
+    SubVel         = np.zeros( (TotNSubs,3), dtype='float32' )
+    SubVelDisp     = np.zeros( TotNSubs, dtype='float32' )
+    SubVmax        = np.zeros( TotNSubs, dtype='float32' )
+    SubSpin        = np.zeros( (TotNSubs,3), dtype='float32' )
+    SubMostBoundID = np.zeros( TotNSubs, dtype='int64' )
+    SubHalfMass    = np.zeros( TotNSubs, dtype='float32' )
+
+    # load
+    s_off = 0 # subhalos
+    g_off = 0 # groups
+
+    for i in range(nChunks):
+        if i % int(nChunks/10) == 0: print(' %d%%' % np.ceil(float(i)/nChunks*100), end='')
+        # full read
+        with open(_chunkPath(snap,i),'rb') as f:
+            data = f.read()
+
+        # header (object counts)
+        NGroups    = struct.unpack('i', data[0:4])[0]
+        NSubs      = struct.unpack('i', data[16:20])[0]
+
+        # per halo
+        off = header_bytes
+        NSubsPerHalo[g_off : g_off + NGroups]   = struct.unpack('i' * NGroups, data[off + 0*NGroups : off + 4*NGroups])
+        FirstSubOfHalo[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 4*NGroups : off + 8*NGroups])
+
+        # per subhalo
+        off = header_bytes + 8*NGroups
+        SubLen[s_off : s_off + NSubs]        = struct.unpack('i' * NSubs, data[off + 0*NSubs : off + 4*NSubs])
+        SubOffset[s_off : s_off + NSubs]     = struct.unpack('i' * NSubs, data[off + 4*NSubs : off + 8*NSubs])
+        SubParentHalo[s_off : s_off + NSubs] = struct.unpack('i' * NSubs, data[off + 8*NSubs : off + 12*NSubs])
+
+        # per halo
+        off = header_bytes + 8*NGroups + 12*NSubs
+        Halo_M_Mean200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 0*NGroups: off + 4*NGroups])
+        Halo_R_Mean200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 4*NGroups: off + 8*NGroups])
+        Halo_M_Crit200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 8*NGroups: off + 12*NGroups])
+        Halo_R_Crit200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 12*NGroups: off + 16*NGroups])
+        Halo_M_TopHat200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 16*NGroups: off + 20*NGroups])
+        Halo_R_TopHat200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 20*NGroups: off + 24*NGroups])
+
+        # per subhalo
+        off = header_bytes + 8*NGroups + 12*NSubs + 24*NGroups
+        SubPos[s_off : s_off + NSubs,:]   = np.reshape( struct.unpack('f' * 3*NSubs, data[off + 0*NSubs : off + 12*NSubs]), (NSubs,3) )
+        SubVel[s_off : s_off + NSubs,:]   = np.reshape( struct.unpack('f' * 3*NSubs, data[off + 12*NSubs : off + 24*NSubs]), (NSubs,3) )
+        SubVelDisp[s_off : s_off + NSubs]             = struct.unpack('f' * 1*NSubs, data[off + 24*NSubs : off + 28*NSubs])
+        SubVmax[s_off : s_off + NSubs]                = struct.unpack('f' * 1*NSubs, data[off + 28*NSubs : off + 32*NSubs])
+        SubSpin[s_off : s_off + NSubs,:]  = np.reshape( struct.unpack('f' * 3*NSubs, data[off + 32*NSubs : off + 44*NSubs]), (NSubs,3) )
+        SubMostBoundID[s_off : s_off + NSubs]         = struct.unpack('q' * 1*NSubs, data[off + 44*NSubs : off + 52*NSubs])
+        SubHalfMass[s_off : s_off + NSubs]            = struct.unpack('f' * 1*NSubs, data[off + 52*NSubs : off + 56*NSubs])
+
+        # should have read entire file
+        off = header_bytes + 8*NGroups + 12*NSubs + 24*NGroups + 56*NSubs
+        assert off == len(data)
+
+        g_off += NGroups
+        s_off += NSubs
+
+    # sanity checks
+    assert SubLen.min() >= 20
+    assert SubOffset.min() >= 0
+    assert SubParentHalo.min() >= 0
+    assert SubPos.min() >= 0.0 and SubPos.max() <= 500.0
+    assert SubMostBoundID.min() >= 0
+
+    r = {}
+    for var in locals().keys():
+        r[var] = locals()[var]
+
+    # save into single hdf5
+    with h5py.File(_chunkPath(snap,'hdf5'), 'w') as f:
+        for key in r:
+            if key in ['s_off','g_off','header','nChunks','_chunkPath','data','NSubs','NGroups','off','f','i','basePath','r','header_bytes']:
+                continue
+            f[key] = r[key]
+
+    # return
+    print('Saved [%s].' % _chunkPath(snap,'hdf5'))
+    return r
