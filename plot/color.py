@@ -15,14 +15,14 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d, gaussian_kde
 
 from util import simParams
-from util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, leastsq_fit
+from util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
 from tracer.tracerMC import match3
 from cosmo.color import calcMstarColor2dKDE, calcColorEvoTracks, characterizeColorMassPlane, \
    loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, colorTransitionTimes
 from cosmo.mergertree import loadMPB
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift, redshiftToSnapNum
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader
-from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange
+from plot.quantities import simSubhaloQuantity, bandMagRange
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
 from plot.config import *

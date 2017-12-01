@@ -7,5 +7,6 @@ from . import color
 from . import general
 from . import globalComp
 from . import oxygen
+from . import quantities
 from . import sizes
 from config import *

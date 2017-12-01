@@ -20,10 +20,11 @@ from functools import partial
 from util import simParams
 from util.loadExtern import werk2013, johnson2015
 from plot.config import *
-from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, closest, reducedChiSq
+from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, getWhiteBlackColors, closest, reducedChiSq
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.cloudy import cloudyIon
-from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList, plotPhaseSpace2D
+from plot.general import plotPhaseSpace2D
+from plot.quantities import simSubhaloQuantity, bandMagRange, quantList
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from plot.cloudy import ionAbundFracs2DHistos
 from vis.common import setAxisColors
@@ -1696,8 +1697,9 @@ def paperPlots():
     # figure 3b: global box phase-diagrams weighted by gas mass in OVI, OVII, and OVIII
     if 0:
         sP = TNG100
-        xAxis = 'dens_nH'
-        yAxis = 'temp'
+        ptType = 'gas'
+        xQuant = 'hdens'
+        yQuant = 'temp'
         weights = ['O VI mass','O VII mass','O VIII mass']
         xMinMax = [-9.0,0.0]
         yMinMax = [3.0,8.0]
@@ -1706,7 +1708,7 @@ def paperPlots():
         hideBelow = True
         smoothSigma = 1.0
 
-        plotPhaseSpace2D(sP, yAxis, xAxis=xAxis, weights=weights, haloID=None, 
+        plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=None, 
                          massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
                          contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 

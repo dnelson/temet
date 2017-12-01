@@ -436,7 +436,7 @@ class simParams:
             self.plotPrefix = 'zL' + str(self.levelMax) + ds
 
         # ZOOMS-2
-        if run in ['zooms2','zooms2_tng']:
+        if run in ['zooms2','zooms2_tng','zooms2_josh']:
             self.validResLevels = [9,10,11,12]
             self.boxSize        = 20000.0
             self.groupOrdered   = True
@@ -468,15 +468,18 @@ class simParams:
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
                 self.winds  = 3
                 self.BHs    = 3
+            if '_josh' in run:
+                assert self.variant in ['FP','MO','PO'] # full-physics, metal-line cooling, primordial only
 
             bs = str(round(self.boxSize/1000))
+            ls = str(self.levelMax) if run != 'zooms2_josh' else '%d_%d_%s' % (self.levelMax,self.levelMax+1,self.variant) # CGM_ZOOM boosted
             ts = 't' if '_tng' in run else ''
 
-            self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+str(self.levelMax)+ts+'/'
+            self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+ls+ts+'/'
             self.savPrefix  = 'Z2'
-            self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + '_' + 'gen2' + ts
-            self.saveTag    = 'z2H' + str(hInd) + 'L' + str(self.levelMax)
-            self.plotPrefix = 'z2L' + str(self.levelMax)
+            self.simName    = 'h' + str(hInd) + 'L' + ls + '_' + 'gen2' + ts
+            self.saveTag    = 'z2H' + str(hInd) + 'L' + ls
+            self.plotPrefix = 'z2L' + ls
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
         if run == 'feedback':

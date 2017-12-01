@@ -13,12 +13,12 @@ from matplotlib.colors import LogNorm
 
 import illustris_python as il
 from util import units
-from util.helper import isUnique, nUnique, iterable, logZeroNaN, sampleColorTable
+from util.helper import isUnique, nUnique, iterable, logZeroNaN, sampleColorTable, getWhiteBlackColors
 from cosmo.util import correctPeriodicDistVecs, correctPeriodicPosVecs, periodicDists, \
   crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatSubhaloIndices
 from cosmo.color import loadSimGalColors, gfmBands
 from cosmo.mergertree import loadMPB
-from plot.general import simSubhaloQuantity, getWhiteBlackColors
+from plot.quantities import simSubhaloQuantity
 from plot.cosmoGeneral import tngModel_chi
 from vis.common import setAxisColors
 from plot.config import *
