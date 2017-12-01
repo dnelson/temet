@@ -713,8 +713,6 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         partFieldLoad = 'vel'
     if partField in velLOSFieldNames + velCompFieldNames:
         partFieldLoad = 'vel'
-    if partField in ['bmag_uG']:
-        partFieldLoad = 'bmag'
 
     # quantity and column density normalization
     normCol = False
@@ -811,7 +809,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
     # hydrogen/metal/ion column densities
     if (' ' in partField and ' mass' not in partField and ' frac' not in partField):
         assert 'sb_' not in partField
-        ion = cloudyIon(None)
+        ion = cloudyIon(sP=None)
         grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
         grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
@@ -820,9 +818,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         if partField == 'O VII': config['ctName'] = 'magma'
         if partField == 'O VIII': config['ctName'] = 'plasma'
 
-    if 'O6_O8_ratio' in partField:
+    if '_ionmassratio' in partField:
+        ion = cloudyIon(sP=None)
+        ion1, ion2, _ = partField.split('_')
+
         grid  = logZeroMin( grid )
-        config['label']  = 'OVI / OVIII Mass Ratio [log]'
+        config['label']  = '%s / %s Mass Ratio [log]' % (ion.formatWithSpace(ion1),ion.formatWithSpace(ion2))
         config['ctName'] = 'Spectral'
         config['plawScale'] = 0.6
 
@@ -893,7 +894,6 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         config['ctName'] = 'Spectral_r'
 
     if partField in ['bmag_uG']:
-        grid = logZeroMin( grid * 1e6 )
         config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
         config['plawScale'] = 0.4

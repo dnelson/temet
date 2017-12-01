@@ -14,9 +14,6 @@ import pickle
 import json
 from datetime import datetime
 
-from prospect.sources import CSPSpecBasis
-from prospect.models import sedmodel
-
 from mpl_toolkits.axes_grid.inset_locator import inset_axes
 from obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
 from plot.config import *
@@ -28,6 +25,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 def plotSingleResult(ind, sps=None, doSim=None):
     """ Load the results of a single MCMC fit, print the answer, render a corner plot of the joint 
     PDFs of all the parameters, and show the original spectrum as well as some ending model spectra. """
+    from prospect.sources import CSPSpecBasis
+    from prospect.models import sedmodel
 
     # mapping from sampling labels to pretty labels
     new_labels = {'zred':'10$^4$ z$_{\\rm res}$', 
@@ -241,6 +240,7 @@ def talkPlots():
     from util.simParams import simParams
     from tracer.tracerMC import match3
     from cosmo.util import cenSatSubhaloIndices
+    from prospect.sources import CSPSpecBasis
 
     singleInds = np.arange(300,400,20) # central #
 

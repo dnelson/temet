@@ -724,7 +724,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
             r[ptName] = offsets_pt[ [first_sub_groupID,last_sub_groupID], sP.ptNum(ptName) ]
             r[ptName][1] += last_sub_length[ sP.ptNum(ptName) ] - 1
 
-        assert r[ptName][1] >= 0 # otherwise indicates we read the last/unused element of offsets_pt
+        assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1 # otherwise we read the last/unused element of offsets_pt
 
     return r
 

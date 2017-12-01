@@ -599,6 +599,15 @@ class cloudyIon():
     solar_Y = 0.2485 # M_He / M_tot
     solar_Z = 0.0134 # M_metals / M_tot (so (M_metals/M_H)_solar = solar_Z/solar_X = 0.0182)
 
+    # property helpers
+    @property
+    def atomicSymbols(self):
+        return [element['symbol'] for element in self.el]
+
+    @property
+    def atomicNames(self):
+        return [element['name'] for element in self.el]
+
     # simple roman numeral mapping
     roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
 
@@ -657,6 +666,7 @@ class cloudyIon():
               log(Z_gas) = 12 + log(O/H) - 12 - log( (M_O / M_H)/(X*M_H + Y*M_He) )
                          = log(O/H) - log( 16.0*1.0079 / (0.75*1.0079 + 0.25*4.0) )
         """
+        assert 0 # to finish
         M_X  = self.atomicMass(element)
         M_H  = self.atomicMass('Hydrogen')
         M_He = self.atomicMass('Helium')
@@ -675,6 +685,13 @@ class cloudyIon():
         M_X = self.atomicMass(element)
 
         return numDensRatio * (M_X/M_H) * self.solar_X
+
+    def _massRatioToRelSolarNumDensRatio(self, mass_ratio, el1, el2):
+        """ Convert a mass (or mass density) ratio of two elements el1 and el2, i.e. Si/H or O/H, to the 
+        notation e.g. [Si/H] or [O/H] which is a number density ratio relative to the solar value. """
+        numdens_ratio = mass_ratio * (self.atomicMass(el1)/self.atomicMass(el2))
+        numdens_ratio_solar = self.solarAbundance(el1) / self.solarAbundance(el2)
+        return np.log10(numdens_ratio) - np.log10(numdens_ratio_solar)
 
     def _getElInfo(self, elements, fieldNameToMatch, fieldNameToReturn):
         """ Search el[] structure and return requested information. """
@@ -725,6 +742,7 @@ class cloudyIon():
     def numToRoman(self, ionNums):
         """ Map numeric ion numbers to roman numeral strings. """
         ionNums = iterable(ionNums)
+        ionNums = [int(num) for num in ionNums]
 
         for i, ionNum in enumerate(ionNums):
             if ionNum <= 0 or ionNum > len(self.roman):
@@ -733,6 +751,21 @@ class cloudyIon():
 
         if len(ionNums) == 1: return ionNums[0]
         return ionNums
+
+    def formatWithSpace(self, str):
+        """ Convert a string of the type e.g. 'Mg2' or 'O6' to 'Mg II' or 'O VI'. """
+        elName = None
+        ionNum = None
+
+        # search through space of element names, sorted shortest first, so that we capture e.g. 'Be' over 'B'
+        for element in sorted(self.atomicSymbols, key=len, reverse=False):
+            if str.find(element) == 0:
+                elName = element
+
+        ionNum = str.split(elName)[1]
+        assert elName is not None and ionNum is not None
+
+        return '%s %s' % (elName, self.numToRoman(ionNum))
 
     def slice(self, element, ionNum, redshift=None, dens=None, metal=None, temp=None):
         """ Return a 1D slice of the table specified by a value in all other dimensions (only one 

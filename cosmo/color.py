@@ -21,7 +21,7 @@ from cosmo.load import groupCat, groupCatHeader, auxCat
 from cosmo.util import correctPeriodicDistVecs, cenSatSubhaloIndices, snapNumToRedshift
 from cosmo.mergertree import loadMPB, loadMPBs
 from plot.config import defSimColorModel
-from plot.general import bandMagRange
+from plot.quantities import bandMagRange
 
 # currently same for all sims, otherwise move into sP:
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,

@@ -17,12 +17,12 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
 from util import simParams
-from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable
+from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors
-from plot.general import simSubhaloQuantity, getWhiteBlackColors, bandMagRange, quantList
+from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
 def addRedshiftAxis(ax, sP, zVals=[0.0,0.25,0.5,0.75,1.0,1.5,2.0,3.0,4.0,6.0,10.0]):

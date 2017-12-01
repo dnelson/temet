@@ -24,6 +24,10 @@ from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 boxGridSizeHI     = 1.5 # code units, e.g. ckpc/h
 boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
+# todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
+# eliminate the entire specialized ufunc logic herein
+userCustomFields = ['Krot','radvel']
+
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
         the SO radii already computed and available in the group catalog (input as a string). Methods A 
@@ -333,7 +337,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     """
     assert op in ['sum','mean','max','ufunc']
     assert scope in ['subfind','fof','global']
-    if op == 'ufunc': assert ptProperty in ['Krot','radVel']
+    if op == 'ufunc': assert ptProperty in userCustomFields
 
     # determine ptRestriction
     if ptType == 'stars':
@@ -423,7 +427,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
         fieldsLoad.append('vel')
         fieldsLoad.append('mass')
-    if ptProperty == 'radVel':
+    if ptProperty == 'radvel':
         if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
         if 'vel' not in fieldsLoad: fieldsLoad.append('vel')
         gc['subhalos']['SubhaloVel'] = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloVel'], sq=True)
@@ -433,6 +437,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
 
     if op != 'ufunc':
+        # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
+        # eliminate the entire specialized ufunc logic herein
         particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
 
     if 'count' not in particles:
@@ -599,42 +605,15 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 r[i,3] = sub_stellarJ_mag / sub_stellarMass # j_star [kpc km/s]
 
             # ufunc: radial velocity
-            if ptProperty == 'radVel':
+            if ptProperty == 'radvel':
                 gas_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
                 gas_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
                 gas_weights = np.squeeze( particles['weights'][i0:i1][wValid] )
 
-                if gas_pos.size == 3: # single cell
-                    gas_pos = np.reshape(gas_pos, (1,3))
-                    gas_vel = np.reshape(gas_vel, (1,3))
-                    gas_weights = np.array([gas_weights])
-
                 haloPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
                 haloVel = gc['subhalos']['SubhaloVel'][subhaloID,:]
 
-                # calculate position, relative to subhalo center (pkpc)
-                for j in range(3):
-                    gas_pos[:,j] -= haloPos[j]
-
-                correctPeriodicDistVecs( gas_pos, sP )
-
-                xyz = sP.units.codeLengthToKpc( gas_pos )
-                rad = np.linalg.norm(xyz, 2, axis=1)
-
-                # correct velocities for subhalo CM motion
-                gas_vel = sP.units.particleCodeVelocityToKms( gas_vel )
-
-                for j in range(3):
-                    # SubhaloVel already peculiar, no scalefactor needed
-                    gas_vel[:,j] -= haloVel[j]
-
-                # correct velocities for hubble flow (neglect mass growth term)
-                vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
-                             gas_vel[:,1] * xyz[:,1] + \
-                             gas_vel[:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards
-
-                v_H = sP.units.H_z * rad # Hubble expansion velocity magnitude (km/s) at each position
-                vrad = vrad_noH + v_H # radial velocity (km/s) with hubble expansion subtracted
+                vrad = sP.units.particleRadialVelInKmS(gas_pos, gas_vel, haloPos, haloVel)
 
                 r[i] = np.average(vrad, weights=gas_weights)
 
@@ -1977,7 +1956,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     r = np.zeros( (nSubsDo,radNumBins,numProfTypes), dtype='float32' )
-    r = np.squeeze(r)
+    if numProfTypes == 1: r = np.squeeze(r, axis=2)
 
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = ['pos']
@@ -1987,12 +1966,18 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     if ptRestriction in ['sfrgt0','sfreq0']:
         fieldsLoad.append('sfr')
 
+    if ptProperty == 'radvel':
+        if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
+        if 'vel' not in fieldsLoad: fieldsLoad.append('vel')
+        gc['SubhaloVel'] = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloVel'], sq=True)
+
     # so long as scope is not 'global', load the full particle set we need for these subhalos now
     if scope not in ['global','global_fof','subfind_global']:
         particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
 
-        particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
-        assert particles[ptProperty].ndim == 1
+        if ptProperty not in userCustomFields:
+            particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
+            assert particles[ptProperty].ndim == 1
 
         if 'count' not in particles:
             particles['count'] = particles[ particles.keys()[0] ].shape[0]
@@ -2020,10 +2005,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, 
                                                  indRange=indRange)
 
-            particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], 
-                                                              indRange=indRange)
+            if ptProperty not in userCustomFields:
+                particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], 
+                                                                  indRange=indRange)
+                assert particles[ptProperty].ndim == 1
 
-            assert particles[ptProperty].ndim == 1
             assert 'count' in particles
             assert weighting is None # load not implemented
 
@@ -2138,8 +2124,20 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             # log(radius), with any zero value set to small (included in first bin)
             loc_rr_log = logZeroSafe( rr[wValid], zeroVal=radMin-1.0 )
-            loc_val    = particles[ptProperty][i0:i1][wValid]
             #loc_wt    = particles['weights'][i0:i1][wValid] if weighting is not None else 1.0
+
+            if ptProperty not in userCustomFields:
+                loc_val = particles[ptProperty][i0:i1][wValid]
+            else:
+                # user function reduction operations, set loc_val now
+                if ptProperty == 'radvel':
+                    p_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
+                    p_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
+
+                    haloPos = gc['SubhaloPos'][subhaloID,:]
+                    haloVel = gc['SubhaloVel'][subhaloID,:]
+
+                    loc_val = sP.units.particleRadialVelInKmS(p_pos, p_vel, haloPos, haloVel)
 
             # weighted histogram (or other op) of rr_log distances
             if scope in ['global','global_fof']:
@@ -2338,9 +2336,9 @@ fieldComputeFunctionMapping = \
    'Subhalo_nH_2rhalfstars_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='nh',op='mean',rad='2rhalfstars',weighting='mass'),
    'Subhalo_Gas_RadialVel_halo_massWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='radVel',op='ufunc',rad='r015_1rvir_halo',weighting='mass'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='radvel',op='ufunc',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Gas_RadialVel_2rhalfstars_massWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='radVel',op='ufunc',rad='2rhalfstars',weighting='mass'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='radvel',op='ufunc',rad='2rhalfstars',weighting='mass'),
 
    'Subhalo_Pratio_2rhalfstars_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='pres_ratio',op='mean',rad='2rhalfstars',weighting='mass'),

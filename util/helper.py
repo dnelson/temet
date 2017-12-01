@@ -495,6 +495,23 @@ def reducedChiSq(sim_x, sim_y, data_x, data_y, data_yerr=None, data_yerr_up=None
 
 # --- vis ---
 
+def getWhiteBlackColors(pStyle):
+    """ Plot style helper. """
+    assert pStyle in ['white','black']
+
+    if pStyle == 'white':
+        color1 = 'white' # background
+        color2 = 'black' # axes etc
+        color3 = '#777777' # color bins with only NaNs
+        color4 = '#cccccc' # color bins with value 0.0
+    if pStyle == 'black':
+        color1 = 'black'
+        color2 = 'white'
+        color3 = '#333333'
+        color4 = '#222222'
+
+    return color1, color2, color3, color4
+
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None):
     """ Load a custom or built-in color table specified by ctName.
       valMinMax: required for some custom colormaps, and for some adjustments.

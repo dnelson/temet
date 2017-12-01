@@ -241,6 +241,16 @@ class units(object):
 
         return vol_cgs
 
+    def codeVolumeToKpc3(self, x):
+        """ Convert a volume [length^3] in code units to physical kpc^3. """
+        assert self._sP.redshift is not None
+
+        vol_cgs = np.array(x, dtype='float64') / self._sP.HubbleParam**3 # remove little h factors
+        vol_cgs *= (self.UnitLength_in_cm/self.kpc_in_cm)**3 # account for non-kpc code lengths
+        vol_cgs *= self.scalefac**3 # comoving -> physical
+
+        return vol_cgs
+
     def physicalKpcToCodeLength(self, x):
         """ Convert a length in [pkpc] to code units [typically ckpc/h]. """
         assert self._sP.redshift is not None
@@ -293,7 +303,7 @@ class units(object):
         return b_gauss
 
     def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
-        """ Calculate particle angular momentum 3-vector in [kpc km/s] given input arrays of pos,vel,mass 
+        """ Calculate particle angular momentum 3-vector in [Msun*kpc km/s] given input arrays of pos,vel,mass 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
         # make copies of input arrays
         gas_mass = self.codeMassToMsun( mass.astype('float32') )
@@ -362,6 +372,10 @@ class units(object):
         # make copies of input arrays
         gas_pos = pos.astype('float32')
         gas_vel = vel.astype('float32')
+
+        if gas_pos.size == 3: # single particle
+            gas_pos = np.reshape(gas_pos, (1,3))
+            gas_vel = np.reshape(gas_vel, (1,3))
 
         # calculate position, relative to subhalo center (pkpc)
         for i in range(3):
@@ -860,7 +874,7 @@ class units(object):
         
         arcsinh_arg = np.sqrt( (1-self._sP.omega_m)/self._sP.omega_m ) * (1+redshifts[w])**(-3.0/2.0)
         age[w] = 2 * np.arcsinh(arcsinh_arg) / (self.H0_kmsMpc * 3 * np.sqrt(1-self._sP.omega_m))
-        age[w] *= 3.085678e+19 / 3.15567e+7 / 1e9 # Gyr
+        age[w] *= 3.085678e+19 / 3.15576e+7 / 1e9 # Gyr
 
         if len(age) == 1:
             return age[0]
