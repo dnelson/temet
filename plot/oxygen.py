@@ -178,6 +178,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                           boxDepth10=False, colorOff=0):
     """ CDDF (column density distribution function) of O VI in the whole box.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
+    from util.loadExtern import danforth2016, muzahid2011
 
     # plot setup
     lw = 3.0
@@ -195,6 +196,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
         ax.set_ylim([-18, -12])
         if len(ions) == 1: ax.set_ylim([-19, -11])
         ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm oxygen}$)  [ cm$^{2}$ ]')
+        if len(ions) == 1: ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm %s}$)  [ cm$^{2}$ ]' % ions[0])
         if clean:
             ax.set_ylabel('f(N$_{\\rm oxygen}$) [ log cm$^{2}$ ]')
             if len(ions) == 1: ax.set_ylabel('f(N$_{\\rm %s}$) [ log cm$^{2}$ ]' % ions[0])
@@ -210,6 +212,26 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
         if clean:
             ax.set_ylabel('[N$_{\\rm oxygen}$$^2$ / 10$^{13}$] $\cdot$ f(N$_{\\rm oxygen}$) [ log ]')
             if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
+
+    # observational OVI points (not in paper)
+    if 0:
+        d16 = danforth2016()
+        m11 = muzahid2011()
+
+        if moment == 1:
+            d16['log_fOVI']  = np.log10( 10.0**d16['log_fOVI'] * 10.0**d16['log_NOVI'] )
+            m11['log_fOVI']  = np.log10( 10.0**m11['log_fOVI'] * 10.0**m11['log_NOVI'] )
+
+        l1,_,_ = ax.errorbar(d16['log_NOVI'], d16['log_fOVI'], yerr=[d16['log_fOVI_errDown'],d16['log_fOVI_errUp']],
+                   xerr=d16['log_NOVI_err'], color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, fmt='s')
+
+        l2,_,_ =  ax.errorbar(m11['log_NOVI'][2:], m11['log_fOVI'][2:], yerr=[m11['log_fOVI_errDown'][2:],m11['log_fOVI_errUp'][2:]],
+                   xerr=[m11['log_NOVI_errLow'][2:],m11['log_NOVI_errHigh'][2:]], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='o')
+        _,_,_  =  ax.errorbar(m11['log_NOVI'][:2], m11['log_fOVI'][:2], yerr=[m11['log_fOVI_errDown'][:2],m11['log_fOVI_errUp'][:2]],
+                   xerr=[m11['log_NOVI_errLow'][:2],m11['log_NOVI_errHigh'][:2]], color='#999999', ecolor='#999999', alpha=0.3, capsize=0.0, fmt='o')
+
+        legend1 = ax.legend([l1,l2], [d16['label'],m11['label']], loc='upper right')
+        ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
@@ -243,7 +265,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                     yy = logZeroNaN( fN_ion*N_ion*(N_ion/1e13) )
 
                 # plot middle line
-                label = '%s %s z=%.1f' % (sP.simName, ion, redshift)
+                label = '%s %s z=%.1f' % (sP.simName, ion, redshift) if len(redshifts) ==1 else '%s %s' % (sP.simName, ion)
                 if clean: label = ion
                 if clean and len(ions) == 1 and not boxDepth10: label = sP.simName
                 if i > 0: label = ''
@@ -256,7 +278,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     sExtra = []
     lExtra = []
 
-    if clean and len(redshifts) > 1:
+    if len(redshifts) > 1:
         for i, redshift in enumerate(redshifts):
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
             lExtra += ['z = %3.1f' % redshift]
@@ -1630,8 +1652,9 @@ def test_lambda_statistic():
 
     # obs
     N_obs = 10000
+    scale_fac = 0.5
 
-    obs_cols = np.random.normal(loc=loc, scale=scale, size=N_obs) # drawn from same distribution
+    obs_cols = np.random.normal(loc=loc, scale=scale*scale_fac, size=N_obs) # drawn from same distribution
     #obs_cols = np.zeros( N_obs, dtype='float32' ) + loc # all exact
 
     #lim_types = np.zeros( N_obs, dtype='int32' ) # all detections (0=detections, 1=upper lim, 2=lower lim)
@@ -1648,7 +1671,6 @@ def test_lambda_statistic():
         if lim_types[i] == 2: lambdas[i] = z2 # lower limit, PDF area which is consistent
 
     print('mean lambda: ',lambdas.mean())
-    import pdb; pdb.set_trace()
 
 # -------------------------------------------------------------------------------------------------
 

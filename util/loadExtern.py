@@ -1125,6 +1125,22 @@ def danforth2016():
 
     return r
 
+def muzahid2011():
+    """ Load observational data (OVI CDDF z~2.3) from Muzahid+ (2011). """
+    path = dataBasePath + 'muzahid/muzahid11_ovi.txt'
+    # columns: N_OVI_systems fN fN_yerrup fN_yerrdown fN_xerrleft fN_xerrright
+    data = np.loadtxt(path)
+
+    r = {'log_NOVI'         : data[:,0],
+         'log_NOVI_errLow'  : data[:,0] - data[:,4],
+         'log_NOVI_errHigh' : data[:,5] - data[:,0],
+         'log_fOVI'         : data[:,1],
+         'log_fOVI_errUp'   : data[:,2] - data[:,1],
+         'log_fOVI_errDown' : data[:,1] - data[:,3],
+         'label'            : 'Muzahid+ (2011) VLT/UVES 1.9<z<3.1'}
+
+    return r
+
 def bekeraite16VF():
     """ Load observational data points from Bekeraite+ (2016) Fig 3 extracted. """
     path = dataBasePath + 'bekeraite/b16.txt'

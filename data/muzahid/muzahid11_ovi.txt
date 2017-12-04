@@ -1,0 +1,12 @@
+# Muzahid+ (2011) - Figure 9 upper left panel
+# N_OVI_systems fN fN_yerrup fN_yerrdown fN_xerrleft fN_xerrright
+# note: first two points are not complete (decline at low N_OVI is not physical)
+# y-errors are 1 sigma Poisson
+# redshift range: 1.9 < z < 3.1, median z ~ 2.3
+13.25 -13.88 -13.69 -14.04 13.10 13.40
+13.55 -13.81 -13.68 -13.92 13.40 13.70
+13.85 -13.87 -13.78 -13.97 13.70 14.00
+14.15 -14.30 -14.18 -14.40 14.00 14.30
+14.45 -14.67 -14.56 -14.79 14.30 14.60
+14.75 -15.45 -15.26 -15.65 14.60 14.90
+15.05 -16.14 -15.84 -16.45 14.90 15.20
