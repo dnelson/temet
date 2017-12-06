@@ -709,8 +709,6 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     # quantity relies on a non-trivial computation / load of another quantity
     partFieldLoad = partField
 
-    if partField in ['vrad','vrad_vvir']:
-        partFieldLoad = 'vel'
     if partField in velLOSFieldNames + velCompFieldNames:
         partFieldLoad = 'vel'
 
@@ -739,9 +737,6 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         # load density estimate, square, convert back to effective mass (still col dens like)
         dm_vol = snapshotSubset(sP, partType, 'subfind_volume', indRange=indRange)
         mass = (mass / dm_vol)**2.0 * dm_vol
-
-    if partField in ['vrad','vrad_vvir']:
-        raise Exception('Not implemented (and remove duplication with tracerMC somehow?)')
 
     if partField in velLOSFieldNames + velCompFieldNames:
         quant = sP.units.particleCodeVelocityToKms(quant) # could add hubble expansion
@@ -973,13 +968,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         config['label'] = '%s %s-Velocity [km/s]' % (ptStr,velDirection)
         config['ctName'] = 'RdBu_r'
 
-    if partField == 'vrad':
+    if partField in ['vrad','halo_vrad','radvel','halo_radvel']:
         config['label']  = '%s Radial Velocity [km/s]' % ptStr
-        config['ctName'] = 'brewer-brownpurple'
+        config['ctName'] = 'PRGn' # brewer purple-green diverging
 
     if partField == 'vrad_vvir':
         config['label']  = '%s Radial Velocity / Halo v$_{200}$' % ptStr
-        config['ctName'] = 'brewer-brownpurple'
+        config['ctName'] = 'PRGn' # brewer purple-green diverging
+
+    if partField in ['specangmom_mag','specj_mag']:
+        grid = logZeroMin( grid )
+        config['label'] = '%s Specific Angular Momentum Magnitude [log kpc km/s]' % ptStr
+        config['ctName'] = 'cubehelix'
 
     # stars
     if partField in ['star_age','stellar_age']:
@@ -1107,8 +1107,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
         # accumulate per chunk by using a minimum reduction between the master grid and each chunk grid
         if '_minIP' in method: grid_quant.fill(np.inf)
 
-        disableChunkLoad = (sP.isPartType(partType,'stars') or sP.isPartType(partType,'dm')) \
-                           and not snapHasField(sP, partType, 'SubfindHsml')
+        disableChunkLoad = (sP.isPartType(partType,'dm') and not snapHasField(sP, partType, 'SubfindHsml')) or \
+                           sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
 
         if indRange is None and sP.subbox is None and not disableChunkLoad:
             nChunks = np.max( [1, int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0)] )
@@ -1346,6 +1346,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
+    fontsize = int(conf.rasterPx / 100.0 * 1.5) # 'xx-large'
+
     def _addCirclesHelper(p, ax, pos, radii, numToAdd):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
         countAdded = 0
@@ -1379,6 +1381,10 @@ def addBoxMarkers(p, conf, ax):
                     xPos = xyzDist[0]
                     yPos = xyzDist[1]
 
+                if p['axesUnits'] == 'kpc':
+                    xPos = p['sP'].units.codeLengthToKpc(xPos)
+                    yPos = p['sP'].units.codeLengthToKpc(yPos)
+                    rad  = p['sP'].units.codeLengthToKpc(rad)
                 if p['axesUnits'] == 'mpc':
                     xPos = p['sP'].units.codeLengthToMpc(xPos)
                     yPos = p['sP'].units.codeLengthToMpc(yPos)
@@ -1430,6 +1436,9 @@ def addBoxMarkers(p, conf, ax):
             xPos = 0.0
             yPos = 0.0
 
+        if p['axesUnits'] == 'kpc':
+            xPos = p['sP'].units.codeLengthToKpc(xPos)
+            yPos = p['sP'].units.codeLengthToKpc(yPos)
         if p['axesUnits'] == 'mpc':
             xPos = p['sP'].units.codeLengthToMpc(xPos)
             yPos = p['sP'].units.codeLengthToMpc(yPos)
@@ -1451,6 +1460,7 @@ def addBoxMarkers(p, conf, ax):
             if p['fracsType'] == 'pkpc':
                 rad = p['sP'].units.physicalKpcToCodeLength(rad)
 
+            if p['axesUnits'] == 'kpc': rad = p['sP'].units.codeLengthToKpc(rad)
             if p['axesUnits'] == 'mpc': rad = p['sP'].units.codeLengthToMpc(rad)
 
             c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
@@ -1465,7 +1475,7 @@ def addBoxMarkers(p, conf, ax):
         xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.12 * 960.0/conf.rasterPx) # upper right
         yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.04 * 960.0/conf.rasterPx)
         ax.text( xt, yt, zStr, color='white', alpha=1.0, 
-                 size='x-large', ha='left', va='center') # same size as legend text
+                 size=fontsize, ha='left', va='center') # same size as legend text
 
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
@@ -1492,22 +1502,18 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 
-        size = 'x-large'
         lw = 2.0
         y_off = 0.03
-        yt_frac = 0.06
 
         if conf.rasterPx >= 1000:
-            size = int(conf.rasterPx / 100.0 * 1.5)
             lw = 3.0
-            y_off = 0.05
-            yt_frac = size/1000.0 * 3.0
+            y_off = 0.04
 
         if conf.rasterPx > 2000:
-            size = int(conf.rasterPx / 100.0 * 5)
             lw = 4.0
-            y_off = 0.06
-            yt_frac = size/1000.0 * 2.3
+            y_off = 0.05
+
+        yt_frac = y_off * (2 + conf.rasterPx/5e3)
 
         x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx) # upper left
         x1 = x0 + (scaleBarLen * p['sP'].HubbleParam) # actually plot size in code units (e.g. ckpc/h)
@@ -1522,6 +1528,11 @@ def addBoxMarkers(p, conf, ax):
             x1 = p['sP'].units.codeLengthToAngularSize(x1, deg=deg, arcmin=amin, arcsec=asec)
             yy = p['sP'].units.codeLengthToAngularSize(yy, deg=deg, arcmin=amin, arcsec=asec)
             yt = p['sP'].units.codeLengthToAngularSize(yt, deg=deg, arcmin=amin, arcsec=asec)
+        if p['axesUnits'] == 'kpc':
+            x0 = p['sP'].units.codeLengthToKpc(x0)
+            x1 = p['sP'].units.codeLengthToKpc(x1)
+            yy = p['sP'].units.codeLengthToKpc(yy)
+            yt = p['sP'].units.codeLengthToKpc(yt)
         if p['axesUnits'] == 'mpc':
             x0 = p['sP'].units.codeLengthToMpc(x0)
             x1 = p['sP'].units.codeLengthToMpc(x1)
@@ -1529,8 +1540,7 @@ def addBoxMarkers(p, conf, ax):
             yt = p['sP'].units.codeLengthToMpc(yt)
 
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
-        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, 
-                 size=size, ha='center', va='center') # same font-size as colorbar/legend
+        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, size=fontsize, ha='center', va='center')
 
     # text in a combined legend?
     legend_labels = []
@@ -1572,7 +1582,7 @@ def addBoxMarkers(p, conf, ax):
     # draw legend
     if len(legend_labels):
         legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
-        legend = ax.legend(legend_lines, legend_labels, fontsize='xx-large', loc='lower left', 
+        legend = ax.legend(legend_lines, legend_labels, fontsize=fontsize, loc='lower left', 
                            handlelength=0, handletextpad=0)
 
         for text in legend.get_texts(): text.set_color('white')
@@ -1737,9 +1747,9 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
-    size = 'x-large'
-    if conf.rasterPx >= 1000:
-        size = int(conf.rasterPx / 100.0 * 3)
+    size = 'xx-large'
+    #if conf.rasterPx >= 1000:
+    #    size = int(conf.rasterPx / 100.0 * 3)
 
     cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
              size=size, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
@@ -1811,9 +1821,11 @@ def renderMultiPanel(panels, conf):
 
             sP = p['sP']
             idStr = ' (id=' + str(sP.hInd) + ')' if not sP.isZoom and sP.hInd is not None else ''
-            ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
+            ax.set_title('%s z=%d%s' % (sP.simName,sP.redshift,idStr))
+            if sP.redshift != int(sP.redshift): ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
+            if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))
 
-            axStrs = {'code':'[ ckpc/h ]', 'mpc':'[ Mpc ]', 'arcmin':'[ arcminutes ]', 'deg':'[ degrees ]'}
+            axStrs = {'code':'[ ckpc/h ]', 'kpc':'[ pkpc ]', 'mpc':'[ Mpc ]', 'arcmin':'[ arcminutes ]', 'deg':'[ degrees ]'}
             axStr = axStrs[ p['axesUnits'] ]
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' ' + axStr)
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' ' + axStr)
@@ -1853,6 +1865,8 @@ def renderMultiPanel(panels, conf):
             # place image
             if p['axesUnits'] == 'code':
                 pExtent = p['extent'] 
+            if p['axesUnits'] == 'kpc':
+                pExtent = p['sP'].units.codeLengthToKpc(p['extent'])
             if p['axesUnits'] == 'mpc':
                 pExtent = p['sP'].units.codeLengthToMpc(p['extent'])
             if p['axesUnits'] == 'arcmin':
@@ -1883,6 +1897,19 @@ def renderMultiPanel(panels, conf):
                 cb = plt.colorbar(cax=cax)
                 cb.outline.set_edgecolor(color2)
                 cb.ax.set_ylabel(config['label'])
+
+            # towards font-size invariance with changing rasterPx
+            fontsize = int(conf.rasterPx / 100.0 * 1.2)
+            padding = conf.rasterPx / 240.0
+            ax.tick_params(axis='x', which='major', labelsize=fontsize)
+            ax.tick_params(axis='y', which='major', labelsize=fontsize)
+            cb.ax.tick_params(axis='y', which='major', labelsize=fontsize)
+            ax.xaxis.label.set_size(fontsize)
+            ax.yaxis.label.set_size(fontsize)
+            cb.ax.yaxis.label.set_size(fontsize)
+            ax.title.set_fontsize(fontsize)
+            ax.tick_params(axis='both', which='major', pad=padding)
+            cb.ax.tick_params(axis='both', which='major', pad=padding)
 
         fig.tight_layout()
         if nRows == 1 and nCols == 3: plt.subplots_adjust(top=0.97,bottom=0.06) # fix degenerate case

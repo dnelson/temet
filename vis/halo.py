@@ -16,7 +16,7 @@ from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
 from util import simParams
 
-def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **kwargs):
+def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
     assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','pkpc']
 
@@ -71,6 +71,8 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, **
             boxCenter = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
             galHalfMassRad = mpb['SubhaloHalfmassRad'][ind[0]]
             galHalfMassRadStars = mpb['SubhaloHalfmassRadType'][ind[0],sP.ptNum('stars')]
+
+    boxCenter += np.array(cenShift)
 
     # convert size into code units
     if sizeType == 'rVirial':
@@ -159,11 +161,12 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     fracsType   = 'rVirial'     # if not rVirial, draw circles at fractions of another quant, same as sizeType
     method      = 'sphMap'      # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
+    cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
-    axesUnits   = 'code'        # code [ckpc/h], Mpc, deg, arcmin
+    axesUnits   = 'code'        # code [ckpc/h], pkpc, Mpc, deg, arcmin
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None          # stretch vector field visualizaton between these bounds (None=automatic)
@@ -253,6 +256,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     fracsType   = 'rVirial'       # if not rVirial, draw circles at fractions of another quant, same as sizeType
     method      = 'sphMap'        # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
+    cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap

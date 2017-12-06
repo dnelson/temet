@@ -1247,6 +1247,9 @@ def snapshotSubset(sP, partType, fields,
 
         # radial velocity, negative=inwards, relative to the central subhalo pos/vel, including hubble correction [km/s]
         if field.lower() in ['vrad','halo_vrad','radvel','halo_radvel']:
+            if sP.isZoom:
+                subhaloID = sP.zoomSubhaloID
+                print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
             assert haloID is not None or subhaloID is not None
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
@@ -1258,6 +1261,9 @@ def snapshotSubset(sP, partType, fields,
 
         # angular momentum, relative to the central subhalo pos/vel, either the 3-vector [Msun kpc km/s] or specific magnitude [kpc km/s]
         if field.lower() in ['specangmom_mag','specj_mag','angmom_vec','j_vec']:
+            if sP.isZoom:
+                subhaloID = sP.zoomSubhaloID
+                print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
             assert haloID is not None or subhaloID is not None
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)

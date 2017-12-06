@@ -934,7 +934,7 @@ class simParams:
             print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0
 
-        if self.run in ['zooms2']:
+        if self.run in ['zooms2','zooms2_josh']:
             if self.hInd == 2 and self.res in [9,10,11]:
                 return 0 # verified
 
