@@ -1149,3 +1149,73 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
         saveFilename = './sampleMatched_%s_%s_%s.pdf' % (sample,run,matchMethod)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def zooms2_josh(conf=2, quadrant=False):
+    """ Visualize single final halo of h2_L11_12_FP (boosted, sims.zooms2) at z=2.25. """
+    panels = []
+
+    run        = 'zooms2_josh'
+    res        = 11
+    redshift   = 2.25
+    hInd       = 2
+    variant    = 'FP'
+
+    rVirFracs  = [1.0]
+    method     = 'sphMap_global'
+    nPixels    = [3840,3840] # 960 or 3840
+    axes       = [1,0]
+    labelZ     = True
+    labelScale = True
+    labelSim   = False
+    labelHalo  = True
+    relCoords  = True
+    rotation   = None
+
+    size       = 180.0 #400.0
+    sizeType   = 'pkpc'
+    axesUnits  = 'kpc'
+
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant, hInd=hInd)
+
+    if quadrant:
+        # zoom in to upper right quadrant
+        halo = groupCatSingle(sP, haloID=sP.zoomSubhaloID)
+        cenShift = [halo['Group_R_Crit200']*0.25,halo['Group_R_Crit200']*0.25,0]
+        size = sP.units.codeLengthToKpc(halo['Group_R_Crit200']*0.5)
+        labelHalo = False
+        relCoords = False
+
+    if conf == 0:
+        # stellar mass column density
+        panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.0]} )
+    if conf == 1:
+        # gas column density
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.5]} )
+    if conf == 2:
+        # gas OVI column
+        panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[12.0, 17.0]} )
+    if conf == 3:
+        # gas MgII column
+        vMM = [11.5, 16.5] if quadrant else [10.0, 16.5]
+        panels.append( {'partType':'gas', 'partField':'Mg II', 'valMinMax':vMM} )
+    if conf == 4:
+        # temperature
+        panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,6.3]} )
+    if conf == 5:
+        # radial velocity
+        panels.append( {'partType':'gas', 'partField':'radvel', 'valMinMax':[-260,260]} )
+    if conf == 6:
+        # magnitude of specific angular momentum
+        panels.append( {'partType':'gas', 'partField':'specj_mag', 'valMinMax':[2.0,4.2]} )
+    if conf == 7:
+        # gas metallicity
+        panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.0]} )
+
+
+    class plotConfig:
+        plotStyle    = 'open'
+        rasterPx     = int(nPixels[0]*1.0)
+        colorbars    = True
+        saveFilename = './zooms2_josh_%s-%s_%s_%d_z%.2f_%d%s.pdf' % (panels[0]['partType'],panels[0]['partField'],run,res,redshift,size,sizeType)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

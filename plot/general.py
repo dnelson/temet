@@ -367,11 +367,9 @@ def singleHaloProperties():
         sP = simParams(res=11,run='zooms2_josh',hInd=2,variant='PO',redshift=2.25)
         haloID = 0
 
-        #plotRadialProfile1D([sP], halo=haloID, ptType='gas', ptProperty='hdens')
-        #plotRadialProfile1D([sP], halo=haloID, ptType='gas', ptProperty='temp_linear')
-        #plotRadialProfile1D([sP], halo=haloID, ptType='gas', ptProperty='cellsize_kpc')
-        plotRadialProfile1D([sP], halo=haloID, ptType='gas', ptProperty='radvel')
-        #plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant='temp_linear', haloID=haloID)
+        for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
+            plotRadialProfile1D([sP], halo=haloID, ptType='gas', ptProperty=prop)
+            plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloID=haloID)
 
     if 0:
         sP = simParams(res=455,run='tng',redshift=0.0)

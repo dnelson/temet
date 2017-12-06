@@ -409,7 +409,9 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
                 # randomly choose a pixel at the correct distance and save
                 valid_values = grid[w_dist]
                 chosen_val = np.random.choice(valid_values)
-                assert np.isfinite(chosen_val) # otherwise, choose again
+                for iter_num in range(20):
+                    if np.isfinite(chosen_val): break # otherwise, choose again
+                    chosen_val = np.random.choice(valid_values)
 
                 r['column'][gal_num,realization_num] = chosen_val
 
