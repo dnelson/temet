@@ -968,6 +968,11 @@ def snapshotSubset(sP, partType, fields,
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
             return sP.units.codeDensToCritRatio(dens, baryon=True, log=True)
 
+        # particle/cell mass [linear solar masses]
+        if field.lower() in ['mass_msun']:
+            mass = snapshotSubset(sP, partType, 'mass', **kwargs)
+            return sP.units.codeMassToMsun(mass)
+
         # entropy (from u,dens) [log cgs]
         if field.lower() in ["ent", "entr", "entropy"]:
             u    = snapshotSubset(sP, partType, 'u', **kwargs)
@@ -1233,6 +1238,9 @@ def snapshotSubset(sP, partType, fields,
 
         # 3D radial distance from halo center, [code] or [physical kpc] or [dimensionless fraction of rvir=r200crit]
         if field.lower() in ['rad','rad_kpc','halo_rad','halo_rad_kpc','rad_rvir','halo_rad_rvir']:
+            if sP.isZoom:
+                subhaloID = sP.zoomSubhaloID
+                print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
             assert haloID is not None or subhaloID is not None
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             if subhaloID is not None: haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']

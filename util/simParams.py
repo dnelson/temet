@@ -470,6 +470,8 @@ class simParams:
                 self.BHs    = 3
             if '_josh' in run:
                 assert self.variant in ['FP','MO','PO'] # full-physics, metal-line cooling, primordial only
+            else:
+                assert self.variant == 'None'
 
             bs = str(round(self.boxSize/1000))
             ls = str(self.levelMax) if run != 'zooms2_josh' else '%d_%d_%s' % (self.levelMax,self.levelMax+1,self.variant) # CGM_ZOOM boosted
@@ -480,6 +482,13 @@ class simParams:
             self.simName    = 'h' + str(hInd) + 'L' + ls + '_' + 'gen2' + ts
             self.saveTag    = 'z2H' + str(hInd) + 'L' + ls
             self.plotPrefix = 'z2L' + ls
+
+            if hInd == 2: # overrides for plots for paper.zooms2
+                snStr = ' (Primordial Only)'
+                if '_josh' in run and variant == 'PO': snStr = '_12 (Primordial Only)'
+                if '_josh' in run and variant == 'MO': snStr = '_12 (Primordial + Metal)'
+                if '_josh' in run and variant == 'FP': snStr = '_12 (Full Physics)'
+                self.simName = 'L11%s' % snStr
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
         if run == 'feedback':

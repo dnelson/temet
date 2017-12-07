@@ -1077,6 +1077,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
+    if ptProperty == 'mass_msun':
+        label = '%s Mass [ log M$_{\\rm sun}$ ]' % typeStr
+        lim = [5.0, 7.0]
+        if haloLims: lim = [3.0, 5.0]
+        log = True
+
     # todo: entr
 
     if ptProperty in ['vol_kpc3','volume_kpc3']:
@@ -1113,7 +1119,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         assert ptType == 'gas'
         label = 'Gas Cell Size [ log kpc ]'
         lim = [-2.0, 3.0]
-        if haloLims: lim = [-2.0, 2.5]
+        if haloLims: lim = [-2.0, 1.0]
         log = True
 
     if ptProperty == 'z_solar':
