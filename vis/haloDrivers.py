@@ -1150,15 +1150,15 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def zooms2_josh(conf=2, quadrant=False):
+def zooms2_josh(conf=1, quadrant=False):
     """ Visualize single final halo of h2_L11_12_FP (boosted, sims.zooms2) at z=2.25. """
     panels = []
 
-    run        = 'zooms2_josh'
+    run        = 'zooms2_josh' # 'zooms2'
     res        = 11
     redshift   = 2.25
     hInd       = 2
-    variant    = 'FP'
+    variant    = 'PO' # MO, PO, FP, None
 
     rVirFracs  = [1.0]
     method     = 'sphMap_global'
@@ -1216,6 +1216,6 @@ def zooms2_josh(conf=2, quadrant=False):
         plotStyle    = 'open'
         rasterPx     = int(nPixels[0]*1.0)
         colorbars    = True
-        saveFilename = './zooms2_josh_%s-%s_%s_%d_z%.2f_%d%s.pdf' % (panels[0]['partType'],panels[0]['partField'],run,res,redshift,size,sizeType)
+        saveFilename = './%s_%s_%s_%d_z%.2f_%d%s.pdf' % (sP.simName,panels[0]['partType'],panels[0]['partField'],res,redshift,size,sizeType)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

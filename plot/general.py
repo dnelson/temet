@@ -11,13 +11,147 @@ from  matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.ndimage.filters import gaussian_filter
+from scipy.stats import binned_statistic
 
 from util import simParams
 from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN
-from cosmo.load import groupCat, auxCat, snapshotSubset
+from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
+
+def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, ylog=True, sfreq0=False):
+    """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
+    both None), or of a single halo/subhalo, where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
+    If ptWeight is None, uniform weighting, otherwise weight by this quantity. """
+
+    # config
+    if ylog:
+        ylim = [-3.0, 1.0]
+        ylabel = 'PDF [ log ]'
+    else:
+        ylim = [0.0,1.0]
+        ylabel = 'PDF'
+
+    nBins = 400
+    lw = 2.0
+
+    assert np.sum(e is not None for e in [haloIDs,subhaloIDs]) in [0,1] # pick one, or neither
+    if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
+    if haloIDs is not None: assert (len(haloIDs) == len(sPs)) # one subhalo ID per sP
+
+    # load
+    haloLims = (subhaloIDs is not None or haloIDs is not None)
+    xlabel, xlim, xlog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=haloLims)
+
+    # special behavior:
+    if ptProperty == 'mass_msun':
+        xlim = [2.0, 4.7]
+        print('Override xlim to: ', xlim)
+
+    # start plot
+    fig = plt.figure(figsize=(11.2,8.0)) #(14,10)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    # loop over simulations
+    for i, sP in enumerate(sPs):
+        # get halo and subhalo IDs
+        if subhaloIDs is not None:
+            subhaloID = subhaloIDs[i]
+            haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']
+        if haloIDs is not None:
+            haloID = haloIDs[i]
+            subhaloID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+
+        # load
+        load_haloID = haloID if haloIDs is not None else None
+        load_subID = subhaloID if subhaloIDs is not None else None
+
+        vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
+        if xlog: vals = np.log10(vals)
+
+
+        # weights
+        if ptWeight is None:
+            weights = np.zeros( vals.size, dtype='float32' ) + 1.0
+        else:
+            weights = snapshotSubset(sP, ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
+
+        if sfreq0:
+            # restrict to non eEOS cells
+            sfr = snapshotSubset(sP, ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
+            w_sfr = np.where(sfr == 0.0)
+            vals = vals[w_sfr]
+            weights = weights[w_sfr]
+
+        # special behavior (not yet generalized)
+        coldDenseCGM = True
+        radWithin10pkpc = True
+
+        if coldDenseCGM:
+            print('Restricting to cold-dense phase of the CGM.')
+            temp = snapshotSubset(sP, ptType, 'temp', haloID=load_haloID, subhaloID=load_subID)
+            hdens = snapshotSubset(sP, ptType, 'hdens', haloID=load_haloID, subhaloID=load_subID)
+            if sfreq0:
+                temp = temp[w_sfr]
+                hdens = hdens[w_sfr]
+            w0 = np.where( (temp < 5.0) & (hdens > 1e-3) )
+            vals = vals[w0]
+            weights = weights[w0]
+
+        if radWithin10pkpc:
+            print('Restricting to rad > 10 pkpc.')
+            rad = snapshotSubset(sP, ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
+            if sfreq0: rad = rad[w_sfr]
+            if coldDenseCGM: rad = rad[w0]
+
+            wr = np.where( rad > 10.0 )
+            vals = vals[wr]
+            weights = weights[wr]
+
+        # histogram (all equivalent methods)
+        bins = np.linspace( xlim[0], xlim[1], nBins+1 )
+        xx = bins[:-1] + (bins[1]-bins[0])/2
+        binsize = bins[1]-bins[0]
+
+        #yy4 = np.zeros( nBins, dtype='float32' )
+        #for j in range(nBins):
+        #    w = np.where( (vals >= bins[j]) & (vals < bins[j+1]) )
+        #    yy4[j] = np.sum(weights[w])
+        #yy4 /= (np.sum(weights)*binsize)
+        
+        #yy2, xx2, _ = binned_statistic(vals, weights, statistic='sum', bins=bins)
+        #yy2 /= (vals.size*binsize)
+        #yy3, xx3 = np.histogram(vals, bins=bins, weights=weights, density=False)
+        #yy3 /= (vals.size*binsize)
+        yy, xx4 = np.histogram(vals, bins=bins, weights=weights, density=True)
+
+        if ylog: yy = logZeroNaN(yy)
+        #if xx.size > sKn:
+        #    yy = savgol_filter(yy,sKn,sKo)
+
+        label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
+        ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
+        l, = ax.plot(xx, yy, linestyle=ls, lw=lw, label=label)
+
+    # finish plot
+    fig.tight_layout()
+    ax.legend(loc='upper left')
+
+    sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
+    hStr = 'global'
+    if haloIDs is not None:
+        hStr = 'haloID-%d' % haloIDs[0] if len(haloIDs) == 1 else 'nH-%d' % len(haloIDs)
+    elif subhaloIDs is not None:
+        hStr = 'subhID-%d' % subhaloIDs[0] if len(subhaloIDs) == 1 else 'nSH-%d' % len(subhaloIDs)
+
+    fig.savefig('histo1D_%s_%s_%s_wt-%s_%s.pdf' % (sPstr,ptType,ptProperty,ptWeight,hStr))
+    plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], haloID=None, pdf=None,
                      xMinMaxForce=None, yMinMaxForce=None, contours=None, 
@@ -134,7 +268,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
     else:
-        fig.savefig('phase_%s_z=%.1f_%s_x-%s_y-%s_wt-%s_h-%s.pdf' % \
+        fig.savefig('phase_%s_z%.1f_%s_x-%s_y-%s_wt-%s_h-%s.pdf' % \
             (sP.simName,sP.redshift,partType,xQuant,yQuant,"-".join([w.replace(" ","") for w in weights]),haloID))
     plt.close(fig)
 
@@ -203,7 +337,7 @@ def plotParticleMedianVsSecondQuant(sP, partType='gas', xQuant='hdens', yQuant='
     fig.savefig('particleMedian_%s_%s-vs-%s_%s_z=%.1f_%s.pdf' % (partType,xQuant,yQuant,sP.simName,sP.redshift,hStr))
     plt.close(fig)
 
-def plotRadialProfile1D(sPs, subhalo=None, ptType='gas', ptProperty='temp', halo=None):
+def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', halo=None):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
     (parent FoF particle restricted, using non-caching auxCat functionality). 
     subhalo is a list, one entry per sPs entry. For each entry of subhalo:
@@ -268,20 +402,24 @@ def plotRadialProfile1D(sPs, subhalo=None, ptType='gas', ptProperty='temp', halo
             assert len(w) == len(subIDsLoc)
 
             # calculate median radial profile and scatter
-            #yy_mean = np.nansum( data[w,:], axis=0 ) / len(w)
-            yy_mean = np.nanmedian( data[w,:], axis=0 )
+            yy_mean = np.nanmean( data[w,:], axis=0 )
+            yy_median = np.nanmedian( data[w,:], axis=0 )
             yp = np.nanpercentile( data[w,:], percs, axis=0 )
 
-            if ylog: yy_mean = logZeroNaN(yy_mean)
-            if ylog: yp = logZeroNaN(yp)
+            if ylog:
+                yy_median = logZeroNaN(yy_median)
+                yy_mean = logZeroNaN(yy_mean)
+                yp = logZeroNaN(yp)
             rr = logZeroNaN(attrs['rad_bins_pkpc'])
 
             if rr.size > sKn:
                 yy_mean = savgol_filter(yy_mean,sKn,sKo)
+                yy_median = savgol_filter(yy_median,sKn,sKo)
                 yp = savgol_filter(yp,sKn,sKo,axis=1) # P[10,90]
 
             sampleDesc = '' if nSamples == 1 else subhalo[i].keys()[j]
-            l, = ax.plot(rr, yy_mean, lw=lw, label='%s %s' % (sP.simName,sampleDesc))
+            l, = ax.plot(rr, yy_median, '-', lw=lw, label='%s %s' % (sP.simName,sampleDesc))
+            ax.plot(rr, yy_mean, ':', lw=lw)
             if len(sPs) == 1 and subhaloIDs.size > 1:
                 ax.fill_between(rr, yp[0,:], yp[-1,:], color=l.get_color(), interpolate=True, alpha=0.2)
 
@@ -289,8 +427,139 @@ def plotRadialProfile1D(sPs, subhalo=None, ptType='gas', ptProperty='temp', halo
     fig.tight_layout()
     ax.legend(loc='best')
     sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
-    fig.savefig('radProfile_%s_%s_%s_Ns-%d_Nh-%d_scope=%s.pdf' % \
+    fig.savefig('radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s.pdf' % \
         (sPstr,ptType,ptProperty,nSamples,len(subhaloIDs),scope))
+    plt.close(fig)
+
+def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhaloIDs=None, haloIDs=None, xlog=True, sfreq0=False, colorOffs=None):
+    """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
+    where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
+    If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs. """
+
+    # config
+    if xlog:
+        xlim = [-0.5,3.0]
+        xlabel = 'radius [ log pkpc ]'
+    else:
+        xlim = [0.0,500.0]
+        xlabel = 'radius [ pkpc ]'
+
+    percs = [10,25,75,90]
+    nRadBins = 40
+    lw = 2.0
+    scope = 'global' # global, fof, subfind
+
+    assert np.sum(e is not None for e in [haloIDs,subhaloIDs]) == 1 # pick one
+    if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
+    if haloIDs is not None: assert (len(haloIDs) == len(sPs)) # one subhalo ID per sP
+
+    ylabel, ylim, ylog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=True)
+
+    # start plot
+    fig = plt.figure(figsize=(11.2,8.0)) #(14,10)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Galactocentric Radius [ log pkpc ]')
+    ax.set_ylabel(ylabel)
+    if xlim is not None: ax.set_xlim(xlim)
+    if ylim is not None: ax.set_ylim(ylim)
+
+    # loop over simulations
+    for i, sP in enumerate(sPs):
+        # get halo and subhalo IDs
+        if subhaloIDs is not None:
+            subhaloID = subhaloIDs[i]
+            haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']
+        else:
+            haloID = haloIDs[i]
+            subhaloID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+
+        # load
+        load_haloID = haloID if scope == 'fof' else None
+        load_subID = subhaloID if scope == 'subfind' else None
+        if load_haloID is None and load_subID is None: assert scope == 'global'
+
+        rad  = snapshotSubset(sP, ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
+        vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
+
+        if sfreq0:
+            # restrict to non eEOS cells
+            sfr = snapshotSubset(sP, ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
+            w = np.where(sfr == 0.0)
+            rad = rad[w]
+            vals = vals[w]
+
+        # radial bin
+        rad_bins = np.linspace( xlim[0], xlim[1], nRadBins+1 )
+        rr = rad_bins[:-1] + (rad_bins[1]-rad_bins[0])/2
+        if xlog: rad = np.log10(rad)
+
+        yy_mean = np.zeros( nRadBins, dtype='float32' )
+        yy_median = np.zeros( nRadBins, dtype='float32' )
+        yy_perc = np.zeros( (len(percs),nRadBins), dtype='float32' )
+
+        for j in range(nRadBins):
+            # calculate median radial profile and scatter
+            w = np.where( (rad >= rad_bins[j]) & (rad < rad_bins[j+1]) )
+            if len(w[0]) == 0:
+                continue
+
+            yy_mean[j] = np.nanmean( vals[w] )
+            yy_median[j] = np.nanmedian( vals[w] )
+            yy_perc[:,j] = np.nanpercentile( vals[w], percs )
+
+        if ylog:
+            yy_mean = logZeroNaN(yy_mean)
+            yy_median = logZeroNaN(yy_median)
+            yy_perc = logZeroNaN(yy_perc)
+
+        if rr.size > sKn:
+            yy_mean = savgol_filter(yy_mean,sKn,sKo)
+            yy_median = savgol_filter(yy_median,sKn,sKo)
+            yy_perc = savgol_filter(yy_perc,sKn,sKo,axis=1) # P[10,90]
+
+        # plot lines
+        if colorOffs is not None:
+            for _ in range(colorOffs[i]):
+                _ = ax._get_lines.prop_cycler.next()['color']
+
+        label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
+        l, = ax.plot(rr, yy_median, '-', lw=lw, label=label)
+        ax.plot(rr, yy_mean, '--', lw=lw, color=l.get_color())
+
+        if len(sPs) <= 2:
+            for j in range(yy_perc.shape[0]/2):
+                ax.fill_between(rr, yy_perc[0+j,:], yy_perc[-(j+1),:], color=l.get_color(), interpolate=True, alpha=0.15*(j+1))
+
+    # special behavior
+    if 1:
+        rad_cgm_zoom = {'r$_{\\rm CGM,min}$':10,'r$_{\\rm CGM,max}$':300,'r$_{\\rm IGM}$':500} # pkpc
+        ylim_p = [ylim[0] + (ylim[1]-ylim[0])/15, ylim[1] - (ylim[1]-ylim[0])/15]
+        alpha = 1.0 if ptProperty == 'mass_msun' else 0.2
+        for label,rad in rad_cgm_zoom.items():
+            off = {10:0.0, 300:-0.04, 500:+0.04}[rad]
+            if xlog: rad = np.log10(rad)
+            ax.plot( [rad,rad], ylim_p, '-', lw=lw, color='black', alpha=0.1 )
+            ax.text( rad+off, ylim_p[0], label, color='black', fontsize=20, alpha=alpha, verticalalignment='top', horizontalalignment='center')
+
+    if ptProperty == 'cellsize_kpc':
+        xlim_p = [xlim[0] + (xlim[1]-xlim[0])/40, xlim[1] - (xlim[1]-xlim[0])/40]
+        notable_sizes = {'100pc':-1.0, '1kpc':0.0}
+        for label,val in notable_sizes.items():
+            ax.plot( xlim_p, [val,val], ':', lw=lw, color='black', alpha=0.05 )
+            ax.text( xlim_p[0]+0.1, val+0.03, label, color='black', fontsize=20, alpha=0.1, verticalalignment='bottom', horizontalalignment='center' )
+
+    # finish plot
+    fig.tight_layout()
+    ax.legend(loc='best')
+
+    sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
+    if haloIDs is not None:
+        hStr = 'haloID-%d' % haloIDs[0] if len(haloIDs) == 1 else 'nH-%d' % len(haloIDs)
+    else:
+        hStr = 'subhID-%d' % subhaloIDs[0] if len(subhaloIDs) == 1 else 'nSH-%d' % len(subhaloIDs)
+
+    fig.savefig('radProfile_%s_%s_%s_%s_scope-%s.pdf' % (sPstr,ptType,ptProperty,hStr,scope))
     plt.close(fig)
 
 # -------------------------------------------------------------------------------------------------
@@ -338,7 +607,7 @@ def compareRuns_RadProfiles():
         subhalos.append( w[0] )
 
     for field in ['metaldens']: #,'dens','temp_linear','P_gas_linear','z_solar']:
-        plotRadialProfile1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
+        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
 
 def compareHaloSets_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two different 
@@ -359,17 +628,26 @@ def compareHaloSets_RadProfiles():
                  '11.8 < M$_{\\rm halo}$ < 12.2, (g-r) > 0.65':w2[0]}]
 
     for field in ['metaldens','dens','temp_linear','P_gas_linear','z_solar']:
-        plotRadialProfile1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
+        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
 
 def singleHaloProperties():
     """ Driver. Several phase/radial profile plots for a single halo. """
     if 1:
-        sP = simParams(res=11,run='zooms2_josh',hInd=2,variant='PO',redshift=2.25)
-        haloID = 0
+        sPs = []
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='PO',redshift=2.25) )
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='MO',redshift=2.25) )
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='FP',redshift=2.25) )
+        sPs.append( simParams(res=9,run='zooms2',hInd=2,redshift=2.25) )
+        haloIDs = np.zeros( len(sPs), dtype='int32' )
 
-        for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
-            plotRadialProfile1D([sP], halo=haloID, ptType='gas', ptProperty=prop)
-            plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloID=haloID)
+        #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', colorOffs=[0,2])
+        #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True, colorOffs=[0,2])
+        #plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True)
+        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
+
+        #for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
+        #    plotStackedRadialProfiles1D([sP], halo=haloID, ptType='gas', ptProperty=prop)
+        #    plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloID=haloID)
 
     if 0:
         sP = simParams(res=455,run='tng',redshift=0.0)
