@@ -19,18 +19,18 @@ from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosB
                        cenSatSubhaloIndices
 from util import simParams
 
-def oneHaloSingleField(conf=0, groupID=None):
+def oneHaloSingleField(conf=0, haloID=None):
     """ In a single (or a few) panel(s) centered on a halo, show one field from the box. """
     panels = []
 
     run        = 'tng'
-    res        = 1820
-    redshift   = 0.0
-    rVirFracs  = None #[1.0]
+    res        = 2160
+    redshift   = 0.7
+    rVirFracs  = [1.0] # None
     method     = 'sphMap'
-    nPixels    = [960,960]
-    axes       = [1,0]
-    labelZ     = False
+    nPixels    = [1920*2,1920*2]
+    axes       = [0,1]
+    labelZ     = True
     labelScale = True
     labelSim   = False
     labelHalo  = True
@@ -39,7 +39,7 @@ def oneHaloSingleField(conf=0, groupID=None):
     mpb        = None
 
     sP = simParams(res=res, run=run, redshift=redshift)
-    hInd = groupCatSingle(sP, haloID=groupID)['GroupFirstSub']
+    hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
 
     if conf == 0:
         # magnetic pressure, gas pressure, and their ratio
@@ -58,11 +58,14 @@ def oneHaloSingleField(conf=0, groupID=None):
     if conf == 4:
         # gas column density
         panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
+    if conf == 5:
+        # magnetic field strength
+        panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
 
-    if 0:
+    if 1:
         size = 2.5
         sizeType = 'rVirial'
-    if 1:
+    if 0:
         size = 100.0
         sizeType = 'pkpc'
 
@@ -70,7 +73,7 @@ def oneHaloSingleField(conf=0, groupID=None):
         plotStyle    = 'open'
         rasterPx     = nPixels[0]
         colorbars    = True
-        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_groupID-%d.pdf' % (conf,run,res,redshift,groupID)
+        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_haloID-%d.pdf' % (conf,run,res,redshift,haloID)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 

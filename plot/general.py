@@ -75,6 +75,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
         vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
         if xlog: vals = np.log10(vals)
 
+        print(sP.simName,'min: ', np.min(10.0**vals))
 
         # weights
         if ptWeight is None:
@@ -272,69 +273,80 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             (sP.simName,sP.redshift,partType,xQuant,yQuant,"-".join([w.replace(" ","") for w in weights]),haloID))
     plt.close(fig)
 
-def plotParticleMedianVsSecondQuant(sP, partType='gas', xQuant='hdens', yQuant='Si_H_numratio', haloID=0):
-    """ Plot the (median) relation between two particle properties for a single halo (if haloID is specified), 
-    or the whole box (if haloID is None). """
+def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='Si_H_numratio', 
+                                   haloID=None, radMinKpc=None, radMaxKpc=None):
+    """ Plot the (median) relation between two particle properties for a single halo (if haloID is not None), 
+    or the whole box (if haloID is None). If a halo is specified, optionally restrict to a given 
+    [radMinKpc,radMaxKpc] radial range, specified in physical kpc."""
 
     # config
     nBins = 50
     lw = 3.0
-
-    radMinKpc = 6.0
-    radMaxKpc = 9.0 # physical kpc, or None for none
-
-    # load
-    xlabel, xlim, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
-    sim_xvals = snapshotSubset(sP, partType, xQuant, haloID=haloID)
-
-    ylabel, ylim, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
-    sim_yvals = snapshotSubset(sP, partType, yQuant, haloID=haloID)
-    
-    # radial restriction
-    if radMaxKpc is not None or radMinKpc is not None:
-        assert haloID is not None
-        rad = snapshotSubset(sP, partType, 'rad_kpc', haloID=haloID)
-        
-        if radMinKpc is None:
-            w = np.where( (rad <= radMaxKpc) )
-        elif radMaxKpc is None:
-            w = np.where( (rad > radMinKpc) )
-        else:
-            w = np.where( (rad > radMinKpc) & (rad <= radMaxKpc) )
-
-        sim_xvals = sim_xvals[w]
-        sim_yvals = sim_yvals[w]
-
-        if radMinKpc is not None:
-            hStr += '_rad_gt_%.1fkpc' % radMinKpc
-        if radMaxKpc is not None:
-            hStr += '_rad_lt_%.1fkpc' % radMaxKpc
 
     # start plot
     fig = plt.figure(figsize=(14,10))
     ax = fig.add_subplot(111)
 
     hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
-    ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
-    ax.set_xlabel(xlabel)
+    if len(sPs) == 1: sStr = '%s z=%.1f' % (sPs[0].simName, sPs[0].redshift) 
+    if len(sPs) > 1: sStr = ' '.join([sP.simName for sP in sPs]) + ' (z=%.1f)' % sPs[0].redshift
+    ax.set_title('%s %s' % (sStr,hStr))
 
-    # median and 10/90th percentile lines
-    binSize = (xlim[1]-xlim[0]) / nBins
+    for i, sP in enumerate(sPs):
+        # load
+        xlabel, xlim, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
+        sim_xvals = snapshotSubset(sP, partType, xQuant, haloID=haloID)
+        if xlog: sim_xvals = logZeroNaN(sim_xvals)
 
-    xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-    xm = xm[1:-1]
-    ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
-    sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
-    pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+        ylabel, ylim, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
+        sim_yvals = snapshotSubset(sP, partType, yQuant, haloID=haloID)
+        if ylog: sim_yvals = logZeroNaN(sim_yvals)
 
-    c = ax._get_lines.prop_cycler.next()['color']
-    ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
 
-    # percentile:
-    ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+
+        # radial restriction
+        if radMaxKpc is not None or radMinKpc is not None:
+            assert haloID is not None
+            rad = snapshotSubset(sP, partType, 'rad_kpc', haloID=haloID)
+            
+            if radMinKpc is None:
+                w = np.where( (rad <= radMaxKpc) )
+            elif radMaxKpc is None:
+                w = np.where( (rad > radMinKpc) )
+            else:
+                w = np.where( (rad > radMinKpc) & (rad <= radMaxKpc) )
+
+            sim_xvals = sim_xvals[w]
+            sim_yvals = sim_yvals[w]
+
+            if radMinKpc is not None:
+                hStr += '_rad_gt_%.1fkpc' % radMinKpc
+            if radMaxKpc is not None:
+                hStr += '_rad_lt_%.1fkpc' % radMaxKpc
+
+        # median and 10/90th percentile lines
+        binSize = (xlim[1]-xlim[0]) / nBins
+
+        xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
+        xm = xm[1:-1]
+        ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
+        sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
+        pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+
+        c = ax._get_lines.prop_cycler.next()['color']
+        ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+
+        # percentile:
+        if len(sPs) <= 3 or (len(sPs) > 3 and i == 0):
+            ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
     # finish plot
-    fig.savefig('particleMedian_%s_%s-vs-%s_%s_z=%.1f_%s.pdf' % (partType,xQuant,yQuant,sP.simName,sP.redshift,hStr))
+    sStr = '%s_z-%.1f' % (sPs[0].simName,sPs[0].redshift) if len(sPs) == 1 else 'sPn%d' % len(sPs)
+    fig.savefig('particleMedian_%s_%s-vs-%s_%s_%s.pdf' % (partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
 def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', halo=None):
@@ -642,8 +654,8 @@ def singleHaloProperties():
 
         #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', colorOffs=[0,2])
         #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True, colorOffs=[0,2])
-        #plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True)
-        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
+        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True)
+        #plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
 
         #for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
         #    plotStackedRadialProfiles1D([sP], halo=haloID, ptType='gas', ptProperty=prop)
@@ -659,4 +671,21 @@ def singleHaloProperties():
         haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
         haloID = haloIDs[6] # random: 3, 4, 5, 6
 
-        plotParticleMedianVsSecondQuant(sP, partType='gas', xQuant='hdens', yQuant='Si_H_ratio', haloID=haloID)
+        plotParticleMedianVsSecondQuant([sP], partType='gas', xQuant='hdens', yQuant='Si_H_ratio', haloID=haloID, radMinKpc=6.0, radMaxKpc=9.0)
+
+def compareRuns_particleQuant():
+    """ Driver. Compare a series of runs in a single panel plot of a particle median quantity vs another. """
+
+    # config
+    yAxis = 'temp'
+    xAxis = 'numdens'
+    variants = ['0000','2102','2202','2302']
+
+    # start PDF, add one page per run
+    sPs = []
+    for variant in variants:
+        sP = simParams(res=512,run='tng',redshift=0.0,variant=variant)
+        if sP.simName == 'DM only': continue
+        sPs.append(sP)
+
+    plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='dens_critb', yQuant='bmag_uG')

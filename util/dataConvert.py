@@ -628,6 +628,35 @@ def redshiftWikiTable():
     for redshift in z[w]:
         pass
 
+def snapRedshiftsTxt():
+    """ Output a text-file of snapshot redshifts, etc. """
+    from util.simParams import simParams
+    from cosmo.util import multiRunMatchedSnapList, snapNumToRedshift, snapNumToAgeFlat
+
+    # config
+    sP = simParams(res=1820,run='tng',redshift=0.0,variant='subbox0')
+    minZ      = 0.0
+    maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
+    maxNSnaps = 2700 # 90 seconds at 30 fps
+    matchUse  = 'condense'
+
+    # snapshots
+    panels = [{'sP':sP}]
+    snapNumLists = multiRunMatchedSnapList(panels, matchUse, maxNum=maxNSnaps, 
+                                           minRedshift=minZ, maxRedshift=maxZ)
+
+    snapNums = snapNumLists[0]
+    frameNums = np.arange(snapNums.size)
+    redshifts = snapNumToRedshift(sP, snapNums)
+    ages      = snapNumToAgeFlat(sP, snap=snapNums)
+
+    # write
+    with file('frames.txt','w') as f:
+        f.write('# frame_number snapshot_number redshift age_universe_gyr\n')
+        for i in range(frameNums.size):
+            f.write('%04d %04d %6.3f %5.3f\n' % (frameNums[i],snapNums[i],redshifts[i],ages[i]))
+    print('Wrote: [frames.txt].')
+
 def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
     """ Output latex-syntax table describing the TNG model variations runs. """
     import csv

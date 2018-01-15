@@ -1071,9 +1071,14 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = True
 
     if ptProperty == 'dens_critratio':
-        assert ptType == 'gas'
         label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$ [ log ]'
         lim = [-6.0, 5.0]
+        if haloLims: lim = [-1.0, 6.0]
+        log = True
+
+    if ptProperty == 'dens_critb':
+        label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$ [ log ]'
+        lim = [-2.0, 8.0]
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
@@ -1105,7 +1110,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = True
     if ptProperty in ['bmag_uG','bfieldmag_uG']:
         label = 'Magnetic Field Magnitude [ log $\mu$G ]'
-        lim = [-9.0, 1.0]
+        lim = [-9.0, 3.0]
         if haloLims: lim = [-3.0, 2.0]
         log = True
 
