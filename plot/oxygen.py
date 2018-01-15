@@ -266,8 +266,10 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
 
                 # plot middle line
                 label = '%s %s z=%.1f' % (sP.simName, ion, redshift) if len(redshifts) ==1 else '%s %s' % (sP.simName, ion)
-                if clean: label = ion
-                if clean and len(ions) == 1 and not boxDepth10: label = sP.simName
+                if clean:
+                    label = ion
+                    if len(ions) == 1 and not boxDepth10: label = sP.simName
+                    if len(sPs) > 1: label = '%s %s' % (ion,sP.simName)
                 if i > 0: label = ''
                 c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
                 lwLoc = lw if not (len(sPs) == 12 and sP.variant == '0000') else 2*lw
@@ -578,6 +580,8 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     for fieldType in fieldTypes:
         fieldNames.append( 'Subhalo_RadProfile%s_'+fieldType+'_%s_Mass' )
 
+    radNames = ['total','self (1-halo)','other (2-halo)','diffuse']
+
     # plot setup
     lw = 3.0
     sizefac = 1.0 if not clean else sfclean
@@ -623,6 +627,8 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         massBins = stellarMassBins
 
     # loop over each fullbox run
+    txt = []
+
     for i, sP in enumerate(sPs):
         # load halo/stellar masses and CSS
         sP.setRedshift(redshift)
@@ -679,6 +685,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                 # loop over mass bins
                 for k, massBin in enumerate(massBins):
+                    txt_mb = []
                     # select
                     w = np.where( (masses_loc >= massBin[0]) & (masses_loc < massBin[1]) )
 
@@ -747,6 +754,14 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                           % (0.5*(massBin[0]+massBin[1])) if (i == 0 and radType == 0) else ''
                         ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[radType], label=label)
 
+                        txt_loc = {}
+                        txt_loc['bin'] = massBin
+                        txt_loc['rr'] = rr
+                        txt_loc['yy'] = yy_mean
+                        txt_loc['yy_0'] = yp[0,:]
+                        txt_loc['yy_1'] = yp[-1,:]
+                        txt_mb.append(txt_loc)
+
                         # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
                         yrvir = ax.get_ylim()
                         yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.25
@@ -775,8 +790,30 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                             # show percentile scatter only for first run
                             ax.fill_between(rr, yp[0,:], yp[-1,:], color=c, interpolate=True, alpha=0.2)
 
+                    txt.append(txt_mb)
+
     # gray resolution band at small radius
     _resolutionLineHelper(ax, sPs[0], radRelToVirRad, rvirs=rvirs, massBins=massBins)
+
+    # print
+    for k in range(len(txt)): # loop over mass bins (separate file for each)
+        filename = 'fig9_%sdens_rad%s_m-%.2f.txt' % \
+          ('num' if projDim=='3D' else 'col', 'rvir' if radRelToVirRad else 'kpc', np.mean(txt[k][0]['bin']))
+        out = '# Nelson+ (2018) http://arxiv.org/abs/1712.00016\n'
+        out += '# Figure 9 Left Panel n_OVI [log cm^-3] (%s z=%.1f)\n' % (sP.simName, sP.redshift)
+        out += '# Halo Mass Bin [%.1f - %.1f]\n' % (txt[k][0]['bin'][0], txt[k][0]['bin'][1])
+        out += '# rad_logpkpc'
+        for j in range(len(txt[k])): # loop over rad types
+            radName = radNames[j].split(" ")[0]
+            out += ' n_%s n_%s_err0 n_%s_err1' % (radName,radName,radName)
+        out += '\n'
+        for i in range(1,txt[k][0]['rr'].size): # loop over radial bins
+            out += '%8.4f ' % txt[k][j]['rr'][i]
+            for j in range(len(txt[k])): # loop over rad types
+                out += '%8.4f %8.4f %8.4f' % (txt[k][j]['yy'][i], txt[k][j]['yy_0'][i], txt[k][j]['yy_1'][i])
+            out += '\n'
+        with open(filename, 'w') as f:
+            f.write(out)
 
     # legend
     sExtra = []
@@ -788,9 +825,8 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                 sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
                 lExtra += ['%s' % sP.simName]
         for i in range(nRadTypes - int(combine2Halo)):
-            names = ['total','self (1-halo)','other (2-halo)','diffuse']
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
-            lExtra += ['%s' % names[i]]
+            lExtra += ['%s' % radNames[i]]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -1749,7 +1785,7 @@ def paperPlots():
     # figure 5, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
     if 0:
         moment = 0
-        sPs = [TNG100]
+        sPs = [TNG100, Illustris]
         boxDepth10 = True
         redshifts = [0,1,2,4]
 

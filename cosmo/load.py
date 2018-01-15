@@ -966,7 +966,7 @@ def snapshotSubset(sP, partType, fields,
         # mass density to critical baryon density [linear dimensionless]
         if field.lower() in ['dens_critratio','dens_critb']:
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
-            return sP.units.codeDensToCritRatio(dens, baryon=True, log=True)
+            return sP.units.codeDensToCritRatio(dens, baryon=('_critb' in field.lower()), log=False)
 
         # particle/cell mass [linear solar masses]
         if field.lower() in ['mass_msun']:
@@ -993,7 +993,7 @@ def snapshotSubset(sP, partType, fields,
             return bmag
 
         # Bmag in micro-Gauss [physical uG]
-        if field.lower() in ['bmag_uG', 'bfieldmag_uG']:
+        if field.lower() in ['bmag_ug', 'bfieldmag_ug']:
             return snapshotSubset(sP, partType, 'bmag', **kwargs) * 1e6
 
         # Alfven velocity magnitude (of electron plasma) [physical km/s]

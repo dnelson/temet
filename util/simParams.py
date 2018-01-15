@@ -5,6 +5,7 @@ util/simParams.py
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
 
+import platform
 import numpy as np
 from os import path
 from util.units import units
@@ -197,7 +198,7 @@ class simParams:
             runStr = 'TNG'
             dirStr = 'TNG'
 
-            if self.variant is not None:
+            if self.variant is not 'None':
                 # r001 through r010 IC realizations, L25n256 boxes
                 if 'r0' in self.variant:
                     assert self.boxSize == 25000.0 and self.res == 256
@@ -237,9 +238,11 @@ class simParams:
                             if '_' in line[0]:
                                 method_run_names[line[0]] = line[8]
                         
-                # L35 or L75 halted runs
-                if self.variant == 'halted':
-                    runStr = 'TNG_halted'
+                # draco/freya: no subbox data copied yet
+                if 'freya' in platform.node() or 'draco' in platform.node():
+                    if 'subbox' in self.variant and self.res != 455:
+                        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455TNG.')
+                # end draco/freya
 
             # make paths and names
             bs = str(int(self.boxSize/1000.0))
@@ -250,7 +253,6 @@ class simParams:
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
 
             # magny
-            import platform
             if 'karl' in platform.node():
                 # no mount to /hits/basement
                 if (self.boxSize == 205000 and res == 2500) or (self.boxSize == 35000 and res == 2160):
@@ -590,7 +592,7 @@ class simParams:
             self.derivPath = self.postPath
 
         # if variant passed in, see if it requests a subbox
-        if self.variant is not None and 'subbox' in self.variant:
+        if self.variant is not 'None' and 'subbox' in self.variant:
             # intentionally cause exceptions if we don't recognize sbNum
             try:
                 sbNum  = np.int(self.variant[6:])
@@ -598,6 +600,9 @@ class simParams:
                 sbSize = self.subboxSize[sbNum]
             except:
                 raise Exception('Input subbox request [%s] not recognized or out of bounds!' % variant)
+
+            # are we on a system without subbox data copied?
+
 
             # assign subbox number, update name, prevent group ordered snapshot loading
             self.subbox = sbNum

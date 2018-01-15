@@ -240,7 +240,7 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
     val = r['redshifts']
     if time:
         val = r['time']
-
+        
     # all values or a given scalar or array list?
     if all:
         w = np.where(val >= 0.0)[0] # remove empties past end of number of snaps
