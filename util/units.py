@@ -50,6 +50,8 @@ class units(object):
     c_km_s            = 2.9979e5        # speed of light in [km/s]
     sigma_thomson     = 6.6524e-25      # thomson cross section [cm^2]
     electron_charge   = 4.8032e-10      # esu [=cm*sqrt(dyne) = g^(1/2)cm^(3/2)s^(-1)]
+    rydberg_ang       = 0.00109737      # rydberg constant in 1/angstrom
+    rydberg_freq      = 3.28984e15      # Hz, i.e. rydberg constant * c
 
     # derived constants
     mag2cgs       = None    # Lsun/Hz to cgs [erg/s/cm^2] at d=10pc
@@ -58,7 +60,7 @@ class units(object):
     # code parameters
     CourantFac  = 0.3     # typical (used only in load:dt_courant)
 
-    # derived constants (code units)
+    # derived constants (code units without h factors)
     H0          = None    # km/s/kpc (hubble constant at z=0)
     G           = None    # kpc (km/s)**2 / 1e10 msun
     rhoCrit     = None    # 1e10 msun / kpc**3 (critical density, z=0)
@@ -66,7 +68,7 @@ class units(object):
     # derived cosmology parameters
     f_b         = None     # baryon fraction
 
-    # redshift dependent values (code units)
+    # redshift dependent values (code units without h factors)
     H2_z_fact   = None     # H^2(z)
     H_z         = None     # hubble constant at redshift z [km/s/kpc]
     rhoCrit_z   = None     # critical density at redshift z
@@ -119,17 +121,16 @@ class units(object):
         self.kpc_in_cm        = self.kpc_in_km * 1e5
         self.msunKpc3_in_gCm3 = self.Msun_in_g / (self.kpc_in_cm)**3.0
 
-        # derived constants (in code units)
+        # derived constants (in code units without little h factors)
         self.H0 = self._sP.HubbleParam * 100 * 1e5 / (self.Mpc_in_cm) / \
                    self.UnitVelocity_in_cm_per_s * self.UnitLength_in_cm
         self.G  = self.Gravity / self.UnitLength_in_cm**3.0 * self.UnitMass_in_g * self.UnitTime_in_s**2.0
 
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0*np.pi*self.G) #code, z=0
 
+        # derived constants / cosmology parameters
         self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
         self.c_ang_per_sec = self.c_cgs / self.ang_in_cm
-
-        # derived cosmology parameters
         self.f_b = self._sP.omega_b / self._sP.omega_m
 
         # redshift dependent values (code units)
@@ -426,6 +427,28 @@ class units(object):
             dens_phys /= self.mass_proton
         return dens_phys
 
+    def physicalDensToCode(self, dens, cgs=False, numDens=False):
+        """ Convert mass density in physical units to code units (comoving + w/ little h factors, in unit system).
+        Input: dens in [msun/kpc^3] or [g/cm^3 if cgs==True] or [1/cm^3 if cgs==True and numDens==True].
+        Output: dens in [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3] comoving. """
+        assert self._sP.redshift is not None
+        if numDens and not cgs:
+            raise Exception('Odd choice.')
+
+        # cosmological factors
+        dens_code = dens.astype('float32') * self.scalefac**3 / self._sP.HubbleParam**2
+
+        # unit system
+        if cgs:
+            dens_code /= self.UnitDensity_in_cgs # [msun/kpc^3] -> [g/cm^3]
+        else:
+            dens_code /= self.UnitMass_in_Msun # [msun/kpc^3] -> [10^10 msun/kpc^3]
+        if numDens:
+            dens_code *= self.mass_proton # [g/cm^3] -> [1/cm^3]
+
+        return dens_code
+
+
     def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, totKpc2=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
             Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
@@ -564,12 +587,12 @@ class units(object):
 
         a3inv = 1.0 / self.scalefac**3.0
 
-        # cosmological and unit system conversions
-        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2.0 # remove all little h factors
+        # cosmological conversions
+        dens_phys = dens.astype('float32') * self._sP.HubbleParam**2.0 * a3inv # 10^10 msun / kpc^3
 
-        # pressure in [K/cm^3]
+        # pressure in [K/cm^3], with unit system conversions
         pressure = u.astype('float32')
-        pressure *= (self.gamma-1.0) * dens_phys * a3inv * \
+        pressure *= (self.gamma-1.0) * dens_phys * \
                    self.UnitPressure_in_cgs / self.boltzmann
 
         # entropy in [K cm^2]
@@ -639,29 +662,27 @@ class units(object):
             csnd = logZeroSafe(csnd)
         return csnd
 
-    def codeDensToCritRatio(self, rho, baryon=None, log=False):
+    def codeDensToCritRatio(self, rho, baryon=False, log=False):
         """ Normalize code density by the critical (total/baryonic) density at some redshift. """
         assert self._sP.redshift is not None
-        if baryon is None:
-            raise Exception("Specify baryon True or False, note... change of behavior.")
 
         rho_crit = self.rhoCrit_z
         if baryon:
             rho_crit *= self._sP.omega_b
 
-        ratio_crit = rho.astype('float32') / rho_crit
+        # normalize, note: codeDensToPhys() returns units [10^10 msun/kpc^3]
+        ratio_crit = self.codeDensToPhys(rho) / rho_crit
 
         if log:
             ratio_crit = logZeroSafe(ratio_crit)
         return ratio_crit
 
-    def critRatioToCodeDens(self, ratioToCrit, baryon=None):
+    def critRatioToCodeDens(self, ratioToCrit, baryon=False):
         """ Convert a ratio of the critical density at some redshift to a code density. """
         assert self._sP.redshift is not None
-        if baryon is None:
-            raise Exception("Specify baryon True or False, note... change of behavior.")
 
-        code_dens = ratioToCrit.astype('float32') * self.rhoCrit_z
+        phys_dens = ratioToCrit.astype('float32') * self.rhoCrit_z # 10^10 msun / kpc^3
+        code_dens = self.physicalDensToCode(phys_dens / self.UnitMass_in_Msun)
 
         if baryon:
             code_dens *= self._sP.omega_b

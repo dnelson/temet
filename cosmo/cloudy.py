@@ -15,7 +15,7 @@ from os.path import isfile, isdir, getsize, expanduser
 from os import mkdir, remove
 
 from cosmo import hydrogen
-from util.helper import closest, iterable
+from util.helper import closest, iterable, logZeroNaN
 from cosmo.load import snapshotSubset, snapHasField
 
 basePath = expanduser("~") + '/code/cloudy.run/'
@@ -151,6 +151,46 @@ def loadFG11UVB(redshifts=None):
               'redshift' : float(redshift) }
 
         r.append(z)
+
+    if len(r) == 1:
+        return r[0]
+
+    return r
+
+def loadHM12UVB(redshifts=None):
+    """ Load the Haardt-Madau (2012) UVB at one or more redshifts and convert to CLOUDY units. """
+    filePath = expanduser("~") + '/python/data/haardt.madau/hm2012.uvb.txt'
+    from util.simParams import simParams
+    sP = simParams(res=1820,run='tng') # for units
+
+    # make sure fields is not a single element
+    if isinstance(redshifts, (int,long,float)):
+        redshifts = [redshifts]
+
+    # load
+    data = np.genfromtxt(filePath,comments='#',delimiter=' ')
+    z = data[0,:-2] # first line, where last entry is dummy, second to last entry has all J_lambda==0 redshifts
+    wavelength = data[1:,0] # first column of each line after the first, rest-frame angstroms
+    J_lambda = data[1:,1:-1] # remaining columns of each line after the first, erg/s/cm^2/Hz/sr
+
+    # convert zeros to negligible non-zeros
+    w = np.where(J_lambda == 0.0)
+    J_lambda[w] = np.nan
+
+    # re-format
+    if redshifts is None:
+        redshifts = z
+
+    r = []
+
+    for redshift in redshifts:
+        # convert angstrom to rydberg, J_nu to CLOUDY units: log( 4 pi [erg/s/cm^2/Hz] )
+        found, w = closest(z, redshift)
+        loc = { 'freqRyd'  : sP.units.c_ang_per_sec / wavelength / sP.units.rydberg_freq,
+                'J_nu'     : logZeroNaN( 4*np.pi*J_lambda[:,w] ),
+                'redshift' : float(redshift) }
+
+        r.append(loc)
 
     if len(r) == 1:
         return r[0]

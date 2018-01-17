@@ -237,6 +237,10 @@ class simParams:
                         for line in csv.reader(lines,quoting=csv.QUOTE_ALL):
                             if '_' in line[0]:
                                 method_run_names[line[0]] = line[8]
+
+                    # freya: variants not accessible (on isaac)
+                    if 'freya' in platform.node() and self.variant != '0000':
+                        raise Exception('No TNG variants except 0000 currently accessible from freya.')
                         
                 # draco/freya: no subbox data copied yet
                 if 'freya' in platform.node() or 'draco' in platform.node():

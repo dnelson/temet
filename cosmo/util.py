@@ -239,7 +239,7 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
     # scale factor or redshift?
     val = r['redshifts']
     if time:
-        val = r['time']
+        val = r['times']
         
     # all values or a given scalar or array list?
     if all:
