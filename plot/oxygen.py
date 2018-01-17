@@ -1803,7 +1803,7 @@ def paperPlots():
                                   boxDepth10=boxDepth10, colorOff=i+2)
 
     # figure 6, CDDF at z=0 with physics variants (L25n512)
-    if 0:
+    if 1:
         simRedshift = 0.0
         moment = 1
 

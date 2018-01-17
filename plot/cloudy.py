@@ -13,20 +13,28 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
-from util.helper import contourf, evenlySample, sampleColorTable
-from cosmo.cloudy import loadFG11UVB, cloudyIon
+from util.helper import contourf, evenlySample, sampleColorTable, closest
+from cosmo.cloudy import loadFG11UVB, loadHM12UVB, cloudyIon
 
-def plotUVB():
+def plotUVB(uvbName='fg11'):
     """ Debug plots of the UVB(nu) as a function of redshift. """
 
     # config
-    redshifts = [0.0, 2.0, 4.0, 6.0, 10.0]
-    nusRyd = [0.9,1.1,3.9,4.1,20.0]
+    redshifts = [0.0, 2.0, 4.0, 6.0]
+    nusRyd = [0.9,1.1,8.0,10.0] #[0.9,1.1,3.9,4.1,20.0]
 
     freq_range = [5e-1,4e3]
     Jnu_range  = [-35,-18]
     Jnu_rangeB = [-26,-18]
     z_range    = [0.0,10.0]
+
+    # load
+    if uvbName == 'fg11':
+        uvbs = loadFG11UVB(redshifts)
+        uvbs_all = loadFG11UVB()
+    if uvbName == 'hm12':
+        uvbs = loadHM12UVB(redshifts)
+        uvbs_all = loadHM12UVB()
 
     # (A) start plot: J_nu(nu) at a few specific redshifts
     fig = plt.figure(figsize=(26,10))
@@ -40,11 +48,11 @@ def plotUVB():
     ax.set_xlabel('$\\nu$ [ Ryd ]')
     ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
-    # load and plot
-    uvbs = loadFG11UVB(redshifts)
-
     for uvb in uvbs:
         ax.plot( uvb['freqRyd'], uvb['J_nu'], label='z = '+str(uvb['redshift']) )
+
+        val, w = closest( uvb['freqRyd'], 8.0 )
+        print(uvbName,uvb['redshift'],8.0,val,uvb['J_nu'][w])
 
     ax.legend()
 
@@ -57,15 +65,12 @@ def plotUVB():
     ax.set_xlabel('Redshift')
     ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
-    # load and plot
-    uvbs = loadFG11UVB()
-
     for nuRyd in nusRyd:
         xx = []
         yy = []
 
-        for uvb in uvbs:
-            ind = np.argmin( np.abs(nuRyd-uvb['freqRyd']) )
+        for uvb in uvbs_all:
+            _, ind = closest(uvb['freqRyd'],nuRyd)
             xx.append( uvb['redshift'] )
             yy.append( uvb['J_nu'][ind] )
 
@@ -84,20 +89,16 @@ def plotUVB():
     ax.set_ylabel('Redshift')
 
     # collect data
-    x = uvbs[0]['freqRyd']
-    y = np.array([uvb['redshift'] for uvb in uvbs])
+    x = uvbs_all[0]['freqRyd']
+    y = np.array([uvb['redshift'] for uvb in uvbs_all])
     XX, YY = np.meshgrid(x, y, indexing='ij')
 
     z = np.zeros( (x.size, y.size), dtype='float32' )
-    for i, uvb in enumerate(uvbs):
+    for i, uvb in enumerate(uvbs_all):
         z[:,i] = uvb['J_nu']
     z = np.clip(z, Jnu_range[0], Jnu_range[1])
 
-    # render methods
-    #plt.pcolormesh(y, x, z, vmin=z_min, vmax=z_max) #cmap='RdBu', 
-    #plt.imshow(z, extent=[x.min(),x.max(),y.min(),y.max()], origin='lower', interpolation='nearest')
-
-    #plt.contour(XX, YY, z, 40, lw=1.0, linestyles='solid')
+    # render as filled contour
     contourf(XX, YY, z, 40)
 
     cb = plt.colorbar()
@@ -105,7 +106,7 @@ def plotUVB():
 
     # finish
     fig.tight_layout()    
-    fig.savefig('uvb.pdf')
+    fig.savefig('uvb_%s.pdf' % uvbName)
     plt.close(fig)
 
 def plotIonAbundances(res='lg', elements=['Oxygen']):
