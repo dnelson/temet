@@ -20,6 +20,7 @@ import h5py
 import illustris_python as il
 
 # dnelson
+import ArepoVTK
 import ICs
 import cosmo
 import plot

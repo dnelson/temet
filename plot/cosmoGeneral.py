@@ -305,6 +305,57 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
             ax.contour(xx, yy, kde_sim, [cLevel], colors=[color2], 
                        alpha=cAlphas[k], linewidths=lwMed, extent=extent)
 
+    # special behaviors
+    if yQuant == 'size_gas':
+        # add virial radius median line
+        aux_yvals, _, _, _ = simSubhaloQuantity(sP, 'rhalo_200_log', clean)
+        aux_yvals = aux_yvals[wSelect][wFiniteColor]
+        if nanFlag: aux_yvals = aux_yvals[wFiniteCval]
+
+        xm, ym, _, _ = running_median(sim_xvals,aux_yvals,binSize=binSizeMed,percs=[5,10,25,75,90,95])
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+
+        ax.plot(xm[:-1], ym[:-1], '--', color=colorMed, lw=lwMed)
+        ax.text(9.2, 2.06, 'Halo $R_{\\rm 200,crit}$', color='black', size=15)
+
+    if yQuant == 'temp_halo':
+        # add virial temperature median line
+        aux_yvals = groupCat(sP, fieldsSubhalos=['tvir_log'])
+        aux_yvals = aux_yvals[wSelect][wFiniteColor]
+        if nanFlag: aux_yvals = aux_yvals[wFiniteCval]
+
+        xm, ym, _, _ = running_median(sim_xvals,aux_yvals,binSize=binSizeMed,percs=[5,10,25,75,90,95])
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+
+        ax.plot(xm[:-1], ym[:-1], '--', color='black', lw=lwMed)
+        ax.text(9.35, 5.55, 'Halo $T_{\\rm vir}$', color='black', size=15)
+
+    if yQuant == 'fgas_r200':
+        # add constant f_b line
+        f_b = np.log10(sP.units.f_b)
+        ax.plot(xMinMax, [f_b,f_b], '--', color='black', lw=lwMed)
+        ax.text(11.4, f_b+0.05, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', color='black', size=17)
+
+    if yQuant in ['BH_CumEgy_low','BH_CumEgy_high']:
+        # add approximate halo binding energy line = (3/5)*GM^2/R
+        G = sP.units.G / 1e10 # kpc (km/s)**2 / msun
+        r_halo, _, _, _ = simSubhaloQuantity(sP, 'rhalo_200', clean) # pkpc
+        m_halo, _, _, _ = simSubhaloQuantity(sP, 'mhalo_200', clean) # msun
+        e_b = (3.0/5.0) * G * m_halo**2 * sP.units.f_b / r_halo # (km/s)**2 * msun
+        e_b = np.array(e_b, dtype='float64') * 1e10 * sP.units.Msun_in_g # cm^2/s^2 * g
+        e_b = logZeroNaN(e_b).astype('float32') # log(cm^2/s^2 * g)
+        e_b = e_b[wSelect][wFiniteColor]
+        if nanFlag: e_b = e_b[wFiniteCval]
+
+        xm, ym, _, _ = running_median(sim_xvals,e_b,binSize=binSizeMed,percs=[5,10,25,75,90,95])
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+
+        ax.plot(xm[:-1], ym[:-1], '--', color='black', lw=lwMed)
+        ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color='black', size=17)
+
     # colorbar
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
     cb = plt.colorbar(cax=cax)
@@ -737,7 +788,7 @@ def plots3():
     sPs = []
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
     cenSatSelects = ['cen']
@@ -747,7 +798,7 @@ def plots3():
     sUpperPercs = [90,50]
 
     yQuants = quantList(wCounts=False, wTr=True, wMasses=True)
-    yQuants = ['M_BH_actual']
+    yQuants = ['Z_gas_all']
 
     # make plots
     for css in cenSatSelects:
@@ -759,8 +810,8 @@ def plots3():
 
         # individual plot per y-quantity:
         for yQuant in yQuants:
-            quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
-                                     sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+            quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css),
+                                     #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
 
         # individual plot per s-quantity:
         #for sQuant in sQuants:

@@ -112,18 +112,21 @@ def neutral_fraction(nH, sP, temp=1e4):
 
     return (B - np.sqrt(B**2-4*A*alpha_A))/(2*A)
 
-def get_H2_frac(nHI):
+def get_H2_frac(nH):
     """ Get the molecular fraction for neutral gas from the ISM pressure: only meaningful when nH > 0.1.
         From Bird+ (2014) Eqn 4, e.g. the pressure-based model of Blitz & Rosolowsky (2006).
       nHI : [ cm^-3 ] """
-    fH2 = 1.0 / ( 1.0 + (35.0*(0.1/nHI)**(5.0/3.0))**0.92 )
+    fH2 = 1.0 / ( 1.0 + (35.0*(0.1/nH)**(5.0/3.0))**0.92 )
     return fH2 # Sigma_H2 / Sigma_H
 
-def neutralHydrogenFraction(gas, sP, atomicOnly=True):
+def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
     """ Get the total neutral hydrogen fraction, by default for the atomic component only. Note that 
     given the SH03 model, none of the hot phase is going to be neutral hydrogen, so in fact we 
     should remove the hot phase mass from the gas cell mass. But this is subdominant and should 
-    be less than 10%. """
+    be less than 10%. If molecularModel is not None, then return instead the H2 fraction itself, 
+    using molecularModel as a string for the particular H2 formulation. Note that in all cases these 
+    are ratios relative to the total hydrogen mass of the gas cell. """
+    if molecularModel is not None: assert not atomicOnly
 
     # fraction of total hydrogen mass which is neutral, as reported by the code, which is already 
     # based on Rahmati+ (2012) if UVB_SELF_SHIELDING is enabled. But, above the star formation 
@@ -143,6 +146,18 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True):
     if atomicOnly:
         frac_nH0[ww] *= ( 1-get_H2_frac(nH[ww]) )
 
+    # return H2 fraction itself?
+    if molecularModel is not None:
+        assert molecularModel in ['BL06'] # only available model for now
+
+        # which model?
+        if molecularModel == 'BL06':
+            frac_nH0[ww] *= get_H2_frac(nH[ww])
+
+        # zero H2 in non-SFing gas
+        w = np.where(nH <= PhysDensThresh)
+        frac_nH0[w] = 0.0
+
     return frac_nH0
 
 def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=False, 
@@ -154,6 +169,14 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
     reqFields = ['Masses','GFM_Metals','NeutralHydrogenAbundance']
     if totalNeutral or atomic or molecular:
         reqFields += ['Density']
+
+    # load here?
+    if gas is None:
+        from cosmo.load import snapshotSubset
+        reqFieldsLoad = list(reqFields) # make copy
+        reqFieldsLoad.remove('GFM_Metals')
+        reqFieldsLoad.append('metals_H')
+        gas = snapshotSubset(sP, 'gas', reqFieldsLoad)
         
     if not all( [f in gas for f in reqFields] ):
         raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')
@@ -175,7 +198,7 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
     if atomic:
         mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=True)
     if molecular:
-        raise Exception('Not really implemented, though could use the simple model of get_H2_frac.')
+        mass_fraction = neutralHydrogenFraction(gas, sP, atomicOnly=False, molecularModel=molecular)
     
     return massH * mass_fraction
 

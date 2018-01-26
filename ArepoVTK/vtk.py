@@ -414,3 +414,36 @@ def makeColorBars():
     # save
     plt.savefig('test.pdf') #, bbox_inches='tight')
     plt.close()
+
+def writeColorTable(ctName='inferno'):
+    """ Output a .tbl discrete color table for use in ArepoVTK, from one that loadColorTable() knows. """
+    from util.helper import loadColorTable
+
+    start = 0
+    alpha = 1.0 # constant
+    filename = 'mpl_%s.tbl' % ctName
+
+    # load
+    rgb = loadColorTable(ctName)
+
+    # handle LinearSegmentedColormap by sampling it
+    if not hasattr(rgb,'colors'):
+        rgb.colors = []
+        for i in range(256):
+            rgb.colors.append( rgb(i) )
+    nVals = len(rgb.colors)
+
+    # convert [0,1] to ArepoVTK input of [0,255] if necessary
+    fac = 1.0
+    if np.max(np.array(rgb.colors)) <= 1.0:
+        fac = 255.0
+
+    # write
+    with file(filename, 'w') as f:
+        f.write('# comment\n')
+        f.write('%d\n' % (nVals-start))
+
+        for i in range(nVals):
+            f.write('%5.1f %5.1f %5.1f %4.2f\n' % (rgb.colors[i][0]*fac, rgb.colors[i][1]*fac, rgb.colors[i][2]*fac, alpha) )
+
+    print('Wrote: [%s]' % filename)

@@ -285,6 +285,12 @@ def _radialRestriction(sP, nSubsTot, rad):
 
         radSqMax = (1.00 * parentR200)**2
         radSqMin = (0.15 * parentR200)**2
+    elif rad == 'r200crit':
+        # within the virial radius (r200,crit definition) (centrals only)
+        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        parentR200 = gcLoad['halos'][gcLoad['subhalos']]
+
+        radSqMax = (1.00 * parentR200)**2
     elif rad == '2rhalfstars':
         # classic Illustris galaxy definition, r < 2*r_{1/2,mass,stars}
         gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
@@ -326,7 +332,7 @@ def _radialRestriction(sP, nSubsTot, rad):
     return radRestrictIn2D, radSqMin, radSqMax
 
 def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, 
-                           ptRestriction=None, weighting=None, scope='subfind'):
+                           ptRestriction=None, weighting=None, scope='subfind', minStellarMass=None):
     """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
         kpc, or as a string specifying a particular model for a variable cut radius). 
@@ -334,6 +340,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         If scope=='global', currently a full non-chunked snapshot load and brute-force distance 
         computations to all particles for each subhalo.
         ptRestriction applies a further cut to which particles are included (None, 'sfrgt0', 'sfreq0').
+        if minStellarMass is not None, then only process subhalos with mstar_30pkpc_log above this value.
     """
     assert op in ['sum','mean','max','ufunc']
     assert scope in ['subfind','fof','global']
@@ -400,6 +407,15 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         i0 = 0 # never changes
         i1 = indRange[1] # never changes
 
+    # stellar mass select
+    if minStellarMass is not None:
+        masses = cosmo.load.groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log'])
+        masses = masses[subhaloIDsTodo]
+        wSelect = np.where( masses >= minStellarMass )
+
+        subhaloIDsTodo = subhaloIDsTodo[wSelect]
+        select += ' (Only with stellar mass >= %.2f)' % minStellarMass
+
     nSubsDo = len(subhaloIDsTodo)
 
     # info
@@ -420,7 +436,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         fieldsLoad.append('pos')
     if ptRestriction == 'real_stars':
         fieldsLoad.append('sftime')
-    if ptRestriction == 'sfrgt0':
+    if ptRestriction in ['sfrgt0','sfreq0']:
         fieldsLoad.append('sfr')
 
     if ptProperty == 'Krot':
@@ -464,12 +480,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         particles['weights'] = np.zeros( particles['count'], dtype='float32' )
         particles['weights'] += 1.0 # uniform
     else:
-        assert weighting in ['mass','volume'] or 'bandLum' in weighting
         assert op not in ['sum'] # meaningless
-
-        if weighting in ['mass','volume']:
-            # use particle masses or volumes (linear) as weights
-            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, indRange=indRange)
 
         if 'bandLum' in weighting:
             # prepare sps interpolator
@@ -489,10 +500,14 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             # use the (linear) luminosity in this band as the weight
             particles['weights'] = np.power(10.0, -0.4 * mags)
 
+        else:
+            # use a particle quantity as weights (e.g. 'mass', 'volume', 'O VI mass')
+            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, indRange=indRange)
+
     assert particles['weights'].ndim == 1 and particles['weights'].size == particles['count']
 
     # loop over subhalos
-    printFac = 100.0 if sP.res > 512 else 10.0
+    printFac = 100.0 if (sP.res > 512 or scope == 'global') else 10.0
 
     for i, subhaloID in enumerate(subhaloIDsTodo):
         if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
@@ -628,7 +643,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
             if op == 'sum': r[i] = np.sum( loc_val )
             if op == 'max': r[i] = np.max( loc_val )
-            if op == 'mean': r[i] = np.average( loc_val , weights=loc_wt )
+            if op == 'mean':
+                if loc_wt.sum() == 0.0: loc_wt = np.zeros( loc_val.size, dtype='float32' ) + 1.0 # if all zero weights
+                r[i] = np.average( loc_val , weights=loc_wt )
         else:
             # vector (e.g. pos, vel, Bfield)
             for j in range(particles[ptProperty].shape[1]):
@@ -637,7 +654,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
                 if op == 'sum': r[i,j] = np.sum( loc_val )
                 if op == 'max': r[i,j] = np.max( loc_val )
-                if op == 'mean': r[i,j] = np.average( loc_val , weights=loc_wt )
+                if op == 'mean':
+                    if loc_wt.sum() == 0.0: loc_wt = np.zeros( loc_val.size, dtype='float32' ) + 1.0 # if all zero weights
+                    r[i,j] = np.average( loc_val , weights=loc_wt )
 
     attrs = {'Description' : desc.encode('ascii'),
              'Selection'   : select.encode('ascii'),
@@ -1755,12 +1774,22 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
     return rr, attrs
 
-def wholeBoxCDDF(sP, pSplit, species):
+def wholeBoxCDDF(sP, pSplit, species, omega=False):
     """ Compute the column density distribution function (CDDF, i.e. histogram) of column densities 
-        given a full box colDens grid."""
+        given a full box colDens grid. If omega == True, then instead compute the single number 
+        Omega_species = rho_species / rho_crit,0. """
     assert pSplit is None # not implemented
     from cosmo.load import auxCat
     from cosmo.hydrogen import calculateCDDF
+
+    if omega:
+        mass = cosmo.load.snapshotSubset(sP, 'gas', species + ' mass')
+        code_dens = np.sum(mass) / sP.boxSize**3 # code units
+        rr = sP.units.codeDensToCritRatio(code_dens, redshiftZero=True)
+        desc = 'Omega_%s = (rho_%s / rho_crit,z=0)' % (species,species)
+        attrs = {'Description' : desc.encode('ascii'), 
+                 'Selection'   : 'All gas cells in box.'.encode('ascii')}
+        return rr, attrs
 
     # config
     binSize   = 0.1 # log cm^-2
@@ -1804,7 +1833,20 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     assert op in ['sum','mean','median','count']
     assert scope in ['global','global_fof','subfind','fof','subfind_global']
-    assert weighting is None # not implemented in binned_statistic approach yet
+
+    def _binned_statistic_weighted(x, values, statistic, bins, weights=None, weights_w=None):
+        """ If weights == None, straight passthrough to scipy.stats.binned_statistic(). Otherwise, 
+        compute once for values*weights, again for weights alone, then normalize and return. 
+        If weights_w is not None, apply this np.where() result to the weights array. """
+        if weights is None:
+            return binned_statistic(x, values, statistic=statistic, bins=bins)
+
+        weights_loc = weights[weights_w] if weights_w is not None else weights
+
+        valwt_sum, bin_edges, bin_number = binned_statistic(x, values*weights_loc, statistic=statistic, bins=bins)
+        wt_sum, _, _ = binned_statistic(x, weights_loc, statistic=statistic, bins=bins)
+
+        return (valwt_sum/wt_sum), bin_edges, bin_number
 
     # config
     radMin = 0.0 # log code units
@@ -1984,8 +2026,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
         # load weights
         if weighting is not None:
-            assert weighting in ['mass','volume']
             assert op not in ['sum'] # meaningless
+            assert op in ['mean'] # currently only supported
 
             # use particle masses or volumes (linear) as weights
             particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, indRange=indRange)
@@ -2124,7 +2166,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             # log(radius), with any zero value set to small (included in first bin)
             loc_rr_log = logZeroSafe( rr[wValid], zeroVal=radMin-1.0 )
-            #loc_wt    = particles['weights'][i0:i1][wValid] if weighting is not None else 1.0
+            loc_wt = particles['weights'][i0:i1][wValid] if weighting is not None else None
 
             if ptProperty not in userCustomFields:
                 loc_val = particles[ptProperty][i0:i1][wValid]
@@ -2142,7 +2184,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # weighted histogram (or other op) of rr_log distances
             if scope in ['global','global_fof']:
                 # (1) all
-                result, _, _ = binned_statistic(loc_rr_log, loc_val, statistic=op, bins=rbins_sq)
+                result, _, _ = _binned_statistic_weighted(loc_rr_log, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
                 r[i,:,0] += result
 
                 # (2) self-halo
@@ -2165,14 +2207,14 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
                 if len(w[0]):
                     # this subhalo at least partially in the currently loaded data
-                    result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
+                    result, _, _ = _binned_statistic_weighted(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
                     r[i,:,1] += result
 
                 # (3) other-halo
                 w = np.where(loc_mask == 1)
 
                 if len(w[0]):
-                    result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
+                    result, _, _ = _binned_statistic_weighted(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
                     r[i,:,2] += result
 
                 if restoreSelf:
@@ -2182,11 +2224,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 w = np.where(loc_mask == 0)
 
                 if len(w[0]):
-                    result, _, _ = binned_statistic(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq)
+                    result, _, _ = _binned_statistic_weighted(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
                     r[i,:,3] += result
             else:
                 # subhalo/fof scope, we have only the self-term available, or 'subfind_global' technique
-                result, _, _ = binned_statistic(loc_rr_log, loc_val, statistic=op, bins=rbins_sq)
+                result, _, _ = _binned_statistic_weighted(loc_rr_log, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
                 r[i,:] += result
 
     attrs = {'Description' : desc.encode('ascii'),
@@ -2251,6 +2293,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo'),
+   'Subhalo_Mass_HaloStars_Metal' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metalmass',op='sum',rad='r015_1rvir_halo'),
+   'Subhalo_Mass_HaloStars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='sum',rad='r015_1rvir_halo'),
 
    'Subhalo_Mass_50pkpc_Gas': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=50.0),
@@ -2264,6 +2310,15 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=250.0),
    'Subhalo_Mass_250pkpc_Stars_Global' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=250.0,scope='global'),
+   'Subhalo_Mass_r200_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r200crit'),
+   'Subhalo_Mass_r200_Gas_Global' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r200crit',scope='global',minStellarMass=9.0),
+
+   'Subhalo_CoolingTime_HaloGas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestriction='sfreq0'),
+   'Subhalo_CoolingTime_OVI_HaloGas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',weighting='O VI mass',rad='r015_1rvir_halo',ptRestriction='sfreq0'),
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
@@ -2452,6 +2507,12 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVI_solar_depth10'     : partial(wholeBoxCDDF,species='OVI_solar_depth10'),
    'Box_CDDF_nOVII_depth10'          : partial(wholeBoxCDDF,species='OVII_depth10'),
    'Box_CDDF_nOVIII_depth10'         : partial(wholeBoxCDDF,species='OVIII_depth10'),
+
+   'Box_Omega_HI'                    : partial(wholeBoxCDDF,species='H I',omega=True),
+   'Box_Omega_H2'                    : partial(wholeBoxCDDF,species='H 2',omega=True),
+   'Box_Omega_OVI'                   : partial(wholeBoxCDDF,species='O VI',omega=True),
+   'Box_Omega_OVII'                  : partial(wholeBoxCDDF,species='O VII',omega=True),
+   'Box_Omega_OVIII'                 : partial(wholeBoxCDDF,species='O VIII',omega=True),
 
    'Subhalo_SubLink_zForm_mm5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
                                          smoothing=['mm',5,'snap']),

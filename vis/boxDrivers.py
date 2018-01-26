@@ -17,12 +17,12 @@ from cosmo.load import groupCatSingle, groupCat
 from cosmo.util import periodicDists
 
 def realizations(conf=1):
-    """ Render a whole box frame of one TNG run at one redshift, comparing gas and magnetic pressure. """
+    """ Render a whole box image at one redshift, of one field, comparing multiple runs. """
     panels = []
 
-    for i in range(1,11):
-        variant = 'r%03d' % i
-        panels.append( {'variant':variant} )
+    # runs
+    panels.append( {'variant':'0000'} )
+    panels.append( {'variant':'2302'} )
 
     if conf == 1:
         partType   = 'dm'
@@ -34,24 +34,28 @@ def realizations(conf=1):
         partField  = 'coldens_msunkpc2'
         valMinMax  = [4.2,7.2]
 
+    if conf == 3:
+        partType   = 'gas'
+        partField  = 'O VI'
+        valMinMax  = [11,15]
+
     run        = 'tng'
-    res        = 256
+    res        = 512
     redshift   = 0.0
-    nPixels    = 960
+    nPixels    = 800
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
-    labelSim   = True
-    plotHalos  = 10
+    labelSim   = False
+    plotHalos  = 20
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'open_black'
-        rasterPx   = 960
+        plotStyle  = 'open'
+        rasterPx   = 600
         colorbars  = True
 
-        sP = simParams(res=res, run=run, redshift=redshift)
-        saveFilename = savePathDefault + 'realizations_gas_%s_z%.1f.pdf' % (sP.simName, redshift)
+        saveFilename = savePathDefault + 'realizations_%s_%s_nSp%d_z%.1f.pdf' % (partType,partField,len(panels),redshift)
 
     renderBox(panels, plotConfig, locals())
 
@@ -132,12 +136,12 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 26: panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
     if conf == 27: panels.append( {'partType':'gas', 'partField':'O VIII', 'valMinMax':[11, 16]} )
 
-    # testing emission
     if conf == 28: panels.append( {'partType':'gas', 'partField':'sb_H-alpha', 'valMinMax':[-13.0, -8.0]} )
     if conf == 29: panels.append( {'partType':'gas', 'partField':'sb_OVIII', 'valMinMax':[-15.0, -10.0]} )
     if conf == 30: panels.append( {'partType':'gas', 'partField':'sb_O--8-16.0067A', 'valMinMax':[-15.0, -10.0]} )
     if conf == 31: panels.append( {'partType':'gas', 'partField':'sb_Lyman-alpha', 'valMinMax':[-13.0, -8.0]} )
     if conf == 32: panels.append( {'partType':'gas', 'partField':'sb_O--6-1031.91A_ster', 'valMinMax':[-4.0, 2.0]} )
+    if conf == 33: panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 3.0]} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -324,7 +328,7 @@ def TNG_oxygenPaperImages(part=0):
     run        = 'tng'
     redshift   = 0.0
     res        = 1820
-    nPixels    = 2000
+    nPixels    = 6000 #2000
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
@@ -419,11 +423,12 @@ def TNG_oxygenPaperImages(part=0):
         panels.append( {'partType':'gas', 'partField':'O VI', 'hInd':shID, 'valMinMax':[12.8, 15.4]} )
 
     class plotConfig:
-        plotStyle  = 'open' # open, edged
-        rasterPx   = 1800 if part in [0,3] else 900
-        colorbars  = True
+        plotStyle  = 'edged' # open
+        #rasterPx   = 1800 if part in [0,3] else 900
+        rasterPx   = 6000
+        colorbars  = False #True
 
-        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.pdf' % \
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],saveStr)
 
     if part in [0,3]:
@@ -650,24 +655,29 @@ def zoom_gasColDens_3res_or_3quant():
 
     renderBox(panels, plotConfig, locals())
 
-def box_slices(curSlice=0):
+def box_slices(curSlice=7, conf=0):
     """ Create a series of slices moving through a box (no halo centering). """
     run        = 'tng'
-    res        = 625
-    redshift   = 9.0
-    nPixels    = 800
+    res        = 2500
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = False
     labelSim   = False
     plotHalos  = False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
-    axesUnits  = 'mpc'
+
+    if conf == 0:
+        redshift = 9.0
+        nPixels  = 1200
+    if conf == 1:
+        redshift = 0.4
+        nPixels  = int(7.14*1200)
 
     panels, _, _, _ = _TNGboxFieldConfig(res, conf=1, thinSlice=False)
+    print(panels[0]['valMinMax'])
+    import pdb; pdb.set_trace()
     sP = simParams(res=res, run=run, redshift=redshift)
-
-    if redshift == 9.0: panels[0]['valMinMax'] += np.array([2.2,-0.2]) # z=9 adjust
+    ###panels[0]['valMinMax'] += np.array([0.4,0.0])
 
     # slicing config
     nSlicesTot = 10 # ~30 mpc deep each
@@ -676,14 +686,16 @@ def box_slices(curSlice=0):
 
     relCenPos = None
     absCenPos = np.array([0.5,0.5,0.5]) * sP.boxSize
+    absCenPos[1] = 125000.0 # center choice
+    absCenPos[0] = 75000.0 # center choice
     absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
     class plotConfig:
-        plotStyle  = 'open' # open, edged
-        rasterPx   = int(nPixels*1.3)
-        colorbars  = True
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels
+        colorbars  = False
         
-        saveFilename = './boxImage_%s_%s-%s_axes%d%d_%s.pdf' % \
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d_%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr)
     
     renderBox(panels, plotConfig, locals())

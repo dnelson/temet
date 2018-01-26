@@ -17,12 +17,13 @@ from illustris_python.util import partTypeNum as ptNum
 from util.helper import iterable, logZeroNaN, curRepoVersion, pSplitRange, numPartToChunkLoadSize
 from cosmo.util import periodicDists
 
-def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False):
+def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False, expandPartial=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now 
       indRange     : if a tuple/list, load only the specified range of data (field and  e.g. subhaloIDs)
-      onlyMeta     : load only attributes and coverage information """
+      onlyMeta     : load only attributes and coverage information 
+      expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
     from cosmo import auxcatalog
     import datetime
     import getpass
@@ -41,8 +42,6 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
     if not isdir(sP.derivPath + 'auxCat'):
         mkdir(sP.derivPath + 'auxCat')
-
-    nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
 
     for field in iterable(fields):
         if field not in auxcatalog.fieldComputeFunctionMapping.keys() + auxcatalog.manualFieldNames:
@@ -213,6 +212,22 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                             r[attrName] = f[attrName][()]
                         else:
                             r[attrName] = f[attrName][indRange[0]:indRange[1]]
+
+            # subhaloIDs indicates computation only for partial set of subhalos?
+            if expandPartial:
+                nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
+                
+                if 'subhaloIDs' in r and (r['subhaloIDs'].size < nSubsTot) and expandPartial:
+                    shape = np.array(r[field].shape)
+                    shape[0] = nSubsTot
+                    new_data = np.zeros( shape, dtype=r[field].dtype )
+                    new_data.fill(np.nan)
+                    if r[field].ndim == 1: new_data[r['subhaloIDs']] = r[field]
+                    if r[field].ndim == 2: new_data[r['subhaloIDs'],:] = r[field]
+                    if r[field].ndim == 3: new_data[r['subhaloIDs'],:,:] = r[field]
+                    print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].size,new_data.size,field))
+                    r[field] = new_data
+
             continue
 
         # either does not exist yet, or reCalculate requested
@@ -240,11 +255,6 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         with h5py.File(savePath,'w') as f:
             f.create_dataset(field, data=r[field])
 
-            if not reCalculate:
-                print(' Saved new [%s].' % savePath)
-            else:
-                print(' Saved over existing [%s].' % savePath)
-
             # save metadata and any additional descriptors as attributes
             f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
             f[field].attrs['CreatedRev']  = curRepoVersion()
@@ -255,6 +265,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     f.create_dataset(attrName, data=r[field+'_attrs'][attrName])
                     continue # typically too large to store as an attribute
                 f[field].attrs[attrName] = attrValue
+
+        if not reCalculate:
+            print(' Saved new [%s].' % savePath)
+        else:
+            print(' Saved over existing [%s].' % savePath)
                     
     return r
 
@@ -1116,12 +1131,28 @@ def snapshotSubset(sP, partType, fields,
             if '_alpha15' in field: modelArgs['alpha'] = 1.5
             return sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
+        # hydrogen model mass calculation (todo: generalize to different molecular models)
+        if field.lower() in ['h i mass', 'hi mass', 'himass']:
+            from cosmo.hydrogen import hydrogenMass
+            return hydrogenMass(None, sP, atomic=True)
+
+        if field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
+            from cosmo.hydrogen import hydrogenMass
+            if 'h2mass_' in field.lower():
+                molecularModel = field.lower().split('_')[1]
+            else:
+                molecularModel = 'BL06'
+                print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
+
+            return hydrogenMass(None, sP, molecular=molecularModel)
+
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
             return _ionLoadHelper(sP, partType, field, kwargs)
 
         if '_ionmassratio' in field:
             # per-cell ratio between two ionic masses, e.g. "O6_O8_ionmassratio"
+            from cosmo.cloudy import cloudyIon
             ion = cloudyIon(sP=None)
             ion1, ion2, _ = field.split('_')
 
@@ -1199,6 +1230,13 @@ def snapshotSubset(sP, partType, fields,
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             return sP.units.calcSoundSpeedKmS(u,dens)
+
+        # cooling time (computed from saved GFM_CoolingRate) [Gyr]
+        if field.lower() in ['tcool','cooltime']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
+            coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
+            return sP.units.coolingTimeGyr(dens, coolrate, u)
 
         # total effective timestep, from snapshot [years]
         if field.lower() == 'dt_yr':

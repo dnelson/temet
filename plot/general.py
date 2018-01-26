@@ -288,8 +288,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     ax = fig.add_subplot(111)
 
     hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
-    if len(sPs) == 1: sStr = '%s z=%.1f' % (sPs[0].simName, sPs[0].redshift) 
-    if len(sPs) > 1: sStr = ' '.join([sP.simName for sP in sPs]) + ' (z=%.1f)' % sPs[0].redshift
+    sStr = '%s z=%.1f' % (sPs[0].simName, sPs[0].redshift) if len(sPs) == 1 else ''
     ax.set_title('%s %s' % (sStr,hStr))
 
     for i, sP in enumerate(sPs):
@@ -344,12 +343,14 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
         if len(sPs) <= 3 or (len(sPs) > 3 and i == 0):
             ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
+    ax.legend(loc='best')
+
     # finish plot
     sStr = '%s_z-%.1f' % (sPs[0].simName,sPs[0].redshift) if len(sPs) == 1 else 'sPn%d' % len(sPs)
     fig.savefig('particleMedian_%s_%s-vs-%s_%s_%s.pdf' % (partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
-def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', halo=None):
+def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', weighting=None, halo=None):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
     (parent FoF particle restricted, using non-caching auxCat functionality). 
     subhalo is a list, one entry per sPs entry. For each entry of subhalo:
@@ -401,7 +402,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
 
         # load
         data, attrs = subhaloRadialProfile(sP, pSplit=None, ptType=ptType, ptProperty=ptProperty, op=op, 
-                                          scope=scope, weighting=None, subhaloIDsTodo=subhaloIDs, 
+                                          scope=scope, weighting=weighting, subhaloIDsTodo=subhaloIDs, 
                                           ptRestriction=ptRestriction)
         assert data.shape[0] == len(subhaloIDs)
 
@@ -431,7 +432,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
 
             sampleDesc = '' if nSamples == 1 else subhalo[i].keys()[j]
             l, = ax.plot(rr, yy_median, '-', lw=lw, label='%s %s' % (sP.simName,sampleDesc))
-            ax.plot(rr, yy_mean, ':', lw=lw)
+            ax.plot(rr, yy_mean, ':', lw=lw, color=l.get_color())
             if len(sPs) == 1 and subhaloIDs.size > 1:
                 ax.fill_between(rr, yp[0,:], yp[-1,:], color=l.get_color(), interpolate=True, alpha=0.2)
 
@@ -439,8 +440,9 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
     fig.tight_layout()
     ax.legend(loc='best')
     sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
-    fig.savefig('radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s.pdf' % \
-        (sPstr,ptType,ptProperty,nSamples,len(subhaloIDs),scope))
+    wtStr = '_wt-'+weighting if weighting is not None else ''
+    fig.savefig('radProfilesStack_%s_%s_%s_Ns-%d_Nh-%d_scope-%s%s.pdf' % \
+        (sPstr,ptType,ptProperty,nSamples,len(subhaloIDs),scope,wtStr))
     plt.close(fig)
 
 def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhaloIDs=None, haloIDs=None, xlog=True, sfreq0=False, colorOffs=None):
@@ -619,7 +621,7 @@ def compareRuns_RadProfiles():
         subhalos.append( w[0] )
 
     for field in ['metaldens']: #,'dens','temp_linear','P_gas_linear','z_solar']:
-        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
+        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, weighting='O VI mass')
 
 def compareHaloSets_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two different 
@@ -639,8 +641,8 @@ def compareHaloSets_RadProfiles():
     subhalos = [{'11.8 < M$_{\\rm halo}$ < 12.2, (g-r) < 0.35':w1[0], 
                  '11.8 < M$_{\\rm halo}$ < 12.2, (g-r) > 0.65':w2[0]}]
 
-    for field in ['metaldens','dens','temp_linear','P_gas_linear','z_solar']:
-        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field)
+    for field in ['tcool']: #['metaldens','dens','temp_linear','P_gas_linear','z_solar']:
+        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, weighting='O VI mass')
 
 def singleHaloProperties():
     """ Driver. Several phase/radial profile plots for a single halo. """
@@ -677,9 +679,10 @@ def compareRuns_particleQuant():
     """ Driver. Compare a series of runs in a single panel plot of a particle median quantity vs another. """
 
     # config
-    yAxis = 'temp'
-    xAxis = 'numdens'
-    variants = ['0000','2102','2202','2302']
+    yQuant = 'tcool'
+    xQuant = 'dens_critb'
+    ptType = 'gas'
+    variants = ['0000'] #,'2102','2202','2302']
 
     # start PDF, add one page per run
     sPs = []
@@ -688,4 +691,4 @@ def compareRuns_particleQuant():
         if sP.simName == 'DM only': continue
         sPs.append(sP)
 
-    plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='dens_critb', yQuant='bmag_uG')
+    plotParticleMedianVsSecondQuant(sPs, partType=ptType, xQuant=xQuant, yQuant=yQuant)

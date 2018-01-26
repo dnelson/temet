@@ -247,6 +247,11 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
             for i, redshift in enumerate(redshifts):
                 sP.setRedshift(redshift)
 
+                # Omega_ion value: compute
+                if len(sPs) > 8:
+                    fieldName = 'Box_Omega_' + ion
+                    boxOmega = auxCat(sP, fields=[fieldName])[fieldName]
+
                 # pre-computed CDDF: load at this redshift
                 fieldName = 'Box_CDDF_n'+ion
                 if boxDepth10: fieldName += '_depth10'
@@ -270,11 +275,15 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                     label = ion
                     if len(ions) == 1 and not boxDepth10: label = sP.simName
                     if len(sPs) > 1: label = '%s %s' % (ion,sP.simName)
+                    if len(sPs) > 8: label = '%s (%.1f)' % (sP.simName,boxOmega*1e7)
                 if i > 0: label = ''
                 c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
                 lwLoc = lw if not (len(sPs) == 12 and sP.variant == '0000') else 2*lw
 
-                ax.plot(xx, yy, lw=lwLoc, color=c, linestyle=linestyles[i], label=label)
+                ls = linestyles[i]
+                if i == 0 and len(sPs) > 8 and 'BH' in sP.simName: ls = '--'
+
+                ax.plot(xx, yy, lw=lwLoc, color=c, linestyle=ls, label=label)
 
     # legend
     sExtra = []
@@ -288,9 +297,9 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     handles, labels = ax.get_legend_handles_labels()
 
     if len(sPs) == 13: # main variants, split into 2 legends
-        legend1 = ax.legend(handles[0:4], labels[0:4], loc='upper right')
+        legend1 = ax.legend(handles[0:4], labels[0:4], loc='upper right', prop={'size':18})
         ax.add_artist(legend1)
-        legend2 = ax.legend(handles[4:]+sExtra, labels[4:]+lExtra, loc='lower left')
+        legend2 = ax.legend(handles[4:]+sExtra, labels[4:]+lExtra, loc='lower left', prop={'size':18})
     else: # default
         loc = 'upper right' if len(ions) > 1 else 'lower left'
         legend2 = ax.legend(handles+sExtra, labels+lExtra, loc=loc)
@@ -588,12 +597,13 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
+    radStr = 'Radius' if '3D' in projDim else 'Impact Parameter'
     if radRelToVirRad:
         ax.set_xlim([-2.0, 2.0])
-        ax.set_xlabel('Radius / Virial Radius [ log ]')
+        ax.set_xlabel('%s / Virial Radius [ log ]' % radStr)
     else:
         ax.set_xlim([0.0, 4.0])
-        ax.set_xlabel('Radius [ log pkpc ]')
+        ax.set_xlabel('%s [ log pkpc ]' % radStr)
 
     speciesStr = ions[0] if len(ions) == 1 else 'oxygen'
 
@@ -1339,11 +1349,13 @@ def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
             sort_inds = np.argsort( log_ssfr )
 
         xx = xtick_vals[1:-1]
+
+        # save some data for later
         pvals = np.zeros(R.size, dtype='float32')
         plims = np.zeros(R.size, dtype='int32')
 
         for i, sort_ind in enumerate(sort_inds):
-            # plot vertical line and obs. galaxy namei
+            # plot vertical line and obs. galaxy name
             ax_right.plot( [ xx[i],xx[i] ], ylim, '-', color='black', alpha=0.04 )
 
             textOpts = {'ha':'center', 'va':'bottom', 'rotation':90, 'color':'#555555', 'fontsize':8}
@@ -1382,7 +1394,7 @@ def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
             if ovi_limit[sort_ind] == 2: pvals[i] = z2 # lower limit, PDF area which is consistent
             plims[i] = ovi_limit[sort_ind]
 
-            print(gals[sort_ind]['name'], pvals[i])
+            print(gals[sort_ind]['name'], ovi_logN[sort_ind], pvals[i])
 
         # print summary of pvals statistic
         percs = np.nanpercentile(pvals, [16,50,84])
@@ -1392,6 +1404,23 @@ def cosOVIDataPlotExtended(sP, saveName, config='COS-Halos'):
             percs = np.nanpercentile(pvals[w], [16,50,84])
             print('limit [%d] percs:' % lim, percs)
         print('counts: ',np.count_nonzero(pvals < 0.05),np.count_nonzero(pvals < 0.01),pvals.size)
+
+        # print summary of sim vs. obs mean/1sigma column densities
+        percs = np.nanpercentile(ovi_logN, [16,50,84])
+        print('obs OVI logN: %.2f (-%.2f +%.2f)' % (percs[1],percs[1]-percs[0],percs[2]-percs[1]))
+        percs = np.nanpercentile(sim_sample['column'].ravel(), [16,50,84])
+        print('sim OVI logN: %.2f (-%.2f +%.2f)' % (percs[1],percs[1]-percs[0],percs[2]-percs[1]))
+
+        w_sf = np.where(log_ssfr >= -11.0)
+        w_qq = np.where(log_ssfr < -11.0)
+        percs_sf = np.nanpercentile(ovi_logN[w_sf], [16,50,84])
+        percs_qq = np.nanpercentile(ovi_logN[w_qq], [16,50,84])
+        print('obs SF OVI logN: %.2f (-%.2f +%.2f)' % (percs_sf[1],percs_sf[1]-percs_sf[0],percs_sf[2]-percs_sf[1]))
+        print('obs QQ OVI logN: %.2f (-%.2f +%.2f)' % (percs_qq[1],percs_qq[1]-percs_qq[0],percs_qq[2]-percs_qq[1]))
+        percs_sf = np.nanpercentile(sim_sample['column'][w_sf,:].ravel(), [16,50,84])
+        percs_qq = np.nanpercentile(sim_sample['column'][w_qq,:].ravel(), [16,50,84])
+        print('sim SF OVI logN: %.2f (-%.2f +%.2f)' % (percs_sf[1],percs_sf[1]-percs_sf[0],percs_sf[2]-percs_sf[1]))
+        print('sim QQ OVI logN: %.2f (-%.2f +%.2f)' % (percs_qq[1],percs_qq[1]-percs_qq[0],percs_qq[2]-percs_qq[1]))
 
         # main panel: legend
         loc = ['upper right','upper left'][iter]
@@ -1581,6 +1610,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
                     c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
 
                 ls = linestyles[i] if len(colDensThresholds) > 1 else linestyles[0]
+                if len(sPs) > 8 and 'BH' in sP.simName: ls = '--'
 
                 ax.plot(xx, yy, lw=lw, color=c, linestyle=ls, label=label)
 
@@ -1590,7 +1620,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
                 ax.fill_between(xx, yy_min, yy_max, color=c, alpha=0.1, interpolate=True)
 
-                # add Illustris-1 line to COS-Halos figure?
+                # add TNG100-2 (i.e. TNG300-1) line to COS-Halos figure?
                 if gs == 'all' and sP.simName == 'TNG100-1' and thresh == 14.15:
                     print('add')
                     sP_ill = simParams(res=910,run='tng',redshift=0.0)
@@ -1621,9 +1651,9 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
         ax.add_artist(legend1)
     else:
         if len(sPs) == 13: # main variants, split into 2 legends
-            legend1 = ax.legend(handles[0:6], labels[0:6], loc='upper right', prop={'size':17})
+            legend1 = ax.legend(handles[0:5], labels[0:5], loc='upper right', prop={'size':18})
             ax.add_artist(legend1)
-            legend2 = ax.legend(handles[6:], labels[6:], loc='lower left', prop={'size':17})
+            legend2 = ax.legend(handles[5:], labels[5:], loc='lower left', prop={'size':18})
         else: # default
             loc = 'upper right' if len(sPs) == 1 else 'lower left'
             prop = {}
@@ -1737,7 +1767,7 @@ def paperPlots():
     # figure 1, 2: full box composite image components, and full box OVI/OVIII ratio
     if 0:
         from vis.boxDrivers import TNG_oxygenPaperImages
-        for part in [0,1,2,3]:
+        for part in [3]: #[0,1,2,3]:
             TNG_oxygenPaperImages(part=part)
 
     # figure 3a: ionization data for OVI, OVII, and OVIII
@@ -1803,7 +1833,7 @@ def paperPlots():
                                   boxDepth10=boxDepth10, colorOff=i+2)
 
     # figure 6, CDDF at z=0 with physics variants (L25n512)
-    if 1:
+    if 0:
         simRedshift = 0.0
         moment = 1
 
@@ -1857,13 +1887,13 @@ def paperPlots():
         ions = ['OVI'] # OVII, OVIII
         cenSatSelect = 'cen'
         haloMassBins = [[10.9,11.1], [11.4,11.6], [11.9,12.1], [12.4,12.6]]
-        projSpecs = ['3D','2Dz_2Mpc']
-        combine2Halo = True
+        projSpecs = ['2Dz_2Mpc'] #['3D','2Dz_2Mpc']
+        combine2Halo = False
 
         simNames = '_'.join([sP.simName for sP in sPs])
 
         for massDensity in [False]: #[True,False]:
-            for radRelToVirRad in [True,False]:
+            for radRelToVirRad in [False]: #[True,False]:
                 for projDim in projSpecs:
 
                     saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
@@ -1960,17 +1990,18 @@ def paperPlots():
     if 0:
         sP = TNG300
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        xQuants = ['mstar_30pkpc_log','mhalo_200_log']
+        xQuants = ['mstar_30pkpc_log'] #['mstar_30pkpc_log','mhalo_200_log']
         cQuant = 'mass_ovi'
 
         yQuants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo','mass_z']
         yQuants2 = ['surfdens1_stars','Z_stars','color_C_gr','size_stars','Krot_oriented_stars2','Krot_oriented_gas2']
-        yQuants3 = ['nh_halo','xray_r500','pratio_halo_masswt','BH_CumEgy_low','M_BH_actual','_dummy_']
+        #yQuants3 = ['nh_halo','xray_r500','pratio_halo_masswt','BH_CumEgy_low','M_BH_actual','_dummy_']
+        yQuants3 = ['nh_halo','fgas_r200','pratio_halo_masswt','BH_CumEgy_low','M_BH_actual','mhalo_200_log']
 
-        yQuantSets = [yQuants1, yQuants2, yQuants3]
+        yQuantSets = [yQuants3] #[yQuants1, yQuants2, yQuants3]
 
         for i, xQuant in enumerate(xQuants):
-            yQuants3[-1] = xQuants[1-i] # include the other
+            #yQuants3[-1] = xQuants[1-i] # include the other
 
             for j, yQuants in enumerate(yQuantSets):
                 params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
@@ -1984,6 +2015,20 @@ def paperPlots():
                 quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
                 quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
                 pdf.close()
+
+    if 1:
+        sP = simParams(res=512,run='tng',redshift=0.0,variant='0000') #TNG100
+        figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
+        xQuant = 'mstar_30pkpc_log'
+        cQuant = 'mass_ovi'
+        yQuant = 'fgas_r200'
+
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
+
+        pdf = PdfPages('histo2d_x=%s_y=%s_%s.pdf' % (xQuant,yQuant,sP.simName))
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
+        pdf.close()
 
     # ------------ appendix ---------------
 
