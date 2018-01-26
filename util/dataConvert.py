@@ -346,10 +346,10 @@ def tracerCutoutFromTracerTracksCat():
 
 def makeSnapHeadersForLHaloTree():
     """ Copy chunk 0 of each snapshot only and the header only (for LHaloTree B-HaloTree). """
-    nSnaps = 100
+    nSnaps = 59 #100
 
-    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG_DM/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/test/snapdir_%03d/'
+    pathFrom = '/home/extdylan/data/out/L35n2160TNG/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/data/out/L35n2160TNG/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -360,6 +360,10 @@ def makeSnapHeadersForLHaloTree():
 
         # open destination for writing
         j = 0
+        if path.isfile(fileTo % (i,i,j)):
+            print('Skip snap [%d], already exists' % j)
+            continue
+
         fOut = h5py.File(fileTo % (i,i,j), 'w')
 
         # open origin file for reading
@@ -377,15 +381,16 @@ def makeSnapHeadersForLHaloTree():
 def makeSnapSubsetsForMergerTrees():
     """ Copy snapshot chunks reducing to needed fields for tree calculation. """
     nSnaps  = 100
-    copyFields = {'PartType0':['Masses','ParticleIDs'], #'Coordinates','Density','GFM_Metals'],
+    copyFields = {'PartType0':['Masses','ParticleIDs'], #for SubLink_gal need 'StarFormationRate'
                   'PartType1':['ParticleIDs'],
                   'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
 
+    copyFields = {'PartType1':['Coordinates','SubfindHsml']}
     #copyFields = {'PartType4':['Coordinates','ParticleIDs']}
     #copyFields = {'PartType0':['Masses','Coordinates','Density','GFM_Metals','GFM_Metallicity']}
 
-    pathFrom = '/home/extdylan/sims.TNG/L35n2160TNG_DM/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/data/out/L35n2160TNG_DM/output/snapdir_%03d/'
+    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/data/out/L205n2500TNG/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -402,23 +407,24 @@ def makeSnapSubsetsForMergerTrees():
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(41,59):
+    for i in range(99,100):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 
         # loop over chunks
         for j in range(nChunks):
             # open destination for writing
-            fOut = h5py.File(fileTo % (i,i,j), 'w')
+            fOut = h5py.File(fileTo % (i,i,j)) # 'w' removed, append to existing file
 
             # open origin file for reading
             assert path.isfile(fileFrom % (i,i,j))
 
             with h5py.File(fileFrom % (i,i,j),'r') as f:
                 # copy header
-                g = fOut.create_group('Header')
-                for attr in f['Header'].attrs:
-                    fOut['Header'].attrs[attr] = f['Header'].attrs[attr]
+                if 'Header' not in fOut:
+                    g = fOut.create_group('Header')
+                    for attr in f['Header'].attrs:
+                        fOut['Header'].attrs[attr] = f['Header'].attrs[attr]
                 # loop over partTypes
                 for gName in copyFields.keys():
                     # skip if not in origin

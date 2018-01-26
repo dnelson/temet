@@ -91,11 +91,6 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
         if not hasattr(plotConfig,var):
             setattr(plotConfig,var,getattr(plotConfigDefaults,var))
 
-    # skip if final output render file already exists?
-    if skipExisting and isfile(plotConfig.saveFilename):
-        print('SKIP: %s' % plotConfig.saveFilename)
-        return
-
     # finalize panels list (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
@@ -125,7 +120,12 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
 
     # request render and save
     if retInfo: return panels
-    
+   
+    # skip if final output render file already exists?
+    if skipExisting and isfile(plotConfig.saveFilename):
+        print('SKIP: %s' % plotConfig.saveFilename)
+        return
+ 
     renderMultiPanel(panels, plotConfig)
 
 def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipExisting=True):

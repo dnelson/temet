@@ -1881,36 +1881,36 @@ def plots():
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
-    sPs.append( simParams(res=2160, run='tng') )  
-    sPs.append( simParams(res=1080, run='tng') )  
-    sPs.append( simParams(res=540, run='tng') )  
+    #sPs.append( simParams(res=2160, run='tng') )  
+    #sPs.append( simParams(res=1080, run='tng') )  
+    #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    #sPs.append( simParams(res=512, run='tng', variant='0010') )
+    sPs.append( simParams(res=512, run='tng', variant='0000') )
+    sPs.append( simParams(res=512, run='tng', variant='2302') )
     #sPs.append( simParams(res=512, run='tng', variant='0011') )
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
-    if 0:
-        # gauss extension proposal
-        pdf = PdfPages('fig_tng50_sfrd.pdf')
+    if 1:
+        # testing
+        pdf = PdfPages('fig_tests.pdf')
+        stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=0.0)
+        stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True, redshifts=[1,2,3,4])
         sfrdVsRedshift(sPs, pdf, xlog=True)
-        pdf.close()
-        return
-    if 0:
-        # gauss extension proposal
-        pdf = PdfPages('fig_tng50_smf.pdf')
-        redshifts = [0.8,2.0,4.0]
-        stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=redshifts)
+        stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=0.0)
+        #massMetallicityStars(sPs, pdf, simRedshift=0.0)
+        massMetallicityGas(sPs, pdf, simRedshift=1.0)
+        galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None)
         pdf.close()
         return
 
     # make multipage PDF
     pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
-    zZero = 0.8 # change to plot simulations at z>0 against z=0 observational data
+    zZero = 0.0 # change to plot simulations at z>0 against z=0 observational data
 
     stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)

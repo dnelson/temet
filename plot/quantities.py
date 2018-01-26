@@ -12,6 +12,7 @@ from os.path import isfile
 from util.helper import logZeroNaN
 from cosmo.load import groupCat, groupCatHeader, auxCat
 from cosmo.cloudy import cloudyIon
+from plot.config import *
 
 def bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
@@ -63,7 +64,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_rad = ['rhalo_200','rhalo_500']
 
     # generally available (auxcat)
-    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z']
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 'mass_gasall']
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                    'bmag_halo_masswt',   'bmag_halo_volwt', 
                    'pratio_halo_masswt', 'pratio_halo_volwt', 'pratio_2rhalf_masswt', 
@@ -78,7 +79,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     quants_misc = ['zform_mm5','M_bulge_counter_rot','xray_r500','xray_subhalo',
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla',
-                   'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo']
+                   'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo',
+                   'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi']
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur']
 
@@ -208,6 +210,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = sP.units.codeMassToMsun( gc['subhalos'] )
             mTypeStr = 'Subfind'
 
+        logStr = ''
         if '_log' in quant:
             takeLog = False
             vals = logZeroNaN(vals)
@@ -232,6 +235,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         mTypeStr = '%d,crit' % od
 
+        logStr = ''
         if '_log' in quant:
             takeLog = False
             vals = logZeroNaN(vals)
@@ -241,13 +245,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'kpc ]'
         if clean: label = 'R$_{\\rm halo}$ [ '+logStr+'kpc ]'
 
-    if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
+    if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_gasall']:
         # total OVI/OVII/metal mass in subhalo
         speciesStr = quant.split("_")[1].upper()
         label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
 
         if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
         if speciesStr == 'O': speciesStr = 'AllGas_Oxygen'
+        if speciesStr == 'Gasall': speciesStr = 'AllGas'
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
         ac = auxCat(sP, fields=[fieldName])
@@ -299,13 +304,50 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += ' (<2r$_{\star,1/2}$)'
         minMax = [-0.5, 0.5]
 
-    if quant == 'Z_gas':
-        # mass-weighted mean gas metallicity (within 2r1/2stars)
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloGasMetallicity'])
-        vals = sP.units.metallicityInSolar(gc['subhalos'])
+    if quant in ['Z_gas','Z_gas_all']:
+        # mass-weighted mean gas metallicity (within 2r1/2stars) (or global subhalo)
+        ptName = 'gas'
+
+        if quant == 'Z_gas':
+            metallicity_mass_ratio = groupCat(sP, fieldsSubhalos=['SubhaloGasMetallicity'])['subhalos']
+        if quant == 'Z_gas_all':
+            fieldName1 = 'Subhalo_Mass_All%s' % ptName.capitalize()
+            fieldName2 = 'Subhalo_Mass_All%s_Metal' % ptName.capitalize()
+            ac1 = auxCat(sP, fields=[fieldName1])[fieldName1] # code mass units
+            ac2 = auxCat(sP, fields=[fieldName2])[fieldName2] # code mass units
+            metallicity_mass_ratio = np.zeros( ac1.size, dtype='float32' )
+            w = np.where(ac1 > 0.0)
+            metallicity_mass_ratio[w] = ac2[w] / ac1[w]
+
+        vals = sP.units.metallicityInSolar(metallicity_mass_ratio)
 
         label = 'log ( Z$_{\\rm gas}$ / Z$_{\\rm sun}$ )'
+        if not clean:
+            if quant == 'Z_gas': label += ' (<2r$_{\star,1/2}$)'
+            if quant == 'Z_gas_all': label += ' (subhalo)'
         minMax = [-1.0, 0.5]
+
+    if quant == 'fgas_r200':
+        # gas fraction = (M_gas / M_tot) within virial radius (r200crit), fof scope approximation
+        fieldName = 'Subhalo_Mass_r200_Gas_Global'
+        M_gas = auxCat(sP, fields=[fieldName], expandPartial=True)[fieldName]
+        M_tot = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
+
+        vals = np.zeros( M_tot.size, dtype='float32' )
+        vals.fill(np.nan)
+        w = np.where(np.isfinite(M_tot) & (M_tot > 0))
+        vals[w] = M_gas[w] / M_tot[w]
+
+        label = 'log f$_{\\rm gas}$ (< r$_{\\rm 200,crit}$ )'
+        minMax = [-2.2, -0.6]
+
+    if quant == 'tcool_halo_ovi':
+        # mean cooling time of halo gas, weighted by ovi mass [Gyr]
+        fieldName = 'Subhalo_CoolingTime_OVI_HaloGas'
+        vals = auxCat(sP, fields=[fieldName])[fieldName]
+
+        label = 't$_{\\rm cool,halo,OVI}$ [ log Gyr ]'
+        minMax = [-0.5, 1.5]
 
     if quant == 'size_gas':
         gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
@@ -313,7 +355,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'r$_{\\rm gas,1/2}$ [ log kpc ]'
         minMax = [1.0, 2.8]
-        if tight: minMax = [1.4, 2.8]
+        if tight: minMax = [1.4, 3.0]
 
     if quant == 'size_stars':
         gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
@@ -713,7 +755,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if quant == 'B_MH': label += ' w/ reservoir'
             if quant == 'B_MH_actual': label += ' w/o reservoir'
         minMax = [6.0,9.0]
-        if tight: minMax = [7.5,8.5] #[6.0,10.0]
+        if tight: minMax = [6.0,10.0] #[7.5,8.5]
 
     if quant in ['Mdot_BH_edd']:
         # blackhole mass accretion rate normalized by its eddington rate
@@ -1019,6 +1061,24 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean:
             label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
 
+    if quant in ['Z_stars_halo','Z_gas_halo']:
+        # average stellar/gas metallicity in the halo (always mass weighted)
+        minMax = [-3.0,1.0]
+        if tight: minMax = [-2.5,1.0]
+
+        ptName = quant.split('_')[1].capitalize()
+        fieldName1 = 'Subhalo_Mass_Halo%s' % ptName
+        fieldName2 = 'Subhalo_Mass_Halo%s_Metal' % ptName
+        ac1 = auxCat(sP, fields=[fieldName1])[fieldName1] # code mass units
+        ac2 = auxCat(sP, fields=[fieldName2])[fieldName2] # code mass units
+
+        metallicity_mass_ratio = ac2 / ac1
+        vals = sP.units.metallicityInSolar(metallicity_mass_ratio)
+
+        label = 'log ( Z$_{\\rm %s}$ / Z$_{\\rm sun}$ )' % ptName.lower()
+        if not clean:
+            label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
     # cache
     assert label is not None
 
@@ -1078,7 +1138,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
 
     if ptProperty == 'dens_critb':
         label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$ [ log ]'
-        lim = [-2.0, 8.0]
+        lim = [-2.0, 9.0]
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
@@ -1206,7 +1266,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = True
 
     if 'metaldens' in ptProperty: # e.g. 'metaldens_msun', 'metaldens_He_msun'
-        assert ptType == 'gas' and '_msun' in ptProperty
+        assert ptType == 'gas' #and '_msun' in ptProperty
         field = ptProperty.split('_msun')[0]
         metalStr = 'Metal' if '_' not in field else field.split('_')[1]
 
@@ -1220,6 +1280,13 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         lim = [-1e4, 1e5] # todo
         if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
         log = False
+
+    if ptProperty in ['tcool','cooltime']:
+        assert ptType == 'gas'
+        label = 'Gas Cooling Time [ log Gyr ]'
+        lim = [-3.0,2.0]
+        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        log = True
 
     if ptProperty == 'mass_sfr_dt':
         assert ptType == 'gas'

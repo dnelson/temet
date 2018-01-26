@@ -779,7 +779,8 @@ def pyramidTNG(fieldName='gassynch'):
     nPixels = 16384
     nPanels = 64 # 8x8
     confNums = {'gasdens':0, 'dmdens':1, 'dmannih':23, 'dmvel':15, 'stardens':2, 'gasvel':14, 'gassynch':24,
-                'gastemp':7, 'gasbmag':5, 'gasxray':11, 'gasmachnum':12, 'gasshockdedt':13, 'gashi':16}
+                'gastemp':7, 'gasbmag':5, 'gasxray':11, 'gasmachnum':12, 'gasshockdedt':13, 'gashi':16,
+                'gaso6o8':33}
 
     # allocate global (64GB or 64GB*3 for pngs)
     nPanelsPerDim = int(np.sqrt(nPanels))

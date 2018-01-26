@@ -524,6 +524,20 @@ class units(object):
 
         return coolrate_cgs
 
+    def coolingTimeGyr(self, code_dens, code_gfmcoolrate, code_u):
+        """ Calculate a cooling time in Gyr from three code units inputs (i.e. snapshot values) of Density, GFM_CoolingRate, InternalEnergy. """
+        dens_cgs = self.codeDensToPhys(code_dens, cgs=True) # g/cm^3
+        ratefact = self.hydrogen_massfrac**2 / self.mass_proton**2 * dens_cgs # 1/(g*cm^3)
+        coolrate = code_gfmcoolrate * ratefact # erg cm^3/s * (1/g/cm^3) = erg/s/g (i.e. specific rate)
+        u_cgs_spec = code_u * self.UnitVelocity_in_cm_per_s**2 # i.e. (km/s)^2 to (cm/s)^2, so specific erg/g
+        t_cool = u_cgs_spec / (-1.0*coolrate) / self.s_in_Gyr
+
+        # if lambda_net is positive set t_cool=0 (i.e. actual net heating, perhaps from the background)
+        w = np.where(code_gfmcoolrate >= 0.0)
+        t_cool[w] = 0.0
+
+        return t_cool
+
     def tracerEntToCGS(self, ent, log=False):
         """ Fix cosmological/unit system in TRACER_MC[MaxEnt], output in cgs [K cm^2]. """
         assert self._sP.redshift is not None
@@ -662,11 +676,14 @@ class units(object):
             csnd = logZeroSafe(csnd)
         return csnd
 
-    def codeDensToCritRatio(self, rho, baryon=False, log=False):
-        """ Normalize code density by the critical (total/baryonic) density at some redshift. """
+    def codeDensToCritRatio(self, rho, baryon=False, log=False, redshiftZero=False):
+        """ Normalize code density by the critical (total/baryonic) density at some redshift. 
+        If redshiftZero, normalize by rho_crit,0 instead of rho_crit(z). """
         assert self._sP.redshift is not None
 
         rho_crit = self.rhoCrit_z
+        if redshiftZero:
+            rho_crit = self.rhoCrit
         if baryon:
             rho_crit *= self._sP.omega_b
 
