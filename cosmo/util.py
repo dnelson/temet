@@ -12,6 +12,7 @@ import cosmo.load
 import copy
 from os.path import isfile, isdir
 from os import mkdir
+from util.helper import closest
 
 # --- snapshot configuration & spacing ---
 
@@ -240,7 +241,7 @@ def snapNumToRedshift(sP, snap=None, time=False, all=False):
     val = r['redshifts']
     if time:
         val = r['times']
-        
+
     # all values or a given scalar or array list?
     if all:
         w = np.where(val >= 0.0)[0] # remove empties past end of number of snaps
@@ -756,3 +757,256 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
     if cenSatSelect in ['cen','pri','primary','central','centrals']: return w1
     if cenSatSelect in ['sat','sec','secondary','satellite','satellites']: return w3
     if cenSatSelect in ['all','both']: return w2
+
+def subboxSubhaloCat(sP, sbNum):
+    """ Generate/return the SubboxSubhaloList catalog giving the intersection of fullbox subhalos 
+    with the subbox volumes across time, using the merger trees, and some interpolated properties 
+    of relevant subhalos at each subbox snapshot. """
+    from cosmo.mergertree import loadMPBs
+    from util.simParams import simParams
+    from scipy import interpolate
+
+    minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.0]
+    if sP.res == 2160: minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0]
+
+    def _inSubbox(pos):
+        """ Return a vector of True or False entries, if pos (3-vector, or [N,3] vector) is inside subbox. 
+        Also return the minimum distance between pos and the subbox boundaries along any of (x,y,z) directions at each time. """
+        dist_x = np.abs(pos[:,0] - subboxCen[0])
+        dist_y = np.abs(pos[:,1] - subboxCen[1])
+        dist_z = np.abs(pos[:,2] - subboxCen[2])
+
+        # subbox cannot cross periodic boundary, so no need to account for periodic BCs here
+        inside = (dist_x < subboxHalfSize) & (dist_y < subboxHalfSize) & (dist_z < subboxHalfSize)
+
+        # calculate minimum distances for the time inside, along each axis (negative = outside, positive = inside)
+        min_dists = np.min( np.vstack( (subboxHalfSize-dist_x,subboxHalfSize-dist_y,subboxHalfSize-dist_z) ), axis=0 )
+
+        return inside, min_dists
+
+    fileBase = sP.postPath + '/SubboxSubhaloList/'
+    filePath = fileBase + 'subbox%d_%d.hdf5' % (sbNum, sP.snap)
+
+    # check for existence and load
+    if isfile(filePath):
+        r = {}
+        with h5py.File(filePath,'r') as f:
+            for key in f:
+                r[key] = f[key][()]
+        return r
+
+    r = {}
+
+    # calculate new
+    if not isdir(fileBase):
+        mkdir(fileBase)
+
+    # subbox properties
+    subboxCen = np.array(sP.subboxCen[sbNum])
+    subboxSize = np.array(sP.subboxSize[sbNum])
+
+    subboxHalfSize = subboxSize/2
+    subboxMin = subboxCen - subboxSize/2
+    subboxMax = subboxCen + subboxSize/2
+
+    sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
+
+    # load snapshot meta-data
+    snapTimes = snapNumToRedshift(sP, time=True, all=True)
+    subboxTimes = snapNumToRedshift(sP_sub, time=True, all=True)
+
+    # locate the fullbox snapshot according to each subbox time for convenience, and vice versa (-1 indicates no match)
+    r['SubboxScaleFac'] = subboxTimes
+    r['SnapNumMapApprox'] = np.zeros( subboxTimes.size, dtype='float32' )
+    r['FullBoxSnapNum'] = np.zeros( subboxTimes.size, dtype='int16' ) - 1
+    r['SubboxSnapNum'] = np.zeros( snapTimes.size, dtype='int16' ) - 1
+
+    for i, time in enumerate(snapTimes):
+        w = np.where(subboxTimes == time)[0]
+        # if SubboxSyncModulo > 1, may not have exact matches anymore
+        if len(w) == 0:
+            foundTime, w = closest(subboxTimes, time)
+            r['SnapNumMapApprox'][w] = foundTime - time
+            w = [w]
+        #assert len(w) in [1,2] # len(w)==2 occurs for duplicated z=1 subbox outputs, keep last
+        r['SubboxSnapNum'][i] = w[-1]
+        r['FullBoxSnapNum'][w[-1]] = i
+
+    # load all MPBs (SubLink) of subhalos at this ending sP.snap
+    h = cosmo.load.groupCatHeader(sP)
+    ids = np.arange(h['Nsubgroups_Total'])
+    fields = ['SubhaloPos','SubhaloIDMostbound','SnapNum']
+
+    mpbs = loadMPBs(sP, ids, fields=fields, treeName='SubLink')
+
+    # loop over each MPB
+    r['EverInSubboxFlag'] = np.zeros( ids.size, dtype='bool' )
+
+    print('Determining which of [%d] MPBs intersect subbox...' % ids.size)
+    for i, subhaloID in enumerate(ids):
+        if i % int(ids.size/10.0) == 0: print(' %d%%' % np.ceil(float(i)/ids.size*100))
+        if subhaloID not in mpbs:
+            continue
+
+        pos = mpbs[subhaloID]['SubhaloPos']
+        flag, _ = _inSubbox(pos)
+
+        if flag.sum() == 0:
+            continue # never inside
+
+        if mpbs[subhaloID]['SnapNum'].size <= 3: # minimum of 4 required for cspline
+            continue # no progenitor information in tree
+
+        # set flag True if subhalo MPB is ever inside subbox, False if not
+        r['EverInSubboxFlag'][i] = True
+
+    # further processing of those whose MPBs are ever inside
+    w = np.where(r['EverInSubboxFlag'])
+
+    r['SubhaloIDs']       = ids[w]
+    r['SubhaloPos']       = np.zeros( (ids[w].size, subboxTimes.size, 3), dtype='float32' )
+    r['SubhaloPosExtrap'] = np.zeros( (ids[w].size, subboxTimes.size), dtype='int16' )
+    r['SubhaloMBID']      = np.zeros( (ids[w].size, subboxTimes.size), dtype=mpbs[0]['SubhaloIDMostbound'].dtype )
+    r['SubhaloMinSBSnap'] = np.zeros( ids[w].size, dtype='int32' ) - 1
+    r['SubhaloMaxSBSnap'] = np.zeros( ids[w].size, dtype='int32' ) - 1
+
+    r['minEdgeDistRedshifts'] = np.array(minEdgeDistRedshifts, dtype='float32')
+    r['SubhaloMinEdgeDist'] = np.zeros( (ids[w].size, r['minEdgeDistRedshifts'].size), dtype='float32' )
+
+    minEdgeIndices = []
+    for redshift in r['minEdgeDistRedshifts']:
+        # pre-search for indices of each redshift range within which we record minimum edge distances
+        minEdgeIndices.append( np.where(1/subboxTimes-1 <= redshift)[0] )
+
+    print('\n[%d] subhalos intersect subbox, interpolating positions to subbox times...' % r['SubhaloIDs'].size)
+    for i, subhaloID in enumerate(r['SubhaloIDs']):
+        if i % int(r['SubhaloIDs'].size/10.0) == 0: print(' %d%%' % np.ceil(float(i)/r['SubhaloIDs'].size*100))
+        # create position interpolant
+        mpb = mpbs[subhaloID]
+        times = snapTimes[mpb['SnapNum']]
+        pos = np.zeros( (subboxTimes.size,3), dtype='float32' )
+
+        timeSnapMax = times.max()
+        timeSnapMin = times.min()
+
+        wInterp = np.where( (subboxTimes >= timeSnapMin) & (subboxTimes <= timeSnapMax) )
+        wExtrap = np.where( (subboxTimes < timeSnapMin) | (subboxTimes > timeSnapMax) )
+
+        for j in range(3):
+            # each axis separately, first cubic spline interp
+            f = interpolate.interp1d(times, mpb['SubhaloPos'][:,j], kind='cubic')
+            pos[wInterp,j] = f(subboxTimes[wInterp])
+
+            # linear extrapolation
+            f = interpolate.interp1d(times, mpb['SubhaloPos'][:,j], kind='linear', fill_value='extrapolate')
+            pos[wExtrap,j] = f(subboxTimes[wExtrap])
+
+        # flag for extrapolated positions
+        posExtrapolated = np.zeros( subboxTimes.size, dtype='int16' )
+        posExtrapolated[wExtrap] = 1
+
+        # verify: positions should match where a subbox intersects a full box
+        #for j, time in enumerate(times):
+        #    w = np.where(subboxTimes == time)[0]
+        #    assert np.sum(np.abs(mpb['SubhaloPos'][j,:]-pos[w,:])) < 1e-8
+
+        # replicate most bound IDs to allow them to be re-located in subbox (alternative position possibility)
+        mbID = np.zeros( subboxTimes.size, dtype=mpb['SubhaloIDMostbound'].dtype )
+        mbID[ r['SubboxSnapNum'][mpb['SnapNum']] ] = mpb['SubhaloIDMostbound']
+        for j in range(mbID.size-2, -1, -1):
+            if mbID[j] == 0: mbID[j] = mbID[j+1]
+
+        # store
+        r['SubhaloPos'][i,:,:] = pos
+        r['SubhaloPosExtrap'][i,:] = posExtrapolated
+        r['SubhaloMBID'][i,:] = mbID
+
+        # minimum distance to subbox boundary and bounding snapshots where this subhalo is inside the subbox
+        flags, min_dists = _inSubbox(pos)
+        w = np.where(flags)[0]
+
+        for j in range(r['minEdgeDistRedshifts'].size): # negative = outside, positive = inside
+            r['SubhaloMinEdgeDist'][i,j] = min_dists[ minEdgeIndices[j] ].min()
+
+        if len(w) == 0:
+            # mpb['SubhaloPos'] is inside, but pos is not: should be extremely rare (and require SnapNumMapApprox.sum()>0)
+            print('Warning: subhalo [%d] ID [%d] interpolated positions never inside subbox...' % (i,subhaloID))
+            continue
+
+        r['SubhaloMinSBSnap'][i] = w.min()
+        r['SubhaloMaxSBSnap'][i] = w.max()
+
+    # intermediate save now
+    with h5py.File(filePath,'w') as f:
+        for key in r:
+            f[key] = r[key]
+    print('Saved intermediate: [%s]' % filePath)
+
+    return
+
+    # allocate for additional quantities
+    nApertures = 3
+    r['SubhaloStars_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+    r['SubhaloGas_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+    r['SubhaloBH_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+
+    r['SubhaloGas_SFR'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+    r['SubhaloBH_CumEgyInjection_QM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+    r['SubhaloBH_CumEgyInjection_RM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+    r['SubhaloBH_Num'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='int16' )
+
+    print('\nLoading subbox and deriving additional quantities...')
+    for sbSnapNum in range(subboxTimes.size):
+        # load
+        sP_sub.setSnap(sbSnapNum)
+
+        apertures_sq = [sP_sub.units.physicalKpcToCodeLength(30.0)**2, 30.0**2, 50.0**2] # 30 pkpc, 30 ckpc/h, 50 ckpc/h
+        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/subboxTimes[sbSnapNum]-1,np.sqrt(apertures_sq[0])))
+
+        # loop over particle types
+        for ptType in ['gas','stars','bh']:
+            loadFields = ['Masses','Coordinates']
+            if ptType == 'gas':
+                loadFields.append('StarFormationRate')
+            if ptType == 'bh':
+                loadFields.append('BH_CumEgyInjection_QM')
+                loadFields.append('BH_CumEgyInjection_RM')  
+                
+            # particle data load   
+            x = cosmo.load.snapshotSubset(sP_sub, ptType, loadFields)
+
+            if x['count'] == 0:
+                continue
+
+            # loop over each subhalo
+            for i, subhaloID in enumerate(r['SubhaloIDs']):
+                # compute distances to all subbox particles/cells from the interpolated position of this subhalo
+                xDist = x['Coordinates'][:,0] - r['SubhaloPos'][i,sbSnapNum,0]
+                yDist = x['Coordinates'][:,1] - r['SubhaloPos'][i,sbSnapNum,1]
+                zDist = x['Coordinates'][:,2] - r['SubhaloPos'][i,sbSnapNum,2]
+                distsSq = xDist*xDist + yDist*yDist + zDist*zDist # no periodic needed/possible
+
+                for j, aperture_sq in enumerate(apertures_sq):
+                    w = np.where(distsSq < aperture_sq)
+                    if len(w[0]) == 0: continue
+
+                    # store properties of all particles/cells within the 3D aperture
+                    saveStr = ptType.capitalize() if ptType != 'bh' else 'BH'
+                    r['Subhalo%s_Mass' % saveStr][i,j,sbSnapNum] = x['Masses'][w].sum()
+                    if ptType == 'gas':
+                        r['SubhaloGas_SFR'][i,j,sbSnapNum] = x['StarFormationRate'][w].sum()
+                    if ptType == 'bh':
+                        r['SubhaloBH_CumEgyInjection_QM'][i,j,sbSnapNum] = x['BH_CumEgyInjection_QM'][w].max()
+                        r['SubhaloBH_CumEgyInjection_RM'][i,j,sbSnapNum] = x['BH_CumEgyInjection_RM'][w].max()
+                        r['SubhaloBH_Num'][i,j,sbSnapNum] = len(w[0])
+
+
+    # save and return
+    with h5py.File(filePath) as f:
+        for key in r:
+            if key not in f:
+                f[key] = r[key]
+    print('Saved: [%s]' % filePath)
+
+    return r
+    
