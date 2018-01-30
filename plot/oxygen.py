@@ -235,6 +235,8 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
 
     # loop over each fullbox run
     for sP in sPs:
+        txt = []
+
         for j, ion in enumerate(ions):
             print('[%s]: %s' % (ion,sP.simName))
 
@@ -269,6 +271,12 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                 if moment == 2:
                     yy = logZeroNaN( fN_ion*N_ion*(N_ion/1e13) )
 
+                txt_loc = {}
+                txt_loc['N'] = xx
+                txt_loc['fN'] = yy
+                txt_loc['z'] = redshift
+                txt.append(txt_loc)
+
                 # plot middle line
                 label = '%s %s z=%.1f' % (sP.simName, ion, redshift) if len(redshifts) ==1 else '%s %s' % (sP.simName, ion)
                 if clean:
@@ -284,6 +292,29 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                 if i == 0 and len(sPs) > 8 and 'BH' in sP.simName: ls = '--'
 
                 ax.plot(xx, yy, lw=lwLoc, color=c, linestyle=ls, label=label)
+
+    # print
+    if len(ions) == 1 and len(sPs) == 1:
+        filename = 'fig5_cddf_%s.txt' % ion
+        out = '# Nelson+ (2018) http://arxiv.org/abs/1712.00016\n'
+        out += '# Figure 5 CDDFs (%s z=%.1f)\n' % (sP.simName, sP.redshift)
+        if boxDepth10: out += '# Note: Calculated for a projection depth of 10 cMpc/h (=14.8 pMpc at z=0)\n'
+        out += '# N_%s [log cm^-2]' % (ion)
+        for redshift in redshifts: out += ' f(N)_z%d' % redshift
+        out += ' (all [log cm^2])\n'
+
+        for i in range(len(txt)-1): # make sure columns are the same at each redshift (for each column)
+            assert np.array_equal(txt[i+1]['N'], txt[0]['N'])
+
+        for i in range(txt[0]['N'].size):
+            if txt[0]['N'][i] > 20.0: continue
+            out += '%7.2f' % txt[0]['N'][i]
+            for j in range(len(txt)): # loop over redshifts
+                out += ' %7.3f' % txt[j]['fN'][i]
+            out += '\n'
+
+        with open(filename, 'w') as f:
+            f.write(out)
 
     # legend
     sExtra = []
@@ -1813,17 +1844,17 @@ def paperPlots():
         pdf.close()
 
     # figure 5, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
-    if 0:
+    if 1:
         moment = 0
-        sPs = [TNG100, Illustris]
+        sPs = [TNG100] #, Illustris]
         boxDepth10 = True
         redshifts = [0,1,2,4]
 
-        saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
-            ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
-             '_'.join([sP.simName for sP in sPs]))
-        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, 
-                              boxDepth10=boxDepth10, colorOff=2)
+        #saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
+        #    ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
+        #     '_'.join([sP.simName for sP in sPs]))
+        #cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, 
+        #                      boxDepth10=boxDepth10, colorOff=2)
 
         for i, ion in enumerate(ions):
             saveName = 'cddf_%s_zevo-%s_moment%d_%s%s.pdf' % \
@@ -1990,23 +2021,22 @@ def paperPlots():
     if 0:
         sP = TNG300
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
-        xQuants = ['mstar_30pkpc_log'] #['mstar_30pkpc_log','mhalo_200_log']
+        xQuants = ['mstar_30pkpc_log','mhalo_200_log']
         cQuant = 'mass_ovi'
 
-        yQuants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo','mass_z']
+        yQuants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo_volwt','mass_z']
         yQuants2 = ['surfdens1_stars','Z_stars','color_C_gr','size_stars','Krot_oriented_stars2','Krot_oriented_gas2']
-        #yQuants3 = ['nh_halo','xray_r500','pratio_halo_masswt','BH_CumEgy_low','M_BH_actual','_dummy_']
-        yQuants3 = ['nh_halo','fgas_r200','pratio_halo_masswt','BH_CumEgy_low','M_BH_actual','mhalo_200_log']
+        yQuants3 = ['nh_halo_volwt','fgas_r200','pratio_halo_volwt','BH_CumEgy_low','M_BH_actual','_dummy_']
 
-        yQuantSets = [yQuants3] #[yQuants1, yQuants2, yQuants3]
+        yQuantSets = [yQuants1, yQuants2, yQuants3]
 
         for i, xQuant in enumerate(xQuants):
-            #yQuants3[-1] = xQuants[1-i] # include the other
+            yQuants3[-1] = xQuants[1-i] # include the other
 
             for j, yQuants in enumerate(yQuantSets):
                 params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
 
-                pdf = PdfPages('histo2d_x=%s_set-%d_%s.pdf' % (xQuant,j,sP.simName))
+                pdf = PdfPages('histo2d_x=%s_set-%d_%sb.pdf' % (xQuant,j,sP.simName))
                 fig = plt.figure(figsize=figsize_loc)
                 quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
                 quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
@@ -2015,20 +2045,6 @@ def paperPlots():
                 quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
                 quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
                 pdf.close()
-
-    if 1:
-        sP = simParams(res=512,run='tng',redshift=0.0,variant='0000') #TNG100
-        figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
-        xQuant = 'mstar_30pkpc_log'
-        cQuant = 'mass_ovi'
-        yQuant = 'fgas_r200'
-
-        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
-
-        pdf = PdfPages('histo2d_x=%s_y=%s_%s.pdf' % (xQuant,yQuant,sP.simName))
-        fig = plt.figure(figsize=figsize_loc)
-        quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
-        pdf.close()
 
     # ------------ appendix ---------------
 

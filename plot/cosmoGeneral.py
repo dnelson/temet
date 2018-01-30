@@ -17,7 +17,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
 from util import simParams
-from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors
+from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors, sampleColorTable
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, snapshotSubset
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
@@ -316,10 +316,11 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if xm.size > sKn:
             ym = savgol_filter(ym,sKn,sKo)
 
-        ax.plot(xm[:-1], ym[:-1], '--', color=colorMed, lw=lwMed)
-        ax.text(9.2, 2.06, 'Halo $R_{\\rm 200,crit}$', color='black', size=15)
+        color = sampleColorTable('tableau10','purple')
+        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
+        ax.text(9.2, 2.06, 'Halo $R_{\\rm 200,crit}$', color=color, size=15)
 
-    if yQuant == 'temp_halo':
+    if yQuant in ['temp_halo','temp_halo_volwt']:
         # add virial temperature median line
         aux_yvals = groupCat(sP, fieldsSubhalos=['tvir_log'])
         aux_yvals = aux_yvals[wSelect][wFiniteColor]
@@ -329,14 +330,17 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if xm.size > sKn:
             ym = savgol_filter(ym,sKn,sKo)
 
-        ax.plot(xm[:-1], ym[:-1], '--', color='black', lw=lwMed)
-        ax.text(9.35, 5.55, 'Halo $T_{\\rm vir}$', color='black', size=15)
+        color = sampleColorTable('tableau10','purple')
+        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
+        ax.text(9.35, 5.55, 'Halo $T_{\\rm vir}$', color=color, size=15)
 
     if yQuant == 'fgas_r200':
         # add constant f_b line
         f_b = np.log10(sP.units.f_b)
-        ax.plot(xMinMax, [f_b,f_b], '--', color='black', lw=lwMed)
-        ax.text(11.4, f_b+0.05, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', color='black', size=17)
+
+        color = sampleColorTable('tableau10','purple')
+        ax.plot(xMinMax, [f_b,f_b], '--', color=color, lw=lwMed)
+        ax.text(11.4, f_b+0.05, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', color=color, size=17)
 
     if yQuant in ['BH_CumEgy_low','BH_CumEgy_high']:
         # add approximate halo binding energy line = (3/5)*GM^2/R
@@ -353,8 +357,9 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if xm.size > sKn:
             ym = savgol_filter(ym,sKn,sKo)
 
-        ax.plot(xm[:-1], ym[:-1], '--', color='black', lw=lwMed)
-        ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color='black', size=17)
+        color = sampleColorTable('tableau10','purple')
+        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
+        ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color=color, size=17)
 
     # colorbar
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)

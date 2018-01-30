@@ -724,6 +724,96 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
         print('  \end{center}')
         print('\end{table*}')
 
+def export_ovi_phase():
+    """ Export raw data points for OVI phase diagram. """
+    from cosmo.load import snapshotSubset
+    from cosmo.util import inverseMapPartIndicesToSubhaloIDs, cenSatSubhaloIndices
+    from tracer.tracerMC import match3
+    from util.simParams import simParams
+    
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+    N = int(1e7) # None for all
+    partType = 'gas'
+    cenSubsOnly = True # select from particles within central subhalos only, otherwise all in box
+
+    # load
+    xvals = snapshotSubset(sP, partType, 'hdens')
+    xvals = np.log10(xvals) # log=True
+    yvals = snapshotSubset(sP, partType, 'temp')
+    weight = snapshotSubset(sP, partType, 'O VI mass')
+    weight = sP.units.codeMassToMsun(weight)
+    N_tot = xvals.size
+
+    # subsample?
+    if N is not None:
+        np.random.seed(424242)
+        inds = np.arange(xvals.size)
+
+        selection = 'all particles in box'
+        if cenSubsOnly:
+            inds2 = inverseMapPartIndicesToSubhaloIDs(sP, inds, partType)
+            cen_inds = cenSatSubhaloIndices(sP, cenSatSelect='cen')
+            _, in_cen_inds = match3(cen_inds, inds2)
+            inds = inds[in_cen_inds]
+            selection = 'central subhalo particles only (all masses)'
+
+        inds_sel = np.random.choice(inds, size=N, replace=False)
+        xvals = xvals[inds_sel]
+        yvals = yvals[inds_sel]
+        weight = weight[inds_sel]
+
+    # save
+    selStr = '' if not cenSubsOnly else '_censub'
+    with h5py.File('ovi_%s_z%s_%s%s.hdf5' % (sP.simName,sP.redshift,N,selStr), 'w') as f:
+        h = f.create_group('Header')
+        h.attrs['num_pts'] = N
+        h.attrs['num_pts_total'] = N_tot
+        h.attrs['written_by'] = 'dnelson'
+        h.attrs['selection'] = selection
+        h.attrs['sim_name'] = sP.simName
+        h.attrs['sim_redshift'] = sP.redshift
+
+        h['hdens_logcm3'] = xvals
+        h['temp_logk'] = yvals
+        h['ovi_mass_msun'] = weight
+
+def makeCohnVsuiteCatalog(redshift=0.0):
+    """ Write a .txt file for input into Joanne Cohn's validation-suite. """
+    from util.simParams import simParams
+    from cosmo.load import groupCat
+    sP = simParams(res=1820,run='illustris',redshift=redshift)
+
+    # load
+    mstar = groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log']) # log msun
+    sfr   = groupCat(sP, fieldsSubhalos=['SubhaloSFRinRad'])['subhalos'] # msun/yr
+    cen   = groupCat(sP, fieldsSubhalos=['central_flag'])
+    mhalo = groupCat(sP, fieldsSubhalos=['mhalo_subfind_log']) # log msun
+    m200  = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+
+    sat = (~cen.astype('bool')).astype('int16')
+
+    w = np.where(np.isnan(mstar)) # zero stellar mass
+    mstar[w] = 0.0
+
+    w = np.where(cen == 1)
+    mhalo[w] = m200 # use m200,crit values for centrals at least
+
+    w = np.where(mstar >= 7.8)
+    mstar = mstar[w]
+    sfr = sfr[w]
+    cen = cen[w]
+    mhalo = mhalo[w]
+    sat = sat[w]
+
+    with open('inputstats_%s_z%s_new.txt' % (sP.simName,int(redshift)),'w') as f:
+        f.write('# Illustris-1 simulation (z=%s)\n' % redshift)
+        f.write('# Nelson+ (2015) (https://arxiv.org/abs/1504.00362) (http://www.illustris-project.org/data/)\n')
+        f.write('# note: M* is 30pkpc aperture values, SFR is SubhaloSFRinRad, M_halo is Group_M_Crit200 for centrals, SubhaloMass for satellites\n')
+        f.write('# note: minimum M* of 7.8 log msun for inclusion here (50 stars)\n')
+        f.write('# \log_10 M^* [M_\odot], SFR (M^*[M_\odot]/yr), RA, DEC, zred, ifsat, \log_10 M_halo [M_\odot]\n')
+        for i in range(mstar.size):
+            f.write('%7.3f %7.3f 1.0 1.0 %.1f %d %7.3f\n' % (mstar[i],sfr[i],redshift,sat[i],mhalo[i]))
+
 def loadMillenniumSubhaloCatalog():
     """ Load a complete subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation. """
     basePath = '/home/extdylan/sims.millennium/Millennium1/output/'
