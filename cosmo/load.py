@@ -795,6 +795,26 @@ def groupCatOffsetListIntoSnap(sP):
 
     return r    
 
+def _haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
+    """ Return the offset and length as a subset dict{} for a given haloID/subhaloID, as needed by il.snapshot.loadSubset(). """
+    gcName = 'Group' if haloID is not None else 'Subhalo'
+    gcID = haloID if haloID is not None else subhaloID
+
+    subset = { 'snapOffsets' : snapOffsetList(sP) }
+
+    # calculate target groups file chunk which contains this id
+    groupFileOffsets = groupCatOffsetList(sP)['offsets'+gcName]
+    groupFileOffsets = int(gcID) - groupFileOffsets
+    fileNum = np.max( np.where(groupFileOffsets >= 0) )
+    groupOffset = groupFileOffsets[fileNum]
+
+    # load the length (by type) of this group/subgroup from the group catalog, and its offset within the snapshot
+    with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
+        subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
+        subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
+
+    return subset
+
 def _ionLoadHelper(sP, partType, field, kwargs):
     """ Helper to load (with particle level caching) ionization fraction, or total ion mass, 
     values values for gas cells. Or, total line flux for emission. """
@@ -807,7 +827,16 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     assert sP.isPartType(partType, 'gas')
     assert prop in ['mass','frac','flux']
 
+    # indRange subset
     indRangeOrig = kwargs['indRange']
+
+    # haloID or subhaloID subset
+    if kwargs['haloID'] is not None or kwargs['subhaloID'] is not None:
+        assert indRangeOrig is None
+        subset = _haloOrSubhaloSubset(sP, haloID=kwargs['haloID'], subhaloID=kwargs['subhaloID'])
+        offset = subset['offsetType'][sP.ptNum(partType)]
+        length = subset['lenType'][sP.ptNum(partType)]
+        indRangeOrig = [offset, offset+length-1] # inclusive below
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
     if indRangeOrig is not None:
@@ -1450,21 +1479,7 @@ def snapshotSubset(sP, partType, fields,
 
     # halo or subhalo based subset
     if haloID is not None or subhaloID is not None:
-        gcName = 'Group' if haloID is not None else 'Subhalo'
-        gcID = haloID if haloID is not None else subhaloID
-
-        subset = { 'snapOffsets' : snapOffsetList(sP) }
-
-        # calculate target groups file chunk which contains this id
-        groupFileOffsets = groupCatOffsetList(sP)['offsets'+gcName]
-        groupFileOffsets = int(gcID) - groupFileOffsets
-        fileNum = np.max( np.where(groupFileOffsets >= 0) )
-        groupOffset = groupFileOffsets[fileNum]
-    
-        # load the length (by type) of this group/subgroup from the group catalog, and its offset within the snapshot
-        with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
-            subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
-            subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
+        subset = _haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
     if len(fields) == 1 and mdi[0] is None and indRange is not None:
