@@ -739,7 +739,9 @@ def sampleColorTable(ctName, num, bounds=None):
         # note: exists in matplotlib 2.0+ as 'tab10'
         colors = {'blue':'#1F77B4','orange':'#FF7F0E','green':'#2CA02C','red':'#D62728','purple':'#9467BD',
                   'brown':'#8C564B','pink':'#E377C2','gray':'#BCBD22','yellow':'#17BECF','lightblue':'#7F7F7F'}
-        return [colors[name] for name in num]
+        r = [colors[name] for name in iterable(num)]
+        if len(r) == 1: return r[0]
+        return r
 
     cmap = cm.get_cmap(ctName)
     if bounds is None: bounds = [0,1]

@@ -18,44 +18,6 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
-def export_ovi_phase():
-    """ Export raw data points for OVI phase diagram. """
-    from cosmo.load import snapshotSubset
-    sP = simParams(res=1820,run='tng',redshift=0.0)
-    N = int(1e7) # None for all
-    partType = 'gas'
-
-    # load
-    xvals = snapshotSubset(sP, partType, 'hdens')
-    xvals = np.log10(xvals) # log=True
-    yvals = snapshotSubset(sP, partType, 'temp')
-    weight = snapshotSubset(sP, partType, 'O VI mass')
-    weight = sP.units.codeMassToMsun(weight)
-    N_tot = xvals.size
-
-    # subsample?
-    if N is not None:
-        np.random.seed(424242)
-        inds = np.arange(xvals.size)
-        inds_sel = np.random.choice(inds, size=N, replace=False)
-        xvals = xvals[inds_sel]
-        yvals = yvals[inds_sel]
-        weight = weight[inds_sel]
-
-    # save
-    with h5py.File('ovi_%s_z%s_%s.hdf5' % (sP.simName,sP.redshift,N), 'w') as f:
-        h = f.create_group('Header')
-        h.attrs['num_pts'] = N
-        h.attrs['num_pts_total'] = N_tot
-        h.attrs['written_by'] = 'dnelson'
-        h.attrs['sim_name'] = sP.simName
-        h.attrs['sim_redshift'] = sP.redshift
-
-        h['hdens_logcm3'] = xvals
-        h['temp_logk'] = yvals
-        h['ovi_mass_msun'] = weight
-
-
 def barnes_check1():
     """ Test plots for Barnes paper. """
     from util.loadExtern import rossetti17planck

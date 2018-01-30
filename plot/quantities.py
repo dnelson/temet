@@ -329,9 +329,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quant == 'fgas_r200':
         # gas fraction = (M_gas / M_tot) within virial radius (r200crit), fof scope approximation
-        fieldName = 'Subhalo_Mass_r200_Gas_Global'
+        fieldName = 'Subhalo_Mass_r200_Gas'
         M_gas = auxCat(sP, fields=[fieldName], expandPartial=True)[fieldName]
         M_tot = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
+
+        # correct for non-global r200 calculation
+        if not '_Global' in fieldName:
+            M_gas *= 1.12 # mean shift derived from L75n455TNG z=0
+            print('Warning: correcting [%s] for non-global r200 calculation (~10%% difference)' % fieldName)
 
         vals = np.zeros( M_tot.size, dtype='float32' )
         vals.fill(np.nan)
@@ -1000,7 +1005,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax[0] -= 2 # adjust down for VLA, calibrated for SKA
             minMax[1] -= 2
 
-    if quant in ['nh_2rhalf','nh_halo']:
+    if quant in ['nh_2rhalf','nh_halo','nh_halo_volwt']:
         # average hydrogen numdens in halo or <2rhalf (always mass weighted)
         if '_2rhalf' in quant:
             selStr = '2rhalfstars'
@@ -1012,8 +1017,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             selDesc = 'halo'
             minMax = [-4.5, -1.5]
             if tight: minMax = [-5.5, -1.5]
+            if '_volwt' in quant:
+                minMax = [-5.0, -3.0]
+                if tight: minMax = [-6.0, -3.0]
 
-        fieldName = 'Subhalo_nH_%s_massWt' % (selStr)
+        wtStr = 'massWt' if not '_volwt' in quant else 'volWt'
+
+        fieldName = 'Subhalo_nH_%s_%s' % (selStr,wtStr)
 
         ac = auxCat(sP, fields=[fieldName])
         vals = ac[fieldName] # 1/cm^3
@@ -1047,12 +1057,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$]'
             if '_halo' in quant: label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
 
-    if quant in ['temp_halo']:
+    if quant in ['temp_halo','temp_halo_volwt']:
         # average gas temperature in halo (always mass weighted)
         minMax = [4.0, 8.0]
         if tight: minMax = [4.5, 7.5]
 
-        fieldName = 'Subhalo_Temp_halo_massWt'
+        wtStr = 'massWt' if not '_volwt' in quant else 'volWt'
+        fieldName = 'Subhalo_Temp_halo_%s' % wtStr
 
         ac = auxCat(sP, fields=[fieldName])
         vals = ac[fieldName] # Kelvin
@@ -1120,7 +1131,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         assert ptType == 'gas'
         label = 'Gas Hydrogen Density n$_{\\rm H}$ [ log cm$^{-3}$ ]'
         lim = [-9.0,3.0]
-        if haloLims: lim = [-3.0, 3.0]
+        if haloLims: lim = [-5.0, 0.0]
         log = True
 
     if ptProperty in ['numdens']:

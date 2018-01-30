@@ -2386,8 +2386,12 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_Temp_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='temp_linear',op='mean',rad='r015_1rvir_halo',weighting='mass'),
+   'Subhalo_Temp_halo_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='temp_linear',op='mean',rad='r015_1rvir_halo',weighting='volume'),
    'Subhalo_nH_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='nh',op='mean',rad='r015_1rvir_halo',weighting='mass'),
+   'Subhalo_nH_halo_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='nh',op='mean',rad='r015_1rvir_halo',weighting='volume'),
    'Subhalo_nH_2rhalfstars_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='nh',op='mean',rad='2rhalfstars',weighting='mass'),
    'Subhalo_Gas_RadialVel_halo_massWt' : \

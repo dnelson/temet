@@ -461,7 +461,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
     percs = [10,25,75,90]
     nRadBins = 40
     lw = 2.0
-    scope = 'global' # global, fof, subfind
+    scope = 'fof' # global, fof, subfind
 
     assert np.sum(e is not None for e in [haloIDs,subhaloIDs]) == 1 # pick one
     if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
@@ -546,7 +546,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
                 ax.fill_between(rr, yy_perc[0+j,:], yy_perc[-(j+1),:], color=l.get_color(), interpolate=True, alpha=0.15*(j+1))
 
     # special behavior
-    if 1:
+    if 0:
         rad_cgm_zoom = {'r$_{\\rm CGM,min}$':10,'r$_{\\rm CGM,max}$':300,'r$_{\\rm IGM}$':500} # pkpc
         ylim_p = [ylim[0] + (ylim[1]-ylim[0])/15, ylim[1] - (ylim[1]-ylim[0])/15]
         alpha = 1.0 if ptProperty == 'mass_msun' else 0.2
