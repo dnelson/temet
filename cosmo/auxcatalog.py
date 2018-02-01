@@ -1624,7 +1624,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
     # check
     hDensSpecies = ['HI','HI_noH2']
-    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII']
+    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VIII solarz']
 
     if species not in hDensSpecies + zDensSpecies + ['Z']:
         raise Exception('Not implemented.')
@@ -1726,6 +1726,10 @@ def wholeBoxColDensGrid(sP, pSplit, species):
                 # assume solar abundances
                 mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
                                                                     assumeSolarAbunds=True)
+            if len(species.split()) == 3 and species.split()[2] == 'solarz':
+                # assume solar abundances
+                mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
+                                                                    assumeSolarAbunds=True,assumeSolarMetallicity=True)
             else:
                 # default (use cached ion masses)
                 mMetal = cosmo.load.snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
@@ -2264,6 +2268,13 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_SFingGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestriction='sfrgt0'),
 
+   'Subhalo_Mass_30pkpc_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=30.0),
+   'Subhalo_Mass_2rstars_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad='2rhalfstars'),
+   'Subhalo_Mass_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
+
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
    'Subhalo_Mass_OVI' : \
@@ -2495,22 +2506,26 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
    'Box_CDDF_nOVI_10'        : partial(wholeBoxCDDF,species='OVI_10'),
    'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
-   'Box_CDDF_nOVI_solar'     : partial(wholeBoxCDDF,species='OVI_solar'),
    'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
    'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
 
    'Box_Grid_nOVI_depth10'           : partial(wholeBoxColDensGrid,species='O VI_depth10'),
    'Box_Grid_nOVI_10_depth10'        : partial(wholeBoxColDensGrid,species='O VI 10_depth10'),
    'Box_Grid_nOVI_25_depth10'        : partial(wholeBoxColDensGrid,species='O VI 25_depth10'),
-   'Box_Grid_nOVI_solar_depth10'     : partial(wholeBoxColDensGrid,species='O VI solar_depth10'),
    'Box_Grid_nOVII_depth10'          : partial(wholeBoxColDensGrid,species='O VII_depth10'),
    'Box_Grid_nOVIII_depth10'         : partial(wholeBoxColDensGrid,species='O VIII_depth10'),
    'Box_CDDF_nOVI_depth10'           : partial(wholeBoxCDDF,species='OVI_depth10'),
    'Box_CDDF_nOVI_10_depth10'        : partial(wholeBoxCDDF,species='OVI_10_depth10'),
    'Box_CDDF_nOVI_25_depth10'        : partial(wholeBoxCDDF,species='OVI_25_depth10'),
-   'Box_CDDF_nOVI_solar_depth10'     : partial(wholeBoxCDDF,species='OVI_solar_depth10'),
    'Box_CDDF_nOVII_depth10'          : partial(wholeBoxCDDF,species='OVII_depth10'),
    'Box_CDDF_nOVIII_depth10'         : partial(wholeBoxCDDF,species='OVIII_depth10'),
+
+   'Box_Grid_nOVI_solar_depth10'     : partial(wholeBoxColDensGrid,species='O VI solar_depth10'),
+   'Box_CDDF_nOVI_solar_depth10'     : partial(wholeBoxCDDF,species='OVI_solar_depth10'),
+   'Box_Grid_nOVII_solarz_depth10'    : partial(wholeBoxColDensGrid,species='O VII solarz_depth10'),
+   'Box_CDDF_nOVII_solarz_depth10'    : partial(wholeBoxCDDF,species='OVII_solarz_depth10'),
+   'Box_Grid_nOVIII_solarz_depth10'   : partial(wholeBoxColDensGrid,species='O VIII solarz_depth10'),
+   'Box_CDDF_nOVIII_solarz_depth10'   : partial(wholeBoxCDDF,species='OVIII_solarz_depth10'),
 
    'Box_Omega_HI'                    : partial(wholeBoxCDDF,species='H I',omega=True),
    'Box_Omega_H2'                    : partial(wholeBoxCDDF,species='H 2',omega=True),

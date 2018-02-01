@@ -9,6 +9,7 @@ import numpy as np
 import h5py
 from os import path, mkdir
 import glob
+import time
 import struct
 
 def concatSubboxFilesAndMinify():
@@ -734,13 +735,17 @@ def export_ovi_phase():
     sP = simParams(res=1820,run='tng',redshift=0.0)
     N = int(1e7) # None for all
     partType = 'gas'
-    cenSubsOnly = True # select from particles within central subhalos only, otherwise all in box
+
+    # one of the these three:
+    cenSubsOnly = False # select from particles within central subhalos only, otherwise all in box
+    fofOnly = True # select from particles within FoF halos only
+    haloID = None # if not None, only this fof halo
 
     # load
-    xvals = snapshotSubset(sP, partType, 'hdens')
+    xvals = snapshotSubset(sP, partType, 'hdens', haloID=haloID, haloSubset=fofOnly)
     xvals = np.log10(xvals) # log=True
-    yvals = snapshotSubset(sP, partType, 'temp')
-    weight = snapshotSubset(sP, partType, 'O VI mass')
+    yvals = snapshotSubset(sP, partType, 'temp', haloID=haloID, haloSubset=fofOnly)
+    weight = snapshotSubset(sP, partType, 'O VI mass', haloID=haloID, haloSubset=fofOnly)
     weight = sP.units.codeMassToMsun(weight)
     N_tot = xvals.size
 
@@ -751,22 +756,31 @@ def export_ovi_phase():
 
         selection = 'all particles in box'
         if cenSubsOnly:
+            assert haloID is None and not fofOnly
             inds2 = inverseMapPartIndicesToSubhaloIDs(sP, inds, partType)
             cen_inds = cenSatSubhaloIndices(sP, cenSatSelect='cen')
             _, in_cen_inds = match3(cen_inds, inds2)
             inds = inds[in_cen_inds]
             selection = 'central subhalo particles only (all masses)'
+            selStr = '_censub'
+        if fofOnly:
+            assert haloID is None and not cenSubsOnly
+            selection = 'fof halo particles only (all masses)'
+            selStr = '_fof'
 
-        inds_sel = np.random.choice(inds, size=N, replace=False)
-        xvals = xvals[inds_sel]
-        yvals = yvals[inds_sel]
-        weight = weight[inds_sel]
+        if haloID is not None:
+            selection = 'all member particles of fof halo [%d] only' % haloID
+            selStr = '_halo%d' % haloID
+        else:
+            inds_sel = np.random.choice(inds, size=N, replace=False)
+            xvals = xvals[inds_sel]
+            yvals = yvals[inds_sel]
+            weight = weight[inds_sel]
 
     # save
-    selStr = '' if not cenSubsOnly else '_censub'
     with h5py.File('ovi_%s_z%s_%s%s.hdf5' % (sP.simName,sP.redshift,N,selStr), 'w') as f:
         h = f.create_group('Header')
-        h.attrs['num_pts'] = N
+        h.attrs['num_pts'] = N if haloID is None else N_tot
         h.attrs['num_pts_total'] = N_tot
         h.attrs['written_by'] = 'dnelson'
         h.attrs['selection'] = selection
@@ -814,15 +828,22 @@ def makeCohnVsuiteCatalog(redshift=0.0):
         for i in range(mstar.size):
             f.write('%7.3f %7.3f 1.0 1.0 %.1f %d %7.3f\n' % (mstar[i],sfr[i],redshift,sat[i],mhalo[i]))
 
-def loadMillenniumSubhaloCatalog():
-    """ Load a complete subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation. """
-    basePath = '/home/extdylan/sims.millennium/Millennium1/output/'
-    snap = 63
+def convertMillenniumSubhaloCatalog(snap=63):
+    """ Convert a subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation to Illustris-like HDF5. """
+    from tracer.tracerMC import match3
 
-    header_bytes = 20
+    savePath = '/u/dnelson/data/sims.millennium/Millennium1/output/'
+    loadPath = '/virgo/simulations/Millennium/' 
+
+    dm_particle_mass = 0.0860657 # ~10^9 msun
+
+    if not path.isdir(savePath + 'groups_%03d' % snap):
+        mkdir(savePath + 'groups_%03d' % snap)
 
     def _chunkPath(snap, chunkNum):
-        return basePath + 'groups_%03d/sub_tab_%03d.%s' % (snap,snap,chunkNum)
+        return loadPath + 'postproc_%03d/sub_tab_%03d.%s' % (snap,snap,chunkNum)
+    def _groupChunkPath(snap, chunkNum):
+        return loadPath + 'snapdir_%03d/group_tab_%03d.%s' % (snap,snap,chunkNum)
 
     nChunks = len( glob.glob(_chunkPath(snap,'*')) )
     print('Found [%d] chunks for snapshot [%03d], loading...' % (nChunks,snap))
@@ -856,13 +877,38 @@ def loadMillenniumSubhaloCatalog():
 
     assert TotNGroupsCheck == TotNGroups
 
-    # allocate
+    # allocate (group files)
+    GroupLen       = np.zeros( TotNGroups, dtype='int32' )
+    GroupOffset    = np.zeros( TotNGroups, dtype='int32' )
+
+    # load (group files)
+    g_off = 0
+
+    for i in range(nChunks):
+        if i % int(nChunks/10) == 0: print(' %d%%' % np.ceil(float(i)/nChunks*100), end='')
+        # full read
+        with open(_groupChunkPath(snap,i),'rb') as f:
+            data = f.read()
+
+        # header (object counts)
+        NGroups = struct.unpack('i', data[0:4])[0]
+
+        GroupLen[g_off : g_off + NGroups]    = struct.unpack('i' * NGroups, data[16 : 16 + 4*NGroups])
+        GroupOffset[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[16 + 4*NGroups : 16 + 8*NGroups])
+
+        g_off += NGroups
+
+    print(' done with group files.')
+
+    # allocate (subhalo files)
     NSubsPerHalo   = np.zeros( TotNGroups, dtype='int32' )
     FirstSubOfHalo = np.zeros( TotNGroups, dtype='int32' )
 
     SubLen         = np.zeros( TotNSubs, dtype='int32' )
     SubOffset      = np.zeros( TotNSubs, dtype='int32' )
     SubParentHalo  = np.zeros( TotNSubs, dtype='int32' )
+    SubFileNr      = np.zeros( TotNSubs, dtype='int16' )
+    SubLocalIndex  = np.zeros( TotNSubs, dtype='int32' )
 
     Halo_M_Mean200 = np.zeros( TotNGroups, dtype='float32' )
     Halo_R_Mean200 = np.zeros( TotNGroups, dtype='float32' )
@@ -879,7 +925,7 @@ def loadMillenniumSubhaloCatalog():
     SubMostBoundID = np.zeros( TotNSubs, dtype='int64' )
     SubHalfMass    = np.zeros( TotNSubs, dtype='float32' )
 
-    # load
+    # load (subhalo files)
     s_off = 0 # subhalos
     g_off = 0 # groups
 
@@ -894,15 +940,22 @@ def loadMillenniumSubhaloCatalog():
         NSubs      = struct.unpack('i', data[16:20])[0]
 
         # per halo
+        header_bytes = 20
         off = header_bytes
         NSubsPerHalo[g_off : g_off + NGroups]   = struct.unpack('i' * NGroups, data[off + 0*NGroups : off + 4*NGroups])
         FirstSubOfHalo[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 4*NGroups : off + 8*NGroups])
+        FirstSubOfHalo[g_off : g_off + NGroups] += s_off # as stored is local to chunk files
 
         # per subhalo
         off = header_bytes + 8*NGroups
         SubLen[s_off : s_off + NSubs]        = struct.unpack('i' * NSubs, data[off + 0*NSubs : off + 4*NSubs])
         SubOffset[s_off : s_off + NSubs]     = struct.unpack('i' * NSubs, data[off + 4*NSubs : off + 8*NSubs])
         SubParentHalo[s_off : s_off + NSubs] = struct.unpack('i' * NSubs, data[off + 8*NSubs : off + 12*NSubs])
+        SubParentHalo[s_off : s_off + NSubs] += g_off # as stored is local to chunk files
+
+        # per subhalo chunk-pointer information
+        SubFileNr[s_off : s_off + NSubs] = i
+        SubLocalIndex[s_off : s_off + NSubs] = np.arange(NSubs)
 
         # per halo
         off = header_bytes + 8*NGroups + 12*NSubs
@@ -937,17 +990,474 @@ def loadMillenniumSubhaloCatalog():
     assert SubPos.min() >= 0.0 and SubPos.max() <= 500.0
     assert SubMostBoundID.min() >= 0
 
-    r = {}
-    for var in locals().keys():
-        r[var] = locals()[var]
+    # group (mass) ordering is LOCAL to each chunk! need a global sort and shuffle of all fields
+    g_globalSort = np.argsort(-GroupLen, kind='mergesort') # negative -> descending order, stable
+
+    GroupLen_Orig = np.array(GroupLen) # keep copy
+
+    # re-order group properties
+    GroupLen = GroupLen[g_globalSort]
+    NSubsPerHalo = NSubsPerHalo[g_globalSort]
+    FirstSubOfHalo = FirstSubOfHalo[g_globalSort]
+    Halo_M_Mean200 = Halo_M_Mean200[g_globalSort]
+    Halo_R_Mean200 = Halo_R_Mean200[g_globalSort]
+    Halo_M_Crit200 = Halo_M_Crit200[g_globalSort]
+    Halo_R_Crit200 = Halo_R_Crit200[g_globalSort]
+    Halo_M_TopHat200 = Halo_M_TopHat200[g_globalSort]
+    Halo_R_TopHat200 = Halo_R_TopHat200[g_globalSort]
+
+    # fix subhalo parent indices, determine new subhalo ordering
+    g_globalSortInv = np.zeros( g_globalSort.size, dtype='int32' )
+    g_globalSortInv[g_globalSort] = np.arange(g_globalSort.size)
+    SubParentHalo = g_globalSortInv[SubParentHalo]
+
+    s_globalSort = np.argsort(SubParentHalo, kind='mergesort')
+
+    # check new subhalo ordering
+    SubParentHalo_check = np.zeros( SubParentHalo.size, dtype='int32' )
+    for i in range(TotNGroups):
+        if NSubsPerHalo[i] == 0:
+            continue
+        SubParentHalo_check[ FirstSubOfHalo[i] : FirstSubOfHalo[i] + NSubsPerHalo[i] ] = i
+    assert np.array_equal(SubParentHalo,SubParentHalo_check)
+
+    # fix first subhalo indices
+    s_globalSortInv = np.zeros( s_globalSort.size, dtype='int32' )
+    s_globalSortInv[s_globalSort] = np.arange(s_globalSort.size)
+
+    FirstSubOfHalo = s_globalSortInv[FirstSubOfHalo]
+
+    SubLen_Orig = np.array(SubLen)
+
+    # re-order subhalo properties
+    SubParentHalo = SubParentHalo[s_globalSort]
+    SubLen = SubLen[s_globalSort]
+    SubPos = SubPos[s_globalSort,:]
+    SubVel = SubVel[s_globalSort,:]
+    SubVelDisp = SubVelDisp[s_globalSort]
+    SubVmax = SubVmax[s_globalSort]
+    SubSpin = SubSpin[s_globalSort]
+    SubMostBoundID = SubMostBoundID[s_globalSort]
+    SubHalfMass = SubHalfMass[s_globalSort]
+
+    # sanity checks
+    assert FirstSubOfHalo[0] == 0
+    w = np.where(NSubsPerHalo > 0)
+    assert np.array_equal(SubParentHalo[FirstSubOfHalo[w]], w[0])
+    assert GroupLen[0] == GroupLen.max()
+    w = np.where(NSubsPerHalo == 0)
+    a, b = match3(w[0],SubParentHalo)
+    assert a is None and b is None
+    FirstSubOfHalo[w] = FirstSubOfHalo[w[0]+1] # for clarity, duplicate the next FirstSubOfHalo as originally was the case
+
+    # GroupOffset/SubhaloOffset are local to chunk files, just recreate now with global offsets
+    subgroupCount = 0
+
+    snapOffsetsGroup = np.zeros( TotNGroups, dtype='int64' )
+    snapOffsetsSubhalo = np.zeros( TotNSubs, dtype='int64' )
+    
+    snapOffsetsGroup[1:] = np.cumsum( GroupLen )[:-1]
+    
+    for k in np.arange(TotNGroups):
+        # subhalo offsets depend on group (to allow fuzz)
+        if NSubsPerHalo[k] > 0:
+            snapOffsetsSubhalo[subgroupCount] = snapOffsetsGroup[k]
+            
+            subgroupCount += 1
+            for m in np.arange(1, NSubsPerHalo[k]):
+                snapOffsetsSubhalo[subgroupCount] = snapOffsetsSubhalo[subgroupCount-1] + SubLen[subgroupCount-1]
+                subgroupCount += 1
+
+    # create a mapping of original (FileNr, SubLocalIndex) -> new index, which we will need to go from MPA trees to these group catalogs
+    offset = 0
+    FileNr_len = np.zeros( nChunks, dtype='int32' )
+    FileNr_off = np.zeros( nChunks, dtype='int32' )
+    new_index  = np.zeros( TotNSubs, dtype='int32' )
+
+    for i in range(nChunks):
+        w = np.where(SubFileNr == i)
+        inds = s_globalSortInv[w]
+
+        FileNr_len[i] = inds.size
+        new_index[offset : offset + inds.size] = inds
+        offset += inds.size
+
+    FileNr_off[1:] = np.cumsum( FileNr_len )[:-1]
+
+    with h5py.File(savePath + 'groups_%03d/original_order_%03d.hdf5' % (snap,snap), 'w') as f:
+        f['Group_Reorder'] = g_globalSort
+        f['Subhalo_Reorder'] = s_globalSort
+
+        # e.g. the subhalo is at f['NewIndex'][ f['NewIndex_FileNrOffset'][FileNr] + SubhaloIndex ]
+        f['NewIndex_FileNrOffset'] = FileNr_off
+        f['NewIndex'] = new_index
+
+    # create original GroupOffset to help particle rearrangement
+    snapOffsetsGroup_Orig = np.zeros( TotNGroups, dtype='int64' )    
+    snapOffsetsGroup_Orig[1:] = np.cumsum( GroupLen_Orig )[:-1]
+
+    with h5py.File(savePath + 'gorder_%d.hdf5' % snap,'w') as f:
+        f['GroupLen_Orig'] = GroupLen_Orig
+        f['GroupOffset_Orig'] = snapOffsetsGroup_Orig
+        f['Group_Reorder'] = g_globalSort
 
     # save into single hdf5
-    with h5py.File(_chunkPath(snap,'hdf5'), 'w') as f:
-        for key in r:
-            if key in ['s_off','g_off','header','nChunks','_chunkPath','data','NSubs','NGroups','off','f','i','basePath','r','header_bytes']:
-                continue
-            f[key] = r[key]
+    with h5py.File(savePath + 'groups_%03d/fof_subhalo_tab_%03d.hdf5' % (snap,snap), 'w') as f:
+        # header
+        header = f.create_group('Header')
+        header.attrs['Ngroups_ThisFile'] = TotNGroups
+        header.attrs['Ngroups_Total'] = TotNGroups
+        header.attrs['Nids_ThisFile'] = 0
+        header.attrs['Nids_Total'] = 0
+        header.attrs['Nsubgroups_ThisFile'] = TotNSubs
+        header.attrs['Nsubgroups_Total'] = TotNSubs
+        header.attrs['NumFiles'] = 1
+
+        # groups
+        groups = f.create_group('Group')
+        groups['GroupFirstSub'] = FirstSubOfHalo
+        groups['GroupLen'] = GroupLen
+        groups['GroupMass'] = GroupLen * dm_particle_mass
+        groups['GroupNsubs'] = NSubsPerHalo
+        groups['Group_M_Crit200'] = Halo_M_Crit200
+        groups['Group_R_Crit200'] = Halo_R_Crit200
+        groups['Group_M_Mean200'] = Halo_M_Mean200
+        groups['Group_R_Mean200'] = Halo_R_Mean200
+        groups['Group_M_TopHat200'] = Halo_M_TopHat200
+        groups['Group_R_TopHat200'] = Halo_R_TopHat200
+
+        # subhalos
+        subs = f.create_group('Subhalo')
+        subs['SubhaloGrNr'] = SubParentHalo
+        subs['SubhaloHalfmassRad'] = SubHalfMass
+        subs['SubhaloIDMostbound'] = SubMostBoundID
+        subs['SubhaloLen'] = SubLen
+        subs['SubhaloMass'] = SubLen * dm_particle_mass
+        subs['SubhaloPos'] = SubPos
+        subs['SubhaloSpin'] = SubSpin
+        subs['SubhaloVel'] = SubVel
+        subs['SubhaloVelDisp'] = SubVelDisp
+        subs['SubhaloVmax'] = SubVmax
+
+        # offsets (inside group files, similar to Illustris public data release, for convenience)
+        offs = f.create_group('Offsets')
+        offs['Group_Snap'] = snapOffsetsGroup
+        offs['Subhalo_Snap'] = snapOffsetsSubhalo
 
     # return
-    print('Saved [%s].' % _chunkPath(snap,'hdf5'))
-    return r
+    print(' All Done.')
+
+def convertMillenniumSnapshot(snap=63):
+    """ Convert a complete Millennium snapshot (+IDS) into Illustris-like group-ordered HDF5 format. """
+    from tracer.tracerMC import match3
+    from util.helper import isUnique
+
+    savePath = '/u/dnelson/data/sims.millennium/Millennium1/output/'
+    loadPath = '/virgo/simulations/Millennium/' 
+    #loadPath = '/virgo/simulations/MilliMillennium/'
+
+    saveFile = savePath + 'snapdir_%03d/snap_%03d.hdf5' % (snap,snap)
+
+    if not path.isdir(savePath + 'snapdir_%03d' % snap):
+        mkdir(savePath + 'snapdir_%03d' % snap)
+
+    def _snapChunkPath(snap, chunkNum):
+        return loadPath + 'snapdir_%03d/snap_millennium_%03d.%s' % (snap,snap,chunkNum)
+        #return loadPath + 'snapdir_%03d/snap_milli_%03d.%s' % (snap,snap,chunkNum)
+    def _idChunkPath(snap, chunkNum):
+        return loadPath + 'postproc_%03d/sub_ids_%03d.%s' % (snap,snap,chunkNum)
+
+    nChunks = len( glob.glob(_snapChunkPath(snap,'*')) )
+    nChunksIDs = len( [fn for fn in glob.glob(_idChunkPath(snap,'*')) if 'swapped' not in fn] )
+    assert nChunks == nChunksIDs
+    print('Found [%d] chunks for snapshot [%03d], loading...' % (nChunks,snap))
+
+    if not path.isfile(saveFile):
+        # first, load all IDs
+        Nids_tot = 0
+        offset = 0
+
+        for i in range(nChunks):
+            with open(_idChunkPath(snap,i),'rb') as f:
+                header = f.read(16)
+                Nids = struct.unpack('i', header[4:8])[0]
+                Nids_tot += Nids
+
+        ids_groupordered_old = np.zeros( Nids_tot, dtype='int64' )
+        print('Reading a total of [%d] IDs now...' % Nids_tot)
+
+        bitshift = ((1 << 34) - 1) # from get_group_coordinates()
+
+        for i in range(nChunks):
+            # full read
+            with open(_idChunkPath(snap,i),'rb') as f:
+                data = f.read()
+            Nids = struct.unpack('i', data[4:8])[0]
+            if Nids == 0:
+                continue
+            ids = struct.unpack('q' * Nids, data[16:16 + Nids*8])
+
+            # transform into actual particle ID
+            # particleid = (GroupIDs[i] << 30) >> 30 (seems wrong...)
+            # hashkey    = GroupIDs[i] >> 34
+            #ids_groupordered[offset : offset+Nids] = (np.array(ids) << 30) >> 30
+            ids_groupordered_old[offset : offset+Nids] = np.array(ids) & bitshift
+
+            print('[%3d] IDs [%8d] particles, from [%10d] to [%10d].' % (i, Nids, offset, offset+Nids))
+            offset += Nids
+
+        assert np.min(ids_groupordered_old) >= 0 # otherwise overflow or bad conversion above
+
+        # ids_groupordered are in the chunk-local group ordering! reshuffle now
+        print('Shuffling IDs into global group order...')
+
+        gorder = {}
+        with h5py.File(savePath + 'gorder_%d.hdf5' % snap) as f:
+            for key in f:
+                gorder[key] = f[key][()]
+
+        # use original (chunk-ordered) GroupOffset and GroupLen accessed in global-order
+        # to access ids_groupordered in non-contig blocks, stamping into ids_groupordered_new contiguously through
+        offset = 0
+        ids_groupordered = np.zeros( Nids_tot, dtype='int64' )
+
+        for i in gorder['Group_Reorder']:
+            read_offset = gorder['GroupOffset_Orig'][i]
+            read_length = gorder['GroupLen_Orig'][i]
+
+            if read_length == 0:
+                continue
+
+            ids_groupordered[offset : offset+read_length] = ids_groupordered_old[read_offset : read_offset + read_length]
+            offset += read_length
+
+        ids_groupordered_old = None
+
+        # reader header of first snapshot chunk
+        with open(_snapChunkPath(snap,0),'rb') as f:
+            header = f.read(260)
+
+        npart      = struct.unpack('iiiiii', header[4:4+24])[1]
+        mass       = struct.unpack('dddddd', header[28:28+48])
+        scalefac   = struct.unpack('d', header[76:76+8])[0]
+        redshift   = struct.unpack('d', header[84:84+8])[0]
+        #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[1]
+        nFiles     = struct.unpack('i', header[128:128+4])[0]
+        BoxSize    = struct.unpack('d', header[132:132+8])[0]
+        Omega0     = struct.unpack('d', header[140:140+8])[0]
+        OmegaL     = struct.unpack('d', header[148:148+8])[0]
+        Hubble     = struct.unpack('d', header[156:156+8])[0]
+
+        assert nFiles == nChunks
+
+        # nPartTot is wrong, has no highword, so read and accumulate manually
+        nPartTot = 0
+        for i in range(nChunks):
+            with open(_snapChunkPath(snap,i),'rb') as f:
+                header = f.read(28)
+                npart  = struct.unpack('iiiiii', header[4:4+24])[1]
+            nPartTot += npart
+        print('Found new nPartTot [%d]' % nPartTot)
+
+        # load all snapshot IDs
+        offset = 0
+        ids_snapordered = np.zeros( nPartTot, dtype='int64' )
+
+        for i in range(nChunks):
+            # full read
+            with open(_snapChunkPath(snap,i),'rb') as f:
+                data = f.read()
+
+            # local particle counts
+            npart_local = struct.unpack('iiiiii', data[4:4+24])[1]
+
+            # cast and save
+            start_ids = 284 + 24*npart_local
+            ids = struct.unpack('q' * npart_local*1, data[start_ids:start_ids + npart_local*8])
+
+            ids_snapordered[offset : offset+npart_local] = ids
+
+            print('[%3d] Snap IDs [%8d] particles, from [%10d] to [%10d].' % (i, npart_local, offset, offset+npart_local))
+            offset += npart_local
+
+        # crossmatch
+        print('Matching two ID sets now...')
+        start = time.time()
+
+        ind_snapordered, ind_groupordered = match3(ids_snapordered, ids_groupordered)
+        # note: ids_snapordered[ind_snapordered] puts them into group ordering
+        print(' took: '+str(round(time.time()-start,2))+' sec')
+
+        assert ind_snapordered.size == ids_groupordered.size # must have found them all
+        ids_groupordered = None
+        ind_groupordered = None
+
+        # create mask for outer FoF fuzz
+        mask = np.zeros( ids_snapordered.size, dtype='bool' )
+        mask[ind_snapordered] = 1
+
+        ind_outerfuzz = np.where(mask == 0)[0]
+
+        # create master re-ordering index list
+        inds_reorder = np.hstack( (ind_snapordered,ind_outerfuzz) )
+
+        ind_snapordered = None
+        ind_outerfuzz = None    
+
+        assert inds_reorder.size == ids_snapordered.size # union must include all
+        assert isUnique(inds_reorder) # no duplicates
+
+        # open file for writing
+        fOut = h5py.File(saveFile, 'w')
+
+        header = fOut.create_group('Header')
+        numPartTot = np.zeros( 6, dtype='int64' )
+        numPartTot[1] = nPartTot
+        header.attrs['BoxSize'] = BoxSize
+        header.attrs['HubbleParam'] = Hubble
+        header.attrs['MassTable'] = np.array(mass, dtype='float64')
+        header.attrs['NumFilesPerSnapshot'] = 1
+        header.attrs['NumPart_ThisFile'] = numPartTot
+        header.attrs['NumPart_Total'] = numPartTot
+        header.attrs['NumPart_Total_HighWord'] = np.zeros(6, dtype='int64')
+        header.attrs['Omega0'] = Omega0
+        header.attrs['OmegaLambda'] = OmegaL
+        header.attrs['Redshift'] = redshift
+        header.attrs['Time'] = scalefac
+
+        pt1 = fOut.create_group('PartType1')
+
+        # save IDs immediately
+        pt1['ParticleIDs'] = ids_snapordered[inds_reorder]
+        ids_snapordered = None
+        fOut.close()
+
+        # save order permutation, early quit (clear memory)
+        with h5py.File(savePath + 'reorder_%d.hdf5' % snap,'w') as f:
+            f['Reorder'] = inds_reorder
+        print('Wrote intermediate file, restart to finish.')
+        return
+    else:
+        # intermediate file already exists, open
+        print('Loading intermediate file...')
+        with h5py.File(savePath + 'reorder_%d.hdf5' % snap) as f:
+            inds_reorder = f['Reorder'][()]
+
+        fOut = h5py.File(saveFile)
+        nPartTot = fOut['Header'].attrs['NumPart_Total'][1]
+        pt1 = fOut['PartType1']
+
+        # load remaining particle fields, one at a time
+        for ptName in ['Coordinates','Velocities']:
+            offset = 0
+            val = np.zeros( (nPartTot,3), dtype='float32' )
+
+            for i in range(nChunks):
+                # full read
+                with open(_snapChunkPath(snap,i),'rb') as f:
+                    data = f.read()
+
+                # local particle counts
+                npart_local = struct.unpack('iiiiii', data[4:4+24])[1]
+
+                # cast
+                start_pos = 268
+                start_vel = 276 + 12*npart_local
+                start = start_pos if ptName == 'Coordinates' else start_vel
+
+                val_local = struct.unpack('f' * npart_local*3, data[start:start + npart_local*12])
+
+                # stamp
+                val[offset:offset+npart_local,:] = np.reshape(val_local, (npart_local,3))
+
+                print('[%3d] %s [%8d] particles, from [%10d] to [%10d].' % (i, ptName, npart_local, offset, offset+npart_local))
+                offset += npart_local
+
+            # re-order and write
+            val = val[inds_reorder,:]
+
+            pt1[ptName] = val
+
+        # close
+        fOut.close()
+        print('All done.')
+
+def splitSingleHDF5IntoChunks():
+    """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
+    from util.helper import pSplitRange
+    basePath = '/u/dnelson/sims.millennium/Millennium1/output/snapdir_063/'
+    fileName = 'milli_063.hdf5'
+    numChunksSave = 16
+
+    # load header, dtypes, ndims, and data
+    fGroups = {}
+    dtypes = {}
+    ndims = {}
+    data = {}
+
+    with h5py.File(basePath + fileName,'r') as f:
+        header = dict( f['Header'].attrs.items() )
+        for k in f.keys():
+            if k != 'Header': fGroups[k] = []
+
+        for gName in fGroups.keys():
+            dtypes[gName] = {}
+            ndims[gName] = {}
+            data[gName] = {}
+            fGroups[gName] = f[gName].keys()
+
+            for field in fGroups[gName]:
+                dtypes[gName][field] = f[gName][field].dtype
+                ndims[gName][field] = f[gName][field].ndim
+                if ndims[gName][field] > 1:
+                    ndims[gName][field] = f[gName][field].shape[1] # actually need shape of 2nd dim
+                data[gName][field] = f[gName][field][()]
+
+    print('NumPartTot: ', header['NumPart_Total'])
+
+    start = {}
+    stop = {}
+    for gName in fGroups.keys():
+        start[gName] = 0
+        stop[gName] = 0
+
+    for i in range(numChunksSave):
+        # determine split, update header
+        header['NumFilesPerSnapshot'] = numChunksSave
+        for gName in fGroups.keys():
+            ptNum = int(gName[-1])
+            if header['NumPart_Total'][ptNum] == 0:
+                continue
+
+            start[gName], stop[gName] = pSplitRange([0,header['NumPart_Total'][ptNum]], numChunksSave, i)
+
+            assert stop[gName] > start[gName]
+            header['NumPart_ThisFile'][ptNum] = stop[gName] - start[gName]
+            print(i,gName,start[gName],stop[gName])
+
+        newChunkPath = basePath + fileName.split('.hdf5')[0] + '.%d.hdf5' % i
+
+        with h5py.File(newChunkPath,'w') as f:
+            # save header
+            g = f.create_group('Header')
+            for attr in header.keys():
+                g.attrs[attr] = header[attr]
+
+            # save data
+            for gName in fGroups.keys():
+                ptNum = int(gName[-1])
+                if header['NumPart_Total'][ptNum] == 0:
+                    print(' skip pt %d (write)' % ptNum)
+                    continue
+
+                g = f.create_group(gName)
+
+                for field in fGroups[gName]:
+                    ndim = ndims[gName][field]
+
+                    if ndim == 1:
+                        g[field] = data[gName][field][start[gName]:stop[gName]]
+                    else:
+                        g[field] = data[gName][field][start[gName]:stop[gName],:]
+
+    print('Done.')

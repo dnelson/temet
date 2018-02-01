@@ -893,6 +893,9 @@ class simParams:
     def ptNum(self, partType):
         """ Return particle type number (in snapshots) for input partType string. 
         Allows different simulations to use arbitrary numbers for each type (so far they do not). """
+        if partType in ['dm_lowres','dm_coarse']:
+            assert self.isZoom
+            return 2 # sims.zooms, sims.zooms2 ICs configuration
         return partTypeNum(partType)
 
     def isPartType(self, ptToCheck, ptToCheckAgainst):

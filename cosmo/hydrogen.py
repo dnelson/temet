@@ -161,7 +161,7 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
     return frac_nH0
 
 def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=False, 
-                 atomic=False, molecular=False):
+                 atomic=False, molecular=False, indRange=None):
     """ Calculate the (total, total neutral, atomic, or molecular) hydrogen mass per cell. Here we 
         use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
         density. Return still in code units, e.g. [10^10 Msun/h].
@@ -176,7 +176,7 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
         reqFieldsLoad = list(reqFields) # make copy
         reqFieldsLoad.remove('GFM_Metals')
         reqFieldsLoad.append('metals_H')
-        gas = snapshotSubset(sP, 'gas', reqFieldsLoad)
+        gas = snapshotSubset(sP, 'gas', reqFieldsLoad, indRange=indRange)
         
     if not all( [f in gas for f in reqFields] ):
         raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')

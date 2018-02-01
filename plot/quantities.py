@@ -57,7 +57,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
-                   'mstar_30pkpc','mstar_30pkpc_log',
+                   'mstar_30pkpc','mstar_30pkpc_log','mhi_30pkpc','mhi_30pkpc_log','mhi2','mhi2_log'
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                    'mhalo_subfind','mhalo_subfind_log']
 
@@ -162,14 +162,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         gc = groupCat(sP, fieldsSubhalos=[fieldName])
         vals = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum(partName)] )
 
-        logStr = ''
         if '_log' in quant:
             takeLog = False
             vals = logZeroNaN(vals)
-            logStr = 'log '
 
-        label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ '+logStr+'M$_{\\rm sun}$ ]'
-        if clean: label = 'M$_{\\rm '+partLabel+'}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+        label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]'
+        if clean: label = 'M$_{\\rm '+partLabel+'}$ [ log M$_{\\rm sun}$ ]'
 
     if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
         # stellar mass (auxcat based calculations)
@@ -178,15 +176,37 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = sP.units.codeMassToMsun(ac[acField])
 
-        logStr = ''
         if '_log' in quant:
             takeLog = False
             vals = logZeroNaN(vals)
-            logStr = 'log '
 
         minMax = [9.0, 12.0]
-        label = 'M$_{\\rm \star}(<30pkpc)$ [ '+logStr+'M$_{\\rm sun}$ ]'
-        if clean: label = 'M$_{\\rm \star}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+        label = 'M$_{\\rm \star}(<30pkpc)$ [ log M$_{\\rm sun}$ ]'
+        if clean: label = 'M$_{\\rm \star}$ [ log M$_{\\rm sun}$ ]'
+
+    if quant in ['mhi','mhi_30pkpc','mhi_30pkpc_log','mhi2','mhi2_log']:
+        # HI (atomic hydrogen) mass, either in 30pkpc or 2rhalfstars apertures (auxcat calculations)
+        if quant in ['mhi_30pkpc','mhi_30pkpc_log']:
+            radStr1 = '_30pkpc'
+            radStr2 = '\\rm{30pkpc}'
+        if quant in ['mhi2','mhi2_log']:
+            radStr1 = '_2rstars'
+            radStr2 = '2r_{\\rm \star,1/2}'
+        if quant == 'mhi': 
+            radStr1 = ''
+            radStr2 = '\\rm{sub}'
+
+        acField = 'Subhalo_Mass%s_HI' % radStr1
+
+        ac = auxCat(sP, fields=[acField])
+        vals = sP.units.codeMassToMsun(ac[acField])
+
+        if '_log' in quant:
+            takeLog = False
+            vals = logZeroNaN(vals)
+
+        minMax = [8.0, 11.5]
+        label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr2
 
     if quant in ['mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                  'mhalo_subfind','mhalo_subfind_log']:
@@ -210,16 +230,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = sP.units.codeMassToMsun( gc['subhalos'] )
             mTypeStr = 'Subfind'
 
-        logStr = ''
         if '_log' in quant:
             takeLog = False
             vals = logZeroNaN(vals)
-            logStr = 'log '
 
         minMax = [11.0, 15.0]
         if '_500' in quant: minMax = [11.0, 15.0]
-        label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'M$_{\\rm sun}$ ]'
-        if clean: label = 'M$_{\\rm halo}$ [ '+logStr+'M$_{\\rm sun}$ ]'
+        label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ log M$_{\\rm sun}$ ]'
+        if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
     if quant in ['rhalo_200','rhalo_500','rhalo_200_log','rhalo_500_log']:
         # R200crit or R500crit
@@ -235,15 +253,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         mTypeStr = '%d,crit' % od
 
-        logStr = ''
         if '_log' in quant:
             takeLog = False
             vals = logZeroNaN(vals)
-            logStr = 'log '
 
         minMax = [1.0, 2.5]
-        label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ '+logStr+'kpc ]'
-        if clean: label = 'R$_{\\rm halo}$ [ '+logStr+'kpc ]'
+        label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ log kpc ]'
+        if clean: label = 'R$_{\\rm halo}$ [ log kpc ]'
 
     if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_gasall']:
         # total OVI/OVII/metal mass in subhalo

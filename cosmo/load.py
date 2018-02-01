@@ -1161,11 +1161,13 @@ def snapshotSubset(sP, partType, fields,
             return sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
         # hydrogen model mass calculation (todo: generalize to different molecular models)
-        if field.lower() in ['h i mass', 'hi mass', 'himass']:
+        if field.lower() in ['h i mass', 'hi mass', 'himass', 'h1mass', 'hi_mass']:
+            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
             from cosmo.hydrogen import hydrogenMass
-            return hydrogenMass(None, sP, atomic=True)
+            return hydrogenMass(None, sP, atomic=True, indRange=indRange)
 
         if field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
+            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
             from cosmo.hydrogen import hydrogenMass
             if 'h2mass_' in field.lower():
                 molecularModel = field.lower().split('_')[1]
@@ -1173,7 +1175,7 @@ def snapshotSubset(sP, partType, fields,
                 molecularModel = 'BL06'
                 print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
 
-            return hydrogenMass(None, sP, molecular=molecularModel)
+            return hydrogenMass(None, sP, molecular=molecularModel, indRange=indRange)
 
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
