@@ -157,9 +157,11 @@ def loadFG11UVB(redshifts=None):
 
     return r
 
-def loadHM12UVB(redshifts=None):
-    """ Load the Haardt-Madau (2012) UVB at one or more redshifts and convert to CLOUDY units. """
+def loadHM12UVB(redshifts=None, puchwein18=False):
+    """ Load the Haardt-Madau (2012) or Puchwein+ (2018) UVB at one or more redshifts and convert to CLOUDY units. """
     filePath = expanduser("~") + '/python/data/haardt.madau/hm2012.uvb.txt'
+    if puchwein18:
+        filePath = expanduser("~") + '/python/data/puchwein/p18.uvb.txt'
     from util.simParams import simParams
     sP = simParams(res=1820,run='tng') # for units
 
@@ -196,6 +198,10 @@ def loadHM12UVB(redshifts=None):
         return r[0]
 
     return r
+
+def loadP18UVB(redshifts=None):
+    """ Load the Puchwein+ (2018) UVB at one or more redshifts and convert to CLOUDY units. """
+    return loadHM12UVB(redshifts=redshifts, puchwein18=True)
 
 def cloudyUVBInputAttenuated(gv, attenuateUVB=True):
     """ Generate the cloudy input string for the UVB, using the FG11 tables and with the 
@@ -897,7 +903,7 @@ class cloudyIon():
                                assumeSolarAbunds=False, assumeSolarMetallicity=False):
         """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
-         aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
+         aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
          aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. """
 
         # load required gas properties
@@ -943,7 +949,6 @@ class cloudyIon():
                 metal_mass_fraction = (metal/self.solar_Z) * self._solarMetalAbundanceMassRatio(element)
 
         metal_ion_mass_fraction = metal_mass_fraction * ion_fraction
-        
         return metal_ion_mass_fraction
 
 class cloudyEmission():

@@ -1161,7 +1161,7 @@ def zooms2_josh(conf=1, quadrant=False):
     res        = 11
     redshift   = 2.25
     hInd       = 2
-    variant    = 'PO' # MO, PO, FP, None
+    variant    = 'FP' # MO, PO, FP, None
 
     rVirFracs  = [1.0]
     method     = 'sphMap_global'
@@ -1213,7 +1213,6 @@ def zooms2_josh(conf=1, quadrant=False):
     if conf == 7:
         # gas metallicity
         panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.0]} )
-
 
     class plotConfig:
         plotStyle    = 'open'

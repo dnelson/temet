@@ -1844,17 +1844,17 @@ def paperPlots():
         pdf.close()
 
     # figure 5, CDDF redshift evolution of multiple ions (combined panel, and individual panels)
-    if 1:
+    if 0:
         moment = 0
         sPs = [TNG100] #, Illustris]
         boxDepth10 = True
         redshifts = [0,1,2,4]
 
-        #saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
-        #    ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
-        #     '_'.join([sP.simName for sP in sPs]))
-        #cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, 
-        #                      boxDepth10=boxDepth10, colorOff=2)
+        saveName = 'cddf_%s_zevo-%s_moment%d_%s.pdf' % \
+            ('-'.join(ions), '-'.join(['%d'%z for z in redshifts]), moment, 
+             '_'.join([sP.simName for sP in sPs]))
+        cddfRedshiftEvolution(sPs, saveName, moment=moment, ions=ions, redshifts=redshifts, 
+                              boxDepth10=boxDepth10, colorOff=2)
 
         for i, ion in enumerate(ions):
             saveName = 'cddf_%s_zevo-%s_moment%d_%s%s.pdf' % \

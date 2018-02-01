@@ -11,7 +11,7 @@ from  matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 from scipy.ndimage.filters import gaussian_filter
-from scipy.stats import binned_statistic
+from scipy.stats import binned_statistic, binned_statistic_2d
 
 from util import simParams
 from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN
@@ -154,12 +154,13 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     fig.savefig('histo1D_%s_%s_%s_wt-%s_%s.pdf' % (sPstr,ptType,ptProperty,ptWeight,hStr))
     plt.close(fig)
 
-def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], haloID=None, pdf=None,
+def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
                      xMinMaxForce=None, yMinMaxForce=None, contours=None, 
                      massFracMinMax=[-10.0,0.0], hideBelow=False, smoothSigma=0.0):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
-    if more than one, a horizontal multi-panel plot will be made with a single colorbar. If 
+    if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
+    not None, then show the mean value per pixel of these quantities, instead of weighted histograms. If 
     x[y]MinMaxForce, use these range limits. If contours is not None, draw solid contours at 
     these levels on top of the 2D histogram image. If smoothSigma is not zero, gaussian smooth 
     contours at this level. If hideBelow, then pixel values below massFracMinMax[0] are left pure white. """
@@ -168,6 +169,20 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     nBinsX = 800
     nBinsY = 400
     sizefac = 0.7
+
+    if sP.isZoom:
+        nBinsX = 250
+        nBinsY = 250
+
+    # binned_statistic_2d instead of histogram2d?
+    binnedStat = False
+    if meancolors is not None:
+        assert weights is None # one or the other
+        binnedStat = True
+        weights = meancolors # loop over these instead
+    if weights is None:
+        # one or the other
+        assert meancolors is not None
 
     ctNameHisto = 'viridis'
     contoursColor = 'k' # black
@@ -219,10 +234,20 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                 w = np.where( ((xvals > -4.8) & (yvals < 5.1)) | ((xvals > -4.4) & (yvals < 5.3)) )
                 yvals[w] = 0.0
 
-        # plot 2D histogram image
-        zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBinsX, nBinsY], range=[xlim,ylim], 
-                                    normed=True, weights=weight)
-        zz = logZeroNaN(zz.T)
+        if binnedStat:
+            # plot 2D image, each pixel colored by the mean value of a third quantity
+            clabel, clim, clog = simParticleQuantity(sP, partType, wtProp, clean=clean)
+            wtStr = 'Mean ' + clabel
+            zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
+                                                         bins=[nBinsX, nBinsY], range=[xlim,ylim])
+            zz = zz.T
+            if clog: zz = logZeroNaN(zz)
+
+        else:
+            # plot 2D histogram image, optionally weighted
+            zz, _, _ = np.histogram2d(xvals, yvals, bins=[nBinsX, nBinsY], range=[xlim,ylim], 
+                                        normed=True, weights=weight)
+            zz = logZeroNaN(zz.T)
 
         if hideBelow:
             w = np.where(zz < massFracMinMax[0])
@@ -235,10 +260,16 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         # plot contours?
         if contours is not None:
-            zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBinsX/4, nBinsY/4], range=[xlim,ylim], 
-                                        normed=True, weights=weight)
+            if binnedStat:
+                zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, weight, 'mean',
+                                                             bins=[nBinsX/4, nBinsY/4], range=[xlim,ylim])
+                if clog: zz = logZeroNaN(zz)
+            else:
+                zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBinsX/4, nBinsY/4], range=[xlim,ylim], 
+                                            normed=True, weights=weight)
+                zz = logZeroNaN(zz)
+
             XX, YY = np.meshgrid(xc[:-1], yc[:-1], indexing='ij')
-            zz = logZeroNaN(zz)
 
             # smooth, ignoring NaNs
             if smoothSigma > 0:
@@ -260,11 +291,19 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
     # colorbar and save
     fig.tight_layout()
-    fig.subplots_adjust(right=0.93)
-    cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.831]) # 0.821
-    #cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+    
+    if xQuant == 'hdens' and yQuant == 'temp' and len(weights) == 3:
+        # TNG colors paper
+        fig.subplots_adjust(right=0.93)
+        cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.831]) 
+    else:
+        # more general
+        fig.subplots_adjust(right=0.89)
+        cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.15)
+
     cb = plt.colorbar(im, cax=cbar_ax)
-    cb.ax.set_ylabel('Relative %s [ log ]' % wtStr)
+    if not binnedStat: wtStr = 'Relative ' + wtStr + ' [ log ]'
+    cb.ax.set_ylabel(wtStr)
     
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())

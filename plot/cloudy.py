@@ -14,7 +14,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 from util.helper import contourf, evenlySample, sampleColorTable, closest
-from cosmo.cloudy import loadFG11UVB, loadHM12UVB, cloudyIon
+from cosmo.cloudy import loadFG11UVB, loadHM12UVB, loadP18UVB, cloudyIon
 
 def plotUVB(uvbName='fg11'):
     """ Debug plots of the UVB(nu) as a function of redshift. """
@@ -35,6 +35,9 @@ def plotUVB(uvbName='fg11'):
     if uvbName == 'hm12':
         uvbs = loadHM12UVB(redshifts)
         uvbs_all = loadHM12UVB()
+    if uvbName == 'p18':
+        uvbs = loadP18UVB(redshifts)
+        uvbs_all = loadP18UVB()
 
     # (A) start plot: J_nu(nu) at a few specific redshifts
     fig = plt.figure(figsize=(26,10))

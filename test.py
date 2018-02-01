@@ -18,6 +18,103 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_millennium():
+    # create re-write of Millennium simulation files
+    basePath = '/u/dnelson/sims.millennium/Millennium1/output/'
+    snap = 63
+
+    objType = 'Subhalo' # Subhalo
+    objID = 123456
+
+    groupPath = basePath + 'groups_%03d/fof_subhalo_tab_%03d.hdf5' % (snap,snap)
+    snapPath = basePath + 'snapdir_%03d/snap_%03d.hdf5' % (snap,snap)
+
+    with h5py.File(groupPath,'r') as f:
+        snap_off = f['Offsets/%s_Snap' % objType][objID]
+        snap_len = f['%s/%sLen' % (objType,objType)][objID]
+        obj_pos = f['%s/%sPos' % (objType,objType)][objID,:]
+        obj_vel = f['%s/%sVel' % (objType,objType)][objID,:]
+
+    print('%s [%d] found offset = %d, length = %d' % (objType,objID,snap_off,snap_len))
+
+    with h5py.File(snapPath,'r') as f:
+        pos = f['PartType1/Coordinates'][snap_off:snap_off+snap_len,:]
+        vel = f['PartType1/Velocities'][snap_off:snap_off+snap_len,:]
+        ids = f['PartType1/ParticleIDs'][snap_off:snap_off+snap_len]
+
+    for i in range(3):
+        xyz = ['x','y','z'][i]
+        print('pos mean %s = %f' % (xyz,np.mean(pos[:,i], dtype='float64')))
+        print('vel mean %s = %f' % (xyz,vel[:,i].mean()))
+    print('obj pos = ', obj_pos)
+    print('obj vel = ', obj_vel)
+    print('ids first five:', ids[0:5])
+    print('ids last five: ', ids[-5:])
+
+def josh_paper1():
+    # OVI mass phase diagram
+    from plot.general import plotPhaseSpace2D
+    sP = simParams(res=11,run='zooms2_josh',variant='FP',hInd=2,redshift=2.25)
+
+    ptType = 'gas'
+    xQuant = 'hdens'
+    yQuant = 'temp'
+    weights = ['O VI mass'] #,'O VII mass','O VIII mass']
+    xMinMax = [-6.0,0.0]
+    yMinMax = [3.5,7.0]
+    contours = [-3.0, -2.0, -1.0]
+    massFracMinMax = [-4.0, -1.0] #[-10.0, 0.0]
+    hideBelow = True
+    smoothSigma = 1.5
+    haloID = 0 # None for fullbox
+
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
+                     massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                     contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+
+def josh_paper2():
+    # cooling time phase diagram
+    from plot.general import plotPhaseSpace2D
+    sP = simParams(res=11,run='zooms2_josh',variant='FP',hInd=2,redshift=2.25)
+
+    ptType = 'gas'
+    xQuant = 'hdens'
+    yQuant = 'temp'
+    weights = None
+    meancolors = ['cooltime']
+    xMinMax = [-6.0,0.0]
+    yMinMax = [3.5,7.0]
+    contours = [-2.0, -1.0, 0.0]
+    massFracMinMax = [-3.0, 1.0] # 1 Myr to 10 Gyr
+    hideBelow = False
+    smoothSigma = 1.5
+
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, 
+                     massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                     contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+
+def josh_paper3():
+    # TNG50 analog for comparison
+    print('Need to disable OVI cache for now...')
+    from plot.general import plotPhaseSpace2D
+    sP = simParams(res=2160,run='tng',redshift=2.25)
+    haloID = 100
+
+    ptType = 'gas'
+    xQuant = 'hdens'
+    yQuant = 'temp'
+    weights = ['O VI mass'] #,'O VII mass','O VIII mass']
+    xMinMax = [-6.0,0.0]
+    yMinMax = [3.5,7.0]
+    contours = [-3.0, -2.0, -1.0]
+    massFracMinMax = [-4.0, 0.0] #[-10.0, 0.0]
+    hideBelow = True
+    smoothSigma = 1.0
+
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
+                     massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                     contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+
 def barnes_check1():
     """ Test plots for Barnes paper. """
     from util.loadExtern import rossetti17planck

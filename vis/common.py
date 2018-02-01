@@ -62,7 +62,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
 
     else:
         # dark matter
-        if sP.isPartType(partType, 'dm'):
+        if sP.isPartType(partType, 'dm') or sP.isPartType(partType, 'dm_lowres'):
             if not snapHasField(sP, partType, 'SubfindHsml'):
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'
@@ -626,10 +626,10 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     # mass/weights
     from cosmo.stellarPop import sps
 
-    if partType in ['gas','stars']:
-        mass = snapshotSubset(sP, partType, 'mass', indRange=indRange).astype('float32')
-    elif partType == 'dm':
+    if partType in ['dm']:
         mass = sP.dmParticleMass
+    else:
+        mass = snapshotSubset(sP, partType, 'mass', indRange=indRange).astype('float32')
 
     # neutral hydrogen mass model (do column densities)
     if partField in ['HI','HI_segmented']:
@@ -712,6 +712,9 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
     if partField in velLOSFieldNames + velCompFieldNames:
         partFieldLoad = 'vel'
 
+    if partField in ['masspart','particle_mass']:
+        partFieldLoad = 'mass'
+
     # quantity and column density normalization
     normCol = False
 
@@ -772,6 +775,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, method
         grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
         subStr = ' '+' '.join(partField.split()[:-1]) if ' mass' in partField else ''
         config['label']  = 'Total %s%s Mass [log M$_{\\rm sun}$]' % (ptStr,subStr)
+        config['ctName'] = 'perula'
+
+    if partField in ['masspart','particle_mass']:
+        grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
+        config['label']  = '%s Particle Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'perula'
 
     # fractional total sum of sub-component relative to total (note: for now, grid is pure mass)
@@ -1140,6 +1148,16 @@ def gridBox(sP, method, partType, partField, nPixels, axes,
 
             # load: mass/weights, quantity, and render specifications required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
+
+            if 0:
+                print('WARNING: Selectively setting mass=0 based on some particle criterion!')
+                dens = snapshotSubset(sP, partType, 'numdens', indRange=indRange)
+                temp = snapshotSubset(sP, partType, 'temp', indRange=indRange)
+                w = np.where( (temp>5.5) & (dens>1e-3) )
+                mask = np.zeros( dens.size, dtype='int16' )
+                mask[w] = 1
+                w = np.where(mask == 0)
+                mass[w] = 0.0
 
             # rotation? handle for view dependent quantities (e.g. velLOS) (any 3-vector really...)
             if partField in velLOSFieldNames + velCompFieldNames:
