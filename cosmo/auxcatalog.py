@@ -2270,6 +2270,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_Mass_30pkpc_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=30.0),
+   'Subhalo_Mass_100pkpc_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=100.0),
    'Subhalo_Mass_2rstars_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad='2rhalfstars'),
    'Subhalo_Mass_HI' : \

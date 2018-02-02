@@ -757,6 +757,96 @@ def stellarMassFunctionMultiPanel(sPs, pdf, highMassEnd=False, centralsOnly=Fals
                             use30kpc=use30kpc, use30H=use30H, useP10=useP10, 
                             simRedshift=redshift, dataRedshift=redshift, fig_subplot=[fig,ind])
 
+def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
+    """ HI mass function (number density of HI masses) at redshift zero. """
+    acFields = ['Subhalo_Mass_100pkpc_HI','Subhalo_Mass_30pkpc_HI','Subhalo_Mass_HI']
+    lw = 3.0
+
+    # plot setup
+    if fig_subplot[0] is None:
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+    
+    ax.set_ylim([1e-6,4e-1])
+    ax.set_xlim([6.5,11.0])
+
+    ax.set_xlabel('Galaxy HI Mass [ log M$_{\\rm sun}$ ] [ < various ]')
+    ax.set_ylabel('HI Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ]')
+    ax.set_yscale('log')
+
+    # observational points (Jones, M.G.+ 2018)
+    data = [{'phi_star':0.0045, 'm_star':9.94, 'alpha':-1.25, 'label':'ALFALFA $\\alpha$.100'},
+            {'phi_star':0.0049, 'm_star':9.94, 'alpha':-1.29, 'label':'ALFALFA $\\alpha$.100S'},
+            {'phi_star':0.0043, 'm_star':9.92, 'alpha':-1.15, 'label':'ALFALFA $\\alpha$.100F'},
+            {'phi_star':0.0062, 'm_star':9.76, 'alpha':-1.22, 'label':'ALFALFA $\\alpha$.100N'}]
+    lines = []
+
+    for i, d in enumerate(data):
+        xx = np.linspace(6.5, 11.0, 100)
+        x_ratio = 10.0**xx / 10.0**d['m_star']
+        yy = np.log(10) * d['phi_star'] * x_ratio**(d['alpha']+1.0) * np.exp(-x_ratio)
+        l, = ax.plot(xx, yy, linestyle=linestyles[i], color='black', lw=lw, alpha=0.6 if i == 0 else 0.3)
+        lines.append(l)
+
+    legend1 = ax.legend(lines, [d['label'] for d in data],loc='upper right')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('HI MF: '+sP.simName+' (z=%.1f)' % simRedshift)
+        sP.setRedshift(simRedshift)
+
+        gc = groupCat(sP, fieldsSubhalos=['central_flag'])
+
+        # centrals only?
+        w = np.arange(gc.size)
+        if centralsOnly:
+            w = np.where(gc == 1)            
+
+        # for each of the three stellar mass definitions, calculate HIMF and plot
+        for i, acField in enumerate(acFields):
+            # load HI masses under this definition
+            ac = auxCat(sP, fields=[acField])[acField]
+            xx = sP.units.codeMassToLogMsun(ac[w])
+
+            # calculate mass function
+            normFac = sP.boxSizeCubicComovingMpc * binSize
+            xm, ym_i = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
+            ym = savgol_filter(ym_i,sKn,sKo)
+
+            label = sP.simName+' z=%.1f'%sP.redshift if i == 0 else ''
+            color = l.get_color() if i > 0 else None
+            l, = ax.plot(xm[3:], ym[3:], linestyles[i], color=color, lw=lw, label=label)
+
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = []
+    lExtra = []
+    for i, acField in enumerate(acFields):
+        sExtra.append( plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[i]) )
+        lExtra.append( acField )
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
 def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_subplot=[None,None]):
     """ Stellar mass-metallicity relation at z=0. """
     # config
@@ -1877,7 +1967,7 @@ def plots():
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -1887,8 +1977,8 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    sPs.append( simParams(res=512, run='tng', variant='0000') )
-    sPs.append( simParams(res=512, run='tng', variant='2302') )
+    #sPs.append( simParams(res=512, run='tng', variant='0000') )
+    #sPs.append( simParams(res=512, run='tng', variant='2302') )
     #sPs.append( simParams(res=512, run='tng', variant='0011') )
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
@@ -1897,13 +1987,7 @@ def plots():
     if 1:
         # testing
         pdf = PdfPages('fig_tests.pdf')
-        stellarMassHaloMass(sPs, pdf, ylog=False, use30kpc=True, simRedshift=0.0)
-        stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True, redshifts=[1,2,3,4])
-        sfrdVsRedshift(sPs, pdf, xlog=True)
-        stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=0.0)
-        #massMetallicityStars(sPs, pdf, simRedshift=0.0)
-        massMetallicityGas(sPs, pdf, simRedshift=1.0)
-        galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, addHalfLightRad=None)
+        HIMassFunction(sPs, pdf, simRedshift=0.0)
         pdf.close()
         return
 
@@ -1957,6 +2041,7 @@ def plots():
     stellarAges(sPs, pdf, centralsOnly=True, simRedshift=zZero)
     haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
     haloSynchrotronPower(sPs, pdf, simRedshift=zZero)
+    HIMassFunction(sPs, pdf, simRedshift=zZero)
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

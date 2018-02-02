@@ -759,14 +759,14 @@ def plots():
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'mstar_out_100kpc_frac_r200' # 'color_C_gr'
-
-    xQuant = 'mhalo_200_log' # mstar_30pkpc_log, mstar2_log
+    yQuant = 'M_BH_actual' # 'color_C_gr'
+    xQuant = 'mstar_30pkpc_log'
     cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
     pStyle = 'white'
 
     quants = quantList(wTr=True, wMasses=True)
+    quants = ['fgas2']
 
     for sP in sPs:
         for css in cenSatSelects:
