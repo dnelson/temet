@@ -815,6 +815,16 @@ def subboxSubhaloCat(sP, sbNum):
     snapTimes = snapNumToRedshift(sP, time=True, all=True)
     subboxTimes = snapNumToRedshift(sP_sub, time=True, all=True)
 
+    minEdgeIndices = []
+    for redshift in minEdgeDistRedshifts:
+        # pre-search for indices of each redshift range within which we record minimum edge distances
+        inds_local = np.where(1/subboxTimes-1 <= redshift)[0]
+        if len(inds_local) == 0:
+            assert redshift == 0.0 # i.e. no subbox saved exactly at z=0, use last one
+            assert 1/subboxTimes[-1]-1 < 0.01
+            inds_local = np.array([subboxTimes.size-1])
+        minEdgeIndices.append( inds_local )
+
     # locate the fullbox snapshot according to each subbox time for convenience, and vice versa (-1 indicates no match)
     r['SubboxScaleFac'] = subboxTimes
     r['SnapNumMapApprox'] = np.zeros( subboxTimes.size, dtype='float32' )
@@ -872,11 +882,6 @@ def subboxSubhaloCat(sP, sbNum):
 
     r['minEdgeDistRedshifts'] = np.array(minEdgeDistRedshifts, dtype='float32')
     r['SubhaloMinEdgeDist'] = np.zeros( (ids[w].size, r['minEdgeDistRedshifts'].size), dtype='float32' )
-
-    minEdgeIndices = []
-    for redshift in r['minEdgeDistRedshifts']:
-        # pre-search for indices of each redshift range within which we record minimum edge distances
-        minEdgeIndices.append( np.where(1/subboxTimes-1 <= redshift)[0] )
 
     print('\n[%d] subhalos intersect subbox, interpolating positions to subbox times...' % r['SubhaloIDs'].size)
     for i, subhaloID in enumerate(r['SubhaloIDs']):
