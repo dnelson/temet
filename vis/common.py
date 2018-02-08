@@ -62,7 +62,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
 
     else:
         # dark matter
-        if sP.isPartType(partType, 'dm') or sP.isPartType(partType, 'dm_lowres'):
+        if sP.isPartType(partType, 'dm'):
             if not snapHasField(sP, partType, 'SubfindHsml'):
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'

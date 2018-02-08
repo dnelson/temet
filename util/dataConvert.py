@@ -382,16 +382,16 @@ def makeSnapHeadersForLHaloTree():
 def makeSnapSubsetsForMergerTrees():
     """ Copy snapshot chunks reducing to needed fields for tree calculation. """
     nSnaps  = 100
-    copyFields = {'PartType0':['Masses','ParticleIDs'], #for SubLink_gal need 'StarFormationRate'
+    copyFields = {'PartType0':['Masses','ParticleIDs','StarFormationRate'], #for SubLink_gal need 'StarFormationRate'
                   'PartType1':['ParticleIDs'],
                   'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
 
-    copyFields = {'PartType1':['Coordinates','SubfindHsml']}
+    #copyFields = {'PartType1':['Coordinates','SubfindHsml']}
     #copyFields = {'PartType4':['Coordinates','ParticleIDs']}
     #copyFields = {'PartType0':['Masses','Coordinates','Density','GFM_Metals','GFM_Metallicity']}
 
-    pathFrom = '/home/extdylan/sims.TNG/L205n2500TNG/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/data/out/L205n2500TNG/output/snapdir_%03d/'
+    pathFrom = '/home/extdylan/sims.TNG/L35n1080TNG_DM/output/snapdir_%03d/'
+    pathTo   = '/home/extdylan/data/out/L35n1080TNG_DM/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -402,13 +402,16 @@ def makeSnapSubsetsForMergerTrees():
     if 'L35n2160' in pathFrom:
         nChunks = 680
         if '_DM' in pathFrom: nChunks = 128
+    if 'L35n1080' in pathFrom:
+        nChunks = 128
+        if '_DM' in pathFrom: nChunks = 85
 
     # verify number of chunks
     files = glob.glob(fileFrom % (0,0,'*'))
     assert len(files) == nChunks
 
     # loop over snapshots
-    for i in range(99,100):
+    for i in range(82,nSnaps):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 
