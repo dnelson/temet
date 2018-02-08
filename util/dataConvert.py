@@ -1028,6 +1028,10 @@ def convertMillenniumSubhaloCatalog(snap=63):
     s_globalSortInv = np.zeros( s_globalSort.size, dtype='int32' )
     s_globalSortInv[s_globalSort] = np.arange(s_globalSort.size)
 
+    w_past = np.where(FirstSubOfHalo >= s_globalSort.size)
+    assert np.sum(NSubsPerHalo[w_past]) == 0
+    FirstSubOfHalo[w_past] = -1
+
     FirstSubOfHalo = s_globalSortInv[FirstSubOfHalo]
 
     SubLen_Orig = np.array(SubLen)
@@ -1051,7 +1055,7 @@ def convertMillenniumSubhaloCatalog(snap=63):
     w = np.where(NSubsPerHalo == 0)
     a, b = match3(w[0],SubParentHalo)
     assert a is None and b is None
-    FirstSubOfHalo[w] = FirstSubOfHalo[w[0]+1] # for clarity, duplicate the next FirstSubOfHalo as originally was the case
+    FirstSubOfHalo[w] = -1 # convention
 
     # GroupOffset/SubhaloOffset are local to chunk files, just recreate now with global offsets
     subgroupCount = 0
