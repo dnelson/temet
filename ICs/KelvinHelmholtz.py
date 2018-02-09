@@ -4,7 +4,7 @@ ics/KelvinHelmholtz.py
 """
 import numpy as np
 import h5py
-from ICs.util import write_ic_file
+from ICs.utilities import write_ic_file
 
 def create_ics(numPartPerDim=64, filename='ics.hdf5'):
     """ Create idealized ICs for KH instability in 2D. """

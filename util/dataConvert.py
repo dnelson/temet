@@ -1389,6 +1389,97 @@ def convertMillenniumSnapshot(snap=63):
         fOut.close()
         print('All done.')
 
+def convertGadgetICsToHDF5():
+    """ Convert a Gadget-1 binary format ICs (dm-only, 8 byte IDs, 4 byte pos/vel) into HDF5 format (keep original ordering). """
+    loadPath = '/u/dnelson/sims.TNG/InitialConditions/L75n455/output/ICs.%s' 
+    savePath = '/u/dnelson/sims.TNG/L75n455TNG/output/snap_ics.hdf5'
+
+    nChunks = len( glob.glob(loadPath % '*') )
+    print('Found [%d] chunks, loading...' % nChunks)
+
+    # reader header of first snapshot chunk
+    with open(loadPath % 0,'rb') as f:
+        header = f.read(260)
+
+    npart      = struct.unpack('iiiiii', header[4:4+24])[1]
+    mass       = struct.unpack('dddddd', header[28:28+48])
+    scalefac   = struct.unpack('d', header[76:76+8])[0]
+    redshift   = struct.unpack('d', header[84:84+8])[0]
+    #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[1]
+    nFiles     = struct.unpack('i', header[128:128+4])[0]
+    BoxSize    = struct.unpack('d', header[132:132+8])[0]
+    Omega0     = struct.unpack('d', header[140:140+8])[0]
+    OmegaL     = struct.unpack('d', header[148:148+8])[0]
+    Hubble     = struct.unpack('d', header[156:156+8])[0]
+
+    assert nFiles == nChunks
+
+    # nPartTot is wrong, has no highword, so read and accumulate manually
+    nPartTot = 0
+    for i in range(nChunks):
+        with open(loadPath % i,'rb') as f:
+            header = f.read(28)
+            npart  = struct.unpack('iiiiii', header[4:4+24])[1]
+        nPartTot += npart
+    print('Found new nPartTot [%d]' % nPartTot)
+
+    # load all snapshot IDs
+    offset = 0
+    particle_pos = np.zeros( (nPartTot,3), dtype='float32' )
+    particle_vel = np.zeros( (nPartTot,3), dtype='float32' )
+    particle_ids = np.zeros( nPartTot, dtype='int64' )
+
+    for i in range(nChunks):
+        # full read
+        with open(loadPath % i,'rb') as f:
+            data = f.read()
+
+        # local particle counts
+        npart_local = struct.unpack('iiiiii', data[4:4+24])[1]
+
+        # cast and save
+        start_pos = 268 + 0*npart_local
+        start_vel = 276 + 12*npart_local
+        start_ids = 284 + 24*npart_local
+
+        pos = struct.unpack('f' * npart_local*3, data[start_pos:start_pos + npart_local*12])
+        vel = struct.unpack('f' * npart_local*3, data[start_vel:start_vel + npart_local*12])
+        ids = struct.unpack('q' * npart_local*1, data[start_ids:start_ids + npart_local*8])
+
+        particle_pos[offset : offset+npart_local,:] = np.reshape( pos, (npart_local,3) )
+        particle_vel[offset : offset+npart_local,:] = np.reshape( vel, (npart_local,3) )
+        particle_ids[offset : offset+npart_local] = ids
+
+        print('[%3d] Snap chunk has [%8d] particles, from [%10d] to [%10d].' % (i, npart_local, offset, offset+npart_local))
+        offset += npart_local
+
+    # open file for writing
+    with h5py.File(savePath, 'w') as fOut:
+        # header
+        header = fOut.create_group('Header')
+        numPartTot = np.zeros( 6, dtype='int64' )
+        numPartTot[1] = nPartTot
+        header.attrs['BoxSize'] = BoxSize
+        header.attrs['HubbleParam'] = Hubble
+        header.attrs['MassTable'] = np.array(mass, dtype='float64')
+        header.attrs['NumFilesPerSnapshot'] = 1
+        header.attrs['NumPart_ThisFile'] = numPartTot
+        header.attrs['NumPart_Total'] = numPartTot
+        header.attrs['NumPart_Total_HighWord'] = np.zeros(6, dtype='int64')
+        header.attrs['Omega0'] = Omega0
+        header.attrs['OmegaLambda'] = OmegaL
+        header.attrs['Redshift'] = redshift
+        header.attrs['Time'] = scalefac
+
+        pt1 = fOut.create_group('PartType1')
+
+        # particle data
+        pt1['Coordinates'] = particle_pos
+        pt1['Velocities'] = particle_vel
+        pt1['ParticleIDs'] = particle_ids
+
+    print('All done.')
+
 def splitSingleHDF5IntoChunks():
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
     from util.helper import pSplitRange
