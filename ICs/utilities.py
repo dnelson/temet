@@ -1,5 +1,5 @@
 """
-ics/util.py
+ics/utilities.py
   Idealized initial conditions: utility (common) functions.
 """
 import numpy as np
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import subprocess
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-def write_ic_file(fileName, partTypes, boxSize, massTable=None):
+def write_ic_file(fileName, partTypes, boxSize, massTable=None, headerExtra=None):
     """ Helper to write a HDF5 IC file. partTypes is a dictionary with keys of the form 
     PartTypeX, each of which is its own dictionary of particle fields and ndarrays. 
     boxSize is a scalar float, and massTable a 6-element float array, if specified. """
@@ -37,6 +37,10 @@ def write_ic_file(fileName, partTypes, boxSize, massTable=None):
         h.attrs['NumPart_ThisFile'] = NumPart
         h.attrs['NumPart_Total'] = NumPart
         h.attrs['NumPart_Total_HighWord'] = np.zeros( nPartTypes, dtype='int32' )
+
+        if headerExtra is not None:
+            for key in headerExtra.keys():
+                h.attrs[key] = headerExtra[key]
 
         for k in ['Time','Redshift','Omega0','OmegaLambda','HubbleParam']:
             h.attrs[k] = 0.0

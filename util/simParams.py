@@ -866,7 +866,12 @@ class simParams:
         """ Update sP based on new snapshot. """
         self.snap = snap
         if self.snap is not None:
-            self.redshift = snapNumToRedshift(sP=self)
+            if self.snap == 'ics':
+                self.redshift = 127.0
+                assert self.run == 'tng' # otherwise generalize
+            else:
+                self.redshift = snapNumToRedshift(sP=self)
+
             assert self.redshift >= 0.0
             if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
