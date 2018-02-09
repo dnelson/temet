@@ -847,6 +847,127 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         pdf.savefig()
         plt.close(fig)
 
+def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
+    """ HI mass fraction (M_HI/M*) vs M* at redshift zero. """
+    acFields = ['Subhalo_Mass_100pkpc_HI','Subhalo_Mass_30pkpc_HI','Subhalo_Mass_HI']
+    lw = 3.0
+
+    # plot setup
+    if fig_subplot[0] is None:
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+    
+    ax.set_ylim([-3.0,1.0])
+    ax.set_xlim([8.5,12.0])
+
+    ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 30pkpc ]')
+    ax.set_ylabel('M$_{\\rm HI}$ / M$_\star$ [ log ]')
+
+    # observational points (xCOLDGASS)
+    c18 = catinella2018()
+
+    symbols = ['D','o']
+    color = '#222222'
+    l1,_,_ = ax.errorbar(c18['mStar'], c18['HI_frac_mean'], yerr=c18['HI_frac_meanErr'], 
+                         color=color, ecolor=color, alpha=0.9, capsize=0.0, fmt=symbols[0])
+    l2, = ax.plot(c18['mStar'], c18['HI_frac_median'], symbols[1], color=color)
+
+    legend1 = ax.legend([l1,l2], [c18['label']+' mean', c18['label']+' median'], loc='upper right')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('HI FRAC: '+sP.simName+' (z=%.1f)' % simRedshift)
+        sP.setRedshift(simRedshift)
+
+        gc = groupCat(sP, fieldsSubhalos=['central_flag'])
+
+        # centrals only?
+        w = np.arange(gc.size)
+        if centralsOnly:
+            w = np.where(gc == 1)            
+
+        # load galaxy stellar masses, using the given definition
+        massField = 'Subhalo_Mass_30pkpc_Stars'
+        ac = auxCat(sP, fields=[massField])[massField]
+        xx = sP.units.codeMassToLogMsun(ac[w])
+
+        # add obs. scatter
+        if 1:
+            stellarMassErrorDex = 0.1
+            np.random.seed(424242)
+            mass_errors_dex = np.random.normal(loc=0.0, scale=stellarMassErrorDex, size=xx.size)
+            xx += mass_errors_dex
+
+        # for each of the HI mass definitions, calculate HI mass fractions and plot
+        for i, acField in enumerate(acFields):
+            # load HI masses under this definition
+            ac = auxCat(sP, fields=[acField])[acField]
+            m_HI = sP.units.codeMassToLogMsun(ac[w])
+
+            # calculate ratio, apply detection threshold treatment of upper limits of xGASS
+            yy = 10.0**m_HI / 10.0**xx
+            
+            if 1:
+                # note: neither of these actually modify the running_median() result
+                # above M* = 10^9.7, detection limit equal to MHI/M*=0.02
+                w_mstar_above = np.where(xx > 9.7)
+                w_undetected = np.where( yy[w_mstar_above] < 0.02 )
+                yy[w_mstar_above][w_undetected] = 0.02 
+                #print('%d of %d above M* = 10^9.7 set to 2%% limit' % (len(w_undetected[0]),len(w_mstar_above[0])))
+
+                 # below M* = 10^9.7, detection limit equal to MHI=10^8 msun
+                w_mstar_below = np.where(xx <= 9.7)
+                w_undetected = np.where( m_HI[w_mstar_below] < 8.0 )
+                yy[w_mstar_below][w_undetected] = 10.0**8.0 / 10.0**xx[w_mstar_below][w_undetected]
+                #print('%d of %d below M* = 10^9.7 set to 8.0 limit' % (len(w_undetected[0]),len(w_mstar_below[0])))
+
+            yy = np.log10(yy) # obs. points are average/median of log of gas fractions
+
+            # calculate median            
+            xm, ym_i, sm_i, pm_i = running_median(xx,yy,binSize=binSize,skipZeros=True,percs=[10,25,75,90],mean=True)
+
+            if xm.size > sKn:
+                ym = savgol_filter(ym_i,sKn,sKo)
+                sm = savgol_filter(sm_i,sKn,sKo)
+                pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+
+            label = sP.simName+' z=%.1f'%sP.redshift if i == 0 else ''
+            color = l.get_color() if i > 0 else None
+            l, = ax.plot(xm, ym, linestyles[i], color=color, lw=lw, label=label)
+
+            if i == 0:
+                ax.fill_between(xm, pm[0,:], pm[-1,:], color=l.get_color(), interpolate=True, alpha=0.25)
+
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = []
+    lExtra = []
+    for i, acField in enumerate(acFields):
+        sExtra.append( plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[i]) )
+        lExtra.append( acField )
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
 def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_subplot=[None,None]):
     """ Stellar mass-metallicity relation at z=0. """
     # config
@@ -1959,15 +2080,15 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -1987,7 +2108,7 @@ def plots():
     if 1:
         # testing
         pdf = PdfPages('fig_tests.pdf')
-        HIMassFunction(sPs, pdf, simRedshift=0.0)
+        HIMassFraction(sPs, pdf, simRedshift=0.0)
         pdf.close()
         return
 
@@ -2042,6 +2163,7 @@ def plots():
     haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=zZero)
     haloSynchrotronPower(sPs, pdf, simRedshift=zZero)
     HIMassFunction(sPs, pdf, simRedshift=zZero)
+    HIMassFraction(sPs, pdf, simRedshift=zZero)
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

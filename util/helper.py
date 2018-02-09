@@ -137,7 +137,7 @@ def tail(fileName, nLines):
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10):
+def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10, mean=False):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     minVal = np.nanmin(X)
     if skipZeros:
@@ -165,7 +165,10 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
         if len(w[0]) >= minNumPerBin or (i == len(bins)-1 and len(w[0]) >= minNumPerBin/2):
 
             binLeft = binMax
-            running_median.append( np.nanmedian(Y[w]) )
+            if mean:
+                running_median.append( np.nanmean(Y[w]) )
+            else:
+                running_median.append( np.nanmedian(Y[w]) )
             running_std.append( np.nanstd(Y[w]) )
             bin_centers.append( np.nanmedian(X[w]) )
 

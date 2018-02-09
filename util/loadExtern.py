@@ -1484,6 +1484,23 @@ def cassano13():
 
     return r
 
+def catinella2018():
+    """ Load observational x-ray data from Catinella+ (2018) xCOLDGASS survey. Table 1. """
+    xx = [9.14, 9.44, 9.74, 10.07, 10.34, 10.65, 10.95, 11.20]
+    N = [113, 92, 96, 214, 191, 189, 196, 86] # number of galaxies per bin
+    yy1 = [-0.242, -0.459, -0.748, -0.869, -1.175, -1.231, -1.475, -1.589] # weighted average
+    yy1_err = [0.053, 0.067, 0.069, 0.042, 0.037, 0.036, 0.033, 0.044]
+    yy2 = [-0.092, -0.320, -0.656, -0.854, -1.278, -1.223, -1.707, -1.785] # weighted median
+
+    r = {'mStar'  : xx,
+         'binN'   : N,
+         'HI_frac_median'  : yy2,
+         'HI_frac_mean'    : yy1,
+         'HI_frac_meanErr' : yy1_err,
+         'label' : 'Catinella+ (2018) xCOLDGASS'}
+
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
