@@ -6,6 +6,7 @@ from . import cosmoMisc
 from . import color
 from . import general
 from . import globalComp
+from . import outflows
 from . import oxygen
 from . import quantities
 from . import sizes

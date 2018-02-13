@@ -20,17 +20,23 @@ from cosmo.util import periodicDists
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
-def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, ylog=True, sfreq0=False):
+def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, 
+      ylog=True, ylim=None, sfreq0=False, pdf=None):
     """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
     both None), or of a single halo/subhalo, where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
-    If ptWeight is None, uniform weighting, otherwise weight by this quantity. """
+    If ptWeight is None, uniform weighting, otherwise weight by this quantity.
+    If sfreq0 is True, include only non-starforming cells. 
+    If ylim is None, then hard-coded typical limits for PDFs. If 'auto', then autoscale. Otherwise, 2-tuple to use as limits. """
 
     # config
     if ylog:
-        ylim = [-3.0, 1.0]
         ylabel = 'PDF [ log ]'
+        if ylim is None:
+            ylim = [-3.0, 1.0]
+        else:
+            if ylim == 'auto': ylim = None
     else:
-        ylim = [0.0,1.0]
+        ylim = [0.0, 1.0]
         ylabel = 'PDF'
 
     nBins = 400
@@ -56,7 +62,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    if ylim is not None: ax.set_ylim(ylim)
 
     # loop over simulations
     for i, sP in enumerate(sPs):
@@ -75,7 +81,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
         vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
         if xlog: vals = np.log10(vals)
 
-        print(sP.simName,'min: ', np.min(10.0**vals))
+        print(sP.simName,', min: ', np.nanmin(vals), ' max: ', np.nanmax(vals))
 
         # weights
         if ptWeight is None:
@@ -91,8 +97,8 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             weights = weights[w_sfr]
 
         # special behavior (not yet generalized)
-        coldDenseCGM = True
-        radWithin10pkpc = True
+        coldDenseCGM = False
+        radWithin10pkpc = False
 
         if coldDenseCGM:
             print('Restricting to cold-dense phase of the CGM.')
@@ -151,7 +157,10 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     elif subhaloIDs is not None:
         hStr = 'subhID-%d' % subhaloIDs[0] if len(subhaloIDs) == 1 else 'nSH-%d' % len(subhaloIDs)
 
-    fig.savefig('histo1D_%s_%s_%s_wt-%s_%s.pdf' % (sPstr,ptType,ptProperty,ptWeight,hStr))
+    if pdf is not None:
+        pdf.savefig(facecolor=fig.get_facecolor())
+    else:
+        fig.savefig('histo1D_%s_%s_%s_wt-%s_%s.pdf' % (sPstr,ptType,ptProperty,ptWeight,hStr))
     plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
