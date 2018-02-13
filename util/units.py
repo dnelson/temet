@@ -776,7 +776,7 @@ class units(object):
         return age
 
     def codeEnergyToErg(self, energy, log=False):
-        """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. """
+        """ Convert energy from code units (unitMass*unitLength^2/unitTime^2) to [erg]. (for BH_CumEgy* ). """
         energy_cgs = energy.astype('float32') * self.UnitEnergy_in_cgs / self._sP.HubbleParam
         
         if log:
@@ -784,7 +784,7 @@ class units(object):
         return energy_cgs
 
     def codeEnergyRateToErgPerSec(self, energy_rate, log=False):
-        """ Convert energy/time from code units (unitEnergy/unitTime) to [erg/s]. """
+        """ Convert energy/time from code units (unitEnergy/unitTime) to [erg/s]. (for Gas EnergyDissipation). """
         energy_rate_cgs = energy_rate.astype('float64') * (1/self._sP.scalefac) # physical
         energy_rate_cgs *= (self.UnitEnergy_in_cgs / self.UnitTime_in_s) # need float64 to avoid overflow
 

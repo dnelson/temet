@@ -15,7 +15,7 @@ from scipy.signal import savgol_filter
 from cosmo.util import snapNumToRedshift, correctPeriodicPosBoxWrap
 from util.helper import running_sigmawindow, iterable
 
-treeName_default = "SubLink_gal"
+treeName_default = "SubLink"
 
 def loadMPB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False):
     """ Load fields of main-progenitor-branch (MPB) of subhalo id from the given tree. """
