@@ -125,8 +125,9 @@ class simParams:
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
+            res_L680 = [1024, 2048, 4096, 8192]
 
-            self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205
+            self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
             self.groupOrdered = True
 
             # note: grav softenings [ckpc/h] are comoving until z=1,: fixed at z=1 value after
@@ -134,20 +135,24 @@ class simParams:
             if res in res_L35:  self.gravSoft = 3.12 / (res/270)
             if res in res_L75:  self.gravSoft = 4.0 / (res/455)
             if res in res_L205: self.gravSoft = 8.0 / (res/625)
+            if res in res_L680: self.gravSoft = 16.0 / (res/1024)
 
             if res in res_L25:  self.targetGasMass = 1.57032e-4 * (8 ** np.log2(512/res))
             if res in res_L35:  self.targetGasMass = 5.73879e-6 * (8 ** np.log2(2160/res))
             if res in res_L75:  self.targetGasMass = 9.43950e-5 * (8 ** np.log2(1820/res))
             if res in res_L205: self.targetGasMass = 7.43736e-4 * (8 ** np.log2(2500/res))
+            if res in res_L680: self.targetGasMass = 0.0 # todo
 
             if res in res_L25:  self.boxSize = 25000.0
             if res in res_L35:  self.boxSize = 35000.0
             if res in res_L75:  self.boxSize = 75000.0
             if res in res_L205: self.boxSize = 205000.0
+            if res in res_L680: self.boxSize = 680000.0
 
             if res in res_L35:  boxSizeName = 50
             if res in res_L75:  boxSizeName = 100
             if res in res_L205: boxSizeName = 300
+            if res in res_L680: boxSizeName = 1
 
             # common: Planck2015 cosmology
             self.omega_m     = 0.3089
@@ -165,6 +170,9 @@ class simParams:
             if res in res_L205:
                 self.subboxCen  = [[44000,49000,148000],[20000,175000,15000],[169000,97900,138000]]
                 self.subboxSize = [15000, 15000, 10000]
+            if res in res_L680:
+                self.subboxCen  = []
+                self.subboxSize = []
 
             # tracers
             if res in res_L75:
@@ -173,7 +181,7 @@ class simParams:
             if res in res_L35+res_L205:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
                 self.trMCPerCell = 1
-            if res in res_L25:
+            if res in res_L25+res_L680:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
                 self.trMCPerCell = 0 # no tracers
 
@@ -270,11 +278,12 @@ class simParams:
             self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if res in res_L35+res_L75+res_L205:
+            if res in res_L35+res_L75+res_L205+res_L680:
                 # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
                 if res in res_L205: resInd = len(res_L205) - res_L205.index(res)
+                #if res in res_L680: resInd = len(res_L680) - res_L680.index(res)
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
 

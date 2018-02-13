@@ -276,12 +276,12 @@ def generate():
     # config
     saveFilename = 'out.hdf5'
     sP = simParams(res=455,run='tng',redshift=0.0)
-    fofID = 10
-    MaxLevel = 7 # 9=512^3
+    fofID = 50
+    MaxLevel = 9 # e.g. 9=512^3
     MinLevel = 4
-    ZoomFactor = 3
+    ZoomFactor = 2
     Angle = 0.1
-    EnlargeHighResFactor = 2.5
+    EnlargeHighResFactor = 2.0
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
 
@@ -289,12 +289,15 @@ def generate():
     start_time = time.time()
     halo = groupCatSingle(sP, haloID=fofID)
     haloLen = halo['GroupLenType'][sP.ptNum('dm')]
-    print('Halo [%d] length: [%d], loading IDs and crossmatching for positions...' % (fofID,haloLen))
+    haloPos = halo['GroupPos']
+    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], loading IDs and crossmatching for positions...' % \
+        (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen))
 
     dmIDs_halo = snapshotSubset(sP, 'dm', 'ids', haloID=fofID)
     assert haloLen == dmIDs_halo.size
 
     # load parent box initial conditions
+    sP_snap = sP.snap
     sP.setSnap('ics')
     dmIDs_ics = snapshotSubset(sP, 'dm', 'ids')
 
@@ -347,6 +350,10 @@ def generate():
     assert pIndex == NumPartTot
     print(' done, took [%g] sec.' % (time.time()-start_time))
 
+    w = np.where(Grids[GridsOffset[MaxLevel]:] == 1)
+    vol_frac = float(len(w[0])) / Grids[GridsOffset[MaxLevel]:].size * 100
+    print(' Volume fraction of box occupied by high-res region = %.2f%%' % vol_frac)
+
     # save
     for i in range(6):
         print(' partType [%d] has [%10d] particles.' % (i,PartCount[i]))
@@ -384,5 +391,7 @@ def generate():
             # add masses for variable mass particle type
             partTypes[gName]['Masses'] = P_Mass[w]
 
-    write_ic_file(saveFilename, partTypes, sP.boxSize, massTable=massTable, headerExtra={'GroupCM':cmInitial})
+    headerExtra = {'GroupCM':cmInitial, 'MinLevel':MinLevel, 'MaxLevel':MaxLevel, 'ZoomFactor':ZoomFactor, 
+                   'Boxsize':sP.boxSize, 'Sim_name':sP.simName, 'Sim_snap':sP_snap, 'Sim_fofID':fofID}
+    write_ic_file(saveFilename, partTypes, sP.boxSize, massTable=massTable, headerExtra=headerExtra)
     print(' Done.')
