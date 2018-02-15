@@ -201,3 +201,202 @@ def plotCpuTimeEstimates():
     fig.tight_layout()
     fig.savefig(fName1)
     plt.close(fig)
+
+def periodic_slurm_status():
+    """ Collect current statistics from the SLURM scheduler, save some data, make some plots. """
+    import pyslurm
+    import subprocess
+    import os
+    import pwd
+
+    def _expandNodeList(nodeListStr):
+        nodesRet = []
+        nodeGroups = nodeListStr.split(',')
+
+        for nodeGroup in nodeGroups:
+            base, num_range = nodeGroup.split('[')
+            num_range = num_range[:-1].split('-')
+            for num in range(int(num_range[0]), int(num_range[1])+1):
+                if len(num_range[0]) == 2: nodesRet.append( '%s%02d' % (base,num) )
+                if len(num_range[0]) == 3: nodesRet.append( '%s%03d' % (base,num) )
+
+        return nodesRet
+
+    # config
+    partName = 'p.24h'
+    coresPerNode = 40
+    cpusPerNode = 2
+
+    numRacks = 3
+    rackPrefix = 'opasw'
+
+    allocStates = ['ALLOCATED','MIXED']
+    idleStates = ['IDLE']
+    downStates = ['DOWN','DRAINED','ERROR','FAIL','FAILING','POWER_DOWN','UNKNOWN']
+
+    # get data
+    jobs  = pyslurm.job().get()
+    topo  = pyslurm.topology().get()
+    stats = pyslurm.statistics().get()
+    nodes = pyslurm.node().get()
+    parts = pyslurm.partition().get()
+
+    curTime = datetime.fromtimestamp(stats['req_time'])
+    print('Now [%s].' % curTime.strftime('%A (%d %b) %H:%M'))
+
+    # jobs: split, and attach running job info to nodes
+    jobs_running = [jobs[jid] for jid in jobs if jobs[jid]['job_state'] == 'RUNNING']
+    jobs_pending = [jobs[jid] for jid in jobs if jobs[jid]['job_state'] == 'PENDING']
+
+    for job in jobs_running:
+        for nodeName, numCores in job['cpus_allocated'].iteritems():
+            if 'cur_job_owner' in nodes[nodeName]:
+                print('WARNING: Node [%s] already has a job from [%s].' % (nodeName,nodes[nodeName]['cur_job_owner']))
+
+            #nodes[nodeName]['cur_job_user'] = subprocess.check_output('id -nu %d'%job['user_id'], shell=True).strip()
+            nodes[nodeName]['cur_job_owner'] = pwd.getpwuid(job['user_id'])[4].split(',')[0]
+            nodes[nodeName]['cur_job_name'] = job['name']
+            nodes[nodeName]['cur_job_runtime'] = job['run_time_str']
+
+    # restrict nodes to those in main partition (skip login nodes, etc)
+    nodesInPart = _expandNodeList( parts[partName]['nodes'] )
+
+    for _, node in nodes.iteritems():
+        if node['cpu_load'] == 4294967294: node['cpu_load'] = 0 # fix uint32 overflow
+
+    nodes_main = [nodes[name] for name in nodes if name in nodesInPart]
+    nodes_misc = [nodes[name] for name in nodes if name not in nodesInPart]
+
+    # nodes: gather statistics
+    nodes_idle = []
+    nodes_alloc = []
+    nodes_down = []
+
+    for node in nodes_main:
+        # idle?
+        for state in idleStates:
+            if state in node['state']:
+                nodes_idle.append(node)
+                continue
+
+        # down for any reason?
+        for state in downStates:
+            if state in node['state']:
+                nodes_down.append(node)
+                continue
+
+        # in use?
+        for state in allocStates:
+            if state in node['state']:
+                nodes_alloc.append(node)
+                continue
+
+    # nodes: print statistics
+    print('Main nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
+        (len(nodes_main), len(nodes_idle), len(nodes_alloc), len(nodes_down)))
+    print('Misc nodes: [%d] total.' % len(nodes_misc))
+
+    if parts[partName]['total_nodes'] != len(nodes_main):
+        print('WARNING: Node count mismatch.')
+    if len(nodes_main) != len(nodes_idle) + len(nodes_alloc) + len(nodes_down):
+        print('WARNING: Nodes not all accounted for.')
+
+    nCores = parts[partName]['total_nodes'] * coresPerNode
+    nCores_alloc = np.sum([j['num_cpus'] for j in jobs_running]) / 2
+    nCores_idle = nCores - nCores_alloc
+
+    print('Cores: [%d] total, of which [%d] are allocated, [%d] are idle or unavailable.' % (nCores,nCores_alloc,nCores_idle))
+
+    if nCores != nCores_alloc + nCores_idle:
+        print('WARNING: Cores not all accounted for.')
+
+    # cluster: statistics
+    cluster_load = float(nCores_alloc) / nCores * 100
+
+    cpu_load_allocnodes_mean = np.mean( [float(node['cpu_load'])/(node['cpus']/2) for node in nodes_alloc] )
+    cpu_load_allnodes_mean = np.mean( [float(node['cpu_load'])/(node['cpus']/2) for node in nodes_main] )
+
+    print('Cluster: [%.1f%%] global load, with mean per-node CPU loads: [%.1f%% %.1f%%].' % \
+        (cluster_load,cpu_load_allocnodes_mean,cpu_load_allnodes_mean))
+
+    # start node figure
+    fig = plt.figure(figsize=(16,14))
+
+    for i in range(numRacks):
+        rack = topo[rackPrefix + '%d' % (i+1)]
+        rackNodes = _expandNodeList(rack['nodes'])
+        print(rack['name'], rack['level'], rack['nodes'], len(rackNodes))
+
+        ax = fig.add_subplot(1,3,i+1)
+        
+        ax.set_xlim([0,1])
+        ax.set_ylim([-1,len(rackNodes)])
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        # draw representation of each node
+        for j, name in enumerate(rackNodes):
+            # circle: color by status
+            if name in [n['name'] for n in nodes_down]: color = 'red'
+            if name in [n['name'] for n in nodes_alloc]: color = 'green'
+            if name in [n['name'] for n in nodes_idle]: color = 'orange'
+            ax.plot(0.16, j, 'o', color=color, markersize=10.0)
+            textOpts = {'fontsize':10.0, 'horizontalalignment':'left', 'verticalalignment':'center'}
+
+            pad = 0.15
+            xmin = 0.20
+            xmax = 0.64
+            padx = 0.002
+            dx = (xmax-xmin) / (coresPerNode/cpusPerNode)
+
+            # entire node
+            #ax.fill_between( [xmin,xmax], [j-0.5+pad,j-0.5+pad], [j+0.5-pad, j+0.5-pad], facecolor=color, alpha=0.2)
+
+            # individual cores
+            for k in range(cpusPerNode):
+                if k == 0:
+                    y0 = j - 0.5 + pad
+                    y1 = j - pad/2
+                if k == 1:
+                    y0 = j + pad/2
+                    y1 = j + 0.5 - pad
+
+                for m in range(coresPerNode/cpusPerNode):
+                    ax.fill_between( [xmin+m*dx+padx,xmin+(m+1)*dx-padx], [y0,y0], [y1,y1], 
+                        facecolor=color, alpha=0.3)
+
+            # load
+            load = float(nodes[name]['cpu_load']) / (nodes[name]['cpus']/2)
+            ax.text(xmax+padx*10, j, '%.1f%%' % load, color='#333333', **textOpts)
+
+            # node name
+            ax.text(0.02, j, name, color='#222222', **textOpts)
+
+            if 'cur_job_owner' in nodes[name]:
+                real_name = nodes[name]['cur_job_owner']
+                real_name = real_name[:16]+'...' if len(real_name) > 16 else real_name # truncate
+                ax.text(xmax+0.1+padx*10, j, real_name, color='#333333', **textOpts)
+
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.88)
+
+    # text
+    textOpts = {'fontsize':28.0, 'horizontalalignment':'center', 'verticalalignment':'center'}
+    timeStr = 'FREYA Status. Last updated %s.' % curTime.strftime('%A (%d %b) %H:%M')
+    nodesStr = 'nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
+        (len(nodes_main), len(nodes_idle), len(nodes_alloc), len(nodes_down))
+    coresStr = 'cores: [%d] total, of which [%d] are allocated, [%d] are idle or unavailable.' % (nCores,nCores_alloc,nCores_idle)
+    loadStr = 'cluster: [%.1f%%] global load, with mean per-node CPU load: [%.1f%%].' % \
+        (cluster_load,cpu_load_allocnodes_mean)
+
+    ax.annotate(timeStr, [0.5, 0.98], xycoords='figure fraction', **textOpts)
+    textOpts['fontsize'] = 20.0
+    ax.annotate(nodesStr, [0.5, 0.95], xycoords='figure fraction', **textOpts)
+    ax.annotate(coresStr, [0.5, 0.925], xycoords='figure fraction', **textOpts)
+    ax.annotate(loadStr, [0.5, 0.90], xycoords='figure fraction', **textOpts)
+
+    # save
+    fig.savefig('freya_stat_1.png')
+    plt.close(fig)
