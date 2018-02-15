@@ -1576,7 +1576,7 @@ def addBoxMarkers(p, conf, ax):
             # zoom run: write properties of zoomTargetHalo
             subhaloID = p['sP'].zoomSubhaloID
 
-        subhalo = groupCatSingle(p['sP'], subhaloID=p['hInd'])
+        subhalo = groupCatSingle(p['sP'], subhaloID=subhaloID)
         halo = groupCatSingle(p['sP'], haloID=subhalo['SubhaloGrNr'])
 
         haloMass = p['sP'].units.codeMassToLogMsun(halo['Group_M_Crit200'])
