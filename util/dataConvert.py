@@ -962,12 +962,12 @@ def convertMillenniumSubhaloCatalog(snap=63):
 
         # per halo
         off = header_bytes + 8*NGroups + 12*NSubs
-        Halo_M_Mean200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 0*NGroups: off + 4*NGroups])
-        Halo_R_Mean200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 4*NGroups: off + 8*NGroups])
-        Halo_M_Crit200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 8*NGroups: off + 12*NGroups])
-        Halo_R_Crit200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 12*NGroups: off + 16*NGroups])
-        Halo_M_TopHat200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 16*NGroups: off + 20*NGroups])
-        Halo_R_TopHat200[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 20*NGroups: off + 24*NGroups])
+        Halo_M_Mean200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 0*NGroups: off + 4*NGroups])
+        Halo_R_Mean200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 4*NGroups: off + 8*NGroups])
+        Halo_M_Crit200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 8*NGroups: off + 12*NGroups])
+        Halo_R_Crit200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 12*NGroups: off + 16*NGroups])
+        Halo_M_TopHat200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 16*NGroups: off + 20*NGroups])
+        Halo_R_TopHat200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 20*NGroups: off + 24*NGroups])
 
         # per subhalo
         off = header_bytes + 8*NGroups + 12*NSubs + 24*NGroups
