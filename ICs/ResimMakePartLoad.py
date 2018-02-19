@@ -274,24 +274,25 @@ def generate():
     from tracer.tracerMC import match3
 
     # config
-    saveFilename = 'out.hdf5'
     sP = simParams(res=455,run='tng',redshift=0.0)
     fofID = 50
     MaxLevel = 9 # e.g. 9=512^3
-    MinLevel = 4
-    ZoomFactor = 2
+    MinLevel = 5 # 2^5=32 coarsest background
+    ZoomFactor = 1
     Angle = 0.1
     EnlargeHighResFactor = 2.0
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
+    saveFilename = 'partload_%s_halo%d_L%d.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1))
 
     # load halo DM positions and IDs at target snapshot
     start_time = time.time()
     halo = groupCatSingle(sP, haloID=fofID)
     haloLen = halo['GroupLenType'][sP.ptNum('dm')]
     haloPos = halo['GroupPos']
-    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], loading IDs and crossmatching for positions...' % \
-        (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen))
+    haloVirRad = sP.units.codeLengthToMpc(halo['Group_R_Crit200'])
+    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], rvir [%.2f pMpc], loading IDs and crossmatching for positions...' % \
+        (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen,haloVirRad))
 
     dmIDs_halo = snapshotSubset(sP, 'dm', 'ids', haloID=fofID)
     assert haloLen == dmIDs_halo.size
@@ -308,6 +309,9 @@ def generate():
     # locate dm particles in ICs, load positions of halo DM particles
     dmPos_ics = snapshotSubset(sP, 'dm', 'pos')
     posInitial = dmPos_ics[inds_ics,:]
+
+    print('Initial DM positions extent, x [%.1f - %.1f], y [%.1f - %.1f], z [%.1f - %.1f]' % \
+        (posInitial[:,0].min(), posInitial[:,0].max(), posInitial[:,1].min(), posInitial[:,1].max(), posInitial[:,2].min(), posInitial[:,2].max()))
 
     # initialize grid
     GridDim = np.zeros( MaxLevel+1, dtype='int32')
@@ -352,7 +356,7 @@ def generate():
 
     w = np.where(Grids[GridsOffset[MaxLevel]:] == 1)
     vol_frac = float(len(w[0])) / Grids[GridsOffset[MaxLevel]:].size * 100
-    print(' Volume fraction of box occupied by high-res region = %.2f%%' % vol_frac)
+    print(' Volume fraction of box occupied by high-res region in ICs = %.3f%%' % vol_frac)
 
     # save
     for i in range(6):
@@ -392,6 +396,7 @@ def generate():
             partTypes[gName]['Masses'] = P_Mass[w]
 
     headerExtra = {'GroupCM':cmInitial, 'MinLevel':MinLevel, 'MaxLevel':MaxLevel, 'ZoomFactor':ZoomFactor, 
-                   'Boxsize':sP.boxSize, 'Sim_name':sP.simName, 'Sim_snap':sP_snap, 'Sim_fofID':fofID}
+                   'Boxsize':sP.boxSize, 'Sim_name':sP.simName, 'Sim_snap':sP_snap, 'Sim_fofID':fofID,
+                   'EnlargeHighResFactor':EnlargeHighResFactor, 'InitBoxVolFrac':vol_frac, 'InitTime':sP.scalefac}
     write_ic_file(saveFilename, partTypes, sP.boxSize, massTable=massTable, headerExtra=headerExtra)
-    print(' Done.')
+    print(' Done (starting z = %.1f, a = %f).' % (sP.redshift, sP.scalefac))

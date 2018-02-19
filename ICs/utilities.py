@@ -43,8 +43,10 @@ def write_ic_file(fileName, partTypes, boxSize, massTable=None, headerExtra=None
                 h.attrs[key] = headerExtra[key]
 
         for k in ['Time','Redshift','Omega0','OmegaLambda','HubbleParam']:
+            if headerExtra is not None and k in headerExtra: continue
             h.attrs[k] = 0.0
         for k in ['Sfr','Cooling','StellarAge','Metals','Feedback','DoublePrecision']:
+            if headerExtra is not None and k in headerExtra: continue
             h.attrs['Flag_%s' % k] = 0
 
         if massTable is not None:

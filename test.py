@@ -18,6 +18,60 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_zoom():
+    # load parent box: halo
+    from scipy.spatial import ConvexHull
+
+    sP = simParams(res=455,run='tng',redshift=0.0)
+    hInd = 50
+
+    halo = cosmo.load.groupCatSingle(sP, haloID=hInd)
+
+    # load zoom: group catalog
+    sPz = simParams(res=9, run='tng_zoom_dm', hInd=hInd, redshift=0.0)
+
+    halo_zoom = cosmo.load.groupCatSingle(sPz, haloID=0)
+    halos_zoom = cosmo.load.groupCat(sPz, fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
+    subs_zoom = cosmo.load.groupCat(sPz, fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
+
+    print(sP.units.codeMassToLogMsun(halo['Group_M_Crit200']), sP.units.codeMassToLogMsun(halo['GroupMass']))
+    print(sP.units.codeMassToLogMsun(halo_zoom['Group_M_Crit200']), sP.units.codeMassToLogMsun(halo_zoom['GroupMass']))
+
+    # particles
+    sPz.setSnap('ics')
+    h = cosmo.load.snapshotHeader(sPz)
+    x = cosmo.load.snapshotSubset(sPz, 'dm', 'pos')
+    y = cosmo.load.snapshotSubset(sPz, 2, 'pos')
+
+    dists = cosmo.util.periodicDists( halo_zoom['GroupPos'], y, sP=sP )
+    print('min dists: ', dists.min())
+    w = np.where(dists < 5*halo_zoom['Group_R_Crit200'])
+    print('num within 5rvir: ', 5*halo_zoom['Group_R_Crit200'], len(w[0]))
+
+    # convex hull, time evo
+    for snap in range(0,100):
+        sPz.setSnap(snap)
+        x = cosmo.load.snapshotSubset(sPz, 'dm', 'pos')
+        hull = ConvexHull(x)
+        print('[%3d] z = %.2f frac = %.3f' % (snap,sP.redshift,hull.volume/sP.boxSize**3*100))
+
+        # plot points scatter
+        if 1:
+            fig = plt.figure(figsize=(16,16))
+            ax = fig.add_subplot(111)
+
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_xlim([0,sP.boxSize])
+            ax.set_ylim([0,sP.boxSize])
+            ax.plot(x[:,0], x[:,1], '.')
+
+            fig.tight_layout()    
+            fig.savefig('check_zoom-%d.png' % snap)
+            plt.close(fig)
+
+    import ipdb; ipdb.set_trace()
+
 def check_millennium():
     # create re-write of Millennium simulation files
     basePath = '/u/dnelson/sims.millennium/Millennium1/output/'

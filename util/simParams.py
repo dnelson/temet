@@ -119,9 +119,9 @@ class simParams:
         self.data = {}
 
         # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
-        if 'tng' in run or 'prime' in run:
+        if 'tng' in run or 'prime' in run and ('zoom' not in run):
 
-            res_L25  = [128, 256, 512, 1024]
+            res_L25  = [128, 256, 512] #, 1024]
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
@@ -278,52 +278,52 @@ class simParams:
             self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if res in res_L35+res_L75+res_L205+res_L680:
+            if res in res_L35+res_L75+res_L205:#+res_L680:
                 # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
                 if res in res_L205: resInd = len(res_L205) - res_L205.index(res)
-                #if res in res_L680: resInd = len(res_L680) - res_L680.index(res)
+                if res in res_L680: resInd = len(res_L680) - res_L680.index(res)
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
+                if '_dm' in run: self.simName += '-Dark'
 
             if res in res_L25:
                 # override method name
                 if self.simName in method_run_names:
                     self.simName = method_run_names[self.simName]
 
-        # iClusters
-        if run in ['iClusters']:
-            if self.variant not in ['TNG_00','TNG_11']:
-                raise Exception("Unknown or unspecified variant for iClusters run selection.")
-
-            self.mpcUnits = True
-
-            self.validResLevels = [1,2,3]
-            self.boxSize        = 3000.0 # 3 Gpc
+        # TNG zooms (currently testing with L75n455*)
+        if run in ['tng_zoom','tng_zoom_dm']:
+            assert hInd is not None
+            self.validResLevels = [9,10]
             self.groupOrdered   = True
 
-            self.omega_m        = 0.2726
-            self.omega_L        = 0.7274
-            self.omega_b        = 0.0456
-            self.HubbleParam    = 0.704
+            self.zoomLevel = self.res # L9, L10, L11
+            self.res = 455 * (res-self.validResLevels[0]+1)
 
-            if res == 1: self.gravSoft = 1.0
-            if res == 2: self.gravSoft = 2.0
-            if res == 3: self.gravSoft = 4.0
-            self.zoomLevel = 9 - (self.res-1) # I1=9, I2=8, I3=7
+            self.gravSoft = 4.0 / (res/455)
+            self.targetGasMass = 0.0 #9.43950e-5 * (8 ** np.log2(1820/res))
+            self.boxSize = 75000.0
 
-            if self.variant == 'TNG_11' and self.res == 3: self.marker = 'D'
-            if self.variant == 'TNG_11' and self.res == 2: self.marker = 's'
-            if self.variant == 'TNG_00' and self.res == 3: self.marker = 'o'
-            if self.variant == 'TNG_00' and self.res == 2: self.marker = '*'
+            # common: Planck2015 TNG cosmology
+            self.omega_m     = 0.3089
+            self.omega_L     = 0.6911
+            self.omega_b     = 0.0486
+            self.HubbleParam = 0.6774
 
-            dirStr = 'zoom_' + str(self.hInd).zfill(2) + '_ill' + str(self.res) + '_' + self.variant
-            self.arepoPath  = self.basePath + 'dev.prime/iClusters/' + dirStr + '/'
-            self.savPrefix  = 'IC'
-            self.saveTag    = 'iC'
-            self.plotPrefix = 'iC'
-            self.simName    = self.run + ' ' + self.variant + ' r' + str(self.res)
+            # paths
+            bs = str(int(self.boxSize/1000.0))
+            if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
+
+            dmStr = '_DM' if '_dm' in run else ''
+            dirStr = 'L'+bs+'n'+str(self.res)+'TNG_h' + str(self.hInd) + '_L' + str(self.zoomLevel) + dmStr
+
+            self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
+            self.savPrefix  = 'TZ'
+            self.saveTag    = 'tZ'
+            self.plotPrefix = 'tZ'
+            self.simName    = dirStr
 
         # ILLUSTRIS
         if run in ['illustris','illustris_dm']:
@@ -877,7 +877,7 @@ class simParams:
         if self.snap is not None:
             if self.snap == 'ics':
                 self.redshift = 127.0
-                assert self.run == 'tng' # otherwise generalize
+                assert self.run in ['tng','tng_zoom','tng_zoom_dm'] # otherwise generalize
             else:
                 self.redshift = snapNumToRedshift(sP=self)
 
