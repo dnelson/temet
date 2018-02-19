@@ -1107,7 +1107,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
 
     # cache
-    assert label is not None
+    if label is None:
+        raise Exception('Unrecognized particle field [%s].' % quant)
 
     k = 'sim_' + quant + '_'
     sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog'] = \
@@ -1133,7 +1134,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     if ptProperty == 'temp':
         label = 'Gas Temperature [ log K ]'
         lim = [2.0, 8.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: lim = [4.0, 8.0]
         log = False
 
     if ptProperty == 'temp_linear':
@@ -1154,7 +1155,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         assert ptType == 'gas'
         label = 'Gas Number Density [ log cm$^{-3}$ ]'
         lim = [-9.0,3.0]
-        if haloLims: lim = [-3.0, 4.0]
+        if haloLims: lim = [-4.0, 3.0]
         log = True
 
     if ptProperty == 'dens_critratio':
@@ -1340,7 +1341,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         unitsStr = 'kpc' if '_kpc' in ptProperty else 'ckpc/h'
         label = '%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
         lim = [0.0, 5.0]
-        if haloLims: lim = [0.0, 2.5]
+        if haloLims: lim = [0.0, 3.0]
         log = True
     if ptProperty in ['rad_rvir','halo_rad_rvir']:
         label = '%s Radial Distance / Halo R$_{\\rm vir}$ [ log ]' % typeStr
@@ -1369,7 +1370,8 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = True
 
     # did we recognize a field?
-    assert label is not None
+    if label is None:
+        raise Exception('Unrecognized particle field [%s].' % ptProperty)
 
     # return
     return label, lim, log
