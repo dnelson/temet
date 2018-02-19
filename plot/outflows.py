@@ -29,7 +29,8 @@ def explore_vrad(sP):
 
     # halo selection: all centrals above 10^12 Mhalo
     m200 = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
-    w = np.where(m200 >= 12.0)
+    with np.errstate(invalid='ignore'):
+        w = np.where(m200 >= 12.0)
     subInds = w[0]
 
     print('Halo selection [%d] objects.' % len(subInds))
@@ -58,16 +59,74 @@ def explore_vrad(sP):
     dt_myr = (tage - sP.tage) * 1000
     sP.setSnap(snap)
 
-    bh_dedt_low = (bh_egyLow_cur[prevInds] - bh_egyLow_prev[subInds]) / dt_myr # erg/myr
+    bh_dedt_low = (bh_egyLow_cur[subInds] - bh_egyLow_prev[prevInds]) / dt_myr # erg/myr
 
-    assert bh_dedt_low.min() >= 0.0 # otherwise likely bad MPB track
+    w = np.where(bh_dedt_low < 0.0)
+    bh_dedt_low[w] = 0.0 # bad MPB track? CumEgy counter should be monotonically increasing
 
-    # make two separate selections: galaxies with dedt>>0 and those with dedt~0
+    # sort halo sample based on recent BH energy injection in low-state
+    sort_inds = np.argsort(bh_dedt_low)[::-1] # highest to lowest
+
+    subInds = subInds[sort_inds]
+
+    # get fof halo IDs
+    haloInds = groupCat(sP, fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+    haloInds = haloInds[subInds]
+
+    # plot booklet of 1D vrad profiles
+    haloIndsPlot = haloInds
+    vrad_lim = [-1000.0, 2000.0]
+
+    if 1:
+        numPerPage = 5
+        numPages = haloIndsPlot.size / numPerPage
+        pdf = PdfPages('histo1d_vrad.pdf')
+
+        for i in range(numPages):
+            haloIDs = [haloIndsPlot[(i+0)*numPerPage : (i+1)*numPerPage]] # fof scope
+            plotHistogram1D([sP], haloIDs=haloIDs, ptType='gas', ptProperty='vrad', 
+                sfreq0=False, ylim=[-6.0,-2.0], xlim=vrad_lim, pdf=pdf)
+
+        pdf.close()
+
+    # plot booklet of 2D phase diagrams
+    nBins = 200
+    clim = [-2.0, -6.0]
+    commonOpts = {'yQuant':'vrad', 'ylim':vrad_lim, 'nBins':nBins, 'clim':clim}
+
+    if 1:
+        pdf = PdfPages('phase2d_vrad_numdens.pdf')
+        for haloID in haloIndsPlot:
+            plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', haloID=haloID, pdf=pdf, **commonOpts)
+        pdf.close()
+
+    if 1:
+        pdf = PdfPages('phase2d_vrad_rad.pdf')
+        for haloID in haloIndsPlot:
+            plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloID=haloID, pdf=pdf, **commonOpts)
+        pdf.close()
+
+    if 1:
+        pdf = PdfPages('phase2d_vrad_temp.pdf')
+        for haloID in haloIndsPlot:
+            plotPhaseSpace2D(sP, partType='gas', xQuant='temp', haloID=haloID, pdf=pdf, **commonOpts)
+        pdf.close()
     
-    import pdb; pdb.set_trace()
+    if 1:
+        pdf = PdfPages('phase2d_vrad_numdens_c=temp.pdf')
+        for haloID in haloIndsPlot:
+            plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
+                meancolors=['temp'], weights=None, haloID=haloID, pdf=pdf)
+        pdf.close()
 
-    #plotHistogram1D([sP], haloIDs=haloIDs, ptType='gas', ptProperty='vrad', sfreq0=False, ylim='auto')
-    #plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloID=haloID)
+    if 1:
+        pdf = PdfPages('phase2d_vrad_rad_c=temp.pdf')
+        for haloID in haloIndsPlot:
+            plotPhaseSpace2D(sP, partType='gas', xQuant='rad', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
+                meancolors=['temp'], weights=None, haloID=haloID, pdf=pdf)
+        pdf.close()
+
+   
 
 # -------------------------------------------------------------------------------------------------
 

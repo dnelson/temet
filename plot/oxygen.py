@@ -1828,7 +1828,7 @@ def paperPlots():
         smoothSigma = 1.0
 
         plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=None, 
-                         massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                         clim=massFracMinMax, xlim=xMinMax, ylim=yMinMax, 
                          contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
     # figure 4, CDDF of OVI at z~0 compared to observations

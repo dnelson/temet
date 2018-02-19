@@ -71,12 +71,13 @@ def plotMassFunctions():
     binSize = 0.2
     
     sPs = []
-    sPs.append( simParams(res=2160,run='tng',redshift=0.8) )
+    #sPs.append( simParams(res=2160,run='tng',redshift=0.0) )
     #sPs.append( simParams(res=1080,run='tng',redshift=0.8) )
     #sPs.append( simParams(res=540,run='tng',redshift=0.8) )
     #sPs.append( simParams(res=270,run='tng',redshift=0.8) )
-    sPs.append( simParams(res=1820,run='tng',redshift=0.8) )
-    sPs.append( simParams(res=2500,run='tng',redshift=0.8) )
+    sPs.append( simParams(res=1024,run='tng_dm',redshift=0.0) )
+    sPs.append( simParams(res=1820,run='tng_dm',redshift=0.0) )
+    sPs.append( simParams(res=2500,run='tng_dm',redshift=0.0) )
 
     # plot setup
     fig = plt.figure(figsize=(18,8))

@@ -14,16 +14,17 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from util import simParams
-from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN
+from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
 def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, 
-      ylog=True, ylim=None, sfreq0=False, pdf=None):
+      ylog=True, ylim=None, xlim=None, sfreq0=False, pdf=None):
     """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
-    both None), or of a single halo/subhalo, where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
+    both None), or of one or more halos/subhalos, where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
+    Alternatively, subhaloIDs/haloIDs can be a list of lists, each sub-list of IDs of objects for that run, which are overplotted.
     If ptWeight is None, uniform weighting, otherwise weight by this quantity.
     If sfreq0 is True, include only non-starforming cells. 
     If ylim is None, then hard-coded typical limits for PDFs. If 'auto', then autoscale. Otherwise, 2-tuple to use as limits. """
@@ -42,21 +43,37 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     nBins = 400
     lw = 2.0
 
+    # special behavior (not yet generalized)
+    coldDenseCGM = False # zooms2.josh
+    radWithin10pkpc = False
+
+    # inputs
+    oneObjPerRun = False
+
     assert np.sum(e is not None for e in [haloIDs,subhaloIDs]) in [0,1] # pick one, or neither
-    if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
-    if haloIDs is not None: assert (len(haloIDs) == len(sPs)) # one subhalo ID per sP
+    if subhaloIDs is not None:
+        assert (len(subhaloIDs) == len(sPs)) or len(sPs) == 1 # one subhalo ID per sP, or one sP
+        assert isinstance(subhaloIDs, (list,np.ndarray))
+        if not isinstance(subhaloIDs[0], (list,np.ndarray)):
+            assert len(subhaloIDs) == len(sPs)
+            oneObjPerRun = True
+        objIDs = subhaloIDs
+
+    if haloIDs is not None:
+        assert (len(haloIDs) == len(sPs)) or len(sPs) == 1 # one subhalo ID per sP, or one sP
+        assert isinstance(haloIDs, (list,np.ndarray))
+        if not isinstance(haloIDs[0], (list,np.ndarray)):
+            assert len(haloIDs) == len(sPs)
+            oneObjPerRun = True
+        objIDs = haloIDs
 
     # load
     haloLims = (subhaloIDs is not None or haloIDs is not None)
-    xlabel, xlim, xlog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=haloLims)
-
-    # special behavior:
-    if ptProperty == 'mass_msun':
-        xlim = [2.0, 4.7]
-        print('Override xlim to: ', xlim)
+    xlabel, xlim_quant, xlog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=haloLims)
+    if xlim is None: xlim = xlim_quant
 
     # start plot
-    fig = plt.figure(figsize=(11.2,8.0)) #(14,10)
+    fig = plt.figure(figsize=(14,10)) #(11.2,8.0)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel(xlabel)
@@ -66,85 +83,87 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
 
     # loop over simulations
     for i, sP in enumerate(sPs):
-        # get halo and subhalo IDs
-        if subhaloIDs is not None:
-            subhaloID = subhaloIDs[i]
-            haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']
-        if haloIDs is not None:
-            haloID = haloIDs[i]
-            subhaloID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+        # loop over halo/subhalo IDs
+        if subhaloIDs is not None or haloIDs is not None:
+            if not oneObjPerRun:
+                sP_objIDs = objIDs[i] # list
+            else:
+                sP_objIDs = [objIDs[i]]
 
-        # load
-        load_haloID = haloID if haloIDs is not None else None
-        load_subID = subhaloID if subhaloIDs is not None else None
+        for objID in sP_objIDs:
+            # get corresponding halo or subhalo ID for this object
+            #if subhaloIDs is not None:
+            #    haloID = groupCatSingle(sP, subhaloID=objID)['SubhaloGrNr']
+            #if haloIDs is not None:
+            #    subhaloID = groupCatSingle(sP, haloID=objID)['GroupFirstSub']
 
-        vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
-        if xlog: vals = np.log10(vals)
+            # load
+            load_haloID = objID if haloIDs is not None else None
+            load_subID = objID if subhaloIDs is not None else None
 
-        print(sP.simName,', min: ', np.nanmin(vals), ' max: ', np.nanmax(vals))
+            vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
+            if xlog: vals = np.log10(vals)
 
-        # weights
-        if ptWeight is None:
-            weights = np.zeros( vals.size, dtype='float32' ) + 1.0
-        else:
-            weights = snapshotSubset(sP, ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
+            print(sP.simName,', min: ', np.nanmin(vals), ' max: ', np.nanmax(vals))
 
-        if sfreq0:
-            # restrict to non eEOS cells
-            sfr = snapshotSubset(sP, ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
-            w_sfr = np.where(sfr == 0.0)
-            vals = vals[w_sfr]
-            weights = weights[w_sfr]
+            # weights
+            if ptWeight is None:
+                weights = np.zeros( vals.size, dtype='float32' ) + 1.0
+            else:
+                weights = snapshotSubset(sP, ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
 
-        # special behavior (not yet generalized)
-        coldDenseCGM = False
-        radWithin10pkpc = False
-
-        if coldDenseCGM:
-            print('Restricting to cold-dense phase of the CGM.')
-            temp = snapshotSubset(sP, ptType, 'temp', haloID=load_haloID, subhaloID=load_subID)
-            hdens = snapshotSubset(sP, ptType, 'hdens', haloID=load_haloID, subhaloID=load_subID)
             if sfreq0:
-                temp = temp[w_sfr]
-                hdens = hdens[w_sfr]
-            w0 = np.where( (temp < 5.0) & (hdens > 1e-3) )
-            vals = vals[w0]
-            weights = weights[w0]
+                # restrict to non eEOS cells
+                sfr = snapshotSubset(sP, ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
+                w_sfr = np.where(sfr == 0.0)
+                vals = vals[w_sfr]
+                weights = weights[w_sfr]
 
-        if radWithin10pkpc:
-            print('Restricting to rad > 10 pkpc.')
-            rad = snapshotSubset(sP, ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
-            if sfreq0: rad = rad[w_sfr]
-            if coldDenseCGM: rad = rad[w0]
+            if coldDenseCGM:
+                print('Restricting to cold-dense phase of the CGM.')
+                temp = snapshotSubset(sP, ptType, 'temp', haloID=load_haloID, subhaloID=load_subID)
+                hdens = snapshotSubset(sP, ptType, 'hdens', haloID=load_haloID, subhaloID=load_subID)
+                if sfreq0:
+                    temp = temp[w_sfr]
+                    hdens = hdens[w_sfr]
+                w0 = np.where( (temp < 5.0) & (hdens > 1e-3) )
+                vals = vals[w0]
+                weights = weights[w0]
 
-            wr = np.where( rad > 10.0 )
-            vals = vals[wr]
-            weights = weights[wr]
+            if radWithin10pkpc:
+                print('Restricting to rad > 10 pkpc.')
+                rad = snapshotSubset(sP, ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
+                if sfreq0: rad = rad[w_sfr]
+                if coldDenseCGM: rad = rad[w0]
 
-        # histogram (all equivalent methods)
-        bins = np.linspace( xlim[0], xlim[1], nBins+1 )
-        xx = bins[:-1] + (bins[1]-bins[0])/2
-        binsize = bins[1]-bins[0]
+                wr = np.where( rad > 10.0 )
+                vals = vals[wr]
+                weights = weights[wr]
 
-        #yy4 = np.zeros( nBins, dtype='float32' )
-        #for j in range(nBins):
-        #    w = np.where( (vals >= bins[j]) & (vals < bins[j+1]) )
-        #    yy4[j] = np.sum(weights[w])
-        #yy4 /= (np.sum(weights)*binsize)
-        
-        #yy2, xx2, _ = binned_statistic(vals, weights, statistic='sum', bins=bins)
-        #yy2 /= (vals.size*binsize)
-        #yy3, xx3 = np.histogram(vals, bins=bins, weights=weights, density=False)
-        #yy3 /= (vals.size*binsize)
-        yy, xx4 = np.histogram(vals, bins=bins, weights=weights, density=True)
+            # histogram (all equivalent methods)
+            bins = np.linspace( xlim[0], xlim[1], nBins+1 )
+            xx = bins[:-1] + (bins[1]-bins[0])/2
+            binsize = bins[1]-bins[0]
 
-        if ylog: yy = logZeroNaN(yy)
-        #if xx.size > sKn:
-        #    yy = savgol_filter(yy,sKn,sKo)
+            #yy4 = np.zeros( nBins, dtype='float32' )
+            #for j in range(nBins):
+            #    w = np.where( (vals >= bins[j]) & (vals < bins[j+1]) )
+            #    yy4[j] = np.sum(weights[w])
+            #yy4 /= (np.sum(weights)*binsize)
+            
+            #yy2, xx2, _ = binned_statistic(vals, weights, statistic='sum', bins=bins)
+            #yy2 /= (vals.size*binsize)
+            #yy3, xx3 = np.histogram(vals, bins=bins, weights=weights, density=False)
+            #yy3 /= (vals.size*binsize)
+            yy, xx4 = np.histogram(vals, bins=bins, weights=weights, density=True)
 
-        label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
-        ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
-        l, = ax.plot(xx, yy, linestyle=ls, lw=lw, label=label)
+            if ylog: yy = logZeroNaN(yy)
+            #if xx.size > sKn:
+            #    yy = savgol_filter(yy,sKn,sKo)
+
+            label = '%s [%d]' % (sP.simName,objID)
+            ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
+            l, = ax.plot(xx, yy, linestyle=ls, lw=lw, label=label)
 
     # finish plot
     fig.tight_layout()
@@ -152,10 +171,8 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
 
     sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
     hStr = 'global'
-    if haloIDs is not None:
-        hStr = 'haloID-%d' % haloIDs[0] if len(haloIDs) == 1 else 'nH-%d' % len(haloIDs)
-    elif subhaloIDs is not None:
-        hStr = 'subhID-%d' % subhaloIDs[0] if len(subhaloIDs) == 1 else 'nSH-%d' % len(subhaloIDs)
+    if haloIDs is not None: hStr = 'haloIDs-n%d' % len(haloIDs)
+    elif subhaloIDs is not None: hStr = 'subhIDs-n%d' % len(subhaloIDs)
 
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
@@ -164,31 +181,34 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
-                     xMinMaxForce=None, yMinMaxForce=None, contours=None, 
-                     massFracMinMax=[-10.0,0.0], hideBelow=False, smoothSigma=0.0):
+                     contours=None, xlim=None, ylim=None, clim=[-6.0,0.0], hideBelow=False, smoothSigma=0.0, nBins=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
-    not None, then show the mean value per pixel of these quantities, instead of weighted histograms. If 
-    x[y]MinMaxForce, use these range limits. If contours is not None, draw solid contours at 
-    these levels on top of the 2D histogram image. If smoothSigma is not zero, gaussian smooth 
-    contours at this level. If hideBelow, then pixel values below massFracMinMax[0] are left pure white. """
+    not None, then show the mean value per pixel of these quantities, instead of weighted histograms.
+    If contours is not None, draw solid contours at these levels on top of the 2D histogram image. 
+    If smoothSigma is not zero, gaussian smooth contours at this level. 
+    If hideBelow, then pixel values below clim[0] are left pure white. """
 
     # config
-    nBinsX = 800
-    nBinsY = 400
-    sizefac = 0.7
+    if nBins is None:
+        nBinsX = 800
+        nBinsY = 400
+        if sP.isZoom:
+            nBinsX = 250
+            nBinsY = 250
+    else:
+        nBinsX = nBins
+        nBinsY = nBins
 
-    if sP.isZoom:
-        nBinsX = 250
-        nBinsY = 250
+    sizefac = 0.9
 
     # binned_statistic_2d instead of histogram2d?
     binnedStat = False
     if meancolors is not None:
         assert weights is None # one or the other
         binnedStat = True
-        weights = meancolors # loop over these instead
+        weights = iterable(meancolors) # loop over these instead
     if weights is None:
         # one or the other
         assert meancolors is not None
@@ -197,20 +217,18 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     contoursColor = 'k' # black
 
     # load: x-axis
-    xlabel, xlim, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean)
+    xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
+    if xlim is None: xlim = xlim_quant
     xvals = snapshotSubset(sP, partType, xQuant, haloID=haloID)
 
     if xlog: xvals = np.log10(xvals)
 
     # load: y-axis
-    ylabel, ylim, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean)
+    ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
+    if ylim is None: ylim = ylim_quant
     yvals = snapshotSubset(sP, partType, yQuant, haloID=haloID)
 
     if ylog: yvals = np.log10(yvals)
-
-    # overrides to default ranges?
-    if xMinMaxForce is not None: xlim = xMinMaxForce
-    if yMinMaxForce is not None: ylim = yMinMaxForce
 
     # start figure
     fig = plt.figure(figsize=[figsize[0]*sizefac*(len(weights)*0.9), figsize[1]*sizefac])
@@ -245,13 +263,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         if binnedStat:
             # plot 2D image, each pixel colored by the mean value of a third quantity
-            clabel, clim, clog = simParticleQuantity(sP, partType, wtProp, clean=clean)
+            clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloID is not None))
             wtStr = 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
                                                          bins=[nBinsX, nBinsY], range=[xlim,ylim])
             zz = zz.T
             if clog: zz = logZeroNaN(zz)
 
+            clim = clim_quant # colorbar limits
         else:
             # plot 2D histogram image, optionally weighted
             zz, _, _ = np.histogram2d(xvals, yvals, bins=[nBinsX, nBinsY], range=[xlim,ylim], 
@@ -259,11 +278,11 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             zz = logZeroNaN(zz.T)
 
         if hideBelow:
-            w = np.where(zz < massFracMinMax[0])
+            w = np.where(zz < clim[0])
             zz[w] = np.nan
 
         cmap = loadColorTable(ctNameHisto)
-        norm = Normalize(vmin=massFracMinMax[0], vmax=massFracMinMax[1], clip=False)
+        norm = Normalize(vmin=clim[0], vmax=clim[1], clip=False)
         im = plt.imshow(zz, extent=[xlim[0],xlim[1],ylim[0],ylim[1]], 
                    cmap=cmap, norm=norm, origin='lower', interpolation='nearest', aspect='auto')
 
@@ -493,17 +512,18 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
         (sPstr,ptType,ptProperty,nSamples,len(subhaloIDs),scope,wtStr))
     plt.close(fig)
 
-def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhaloIDs=None, haloIDs=None, xlog=True, sfreq0=False, colorOffs=None):
+def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhaloIDs=None, haloIDs=None, 
+    xlog=True, xlim=None, sfreq0=False, colorOffs=None):
     """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
     where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs. """
 
     # config
     if xlog:
-        xlim = [-0.5,3.0]
+        if xlim is not None: xlim = [-0.5,3.0]
         xlabel = 'radius [ log pkpc ]'
     else:
-        xlim = [0.0,500.0]
+        if xlim is not None: xlim = [0.0,500.0]
         xlabel = 'radius [ pkpc ]'
 
     percs = [10,25,75,90]
@@ -692,6 +712,27 @@ def compareHaloSets_RadProfiles():
     for field in ['tcool']: #['metaldens','dens','temp_linear','P_gas_linear','z_solar']:
         plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, weighting='O VI mass')
 
+def compareHaloSets_1DHists():
+    """ Driver. Compare 1D histograms of a quantity, overplotting several halos. One run. """
+    sPs = []
+
+    sPs.append( simParams(res=910,run='tng',redshift=0.0) )
+    mhalo = groupCat(sPs[-1], fieldsSubhalos=['mhalo_200_log'])
+    with np.errstate(invalid='ignore'):
+        w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2)  )
+    subhaloIDs = [w1[0][0:5]]
+
+    if 0:
+        # add a second run
+        sPs.append( simParams(res=455,run='tng',redshift=0.0) )
+        mhalo = groupCat(sPs[-1], fieldsSubhalos=['mhalo_200_log'])
+        with np.errstate(invalid='ignore'):
+            w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2)  )
+        subhaloIDs.append( w2[0][0:5] )
+
+    for field in ['temp']: #['tcool','vrad']:
+        plotHistogram1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field)
+
 def singleHaloProperties():
     """ Driver. Several phase/radial profile plots for a single halo. """
     if 1:
@@ -702,7 +743,7 @@ def singleHaloProperties():
         sPs.append( simParams(res=9,run='zooms2',hInd=2,redshift=2.25) )
         haloIDs = np.zeros( len(sPs), dtype='int32' )
 
-        #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', colorOffs=[0,2])
+        #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', colorOffs=[0,2], xlim=[2.0,4.7])
         #plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True, colorOffs=[0,2])
         plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True)
         #plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
