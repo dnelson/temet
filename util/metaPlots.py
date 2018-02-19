@@ -208,12 +208,20 @@ def periodic_slurm_status():
     import subprocess
     import os
     import pwd
+    import h5py
 
     def _expandNodeList(nodeListStr):
         nodesRet = []
         nodeGroups = nodeListStr.split(',')
 
         for nodeGroup in nodeGroups:
+            if '[' not in nodeGroup: # single node
+                nodesRet.append( nodeGroup )
+                continue
+            if ',' in nodeGroup:
+                raise Exception('Not handled yet.') # e.g. 'freya[01-04,08-09]'
+
+            # typical case, e.g. 'freya[01-04]'
             base, num_range = nodeGroup.split('[')
             num_range = num_range[:-1].split('-')
             for num in range(int(num_range[0]), int(num_range[1])+1):
@@ -223,11 +231,12 @@ def periodic_slurm_status():
         return nodesRet
 
     # config
+    saveDataFile = 'historical.hdf5'
     partName = 'p.24h'
     coresPerNode = 40
     cpusPerNode = 2
 
-    numRacks = 3
+    numRacks = 4
     rackPrefix = 'opasw'
 
     allocStates = ['ALLOCATED','MIXED']
@@ -257,6 +266,9 @@ def periodic_slurm_status():
             nodes[nodeName]['cur_job_owner'] = pwd.getpwuid(job['user_id'])[4].split(',')[0]
             nodes[nodeName]['cur_job_name'] = job['name']
             nodes[nodeName]['cur_job_runtime'] = job['run_time_str']
+
+    n_jobs_running = len(jobs_running)
+    n_jobs_pending = len(jobs_pending)
 
     # restrict nodes to those in main partition (skip login nodes, etc)
     nodesInPart = _expandNodeList( parts[partName]['nodes'] )
@@ -292,13 +304,17 @@ def periodic_slurm_status():
                 continue
 
     # nodes: print statistics
+    n_nodes_down = len(nodes_down)
+    n_nodes_idle = len(nodes_idle)
+    n_nodes_alloc = len(nodes_alloc)
+
     print('Main nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
-        (len(nodes_main), len(nodes_idle), len(nodes_alloc), len(nodes_down)))
+        (len(nodes_main), n_nodes_idle, n_nodes_alloc, n_nodes_down))
     print('Misc nodes: [%d] total.' % len(nodes_misc))
 
     if parts[partName]['total_nodes'] != len(nodes_main):
         print('WARNING: Node count mismatch.')
-    if len(nodes_main) != len(nodes_idle) + len(nodes_alloc) + len(nodes_down):
+    if len(nodes_main) != n_nodes_idle + n_nodes_alloc + n_nodes_down:
         print('WARNING: Nodes not all accounted for.')
 
     nCores = parts[partName]['total_nodes'] * coresPerNode
@@ -319,35 +335,73 @@ def periodic_slurm_status():
     print('Cluster: [%.1f%%] global load, with mean per-node CPU loads: [%.1f%% %.1f%%].' % \
         (cluster_load,cpu_load_allocnodes_mean,cpu_load_allnodes_mean))
 
+    # time series data file: create if it doesn't exist already
+    nSavePts = 10000
+    saveDataFields = ['cluster_load','cpu_load_allocnodes_mean','n_jobs_running','n_jobs_pending',
+                      'n_nodes_down','n_nodes_idle','n_nodes_alloc']
+
+    if not os.path.isfile(saveDataFile):
+        with h5py.File(saveDataFile,'w') as f:
+            for field in saveDataFields:
+                f[field] = np.zeros( nSavePts, dtype='float32' )
+            f['timestamp'] = np.zeros( nSavePts, dtype='int32' )
+            f.attrs['count'] = 0
+
+    # time series data file: store current data
+    with h5py.File(saveDataFile) as f:
+        ind = f.attrs['count']
+        f['timestamp'][ind] = stats['req_time']
+        for field in saveDataFields:
+            f[field][ind] = locals()[field]
+        f.attrs['count'] += 1
+
+    # count nodes per rack
+    maxNodesPerRack = 0
+    for i in range(numRacks):
+        rack = topo[rackPrefix + '%d' % (i+1)]
+        rackNodes = _expandNodeList(rack['nodes'])
+        if len(rackNodes) > maxNodesPerRack:
+            maxNodesPerRack = len(rackNodes)
+
     # start node figure
-    fig = plt.figure(figsize=(16,14))
+    fig = plt.figure(figsize=(18.9,9.2))
 
     for i in range(numRacks):
         rack = topo[rackPrefix + '%d' % (i+1)]
         rackNodes = _expandNodeList(rack['nodes'])
         print(rack['name'], rack['level'], rack['nodes'], len(rackNodes))
 
-        ax = fig.add_subplot(1,3,i+1)
+        ax = fig.add_subplot(1,numRacks,i+1)
         
         ax.set_xlim([0,1])
-        ax.set_ylim([-1,len(rackNodes)])
+        ax.set_ylim([-1,maxNodesPerRack])
         ax.set_xlabel('')
         ax.set_ylabel('')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
 
+        if len(rackNodes) < maxNodesPerRack:
+            # draw shorter rack
+            for spine in ['top','right','left','bottom']:
+                ax.spines[spine].set_visible(False)
+            ax.plot([0,1], [-1,-1], '-', lw=1.5, color='black')
+            ax.plot([0,1], [len(rackNodes),len(rackNodes)], '-', lw=1.5, color='black')
+            ax.plot([0,0], [-1,len(rackNodes)], '-', lw=2.0, color='black')
+            ax.plot([1,1], [-1,len(rackNodes)], '-', lw=2.5, color='black')
+
         # draw representation of each node
         for j, name in enumerate(rackNodes):
             # circle: color by status
+            color = 'gray'
             if name in [n['name'] for n in nodes_down]: color = 'red'
             if name in [n['name'] for n in nodes_alloc]: color = 'green'
             if name in [n['name'] for n in nodes_idle]: color = 'orange'
             ax.plot(0.16, j, 'o', color=color, markersize=10.0)
-            textOpts = {'fontsize':10.0, 'horizontalalignment':'left', 'verticalalignment':'center'}
+            textOpts = {'fontsize':9.0, 'horizontalalignment':'left', 'verticalalignment':'center'}
 
-            pad = 0.15
+            pad = 0.10
             xmin = 0.20
-            xmax = 0.64
+            xmax = 0.60
             padx = 0.002
             dx = (xmax-xmin) / (coresPerNode/cpusPerNode)
 
@@ -383,20 +437,19 @@ def periodic_slurm_status():
     fig.subplots_adjust(top=0.88)
 
     # text
-    textOpts = {'fontsize':28.0, 'horizontalalignment':'center', 'verticalalignment':'center'}
-    timeStr = 'FREYA Status. Last updated %s.' % curTime.strftime('%A (%d %b) %H:%M')
+    timeStr = 'Last updated %s.' % curTime.strftime('%A (%d %b) %H:%M')
     nodesStr = 'nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
         (len(nodes_main), len(nodes_idle), len(nodes_alloc), len(nodes_down))
     coresStr = 'cores: [%d] total, of which [%d] are allocated, [%d] are idle or unavailable.' % (nCores,nCores_alloc,nCores_idle)
     loadStr = 'cluster: [%.1f%%] global load, with mean per-node CPU load: [%.1f%%].' % \
         (cluster_load,cpu_load_allocnodes_mean)
 
-    ax.annotate(timeStr, [0.5, 0.98], xycoords='figure fraction', **textOpts)
-    textOpts['fontsize'] = 20.0
-    ax.annotate(nodesStr, [0.5, 0.95], xycoords='figure fraction', **textOpts)
-    ax.annotate(coresStr, [0.5, 0.925], xycoords='figure fraction', **textOpts)
-    ax.annotate(loadStr, [0.5, 0.90], xycoords='figure fraction', **textOpts)
+    ax.annotate('FREYA Status', [0.995,0.95], xycoords='figure fraction', fontsize=56.0, horizontalalignment='right', verticalalignment='center')
+    ax.annotate(timeStr, [0.995, 0.90], xycoords='figure fraction', fontsize=16.0, horizontalalignment='right', verticalalignment='center')
+    ax.annotate(nodesStr, [0.012, 0.98], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
+    ax.annotate(coresStr, [0.012, 0.943], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
+    ax.annotate(loadStr, [0.012, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
 
     # save
-    fig.savefig('freya_stat_1.png')
+    fig.savefig('freya_stat_1.png', dpi=100) # 1890x920 pixels
     plt.close(fig)

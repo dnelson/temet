@@ -1312,6 +1312,8 @@ def snapshotSubset(sP, partType, fields,
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
             assert haloID is not None or subhaloID is not None
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
+            if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+            
             if subhaloID is not None: haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']
             halo = groupCatSingle(sP, haloID=haloID)
             haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
@@ -1331,6 +1333,8 @@ def snapshotSubset(sP, partType, fields,
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
 
+            if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+
             shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
             firstSub = groupCatSingle(sP, subhaloID=shID)
 
@@ -1345,6 +1349,8 @@ def snapshotSubset(sP, partType, fields,
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
             mass = snapshotSubset(sP, partType, 'mass', **kwargs)
+
+            if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
             shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
             firstSub = groupCatSingle(sP, subhaloID=shID)
