@@ -81,6 +81,16 @@ def _TNGboxSliceConfig(res):
         # adjust for deeper slice
         dmMM[0] += 0.5 
         gasMM[0] += 0.7
+    if res in [1024,2048]:
+        # L680
+        centerHaloID = 0 # fof
+        nSlicesTot   = 4 # slice depth equal to a third, ~170 Mpc/h ~ 251 Mpc
+        curSlice     = 0 # offset slice along projection direction?
+
+        # adjust for deeper slice
+        dmMM[0] += 1.2
+        dmMM[1] -= 0.2
+        gasMM[0] += 1.6
     if res in [270,540,1080,2160]:
         # L35
         centerHaloID = 0 # fof
@@ -143,6 +153,9 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 32: panels.append( {'partType':'gas', 'partField':'sb_O--6-1031.91A_ster', 'valMinMax':[-4.0, 2.0]} )
     if conf == 33: panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 3.0]} )
 
+    # testing equirectangular projections:
+    if conf == 34:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':[11.0, 15.5]} )
+
     # thin slices may need different optimal bounds:
     if thinSlice:
         if conf == 0: panels[0]['valMinMax'] = [2.0, 5.0] # gas coldens_msunkpc2
@@ -195,7 +208,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     class plotConfig:
         plotStyle  = 'edged' # open, edged
-        rasterPx   = nPixels
+        rasterPx   = nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
         colorbars  = False
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \

@@ -181,15 +181,17 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     labelCustom = False         # custom label string to include
     plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
+    projType    = 'ortho'       # projection type, 'ortho', 'equirectangular'
+    projParams  = {}            # dictionary of parameters associated to this projection type
     rotation    = None          # 'face-on', 'edge-on', or None
     mpb         = None          # use None for non-movie/single frame
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
-        plotStyle  = 'open'  # open, edged, open_black, edged_black
-        rasterPx   = 1400    # each panel will have this number of pixels if making a raster (png) output
-                             # but it also controls the relative size balance of raster/vector (e.g. fonts)
-        colorbars  = True    # include colorbars
+        plotStyle  = 'open'       # open, edged, open_black, edged_black
+        rasterPx   = [1400,1400]  # each panel will have this number of pixels if making a raster (png) output
+                                  # but it also controls the relative size balance of raster/vector (e.g. fonts)
+        colorbars  = True         # include colorbars
 
         saveFilename = savePathDefault + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
@@ -202,6 +204,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
         if not hasattr(plotConfig,var):
             setattr(plotConfig,var,getattr(plotConfigDefaults,var))
+
+    if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
     # finalize panels list (insert defaults as necessary)
     for p in panels:
@@ -274,16 +278,18 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     labelSim    = False           # label simulation name (lower right corner) of panel
     labelHalo   = False           # label halo total mass and stellar mass
     labelCustom = False           # custom label string to include
-    plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
+    plotSubhalos = False          # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
+    projType    = 'ortho'         # projection type, 'ortho', 'equirectangular'
+    projParams  = {}              # dictionary of parameters associated to this projection type
     rotation    = None            # 'face-on', 'edge-on', or None
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
-        plotStyle  = 'open' # open, edged, open_black, edged_black
-        rasterPx   = 1200   # each panel will have this number of pixels if making a raster (png) output
-                            # but it also controls the relative size balance of raster/vector (e.g. fonts)
-        colorbars = True    # include colorbars
+        plotStyle  = 'open'       # open, edged, open_black, edged_black
+        rasterPx   = [1200,1200]  # each panel will have this number of pixels if making a raster (png) output
+                                  # but it also controls the relative size balance of raster/vector (e.g. fonts)
+        colorbars = True          # include colorbars
 
         savePath = savePathDefault
         saveFileBase = 'renderHaloFrame' # filename base upon which frame numbers are appended
@@ -298,6 +304,8 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
         if not hasattr(plotConfig,var):
             setattr(plotConfig,var,getattr(plotConfigDefaults,var))
+
+    if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
     # load MPB properties for each panel, could be e.g. different runs (do not modify below)
     for p in panels:

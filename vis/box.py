@@ -74,15 +74,17 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     plotHalos   = 20          # plot virial circles for the N most massive halos in the box
+    projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
+    projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
-        plotStyle = 'open'   # open, edged, open_black, edged_black
-        rasterPx  = 1400     # each panel will have this number of pixels if making a raster (png) output
-                             # but it also controls the relative size balance of raster/vector (e.g. fonts)
-        colorbars = True     # include colorbars
+        plotStyle = 'open'       # open, edged, open_black, edged_black
+        rasterPx  = [1400,1400]  # each panel will have this number of pixels if making a raster (png) output
+                                 # but it also controls the relative size balance of raster/vector (e.g. fonts)
+        colorbars = True         # include colorbars
 
         saveFilename = savePathDefault + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
@@ -90,6 +92,8 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
         if not hasattr(plotConfig,var):
             setattr(plotConfig,var,getattr(plotConfigDefaults,var))
+
+    if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
     # finalize panels list (do not modify below)
     for p in panels:
@@ -153,13 +157,15 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     plotHalos   = 0           # plot virial circles for the N most massive halos in the box
+    projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
+    projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
         plotStyle = 'open'     # open, edged, open_black, edged_black
-        rasterPx  = 960        # each panel will have this number of pixels if making a raster (png) output
+        rasterPx  = [960,960]  # each panel will have this number of pixels if making a raster (png) output
                                # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True       # include colorbars
 
@@ -176,6 +182,8 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     for var in [v for v in vars(plotConfigDefaults) if not v.startswith("__")]:
         if not hasattr(plotConfig,var):
             setattr(plotConfig,var,getattr(plotConfigDefaults,var))
+
+    if not isinstance(plotConfig.rasterPx,list): plotConfig.rasterPx = [plotConfig.rasterPx,plotConfig.rasterPx]
 
     # finalize panels list (do not modify below)
     for p in panels:

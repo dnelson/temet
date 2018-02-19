@@ -59,8 +59,11 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     """ Core routine for sphMap(), see below. """
     # init
     NumPart = pos.shape[0]
-    BoxHalf = boxSizeSim / 2.0
     axis3   = 3 - axes[0] - axes[1]
+
+    BoxHalf = np.zeros( 3, dtype=np.float32 )
+    for i in range(3):
+        BoxHalf[i] = boxSizeSim[i] / 2.0
 
     # coefficients for SPH spline kernel and its derivative
     if ndims == 1:
@@ -100,7 +103,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 
         # clip points ouside box (z) dimension
         if pos.shape[1] == 3:
-            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf,boxSizeSim) ) > 0.5 * boxSizeImg[2]:
+            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5 * boxSizeImg[2]:
                 continue
 
         # clamp smoothing length
@@ -110,8 +113,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
             h = hsmlMax
 
         # clip points outside box (x,y) dimensions
-        if np.abs( _NEAREST(p0-boxCen[0],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[0]+h or \
-           np.abs( _NEAREST(p1-boxCen[1],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[1]+h:
+        if np.abs( _NEAREST(p0-boxCen[0],BoxHalf[0],boxSizeSim[0]) ) > 0.5*boxSizeImg[0]+h or \
+           np.abs( _NEAREST(p1-boxCen[1],BoxHalf[1],boxSizeSim[1]) ) > 0.5*boxSizeImg[1]+h:
            continue
 
         # position relative to box (x,y) center
@@ -153,8 +156,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         for dx in range(-nx,nx+1):
             for dy in range(-ny,ny+1):
                 # coordinates of pixel center of covering pixels
-                xxx = _NEAREST_POS(x + dx * pixelSizeX, boxSizeSim)
-                yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim)
+                xxx = _NEAREST_POS(x + dx * pixelSizeX, boxSizeSim[0])
+                yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[1])
 
                 # pixel array indices
                 i = np.int(xxx / pixelSizeX)
@@ -201,8 +204,8 @@ def _gridInterp(posTarget,kT,axes,boxCen,boxSizeImg,boxSizeSim,
     p0T = posTarget[kT,axes[0]]
     p1T = posTarget[kT,axes[1]]
 
-    pos0T = _NEAREST_POS( p0T - (boxCen[0] - 0.5*boxSizeImg[0]), boxSizeSim )
-    pos1T = _NEAREST_POS( p1T - (boxCen[1] - 0.5*boxSizeImg[1]), boxSizeSim )
+    pos0T = _NEAREST_POS( p0T - (boxCen[0] - 0.5*boxSizeImg[0]), boxSizeSim[0] )
+    pos1T = _NEAREST_POS( p1T - (boxCen[1] - 0.5*boxSizeImg[1]), boxSizeSim[1] )
 
     # pixel coordinates (lower-left) of projected target position
     i0 = np.int(np.floor(pos0T / pixelSizeX))
@@ -218,8 +221,8 @@ def _gridInterp(posTarget,kT,axes,boxCen,boxSizeImg,boxSizeSim,
         x = (np.floor( pos0T / pixelSizeX ) + 0.5) * pixelSizeX
         y = (np.floor( pos1T / pixelSizeY ) + 0.5) * pixelSizeY
 
-        xxx = _NEAREST_POS(x, boxSizeSim)
-        yyy = _NEAREST_POS(y, boxSizeSim)
+        xxx = _NEAREST_POS(x, boxSizeSim[0])
+        yyy = _NEAREST_POS(y, boxSizeSim[1])
 
         i = np.int(xxx / pixelSizeX)
         j = np.int(yyy / pixelSizeY)
@@ -256,8 +259,11 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
     # init
     NumPart   = pos.shape[0]
     NumTarget = posTarget.shape[0]
-    BoxHalf   = boxSizeSim / 2.0
     axis3     = 3 - axes[0] - axes[1]
+
+    BoxHalf = np.zeros( 3, dtype=np.float32 )
+    for i in range(3):
+        BoxHalf[i] = boxSizeSim[i] / 2.0
 
     # coefficients for SPH spline kernel and its derivative
     if ndims == 1:
@@ -274,7 +280,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
         COEFF_3 = 5.092958178941
 
     # find minimum of axis3 coordinate
-    min_axis3 = boxSizeSim * 2.0
+    min_axis3 = boxSizeSim[axis3] * 2.0
     pos_axis3 = np.zeros( NumPart, dtype=np.float32 )
     posTarget_axis3 = np.zeros( NumTarget, dtype=np.float32 )
 
@@ -289,9 +295,9 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
     # sort indices along periodic(axis3) for both pos and posTarget
     for i in range(NumPart):
-        pos_axis3[i] = _NEAREST(pos_axis3[i]-min_axis3,BoxHalf,boxSizeSim)
+        pos_axis3[i] = _NEAREST(pos_axis3[i]-min_axis3,BoxHalf[i],boxSizeSim[i])
     for i in range(NumTarget):
-        posTarget_axis3[i] = _NEAREST(posTarget_axis3[i]-min_axis3,BoxHalf,boxSizeSim) 
+        posTarget_axis3[i] = _NEAREST(posTarget_axis3[i]-min_axis3,BoxHalf[i],boxSizeSim[i]) 
 
     pos_sortInds = np.argsort(pos_axis3) # requires numba 0.28+
     posTarget_sortInds = np.argsort(posTarget_axis3)
@@ -327,7 +333,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
         w  = quant[k] if quant.size > 1 else 0.0
 
         # (A) check target list
-        while _NEAREST(p2T-p2,BoxHalf,boxSizeSim) <= 0.0:
+        while _NEAREST(p2T-p2,BoxHalf[axis3],boxSizeSim[axis3]) <= 0.0:
             # target z-coordinate has been passed, record grid value now
             dens_interp, quant_interp = _gridInterp(posTarget,kT,axes,boxCen,boxSizeImg,boxSizeSim,
                                           nPixels,pixelSizeX,pixelSizeY,invPixelArea,dens_out,quant_out)
@@ -343,7 +349,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
             if targetInd >= NumTarget:
                 # exit while loop and never re-enter
-                p2T = boxSizeSim * 2.0
+                p2T = boxSizeSim[axis3] * 2.0
                 break
 
             kT = posTarget_sortInds[targetInd]
@@ -357,7 +363,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
         # clip points ouside box (z) dimension
         if pos.shape[1] == 3:
-            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf,boxSizeSim) ) > 0.5 * boxSizeImg[2]:
+            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5 * boxSizeImg[2]:
                 continue
 
         # clamp smoothing length
@@ -367,8 +373,8 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
             h = hsmlMax
 
         # clip points outside box (x,y) dimensions
-        if np.abs( _NEAREST(p0-boxCen[0],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[0]+h or \
-           np.abs( _NEAREST(p1-boxCen[1],BoxHalf,boxSizeSim) ) > 0.5*boxSizeImg[1]+h:
+        if np.abs( _NEAREST(p0-boxCen[0],BoxHalf[0],boxSizeSim[0]) ) > 0.5*boxSizeImg[0]+h or \
+           np.abs( _NEAREST(p1-boxCen[1],BoxHalf[1],boxSizeSim[1]) ) > 0.5*boxSizeImg[1]+h:
            continue
 
         # position relative to box (x,y) center
@@ -408,8 +414,8 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
         for dx in range(-nx,nx+1):
             for dy in range(-ny,ny+1):
                 # coordinates of pixel center of covering pixels
-                xxx = _NEAREST_POS(x + dx * pixelSizeX, boxSizeSim)
-                yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim)
+                xxx = _NEAREST_POS(x + dx * pixelSizeX, boxSizeSim[0])
+                yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[0])
 
                 # pixel array indices
                 i = np.int(xxx / pixelSizeX)
@@ -476,7 +482,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
           Note: transpose of _calcSphMap() is taken such that with default plotting approaches e.g. 
                 axes=[0,1] gives imshow(return[i,j]) with x and y axes corresponding correctly to 
                 code coordinates. 
-          Note: both boxSizeImg and boxCenter [0,1,2] correspond to [axes[0],axes[1],axes2], meaning
+          Note: both boxSizeImg, boxCenter, and boxSizeSim [0,1,2] correspond to [axes[0],axes[1],axes2], meaning
                 pos[:,axes[0]] is compared against the first entries boxSizeImg[0] and boxCenter[0]
                 and not compared against e.g. boxSizeImg[axes[0]].
 
@@ -486,7 +492,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       quant[N]       : array of some quantity to calculate a mass-weighted projection of (None=skip)
       axes[2]        : list of two axis indices, e.g. [0,1] for x,y (project along z-axis)
       boxSizeImg[3]  : the physical size the image should cover, same units as pos
-      boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      boxSizeSim[3]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
       boxCen[3]      : (x,y,z) coordinates of the center of the imaging box, same units as pos
       nPixels[2]     : number of pixels in x,y directions for output image
       ndims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
@@ -504,10 +510,15 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       minIntProj     : perform a -minimum- intensity projection, instead of the usual weighting
     """
     # input sanity checks
-    if len(boxSizeImg) != 3 or not isinstance(boxSizeSim,(float)) or len(boxCen) != 3:
+    if len(boxSizeImg) != pos.shape[1] or len(boxCen) != pos.shape[1]:
         raise Exception('Strange size of box input(s).')
     if len(nPixels) != 2 or len(axes) != 2:
         raise Exception('Strange size of imaging input(s).')
+
+    if not isinstance(boxSizeSim,(float)):
+        assert len(boxSizeSim) == 3
+    else:
+        boxSizeSim = [boxSizeSim, boxSizeSim, boxSizeSim] # same in all 3 coordinate directions
 
     if pos.ndim != 2 or (pos.shape[1] != 3 and pos.shape[1] != 2) or pos.shape[0] <= 1:
         raise Exception('Strange dimensions of pos.')
