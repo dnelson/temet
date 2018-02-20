@@ -1205,6 +1205,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 mass[w] = 0.0
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
+            hsml_1 = None
+
             if projType == 'equirectangular':
                 assert axes == [0,1] # by convention
                 assert projParams['fov'] == 360.0
@@ -1219,14 +1221,19 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
                 # cartesian to spherical coordinates
                 s_rad = np.sqrt(pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2)
-                s_lat = np.arctan2(pos[:,2], np.sqrt(pos[:,0]**2 + pos[:,1]**2)) # latitude in [-pi/2,pi/2], defined from XY plane up
-                s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude in [-pi,pi]
+                s_lat = np.arctan2(pos[:,2], np.sqrt(pos[:,0]**2 + pos[:,1]**2)) # latitude (phi) in [-pi/2,pi/2], defined from XY plane up
+                s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude (lambda) in [-pi,pi]
 
                 # hsml: convert from kpc to deg (compute angular diameter)
-                hsml = 2 * np.arcsin(hsml_orig / (2*s_rad))
-                hsml = hsml.astype('float32')
+                w = np.where(hsml_orig > 2*s_rad)
+                hsml_orig[w] = 1.999*s_rad[w] # otherwise outside arcsin
 
-                hsml /= np.cos(s_lat) # TODO: needs to be hsml_x only!!! need asymmetric hsml support in sphMap()
+                hsml = 2 * np.arcsin(hsml_orig / (2*s_rad))
+
+                # handle differential distortion along x/y directions
+                hsml_1 = hsml.astype('float32') # hsml_1 (hsml_y) unmodified
+                hsml = hsml / np.cos(s_lat) # hsml_0 (i.e. hsml_x) only
+                hsml = hsml.astype('float32')
 
                 # we will project in this space, periodic on the boundaries
                 pos = np.zeros( (pos.shape[0],2), dtype=pos.dtype )
@@ -1293,7 +1300,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # render
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                                          boxSizeSim=boxSizeSim, boxSizeImg=boxSizeImgMap, boxCen=boxCenterMap, 
-                                         nPixels=nPixels, colDens=normCol, multi=True, 
+                                         nPixels=nPixels, hsml_1=hsml_1, colDens=normCol, multi=True, 
                                          maxIntProj=maxIntProj, minIntProj=minIntProj )
 
                 # accumulate for chunked processing
