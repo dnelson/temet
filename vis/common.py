@@ -812,14 +812,22 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if partField in ['coldens_msun_ster']:
         assert projType == 'equirectangular' # otherwise generalize
-        # grid is (code mass) / pixelArea = (code mass) / steradian
-        pxArea = (2*np.pi/2000) * (np.pi/1000) # steradian
+        # grid is (code mass) / pixelArea where pixelArea is incorrectly constant as:
+        pxArea = (2*np.pi/nPixels[0]) * (np.pi/nPixels[1]) # steradian
+        grid *= pxArea # remove normalization
+
+        dlat = np.pi/nPixels[1]
+        lats = np.linspace(0.0+dlat/2, np.pi-dlat/2, nPixels[1]) # rad, 0 to np.pi from z-axis
+        pxAreasByLat = np.sin(lats) * pxArea # infinite at poles, 0 at equator
+
+        for i in range(nPixels[1]): # normalize separately for each latitude
+            grid[i,:] /= pxAreasByLat[i]
 
         grid = logZeroMin( sP.units.codeMassToMsun(grid) ) # log(msun/ster)
         config['label'] = '%s Column Density [log M$_{\\rm sun}$ ster$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng4'
+        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gray' #'gasdens_tng4'
         if sP.isPartType(partType,'stars'): config['ctName'] = 'gray'
 
     # hydrogen/metal/ion column densities
@@ -1222,6 +1230,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # cartesian to spherical coordinates
                 s_rad = np.sqrt(pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2)
                 s_lat = np.arctan2(pos[:,2], np.sqrt(pos[:,0]**2 + pos[:,1]**2)) # latitude (phi) in [-pi/2,pi/2], defined from XY plane up
+                ##s_lat = np.arccos(pos[:,2] / s_rad) # latitude (phi) in [0,pi], defined from z-axis down
                 s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude (lambda) in [-pi,pi]
 
                 # hsml: convert from kpc to deg (compute angular diameter)
