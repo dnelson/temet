@@ -213,7 +213,7 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
     return numNodes
 
 @jit(nopython=True, nogil=True, cache=True)
-def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nextnode):
+def _treeSearch(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nextnode,quant,op):
     """ Helper routine for calcHsml(), see below. """
     boxHalf = 0.5 * boxSizeSim
 
@@ -222,6 +222,12 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
 
     numNgbInH = 0
     numNgbWeightedInH = 0.0
+
+    quantResult = 0.0
+    if op == 2: # max
+        quantResult = -np.inf
+    if op == 3: # min
+        quantResult = np.inf
 
     # 3D-normalized kernel
     C1 = 2.546479089470  # COEFF_1
@@ -262,7 +268,22 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
             numNgbInH += 1
 
             # weighted count
-            numNgbWeightedInH += CN * _getkernel(hinv, r2, C1, C2, C3)
+            kval = _getkernel(hinv, r2, C1, C2, C3)
+            numNgbWeightedInH += CN * kval
+
+            # reduction operation on particle quantity
+            if op == 1: # sum
+                quantResult += quant[p]
+            if op == 2: # max
+                if quant[p] > quantResult: quantResult = quant[p]
+            if op == 3: # min
+                if quant[p] < quantResult: quantResult = quant[p]
+            if op == 4: # unweighted mean
+                quantResult += quant[p]
+            if op == 5: # kernel-weighted mean
+                quantResult += quant[p] * kval
+            if op == 6: # count
+                quantResult += 1
 
         else:
             # internal node
@@ -286,10 +307,15 @@ def _treeSearchNumNgb(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibli
 
             no = nextnode[ind] # we need to open the node
 
-    return numNgbInH, numNgbWeightedInH
+    if op == 4: # mean
+        if numNgbInH != 0.0: quantResult /= numNgbInH
+    if op == 5: # kernel-weighted mean
+        if numNgbWeightedInH != 0.0: quantResult /= numNgbWeightedInH
+
+    return numNgbInH, numNgbWeightedInH, quantResult
 
 @jit(nopython=True, nogil=True, cache=True)
-def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
+def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
                           next_node,length,center,sibling,nextnode,weighted_num):
     """ Helper routine for calcHsml(), see below. """
     left  = 0.0
@@ -306,8 +332,8 @@ def _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
 
         assert iter_num < 1000 # Convergence failure, too many iterations.
 
-        numNgbInH, numNgbWeightedInH = _treeSearchNumNgb(xyz,h_guess,NumPart,boxSizeSim,pos,
-                                                         next_node,length,center,sibling,nextnode)
+        numNgbInH, numNgbWeightedInH, dummy = _treeSearch(xyz,h_guess,NumPart,boxSizeSim,pos,
+                                                          next_node,length,center,sibling,nextnode,-1,-1)
 
         # looking for h enclosing the SPH kernel weighted number, instead of the actual number?
         if weighted_num:
@@ -360,16 +386,72 @@ def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
         # single ball search using octtree, requesting hsml which enclosed nNGB+/-nNGBDev around xyz
         xyz = posSearch[ind0+i,:]
 
-        hsml[i] = _treeSearchHsmlSingle(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
-                                        next_node,length,center,sibling,nextnode,weighted_num)
+        hsml[i] = _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
+                                         next_node,length,center,sibling,nextnode,weighted_num)
 
         # use previous result as guess for the next (any spatial ordering will greatly help)
         h_guess = hsml[i]
 
     return hsml
 
+@jit(nopython=True, nogil=True, cache=True)
+def _treeSearchQuantReduction(posSearch,hsml,ind0,ind1,boxSizeSim,pos,quant,opnum,
+                              next_node,length,center,sibling,nextnode):
+    """ Core routine for calcQuantReduction(), see below. """
+    numSearch = ind1 - ind0 + 1
+    NumPart = pos.shape[0]
+
+    result = np.zeros( numSearch, dtype=np.float32 )
+
+    for i in range(numSearch):
+        # single ball search using octtree, requesting reduction of a given type on the 
+        # quantity of all the particles within a fixed distance hsml around xyz
+        xyz = posSearch[ind0+i,:]
+        h = hsml[ind0+i] if hsml.shape[0] > 1 else hsml[0] # variable or constant
+
+        _, _, result[i] = _treeSearch(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,
+                                      sibling,nextnode,quant,opnum)
+
+    return result
+
+def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
+    """ Helper. See below. """
+    treePrecs = {'single':'float32','double':'float64'}
+    if treePrec in treePrecs.keys(): treePrec = treePrecs[treePrec]
+    assert treePrec in treePrecs.values()
+
+    start_time = time.time()
+
+    NumPart = pos.shape[0]
+    NextNode = np.zeros( NumPart, dtype='int32' )
+
+    # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
+    for num_iter in range(10):
+        # allocate
+        MaxNodes = np.int( (num_iter+1.1)*NumPart ) + 1
+
+        length   = np.zeros( MaxNodes, dtype=treePrec )     # NODE struct member
+        center   = np.zeros( (3,MaxNodes), dtype=treePrec ) # NODE struct member
+        suns     = np.zeros( (8,MaxNodes), dtype='int32' )   # NODE.u first union member
+        sibling  = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+        nextnode = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+
+        # construct: call JIT compiled kernel
+        numNodes = _constructTree(pos,boxSizeSim,NextNode,length,center,suns,sibling,nextnode)
+
+        if numNodes > 0:
+            break
+
+        print(' tree: increase alloc %g to %g and redo...' % (num_iter+1.1,num_iter+2.1))
+
+    assert numNodes > 0, 'Tree: construction failed!'
+    if verbose:
+        print(' tree: construction took [%g] sec.' % (time.time()-start_time))
+
+    return NextNode, length, center, sibling, nextnode
+
 def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
-             treePrec='single', nThreads=8):
+             treePrec='single', tree=None, nThreads=16):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
@@ -382,53 +464,29 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
       nDims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
       weighted_num   : if True, search for SPH kernel weighted number of neighbors, instead of real number
       treePrec       : construct the tree using 'single' or 'double' precision for coordinates
+      tree           : if not None, should be a list of all the needed tree arrays (pre-computed), 
+                       i.e the exact return of buildFullTree()
       nThreads       : do multithreaded calculation (on treefind, while tree construction remains serial)
     """
     # input sanity checks
-    treePrecs = ['single','double']
     treeDims  = [3]
 
     assert pos.ndim == 2 and pos.shape[1] in treeDims, 'Strange dimensions of pos.'
     assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
     assert nDims in treeDims, 'Invalid ndims specification (3D only).'
-    assert treePrec in ['single','double'], 'Invalid treePrec specification.'
 
     # handle small inputs
     if pos.shape[0] < nNGB-nNGBDev:
         nNGBDev = nNGB - pos.shape[0] + 1
         print('WARNING: Less particles than requested neighbors. Increasing nNGBDev to [%d]!' % nNGBDev)
 
-    treeDtype = 'float32' if treePrec == 'single' else 'float64'
-
-    NumPart = pos.shape[0]
-
-    # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
-    start_time = time.time()
-    print(' calcHsml(): starting...')
-
-    NextNode = np.zeros( NumPart, dtype='int32' )
-
-    for num_iter in range(10):
-        # allocate
-        MaxNodes = np.int( (num_iter+1.1)*NumPart ) + 1
-
-        length   = np.zeros( MaxNodes, dtype=treeDtype )     # NODE struct member
-        center   = np.zeros( (3,MaxNodes), dtype=treeDtype ) # NODE struct member
-        suns     = np.zeros( (8,MaxNodes), dtype='int32' )   # NODE.u first union member
-        sibling  = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
-        nextnode = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
-
-        # construct: call JIT compiled kernel
-        numNodes = _constructTree(pos,boxSizeSim,NextNode,length,center,suns,sibling,nextnode)
-
-        if numNodes > 0:
-            break
-
-        print(' calcHsml(): increase alloc %g to %g and redo...' % (num_iter+1.1,num_iter+2.1))
-
+    # build tree
+    if tree is None:
+        NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec)
+    else:
+        NextNode, length, center, sibling, nextnode = tree # split out list
+        
     build_done_time = time.time()
-    assert numNodes > 0, 'Tree construction failed.'
-    print(' calcHsml(): tree construction took [%g] sec.' % (build_done_time-start_time))
 
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
@@ -446,7 +504,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         hsml = _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
                                   NextNode,length,center,sibling,nextnode,weighted_num)
 
-        print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-build_done_time))
+        #print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-build_done_time))
         return hsml
 
     # else, multithreaded
@@ -475,6 +533,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
             # create views to other arrays
             self.posSearch = posSearch
             self.pos       = pos
+
             self.NextNode  = NextNode
             self.length    = length
             self.center    = center
@@ -503,8 +562,126 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         # after each has finished, add its result array to the global
         hsml[thread.ind0 : thread.ind1 + 1] = thread.hsml
 
-    print(' calcHsml(): search took [%g] sec.' % (time.time()-build_done_time))
+    #print(' calcHsml(): search took [%g] sec.' % (time.time()-build_done_time))
     return hsml
+
+def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec='single', tree=None, nThreads=16):
+    """ Calculate a reduction of a given quantity reduction on all the particles within a fixed search 
+    distance hsml around each pos. If posSearch==None, then pos defines both the neighbor and search point 
+    sets, otherwise a reduction at the location of each posSearch is calculated by searching for nearby points in pos.
+        
+      pos[N,3]/[N,2]  : array of 3-coordinates for the particles (or 2-coords for 2D)
+      quant[N]        : array of quantity values (i.e. mass, temperature)
+      hsml[N]/hsml[1] : array of search distances, or scalar value if constant
+      op              : 'min', 'max', 'mean', 'kernel_mean', 'sum', 'count'
+      boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      treePrec        : construct the tree using 'single' or 'double' precision for coordinates
+      tree            : if not None, should be a list of all the needed tree arrays (pre-computed), 
+                        i.e the exact return of buildFullTree()
+      nThreads        : do multithreaded calculation (on treefind, while tree construction remains serial)
+    """
+    # input sanity checks
+    nDims = pos.shape[1]
+    ops = {'sum':1, 'max':2, 'min':3, 'mean':4, 'kernel_mean':5, 'count':6}
+    treeDims  = [3]
+
+    if isinstance(hsml,float):
+        hsml = [hsml]
+    hsml = np.array(hsml, dtype='float32')
+
+    assert pos.ndim == 2 and pos.shape[1] in treeDims, 'Strange dimensions of pos.'
+    assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
+    assert pos.shape[1] in treeDims, 'Invalid ndims specification (3D only).'
+    assert quant.ndim == 1 and quant.size == pos.shape[0], 'Strange quant shape.'
+    assert hsml.size == 1 or hsml.size == quant.size, 'Strange hsml shape.'
+    assert op in ops.keys(), 'Unrecognized reduction operation.'
+
+    # build tree
+    if tree is None:
+        NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec)
+    else:
+        NextNode, length, center, sibling, nextnode = tree # split out list
+
+    build_done_time = time.time()
+
+    if posSearch is None:
+        posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
+
+    if posSearch.shape[0] < nThreads:
+        nThreads = 1
+        print('WARNING: Less particles than requested threads. Just running in serial.') 
+
+    opnum = ops[op]
+
+    # single threaded?
+    # ----------------
+    if nThreads == 1:
+        ind0 = 0
+        ind1 = posSearch.shape[0] - 1
+
+        result = _treeSearchQuantReduction(posSearch,hsml,ind0,ind1,boxSizeSim,pos,quant,opnum,
+                                           NextNode,length,center,sibling,nextnode)
+
+        print(' calcQuantReduction(): took [%g] sec (serial).' % (time.time()-build_done_time))
+        return result
+
+    # else, multithreaded
+    # -------------------
+    class searchThread(threading.Thread):
+        """ Subclass Thread() to provide local storage (hsml) which can be retrieved after 
+            this thread terminates and added to the global return. Note (on Ody2): This algorithm with 
+            the serial overhead of the tree construction has ~55% scaling effeciency to 16 threads (~8x
+            speedup), drops to ~32% effeciency at 32 threads (~10x speedup). """
+        def __init__(self, threadNum, nThreads):
+            super(searchThread, self).__init__()
+
+            # determine local slice (this is a view instead of a copy, even better)
+            searchInds = np.arange(posSearch.shape[0])
+            inds = pSplit(searchInds, nThreads, threadNum)
+
+            self.ind0 = inds[0]
+            self.ind1 = inds[-1]
+
+            # copy other parameters (non-self inputs to _calc() appears to prevent GIL release)
+            self.boxSizeSim = boxSizeSim
+            self.opnum      = opnum
+
+            # create views to other arrays
+            self.posSearch = posSearch
+            self.pos       = pos
+            self.hsml      = hsml
+            self.quant     = quant
+
+            self.NextNode  = NextNode
+            self.length    = length
+            self.center    = center
+            self.sibling   = sibling
+            self.nextnode  = nextnode
+
+        def run(self):
+            # call JIT compiled kernel (normQuant=False since we handle this later)
+            self.result = _treeSearchQuantReduction(self.posSearch,self.hsml,self.ind0,self.ind1,self.boxSizeSim,
+                                                    self.pos,self.quant,self.opnum,
+                                                    self.NextNode,self.length,self.center,self.sibling,self.nextnode)
+
+    # create threads
+    threads = [searchThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
+
+    # allocate master return grids
+    result = np.zeros( posSearch.shape[0], dtype=np.float32 )
+
+    # launch each thread, detach, and then wait for each to finish
+    for thread in threads:
+        thread.start()
+        
+    for thread in threads:
+        thread.join()
+
+        # after each has finished, add its result array to the global
+        result[thread.ind0 : thread.ind1 + 1] = thread.result
+
+    #print(' calcQuantReduction(): took [%g] sec.' % (time.time()-build_done_time))
+    return result
 
 def benchmark():
     """ Benchmark performance of calcHsml(). """

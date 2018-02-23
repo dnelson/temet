@@ -779,7 +779,7 @@ def subboxSubhaloCat(sP, sbNum):
         # subbox cannot cross periodic boundary, so no need to account for periodic BCs here
         inside = (dist_x < subboxHalfSize) & (dist_y < subboxHalfSize) & (dist_z < subboxHalfSize)
 
-        # calculate minimum distances for the time inside, along each axis (negative = outside, positive = inside)
+        # calculate minimum distances along each axis (negative = outside, positive = inside)
         min_dists = np.min( np.vstack( (subboxHalfSize-dist_x,subboxHalfSize-dist_y,subboxHalfSize-dist_z) ), axis=0 )
 
         return inside, min_dists
@@ -927,11 +927,11 @@ def subboxSubhaloCat(sP, sbNum):
         r['SubhaloMBID'][i,:] = mbID
 
         # minimum distance to subbox boundary and bounding snapshots where this subhalo is inside the subbox
-        flags, min_dists = _inSubbox(pos)
+        flags, min_axis_dists = _inSubbox(pos)
         w = np.where(flags)[0]
 
         for j in range(r['minEdgeDistRedshifts'].size): # negative = outside, positive = inside
-            r['SubhaloMinEdgeDist'][i,j] = min_dists[ minEdgeIndices[j] ].min()
+            r['SubhaloMinEdgeDist'][i,j] = min_axis_dists[ minEdgeIndices[j] ].min() 
 
         if len(w) == 0:
             # mpb['SubhaloPos'] is inside, but pos is not: should be extremely rare (and require SnapNumMapApprox.sum()>0)
@@ -947,26 +947,50 @@ def subboxSubhaloCat(sP, sbNum):
             f[key] = r[key]
     print('Saved intermediate: [%s]' % filePath)
 
-    return
+    return r
+    
+def subboxSubhaloCatExtend(sP, sbNum):
+    """ Extend the SubboxSubhaloList catalog with particle-level interpolated properties (i.e. M* < 30pkpc) of 
+    the relevant subhalos at each subbox snapshot. Separated into second step since this is a heavy calculation. """
+    from cosmo.mergertree import loadMPBs
+    from util.simParams import simParams
+    from util.treeSearch import calcQuantReduction, buildFullTree
+
+    fileBase = sP.postPath + '/SubboxSubhaloList/'
+    filePath = fileBase + 'subbox%d_%d.hdf5' % (sbNum, sP.snap)
+
+    # check for existence and load
+    r = {}
+    assert isfile(filePath)
+
+    with h5py.File(filePath,'r') as f:
+        for key in f:
+            r[key] = f[key][()]
 
     # allocate for additional quantities
     nApertures = 3
-    r['SubhaloStars_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
-    r['SubhaloGas_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
-    r['SubhaloBH_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
+    nSubSnaps = r['SubboxScaleFac'].size
 
-    r['SubhaloGas_SFR'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
-    r['SubhaloBH_CumEgyInjection_QM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
-    r['SubhaloBH_CumEgyInjection_RM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='float32' )
-    r['SubhaloBH_Num'] = np.zeros( (r['SubhaloIDs'].size, nApertures, subboxTimes.size), dtype='int16' )
+    r['SubhaloStars_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
+    r['SubhaloGas_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
+    r['SubhaloBH_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
 
-    print('\nLoading subbox and deriving additional quantities...')
-    for sbSnapNum in range(subboxTimes.size):
+    r['SubhaloGas_SFR'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
+    r['SubhaloBH_CumEgyInjection_QM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
+    r['SubhaloBH_CumEgyInjection_RM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
+    r['SubhaloBH_Num'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='int16' )
+    r['SubhaloBH_Mass2'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='int16' )
+
+    sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
+
+    print('Loading subbox and deriving additional quantities...')
+
+    for sbSnapNum in range(nSubSnaps):
         # load
         sP_sub.setSnap(sbSnapNum)
 
         apertures_sq = [sP_sub.units.physicalKpcToCodeLength(30.0)**2, 30.0**2, 50.0**2] # 30 pkpc, 30 ckpc/h, 50 ckpc/h
-        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/subboxTimes[sbSnapNum]-1,np.sqrt(apertures_sq[0])))
+        print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/r['SubboxScaleFac'][sbSnapNum]-1,np.sqrt(apertures_sq[0])))
 
         # loop over particle types
         for ptType in ['gas','stars','bh']:
@@ -975,7 +999,8 @@ def subboxSubhaloCat(sP, sbNum):
                 loadFields.append('StarFormationRate')
             if ptType == 'bh':
                 loadFields.append('BH_CumEgyInjection_QM')
-                loadFields.append('BH_CumEgyInjection_RM')  
+                loadFields.append('BH_CumEgyInjection_RM')
+                loadFields.append('BH_Mass')
                 
             # particle data load   
             x = cosmo.load.snapshotSubset(sP_sub, ptType, loadFields)
@@ -983,35 +1008,39 @@ def subboxSubhaloCat(sP, sbNum):
             if x['count'] == 0:
                 continue
 
-            # loop over each subhalo
-            for i, subhaloID in enumerate(r['SubhaloIDs']):
-                # compute distances to all subbox particles/cells from the interpolated position of this subhalo
-                xDist = x['Coordinates'][:,0] - r['SubhaloPos'][i,sbSnapNum,0]
-                yDist = x['Coordinates'][:,1] - r['SubhaloPos'][i,sbSnapNum,1]
-                zDist = x['Coordinates'][:,2] - r['SubhaloPos'][i,sbSnapNum,2]
-                distsSq = xDist*xDist + yDist*yDist + zDist*zDist # no periodic needed/possible
+            # tree-based quantity reduction: build tree once per particle type
+            pos = x['Coordinates']
+            posSearch = np.squeeze(r['SubhaloPos'][:,sbSnapNum,:])
 
-                for j, aperture_sq in enumerate(apertures_sq):
-                    w = np.where(distsSq < aperture_sq)
-                    if len(w[0]) == 0: continue
+            tree = buildFullTree(pos, boxSizeSim=0, treePrec='float64')
 
-                    # store properties of all particles/cells within the 3D aperture
-                    saveStr = ptType.capitalize() if ptType != 'bh' else 'BH'
-                    r['Subhalo%s_Mass' % saveStr][i,j,sbSnapNum] = x['Masses'][w].sum()
-                    if ptType == 'gas':
-                        r['SubhaloGas_SFR'][i,j,sbSnapNum] = x['StarFormationRate'][w].sum()
-                    if ptType == 'bh':
-                        r['SubhaloBH_CumEgyInjection_QM'][i,j,sbSnapNum] = x['BH_CumEgyInjection_QM'][w].max()
-                        r['SubhaloBH_CumEgyInjection_RM'][i,j,sbSnapNum] = x['BH_CumEgyInjection_RM'][w].max()
-                        r['SubhaloBH_Num'][i,j,sbSnapNum] = len(w[0])
+            for i, aperture_sq in enumerate(apertures_sq):
+                # successive queries for each aperture search: mass sum
+                hsml = np.sqrt(apertures_sq[i])
+                result = calcQuantReduction(pos, x['Masses'], hsml, op='sum', boxSizeSim=0, posSearch=posSearch, tree=tree)
 
+                # save results
+                saveStr = ptType.capitalize() if ptType != 'bh' else 'BH'
+                r['Subhalo%s_Mass' % saveStr][:,i,sbSnapNum] = result
+
+                if ptType == 'gas':
+                    result1 = calcQuantReduction(pos, x['StarFormationRate'], hsml, op='sum', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    r['SubhaloGas_SFR'][:,i,sbSnapNum] = result1
+                if ptType == 'bh':
+                    result1 = calcQuantReduction(pos, x['BH_CumEgyInjection_QM'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result2 = calcQuantReduction(pos, x['BH_CumEgyInjection_RM'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result3 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='max', boxSizeSim=0, posSearch=posSearch, tree=tree)
+                    result4 = calcQuantReduction(pos, x['BH_Mass'], hsml, op='count', boxSizeSim=0, posSearch=posSearch, tree=tree)
+
+                    r['SubhaloBH_CumEgyInjection_QM'][:,i,sbSnapNum] = result1
+                    r['SubhaloBH_CumEgyInjection_RM'][:,i,sbSnapNum] = result2
+                    r['SubhaloBH_Mass2'][:,i,sbSnapNum] = result3
+                    r['SubhaloBH_Num'][:,i,sbSnapNum] = result4
 
     # save and return
     with h5py.File(filePath) as f:
         for key in r:
             if key not in f:
                 f[key] = r[key]
-    print('Saved: [%s]' % filePath)
 
-    return r
-    
+    print('Saved: [%s]' % filePath)
