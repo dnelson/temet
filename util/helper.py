@@ -762,7 +762,7 @@ def contourf(*args, **kwargs):
 
 def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
     """ Plot a quick 1D histogram of an array x and save it to a PDF. """
-    if skipzeros: x = x[x > 0.0]
+    if skipzeros: x = x[x != 0.0]
 
     # linear (x)
     x_range = [ np.nanmin(x), np.nanmax(x) ]
