@@ -181,14 +181,16 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
-                     contours=None, xlim=None, ylim=None, clim=[-6.0,0.0], hideBelow=False, smoothSigma=0.0, nBins=None):
+                     contours=None, xlim=None, ylim=None, clim=None, hideBelow=False, smoothSigma=0.0, nBins=None, sfreq0=False):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
     not None, then show the mean value per pixel of these quantities, instead of weighted histograms.
+    If xlim,ylim,clim specified, then use these bounds, otherwise use default/automatic bounds.
     If contours is not None, draw solid contours at these levels on top of the 2D histogram image. 
     If smoothSigma is not zero, gaussian smooth contours at this level. 
-    If hideBelow, then pixel values below clim[0] are left pure white. """
+    If hideBelow, then pixel values below clim[0] are left pure white. 
+    If sfreq0 is True, include only non-starforming cells. """
 
     # config
     if nBins is None:
@@ -202,6 +204,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         nBinsY = nBins
 
     sizefac = 0.9
+    clim_default = [-6.0,0.0]
 
     # binned_statistic_2d instead of histogram2d?
     binnedStat = False
@@ -230,6 +233,13 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
     if ylog: yvals = np.log10(yvals)
 
+    if sfreq0:
+        # restrict to non eEOS cells
+        sfr = snapshotSubset(sP, partType, 'sfr', haloID=haloID)
+        w_sfr = np.where(sfr == 0.0)
+        xvals = xvals[w_sfr]
+        yvals = yvals[w_sfr]
+
     # start figure
     fig = plt.figure(figsize=[figsize[0]*sizefac*(len(weights)*0.9), figsize[1]*sizefac])
 
@@ -237,6 +247,9 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     for i, wtProp in enumerate(weights):
         # load: weights
         weight = snapshotSubset(sP, partType, wtProp, haloID=haloID)
+
+        if sfreq0:
+            weight = weight[w_sfr]
 
         # add panel
         ax = fig.add_subplot(1,len(weights),i+1)
@@ -270,12 +283,16 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             zz = zz.T
             if clog: zz = logZeroNaN(zz)
 
-            clim = clim_quant # colorbar limits
+            if clim is None:
+                clim = clim_quant # colorbar limits
         else:
             # plot 2D histogram image, optionally weighted
             zz, _, _ = np.histogram2d(xvals, yvals, bins=[nBinsX, nBinsY], range=[xlim,ylim], 
                                         normed=True, weights=weight)
             zz = logZeroNaN(zz.T)
+
+        if clim is None:
+            clim = clim_default
 
         if hideBelow:
             w = np.where(zz < clim[0])

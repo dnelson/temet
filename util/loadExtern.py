@@ -1501,6 +1501,57 @@ def catinella2018():
 
     return r
 
+def foersterSchreiber2018():
+    """ Load observational data from Foerster Schreiber+ (2018) SINS AO survey. """
+    path = dataBasePath + 'foerster.schreiber/fs2018_table1.txt'
+
+    # load first table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    mag_K = np.zeros( nLines, dtype='float32' ) # AB
+    z     = np.zeros( nLines, dtype='float32' ) # redshift
+    Mstar = np.zeros( nLines, dtype='float32' ) # log(Msun)
+    A_V   = np.zeros( nLines, dtype='float32' ) # mag
+    SFR   = np.zeros( nLines, dtype='float32' ) # SED derived, Msun/yr
+    sSFR  = np.zeros( nLines, dtype='float32' ) # SED derived, 1/Gyr
+    SFR_uvir  = np.zeros( nLines, dtype='float32' ) # UV+IR derived (many non-detections, indicated by -1)
+    sSFR_uvir = np.zeros( nLines, dtype='float32' ) # UV+IR derived (many non-detections, indicated by -1)
+    color_UV  = np.zeros( nLines, dtype='float32' ) # U-V [mag]
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split('&')
+        name.append(line[0])
+        mag_K[i]    = float(line[3])
+        z[i]        = float(line[4])
+        Mstar[i]    = float(line[5])
+        A_V[i]      = float(line[6])
+        SFR[i]      = float(line[7])
+        sSFR[i]     = float(line[8])
+        SFR_uvir    = float(line[9])
+        sSFR_uvir   = float(line[10])
+        color_UV[i] = float(line[11])
+        i += 1
+
+    r = {'label':'F$\\rm{\ddot{o}}$rster Schreiber+ (2018) SINS-AO',
+         'name':name,
+         'mag_K':mag_K,
+         'z':z,
+         'Mstar':np.log10(1e10 * Mstar), # 10^10 msun -> log(msun)
+         'SFR':SFR,
+         'sSFR':sSFR,
+         'color_UV':color_UV}
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT

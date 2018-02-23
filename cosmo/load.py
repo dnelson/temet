@@ -325,8 +325,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
     r = {}
 
-    # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Note! Can do >=1 custom fields 
-    # simultaneously, as opposed to snapshotSubset(), but cannot mix custom and standard fields!
+    # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Can request >=1 custom fields 
+    # and >=1 standard fields simultaneously, as opposed to snapshotSubset().
     if fieldsSubhalos is not None:
 
         for i, field in enumerate(fieldsSubhalos):
@@ -453,15 +453,28 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
-        if len(r) == 1:
-            # compress and return single field
-            key = r.keys()[0]
-            assert len(r.keys()) == 1
-            return r[key]
-        elif len(r) > 1:
-            # return dictionary (no 'subhalos' wrapping)
-            assert sq is False
-            return r
+        if len(r) >= 1:
+            # have at least one custom subhalo field, were halos also requested? not allowed
+            assert fieldsHalos is None
+
+            # do we also have standard fields requested? if so, load them now and combine
+            if len(r) < len(fieldsSubhalos):
+                standardFields = list(fieldsSubhalos)
+                for key in r.keys():
+                    standardFields.remove(key)
+                gc = groupCat(sP, fieldsSubhalos=standardFields, sq=False)
+                gc['subhalos'].update(r)
+                r = gc
+
+            if len(r) == 1:
+                # compress and return single field (by default, unlike for standard fields)
+                key = r.keys()[0]
+                assert len(r.keys()) == 1
+                return r[key]
+            elif len(r) > 1:
+                # return dictionary (no 'subhalos' wrapping)
+                assert sq is False
+                return r
 
     # override path function
     il.groupcat.gcPathOrig = il.groupcat.gcPath
@@ -611,7 +624,10 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
     if checkExists:
         return None
 
-    raise Exception("No snapshot found.")
+    # failure:
+    for fileName in fileNames:
+        print(' '+fileName)
+    raise Exception("ERROR: No snapshot found.")
 
 def snapNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a snapshot, by checking for existence of files inside directory. """
@@ -1306,7 +1322,7 @@ def snapshotSubset(sP, partType, fields,
         # ------------------------------------------------------------------------------------------------------
 
         # 3D radial distance from halo center, [code] or [physical kpc] or [dimensionless fraction of rvir=r200crit]
-        if field.lower() in ['rad','rad_kpc','halo_rad','halo_rad_kpc','rad_rvir','halo_rad_rvir']:
+        if field.lower() in ['rad','rad_kpc','rad_kpc_linear','halo_rad','halo_rad_kpc','rad_rvir','halo_rad_rvir']:
             if sP.isZoom:
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
