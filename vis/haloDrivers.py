@@ -20,26 +20,30 @@ from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosB
 from util import simParams
 
 def oneHaloSingleField(conf=0, haloID=None):
-    """ In a single (or a few) panel(s) centered on a halo, show one field from the box. """
+    """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    run        = 'tng'
-    res        = 2160
-    redshift   = 0.7
-    rVirFracs  = [1.0] # None
+    run        = 'tng' #'tng_zoom_dm'
+    res        = 455
+    redshift   = 0.0
+    rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
-    nPixels    = [1920*2,1920*2]
+    nPixels    = [1920,1920]
     axes       = [0,1]
     labelZ     = True
     labelScale = True
-    labelSim   = False
+    labelSim   = True
     labelHalo  = True
     relCoords  = True
     rotation   = None
     mpb        = None
 
-    sP = simParams(res=res, run=run, redshift=redshift)
-    hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+    sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID)
+    
+    if not sP.isZoom:
+        hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+    else:
+        hInd = haloID
 
     if conf == 0:
         # magnetic pressure, gas pressure, and their ratio
@@ -50,8 +54,8 @@ def oneHaloSingleField(conf=0, haloID=None):
         # stellar mass column density
         panels.append( {'partType':'stars',  'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]} )
     if conf == 2:
-        # dm annihilation signal
-        panels.append( {'partType':'dm',  'partField':'coldens_sq_msunkpc2', 'valMinMax':[-2.0,5.6]} )
+        # dm column density
+        panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.8]} )
     if conf == 3:
         # shock mach number
         panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
@@ -62,11 +66,11 @@ def oneHaloSingleField(conf=0, haloID=None):
         # magnetic field strength
         panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
 
-    if 1:
+    if 0:
         size = 2.5
         sizeType = 'rVirial'
-    if 0:
-        size = 100.0
+    if 1:
+        size = 2000.0
         sizeType = 'pkpc'
 
     class plotConfig:

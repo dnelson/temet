@@ -67,6 +67,8 @@ def _TNGboxSliceConfig(res):
     gasMM = [4.3,7.3]
     starsMM = [1.0, 7.0]
 
+    gasFullMM = [13.0,16.5] # equirectangular/full depth
+
     if res in [455,910,1820]:
         # L75
         centerHaloID = 1 # fof
@@ -81,6 +83,8 @@ def _TNGboxSliceConfig(res):
         # adjust for deeper slice
         dmMM[0] += 0.5 
         gasMM[0] += 0.7
+        gasFullMM[0] += 1.5
+        gasFullMM[1] += 1.5
     if res in [1024,2048]:
         # L680
         centerHaloID = 0 # fof
@@ -106,12 +110,12 @@ def _TNGboxSliceConfig(res):
         nSlicesTot = None
         curSlice = None
 
-    return dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice
+    return dmMM, gasMM, starsMM, gasFullMM, centerHaloID, nSlicesTot, curSlice
 
 def _TNGboxFieldConfig(res, conf, thinSlice):
     panels = []
 
-    dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
+    dmMM, gasMM, starsMM, gasFullMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
 
     if conf == 0:  panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
     if conf == 1:  panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':dmMM} )
@@ -154,7 +158,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
     if conf == 33: panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 3.0]} )
 
     # testing equirectangular projections:
-    if conf == 34:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':[11.0, 15.5]} )
+    if conf == 34:  panels.append( {'partType':'gas', 'partField':'coldens_msun_ster', 'valMinMax':gasFullMM} )
 
     # thin slices may need different optimal bounds:
     if thinSlice:
@@ -213,6 +217,37 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def fullBox360(res, conf=34, variant=None, snap=None):
+    """ Create full box 180 or 360 degree images in various projections. """
+    panels, _, _, _ = _TNGboxFieldConfig(res, conf, thinSlice=False)
+
+    run        = 'tng'
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    projType   = 'equirectangular'
+    projParams = {'fov':360.0}
+    nPixels    = [8000,4000]
+    axesUnits  = 'rad_pi'
+
+    sP = simParams(res=res, run=run, snap=snap, variant=variant)
+    redshift = 0.0 if snap is None else sP.redshift
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
+        colorbars  = False
+
+        saveFilename = './boxImage_%s_%s-%s_%s_%s.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],projType,sP.snap)
 
     renderBox(panels, plotConfig, locals())
 
@@ -296,7 +331,7 @@ def TNG_colorFlagshipBoxImage(part=0):
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    dmMM, gasMM, starsMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
+    dmMM, gasMM, starsMM, gasFullMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
     sliceFac  = (1.0/nSlicesTot)
 
     if part == 0: # part 0: L205 gas dens
@@ -353,7 +388,7 @@ def TNG_oxygenPaperImages(part=0):
 
     if part in [0,3]:
         # part 0: TNG100 full box OVII (15 Mpc depth)
-        _, _, _, centerHaloID, _, _ = _TNGboxSliceConfig(res)
+        _, _, _,_, centerHaloID, _, _ = _TNGboxSliceConfig(res)
         sliceFac = sP.units.physicalKpcToCodeLength(15000.0) / sP.boxSize
         curSlice = 0
         nSlicesTot = 7
