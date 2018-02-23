@@ -252,8 +252,8 @@ class simParams:
                         
                 # draco/freya: no subbox data copied yet
                 if 'freya' in platform.node() or 'draco' in platform.node():
-                    if 'subbox' in self.variant and self.res != 455:
-                        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455TNG.')
+                    if 'subbox' in self.variant and self.res not in [455,2160]:
+                        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455TNG, L35n2160TNG.')
                 # end draco/freya
 
             # make paths and names
@@ -299,6 +299,7 @@ class simParams:
             self.validResLevels = [9,10]
             self.groupOrdered   = True
 
+            parentRes = 455
             self.zoomLevel = self.res # L9, L10, L11
             self.res = 455 * (res-self.validResLevels[0]+1)
 
@@ -317,7 +318,7 @@ class simParams:
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
             dmStr = '_DM' if '_dm' in run else ''
-            dirStr = 'L'+bs+'n'+str(self.res)+'TNG_h' + str(self.hInd) + '_L' + str(self.zoomLevel) + dmStr
+            dirStr = 'L'+bs+'n'+str(parentRes)+'TNG_h' + str(self.hInd) + '_L' + str(self.zoomLevel) + dmStr
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             self.savPrefix  = 'TZ'
@@ -956,7 +957,7 @@ class simParams:
     
     @property
     def zoomSubhaloID(self):
-        if self.run in ['iClusters']:
+        if self.run in ['tng_zoom','tng_zoom_dm']:
             print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0 # hardcoded for now
 
