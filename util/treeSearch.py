@@ -429,6 +429,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
     for num_iter in range(10):
         # allocate
         MaxNodes = np.int( (num_iter+1.1)*NumPart ) + 1
+        if MaxNodes < 1000: MaxNodes = 1000
 
         length   = np.zeros( MaxNodes, dtype=treePrec )     # NODE struct member
         center   = np.zeros( (3,MaxNodes), dtype=treePrec ) # NODE struct member
