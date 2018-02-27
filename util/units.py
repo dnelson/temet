@@ -367,7 +367,7 @@ class units(object):
 
         return ang_mom_mag
 
-    def particleRadialVelInKmS(self, pos, vel, haloPos, haloVel):
+    def particleRadialVelInKmS(self, pos, vel, haloPos, subhaloVel):
         """ Calculate particle radial velocity in [km/s] (negative=inwards) given input arrays of pos,vel 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
         # make copies of input arrays
@@ -394,11 +394,11 @@ class units(object):
         gas_vel = self.particleCodeVelocityToKms( gas_vel )
 
         for i in range(3):
-            # SubhaloVel already peculiar, no scalefactor needed
-            if haloVel.ndim == 1: # scalar
-                gas_vel[:,i] -= haloVel[i]
+            # SubhaloVel already peculiar, no scalefactor needed (note: WRONG calculation if GroupVel is input here)
+            if subhaloVel.ndim == 1: # scalar
+                gas_vel[:,i] -= subhaloVel[i]
             else:
-                gas_vel[:,i] -= haloVel[:,i]
+                gas_vel[:,i] -= subhaloVel[:,i]
 
         # correct velocities for hubble flow (neglect mass growth term)
         vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
@@ -409,6 +409,27 @@ class units(object):
         vrad = vrad_noH + v_H # radial velocity (km/s) with hubble expansion subtracted
 
         return vrad
+
+    def particleRelativeVelInKmS(self, vel, subhaloVel):
+        """ Calculate particle velocity magnitude in [km/s], relative to a given reference frame motion 
+        which is typically SubhaloVel. If not, must be in physical units. """
+        # make copies of input arrays
+        p_vel = vel.astype('float32')
+
+        if p_vel.size == 3: # single particle
+            p_vel = np.reshape(p_vel, (1,3))
+
+        # correct velocities for subhalo CM motion
+        p_vel = self.particleCodeVelocityToKms( p_vel )
+
+        for i in range(3):
+            # SubhaloVel already peculiar, no scalefactor needed (note: WRONG calculation if GroupVel is input here)
+            if subhaloVel.ndim == 1: # scalar
+                p_vel[:,i] -= subhaloVel[i]
+            else:
+                p_vel[:,i] -= subhaloVel[:,i]
+
+        return p_vel
 
     def codeDensToPhys(self, dens, cgs=False, numDens=False):
         """ Convert mass density comoving->physical and add little_h factors. 
@@ -596,7 +617,7 @@ class units(object):
         return Lx.astype('float32')
 
     def calcEntropyCGS(self, u, dens, log=False):
-        """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. """
+        """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. Return [K cm^2]. """
         assert self._sP.redshift is not None
 
         a3inv = 1.0 / self.scalefac**3.0
