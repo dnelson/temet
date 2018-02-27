@@ -1130,6 +1130,8 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     ptType = ptType.lower()
     typeStr = ptType.capitalize()
 
+    #if '_real' in typeStr: typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
+
     # fields:
     if ptProperty == 'temp':
         label = 'Gas Temperature [ log K ]'
@@ -1176,7 +1178,11 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [3.0, 5.0]
         log = True
 
-    # todo: entr
+    if ptProperty in ['ent','entr','entropy']:
+        label = 'Gas Entropy [ log K cm$^{2}$ ]'
+        lim = [8.0, 11.0]
+        if haloLims: [9.0, 11.0]
+        log = False
 
     if ptProperty in ['vol_kpc3','volume_kpc3']:
         assert ptType == 'gas'
@@ -1358,6 +1364,17 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         label = '%s Radial Velocity [ km/s ]' % typeStr
         lim = [-1000, 1000]
         if haloLims: lim = [-300, 300]
+        log = False
+
+    if ptProperty in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
+        label = '%s Halo-Relative Velocity [ km/s ]' % typeStr
+        lim = [-1000, 1000]
+        if haloLims: lim = [-300, 300]
+        log = False
+    if ptProperty in ['vrelmag','halo_vrelmag','relvelmag','halo_relvelmag','relative_velmag','relative_vmag']:
+        label = '%s Halo-Relative Velocity Magnitude [ km/s ]' % typeStr
+        lim = [0, 1000]
+        if haloLims: lim = [0, 400]
         log = False
 
     if ptProperty in ['specangmom_mag','specj_mag']:

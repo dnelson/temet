@@ -35,7 +35,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
         if 'tng' in sP.run:
             nSnaps = 16000 # maximum of 16,000 subbox snapshots for new TNG runs
 
-    # load if exists, otherwise create
+    # load from file if it exists, otherwise create
     r = {}
     saveFilename = sP.derivPath + sP.savPrefix + '_' + sbStr1 + 'snapnum.redshift.hdf5'
 

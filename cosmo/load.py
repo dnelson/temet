@@ -997,6 +997,33 @@ def snapshotSubset(sP, partType, fields,
         indRange = [0, offsets_pt[:,sP.ptNum(partType)].max()]
         kwargs['indRange'] = indRange
 
+    # derived particle types (i.e. subsets of snapshot PartTypeN's)
+    if '_' in partType:
+        ptSnap = partType.split('_')[0]
+
+        # load needed fields to define subset, and set w_sel
+        if partType in ['star_real','stars_real']:
+            sftime = snapshotSubset(sP, ptSnap, 'sftime', **kwargs)
+            w_sel = np.where(sftime >= 0.0)
+        if partType == 'wind_real':
+            sftime = snapshotSubset(sP, ptSnap, 'sftime', **kwargs)
+            w_sel = np.where(sftime < 0.0)
+        if partType in ['gas_sf','gas_eos']:
+            sfr = snapshotSubset(sP, ptSnap, 'sfr', **kwargs)
+            w_sel = np.where(sfr > 0.0)
+        if partType == 'gas_nonsf':
+            sfr = snapshotSubset(sP, ptSnap, 'sfr', **kwargs)
+            w_sel = np.where(sfr == 0.0)
+
+        # load requested field(s), take subset and return
+        ret = snapshotSubset(sP, ptSnap, fields, **kwargs)
+
+        if isinstance(ret,dict):
+            for key in ret.keys():
+                ret[key] = ret[key][w_sel]
+            return ret
+        return ret[w_sel] # single ndarray
+
     # composite and derived fields (temp, vmag, ...), unit conversions (bmag_uG, ...), and custom analysis (ionic masses, ...)
     # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
     for i,field in enumerate(fields):
@@ -1033,7 +1060,7 @@ def snapshotSubset(sP, partType, fields,
             mass = snapshotSubset(sP, partType, 'mass', **kwargs)
             return sP.units.codeMassToMsun(mass)
 
-        # entropy (from u,dens) [log cgs]
+        # entropy (from u,dens) [log cgs] == [log K cm^2]
         if field.lower() in ["ent", "entr", "entropy"]:
             u    = snapshotSubset(sP, partType, 'u', **kwargs)
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
@@ -1356,6 +1383,25 @@ def snapshotSubset(sP, partType, fields,
 
             return sP.units.particleRadialVelInKmS(pos, vel, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
 
+        # velocity 3-vector, relative to the central subhalo pos/vel, [km/s] for each component
+        if field.lower() in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
+            if sP.isZoom:
+                subhaloID = sP.zoomSubhaloID
+                print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
+            assert haloID is not None or subhaloID is not None
+            vel = snapshotSubset(sP, partType, 'vel', **kwargs)
+
+            if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
+
+            shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
+            firstSub = groupCatSingle(sP, subhaloID=shID)
+
+            return sP.units.particleRelativeVelInKmS(vel, firstSub['SubhaloVel'])
+
+        if field.lower() in ['vrelmag','halo_vrelmag','relvelmag','halo_relvelmag','relative_velmag','relative_vmag']:
+            vel = snapshotSubset(sP, partType, 'halo_relvel', **kwargs)
+            return np.sqrt( vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2 )
+
         # angular momentum, relative to the central subhalo pos/vel, either the 3-vector [Msun kpc km/s] or specific magnitude [kpc km/s]
         if field.lower() in ['specangmom_mag','specj_mag','angmom_vec','j_vec']:
             if sP.isZoom:
@@ -1507,7 +1553,7 @@ def snapshotSubset(sP, partType, fields,
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
     if len(fields) == 1 and mdi[0] is None and indRange is not None:
-        cache_key = 'snap%d_%s_%s' % (sP.snap,partType,fields[0].replace(" ","_"))
+        cache_key = 'snap%s_%s_%s' % (sP.snap,partType,fields[0].replace(" ","_"))
         if cache_key in sP.data:
             print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % (cache_key,indRange[0],indRange[1]))
             return sP.data[cache_key][indRange[0]:indRange[1]+1]
