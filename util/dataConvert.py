@@ -1391,8 +1391,8 @@ def convertMillenniumSnapshot(snap=63):
 
 def convertGadgetICsToHDF5():
     """ Convert a Gadget-1 binary format ICs (dm-only, 8 byte IDs, 4 byte pos/vel) into HDF5 format (keep original ordering). """
-    loadPath = '/u/dnelson/sims.TNG/InitialConditions/L680n1024/output/ICs.%s' 
-    savePath = '/u/dnelson/sims.TNG/L680n1024TNG_DM/output/snap_ics.hdf5'
+    loadPath = '/u/dnelson/sims.TNG/InitialConditions/L680n2048/output/ICs.%s' 
+    savePath = '/u/dnelson/sims.TNG/L680n2048TNG_DM/output/snap_ics.hdf5'
 
     nChunks = len( glob.glob(loadPath % '*') )
     print('Found [%d] chunks, loading...' % nChunks)
@@ -1423,11 +1423,34 @@ def convertGadgetICsToHDF5():
         nPartTot += npart
     print('Found new nPartTot [%d]' % nPartTot)
 
+    # open file for writing
+    fOut = h5py.File(savePath, 'w')
+
+    # write header
+    header = fOut.create_group('Header')
+    numPartTot = np.zeros( 6, dtype='int64' )
+    numPartTot[1] = nPartTot
+    header.attrs['BoxSize'] = BoxSize
+    header.attrs['HubbleParam'] = Hubble
+    header.attrs['MassTable'] = np.array(mass, dtype='float64')
+    header.attrs['NumFilesPerSnapshot'] = 1
+    header.attrs['NumPart_ThisFile'] = numPartTot
+    header.attrs['NumPart_Total'] = numPartTot
+    header.attrs['NumPart_Total_HighWord'] = np.zeros(6, dtype='int64')
+    header.attrs['Omega0'] = Omega0
+    header.attrs['OmegaLambda'] = OmegaL
+    header.attrs['Redshift'] = redshift
+    header.attrs['Time'] = scalefac
+
+    # create group and datasets
+    pt1 = fOut.create_group('PartType1')
+
+    particle_pos = pt1.create_dataset('Coordinates', (nPartTot,3), dtype='float32' )
+    particle_vel = pt1.create_dataset('Velocities', (nPartTot,3), dtype='float32' )
+    particle_ids = pt1.create_dataset('ParticleIDs', (nPartTot,), dtype='int64' )
+
     # load all snapshot IDs
     offset = 0
-    particle_pos = np.zeros( (nPartTot,3), dtype='float32' )
-    particle_vel = np.zeros( (nPartTot,3), dtype='float32' )
-    particle_ids = np.zeros( nPartTot, dtype='int64' )
 
     for i in range(nChunks):
         # full read
@@ -1446,6 +1469,7 @@ def convertGadgetICsToHDF5():
         vel = struct.unpack('f' * npart_local*3, data[start_vel:start_vel + npart_local*12])
         ids = struct.unpack('q' * npart_local*1, data[start_ids:start_ids + npart_local*8])
 
+        # write
         particle_pos[offset : offset+npart_local,:] = np.reshape( pos, (npart_local,3) )
         particle_vel[offset : offset+npart_local,:] = np.reshape( vel, (npart_local,3) )
         particle_ids[offset : offset+npart_local] = ids
@@ -1453,31 +1477,7 @@ def convertGadgetICsToHDF5():
         print('[%3d] Snap chunk has [%8d] particles, from [%10d] to [%10d].' % (i, npart_local, offset, offset+npart_local))
         offset += npart_local
 
-    # open file for writing
-    with h5py.File(savePath, 'w') as fOut:
-        # header
-        header = fOut.create_group('Header')
-        numPartTot = np.zeros( 6, dtype='int64' )
-        numPartTot[1] = nPartTot
-        header.attrs['BoxSize'] = BoxSize
-        header.attrs['HubbleParam'] = Hubble
-        header.attrs['MassTable'] = np.array(mass, dtype='float64')
-        header.attrs['NumFilesPerSnapshot'] = 1
-        header.attrs['NumPart_ThisFile'] = numPartTot
-        header.attrs['NumPart_Total'] = numPartTot
-        header.attrs['NumPart_Total_HighWord'] = np.zeros(6, dtype='int64')
-        header.attrs['Omega0'] = Omega0
-        header.attrs['OmegaLambda'] = OmegaL
-        header.attrs['Redshift'] = redshift
-        header.attrs['Time'] = scalefac
-
-        pt1 = fOut.create_group('PartType1')
-
-        # particle data
-        pt1['Coordinates'] = particle_pos
-        pt1['Velocities'] = particle_vel
-        pt1['ParticleIDs'] = particle_ids
-
+    fOut.close()
     print('All done.')
 
 def splitSingleHDF5IntoChunks():
