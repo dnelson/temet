@@ -1025,63 +1025,64 @@ def snapshotSubset(sP, partType, fields,
         return ret[w_sel] # single ndarray
 
     # composite and derived fields (temp, vmag, ...), unit conversions (bmag_uG, ...), and custom analysis (ionic masses, ...)
-    # TODO: combining composite fields with len(fields)>1 currently skips any others, returns single ndarray
+    r = {}
+
     for i,field in enumerate(fields):
         # temperature (from u,nelec) [log K]
         if field.lower() in ["temp", "temperature"]:
             u  = snapshotSubset(sP, partType, 'u', **kwargs)
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
-            return sP.units.UToTemp(u,ne,log=True)
+            r[field] = sP.units.UToTemp(u,ne,log=True)
 
         # temperature (from u,nelec) [linear K]
         if field.lower() in ["temp_linear"]:
             u  = snapshotSubset(sP, partType, 'u', **kwargs)
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
-            return sP.units.UToTemp(u,ne,log=False)
+            r[field] = sP.units.UToTemp(u,ne,log=False)
 
         # hydrogen number density (from rho) [linear 1/cm^3]
         if field.lower() in ["nh","hdens"]:
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
             dens = sP.units.codeDensToPhys(dens,cgs=True,numDens=True)
-            return sP.units.hydrogen_massfrac * dens # constant 0.76 assumed
+            r[field] = sP.units.hydrogen_massfrac * dens # constant 0.76 assumed
 
         # number density (from rho) [linear 1/cm^3]
         if field.lower() in ["numdens"]:
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
-            return sP.units.codeDensToPhys(dens,cgs=True,numDens=True)
+            r[field] = sP.units.codeDensToPhys(dens,cgs=True,numDens=True)
 
         # mass density to critical baryon density [linear dimensionless]
         if field.lower() in ['dens_critratio','dens_critb']:
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
-            return sP.units.codeDensToCritRatio(dens, baryon=('_critb' in field.lower()), log=False)
+            r[field] = sP.units.codeDensToCritRatio(dens, baryon=('_critb' in field.lower()), log=False)
 
         # particle/cell mass [linear solar masses]
         if field.lower() in ['mass_msun']:
             mass = snapshotSubset(sP, partType, 'mass', **kwargs)
-            return sP.units.codeMassToMsun(mass)
+            r[field] = sP.units.codeMassToMsun(mass)
 
         # entropy (from u,dens) [log cgs] == [log K cm^2]
         if field.lower() in ["ent", "entr", "entropy"]:
             u    = snapshotSubset(sP, partType, 'u', **kwargs)
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
-            return sP.units.calcEntropyCGS(u,dens,log=True)
+            r[field] = sP.units.calcEntropyCGS(u,dens,log=True)
 
         # velmag (from 3d velocity) [physical km/s]
         if field.lower() in ["vmag", "velmag"]:
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
             vel = sP.units.particleCodeVelocityToKms(vel)
-            return np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
+            r[field] = np.sqrt( vel[:,0]*vel[:,0] + vel[:,1]*vel[:,1] + vel[:,2]*vel[:,2] )
 
         # Bmag (from vector field) [physical Gauss]
         if field.lower() in ["bmag", "bfieldmag"]:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             b = sP.units.particleCodeBFieldToGauss(b)
             bmag = np.sqrt( b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2] )
-            return bmag
+            r[field] = bmag
 
         # Bmag in micro-Gauss [physical uG]
         if field.lower() in ['bmag_ug', 'bfieldmag_ug']:
-            return snapshotSubset(sP, partType, 'bmag', **kwargs) * 1e6
+            r[field] = snapshotSubset(sP, partType, 'bmag', **kwargs) * 1e6
 
         # Alfven velocity magnitude (of electron plasma) [physical km/s]
         if field.lower() in ["vmag_alfven", "velmag_alfven"]:
@@ -1093,13 +1094,13 @@ def snapshotSubset(sP, partType, fields,
             if not snapHasField(sP, partType, 'Volume'):
                 mass = snapshotSubset(sP, partType, 'mass', **kwargs)
                 dens = snapshotSubset(sP, partType, 'dens', **kwargs)
-                return (mass / dens)
+                r[field] = (mass / dens)
 
         # volume in physical [cm^3] or [kpc^3]
         if field.lower() in ['vol_cm3','volume_cm3']:
-            return sP.units.codeVolumeToCm3( snapshotSubset(sP, partType, 'volume', **kwargs) )
+            r[field] = sP.units.codeVolumeToCm3( snapshotSubset(sP, partType, 'volume', **kwargs) )
         if field.lower() in ['vol_kpc3','volume_kpc3']:
-            return sP.units.codeVolumeToKpc3( snapshotSubset(sP, partType, 'volume', **kwargs) )
+            r[field] = sP.units.codeVolumeToKpc3( snapshotSubset(sP, partType, 'volume', **kwargs) )
 
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:
@@ -1111,29 +1112,29 @@ def snapshotSubset(sP, partType, fields,
                 dens = snapshotSubset(sP, partType, 'dens', **kwargs)
                 vol = mass / dens
                 
-            return (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+            r[field] = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
         # cellsize [physical kpc]
         if field.lower() in ["cellsize_kpc","cellrad_kpc"]:
             cellsize_code = snapshotSubset(sP, partType, 'cellsize', **kwargs)
-            return sP.units.codeLengthToKpc(cellsize_code)
+            r[field] = sP.units.codeLengthToKpc(cellsize_code)
 
         # particle volume (from subfind hsml of N nearest DM particles) [ckpc/h]
         if field.lower() in ["subfind_vol","subfind_volume"]:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', **kwargs)
-            return (4.0/3.0) * np.pi * hsml**3.0
+            r[field] = (4.0/3.0) * np.pi * hsml**3.0
 
         # metallicity in linear(solar) units
         if field.lower() in ["metal_solar","z_solar"]:
             metal = snapshotSubset(sP, partType, 'metal', **kwargs) # metal mass / total mass ratio
-            return sP.units.metallicityInSolar(metal,log=False)
+            r[field] = sP.units.metallicityInSolar(metal,log=False)
 
         # stellar age in Gyr (convert GFM_StellarFormationTime scalefactor)
         if field.lower() in ["star_age","stellar_age"]:
             curUniverseAgeGyr = sP.units.redshiftToAgeFlat(sP.redshift)
             birthTime = snapshotSubset(sP, partType, 'birthtime', **kwargs)
             birthRedshift = 1.0/birthTime - 1.0
-            return curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
+            r[field] = curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
 
         # bolometric x-ray luminosity (simple model) [erg/s]
         if field.lower() in ['xray_lum','xray']:
@@ -1142,7 +1143,7 @@ def snapshotSubset(sP, partType, fields,
             mass = snapshotSubset(sP, partType, 'Masses', **kwargs)
             u    = snapshotSubset(sP, partType, 'u', **kwargs)
             ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
-            return sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
+            r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
 
         # pressure_ratio (linear ratio of magnetic to gas pressure)
         if field.lower() in ['pres_ratio','pressure_ratio']:
@@ -1152,42 +1153,42 @@ def snapshotSubset(sP, partType, fields,
 
             P_gas = sP.units.calcPressureCGS(u, dens)
             P_B   = sP.units.calcMagneticPressureCGS(b)
-            return P_B/P_gas
+            r[field] = P_B/P_gas
 
         # u_B_ke_ratio (linear ratio of magnetic to kinetic energy density)
         if field.lower() in ['u_b_ke_ratio','magnetic_kinetic_edens_ratio','b_ke_edens_ratio']:
             u_b = snapshotSubset(sP, partType, 'p_b', **kwargs) # [log K/cm^3]
             u_ke = snapshotSubset(sP, partType, 'u_ke', **kwargs) # [log K/cm^3]
-            return 10.0**u_b / 10.0**u_ke
+            r[field] = 10.0**u_b / 10.0**u_ke
 
         # gas pressure [log K/cm^3]
         if field.lower() in ['gas_pres','gas_pressure','p_gas']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
-            return sP.units.calcPressureCGS(u, dens, log=True)
+            r[field] = sP.units.calcPressureCGS(u, dens, log=True)
 
         if field.lower() in ['p_gas_linear']:
-            return 10.0**snapshotSubset(sP, partType, 'p_gas', **kwargs)
+            r[field] = 10.0**snapshotSubset(sP, partType, 'p_gas', **kwargs)
 
         # magnetic pressure [log K/cm^3]
         if field.lower() in ['mag_pres','magnetic_pressure','p_b','p_magnetic']:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
-            return sP.units.calcMagneticPressureCGS(b, log=True)
+            r[field] = sP.units.calcMagneticPressureCGS(b, log=True)
 
         if field.lower() in ['p_b_linear']:
-            return 10.0**snapshotSubset(sP, partType, 'p_b', **kwargs)
+            r[field] = 10.0**snapshotSubset(sP, partType, 'p_b', **kwargs)
 
         # kinetic energy density [log erg/cm^3]
         if field.lower() in ['kinetic_energydens','kinetic_edens','u_ke']:
             dens_code = snapshotSubset(sP, partType, 'Density', **kwargs)
             vel_kms = snapshotSubset(sP, partType, 'velmag', **kwargs)
-            return sP.units.calcKineticEnergyDensityCGS(dens_code, vel_kms, log=True)
+            r[field] = sP.units.calcKineticEnergyDensityCGS(dens_code, vel_kms, log=True)
 
         # total pressure, magnetic plus gas [K/cm^3]
         if field.lower() in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:
             P_B = 10.0**snapshotSubset(sP, partType, 'P_B', **kwargs)
             P_gas = 10.0**snapshotSubset(sP, partType, 'P_gas', **kwargs)
-            return ( P_B + P_gas )
+            r[field] = ( P_B + P_gas )
 
         # ------------------------------------------------------------------------------------------------------
 
@@ -1201,13 +1202,13 @@ def snapshotSubset(sP, partType, fields,
             if '_vla' in field: modelArgs['telescope'] = 'VLA'
             if '_eta43' in field: modelArgs['eta'] = (4.0/3.0)
             if '_alpha15' in field: modelArgs['alpha'] = 1.5
-            return sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
+            r[field] = sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
         # hydrogen model mass calculation (todo: generalize to different molecular models)
         if field.lower() in ['h i mass', 'hi mass', 'himass', 'h1mass', 'hi_mass']:
             assert haloID is None and subhaloID is None # otherwise handle, construct indRange
             from cosmo.hydrogen import hydrogenMass
-            return hydrogenMass(None, sP, atomic=True, indRange=indRange)
+            r[field] = hydrogenMass(None, sP, atomic=True, indRange=indRange)
 
         if field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
             assert haloID is None and subhaloID is None # otherwise handle, construct indRange
@@ -1218,11 +1219,11 @@ def snapshotSubset(sP, partType, fields,
                 molecularModel = 'BL06'
                 print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
 
-            return hydrogenMass(None, sP, molecular=molecularModel, indRange=indRange)
+            r[field] = hydrogenMass(None, sP, molecular=molecularModel, indRange=indRange)
 
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
-            return _ionLoadHelper(sP, partType, field, kwargs)
+            r[field] = _ionLoadHelper(sP, partType, field, kwargs)
 
         if '_ionmassratio' in field:
             # per-cell ratio between two ionic masses, e.g. "O6_O8_ionmassratio"
@@ -1232,7 +1233,7 @@ def snapshotSubset(sP, partType, fields,
 
             mass1 = snapshotSubset(sP, partType, '%s mass' % ion.formatWithSpace(ion1), **kwargs)
             mass2 = snapshotSubset(sP, partType, '%s mass' % ion.formatWithSpace(ion2), **kwargs)
-            return ( mass1 / mass2 )
+            r[field] = ( mass1 / mass2 )
 
         if '_numratio' in field:
             # metal number density ratio e.g. "Si_H_numratio", relative to solar, [Si/H] = log(n_Si/n_H)_cell - log(n_Si/n_H)_solar
@@ -1244,7 +1245,7 @@ def snapshotSubset(sP, partType, fields,
             el2_massratio = snapshotSubset(sP, partType, 'metals_'+el2, **kwargs)
             el_ratio = el1_massratio / el2_massratio
 
-            return ion._massRatioToRelSolarNumDensRatio(el_ratio, el1, el2)
+            r[field] = ion._massRatioToRelSolarNumDensRatio(el_ratio, el1, el2)
 
         # metal mass (total or by species): convert fractions to masses [code units] or [msun]
         if "metalmass" in field.lower():
@@ -1264,7 +1265,7 @@ def snapshotSubset(sP, partType, fields,
             if solarUnits:
                 masses = sP.units.codeMassToMsun(sP, masses)
 
-            return masses
+            r[field] = masses
 
         # metal mass density [linear g/cm^3]
         if "metaldens" in field.lower():
@@ -1274,48 +1275,48 @@ def snapshotSubset(sP, partType, fields,
 
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
             dens = sP.units.codeDensToPhys(dens,cgs=True)
-            return dens * snapshotSubset(sP, partType, fracFieldName, **kwargs)
+            r[field] = dens * snapshotSubset(sP, partType, fracFieldName, **kwargs)
 
         # gravitational potential, in linear [(km/s)^2]
         if field.lower() in ['gravpot','gravpotential']:
             pot = snapshotSubset(sP, partType, 'Potential', **kwargs)
-            return pot * sP.units.scalefac
+            r[field] = pot * sP.units.scalefac
 
         # GFM_MetalsTagged: ratio of iron mass [linear] produced in SNIa versus SNII
         if field.lower() in ['sn_iaii_ratio_fe']:
             metals_FeSNIa = snapshotSubset(sP, partType, 'metals_FeSNIa', **kwargs)
             metals_FeSNII = snapshotSubset(sP, partType, 'metals_FeSNII', **kwargs)
-            return ( metals_FeSNIa / metals_FeSNII )
+            r[field] = ( metals_FeSNIa / metals_FeSNII )
 
         # GFM_MetalsTagged: ratio of total metals [linear] produced in SNIa versus SNII
         if field.lower() in ['sn_iaii_ratio_metals']:
             metals_SNIa = snapshotSubset(sP, partType, 'metals_SNIa', **kwargs)
             metals_SNII = snapshotSubset(sP, partType, 'metals_SNII', **kwargs)
-            return ( metals_SNIa / metals_SNII )
+            r[field] = ( metals_SNIa / metals_SNII )
 
         # GFM_MetalsTagged: ratio of total metals [linear] produced in SNIa versus AGB stars
         if field.lower() in ['sn_ia_agb_ratio_metals']:
             metals_SNIa = snapshotSubset(sP, partType, 'metals_SNIa', **kwargs)
             metals_AGB = snapshotSubset(sP, partType, 'metals_AGB', **kwargs)
-            return ( metals_SNIa / metals_AGB )
+            r[field] = ( metals_SNIa / metals_AGB )
 
         # sound speed (hydro only version) [physical km/s]
         if field.lower() in ['csnd','soundspeed']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
-            return sP.units.calcSoundSpeedKmS(u,dens)
+            r[field] = sP.units.calcSoundSpeedKmS(u,dens)
 
         # cooling time (computed from saved GFM_CoolingRate) [Gyr]
         if field.lower() in ['tcool','cooltime']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
-            return sP.units.coolingTimeGyr(dens, coolrate, u)
+            r[field] = sP.units.coolingTimeGyr(dens, coolrate, u)
 
         # total effective timestep, from snapshot [years]
         if field.lower() == 'dt_yr':
             dt = snapshotSubset(sP, 'gas', 'TimeStep', **kwargs)
-            return sP.units.codeTimeStepToYears(dt)
+            r[field] = sP.units.codeTimeStepToYears(dt)
 
         # gas cell hydrodynamical timestep [years]
         if field.lower() == 'dt_hydro_yr':
@@ -1326,7 +1327,7 @@ def snapshotSubset(sP, partType, fields,
 
             dt_hydro_s = sP.units.CourantFac * cellrad_km / soundspeed
             dt_yr = dt_hydro_s / sP.units.s_in_yr
-            return dt_yr
+            r[field] = dt_yr
 
         # ratio of (cell mass / sfr / timestep), either hydro-only or actual timestep [dimensionless linear ratio]
         if field.lower() in ['mass_sfr_dt','mass_sfr_dt_hydro']:
@@ -1337,7 +1338,7 @@ def snapshotSubset(sP, partType, fields,
             dt_type = 'dt_hydro_yr' if '_hydro' in field.lower() else 'dt_yr'
             dt = snapshotSubset(sP, 'gas', dt_type, **kwargs)
 
-            return (mass / sfr / dt)
+            r[field] = (mass / sfr / dt)
 
         # ------------------------------------------------------------------------------------------------------
         # halo centric analysis (currently require one explicit haloID/suhaloID)
@@ -1365,7 +1366,7 @@ def snapshotSubset(sP, partType, fields,
             if '_kpc' in field: rad = sP.units.codeLengthToKpc(rad)
             if '_rvir' in field: rad = rad / halo['Group_R_Crit200']
 
-            return rad
+            r[field] = rad
 
         # radial velocity, negative=inwards, relative to the central subhalo pos/vel, including hubble correction [km/s]
         if field.lower() in ['vrad','halo_vrad','radvel','halo_radvel']:
@@ -1381,7 +1382,7 @@ def snapshotSubset(sP, partType, fields,
             shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
             firstSub = groupCatSingle(sP, subhaloID=shID)
 
-            return sP.units.particleRadialVelInKmS(pos, vel, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
+            r[field] = sP.units.particleRadialVelInKmS(pos, vel, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
 
         # velocity 3-vector, relative to the central subhalo pos/vel, [km/s] for each component
         if field.lower() in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
@@ -1396,11 +1397,11 @@ def snapshotSubset(sP, partType, fields,
             shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
             firstSub = groupCatSingle(sP, subhaloID=shID)
 
-            return sP.units.particleRelativeVelInKmS(vel, firstSub['SubhaloVel'])
+            r[field] = sP.units.particleRelativeVelInKmS(vel, firstSub['SubhaloVel'])
 
         if field.lower() in ['vrelmag','halo_vrelmag','relvelmag','halo_relvelmag','relative_velmag','relative_vmag']:
             vel = snapshotSubset(sP, partType, 'halo_relvel', **kwargs)
-            return np.sqrt( vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2 )
+            r[field] = np.sqrt( vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2 )
 
         # angular momentum, relative to the central subhalo pos/vel, either the 3-vector [Msun kpc km/s] or specific magnitude [kpc km/s]
         if field.lower() in ['specangmom_mag','specj_mag','angmom_vec','j_vec']:
@@ -1418,12 +1419,28 @@ def snapshotSubset(sP, partType, fields,
             firstSub = groupCatSingle(sP, subhaloID=shID)
 
             if '_mag' in field.lower():
-                return sP.units.particleSpecAngMomMagInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
+                r[field] = sP.units.particleSpecAngMomMagInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
             if '_vec' in field.lower():
-                return sP.units.particleAngMomVecInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
+                r[field] = sP.units.particleAngMomVecInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
 
-        # TODO: DM particle mass (use stride_tricks to allow virtual DM 'Masses' load)
-        # http://stackoverflow.com/questions/13192089/fill-a-numpy-array-with-the-same-number
+        # done:
+        if len(r) >= 1:
+            # have at least one custom field, do we also have standard fields requested? if so, load them now and combine
+            if len(r) < len(fields):
+                standardFields = list(fields)
+                for key in r.keys():
+                    standardFields.remove(key)
+
+                ss = snapshotSubset(sP, partType, standardFields, sq=False, **kwargs)
+                ss.update(r)
+                r = ss
+
+            # just one field in total? compress and return single ndarray (by default)
+            if len(r) == 1 and sq is True:
+                key = r.keys()[0]
+                return r[key]
+
+            return r # return dictionary
 
     # alternate field names mappings
     altNames = [ [['center_of_mass','com'], 'Center-of-Mass'],
@@ -1570,5 +1587,7 @@ def snapshotSubset(sP, partType, fields,
             r = sP.units.tracerEntToCGS(r, log=True) # [log cgs] = [log K cm^2]
         if fieldsOrig[0] == 'tracer_maxtemp':
             r = logZeroNaN(r) # [log Kelvin]
+
+    # todo: could inverse map altNames and multiDimSliceMaps such that return dict has key names exactly as requested
 
     return r
