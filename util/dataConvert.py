@@ -813,7 +813,7 @@ def makeCohnVsuiteCatalog(redshift=0.0):
     mstar[w] = 0.0
 
     w = np.where(cen == 1)
-    mhalo[w] = m200 # use m200,crit values for centrals at least
+    mhalo[w] = m200[w] # use m200,crit values for centrals at least
 
     w = np.where(mstar >= 7.8)
     mstar = mstar[w]
@@ -822,7 +822,7 @@ def makeCohnVsuiteCatalog(redshift=0.0):
     mhalo = mhalo[w]
     sat = sat[w]
 
-    with open('inputstats_%s_z%s_new.txt' % (sP.simName,int(redshift)),'w') as f:
+    with open('inputstats_%s_z%s.txt' % (sP.simName,int(redshift)),'w') as f:
         f.write('# Illustris-1 simulation (z=%s)\n' % redshift)
         f.write('# Nelson+ (2015) (https://arxiv.org/abs/1504.00362) (http://www.illustris-project.org/data/)\n')
         f.write('# note: M* is 30pkpc aperture values, SFR is SubhaloSFRinRad, M_halo is Group_M_Crit200 for centrals, SubhaloMass for satellites\n')
@@ -836,7 +836,7 @@ def convertMillenniumSubhaloCatalog(snap=63):
     from tracer.tracerMC import match3
 
     savePath = '/u/dnelson/data/sims.millennium/Millennium1/output/'
-    loadPath = '/virgo/simulations/Millennium/' 
+    loadPath = '/virgo/simulations/Millennium/' # Recovered_Millennium/
 
     dm_particle_mass = 0.0860657 # ~10^9 msun
 
@@ -849,6 +849,23 @@ def convertMillenniumSubhaloCatalog(snap=63):
         return loadPath + 'snapdir_%03d/group_tab_%03d.%s' % (snap,snap,chunkNum)
 
     nChunks = len( glob.glob(_chunkPath(snap,'*')) )
+
+    # no catalog? (snapshot <= 4) write empty catalog
+    if nChunks == 0:
+        print('Found [%d] chunks for snapshot[%03d]! Writing empty catalog!' % (nChunks,snap))
+        # save into single hdf5
+        with h5py.File(savePath + 'groups_%03d/fof_subhalo_tab_%03d.hdf5' % (snap,snap), 'w') as f:
+            # header
+            header = f.create_group('Header')
+            header.attrs['Ngroups_ThisFile'] = 0
+            header.attrs['Ngroups_Total'] = 0
+            header.attrs['Nids_ThisFile'] = 0
+            header.attrs['Nids_Total'] = 0
+            header.attrs['Nsubgroups_ThisFile'] = 0
+            header.attrs['Nsubgroups_Total'] = 0
+            header.attrs['NumFiles'] = 1
+        return
+
     print('Found [%d] chunks for snapshot [%03d], loading...' % (nChunks,snap))
 
     # reader header of first chunk
@@ -861,6 +878,13 @@ def convertMillenniumSubhaloCatalog(snap=63):
     NFiles     = struct.unpack('i', header[12:16])[0]
     NSubs      = struct.unpack('i', header[16:20])[0]
 
+    # detect big-endianness
+    endian = '@' # native = little
+    if NFiles != nChunks:
+        TotNGroups = struct.unpack('>i', header[8:12])[0]
+        NFiles = struct.unpack('>i', header[12:16])[0]
+        endian = '>'
+
     assert NFiles == nChunks
 
     # no TotNSubs stored...
@@ -870,8 +894,8 @@ def convertMillenniumSubhaloCatalog(snap=63):
     for i in range(nChunks):
         with open(_chunkPath(snap,i),'rb') as f:
             header  = f.read(4*5)
-            NGroups = struct.unpack('i', header[0:4])[0]
-            NSubs   = struct.unpack('i', header[16:20])[0]
+            NGroups = struct.unpack(endian+'i', header[0:4])[0]
+            NSubs   = struct.unpack(endian+'i', header[16:20])[0]
 
             TotNSubs += NSubs
             TotNGroupsCheck += NGroups
@@ -894,10 +918,10 @@ def convertMillenniumSubhaloCatalog(snap=63):
             data = f.read()
 
         # header (object counts)
-        NGroups = struct.unpack('i', data[0:4])[0]
+        NGroups = struct.unpack(endian+'i', data[0:4])[0]
 
-        GroupLen[g_off : g_off + NGroups]    = struct.unpack('i' * NGroups, data[16 : 16 + 4*NGroups])
-        GroupOffset[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[16 + 4*NGroups : 16 + 8*NGroups])
+        GroupLen[g_off : g_off + NGroups]    = struct.unpack(endian+'i' * NGroups, data[16 : 16 + 4*NGroups])
+        GroupOffset[g_off : g_off + NGroups] = struct.unpack(endian+'i' * NGroups, data[16 + 4*NGroups : 16 + 8*NGroups])
 
         g_off += NGroups
 
@@ -939,21 +963,21 @@ def convertMillenniumSubhaloCatalog(snap=63):
             data = f.read()
 
         # header (object counts)
-        NGroups    = struct.unpack('i', data[0:4])[0]
-        NSubs      = struct.unpack('i', data[16:20])[0]
+        NGroups    = struct.unpack(endian+'i', data[0:4])[0]
+        NSubs      = struct.unpack(endian+'i', data[16:20])[0]
 
         # per halo
         header_bytes = 20
         off = header_bytes
-        NSubsPerHalo[g_off : g_off + NGroups]   = struct.unpack('i' * NGroups, data[off + 0*NGroups : off + 4*NGroups])
-        FirstSubOfHalo[g_off : g_off + NGroups] = struct.unpack('i' * NGroups, data[off + 4*NGroups : off + 8*NGroups])
+        NSubsPerHalo[g_off : g_off + NGroups]   = struct.unpack(endian+'i' * NGroups, data[off + 0*NGroups : off + 4*NGroups])
+        FirstSubOfHalo[g_off : g_off + NGroups] = struct.unpack(endian+'i' * NGroups, data[off + 4*NGroups : off + 8*NGroups])
         FirstSubOfHalo[g_off : g_off + NGroups] += s_off # as stored is local to chunk files
 
         # per subhalo
         off = header_bytes + 8*NGroups
-        SubLen[s_off : s_off + NSubs]        = struct.unpack('i' * NSubs, data[off + 0*NSubs : off + 4*NSubs])
-        SubOffset[s_off : s_off + NSubs]     = struct.unpack('i' * NSubs, data[off + 4*NSubs : off + 8*NSubs])
-        SubParentHalo[s_off : s_off + NSubs] = struct.unpack('i' * NSubs, data[off + 8*NSubs : off + 12*NSubs])
+        SubLen[s_off : s_off + NSubs]        = struct.unpack(endian+'i' * NSubs, data[off + 0*NSubs : off + 4*NSubs])
+        SubOffset[s_off : s_off + NSubs]     = struct.unpack(endian+'i' * NSubs, data[off + 4*NSubs : off + 8*NSubs])
+        SubParentHalo[s_off : s_off + NSubs] = struct.unpack(endian+'i' * NSubs, data[off + 8*NSubs : off + 12*NSubs])
         SubParentHalo[s_off : s_off + NSubs] += g_off # as stored is local to chunk files
 
         # per subhalo chunk-pointer information
@@ -962,22 +986,22 @@ def convertMillenniumSubhaloCatalog(snap=63):
 
         # per halo
         off = header_bytes + 8*NGroups + 12*NSubs
-        Halo_M_Mean200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 0*NGroups: off + 4*NGroups])
-        Halo_R_Mean200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 4*NGroups: off + 8*NGroups])
-        Halo_M_Crit200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 8*NGroups: off + 12*NGroups])
-        Halo_R_Crit200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 12*NGroups: off + 16*NGroups])
-        Halo_M_TopHat200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 16*NGroups: off + 20*NGroups])
-        Halo_R_TopHat200[g_off : g_off + NGroups] = struct.unpack('f' * NGroups, data[off + 20*NGroups: off + 24*NGroups])
+        Halo_M_Mean200[g_off : g_off + NGroups] = struct.unpack(endian+'f' * NGroups, data[off + 0*NGroups: off + 4*NGroups])
+        Halo_R_Mean200[g_off : g_off + NGroups] = struct.unpack(endian+'f' * NGroups, data[off + 4*NGroups: off + 8*NGroups])
+        Halo_M_Crit200[g_off : g_off + NGroups] = struct.unpack(endian+'f' * NGroups, data[off + 8*NGroups: off + 12*NGroups])
+        Halo_R_Crit200[g_off : g_off + NGroups] = struct.unpack(endian+'f' * NGroups, data[off + 12*NGroups: off + 16*NGroups])
+        Halo_M_TopHat200[g_off : g_off + NGroups] = struct.unpack(endian+'f' * NGroups, data[off + 16*NGroups: off + 20*NGroups])
+        Halo_R_TopHat200[g_off : g_off + NGroups] = struct.unpack(endian+'f' * NGroups, data[off + 20*NGroups: off + 24*NGroups])
 
         # per subhalo
         off = header_bytes + 8*NGroups + 12*NSubs + 24*NGroups
-        SubPos[s_off : s_off + NSubs,:]   = np.reshape( struct.unpack('f' * 3*NSubs, data[off + 0*NSubs : off + 12*NSubs]), (NSubs,3) )
-        SubVel[s_off : s_off + NSubs,:]   = np.reshape( struct.unpack('f' * 3*NSubs, data[off + 12*NSubs : off + 24*NSubs]), (NSubs,3) )
-        SubVelDisp[s_off : s_off + NSubs]             = struct.unpack('f' * 1*NSubs, data[off + 24*NSubs : off + 28*NSubs])
-        SubVmax[s_off : s_off + NSubs]                = struct.unpack('f' * 1*NSubs, data[off + 28*NSubs : off + 32*NSubs])
-        SubSpin[s_off : s_off + NSubs,:]  = np.reshape( struct.unpack('f' * 3*NSubs, data[off + 32*NSubs : off + 44*NSubs]), (NSubs,3) )
-        SubMostBoundID[s_off : s_off + NSubs]         = struct.unpack('q' * 1*NSubs, data[off + 44*NSubs : off + 52*NSubs])
-        SubHalfMass[s_off : s_off + NSubs]            = struct.unpack('f' * 1*NSubs, data[off + 52*NSubs : off + 56*NSubs])
+        SubPos[s_off : s_off + NSubs,:]   = np.reshape( struct.unpack(endian+'f' * 3*NSubs, data[off + 0*NSubs : off + 12*NSubs]), (NSubs,3) )
+        SubVel[s_off : s_off + NSubs,:]   = np.reshape( struct.unpack(endian+'f' * 3*NSubs, data[off + 12*NSubs : off + 24*NSubs]), (NSubs,3) )
+        SubVelDisp[s_off : s_off + NSubs]             = struct.unpack(endian+'f' * 1*NSubs, data[off + 24*NSubs : off + 28*NSubs])
+        SubVmax[s_off : s_off + NSubs]                = struct.unpack(endian+'f' * 1*NSubs, data[off + 28*NSubs : off + 32*NSubs])
+        SubSpin[s_off : s_off + NSubs,:]  = np.reshape( struct.unpack(endian+'f' * 3*NSubs, data[off + 32*NSubs : off + 44*NSubs]), (NSubs,3) )
+        SubMostBoundID[s_off : s_off + NSubs]         = struct.unpack(endian+'q' * 1*NSubs, data[off + 44*NSubs : off + 52*NSubs])
+        SubHalfMass[s_off : s_off + NSubs]            = struct.unpack(endian+'f' * 1*NSubs, data[off + 52*NSubs : off + 56*NSubs])
 
         # should have read entire file
         off = header_bytes + 8*NGroups + 12*NSubs + 24*NGroups + 56*NSubs
@@ -1053,9 +1077,10 @@ def convertMillenniumSubhaloCatalog(snap=63):
     assert np.array_equal(SubParentHalo[FirstSubOfHalo[w]], w[0])
     assert GroupLen[0] == GroupLen.max()
     w = np.where(NSubsPerHalo == 0)
-    a, b = match3(w[0],SubParentHalo)
-    assert a is None and b is None
-    FirstSubOfHalo[w] = -1 # convention
+    if len(w[0]):
+        a, b = match3(w[0],SubParentHalo)
+        assert a is None and b is None
+        FirstSubOfHalo[w] = -1 # convention
 
     # GroupOffset/SubhaloOffset are local to chunk files, just recreate now with global offsets
     subgroupCount = 0
@@ -1160,7 +1185,7 @@ def convertMillenniumSnapshot(snap=63):
     from util.helper import isUnique
 
     savePath = '/u/dnelson/data/sims.millennium/Millennium1/output/'
-    loadPath = '/virgo/simulations/Millennium/' 
+    loadPath = '/virgo/simulations/Recovered_Millennium/' 
     #loadPath = '/virgo/simulations/MilliMillennium/'
 
     saveFile = savePath + 'snapdir_%03d/snap_%03d.hdf5' % (snap,snap)
@@ -1176,84 +1201,102 @@ def convertMillenniumSnapshot(snap=63):
 
     nChunks = len( glob.glob(_snapChunkPath(snap,'*')) )
     nChunksIDs = len( [fn for fn in glob.glob(_idChunkPath(snap,'*')) if 'swapped' not in fn] )
-    assert nChunks == nChunksIDs
+    assert nChunks == nChunksIDs or nChunksIDs == 0
     print('Found [%d] chunks for snapshot [%03d], loading...' % (nChunks,snap))
 
+    # detect big-endianness
+    endian = '@' # native = little
+
+    with open(_snapChunkPath(snap,0),'rb') as f:
+        header = f.read(260)
+        NFiles = struct.unpack(endian+'i', header[128:128+4])[0]
+
+    if NFiles != nChunks:
+        endian = '>'
+        NFiles = struct.unpack(endian+'i', header[128:128+4])[0]
+
+    assert NFiles == nChunks
+
+    # cycle one
     if not path.isfile(saveFile):
-        # first, load all IDs
+        # first, load all IDs from the sub files
         Nids_tot = 0
-        offset = 0
+        
+        if path.isfile(savePath + 'gorder_%d.hdf5' % snap):
+            offset = 0
 
-        for i in range(nChunks):
-            with open(_idChunkPath(snap,i),'rb') as f:
-                header = f.read(16)
-                Nids = struct.unpack('i', header[4:8])[0]
-                Nids_tot += Nids
+            for i in range(nChunks):
+                with open(_idChunkPath(snap,i),'rb') as f:
+                    header = f.read(16)
+                    Nids = struct.unpack(endian+'i', header[4:8])[0]
+                    Nids_tot += Nids
 
-        ids_groupordered_old = np.zeros( Nids_tot, dtype='int64' )
-        print('Reading a total of [%d] IDs now...' % Nids_tot)
+            ids_groupordered_old = np.zeros( Nids_tot, dtype='int64' )
+            print('Reading a total of [%d] IDs now...' % Nids_tot)
 
-        bitshift = ((1 << 34) - 1) # from get_group_coordinates()
+            bitshift = ((1 << 34) - 1) # from get_group_coordinates()
 
-        for i in range(nChunks):
-            # full read
-            with open(_idChunkPath(snap,i),'rb') as f:
-                data = f.read()
-            Nids = struct.unpack('i', data[4:8])[0]
-            if Nids == 0:
-                continue
-            ids = struct.unpack('q' * Nids, data[16:16 + Nids*8])
+            for i in range(nChunks):
+                # full read
+                with open(_idChunkPath(snap,i),'rb') as f:
+                    data = f.read()
+                Nids = struct.unpack(endian+'i', data[4:8])[0]
+                if Nids == 0:
+                    continue
+                ids = struct.unpack(endian+'q' * Nids, data[16:16 + Nids*8])
 
-            # transform into actual particle ID
-            # particleid = (GroupIDs[i] << 30) >> 30 (seems wrong...)
-            # hashkey    = GroupIDs[i] >> 34
-            #ids_groupordered[offset : offset+Nids] = (np.array(ids) << 30) >> 30
-            ids_groupordered_old[offset : offset+Nids] = np.array(ids) & bitshift
+                # transform into actual particle ID
+                # particleid = (GroupIDs[i] << 30) >> 30 (seems wrong...)
+                # hashkey    = GroupIDs[i] >> 34
+                #ids_groupordered[offset : offset+Nids] = (np.array(ids) << 30) >> 30
+                ids_groupordered_old[offset : offset+Nids] = np.array(ids) & bitshift
 
-            print('[%3d] IDs [%8d] particles, from [%10d] to [%10d].' % (i, Nids, offset, offset+Nids))
-            offset += Nids
+                print('[%3d] IDs [%8d] particles, from [%10d] to [%10d].' % (i, Nids, offset, offset+Nids))
+                offset += Nids
 
-        assert np.min(ids_groupordered_old) >= 0 # otherwise overflow or bad conversion above
+            assert np.min(ids_groupordered_old) >= 0 # otherwise overflow or bad conversion above
 
-        # ids_groupordered are in the chunk-local group ordering! reshuffle now
-        print('Shuffling IDs into global group order...')
+            # ids_groupordered are in the chunk-local group ordering! reshuffle now
+            print('Shuffling IDs into global group order...')
 
-        gorder = {}
-        with h5py.File(savePath + 'gorder_%d.hdf5' % snap) as f:
-            for key in f:
-                gorder[key] = f[key][()]
+            gorder = {}
+            with h5py.File(savePath + 'gorder_%d.hdf5' % snap) as f:
+                for key in f:
+                    gorder[key] = f[key][()]
 
-        # use original (chunk-ordered) GroupOffset and GroupLen accessed in global-order
-        # to access ids_groupordered in non-contig blocks, stamping into ids_groupordered_new contiguously through
-        offset = 0
-        ids_groupordered = np.zeros( Nids_tot, dtype='int64' )
+            # use original (chunk-ordered) GroupOffset and GroupLen accessed in global-order
+            # to access ids_groupordered in non-contig blocks, stamping into ids_groupordered_new contiguously through
+            offset = 0
+            ids_groupordered = np.zeros( Nids_tot, dtype='int64' )
 
-        for i in gorder['Group_Reorder']:
-            read_offset = gorder['GroupOffset_Orig'][i]
-            read_length = gorder['GroupLen_Orig'][i]
+            for i in gorder['Group_Reorder']:
+                read_offset = gorder['GroupOffset_Orig'][i]
+                read_length = gorder['GroupLen_Orig'][i]
 
-            if read_length == 0:
-                continue
+                if read_length == 0:
+                    continue
 
-            ids_groupordered[offset : offset+read_length] = ids_groupordered_old[read_offset : read_offset + read_length]
-            offset += read_length
+                ids_groupordered[offset : offset+read_length] = ids_groupordered_old[read_offset : read_offset + read_length]
+                offset += read_length
 
-        ids_groupordered_old = None
+            ids_groupordered_old = None
+        else:
+            print('NO GROUP CATALOG! Assuming zero groups, and proceeding with snapshot rewrite!')
 
         # reader header of first snapshot chunk
         with open(_snapChunkPath(snap,0),'rb') as f:
             header = f.read(260)
 
-        npart      = struct.unpack('iiiiii', header[4:4+24])[1]
-        mass       = struct.unpack('dddddd', header[28:28+48])
-        scalefac   = struct.unpack('d', header[76:76+8])[0]
-        redshift   = struct.unpack('d', header[84:84+8])[0]
-        #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[1]
-        nFiles     = struct.unpack('i', header[128:128+4])[0]
-        BoxSize    = struct.unpack('d', header[132:132+8])[0]
-        Omega0     = struct.unpack('d', header[140:140+8])[0]
-        OmegaL     = struct.unpack('d', header[148:148+8])[0]
-        Hubble     = struct.unpack('d', header[156:156+8])[0]
+        npart      = struct.unpack(endian+'iiiiii', header[4:4+24])[1]
+        mass       = struct.unpack(endian+'dddddd', header[28:28+48])
+        scalefac   = struct.unpack(endian+'d', header[76:76+8])[0]
+        redshift   = struct.unpack(endian+'d', header[84:84+8])[0]
+        #nPartTot   = struct.unpack(endian+'iiiiii', header[100:100+24])[1]
+        nFiles     = struct.unpack(endian+'i', header[128:128+4])[0]
+        BoxSize    = struct.unpack(endian+'d', header[132:132+8])[0]
+        Omega0     = struct.unpack(endian+'d', header[140:140+8])[0]
+        OmegaL     = struct.unpack(endian+'d', header[148:148+8])[0]
+        Hubble     = struct.unpack(endian+'d', header[156:156+8])[0]
 
         assert nFiles == nChunks
 
@@ -1262,7 +1305,7 @@ def convertMillenniumSnapshot(snap=63):
         for i in range(nChunks):
             with open(_snapChunkPath(snap,i),'rb') as f:
                 header = f.read(28)
-                npart  = struct.unpack('iiiiii', header[4:4+24])[1]
+                npart  = struct.unpack(endian+'iiiiii', header[4:4+24])[1]
             nPartTot += npart
         print('Found new nPartTot [%d]' % nPartTot)
 
@@ -1276,40 +1319,44 @@ def convertMillenniumSnapshot(snap=63):
                 data = f.read()
 
             # local particle counts
-            npart_local = struct.unpack('iiiiii', data[4:4+24])[1]
+            npart_local = struct.unpack(endian+'iiiiii', data[4:4+24])[1]
 
             # cast and save
             start_ids = 284 + 24*npart_local
-            ids = struct.unpack('q' * npart_local*1, data[start_ids:start_ids + npart_local*8])
+            ids = struct.unpack(endian+'q' * npart_local*1, data[start_ids:start_ids + npart_local*8])
 
             ids_snapordered[offset : offset+npart_local] = ids
 
             print('[%3d] Snap IDs [%8d] particles, from [%10d] to [%10d].' % (i, npart_local, offset, offset+npart_local))
             offset += npart_local
 
-        # crossmatch
-        print('Matching two ID sets now...')
-        start = time.time()
+        # crossmatch group catalog IDs and snapshot IDs
+        if Nids_tot > 0:
+            print('Matching two ID sets now...')
+            start = time.time()
 
-        ind_snapordered, ind_groupordered = match3(ids_snapordered, ids_groupordered)
-        # note: ids_snapordered[ind_snapordered] puts them into group ordering
-        print(' took: '+str(round(time.time()-start,2))+' sec')
+            ind_snapordered, ind_groupordered = match3(ids_snapordered, ids_groupordered)
+            # note: ids_snapordered[ind_snapordered] puts them into group ordering
+            print(' took: '+str(round(time.time()-start,2))+' sec')
 
-        assert ind_snapordered.size == ids_groupordered.size # must have found them all
-        ids_groupordered = None
-        ind_groupordered = None
+            assert ind_snapordered.size == ids_groupordered.size # must have found them all
+            ids_groupordered = None
+            ind_groupordered = None
 
-        # create mask for outer FoF fuzz
-        mask = np.zeros( ids_snapordered.size, dtype='bool' )
-        mask[ind_snapordered] = 1
+            # create mask for outer FoF fuzz
+            mask = np.zeros( ids_snapordered.size, dtype='bool' )
+            mask[ind_snapordered] = 1
 
-        ind_outerfuzz = np.where(mask == 0)[0]
+            ind_outerfuzz = np.where(mask == 0)[0]
 
-        # create master re-ordering index list
-        inds_reorder = np.hstack( (ind_snapordered,ind_outerfuzz) )
+            # create master re-ordering index list
+            inds_reorder = np.hstack( (ind_snapordered,ind_outerfuzz) )
 
-        ind_snapordered = None
-        ind_outerfuzz = None    
+            ind_snapordered = None
+            ind_outerfuzz = None
+        else:
+            print('No cross-matching! Writing snapshot in ORIGINAL ORDER!')
+            inds_reorder = np.arange(ids_snapordered.size)
 
         assert inds_reorder.size == ids_snapordered.size # union must include all
         assert isUnique(inds_reorder) # no duplicates
@@ -1365,14 +1412,14 @@ def convertMillenniumSnapshot(snap=63):
                     data = f.read()
 
                 # local particle counts
-                npart_local = struct.unpack('iiiiii', data[4:4+24])[1]
+                npart_local = struct.unpack(endian+'iiiiii', data[4:4+24])[1]
 
                 # cast
                 start_pos = 268
                 start_vel = 276 + 12*npart_local
                 start = start_pos if ptName == 'Coordinates' else start_vel
 
-                val_local = struct.unpack('f' * npart_local*3, data[start:start + npart_local*12])
+                val_local = struct.unpack(endian+'f' * npart_local*3, data[start:start + npart_local*12])
 
                 # stamp
                 val[offset:offset+npart_local,:] = np.reshape(val_local, (npart_local,3))
