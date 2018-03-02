@@ -7,7 +7,7 @@ from builtins import *
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.dates import DateFormatter
+from matplotlib.dates import DateFormatter, HourLocator, WeekdayLocator
 from datetime import datetime
 from os.path import isfile, isdir, expanduser
 
@@ -202,7 +202,7 @@ def plotCpuTimeEstimates():
     fig.savefig(fName1)
     plt.close(fig)
 
-def periodic_slurm_status():
+def periodic_slurm_status(nosave=False):
     """ Collect current statistics from the SLURM scheduler, save some data, make some plots. """
     import pyslurm
     import subprocess
@@ -269,6 +269,15 @@ def periodic_slurm_status():
 
     n_jobs_running = len(jobs_running)
     n_jobs_pending = len(jobs_pending)
+
+    pending_reasons = [job['state_reason'] for job in jobs_pending]
+    n_pending_priority   = pending_reasons.count('Priority')
+    n_pending_dependency = pending_reasons.count('Dependency')
+    n_pending_resources  = pending_reasons.count('Resources')
+    n_pending_userheld   = pending_reasons.count('JobHeldUser')
+
+    next_job_starting = jobs_pending[ pending_reasons.index('Resources') ] # always just 1?
+    next_job_starting['user_name'] = pwd.getpwuid(next_job_starting['user_id'])[0]
 
     # restrict nodes to those in main partition (skip login nodes, etc)
     nodesInPart = _expandNodeList( parts[partName]['nodes'] )
@@ -348,12 +357,13 @@ def periodic_slurm_status():
             f.attrs['count'] = 0
 
     # time series data file: store current data
-    with h5py.File(saveDataFile) as f:
-        ind = f.attrs['count']
-        f['timestamp'][ind] = stats['req_time']
-        for field in saveDataFields:
-            f[field][ind] = locals()[field]
-        f.attrs['count'] += 1
+    if not nosave:
+        with h5py.File(saveDataFile) as f:
+            ind = f.attrs['count']
+            f['timestamp'][ind] = stats['req_time']
+            for field in saveDataFields:
+                f[field][ind] = locals()[field]
+            f.attrs['count'] += 1
 
     # count nodes per rack
     maxNodesPerRack = 0
@@ -436,6 +446,40 @@ def periodic_slurm_status():
     fig.tight_layout()
     fig.subplots_adjust(top=0.88)
 
+    # time series data load
+    data = {}
+    with h5py.File(saveDataFile,'r') as f:
+        count = f.attrs['count']
+        for key in f.keys():
+            data[key] = f[key][0:count]
+
+    # time series plot (last week)
+    numDays = 7
+    yticks = [60,70,80,90]
+    ylim = [50,100]
+    fontsize = 11
+
+    ax = fig.add_axes([0.754, 0.39, 0.234, 0.20]) # left,bottom,width,height
+    #ax.set_ylabel('CPU / Cluster Load [%]')
+    ax.set_ylim(ylim)
+
+    minTs = stats['req_time'] - 24*60*60*numDays
+    w = np.where( data['timestamp'] > minTs )[0]
+    dates = [datetime.fromtimestamp(ts) for ts in data['timestamp'] if ts > minTs]
+
+    ax.plot_date(dates, data['cluster_load'][w], '-', label='cluster load')
+    ax.plot_date(dates, data['cpu_load_allocnodes_mean'][w], '-', label='<node load>')
+    ax.tick_params(axis='y', direction='in', pad=-30)
+    ax.yaxis.set_ticks(yticks)
+    ax.yaxis.set_ticklabels([str(yt)+'%' for yt in yticks])
+    ax.xaxis.set_major_locator(HourLocator(byhour=[0]))
+    ax.xaxis.set_major_formatter(DateFormatter('%a')) #%Hh
+    ax.xaxis.set_minor_locator(HourLocator(byhour=[12]))
+    ax.legend(loc='lower right', fontsize=fontsize)
+
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
+        item.set_fontsize(fontsize)
+
     # text
     timeStr = 'Last updated %s.' % curTime.strftime('%A (%d %b) %H:%M')
     nodesStr = 'nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
@@ -443,12 +487,19 @@ def periodic_slurm_status():
     coresStr = 'cores: [%d] total, of which [%d] are allocated, [%d] are idle or unavailable.' % (nCores,nCores_alloc,nCores_idle)
     loadStr = 'cluster: [%.1f%%] global load, with mean per-node CPU load: [%.1f%%].' % \
         (cluster_load,cpu_load_allocnodes_mean)
+    jobsStr = 'jobs: [%d] running, [%d] waiting,' % (n_jobs_running,n_pending_priority+n_pending_resources)
+    jobsStr2 = '[%d] userheld, & [%d] dependent.' % (n_pending_userheld,n_pending_dependency)
+    next_job_starting['name2'] =  next_job_starting['name'][:6]+'...' if len(next_job_starting['name']) > 8 else next_job_starting['name'] # truncate
+    nextJobsStr = 'next to run: id=%d %s (%s)' % (next_job_starting['job_id'],next_job_starting['name2'],next_job_starting['user_name'])
 
     ax.annotate('FREYA Status', [0.995,0.95], xycoords='figure fraction', fontsize=56.0, horizontalalignment='right', verticalalignment='center')
     ax.annotate(timeStr, [0.995, 0.90], xycoords='figure fraction', fontsize=16.0, horizontalalignment='right', verticalalignment='center')
     ax.annotate(nodesStr, [0.012, 0.98], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(coresStr, [0.012, 0.943], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(loadStr, [0.012, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
+    ax.annotate(jobsStr, [0.73, 0.98], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
+    ax.annotate(jobsStr2, [0.73, 0.943], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
+    ax.annotate(nextJobsStr, [0.73, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
 
     # save
     fig.savefig('freya_stat_1.png', dpi=100) # 1890x920 pixels
