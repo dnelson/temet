@@ -67,7 +67,7 @@ def plotRedshiftSpacings():
 def plotMassFunctions():
     """ Plot DM halo and stellar mass functions comparing multiple boxes, at one redshift. """
     # config
-    mass_ranges = [ [5.0, 16.0], [4.4, 13.0] ] # m_halo, m_star
+    mass_ranges = [ [7.0, 16.0], [4.4, 13.0] ] # m_halo, m_star
     binSize = 0.2
     
     sPs = []
@@ -76,17 +76,21 @@ def plotMassFunctions():
     #sPs.append( simParams(res=540,run='tng',redshift=0.8) )
     #sPs.append( simParams(res=270,run='tng',redshift=0.8) )
     sPs.append( simParams(res=1024,run='tng_dm',redshift=0.0) )
+    sPs.append( simParams(res=2048,run='tng_dm',redshift=0.0) )
     sPs.append( simParams(res=1820,run='tng_dm',redshift=0.0) )
     sPs.append( simParams(res=2500,run='tng_dm',redshift=0.0) )
 
     # plot setup
-    fig = plt.figure(figsize=(18,8))
+    if all(sP.isDMO for sP in sPs):
+        mass_ranges = [mass_ranges[0]] # halo mass function only, since all runs are DMO
 
-    # halo or stellar mass function
+    fig = plt.figure(figsize=(9*len(mass_ranges),8))
+
+    # two panels: halo and stellar mass functions
     for j, mass_range in enumerate(mass_ranges):
         nBins = int((mass_range[1]-mass_range[0])/binSize)
 
-        ax = fig.add_subplot(1,2,j+1)
+        ax = fig.add_subplot(1,len(mass_ranges),j+1)
         ax.set_xlim(mass_range)
         if j == 0: ax.set_xlabel('Halo Mass [ M$_{\\rm 200,crit}$  log M$_\odot$ ]')
         if j == 1: ax.set_xlabel('Stellar Mass [ M$_\star(<2r_{\\rm 1/2,stars})$  centrals  log M$_\odot$ ]')
@@ -102,23 +106,20 @@ def plotMassFunctions():
             if j == 0:
                 gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'])
                 masses = sP.units.codeMassToLogMsun(gc['halos'])
-                #print(sP.simName, np.where(masses >= 14.0)[0].size)
-                #continue
             if j == 1:
                 gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMassInRadType'])
                 masses = gc['subhalos'][ gc['halos'] ][:,sP.ptNum('stars')] # Mstar (<2*r_{1/2,stars})
                 masses = sP.units.codeMassToLogMsun(masses)
-                #print(sP.simName, np.where( (masses >= 10.4) & (masses < 10.6) )[0].size)
-                #continue
 
-            yy, xx = np.histogram(masses, bins=nBins, range=mass_range)
-            yy_max = np.max([yy_max,yy.max()])
+            w = np.where(~np.isnan(masses))
+            yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
+            yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
             label = sP.simName + ' z=%.1f' % sP.redshift
-            ax.hist(masses,bins=nBins,range=mass_range,lw=2.0,label=label,histtype='step',alpha=0.9)
+            ax.hist(masses[w],bins=nBins,range=mass_range,lw=2.0,label=label,histtype='step',alpha=0.9)
 
         ax.set_ylim([1,yy_max*1.4])
-        ax.legend()
+        ax.legend(loc='lower left')
 
     fig.tight_layout()    
     fig.savefig('mass_functions.pdf')
