@@ -267,32 +267,36 @@ def _generate_grid(level, i, j, k, Radius, Angle, pIndex, BoxSize, MaxLevel, Min
             P_Mass[pIndex] = 1.0 / (dim*dim*dim)
             pIndex += 1
 
-def generate():
+def generate(fofID=50, EnlargeHighResFactor=None):
     """ Create zoom particle load and save. """
     from util.simParams import simParams
     from cosmo.load import groupCatSingle, snapshotSubset
     from tracer.tracerMC import match3
 
     # config
-    sP = simParams(res=455,run='tng',redshift=0.0)
-    fofID = 50
-    MaxLevel = 9 # e.g. 9=512^3
-    MinLevel = 5 # 2^5=32 coarsest background
-    ZoomFactor = 1
+    sP = simParams(res=2048,run='tng_dm',redshift=0.0)
+    #fofID = 50
+    MaxLevel = 11 # e.g. 9=512^3, 11=2048^3
+    MinLevel = 6 # 2^5=32 coarsest background, 2^6=64
+    ZoomFactor = 3
     Angle = 0.1
-    EnlargeHighResFactor = 2.0
+    if EnlargeHighResFactor is None: EnlargeHighResFactor = 2.0
+
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
-    saveFilename = 'partload_%s_halo%d_L%d.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1))
+    saveFilename = 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
 
     # load halo DM positions and IDs at target snapshot
     start_time = time.time()
+
     halo = groupCatSingle(sP, haloID=fofID)
-    haloLen = halo['GroupLenType'][sP.ptNum('dm')]
-    haloPos = halo['GroupPos']
+    haloLen    = halo['GroupLenType'][sP.ptNum('dm')]
+    haloPos    = halo['GroupPos']
     haloVirRad = sP.units.codeLengthToMpc(halo['Group_R_Crit200'])
-    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], rvir [%.2f pMpc], loading IDs and crossmatching for positions...' % \
-        (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen,haloVirRad))
+    haloM200   = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])
+
+    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], m200 [%.2f] rvir [%.2f pMpc], loading IDs and crossmatching for positions...' % \
+        (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen,haloM200,haloVirRad))
 
     dmIDs_halo = snapshotSubset(sP, 'dm', 'ids', haloID=fofID)
     assert haloLen == dmIDs_halo.size
@@ -301,17 +305,22 @@ def generate():
     sP_snap = sP.snap
     sP.setSnap('ics')
     dmIDs_ics = snapshotSubset(sP, 'dm', 'ids')
+    print(' load done, took [%g] sec.' % (time.time()-start_time))
+    next_time = time.time()
 
     inds_ics, inds_halo = match3(dmIDs_ics, dmIDs_halo)
     assert inds_ics.size == inds_halo.size == dmIDs_halo.size
-    print(' done, took [%g] sec.' % (time.time()-start_time))
+    print(' match done, took [%g] sec.' % (time.time()-next_time))
+    dmIDs_ics = None
 
     # locate dm particles in ICs, load positions of halo DM particles
-    dmPos_ics = snapshotSubset(sP, 'dm', 'pos')
-    posInitial = dmPos_ics[inds_ics,:]
+    posInitial = snapshotSubset(sP, 'dm', 'pos', inds=inds_ics)
+    ext_min = np.min(posInitial, axis=0)
+    ext_max = np.max(posInitial, axis=0)
+    extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
 
-    print('Initial DM positions extent, x [%.1f - %.1f], y [%.1f - %.1f], z [%.1f - %.1f]' % \
-        (posInitial[:,0].min(), posInitial[:,0].max(), posInitial[:,1].min(), posInitial[:,1].max(), posInitial[:,2].min(), posInitial[:,2].max()))
+    print('Initial DM positions extent, x [%.1f - %.1f], y [%.1f - %.1f], z [%.1f - %.1f], max box fraction = %.3f' % \
+        (ext_min[0], ext_max[0], ext_min[1], ext_max[1], ext_min[2], ext_max[2], extent_frac))
 
     # initialize grid
     GridDim = np.zeros( MaxLevel+1, dtype='int32')
@@ -326,7 +335,7 @@ def generate():
 
     Grids = np.zeros(GridsSize, dtype='int8')
     print('Allocated grid of [%d] elements (%.3f GB), creating particle load...' % (Grids.size,float(Grids.size)*1/1024/1024/1024))
-    start_time = time.time()
+    next_time = time.time()
 
     # mark high resolution region, enlarge, and build parent grid
     cmInitial = _get_center_of_mass(posInitial, sP.boxSize)
@@ -352,11 +361,11 @@ def generate():
     _generate_grid(0,0,0,0,Radius,Angle,pIndex,sP.boxSize,MaxLevel,MinLevel,ZoomFactor,Grids,GridsOffset,P_Type,P_Pos,P_Mass)
 
     assert pIndex == NumPartTot
-    print(' done, took [%g] sec.' % (time.time()-start_time))
+    print(' done, took [%g] sec.' % (time.time()-next_time))
 
     w = np.where(Grids[GridsOffset[MaxLevel]:] == 1)
     vol_frac = float(len(w[0])) / Grids[GridsOffset[MaxLevel]:].size * 100
-    print(' Volume fraction of box occupied by high-res region in ICs = %.3f%%' % vol_frac)
+    print('Volume fraction of box occupied by high-res region in ICs = %.3f%%' % vol_frac)
 
     # save
     for i in range(6):
@@ -395,8 +404,18 @@ def generate():
             # add masses for variable mass particle type
             partTypes[gName]['Masses'] = P_Mass[w]
 
-    headerExtra = {'GroupCM':cmInitial, 'MinLevel':MinLevel, 'MaxLevel':MaxLevel, 'ZoomFactor':ZoomFactor, 
-                   'Boxsize':sP.boxSize, 'Sim_name':sP.simName, 'Sim_snap':sP_snap, 'Sim_fofID':fofID,
-                   'EnlargeHighResFactor':EnlargeHighResFactor, 'InitBoxVolFrac':vol_frac, 'InitTime':sP.scalefac}
+    headerExtra = {'GroupCM':cmInitial, 'MinLevel':MinLevel, 'MaxLevel':MaxLevel, 'ZoomFactor':ZoomFactor, 'Boxsize':sP.boxSize, 
+                   'Sim_name':np.string_(sP.simName), 'Sim_snap':sP_snap, 'Sim_fofID':fofID, 'InitTime':sP.scalefac, 
+                   'InitBoxVolFrac':vol_frac, 'InitBoxExtentFrac':extent_frac, 'EnlargeHighResFactor':EnlargeHighResFactor}
+
     write_ic_file(saveFilename, partTypes, sP.boxSize, massTable=massTable, headerExtra=headerExtra)
-    print(' Done (starting z = %.1f, a = %f).' % (sP.redshift, sP.scalefac))
+    print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
+
+def generate_set():
+    haloIDs = [50,51,90]
+    sizeFacs = [2.0,3.0,4.0]
+
+    for haloID in haloIDs:
+        for sizeFac in sizeFacs:
+            generate(fofID=haloID, EnlargeHighResFactor=sizeFac)
+

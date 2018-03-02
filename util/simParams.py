@@ -293,25 +293,28 @@ class simParams:
                 if self.simName in method_run_names:
                     self.simName = method_run_names[self.simName]
 
-        # TNG zooms (currently testing with L75n455*)
+        # TNG [cluster] zooms based on L680n2048 parent box
         if run in ['tng_zoom','tng_zoom_dm']:
             assert hInd is not None
-            self.validResLevels = [9,10]
+            self.validResLevels = [11,12,13,14] # first is ZoomLevel==1 (i.e. at parentRes)
             self.groupOrdered   = True
 
-            parentRes = 455
-            self.zoomLevel = self.res # L9, L10, L11
-            self.res = 455 * (res-self.validResLevels[0]+1)
+            parentRes = 2048
+            self.zoomLevel = self.res # L11 (TNG1-3 or TNG300-3) to L13 (TNG1-1 or TNG300-1) to L14 (i.e. TNG100-1)
+            self.res = 2**res # i.e. 2048 for L11, 4096 for L12, 8192 for L13
 
-            self.gravSoft = 4.0 / (res/455)
-            self.targetGasMass = 0.0 #9.43950e-5 * (8 ** np.log2(1820/res))
-            self.boxSize = 75000.0
+            self.gravSoft = 16.0 / (res/1024)
+            self.targetGasMass = 0.00182873 * (8 ** np.log2(8192/res))
+            self.boxSize = 680000.0 # ckpc/h unit system
 
             # common: Planck2015 TNG cosmology
             self.omega_m     = 0.3089
             self.omega_L     = 0.6911
             self.omega_b     = 0.0486
             self.HubbleParam = 0.6774
+
+            if '_dm' in run:
+                self.targetGasMass = 0.0
 
             # paths
             bs = str(int(self.boxSize/1000.0))
@@ -876,9 +879,9 @@ class simParams:
         """ Update sP based on new snapshot. """
         self.snap = snap
         if self.snap is not None:
-            if self.snap == 'ics':
+            if str(self.snap) == 'ics':
                 self.redshift = 127.0
-                assert self.run in ['tng','tng_zoom','tng_zoom_dm'] # otherwise generalize
+                assert self.run in ['tng','tng_dm','tng_zoom','tng_zoom_dm'] # otherwise generalize
             else:
                 self.redshift = snapNumToRedshift(sP=self)
 
@@ -925,6 +928,10 @@ class simParams:
     @property
     def isZoom(self):
         return self.zoomLevel != 0
+
+    @property
+    def isDMO(self):
+        return self.targetGasMass == 0.0
 
     @property
     def numMetals(self):
