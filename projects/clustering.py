@@ -1,6 +1,7 @@
 """
-clustering.py
-  Plots for TNG clustering.
+projects/clustering.py
+  Plots for hypothetical TNG clustering paper.
+  in prep.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *

@@ -1,4 +1,3 @@
-from . import clustering
 from . import compareTwoHalos
 from . import cosmoGeneral
 from . import cosmoMisc

@@ -10,6 +10,7 @@ import h5py
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 from scipy.stats import gaussian_kde
+import matplotlib.pyplot as plt
 
 from util.loadExtern import loadSDSSData
 from cosmo.kCorr import kCorrections, coeff
@@ -196,3 +197,92 @@ def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range,
     print('Saved: [%s]' % saveFilename)
 
     return xx, yy, kde2d
+
+def compareOldNewMags():
+    """ Compare stellar_photometrics and my new sdss subhalo mags, and BuserUconverted vs sdss_u. """
+    sP = simParams(res=910, run='illustris', redshift=0.0)
+
+    bands = ['i','z']
+
+    # snapshot magnitudes/colors
+    gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
+    snap_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
+
+    # auxcat magnitudes/colors
+    acKey = 'Subhalo_StellarPhot_p07c_nodust'
+    acColorLoad = auxCat(sP, fields=[acKey])
+
+    acBands = acColorLoad[acKey+'_attrs']['bands']
+    i0 = np.where(acBands == 'sdss_'+bands[0])[0][0]
+    i1 = np.where(acBands == 'sdss_'+bands[1])[0][0]
+    auxcat_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
+
+    # plot colors
+    fig = plt.figure(figsize=(16,16))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Snapshot Color')
+    ax.set_ylabel('AuxCat Color')
+
+    ax.scatter(snap_colors, auxcat_colors, marker='.', s=1)
+
+    ax.plot([-1,5],[-1,5],'-',color='orange')
+
+    fig.tight_layout()    
+    fig.savefig('colors_%s.png' % ''.join(bands))
+    plt.close(fig)
+
+    # magnitudes
+    if bands[0] == 'u':
+        snap_mags = gcColorLoad['subhalos'][:,4] + (-1.0/0.2906) * \
+                    (gcColorLoad['subhalos'][:,2] - gcColorLoad['subhalos'][:,4] - 0.0885)
+    elif bands[0] == 'g':
+        snap_mags = gcColorLoad['subhalos'][:,4]
+    elif bands[0] == 'i':
+        snap_mags = gcColorLoad['subhalos'][:,6]
+    elif bands[0] == 'r':
+        snap_mags = gcColorLoad['subhalos'][:,5]
+
+    auxcat_mags = acColorLoad[acKey][:,i0]
+
+    # plot
+    fig = plt.figure(figsize=(16,16))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Snapshot Mag')
+    ax.set_ylabel('AuxCat Mag')
+
+    ax.scatter(snap_mags, auxcat_mags, marker='.', s=1)
+
+    ax.plot([-22,-12],[-22,-12],'-',color='orange')
+
+    fig.tight_layout()  
+    fig.savefig('mags_%s.png' % bands[0])
+    plt.close(fig)
+
+def plotDifferentUPassbands():
+    """ Buser's U filter from BC03 vs. Johnson UX filter from Bessel+ 98. """
+    Buser_lambda = np.linspace(305, 420, 24) #nm
+    Buser_f      = [0.0, 0.012, 0.077, 0.135, 0.204, 0.282, 0.385, 0.493, 0.6, # 345nm
+                    0.705, 0.82, 0.90, 0.959, 0.993, 1.0, # 375nm
+                    0.975, 0.85, 0.645, 0.4, 0.223, 0.125, 0.057, 0.005, 0.0] # 420nm
+
+    Johnson_lambda = np.linspace(300, 420, 25)
+    Johnson_f      = [0.0, 0.016, 0.068, 0.167, 0.287, 0.423, 0.560, 0.673, 0.772, 0.841, # 345nm
+                      0.905, 0.943, 0.981, 0.993, 1.0, # 370nm
+                      0.989, 0.916, 0.804, 0.625, 0.423, 0.238, 0.114, 0.051, 0.019, 0.0] # 420nm
+
+    fig = plt.figure(figsize=(14,7))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Wavelength [nm]')
+    ax.set_ylabel('Transmittance')
+
+    ax.plot(Buser_lambda, Buser_f, label='Buser U')
+    ax.plot(Johnson_lambda, Johnson_f, label='Johnson U')
+
+    ax.legend()
+
+    fig.tight_layout()    
+    fig.savefig('filters_U.pdf')
+    plt.close(fig)
