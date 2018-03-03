@@ -18,59 +18,107 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
-def check_zoom():
-    # load parent box: halo
-    from scipy.spatial import ConvexHull
+def bh_details_check():
+    """ Check gaps in TNG100-1 blackhole_details.hdf5. """
+    with file('out.txt','r') as f:
+        lines = f.read()
 
-    sP = simParams(res=455,run='tng',redshift=0.0)
-    hInd = 50
+    lines = lines.split('\n')
+    mdot = np.zeros( len(lines)-1, dtype='float32' )
+    scalefac = np.zeros( len(lines)-1, dtype='float32' )
 
-    halo = cosmo.load.groupCatSingle(sP, haloID=hInd)
+    for i, line in enumerate(lines[:-1]):
+        d = line.split(' ')
+        mdot[i] = float(d[3])
+        scalefac[i] = float(d[1])
 
-    # load zoom: group catalog
-    sPz = simParams(res=9, run='tng_zoom_dm', hInd=hInd, redshift=0.0)
+    redshift = 1/scalefac-1
 
-    halo_zoom = cosmo.load.groupCatSingle(sPz, haloID=0)
-    halos_zoom = cosmo.load.groupCat(sPz, fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
-    subs_zoom = cosmo.load.groupCat(sPz, fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
+    inds = np.argsort(redshift)
+    redshift = redshift[inds]
+    scalefac = scalefac[inds]
+    mdot = mdot[inds]
 
-    print(sP.units.codeMassToLogMsun(halo['Group_M_Crit200']), sP.units.codeMassToLogMsun(halo['GroupMass']))
-    print(sP.units.codeMassToLogMsun(halo_zoom['Group_M_Crit200']), sP.units.codeMassToLogMsun(halo_zoom['GroupMass']))
+    hh, bins = np.histogram(scalefac, bins=400)
+    ww = np.where(hh <= 3)
+    print('near-empty bins: ', redshift[ww])
 
-    # particles
-    sPz.setSnap('ics')
-    h = cosmo.load.snapshotHeader(sPz)
-    x = cosmo.load.snapshotSubset(sPz, 'dm', 'pos')
-    y = cosmo.load.snapshotSubset(sPz, 2, 'pos')
+    if 1:
+        fig = plt.figure(figsize=(18,10))
+        ax = fig.add_subplot(111)
 
-    dists = cosmo.util.periodicDists( halo_zoom['GroupPos'], y, sP=sP )
-    print('min dists: ', dists.min())
-    w = np.where(dists < 5*halo_zoom['Group_R_Crit200'])
-    print('num within 5rvir: ', 5*halo_zoom['Group_R_Crit200'], len(w[0]))
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('Mdot [msun/yr]')
+        ax.set_yscale('log')
+        ax.plot(redshift,mdot,lw=0.5)
 
-    # convex hull, time evo
-    for snap in range(0,100):
-        sPz.setSnap(snap)
-        x = cosmo.load.snapshotSubset(sPz, 'dm', 'pos')
-        hull = ConvexHull(x)
-        print('[%3d] z = %.2f frac = %.3f' % (snap,sP.redshift,hull.volume/sP.boxSize**3*100))
+        fig.tight_layout()    
+        fig.savefig('check_details.pdf')
+        plt.close(fig)
 
-        # plot points scatter
-        if 1:
-            fig = plt.figure(figsize=(16,16))
-            ax = fig.add_subplot(111)
+    if 1:
+        fig = plt.figure(figsize=(18,10))
+        ax = fig.add_subplot(111)
 
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_xlim([0,sP.boxSize])
-            ax.set_ylim([0,sP.boxSize])
-            ax.plot(x[:,0], x[:,1], '.')
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('Mdot [msun/yr]')
+        ax.set_xlim([2.0,2.2])
+        ax.set_yscale('log')
+        ax.plot(redshift,mdot,lw=0.5)
 
-            fig.tight_layout()    
-            fig.savefig('check_zoom-%d.png' % snap)
-            plt.close(fig)
+        fig.tight_layout()    
+        fig.savefig('check_details_zoom.pdf')
+        plt.close(fig)
+    import pdb; pdb.set_trace()
 
-    import ipdb; ipdb.set_trace()
+def bh_mdot_subbox_test():
+    """ Check that BH accretion rate equals mass increase. """
+    sP = simParams(res=455,run='tng',redshift=0.0,variant='subbox0')
+
+    h = cosmo.load.snapshotHeader(sP)
+    print('num BHs: ', h['NumPart'][sP.ptNum('bh')])
+
+    ids = cosmo.load.snapshotSubset(sP, 'bh', 'ids')
+    print(ids.shape)
+
+    id = ids[0] # take first one
+
+    numSnapsBack = 20
+
+    tage_prev = None
+    mass_prev = None
+
+    for snap in range(sP.snap-numSnapsBack, sP.snap):
+        sP.setSnap(snap)
+        ids = cosmo.load.snapshotSubset(sP, 'bh', 'ids')
+        w = np.where(ids == id)[0]
+        assert len(w)
+
+        dt = sP.tage - tage_prev if tage_prev is not None else 0.0
+        if tage_prev is None: tage_prev = sP.tage
+        dt_yr = dt * 1e9
+
+        mdot = cosmo.load.snapshotSubset(sP, 'bh', 'BH_Mdot') * 10.22 # msun/yr
+        medd = cosmo.load.snapshotSubset(sP, 'bh', 'BH_MdotEddington') * 10.22 # msun/yr
+        mass = cosmo.load.snapshotSubset(sP, 'bh', 'BH_Mass')
+        mass2 = cosmo.load.snapshotSubset(sP, 'bh', 'Masses')
+        mass = sP.units.codeMassToMsun(mass)
+        mass2 = sP.units.codeMassToMsun(mass2)
+
+        if mass_prev is None:
+            mdot_actual = 0.0
+            mass_prev = mass[w]
+        else:
+            BlackHoleRadiativeEfficiency = 0.2
+            mdot_actual = mdot[w] * dt_yr
+            #mdot_adios = mdot / All.BlackHoleAccretionFactor # only if in BH_RADIO_MODE
+            # note: many other modifications here including BH_PRESSURE_CRITERION and BH_EXACT_INTEGRATION...
+            deltaM = (1 - BlackHoleRadiativeEfficiency) * mdot_actual
+            mass_prev += deltaM
+
+        print(snap,w,mdot_actual,medd[w],mass[w],mass2[w],dt_yr,mass_prev,mass_prev/mass[w])
+
+    import pdb; pdb.set_trace()
 
 def check_millennium():
     # create re-write of Millennium simulation files
@@ -168,171 +216,6 @@ def josh_paper3():
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
                      massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
                      contours=contours, smoothSigma=smoothSigma, hideBelow=True)
-
-def barnes_check1():
-    """ Test plots for Barnes paper. """
-    from util.loadExtern import rossetti17planck
-    data = rossetti17planck()
-
-    # z=0 TNG300-1
-    sP = simParams(res=2500, run='tng', redshift=0.0)
-    m500 = cosmo.load.groupCat(sP, fieldsSubhalos=['mhalo_500_log'])
-    w500 = np.where(10.0**m500 >= 2e14)
-
-    # redshifts
-    zz = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
-    med_sim = np.zeros( zz.size, dtype='float32' )
-    med_data = np.zeros( zz.size, dtype='float32' )
-
-    for i, z in enumerate(zz):
-        print(z)
-        sPloc = simParams(res=2500, run='tng', redshift=z)
-        m500loc = cosmo.load.groupCat(sPloc, fieldsSubhalos=['mhalo_500'])
-        w = np.where(m500loc >= 2e14)
-        med_sim[i] = np.log10( np.median( m500loc[w] ) )
-        w = np.where( np.abs(data['z'] - z) <= 0.05 )
-        med_data[i] = np.log10( np.median( 10.0**data['m500'][w] ) )
-
-    # plot
-    fig = plt.figure(figsize=(18,8))
-    ax = fig.add_subplot(121)
-
-    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
-    ax.set_ylabel('N$_{\\rm halos}$')
-    label = sP.simName + ' z=%.1f' % sP.redshift + ' "high-mass" (M$_{\\rm halo} > 2*10^{14} M_{\\rm sun}$)'
-    ax.hist(m500[w500], bins=10, range=[14.2,15.2], alpha=0.7, label=label)
-    ax.hist(data['m500'], bins=10, range=[14.2,15.2], alpha=0.7, label=data['label'])
-    ax.legend()
-
-    ax = fig.add_subplot(122)
-    ax.set_xlabel('Redshift')
-    ax.set_xlim([-0.05,0.6])
-    ax.set_ylabel('Median Halo Mass [m500, log M$_{\\rm sun}$]')
-
-    ax.plot(zz, med_sim, '-', marker='o', label=sP.simName)
-    ax.plot(zz, med_data, '-', marker='o', label='Planck Sample')
-    ax.legend(loc='best')
-
-    fig.tight_layout()    
-    fig.savefig('check_halomass.pdf')
-    plt.close(fig)
-
-def barnes_check2():
-    """ Test plots for Barnes paper. """
-    from util.loadExtern import rossetti17planck
-    data = rossetti17planck()
-
-    c_thresh = 0.075 # from Rossetti
-
-    binSize = 0.2
-    binMin = 14.0
-    nBins = 6
-
-    cc_frac = np.zeros(nBins, dtype='float32')
-    mass = np.zeros(nBins, dtype='float32')
-    cc_frac.fill(np.nan)
-
-    for i in range(nBins):
-        mass0 = binMin + binSize*i
-        mass1 = mass0 + binSize
-        mass[i] = (mass0+mass1)/2
-
-        w = np.where( (data['m500'] > mass0) & (data['m500'] <= mass1) )
-        c_vals = data['c'][w]
-        if c_vals.size == 0: continue
-
-        n_below = np.count_nonzero(c_vals < c_thresh)
-        n_above = np.count_nonzero(c_vals >= c_thresh)
-        cc_frac[i] = float(n_above) / (n_above+n_below)
-
-    # plot
-    fig = plt.figure(figsize=(14,10))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
-    ax.set_ylabel('Cool Core Fraction (Planck Obs, Rossetti+ 17 definition)')
-    ax.plot(mass, cc_frac, '-', marker='o', label=data['label'])
-
-    fig.tight_layout()    
-    fig.savefig('check_ccfrac_vs_mass.pdf')
-    plt.close(fig)
-
-def barnes_check3():
-    """ Line fitting, Figure 9 (oct9 draft) right panel. """
-    x      = np.array([1.00, 0.75,  0.5,   0.4,   0.3,   0.2,   0.1,   0.0])
-    y      = np.array([0.50, 0.384, 0.0,   0.048, 0.098, 0.219, 0.069, 0.097])
-    y_up   = np.array([0.75, 0.525, 0.108, 0.147, 0.181, 0.303, 0.131, 0.157])
-    y_down = np.array([0.25, 0.273, 0.001, 0.032, 0.066, 0.164, 0.046, 0.068])
-
-    obs_x      = np.array([1.0, 0.75, 0.375, 0.125])
-    obs_x_l    = np.array([1.2, 0.8, 0.6, 0.2])
-    obs_x_r    = np.array([0.8, 0.6, 0.2, 0.0])
-    obs_y      = np.array([0.07, 0.183, 0.170, 0.225])
-    obs_y_up   = np.array([0.20, 0.26, 0.26, 0.27])
-    obs_y_down = np.array([0.05, 0.14, 0.12, 0.19])
-
-    # fit
-    from scipy.stats import linregress
-    from scipy.optimize import leastsq
-    from numpy.polynomial.polynomial import polyfit
-
-    result1 = linregress(x[::-1],y[::-1])
-    print('Slope and intercept: %g, %g' % (result1.slope,result1.intercept))
-
-    sigma = ((y-y_down) + (y_up-y)) / 2 # avg
-    weights = 1/sigma
-    result2 = polyfit(x, y, deg=1, w=weights)
-    print('Slope and intercept: %g, %g' % (result2[1], result2[0]))
-
-    sigma_max = np.max( np.vstack( ((y-y_down), (y_up-y)) ), axis=0 ) # max
-    result3 = polyfit(x, y, deg=1, w=1/sigma_max)
-    print('Slope and intercept: %g, %g' % (result3[1], result3[0]))
-
-    def error_function(params, x, y, y_err_up, y_err_down):
-        y_fit = params[1]*x + params[0]
-        error = y - y_fit
-        error_pos = np.where(error >= 0) # fit below data
-        error_neg = np.where(error < 0) # fit above data
-        error[error_pos] /= y_err_down[error_pos]
-        error[error_neg] /= y_err_up[error_neg]
-        return error
-
-    params_init = [0.0, 0.0]
-    args = (x,y,y_up,y_down)
-    result4, params_cov, info, errmsg, retcode = \
-      leastsq(error_function, params_init, args=args, full_output=True)
-
-    print('Slope and intercept: %g, %g' % (result4[1], result4[0]))
-
-    params_init = [0.0, 0.0]
-    args = (obs_x,obs_y,obs_y_up,obs_y_down)
-    result5, params_cov, info, errmsg, retcode = \
-      leastsq(error_function, params_init, args=args, full_output=True)
-
-    print('Slope and intercept: %g, %g (data)' % (result5[1], result5[0]))
-
-    # plot
-    fig = plt.figure(figsize=(14,10))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Redshift')
-    ax.set_ylabel('Fraction')
-    ax.set_xlim([-0.1, 1.1])
-    ax.set_ylim([0.0, 1.05])
-    ax.errorbar(x, y, yerr=[y-y_down,y_up-y], marker='o', label='TNG300-1')
-    ax.errorbar(obs_x, obs_y, linestyle='None', yerr=[obs_y-obs_y_down,obs_y_up-obs_y], marker='o', color='black', label='Obs')
-
-    xx = np.array([-0.05,1.05])
-    ax.plot(xx, result1.slope*xx + result1.intercept, '-', label='linregress un-weighted (%.3f)' % result1.slope)
-    ax.plot(xx, result2[1]*xx + result2[0], '-', label='polyfit weighted mean symmetric error (%.3f)' % result2[1])
-    ax.plot(xx, result3[1]*xx + result3[0], '-', label='polyfit weighted max symmetric error (%.3f)' % result3[1])
-    ax.plot(xx, result4[1]*xx + result4[0], '-', label='leastsq weighted asymmetric error (%.3f)' % result4[1])
-    ax.plot(xx, result5[1]*xx + result5[0], '--', color='black', label='obs-fit leastsq weighted asymmetric error (%.3f)' % result5[1])
-
-    ax.legend()
-    fig.tight_layout()    
-    fig.savefig('check_linfit_Figure9_right.pdf')
-    plt.close(fig)
 
 def verifySimFiles(sP, groups=False, fullSnaps=False, subboxes=False):
     """ Verify existence, permissions, and HDF5 structure of groups, full snaps, subboxes. """
@@ -949,99 +832,6 @@ def richardCutout():
     cutout_request = {'stars':'ParticleIDs'}
     cutout = get(sub_prog_url+"cutout.hdf5", cutout_request)
 
-def compareOldNewMags():
-    """ Compare stellar_photometrics and my new sdss subhalo mags, and BuserUconverted vs sdss_u. """
-    sP = simParams(res=910, run='illustris', redshift=0.0)
-    from cosmo.color import stellarPhotToSDSSColor
-
-    bands = ['i','z']
-
-    # snapshot magnitudes/colors
-    gcColorLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
-    snap_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
-
-    # auxcat magnitudes/colors
-    acKey = 'Subhalo_StellarPhot_p07c_nodust'
-    acColorLoad = cosmo.load.auxCat(sP, fields=[acKey])
-
-    acBands = acColorLoad[acKey+'_attrs']['bands']
-    i0 = np.where(acBands == 'sdss_'+bands[0])[0][0]
-    i1 = np.where(acBands == 'sdss_'+bands[1])[0][0]
-    auxcat_colors = acColorLoad[acKey][:,i0] - acColorLoad[acKey][:,i1]
-
-    # plot colors
-    fig = plt.figure(figsize=(16,16))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Snapshot Color')
-    ax.set_ylabel('AuxCat Color')
-
-    ax.scatter(snap_colors, auxcat_colors, marker='.', s=1)
-
-    ax.plot([-1,5],[-1,5],'-',color='orange')
-
-    fig.tight_layout()    
-    fig.savefig('colors_%s.png' % ''.join(bands))
-    plt.close(fig)
-
-    # magnitudes
-    from cosmo.color import gfmBands
-
-    if bands[0] == 'u':
-        snap_mags = gcColorLoad['subhalos'][:,4] + (-1.0/0.2906) * \
-                    (gcColorLoad['subhalos'][:,2] - gcColorLoad['subhalos'][:,4] - 0.0885)
-    elif bands[0] == 'g':
-        snap_mags = gcColorLoad['subhalos'][:,4]
-    elif bands[0] == 'i':
-        snap_mags = gcColorLoad['subhalos'][:,6]
-    elif bands[0] == 'r':
-        snap_mags = gcColorLoad['subhalos'][:,5]
-
-    auxcat_mags = acColorLoad[acKey][:,i0]
-
-    # plot
-    fig = plt.figure(figsize=(16,16))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Snapshot Mag')
-    ax.set_ylabel('AuxCat Mag')
-
-    ax.scatter(snap_mags, auxcat_mags, marker='.', s=1)
-
-    ax.plot([-22,-12],[-22,-12],'-',color='orange')
-
-    fig.tight_layout()  
-    fig.savefig('mags_%s.png' % bands[0])
-    plt.close(fig)
-
-def plotDifferentUPassbands():
-    """ Buser's U filter from BC03 vs. Johnson UX filter from Bessel+ 98. """
-    Buser_lambda = np.linspace(305, 420, 24) #nm
-    Buser_f      = [0.0, 0.012, 0.077, 0.135, 0.204, 0.282, 0.385, 0.493, 0.6, # 345nm
-                    0.705, 0.82, 0.90, 0.959, 0.993, 1.0, # 375nm
-                    0.975, 0.85, 0.645, 0.4, 0.223, 0.125, 0.057, 0.005, 0.0] # 420nm
-
-    Johnson_lambda = np.linspace(300, 420, 25)
-    Johnson_f      = [0.0, 0.016, 0.068, 0.167, 0.287, 0.423, 0.560, 0.673, 0.772, 0.841, # 345nm
-                      0.905, 0.943, 0.981, 0.993, 1.0, # 370nm
-                      0.989, 0.916, 0.804, 0.625, 0.423, 0.238, 0.114, 0.051, 0.019, 0.0] # 420nm
-
-    fig = plt.figure(figsize=(14,7))
-    ax = fig.add_subplot(111)
-
-    ax.set_xlabel('Wavelength [nm]')
-    ax.set_ylabel('Transmittance')
-
-    ax.plot(Buser_lambda, Buser_f, label='Buser U')
-    ax.plot(Johnson_lambda, Johnson_f, label='Johnson U')
-
-    ax.legend()
-
-    fig.tight_layout()    
-    fig.savefig('filters_U.pdf')
-    plt.close(fig)
-
-
 def checkIllustrisMetalRatioVsSolar():
     """ Check corrupted GFM_Metals content vs solar expectation. """
     from cosmo.cloudy import cloudyIon
@@ -1103,7 +893,6 @@ def checkIllustrisMetalRatioVsSolar():
     plt.close(fig)
 
     import pdb; pdb.set_trace()
-
 
 def checkTracerLoad():
     """ Check new code to load tracers from snapshots. """

@@ -432,3 +432,168 @@ def clusterEntropyCores():
             plt.close(fig) 
 
     pdf.close()
+
+def barnes_check1():
+    """ Test plots for Barnes paper. """
+    from util.loadExtern import rossetti17planck
+    data = rossetti17planck()
+
+    # z=0 TNG300-1
+    sP = simParams(res=2500, run='tng', redshift=0.0)
+    m500 = cosmo.load.groupCat(sP, fieldsSubhalos=['mhalo_500_log'])
+    w500 = np.where(10.0**m500 >= 2e14)
+
+    # redshifts
+    zz = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    med_sim = np.zeros( zz.size, dtype='float32' )
+    med_data = np.zeros( zz.size, dtype='float32' )
+
+    for i, z in enumerate(zz):
+        print(z)
+        sPloc = simParams(res=2500, run='tng', redshift=z)
+        m500loc = cosmo.load.groupCat(sPloc, fieldsSubhalos=['mhalo_500'])
+        w = np.where(m500loc >= 2e14)
+        med_sim[i] = np.log10( np.median( m500loc[w] ) )
+        w = np.where( np.abs(data['z'] - z) <= 0.05 )
+        med_data[i] = np.log10( np.median( 10.0**data['m500'][w] ) )
+
+    # plot
+    fig = plt.figure(figsize=(18,8))
+    ax = fig.add_subplot(121)
+
+    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
+    ax.set_ylabel('N$_{\\rm halos}$')
+    label = sP.simName + ' z=%.1f' % sP.redshift + ' "high-mass" (M$_{\\rm halo} > 2*10^{14} M_{\\rm sun}$)'
+    ax.hist(m500[w500], bins=10, range=[14.2,15.2], alpha=0.7, label=label)
+    ax.hist(data['m500'], bins=10, range=[14.2,15.2], alpha=0.7, label=data['label'])
+    ax.legend()
+
+    ax = fig.add_subplot(122)
+    ax.set_xlabel('Redshift')
+    ax.set_xlim([-0.05,0.6])
+    ax.set_ylabel('Median Halo Mass [m500, log M$_{\\rm sun}$]')
+
+    ax.plot(zz, med_sim, '-', marker='o', label=sP.simName)
+    ax.plot(zz, med_data, '-', marker='o', label='Planck Sample')
+    ax.legend(loc='best')
+
+    fig.tight_layout()    
+    fig.savefig('check_halomass.pdf')
+    plt.close(fig)
+
+def barnes_check2():
+    """ Test plots for Barnes paper. """
+    from util.loadExtern import rossetti17planck
+    data = rossetti17planck()
+
+    c_thresh = 0.075 # from Rossetti
+
+    binSize = 0.2
+    binMin = 14.0
+    nBins = 6
+
+    cc_frac = np.zeros(nBins, dtype='float32')
+    mass = np.zeros(nBins, dtype='float32')
+    cc_frac.fill(np.nan)
+
+    for i in range(nBins):
+        mass0 = binMin + binSize*i
+        mass1 = mass0 + binSize
+        mass[i] = (mass0+mass1)/2
+
+        w = np.where( (data['m500'] > mass0) & (data['m500'] <= mass1) )
+        c_vals = data['c'][w]
+        if c_vals.size == 0: continue
+
+        n_below = np.count_nonzero(c_vals < c_thresh)
+        n_above = np.count_nonzero(c_vals >= c_thresh)
+        cc_frac[i] = float(n_above) / (n_above+n_below)
+
+    # plot
+    fig = plt.figure(figsize=(14,10))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
+    ax.set_ylabel('Cool Core Fraction (Planck Obs, Rossetti+ 17 definition)')
+    ax.plot(mass, cc_frac, '-', marker='o', label=data['label'])
+
+    fig.tight_layout()    
+    fig.savefig('check_ccfrac_vs_mass.pdf')
+    plt.close(fig)
+
+def barnes_check3():
+    """ Line fitting, Figure 9 (oct9 draft) right panel. """
+    x      = np.array([1.00, 0.75,  0.5,   0.4,   0.3,   0.2,   0.1,   0.0])
+    y      = np.array([0.50, 0.384, 0.0,   0.048, 0.098, 0.219, 0.069, 0.097])
+    y_up   = np.array([0.75, 0.525, 0.108, 0.147, 0.181, 0.303, 0.131, 0.157])
+    y_down = np.array([0.25, 0.273, 0.001, 0.032, 0.066, 0.164, 0.046, 0.068])
+
+    obs_x      = np.array([1.0, 0.75, 0.375, 0.125])
+    obs_x_l    = np.array([1.2, 0.8, 0.6, 0.2])
+    obs_x_r    = np.array([0.8, 0.6, 0.2, 0.0])
+    obs_y      = np.array([0.07, 0.183, 0.170, 0.225])
+    obs_y_up   = np.array([0.20, 0.26, 0.26, 0.27])
+    obs_y_down = np.array([0.05, 0.14, 0.12, 0.19])
+
+    # fit
+    from scipy.stats import linregress
+    from scipy.optimize import leastsq
+    from numpy.polynomial.polynomial import polyfit
+
+    result1 = linregress(x[::-1],y[::-1])
+    print('Slope and intercept: %g, %g' % (result1.slope,result1.intercept))
+
+    sigma = ((y-y_down) + (y_up-y)) / 2 # avg
+    weights = 1/sigma
+    result2 = polyfit(x, y, deg=1, w=weights)
+    print('Slope and intercept: %g, %g' % (result2[1], result2[0]))
+
+    sigma_max = np.max( np.vstack( ((y-y_down), (y_up-y)) ), axis=0 ) # max
+    result3 = polyfit(x, y, deg=1, w=1/sigma_max)
+    print('Slope and intercept: %g, %g' % (result3[1], result3[0]))
+
+    def error_function(params, x, y, y_err_up, y_err_down):
+        y_fit = params[1]*x + params[0]
+        error = y - y_fit
+        error_pos = np.where(error >= 0) # fit below data
+        error_neg = np.where(error < 0) # fit above data
+        error[error_pos] /= y_err_down[error_pos]
+        error[error_neg] /= y_err_up[error_neg]
+        return error
+
+    params_init = [0.0, 0.0]
+    args = (x,y,y_up,y_down)
+    result4, params_cov, info, errmsg, retcode = \
+      leastsq(error_function, params_init, args=args, full_output=True)
+
+    print('Slope and intercept: %g, %g' % (result4[1], result4[0]))
+
+    params_init = [0.0, 0.0]
+    args = (obs_x,obs_y,obs_y_up,obs_y_down)
+    result5, params_cov, info, errmsg, retcode = \
+      leastsq(error_function, params_init, args=args, full_output=True)
+
+    print('Slope and intercept: %g, %g (data)' % (result5[1], result5[0]))
+
+    # plot
+    fig = plt.figure(figsize=(14,10))
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Fraction')
+    ax.set_xlim([-0.1, 1.1])
+    ax.set_ylim([0.0, 1.05])
+    ax.errorbar(x, y, yerr=[y-y_down,y_up-y], marker='o', label='TNG300-1')
+    ax.errorbar(obs_x, obs_y, linestyle='None', yerr=[obs_y-obs_y_down,obs_y_up-obs_y], marker='o', color='black', label='Obs')
+
+    xx = np.array([-0.05,1.05])
+    ax.plot(xx, result1.slope*xx + result1.intercept, '-', label='linregress un-weighted (%.3f)' % result1.slope)
+    ax.plot(xx, result2[1]*xx + result2[0], '-', label='polyfit weighted mean symmetric error (%.3f)' % result2[1])
+    ax.plot(xx, result3[1]*xx + result3[0], '-', label='polyfit weighted max symmetric error (%.3f)' % result3[1])
+    ax.plot(xx, result4[1]*xx + result4[0], '-', label='leastsq weighted asymmetric error (%.3f)' % result4[1])
+    ax.plot(xx, result5[1]*xx + result5[0], '--', color='black', label='obs-fit leastsq weighted asymmetric error (%.3f)' % result5[1])
+
+    ax.legend()
+    fig.tight_layout()    
+    fig.savefig('check_linfit_Figure9_right.pdf')
+    plt.close(fig)

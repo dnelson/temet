@@ -9,3 +9,4 @@ from . import mergertree
 from . import perf
 #from . import stellarPop # requires fsps
 from . import util
+from . import zooms
