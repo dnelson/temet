@@ -28,4 +28,5 @@ import tracer
 import util
 import obs
 import vis
+import projects
 from util import simParams

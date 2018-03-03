@@ -14,11 +14,11 @@ from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroNaN, iterable
 from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
 from cosmo.util import validSnapList, periodicDists
-from plot.color import galaxyColorPDF, galaxyColor2DPDFs
 from plot.sizes import galaxySizes
-from plot.oxygen import nOVIcddf
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.config import *
+from projects.oxygen import nOVIcddf
+from projects.color import galaxyColorPDF, galaxyColor2DPDFs
 
 def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False, 
                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):

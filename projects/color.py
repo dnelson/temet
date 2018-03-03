@@ -17,8 +17,8 @@ from scipy.stats import binned_statistic_2d, gaussian_kde
 from util import simParams
 from util.helper import running_median, contourf, logZeroNaN, closest, loadColorTable, getWhiteBlackColors, leastsq_fit
 from tracer.tracerMC import match3
-from cosmo.color import calcMstarColor2dKDE, calcColorEvoTracks, characterizeColorMassPlane, \
-   loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, colorTransitionTimes
+from cosmo.color import loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
+from projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
 from cosmo.mergertree import loadMPB
 from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift, redshiftToSnapNum
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader

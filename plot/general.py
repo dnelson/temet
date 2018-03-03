@@ -691,7 +691,7 @@ def compareRuns_PhaseDiagram():
 def compareRuns_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two different 
     types of halos. One run. """
-    from plot.oxygen import variantsMain as variants
+    from projects.oxygen import variantsMain as variants
 
     sPs = []
     subhalos = []

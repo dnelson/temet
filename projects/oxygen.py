@@ -1,6 +1,7 @@
 """
-plot/oxygen.py
-  Plots: OVI paper.
+projects/oxygen.py
+  Plots: Oxygen (OVI, OVII and OVIII) TNG paper.
+  http://arxiv.org/abs/1712.00016
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -31,7 +32,7 @@ from vis.common import setAxisColors
 from cosmo.util import cenSatSubhaloIndices, redshiftToSnapNum, periodicDists
 from obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoveringFractions
 
-def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
+def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
     from util.loadExtern import danforth2008, danforth2016, thomChen2008, tripp2008
@@ -42,6 +43,8 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False):
     if boxDepth10:
         for i in range(len(speciesList)):
             speciesList[i] += '_depth10'
+    if boxDepth125:
+        speciesList = ['nOVII_solarz_depth125']#,'nOVII_10_solarz_depth125']
 
     # plot setup
     sizefac = 1.0 if not clean else sfclean
