@@ -1,6 +1,7 @@
 """
-plot/oxygen.py
+projects/oxygen.py
   Plots: Outflows paper (TNG50 presentation).
+  in prep.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
