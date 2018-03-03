@@ -444,8 +444,6 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
 
 def correctPeriodicDistVecs(vecs, sP):
     """ Enforce periodic B.C. for distance vectors (effectively component by component). """
-    assert sP.subbox is None
-    
     vecs[ np.where(vecs > sP.boxSize*0.5)  ]  -= sP.boxSize
     vecs[ np.where(vecs <= -sP.boxSize*0.5) ] += sP.boxSize
 
@@ -453,8 +451,6 @@ def correctPeriodicPosVecs(vecs, sP):
     """ Enforce periodic B.C. for positions (add boxSize to any negative points, subtract boxSize from any 
         points outside box).
     """
-    assert sP.subbox is None
-
     vecs[ np.where(vecs < 0.0) ]         += sP.boxSize
     vecs[ np.where(vecs >= sP.boxSize) ] -= sP.boxSize
 
