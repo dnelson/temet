@@ -23,8 +23,10 @@ def oneHaloSingleField(conf=0, haloID=None):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    run        = 'tng' #'tng_zoom_dm'
-    res        = 455
+    run        = 'tng_zoom_dm' #'tng_zoom_dm'
+    res        = 13
+    variant    = 'sf2' # None
+
     redshift   = 0.0
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
@@ -38,7 +40,7 @@ def oneHaloSingleField(conf=0, haloID=None):
     rotation   = None
     mpb        = None
 
-    sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID)
+    sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID, variant=variant)
     
     if not sP.isZoom:
         hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
@@ -70,7 +72,7 @@ def oneHaloSingleField(conf=0, haloID=None):
         size = 2.5
         sizeType = 'rVirial'
     if 1:
-        size = 2000.0
+        size = 5000.0
         sizeType = 'pkpc'
 
     class plotConfig:

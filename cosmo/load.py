@@ -998,7 +998,7 @@ def snapshotSubset(sP, partType, fields,
         kwargs['indRange'] = indRange
 
     # derived particle types (i.e. subsets of snapshot PartTypeN's)
-    if '_' in partType:
+    if '_' in str(partType):
         ptSnap = partType.split('_')[0]
 
         # load needed fields to define subset, and set w_sel

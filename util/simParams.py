@@ -17,9 +17,7 @@ class simParams:
     simPath     = ''    # root path to simulation snapshots and group catalogs
     arepoPath   = ''    # root path to Arepo and param.txt for e.g. projections/fof
     savPrefix   = ''    # save prefix for simulation (make unique, e.g. 'G')
-    saveTag     = ''    # save string = trVel, trMC, or SPH
     simName     = ''    # label to add to plot legends (e.g. "GADGET", "AREPO", "FEEDBACK")
-    plotPrefix  = ''    # plot prefix for simulation (make unique, e.g. 'GR')
     plotPath    = ''    # working path to put plots
     derivPath   = ''    # path to put derivative files ("data.files/")
     postPath    = ''    # path to put postprocessed files ("postprocessing/")
@@ -274,8 +272,6 @@ class simParams:
 
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
-            self.saveTag    = 'iP'
-            self.plotPrefix = 'iP'
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
             if res in res_L35+res_L75+res_L205:#+res_L680:
@@ -316,17 +312,21 @@ class simParams:
             if '_dm' in run:
                 self.targetGasMass = 0.0
 
+            # variants: testing only
+            vStr = ''
+            if self.variant != 'None':
+                assert self.variant in ['sf2','sf3','sf4','n40','n160','n320']
+                vStr = '_' + self.variant
+
             # paths
             bs = str(int(self.boxSize/1000.0))
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
             dmStr = '_DM' if '_dm' in run else ''
-            dirStr = 'L'+bs+'n'+str(parentRes)+'TNG_h' + str(self.hInd) + '_L' + str(self.zoomLevel) + dmStr
+            dirStr = 'L%sn%dTNG_h%d_L%d%s%s' % (bs,parentRes,self.hInd,self.zoomLevel,vStr,dmStr)
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             self.savPrefix  = 'TZ'
-            self.saveTag    = 'tZ'
-            self.plotPrefix = 'tZ'
             self.simName    = dirStr
 
         # ILLUSTRIS
@@ -366,8 +366,6 @@ class simParams:
 
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'FP/'
                 self.savPrefix  = 'I'
-                self.saveTag    = 'il'
-                self.plotPrefix = 'il'
                 self.colors     = ['#e67a22', '#b35f1b', '#804413'] # brown, light to dark
 
                 if res == 455:  self.simName = 'Illustris-3'
@@ -378,8 +376,6 @@ class simParams:
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'DM/'
                 self.savPrefix  = 'IDM'
                 self.simName    = 'ILLUSTRIS_DM'
-                self.saveTag    = 'ilDM'
-                self.plotPrefix = 'ilDM'
                 self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
 
         if run in ['cosmo0_v6']:
@@ -411,8 +407,6 @@ class simParams:
 
             self.arepoPath  = self.basePath + 'sims.illustris/' + self.simName + '/'
             self.savPrefix  = 'C'
-            self.saveTag    = 'c0v6'
-            self.plotPrefix = 'c0v6'
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
@@ -451,8 +445,6 @@ class simParams:
 
             self.savPrefix  = 'Z'
             self.simName    = 'h' + str(hInd) + 'L' + str(self.levelMax) + ds
-            self.saveTag    = 'zH' + str(hInd) + 'L' + str(self.levelMax)
-            self.plotPrefix = 'zL' + str(self.levelMax) + ds
 
         # ZOOMS-2
         if run in ['zooms2','zooms2_tng','zooms2_josh']:
@@ -499,8 +491,6 @@ class simParams:
             self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+ls+ts+'/'
             self.savPrefix  = 'Z2'
             self.simName    = 'h' + str(hInd) + 'L' + ls + '_' + 'gen2' + ts
-            self.saveTag    = 'z2H' + str(hInd) + 'L' + ls
-            self.plotPrefix = 'z2L' + ls
 
             if hInd == 2: # overrides for plots for paper.zooms2
                 snStr = ' (Primordial Only)'
@@ -545,8 +535,6 @@ class simParams:
             self.arepoPath  = self.basePath + 'sims.feedback/'+str(res)+'_'+bs+'Mpc/'
             self.savPrefix  = 'F'
             self.simName    = 'FEEDBACK'
-            self.saveTag    = 'feMC'
-            self.plotPrefix = 'feMC'
             self.colors     = ['#3e41e8', '#151aac', '#080b74'] # blue, light to dark
 
         # TRACER (paper.gasaccretion, 20Mpc box of ComparisonProject)
@@ -589,8 +577,6 @@ class simParams:
             self.arepoPath  = self.basePath + 'sims.tracers/'+str(res)+'_'+bs+'Mpc/'
             self.savPrefix  = 'N'
             self.simName    = 'NO FEEDBACK'
-            self.saveTag    = 'trMC'
-            self.plotPrefix = 'trMC'
             self.colors     = ['#00ab33', '#007d23', '#009013']  # green, light to dark
 
         # ALL RUNS
@@ -603,6 +589,9 @@ class simParams:
         self.derivPath = self.arepoPath + 'data.files/'
         self.postPath  = self.arepoPath + 'postprocessing/'
         self.plotPath  = self.basePath + 'plots/'
+
+        if not path.isdir(self.simPath):
+            raise Exception("simParams: it appears [%s] does not exist." % self.arepoPath)
 
         # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
         if not path.isdir(self.derivPath):
