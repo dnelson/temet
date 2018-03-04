@@ -267,7 +267,7 @@ def _generate_grid(level, i, j, k, Radius, Angle, pIndex, BoxSize, MaxLevel, Min
             P_Mass[pIndex] = 1.0 / (dim*dim*dim)
             pIndex += 1
 
-def generate(fofID=50, EnlargeHighResFactor=None):
+def generate(fofID, EnlargeHighResFactor=None):
     """ Create zoom particle load and save. """
     from util.simParams import simParams
     from cosmo.load import groupCatSingle, snapshotSubset
@@ -275,7 +275,6 @@ def generate(fofID=50, EnlargeHighResFactor=None):
 
     # config
     sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-    #fofID = 50
     MaxLevel = 11 # e.g. 9=512^3, 11=2048^3
     MinLevel = 6 # 2^5=32 coarsest background, 2^6=64
     ZoomFactor = 3

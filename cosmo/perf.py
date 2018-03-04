@@ -51,6 +51,9 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
     filePath = basePath + 'output/cpu.txt'
     saveFilename = basePath + 'data.files/cpu.hdf5'
 
+    if not isdir(basePath + 'data.files/'):
+        saveFilename = basePath + 'postprocessing/cpu.hdf5'
+
     r = {}
 
     cols = None
@@ -178,8 +181,6 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
                 r[key] = r[key][w,:]
 
         # write into hdf5
-        if not isdir(basePath + 'data.files'):
-            mkdir(basePath + 'data.files')
         with h5py.File(saveFilename,'w') as f:
             for key in r.keys():
                 f[key] = r[key]
