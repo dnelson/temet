@@ -8,23 +8,23 @@ from builtins import *
 
 import numpy as np
 import h5py
+import hashlib
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
-from os.path import isfile
+from os.path import isfile, isdir
+from os import mkdir
 
 from util import simParams
 from plot.config import *
-from util.helper import loadColorTable, running_median, logZeroNaN, iterable
+from util.helper import loadColorTable, running_median, logZeroNaN, iterable, closest
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.mergertree import loadMPBs
 from plot.general import plotHistogram1D, plotPhaseSpace2D
 from plot.quantities import simSubhaloQuantity
-from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
-from cosmo.util import cenSatSubhaloIndices
 from tracer.tracerMC import match3
 from vis.common import gridBox
 
@@ -233,7 +233,7 @@ def _get_subbox_data_onesnap(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos, sca
             if color == 'massfrac':
                 # mass distribution in this 2D plane
                 weight = x['Masses']
-                zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], normed=True, weights=weight)
+                zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], density=True, weights=weight)
             else:
                 # each pixel colored according to its mean value of a third quantity
                 weight = vals[color]
@@ -251,32 +251,35 @@ def _get_subbox_data_onesnap(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos, sca
             xlim  = limits[xaxis]
             xvals = vals[xaxis]
 
-            if yaxis == 'count':
-                # 1d histogram within an aperture
-                w = np.where(dists_sq <= apertures['histo1d']**2)
-                hh, _ = np.histogram(xvals[w], bins=histoNbins, range=xlim, normed=True)
-            else:
-                # median yval (i.e. vrad) in bins of xval, which is typically e.g. radius
-                yvals = vals[yaxis]
-                hh, _, _ = binned_statistic(xvals, yvals, statistic='median', range=xlim, bins=histoNbins)
+            data[ptType][histoName] = np.zeros( (len(apertures['histo1d']), histoNbins), dtype='float32' )
 
-            data[ptType][histoName] = hh
+            # loop over apertures (always code units)
+            for i, aperture in enumerate(apertures['histo1d']):
+                w = np.where(dists_sq <= aperture**2)
+
+                if yaxis == 'count':
+                    # 1d histogram of a quantity
+                    hh, _ = np.histogram(xvals[w], bins=histoNbins, range=xlim, density=True)
+                else:
+                    # median yval (i.e. vrad) in bins of xval, which is typically e.g. radius
+                    yvals = vals[yaxis]
+                    hh, _, _ = binned_statistic(xvals[w], yvals[w], statistic='median', range=xlim, bins=histoNbins)
+
+                data[ptType][histoName][i,:] = hh
 
     return data
 
-def save_subbox_data(sP, sbNum, selInd):
+def save_subbox_data(sP, sbNum, selInd, minM200=11.5):
     """ Testing subbox. """
     import multiprocessing as mp
     from functools import partial
     import time
 
-    minM200 = 11.5
     sel = halo_selection(sP, minM200=minM200)
-
-    # for one halo, track through full subbox range and save lots of interesting data
     assert minM200 == 11.5
 
-    _, _, minSBsnap, maxSBsnap, subhaloPos, subboxScaleFac, _ = selection_subbox_overlap(sP, sbNum, sel)
+    # for one halo, track through full subbox range and save lots of interesting data
+    sel_inds, _, minSBsnap, maxSBsnap, subhaloPos, subboxScaleFac, _ = selection_subbox_overlap(sP, sbNum, sel)
 
     sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
 
@@ -289,7 +292,8 @@ def save_subbox_data(sP, sbNum, selInd):
                              'vrad_count','vrel_count','temp_count'],
                     'stars':[],
                     'bhs'  :[]}
-    histoNames2D = {'gas'  :['rad_vrad_massfrac','rad_vrel_massfrac','rad_vrad_templinear','numdens_temp_massfrac','numdens_temp_vrad',
+    histoNames2D = {'gas'  :['rad_vrad_massfrac','rad_vrel_massfrac','rad_vrad_templinear',
+                             'numdens_temp_massfrac','numdens_temp_vrad',
                              'radlog_vrad_massfrac','radlog_vrel_massfrac','radlog_vrad_templinear'],
                     'stars':['rad_vrad_massfrac','radlog_vrad_massfrac'],
                     'bhs'  :[]}
@@ -301,7 +305,7 @@ def save_subbox_data(sP, sbNum, selInd):
 
     apertures = {'scalar'  : 30.0 , # code units, within which scalar quantities are accumulated
                  'sfgas'   : 20.0,  # code units, select SFR>0 gas within this aperture to calculate subVel
-                 'histo1d' : 100.0} # code units, within which 1D histograms are calculated
+                 'histo1d' : [10,50,100,1000]} # code units, for1D histograms/relations
 
     limits = {'rad'     : [0.0, 800.0],
               'radlog'  : [0.0, 3.0],
@@ -319,7 +323,18 @@ def save_subbox_data(sP, sbNum, selInd):
     # existence check, immediate load and return if so
     data = {}
 
-    saveFilename = sP.derivPath + 'subhalo_evo_sb%d_sel%d.hdf5' % (sbNum,selInd)
+    haloInd = sel['haloInds'][sel_inds[selInd]]
+    sbStr = '_subbox%d' % sbNum if sbNum is not None else ''
+    hashStr = hashlib.sha256('%s_%s_%s_%s_%d_%s_%s' % \
+                (str(scalarFields),str(histoNames1D),str(histoNames2D),str(loadFields),
+                 histoNbins,str(apertures),str(limits))).hexdigest()[::4]
+
+    savePath = sP.derivPath + '/haloevo/'
+    saveFilename = savePath + 'evo_%d_h%d%s_%s.hdf5' % (sP.snap,haloInd,sbStr,hashStr)
+
+    if not isdir(savePath):
+        mkdir(savePath)
+
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             for group in f.keys():
@@ -347,7 +362,7 @@ def save_subbox_data(sP, sbNum, selInd):
         for snap in snaps:
             results.append( func(snap) )
 
-    print('[%d] snapshots with [%d] threads took [%.2f] sec' % (len(snaps),nThreads,time.time()-start_time))
+    print('[%d] snaps with [%d] threads took [%.2f] sec' % (len(snaps),nThreads,time.time()-start_time))
 
     # allocate
     for ptType in scalarFields.keys():
@@ -356,14 +371,17 @@ def save_subbox_data(sP, sbNum, selInd):
             data[ptType][field] = np.zeros( subboxScaleFac.size , dtype='float32' )
 
         for name in histoNames2D[ptType]:
-            data[ptType]['histo2d_'+name] = np.zeros( (subboxScaleFac.size,histoNbins,histoNbins), dtype='float32' )
+            data[ptType]['histo2d_'+name] = \
+              np.zeros( (subboxScaleFac.size,histoNbins,histoNbins), dtype='float32' )
         for name in histoNames1D[ptType]:
-            data[ptType]['histo1d_'+name] = np.zeros( (subboxScaleFac.size,histoNbins), dtype='float32' )
+            data[ptType]['histo1d_'+name] = \
+              np.zeros( (subboxScaleFac.size,len(apertures['histo1d']),histoNbins), dtype='float32' )
 
     data['global'] = {}
     data['global']['mask'] = np.zeros( subboxScaleFac.size, dtype='int16' ) # 1 = in subbox
     data['global']['mask'][minSBsnap[selInd] : maxSBsnap[selInd] + 1] = 1
     data['limits'] = limits
+    data['apertures'] = apertures
 
     # stamp
     for result in results:
@@ -383,7 +401,7 @@ def save_subbox_data(sP, sbNum, selInd):
 
             for name in histoNames1D[ptType]:
                 if name not in result[ptType]: continue
-                data[ptType]['histo1d_'+name][snap,:] = result[ptType][name]
+                data[ptType]['histo1d_'+name][snap,:,:] = result[ptType][name]
 
     # save
     with h5py.File(saveFilename,'w') as f:
@@ -453,12 +471,12 @@ def prerender_subbox_images(sP, sbNum, selInd, minM200=11.5):
         for snap in snaps:
             func(snap)
 
-def vis_subbox_data(sP, sbNum, selInd):
-    """ Visualize subbox data. """
+def vis_subbox_data(sP, sbNum, selInd, extended=False):
+    """ Visualize subbox data. 3x2 panel image sequence, or 5x3 if extended == True. """
 
-    def _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i,legendTopRight=False):
+    def _histo2d_helper(gs,i,pt,xaxis,yaxis,color,clim):
         """ Add one panel of a 2D phase diagram. """
-        ax = fig.add_subplot(nRows,nCols,i+1)
+        ax = plt.subplot(gs[i])
 
         xlim   = data['limits'][xaxis]
         ylim   = data['limits'][yaxis]
@@ -501,20 +519,23 @@ def vis_subbox_data(sP, sbNum, selInd):
         # legend (lower right)
         y0 = 0.04
         yd = 0.04
-        if legendTopRight:
+
+        x0 = 0.85 if extended else 0.89
+        if xaxis in ['rad','radlog'] and yaxis == 'vrel':
             # lower right is occupied, move to upper right
             y0 = 1 - y0
             yd = -yd
 
         legend_labels = ['snap = %6d' % snap, 'zred  = %6.3f' % redshifts[snap], 't/gyr = %6.3f' % tage[snap]]
+        textOpts = {'fontsize':fontsizeTime, 'horizontalalignment':'center', 'verticalalignment':'center'}
         for j, label in enumerate(legend_labels):
-            ax.text(0.89, y0+yd*j, label, fontsize=22.0, horizontalalignment='center', verticalalignment='center', transform=ax.transAxes)
+            ax.text(x0, y0+yd*j, label, transform=ax.transAxes, **textOpts)
 
         return ax
 
-    def _histo1d_helper(pt,xaxis,yaxis,ylim,i):
-        """ Add one panel of a 1D profile. """
-        ax = fig.add_subplot(nRows,nCols,i+1)
+    def _histo1d_helper(gs,i,pt,xaxis,yaxis,ylim):
+        """ Add one panel of a 1D profile, all the available apertures by default. """
+        ax = plt.subplot(gs[i])
         
         key    = 'histo1d_%s_%s' % (xaxis,yaxis)
         xlim   = data['limits'][xaxis]
@@ -528,19 +549,41 @@ def vis_subbox_data(sP, sbNum, selInd):
         ax.set_xlabel(xlabel)
 
         # reconstruct bin midpoints
-        histoNbins = data[pt][key].shape[1]
+        histoNbins = data[pt][key].shape[2]
         xx = np.linspace(xlim[0], xlim[1], histoNbins+1)[:-1] + (xlim[1]-xlim[0])/histoNbins/2
 
         # plot
-        yy = data[pt][key][snap,:]
-        if yaxis == 'count': yy = logZeroNaN(yy)
+        for j, aperture in enumerate(data['apertures']['histo1d']):
+            if xaxis in ['rad','radlog'] and j < len(data['apertures']['histo1d'])-1:
+                continue # no need for radially restricted radial profiles
 
-        ax.plot(xx, yy, '-', label=ylabel)
+            yy = data[pt][key][snap,j,:]
+            if yaxis == 'count': yy = logZeroNaN(yy)
 
+            label = 'r < %04d ckpc/h' % aperture if xaxis not in ['rad','radlog'] else ''
+            ax.plot(xx, yy, '-', lw=lw, alpha=1.0, label=label)
+
+        # for radial profiles, overplot a few at selected moments in time as they are passed
+        if xaxis in ['rad','radlog']:
+            cur_redshift = redshifts[snap]
+            freeze_redshifts = [6.0, 2.0, 1.0]
+            aperture_ind = len(data['apertures']['histo1d']) - 1 # full profile
+
+            for z in freeze_redshifts:
+                if cur_redshift <= z:
+                    _, z_ind = closest(redshifts, z)
+                    yy = data[pt][key][z_ind,aperture_ind,:]
+                    ax.plot(xx, yy, '-', lw=lw, alpha=0.3, label='z = %d' % z)
+
+        # legend
+        ax.legend(loc='upper right', prop={'size':fontsizeLegend})
         return ax
 
-    def _image_helper(partType, partField, axes, boxSize, i):
-        """ Helper. """
+    def _image_helper(gs, i, pt, field, axes, boxSize):
+        """ Add one panel of a gridBox() rendered image projection. """
+        ax = plt.subplot(gs[i])
+
+        # render config
         method     = 'sphMap'
         nPixels    = [600,600]
         hsmlFac    = 2.5
@@ -551,12 +594,14 @@ def vis_subbox_data(sP, sbNum, selInd):
         boxSizeImg = np.array([boxSize,boxSize,boxSize])
         boxCenter  = subhaloPos[selInd,snap,:]
 
+        # load/render
         sP_sub = simParams(res=sP.res, run=sP.run, snap=snap, variant='subbox%d' % sbNum)
 
         boxCenter  = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
-        grid, config = gridBox(sP_sub, method, partType, partField, nPixels, axes, projType, projParams, 
+        grid, config = gridBox(sP_sub, method, pt, field, nPixels, axes, projType, projParams, 
                                boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter)
 
+        # plot config
         valMinMax = [5.5, 8.0] # todo generalize
         if boxSize >= 500.0: valMinMax[0] -= 1.0
         cmap = loadColorTable(config['ctName'], valMinMax=valMinMax)
@@ -566,9 +611,10 @@ def vis_subbox_data(sP, sbNum, selInd):
         extent[0:2] -= boxCenter[0] # make coordinates relative
         extent[2:4] -= boxCenter[1]
 
-        ax = fig.add_subplot(nRows,nCols,i+1)
         ax.set_xlabel( ['x','y','z'][axes[0]] + ' [ckpc/h]')
         ax.set_ylabel( ['x','y','z'][axes[1]] + ' [ckpc/h]')
+
+        # plot
         plt.imshow(grid, extent=extent, cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
         ax.autoscale(False)
         plt.clim(valMinMax)
@@ -577,190 +623,212 @@ def vis_subbox_data(sP, sbNum, selInd):
         cb = plt.colorbar(cax=cax)
         cb.ax.set_ylabel(config['label'])
 
+    def _lineplot_helper(gs,i):
+        """ Add one panel of a composite line plot of various component masses and BH energies. """
+        ax = plt.subplot(gs[i])
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('Masses [log M$_{\\rm sun}$]')
+
+        # blackhole mass
+        yy = sP.units.codeMassToLogMsun( data['bhs']['BH_Mass'] )
+        l, = ax.plot(redshifts[w], yy[w], '-', lw=lw, alpha=0.5, label='BH Mass')
+        ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=l.get_color())
+        ax.set_xlim(ax.get_xlim()[::-1]) # time increasing to the right
+        for t in ax.get_yticklabels(): t.set_color(l.get_color())
+
+        # additional info from extended SubboxSubhaloList?
+        linestyles = ['-','--',':'] # for the three apertures
+        apertures = ['30pkpc', '30ckpc/h', '50ckpc/h']
+
+        for key in ['SubhaloGas_Mass','SubhaloStars_Mass']:
+            if key in extInfo:
+                c = ax._get_lines.prop_cycler.next()['color']
+                for j, aperture in enumerate(apertures):
+                    yy = sP.units.codeMassToLogMsun( extInfo[key][selInd,j,:])
+                    yy -= 3.0 # 3 dex offset to get within range of M_BH
+                    label = key.split('Subhalo')[1] + '/$10^3$' if j == 0 else ''
+                    l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
+                    ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
+
+        # blackhole energetics
+        ax2 = ax.twinx()
+        ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
+        c = ax._get_lines.prop_cycler.next()['color']
+        ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7, color=c)
+        ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=c)
+        ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=c, alpha=0.6)
+        ax2.plot(redshifts[snap], dy_low[snap], 'o', markersize=14.0, color=c, alpha=0.6)
+        for t in ax2.get_yticklabels(): t.set_color(c)
+
+        handles, labels = ax.get_legend_handles_labels()
+        sExtra = [plt.Line2D((0,1), (0,0), color='black', marker='', lw=lw, linestyle=ls) for ls in linestyles]
+        ax.legend(handles+sExtra, labels+apertures, loc='lower right', prop={'size':fontsizeLegend})
+
+    def _lineplot_helper2(gs,i):
+        """ Add one panel of a composite line plot SFR(t) and BH_Mdot(t). """
+        ax = plt.subplot(gs[i])
+        ax.set_xlabel('Redshift')
+        ax.set_ylabel('SFR or $\dot{M}_{\\rm BH}$ [log M$_{\\rm sun}$ / yr]')
+
+        # BH mdot
+        c = ax._get_lines.prop_cycler.next()['color']
+        ax.plot(redshifts[w], bh_mdot[w], '-', lw=lw, alpha=0.7, color=c, label='BH_Mdot')
+        ax.plot(redshifts[snap], bh_mdot[snap], 'o', markersize=14.0, color=c, alpha=0.6)
+        ax.set_xlim(ax.get_xlim()[::-1]) # time increasing to the right
+
+        # gas SFR
+        linestyles = ['-','--',':'] # for the three apertures
+        apertures = ['30pkpc', '30ckpc/h', '50ckpc/h']
+
+        key = 'SubhaloGas_SFR'
+        if key in extInfo:
+            c = ax._get_lines.prop_cycler.next()['color']
+            for j, aperture in enumerate(apertures):
+                yy = logZeroNaN( extInfo[key][selInd,j,:] )
+                label = 'Gas_SFR' if j == 0 else ''
+                l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
+                ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
+
+        handles, labels = ax.get_legend_handles_labels()
+        sExtra = [plt.Line2D((0,1), (0,0), color='black', marker='', lw=lw, linestyle=ls) for ls in linestyles]
+        ax.legend(handles+sExtra, labels+apertures, loc='lower right', prop={'size':fontsizeLegend})
+
     # config
-    nRows = 2
-    nCols = 3
+    lw = 2.0
+    fontsizeTime   = 22.0
+    fontsizeLegend = 16.0
+    cmap = loadColorTable('viridis')
 
     labels = {'radlog'       : 'Radius [log ckpc/h]',
               'rad'          : 'Radius [ckpc/h]',
               'vrad'         : 'Radial Velocity [km/s]',
               'vrel'         : 'Halo-Rel Velocity Mag [km/s]',
-              'numdens'      : 'Gas Number Density [log cm$^{-3}$]',
+              'numdens'      : 'Gas Density [log cm$^{-3}$]',
               'temp'         : 'Gas Temperature [log K]',
               'templinear'   : 'Gas Temperature [log K]',
               'massfrac'     : 'Relative Mass Fraction [log]',
               'massfracnorm' : 'Conditional Mass Fraction [log]',
               'count'        : 'PDF'}
 
+    lim1 = [-4.0, -1.5] # massfrac
+    lim2 = [-2.5, 0.0] # massfracnorm
+    lim3 = [-5.0, -1.5] # histo1d
+    lim4 = [4.0, 6.5] # temp
+
     # load
     data = save_subbox_data(sP, sbNum, selInd)
 
     sel = halo_selection(sP, minM200=11.5)
-    sel_inds, subbox_inds, minSBsnap, maxSBsnap, subhaloPos, subboxScaleFac, extInfo = selection_subbox_overlap(sP, sbNum, sel)
+    _, _, _, _, subhaloPos, subboxScaleFac, extInfo = selection_subbox_overlap(sP, sbNum, sel)
 
+    # derive blackhole differential energetics (needed for _lineplot_helpers)
     redshifts = 1.0 / subboxScaleFac - 1.0
     tage = sP.units.redshiftToAgeFlat(redshifts)
+    dtyr = np.diff(tage * 1e9, n=1)
+    dtyr = np.append(dtyr, dtyr[-1])
 
-    # derive blackhole differential energetics
     yy_high = sP.units.codeEnergyToErg(data['bhs']['BH_CumEgyInjection_QM'], log=True)
     yy_low  = sP.units.codeEnergyToErg(data['bhs']['BH_CumEgyInjection_RM'], log=True)
     dy_high = np.diff(10.0**yy_high, n=1) # dy[i] is delta_E between snap=i and snap=i+1
     dy_low  = np.diff(10.0**yy_low, n=1)
-    dy_high = logZeroNaN( np.append(dy_high, np.nan) ) # restore to original size, then log
-    dy_low  = logZeroNaN( np.append(dy_low, np.nan) )
+    dy_high = logZeroNaN( np.append(dy_high, dy_high[-1]) ) # restore to original size, then log
+    dy_low  = logZeroNaN( np.append(dy_low, dy_low[-1]) )
+    bh_mdot = np.diff(sP.units.codeMassToMsun(data['bhs']['BH_Mass']) / dtyr[::-1], n=1)
+    bh_mdot = logZeroNaN( np.append(bh_mdot, bh_mdot[-1]) )
+    wmax = np.where(bh_mdot == np.nanmax(bh_mdot)) # spurious spike due to seed event
+    bh_mdot[wmax] = np.nan
 
     # make plot booklets / movies
     w = np.where(data['global']['mask'] == 1)
 
-    for snap in [2687]: #w[0][::-1]:
-        print(snap)
+    for snap in w[0]: #[2687]:
 
-        # plot setup
-        # todo use Gridspec: https://stackoverflow.com/questions/37737538/merge-matplotlib-subplots-with-shared-x-axis
-        cmap = loadColorTable('viridis')
-        lw = 2.0
-        fig = plt.figure(figsize=[38.4, 21.6]) # produce 3840x2160px image at dpi==100
+        # typical configuration (3x2 panels, 1.5 aspect ratio)
+        if not extended:
+            # plot setup
+            fig = plt.figure(figsize=[38.4, 21.6]) # produce 3840x2160px image at dpi==100
+            gs = gridspec.GridSpec(2,3)
 
-        # upper right: histo2d [rad,vrad] massfrac
-        pt    = 'gas'
-        xaxis = 'radlog'
-        yaxis = 'vrad'
-        color = 'massfracnorm'
-        clim  = [-2.5, 0.0] #[-4.0, -1.5] for colNorm==False
+            # upper left: histo2d [radlog,vrad] massfrac
+            _histo2d_helper(gs,i=0,pt='gas',xaxis='radlog',yaxis='vrad',color='massfracnorm',clim=lim2)
 
-        _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i=0)
+            # upper center: histo2d [radlog,vrad] mean temperature
+            _histo2d_helper(gs,i=1,pt='gas',xaxis='radlog',yaxis='vrad',color='templinear',clim=lim4)
 
-        # upper center: histo2d [rad,vrad] mean temperature
-        pt    = 'gas'
-        xaxis = 'radlog'
-        yaxis = 'vrad'
-        color = 'templinear'
-        clim  = [4.0, 6.5]
+            # upper right: [rad,vrelmag] mass frac
+            _histo2d_helper(gs,i=2,pt='gas',xaxis='rad',yaxis='vrel',color='massfracnorm',clim=lim2)
 
-        _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i=1)
+            # lower left: 2dhisto [dens,temp] mean vrad
+            _histo2d_helper(gs,i=3,pt='gas',xaxis='numdens',yaxis='temp',color='vrad',clim=[-100,300])
 
-        # upper right: [vrad,vrelmag] mass frac
-        pt    = 'gas'
-        xaxis = 'rad'
-        yaxis = 'vrel'
-        color = 'massfracnorm'
-        clim  = [-2.5, 0.0]
+            # lower center: gas dens image, 200 kpc, xy
+            _image_helper(gs,i=4,pt='gas',field='coldens_msunkpc2',axes=[0,1],boxSize=200.0)
 
-        _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i=2,legendTopRight=True)
+            # lower right: (top) masses/blackhole energetics, (bottom) vrad histograms
+            gs_local = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[5], height_ratios=[2,1], hspace=0.20)
+            _lineplot_helper(gs_local,i=0)
+            _histo1d_helper(gs_local,i=1,pt='gas',xaxis='vrad',yaxis='count',ylim=lim3)
 
-        # lower left
-        if 0:
-            # 2dhisto [rad,vrad] mass frac (stars)
-            pt    = 'stars'
-            xaxis = 'rad'
-            yaxis = 'vrad'
-            color = 'massfracnorm'
-            clim  = [-2.5, 0.0]
+        # extended configuration (5x3 panels, 1.67 aspect ratio)
+        if extended:
+            # plot setup
+            fig = plt.figure(figsize=[38.4/0.75, 19.8/0.75]) # produce 3840x1920px image at dpi==75
+            gs = gridspec.GridSpec(3,5)
 
-            _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i=3)
+            # upper col0: histo2d [rad,vrad] massfrac
+            _histo2d_helper(gs,i=0,pt='gas',xaxis='radlog',yaxis='vrad',color='massfracnorm',clim=lim2)
 
-        if 1:
-            # 2dhisto [dens,temp] mass frac
-            pt    = 'gas'
-            xaxis = 'numdens'
-            yaxis = 'temp'
-            color = 'massfrac'
-            clim   = [-4.0, 0.0]
+            # upper col1: histo2d [rad,vrad] mean temperature
+            _histo2d_helper(gs,i=1,pt='gas',xaxis='radlog',yaxis='vrad',color='templinear',clim=lim4)
 
-            _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i=3)
+            # upper col2: histo2d [rad,vrelmag] mass frac
+            _histo2d_helper(gs,i=2,pt='gas',xaxis='rad',yaxis='vrel',color='massfracnorm',clim=lim2)
 
-        # lower center
-        if 0:
-            # 2dhisto [dens,temp] mean vrad
-            pt    = 'gas'
-            xaxis = 'numdens'
-            yaxis = 'temp'
-            color = 'vrad'
-            clim  = [-100, 300]
+            # upper col3: gas radial density profile, vrad vs. temp relation
+            gs_local = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[3], wspace=0.35)
+            _histo1d_helper(gs_local,i=0,pt='gas',xaxis='radlog',yaxis='numdens',ylim=[-6.0,1.0])
+            _histo1d_helper(gs_local,i=1,pt='gas',xaxis='temp',yaxis='vrad',ylim=[-200, 400])
 
-            _histo2d_helper(pt,xaxis,yaxis,color,clim,snap,i=4)
+            # upper col4: SFR and BH Mdot
+            _lineplot_helper2(gs,i=4)
 
-        if 1:
-            # gas dens image, 200 kpc, xy
-            axes    = [0,1]
-            boxSize = 200.0
-            ptType  = 'gas'
-            ptField = 'coldens_msunkpc2'
+            # center col0: 2dhisto [dens,temp] mass frac
+            _histo2d_helper(gs,i=5,pt='gas',xaxis='numdens',yaxis='temp',color='massfrac',clim=[-4.0,-0.5])
 
-            _image_helper(ptType,ptField,axes,boxSize,i=4)
+            # center col1: 2dhisto [rad,vrad] temp
+            _histo2d_helper(gs,i=6,pt='gas',xaxis='rad',yaxis='vrad',color='templinear',clim=lim4)
 
-        # lower right
-        if 0:
-            # gas dens image, 200 kpc, xz
-            axes    = [0,2]
-            boxSize = 2000.0
-            ptType  = 'gas'
-            ptField = 'coldens_msunkpc2'
+            # center col2: 2dhisto [rad,vrad] mass frac (stars)
+            _histo2d_helper(gs,i=7,pt='stars',xaxis='rad',yaxis='vrad',color='massfracnorm',clim=lim2)
 
-            _image_helper(ptType,ptField,axes,boxSize,i=5)
+            # center col3: gas vrad 1d histograms
+            _histo1d_helper(gs,i=8,pt='gas',xaxis='vrad',yaxis='count',ylim=lim3)
+           
+            # center col4: gas vrel/temp 1d histograms
+            gs_local = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[9], hspace=0.25)
+            _histo1d_helper(gs_local,i=0,pt='gas',xaxis='vrel',yaxis='count',ylim=lim3)
+            _histo1d_helper(gs_local,i=1,pt='gas',xaxis='temp',yaxis='count',ylim=[-2.0, 0.5])
 
-        if 0:
-            # gas radial density profile
-            pt    = 'gas'
-            xaxis = 'radlog'
-            yaxis = 'numdens'
-            ylim  = data['limits']['numdens']
+            # bottom col0: 2dhisto [dens,temp] mean vrad
+            _histo2d_helper(gs,i=10,pt='gas',xaxis='numdens',yaxis='temp',color='vrad',clim=[-100,300])
 
-            _histo1d_helper(pt,xaxis,yaxis,ylim,i=5)
+            # bottom col1: gas dens image, 200 kpc, xz
+            _image_helper(gs,i=11,pt='gas',field='coldens_msunkpc2',axes=[0,2],boxSize=200.0)
 
-        if 1:
-            # gas vrad histogram
-            pt    = 'gas'
-            xaxis = 'vrad'
-            yaxis = 'count'
-            ylim  = [-6.0, -1.0]
+            # bottom col2: gas dens image, 200 kpc, xy
+            _image_helper(gs,i=12,pt='gas',field='coldens_msunkpc2',axes=[0,1],boxSize=200.0)
 
-            _histo1d_helper(pt,xaxis,yaxis,ylim,i=5)
+            # bottom col3: gas dens image, 2000 kpc, xy
+            _image_helper(gs,i=13,pt='gas',field='coldens_msunkpc2',axes=[0,1],boxSize=2000.0)
 
-        if 0:
-            # line plot, masses and blackhole diagnostics
-            ax = fig.add_subplot(2,3,6)
-            ax.set_xlabel('Redshift')
-            ax.set_ylabel('Masses [log M$_{\\rm sun}$]')
-
-            # blackhole mass
-            yy = sP.units.codeMassToLogMsun( data['bhs']['BH_Mass'] )
-            l, = ax.plot(redshifts[w], yy[w], '-', alpha=0.5, label='BH Mass')
-            ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=l.get_color())
-            ax.set_xlim(ax.get_xlim()[::-1]) # time increasing to the right
-            for t in ax.get_yticklabels(): t.set_color(l.get_color())
-
-            # additional info from extended SubboxSubhaloList?
-            linestyles = ['-','--',':'] # for the three apertures
-            apertures = ['30pkpc', '30ckpc/h', '50ckpc/h']
-
-            for key in ['SubhaloGas_Mass','SubhaloStars_Mass']:
-                if key in extInfo:
-                    c = ax._get_lines.prop_cycler.next()['color']
-                    for j, aperture in enumerate(apertures):
-                        yy = sP.units.codeMassToLogMsun( extInfo[key][selInd,j,:])
-                        yy -= 3.0 # 3 dex offset to get within range of M_BH
-                        label = key.split('Subhalo')[1] + '/$10^3$' if j == 0 else ''
-                        l, = ax.plot(redshifts[w], yy[w], linestyles[j], alpha=0.5, label=label, color=c)
-                        ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
-
-            # blackhole energetics
-            ax2 = ax.twinx()
-            ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
-            c = ax._get_lines.prop_cycler.next()['color']
-            ax2.plot(redshifts[w], dy_high[w], '-', alpha=0.7, color=c)
-            ax2.plot(redshifts[w], dy_low[w], ':', alpha=0.7, color=c)
-            ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-            ax2.plot(redshifts[snap], dy_low[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-            for t in ax2.get_yticklabels(): t.set_color(c)
-
-            handles, labels = ax.get_legend_handles_labels()
-            sExtra = [plt.Line2D((0,1), (0,0), color='black', marker='', lw=lw, linestyle=ls) for ls in linestyles]
-            ax.legend(handles+sExtra, labels+apertures, loc='lower right')
+            # bottom col4: line plot, masses and blackhole diagnostics
+            _lineplot_helper(gs,i=14)
 
         # finish
         fig.tight_layout()
-        fig.savefig('vis_%s_sbNum-%d_selInd-%d_%04d.png' % (sP.simName,sbNum,selInd,snap))
+        fig.savefig('vis_%s_sbNum-%d_selInd-%d%s_%04d.png' % \
+            (sP.simName,sbNum,selInd,'_extended' if extended else '',snap), 
+            dpi=(75 if extended else 100))
         plt.close(fig)
 
 def explore_vrad_selection(sP):
@@ -1004,14 +1072,14 @@ def paperPlots():
         for sbNum in [0,1,2]:
             _ = selection_subbox_overlap(TNG50, sbNum, sel, verbose=True)
 
-    if 1:
+    if 0:
         # save data (phase diagrams) through time
         save_subbox_data(TNG50, sbNum=0, selInd=0)
         #prerender_subbox_images(TNG50, sbNum=0, selInd=0)
 
-    if 0:
+    if 1:
         # vis
-        vis_subbox_data(TNG50, sbNum=0, selInd=0)
+        vis_subbox_data(TNG50, sbNum=0, selInd=0, extended=False)
 
     if 0:
         # sample comparison against SINS-AO survey at z=2 (M*, SFR)
