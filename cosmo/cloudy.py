@@ -948,6 +948,9 @@ class cloudyIon():
                 print('WARNING: metal abunds but GFM_Metals not available (mini-snap). Assuming solar abundances.')
                 metal_mass_fraction = (metal/self.solar_Z) * self._solarMetalAbundanceMassRatio(element)
 
+        if 0: # DISABLED
+            metal_mass_fraction = 0.000549262436107 # oxygen/total mass ratio, 0.1 * solar
+
         metal_ion_mass_fraction = metal_mass_fraction * ion_fraction
         return metal_ion_mass_fraction
 

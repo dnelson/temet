@@ -828,7 +828,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                         ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
                         ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
-                                alpha=0.1, rotation=90)
+                                fontsize=20.0, alpha=0.1, rotation=90)
 
                         if i == 0 and radType == 0:
                             # show percentile scatter only for first run
@@ -1044,6 +1044,18 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
     sim_xvals = sim_samples[0]['mstar_30pkpc_log'].ravel()
     sim_yvals = sim_samples[0]['ssfr_30pkpc_log'].ravel()
     sim_cvals = np.zeros( sim_xvals.size )
+
+    if 0:
+        # referee report test
+        inds = sim_samples[0]['selected_inds'].ravel()
+        mhalo = groupCat(sPs[0], fieldsSubhalos=['mhalo_200_log'])
+        sel_mhalo = mhalo[inds]
+
+        w_above = np.where(sim_yvals >= -11.0)
+        w_below = np.where(sim_yvals < -11.0)
+        print(np.nanmedian(sel_mhalo[w_above]))
+        print(np.nanmedian(sel_mhalo[w_below]))
+        import pdb; pdb.set_trace()
 
     cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, 'count', 
                                                  bins=nBins2D, range=[xlim,ylim])
@@ -1915,14 +1927,14 @@ def paperPlots():
                 redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True, secondTopAxis=True)
 
     # figure 9: average radial profiles
-    if 0:
+    if 1:
         redshift = 0.0
         sPs = [TNG100]
         ions = ['OVI'] # OVII, OVIII
         cenSatSelect = 'cen'
         haloMassBins = [[10.9,11.1], [11.4,11.6], [11.9,12.1], [12.4,12.6]]
-        projSpecs = ['2Dz_2Mpc'] #['3D','2Dz_2Mpc']
-        combine2Halo = False
+        projSpecs = ['3D','2Dz_2Mpc']
+        combine2Halo = True
 
         simNames = '_'.join([sP.simName for sP in sPs])
 

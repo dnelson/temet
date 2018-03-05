@@ -1619,12 +1619,15 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     projDepthCode = sP.boxSize
 
     if '_depth10' in species:
-        projDepthCode = 10000.0 # 10 Mpc/h
+        projDepthCode = 10000.0 # 10 cMpc/h
         species = species.split("_depth10")[0]  
+    if '_depth125' in species:
+        projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac) # 12.5 cMpc
+        species = species.split("_depth125")[0]  
 
     # check
     hDensSpecies = ['HI','HI_noH2']
-    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VIII solarz']
+    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VII 10 solarz']
 
     if species not in hDensSpecies + zDensSpecies + ['Z']:
         raise Exception('Not implemented.')
@@ -1643,7 +1646,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         boxGridSize = boxGridSizeHI
 
     # adjust grid size
-    if species == 'O VI 10':
+    if species in ['O VI 10','O VII 10 solarz']:
         boxGridSize = 10.0 # test, x2 bigger
     if species == 'O VI 25':
         boxGridSize = 2.5 # test, x2 smaller
@@ -1722,12 +1725,12 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
             ion = cloudyIon(sP, el=element, redshiftInterp=True)
 
-            if len(species.split()) == 3 and species.split()[2] == 'solar':
+            if species[-5:] == 'solar':
                 # assume solar abundances
                 mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
                                                                     assumeSolarAbunds=True)
-            if len(species.split()) == 3 and species.split()[2] == 'solarz':
-                # assume solar abundances
+            elif species[-6:] == 'solarz':
+                # assume solar abundances and solar metallicity
                 mMetal = gas['Masses'] * ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange,
                                                                     assumeSolarAbunds=True,assumeSolarMetallicity=True)
             else:
@@ -1807,9 +1810,16 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
     acField = 'Box_Grid_n'+species
     ac = auxCat(sP, fields=[acField])
 
-    depthFrac = 10000.0/sP.boxSize if '_depth10' in species else 1.0
+    # depth
+    projDepthCode = sP.boxSize
+    if '_depth10' in species:
+        projDepthCode = 10000.0
+    if '_depth125' in species: 
+        projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac)
 
     # calculate
+    depthFrac = projDepthCode/sP.boxSize
+
     fN, n = calculateCDDF(ac[acField], binMinMax[0], binMinMax[1], binSize, sP, depthFrac=depthFrac)
 
     rr = np.vstack( (n,fN) )
@@ -2528,6 +2538,10 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVII_solarz_depth10'    : partial(wholeBoxCDDF,species='OVII_solarz_depth10'),
    'Box_Grid_nOVIII_solarz_depth10'   : partial(wholeBoxColDensGrid,species='O VIII solarz_depth10'),
    'Box_CDDF_nOVIII_solarz_depth10'   : partial(wholeBoxCDDF,species='OVIII_solarz_depth10'),
+   'Box_Grid_nOVII_solarz_depth125'    : partial(wholeBoxColDensGrid,species='O VII solarz_depth125'),
+   'Box_CDDF_nOVII_solarz_depth125'    : partial(wholeBoxCDDF,species='OVII_solarz_depth125'),
+   'Box_Grid_nOVII_10_solarz_depth125'    : partial(wholeBoxColDensGrid,species='O VII 10 solarz_depth125'),
+   'Box_CDDF_nOVII_10_solarz_depth125'    : partial(wholeBoxCDDF,species='OVII_10_solarz_depth125'),
 
    'Box_Omega_HI'                    : partial(wholeBoxCDDF,species='H I',omega=True),
    'Box_Omega_H2'                    : partial(wholeBoxCDDF,species='H 2',omega=True),

@@ -689,9 +689,9 @@ def compareRuns_PhaseDiagram():
     pdf.close()
 
 def compareRuns_RadProfiles():
-    """ Driver. Compare median radial profile of a quantity, differentiating between two different 
-    types of halos. One run. """
-    from projects.oxygen import variantsMain as variants
+    """ Driver. Compare median radial profile of a quantity, differentiating between two runs. """
+    #from projects.oxygen import variantsMain as variants
+    variants = ['0000','0010']
 
     sPs = []
     subhalos = []
@@ -705,7 +705,7 @@ def compareRuns_RadProfiles():
 
         subhalos.append( w[0] )
 
-    for field in ['metaldens']: #,'dens','temp_linear','P_gas_linear','z_solar']:
+    for field in ['temp_linear']: #,'dens','temp_linear','P_gas_linear','z_solar']:
         plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, weighting='O VI mass')
 
 def compareHaloSets_RadProfiles():
