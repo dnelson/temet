@@ -61,7 +61,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                    'mhalo_subfind','mhalo_subfind_log']
 
-    quants_rad = ['rhalo_200','rhalo_500']
+    quants_rad = ['rhalo_200','rhalo_500','velmag']
 
     # generally available (auxcat)
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 'mass_gasall']
@@ -260,6 +260,19 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [1.0, 2.5]
         label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ log kpc ]'
         if clean: label = 'R$_{\\rm halo}$ [ log kpc ]'
+
+    if quant in ['vmag','velmag','vmag_log','velmag_log']:
+        # SubhaloVel [physical km/s]
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloVel'])
+        vals = sP.units.subhaloCodeVelocityToKms(gc['subhalos'])
+        vals = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
+
+        if '_log' in quant:
+            takeLog = False
+            vals = logZeroNaN(vals)
+
+        minMax = [1.5,3.5]
+        label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
 
     if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_gasall']:
         # total OVI/OVII/metal mass in subhalo
