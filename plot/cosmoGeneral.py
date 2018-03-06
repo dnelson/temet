@@ -522,7 +522,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, 
-                             scatterPoints=False, markSubhaloIDs=None, fig_subplot=[None,None]):
+                             scatterPoints=False, markSubhaloIDs=None, xlim=None, ylim=None, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -567,6 +567,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             # y-axis: load fullbox galaxy properties
             sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+            if ylim is not None: yMinMax = ylim
 
             if sim_yvals is None:
                 print('   skip')
@@ -576,6 +577,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             # x-axis: load fullbox galaxy properties
             sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
             if xLog: sim_xvals = logZeroNaN(sim_xvals)
+            if xlim is not None: xMinMax = xlim
 
             # splitting on third quantity? load now
             if sQuant is not None:
@@ -620,7 +622,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 sm = savgol_filter(sm,sKn,sKo)
                 pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-            ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=sP.simName)
+            label = sP.simName + ' z=%.1f' % sP.redshift
+            ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
 
             # percentile:
             if sim_xvals.size >= ptPlotThresh:

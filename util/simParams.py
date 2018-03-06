@@ -923,6 +923,10 @@ class simParams:
         return self.targetGasMass == 0.0
 
     @property
+    def isSubbox(self):
+        return 'subbox' in self.variant
+
+    @property
     def numMetals(self):
         if self.metals:
             return len(self.metals)

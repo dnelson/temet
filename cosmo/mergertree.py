@@ -12,7 +12,8 @@ from os import path
 
 import cosmo
 from scipy.signal import savgol_filter
-from cosmo.util import snapNumToRedshift, correctPeriodicPosBoxWrap
+from scipy import interpolate
+from cosmo.util import snapNumToRedshift, validSnapList, correctPeriodicPosBoxWrap
 from util.helper import running_sigmawindow, iterable
 
 treeName_default = "SubLink"
@@ -150,14 +151,75 @@ def insertMPBGhost(mpb, snapToInsert=None):
             continue
 
         if mpb[key].ndim == 1: # [N]
-            interpVal = np.mean([mpb[key][indAfter],mpb[key][indAfter-2]])
+            interpVal = np.mean([mpb[key][indAfter],mpb[key][indAfter-2]], dtype=mpb[key].dtype)
             mpb[key] = np.insert( mpb[key], indAfter, interpVal )
 
         if mpb[key].ndim == 2: # [N,3]
-            interpVal = np.mean( np.vstack((mpb[key][indAfter,:],mpb[key][indAfter-2,:])), axis=0)
+            interpVal = np.mean( np.vstack((mpb[key][indAfter,:],mpb[key][indAfter-2,:])), dtype=mpb[key].dtype, axis=0)
             mpb[key] = np.insert( mpb[key], indAfter, interpVal, axis=0)
 
     return mpb
+
+def mpbPositionComplete(sP, id, extraFields=[]):
+    """ Load a particular MPB of subhalo id, and return it along with a filled version of SubhaloPos 
+    which interpolates for any skipped intermediate snapshots as well as back beyond the end of the 
+    tree to the beginning of the simulation. The return indexed by snapshot number. """
+    from tracer.tracerMC import match3
+
+    fields = ['SubfindID','SnapNum','SubhaloPos']
+
+    # any extra fields to be loaded?
+    treeFileFields = loadTreeFieldnames(sP)
+
+    for field in iterable(extraFields):
+        if field not in fields and field in treeFileFields:
+            fields.append(field)
+
+    # load MPB
+    mpb = loadMPB(sP, id, fields=fields)
+
+    # load all valid snapshots, then make (contiguous) list from [0, sP.snap]
+    snaps = validSnapList(sP)
+    times = snapNumToRedshift(sP, snap=snaps, time=True)
+    assert snaps.shape == times.shape
+
+    w = np.where(snaps <= sP.snap)
+    snaps = snaps[w]
+    times = times[w]
+
+    assert len(snaps) == snaps.max() - snaps.min() + 1 # otherwise think more about missing snaps
+    assert snaps.min() == 0 # otherwise think more
+
+    # fill any missing [intermediate] snapshots with ghost entries
+    for snap in np.arange( mpb['SnapNum'].min(), mpb['SnapNum'].max() ):
+        if snap in mpb['SnapNum']:
+            continue
+        mpb = insertMPBGhost(mpb, snapToInsert=snap)
+        #print(' mpb inserted [%d] ghost' % snap)
+
+    # rearrange into ascending snapshot order, and are we already done?
+    SubhaloPos  = mpb['SubhaloPos'][::-1,:] # ascending snapshot order
+    SnapNum     = mpb['SnapNum'][::-1] # ascending snapshot order
+
+    if np.array_equal(SnapNum, snaps):
+        return SnapNum, SubhaloPos
+
+    # extrapolate back to t=0 beyond the end of the (resolved) tree
+    mpbTimes = cosmo.util.snapNumToRedshift(sP, snap=SnapNum, time=True)
+
+    posComplete = np.zeros( (times.size,3), dtype=SubhaloPos.dtype )
+    wExtrap = np.where( (times < mpbTimes.min()) | (times > mpbTimes.max()) )
+
+    ind0, ind1 = match3(snaps, SnapNum)
+    posComplete[ind0,:] = SubhaloPos[ind1,:]
+
+    for j in range(3):
+        # each axis separately, linear extrapolation
+        f = interpolate.interp1d(mpbTimes, SubhaloPos[:,j], kind='linear', fill_value='extrapolate')
+        assert posComplete[wExtrap,j].sum() == 0.0 # should be empty
+        posComplete[wExtrap,j] = f(times[wExtrap])
+
+    return snaps, posComplete
 
 def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=[]):
     """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 

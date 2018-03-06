@@ -157,17 +157,11 @@ def selection_subbox_overlap(sP, sbNum, sel, verbose=False):
 
     return sel_inds, subbox_inds, minSBsnap, maxSBsnap, subhaloPos, subboxScaleFac, extInfo
 
-def _get_subbox_data_onesnap(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos, scalarFields, loadFields, 
-                             histoNames1D, histoNames2D, apertures, limits, histoNbins):
-    """ Multiprocessing pool target, load and process all data for one subbox snapshot, returning results. """
-    if snap < minSBsnap or snap > maxSBsnap:
-        return None
-
-    sP_sub.setSnap(snap)
-    if snap % 100 == 0: print(snap)
-
-    subPos = subhaloPos[snap,:]
-    subVel = 0 # derived below, or could load from extended SubboxSubhaloList if available
+def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scalarFields, loadFields, 
+                           histoNames1D, histoNames2D, apertures, limits, histoNbins):
+    """ Multiprocessing target: load and process all data for one subbox/normal snap, returning results. """
+    sP.setSnap(snap)
+    if (sP.isSubbox and snap % 100 == 0) or (not sP.isSubbox): print('snap: ',snap)
 
     data = {'snap':snap}
 
@@ -176,117 +170,124 @@ def _get_subbox_data_onesnap(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos, sca
         data[ptType] = {}
         fieldsToLoad = list(set( ['Coordinates'] + scalarFields[ptType] + loadFields[ptType] )) # unique
 
-        x = snapshotSubset(sP_sub, ptType, fieldsToLoad)
+        x = snapshotSubset(sP, ptType, fieldsToLoad)
 
         if x['count'] == 0:
             continue
 
-        # localize to this subhalo
-        dists_sq = (x['Coordinates'][:,0]-subPos[0])**2 + (x['Coordinates'][:,1]-subPos[1])**2 + (x['Coordinates'][:,2]-subPos[2])**2
+        # subhalo loop
+        for i, haloInd in enumerate(haloInds):
+            data_loc = {}
+            subPos = centerPos[i,snap,:]
 
-        # scalar fields: select relevant particles and save
-        w = np.where(dists_sq <= apertures['scalar']**2)
+            if snap < minSnap[i] or snap > maxSnap[i]:
+                continue
 
-        if len(w[0]) > 0:
-            for key in scalarFields[ptType]:
-                if ptType == 'bhs':
-                    data[ptType][key] = x[key][w].max() # MAX
-                if ptType == 'gas':
-                    data[ptType][key] = x[key][w].sum() # TOTAL (unused)
+            # localize to this subhalo
+            dists_sq = (x['Coordinates'][:,0]-subPos[0])**2 + (x['Coordinates'][:,1]-subPos[1])**2 + (x['Coordinates'][:,2]-subPos[2])**2
 
-        if len(histoNames1D[ptType]) + len(histoNames2D[ptType]) == 0:
-            continue
+            # scalar fields: select relevant particles and save
+            w = np.where(dists_sq <= apertures['scalar']**2)
 
-        # common computations
-        if ptType == 'gas':
-            # first compute subVel using gas
-            w = np.where( (dists_sq <= apertures['sfgas']**2) & (x['StarFormationRate'] > 0.0) )
-            subVel = np.mean( x['Velocities'][w,:], axis=1 )
-            # todo: may need to smooth vel in time?
-            # todo: alternatively, use MBID pos/vel evolution
-            # or, we have the Potential saved in subboxes, could use particle with min(Potential) inside rad
+            if len(w[0]) > 0:
+                for key in scalarFields[ptType]:
+                    if ptType == 'bhs':
+                        data_loc[key] = x[key][w].max() # MAX
+                    if ptType == 'gas':
+                        data_loc[key] = x[key][w].sum() # TOTAL (unused)
 
-        rad = np.sqrt(dists_sq) # i.e. 'rad', code units, [ckpc/h]
-        radlog = np.log10(rad)
-        vrad = sP_sub.units.particleRadialVelInKmS(x['Coordinates'], x['Velocities'], subPos, subVel)
+            if len(histoNames1D[ptType]) + len(histoNames2D[ptType]) == 0:
+                continue
 
-        vrel = sP_sub.units.particleRelativeVelInKmS(x['Velocities'], subVel)
-        vrel = np.sqrt( vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2 )
+            # common computations
+            if ptType == 'gas':
+                # first compute subVel using gas
+                w = np.where( (dists_sq <= apertures['sfgas']**2) & (x['StarFormationRate'] > 0.0) )
+                subVel = np.mean( x['Velocities'][w,:], axis=1 )
+                # todo: may need to smooth vel in time?
+                # todo: alternatively, use MBID pos/vel evolution
+                # or, we have the Potential saved in subboxes, could use particle with min(Potential) inside rad
 
-        vals = {'rad':rad, 'radlog':radlog, 'vrad':vrad, 'vrel':vrel}
+            rad = np.sqrt(dists_sq) # i.e. 'rad', code units, [ckpc/h]
+            radlog = np.log10(rad)
+            vrad = sP.units.particleRadialVelInKmS(x['Coordinates'], x['Velocities'], subPos, subVel)
 
-        if ptType == 'gas':
-            vals['numdens'] = np.log10( x['numdens'] )
-            vals['temp'] = np.log10( x['temp_linear'] )
-            vals['templinear'] = x['temp_linear']
+            vrel = sP.units.particleRelativeVelInKmS(x['Velocities'], subVel)
+            vrel = np.sqrt( vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2 )
 
-        # 2D histograms: compute and save
-        for histoName in histoNames2D[ptType]:
-            xaxis, yaxis, color = histoName.split('_')
+            vals = {'rad':rad, 'radlog':radlog, 'vrad':vrad, 'vrel':vrel}
 
-            xlim = limits[xaxis]
-            ylim = limits[yaxis]
+            if ptType == 'gas':
+                vals['numdens'] = np.log10( x['numdens'] )
+                vals['temp'] = np.log10( x['temp_linear'] )
+                vals['templinear'] = x['temp_linear']
 
-            xvals = vals[xaxis]
-            yvals = vals[yaxis]
+            # 2D histograms: compute and save
+            for histoName in histoNames2D[ptType]:
+                xaxis, yaxis, color = histoName.split('_')
 
-            if color == 'massfrac':
-                # mass distribution in this 2D plane
-                weight = x['Masses']
-                zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], density=True, weights=weight)
-            else:
-                # each pixel colored according to its mean value of a third quantity
-                weight = vals[color]
-                zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', bins=[histoNbins, histoNbins], range=[xlim,ylim])
+                xlim = limits[xaxis]
+                ylim = limits[yaxis]
 
-            zz = zz.T
-            if color != 'vrad':
-                zz = logZeroNaN(zz)
+                xvals = vals[xaxis]
+                yvals = vals[yaxis]
 
-            data[ptType][histoName] = zz
-
-        # 1D histograms (and X as a function of Y relationships): compute and save
-        for histoName in histoNames1D[ptType]:
-            xaxis, yaxis = histoName.split('_')
-            xlim  = limits[xaxis]
-            xvals = vals[xaxis]
-
-            data[ptType][histoName] = np.zeros( (len(apertures['histo1d']), histoNbins), dtype='float32' )
-
-            # loop over apertures (always code units)
-            for i, aperture in enumerate(apertures['histo1d']):
-                w = np.where(dists_sq <= aperture**2)
-
-                if yaxis == 'count':
-                    # 1d histogram of a quantity
-                    hh, _ = np.histogram(xvals[w], bins=histoNbins, range=xlim, density=True)
+                if color == 'massfrac':
+                    # mass distribution in this 2D plane
+                    weight = x['Masses']
+                    zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], normed=True, weights=weight)
                 else:
-                    # median yval (i.e. vrad) in bins of xval, which is typically e.g. radius
-                    yvals = vals[yaxis]
-                    hh, _, _ = binned_statistic(xvals[w], yvals[w], statistic='median', range=xlim, bins=histoNbins)
+                    # each pixel colored according to its mean value of a third quantity
+                    weight = vals[color]
+                    zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', bins=[histoNbins, histoNbins], range=[xlim,ylim])
 
-                data[ptType][histoName][i,:] = hh
+                zz = zz.T
+                if color != 'vrad':
+                    zz = logZeroNaN(zz)
+
+                data_loc[histoName] = zz
+
+            # 1D histograms (and X as a function of Y relationships): compute and save
+            for histoName in histoNames1D[ptType]:
+                xaxis, yaxis = histoName.split('_')
+                xlim  = limits[xaxis]
+                xvals = vals[xaxis]
+
+                data_loc[histoName] = np.zeros( (len(apertures['histo1d']), histoNbins), dtype='float32' )
+
+                # loop over apertures (always code units)
+                for j, aperture in enumerate(apertures['histo1d']):
+                    w = np.where(dists_sq <= aperture**2)
+
+                    if yaxis == 'count':
+                        # 1d histogram of a quantity
+                        hh, _ = np.histogram(xvals[w], bins=histoNbins, range=xlim, density=True)
+                    else:
+                        # median yval (i.e. vrad) in bins of xval, which is typically e.g. radius
+                        yvals = vals[yaxis]
+                        hh, _, _ = binned_statistic(xvals[w], yvals[w], statistic='median', range=xlim, bins=histoNbins)
+
+                    data_loc[histoName][j,:] = hh
+
+            data[ptType][haloInd] = data_loc # add dict for this subhalo to the byPartType dict, with haloInd as key
 
     return data
 
-def save_subbox_data(sP, sbNum, selInd, minM200=11.5):
-    """ Testing subbox. """
+def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, largeLimits=False):
+    """ For one or more halos (defined by their evolving centerPos locations), iterate over all subbox/normal snapshots and 
+    record a number of properties for each halo at each timestep. minSnap/maxSnap define the range over which to consider 
+    each halo. sP can be a fullbox or subbox, which sets the data origin. One save file is made per halo. """
     import multiprocessing as mp
     from functools import partial
     import time
-
-    sel = halo_selection(sP, minM200=minM200)
-    assert minM200 == 11.5
-
-    # for one halo, track through full subbox range and save lots of interesting data
-    sel_inds, _, minSBsnap, maxSBsnap, subhaloPos, subboxScaleFac, _ = selection_subbox_overlap(sP, sbNum, sel)
-
-    sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
 
     # config
     scalarFields = {'gas'  :['StarFormationRate'], 
                     'stars':[],
                     'bhs'  :['BH_CumEgyInjection_QM','BH_CumEgyInjection_RM','BH_Mass']}
+    if not np.array_equal(haloInds,[296]): # just legacy
+        scalarFields['bhs'] += ['BH_Mdot', 'BH_MdotEddington', 'BH_MdotBondi', 'BH_Progs']
+
     histoNames1D = {'gas'  :['rad_numdens','rad_temp','rad_vrad','rad_vrel','temp_vrad',
                              'radlog_numdens','radlog_temp','radlog_vrad','radlog_vrel',
                              'vrad_count','vrel_count','temp_count'],
@@ -314,44 +315,48 @@ def save_subbox_data(sP, sbNum, selInd, minM200=11.5):
               'numdens' : [-8.0, 2.0],
               'temp'    : [3.0, 8.0]}
 
-    if minM200 == 12.0:
-        # looking at M_halo > 12 with the action of the low-state BH winds
+    if largeLimits:
+        # e.g. looking at M_halo > 12 with the action of the low-state BH winds, expand limits
         limits['rad'] = [0, 1200]
         limits['vrad'] = [-1000, 2000]
         limits['vrel'] = [0, 3000]
 
     # existence check, immediate load and return if so
-    data = {}
-
-    haloInd = sel['haloInds'][sel_inds[selInd]]
-    sbStr = '_subbox%d' % sbNum if sbNum is not None else ''
+    sbStr = '_'+sP.variant if 'subbox' in sP.variant else ''
     hashStr = hashlib.sha256('%s_%s_%s_%s_%d_%s_%s' % \
                 (str(scalarFields),str(histoNames1D),str(histoNames2D),str(loadFields),
                  histoNbins,str(apertures),str(limits))).hexdigest()[::4]
 
     savePath = sP.derivPath + '/haloevo/'
-    saveFilename = savePath + 'evo_%d_h%d%s_%s.hdf5' % (sP.snap,haloInd,sbStr,hashStr)
 
     if not isdir(savePath):
         mkdir(savePath)
 
-    if isfile(saveFilename):
-        with h5py.File(saveFilename,'r') as f:
-            for group in f.keys():
-                data[group] = {}
-                for dset in f[group].keys():
-                    data[group][dset] = f[group][dset][()]
-        return data
+    savePath = savePath + 'evo_%d_h%d%s_%s.hdf5'
+
+    if len(haloInds) == 1:
+        # single halo: try to load and return available data
+        data = {}
+        saveFilename = savePath % (haloIndsSnap,haloInds[0],sbStr,hashStr)
+
+        if isfile(saveFilename):
+            with h5py.File(saveFilename,'r') as f:
+                for group in f.keys():
+                    data[group] = {}
+                    for dset in f[group].keys():
+                        data[group][dset] = f[group][dset][()]
+            return data
 
     # thread parallelize by snapshot
-    nThreads = 32
+    nThreads = 32 if sP.isSubbox else 1 # assume ~full node memory usage when analyzing full boxes
     pool = mp.Pool(processes=nThreads)
-    func = partial(_get_subbox_data_onesnap, sP_sub=sP_sub, minSBsnap=minSBsnap[selInd], maxSBsnap=maxSBsnap[selInd],
-                   subhaloPos=subhaloPos[selInd,:,:], scalarFields=scalarFields, loadFields=loadFields, 
+    func = partial(_getHaloEvoDataOneSnap, sP=sP, haloInds=haloInds, minSnap=minSnap, maxSnap=maxSnap,
+                   centerPos=centerPos, scalarFields=scalarFields, loadFields=loadFields, 
                    histoNames1D=histoNames1D, histoNames2D=histoNames2D, apertures=apertures, 
                    limits=limits, histoNbins=histoNbins)
 
-    snaps = range(minSBsnap.min(),maxSBsnap.max()+1) #[2687]
+    #snaps = range( np.min(minSnap),np.max(maxSnap)+1 ) #[2687]
+    snaps = range( 1,np.max(maxSnap)+1 ) #[2687]
 
     start_time = time.time()
 
@@ -362,56 +367,118 @@ def save_subbox_data(sP, sbNum, selInd, minM200=11.5):
         for snap in snaps:
             results.append( func(snap) )
 
-    print('[%d] snaps with [%d] threads took [%.2f] sec' % (len(snaps),nThreads,time.time()-start_time))
+    print('[%d] snaps and [%d] halos with [%d] threads took [%.2f] sec' % (len(snaps),len(haloInds),nThreads,time.time()-start_time))
 
-    # allocate
-    for ptType in scalarFields.keys():
-        data[ptType] = {}
-        for field in scalarFields[ptType]:
-            data[ptType][field] = np.zeros( subboxScaleFac.size , dtype='float32' )
+    # save each individually
+    numSnaps = centerPos.shape[1]
 
-        for name in histoNames2D[ptType]:
-            data[ptType]['histo2d_'+name] = \
-              np.zeros( (subboxScaleFac.size,histoNbins,histoNbins), dtype='float32' )
-        for name in histoNames1D[ptType]:
-            data[ptType]['histo1d_'+name] = \
-              np.zeros( (subboxScaleFac.size,len(apertures['histo1d']),histoNbins), dtype='float32' )
+    for i, haloInd in enumerate(haloInds):
+        data = {}
 
-    data['global'] = {}
-    data['global']['mask'] = np.zeros( subboxScaleFac.size, dtype='int16' ) # 1 = in subbox
-    data['global']['mask'][minSBsnap[selInd] : maxSBsnap[selInd] + 1] = 1
-    data['limits'] = limits
-    data['apertures'] = apertures
-
-    # stamp
-    for result in results:
-        if result is None:
-            continue
-
-        snap = result['snap']
-
+        # allocate a save data structure for this halo alone
         for ptType in scalarFields.keys():
+            data[ptType] = {}
             for field in scalarFields[ptType]:
-                if field not in result[ptType]: continue
-                data[ptType][field][snap] = result[ptType][field]
+                data[ptType][field] = np.zeros( numSnaps , dtype='float32' )
 
             for name in histoNames2D[ptType]:
-                if name not in result[ptType]: continue
-                data[ptType]['histo2d_'+name][snap,:,:] = result[ptType][name]
-
+                data[ptType]['histo2d_'+name] = \
+                  np.zeros( (numSnaps,histoNbins,histoNbins), dtype='float32' )
             for name in histoNames1D[ptType]:
-                if name not in result[ptType]: continue
-                data[ptType]['histo1d_'+name][snap,:,:] = result[ptType][name]
+                data[ptType]['histo1d_'+name] = \
+                  np.zeros( (numSnaps,len(apertures['histo1d']),histoNbins), dtype='float32' )
 
-    # save
-    with h5py.File(saveFilename,'w') as f:
-        for key in data:
-            group = f.create_group(key)
-            for dset in data[key]:
-                group[dset] = data[key][dset]
-    print('Saved [%s].' % saveFilename)
+        data['global'] = {}
+        data['global']['mask'] = np.zeros( numSnaps, dtype='int16' ) # 1 = in subbox
+        data['global']['mask'][minSnap[i] : maxSnap[i] + 1] = 1
+        data['limits'] = limits
+        data['apertures'] = apertures
+
+        # stamp by snapshot
+        for result in results:
+            snap = result['snap']
+
+            for ptType in scalarFields.keys():
+                # nothing for this halo/ptType combination (i.e. out of minSnap/maxSnap bounds)
+                if haloInd not in result[ptType]:
+                    continue
+
+                for field in scalarFields[ptType]:
+                    if field not in result[ptType][haloInd]: continue
+                    data[ptType][field][snap] = result[ptType][haloInd][field]
+
+                for name in histoNames2D[ptType]:
+                    if name not in result[ptType][haloInd]: continue
+                    data[ptType]['histo2d_'+name][snap,:,:] = result[ptType][haloInd][name]
+
+                for name in histoNames1D[ptType]:
+                    if name not in result[ptType][haloInd]: continue
+                    data[ptType]['histo1d_'+name][snap,:,:] = result[ptType][haloInd][name]
+
+        # save
+        saveFilename = savePath % (haloIndsSnap,haloInd,sbStr,hashStr)
+        with h5py.File(saveFilename,'w') as f:
+            for key in data:
+                group = f.create_group(key)
+                for dset in data[key]:
+                    group[dset] = data[key][dset]
+        print('Saved [%s].' % saveFilename)
 
     return data
+
+def save_haloevo_data_subbox(sP, sbNum, selInds, minM200=11.5):
+    """ For one or more halos, iterate over all subbox snapshots and record a number of 
+    properties for those halo at each subbox snap. Halos are specified by selInds, which 
+    index the result of selection_subbox_overlap() which intersects the SubboxSubhaloList 
+    catalog with the simple mass selection returned by halo_selection(). """
+    sel = halo_selection(sP, minM200=minM200)
+
+    sel_inds, _, minSBsnap, maxSBsnap, subhaloPos, _, _ = selection_subbox_overlap(sP, sbNum, sel)
+
+    # indices, position evolution tracks, and min/max subbox snapshots for each
+    selInds = iterable(selInds)
+
+    haloInds = sel['haloInds'][sel_inds[selInds]]
+    centerPos = subhaloPos[ selInds,:,:] # ndim == 3
+    minSnap = minSBsnap[selInds]
+    maxSnap = maxSBsnap[selInds]
+
+    # compute and save, or return, time evolution data
+    sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
+
+    largeLimits = False if minM200 == 11.5 else True
+
+    return save_haloevo_data(sP_sub, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
+
+def save_haloevo_data_fullbox(sP, haloInds):
+    """ For one or more halos, iterate over all fullbox snapshots and record a number of 
+    properties for those halo at each snasphot. Use SubLink MPB for positioning, extrapolating 
+    back to snapshot zero. """
+    from cosmo.mergertree import mpbPositionComplete
+
+    posSet  = []
+    minSnap = []
+    maxSnap = []
+
+    # acquire complete positional tracks at all snapshots
+    for haloInd in haloInds:
+        halo = groupCatSingle(sP, haloID=haloInd)
+        snaps, pos = mpbPositionComplete(sP, halo['GroupFirstSub'])
+
+        posSet.append(pos)
+        minSnap.append(0)
+        maxSnap.append(sP.snap)
+
+        assert np.array_equal(snaps, range(0,sP.snap+1)) # otherwise handle
+
+    centerPos = np.zeros( (len(posSet),posSet[0].shape[0],posSet[0].shape[1]), dtype=posSet[0].dtype )
+    for i, pos in enumerate(posSet):
+        centerPos[i,:,:] = pos
+
+    # compute and save, or return, time evolution data
+    largeLimits = True if sP.units.codeMassToLogMsun(halo['Group_M_Crit200']) > 12.1 else False
+
+    return save_haloevo_data(sP, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
 
 def _render_single_subbox_image(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos):
     """ Multipricessing pool target. """
@@ -1074,12 +1141,17 @@ def paperPlots():
 
     if 0:
         # save data (phase diagrams) through time
-        save_subbox_data(TNG50, sbNum=0, selInd=0)
+        save_haloevo_data_subbox(TNG50, sbNum=0, selInds=[2,3])
         #prerender_subbox_images(TNG50, sbNum=0, selInd=0)
 
-    if 1:
+    if 0:
         # vis
         vis_subbox_data(TNG50, sbNum=0, selInd=0, extended=False)
+
+    if 1:
+        # load fullbox test, first 20 halos of 12.0 selection all at once...
+        sel = halo_selection(TNG50, minM200=12.0)
+        save_haloevo_data_fullbox(TNG50, haloInds=sel['haloInds'][0:20])
 
     if 0:
         # sample comparison against SINS-AO survey at z=2 (M*, SFR)
