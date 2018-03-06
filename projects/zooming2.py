@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from util.simParams import simParams
 from cosmo.load import groupCatSingle
-from plot.general import plotPhaseSpace2D
+from plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
 from vis.halo import renderSingleHalo
 
 def visualize_halo(conf=1, quadrant=False):
@@ -144,3 +144,35 @@ def phase_diagram_ovi_tng50_comparison():
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
                      massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
                      contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+
+def figure1_res_statistics(conf=0):
+    """ Figure 1: resolution statistics in mass/size for gas cells, comparing runs. """
+    sPs = []
+
+    if conf in [0,3]:
+        # 4 run comparison
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='PO',redshift=2.25) )
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='MO',redshift=2.25) )
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='FP',redshift=2.25) )
+        sPs.append( simParams(res=11,run='zooms2',hInd=2,redshift=2.25) )
+    if conf in [1,2]:
+        # just compare L11 primordial vs. L11_12 primordial
+        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='PO',redshift=2.25) )
+        sPs.append( simParams(res=11,run='zooms2',hInd=2,redshift=2.25) )
+
+    haloIDs = np.zeros( len(sPs), dtype='int32' )
+
+    if conf == 0:
+        # Figure 1, lower left panel
+        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', sfreq0=True, xlim=[2.0,4.7])
+    if conf == 3:
+        # unused (cellsize histograms)
+        plotHistogram1D(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', sfreq0=True)
+    if conf == 1:
+        # Figure 1, lower right panel
+        plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='cellsize_kpc', 
+            sfreq0=True, colorOffs=[0,2], xlim=[-0.5,3.0], scope='global')
+    if conf == 2:
+        # Figure 1, upper panel
+        plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', 
+            colorOffs=[0,2], xlim=[2.0,4.7], scope='global')
