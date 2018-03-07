@@ -10,7 +10,7 @@ import h5py
 import glob
 from functools import partial
 from os.path import isfile, isdir
-from os import mkdir
+from os import mkdir, makedirs
 
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
@@ -675,10 +675,11 @@ def snapHasField(sP, partType, field):
 def snapOffsetList(sP):
     """ Make the offset table (by type) for the snapshot files, to be able to quickly determine within 
         which file(s) a given offset+length will exist. """
-    saveFilename = sP.derivPath + 'offsets/snapshot_' + str(sP.snap) + '.hdf5'
+    _, sbStr1, sbStr2 = subboxVals(sP.subbox)
+    saveFilename = sP.derivPath + 'offsets/%ssnapshot_%d.hdf5' % (sbStr2,sP.snap)
 
-    if not isdir(sP.derivPath+'offsets'):
-        mkdir(sP.derivPath+'offsets')
+    if not isdir(sP.derivPath+'offsets/%s' % sbStr2):
+        makedirs(sP.derivPath+'offsets/%s' % sbStr2)
 
     if isfile(saveFilename):
             with h5py.File(saveFilename,'r') as f:
@@ -688,7 +689,7 @@ def snapOffsetList(sP):
         snapOffsets = np.zeros( (sP.nTypes, nChunks), dtype='int64' )
 
         for i in np.arange(1,nChunks+1):
-            f = h5py.File( snapPath(sP.simPath,sP.snap,chunkNum=i-1), 'r' )
+            f = h5py.File( snapPath(sP.simPath,sP.snap,chunkNum=i-1,subbox=sP.subbox), 'r' )
 
             if i < nChunks:
                 for j in range(sP.nTypes):
