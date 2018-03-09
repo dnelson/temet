@@ -308,6 +308,9 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     if checkExists:
         return None
 
+    # failure:
+    for fileName in fileNames:
+        print(' '+fileName)
     raise Exception("No group catalog found.")
 
 def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None, sq=False):
@@ -641,6 +644,18 @@ def snapNumChunks(basePath, snapNum, subbox=None):
 
     return nChunks
 
+def groupCatNumChunks(basePath, snapNum, subbox=None):
+    """ Find number of file chunks in a group catalog. """
+    _, sbStr1, sbStr2 = subboxVals(subbox)
+    path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
+
+    nChunks = len(glob.glob(path))
+
+    if nChunks == 0:
+        nChunks = 1 # single file per snapshot
+
+    return nChunks
+
 def snapshotHeader(sP, fileName=None):
     """ Load complete snapshot header. """
     if fileName is None:
@@ -682,8 +697,8 @@ def snapOffsetList(sP):
         makedirs(sP.derivPath+'offsets/%s' % sbStr2)
 
     if isfile(saveFilename):
-            with h5py.File(saveFilename,'r') as f:
-                snapOffsets = f['offsets'][()]
+        with h5py.File(saveFilename,'r') as f:
+            snapOffsets = f['offsets'][()]
     else:
         nChunks = snapNumChunks(sP.simPath, sP.snap, sP.subbox)
         snapOffsets = np.zeros( (sP.nTypes, nChunks), dtype='int64' )
@@ -718,7 +733,7 @@ def groupCatOffsetList(sP):
             r['offsetsGroup']   = f['offsetsGroup'][()]
             r['offsetsSubhalo'] = f['offsetsSubhalo'][()]
     else:
-        nChunks = snapNumChunks(sP.simPath, sP.snap)
+        nChunks = groupCatNumChunks(sP.simPath, sP.snap)
         r['offsetsGroup']   = np.zeros( nChunks, dtype='int32' )
         r['offsetsSubhalo'] = np.zeros( nChunks, dtype='int32' )
 
@@ -753,9 +768,7 @@ def groupCatOffsetListIntoSnap(sP):
             r['snapOffsetsGroup']   = f['snapOffsetsGroup'][()]
             r['snapOffsetsSubhalo'] = f['snapOffsetsSubhalo'][()]
     else:
-        nChunks = snapNumChunks(sP.simPath, sP.snap)
-        print('Calculating new groupCatOffsetsListIntoSnap... ['+str(nChunks)+' chunks]')
-
+        # allocate
         with h5py.File( gcPath(sP.simPath,sP.snap), 'r' ) as f:
             totGroups    = f['Header'].attrs['Ngroups_Total']
             totSubGroups = f['Header'].attrs['Nsubgroups_Total']
@@ -770,6 +783,9 @@ def groupCatOffsetListIntoSnap(sP):
         groupLenType    = np.zeros( (totGroups, sP.nTypes), dtype=np.int32 )
         groupNsubs      = np.zeros( (totGroups,), dtype=np.int32 )
         subgroupLenType = np.zeros( (totSubGroups, sP.nTypes), dtype=np.int32 )
+
+        nChunks = snapNumChunks(sP.simPath, sP.snap)
+        print('Calculating new groupCatOffsetsListIntoSnap... ['+str(nChunks)+' chunks]')
 
         for i in range(1,nChunks+1):
             # load header, get number of groups/subgroups in this file, and lengths
@@ -952,7 +968,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
 def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
-                   mdi=None, sq=True, haloSubset=False):
+                   mdi=None, sq=True, haloSubset=False, float32=False):
     """ For a given snapshot load one or more field(s) for one particle type
           partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
           fields   = e.g. ['ParticleIDs','Coordinates','temp',...]
@@ -965,6 +981,7 @@ def snapshotSubset(sP, partType, fields,
           mdi : multi-dimensional index slice load (only used in recursive calls, don't input directly)
           sq  : squeeze single field return into a numpy array instead of within a dict
           haloSubset : return particle subset of only those in all FoF halos (no outer fuzz)
+          float32 : load any float64 datatype datasets directly as float32 (optimize for memory)
     """
     kwargs = {'inds':inds, 'indRange':indRange, 'haloID':haloID, 'subhaloID':subhaloID}
     subset = None
@@ -1577,7 +1594,7 @@ def snapshotSubset(sP, partType, fields,
             return sP.data[cache_key][indRange[0]:indRange[1]+1]
 
     # load from disk
-    r = il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq)
+    r = il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq, float32=float32)
 
     # optional unit post-processing
     if isinstance(r, np.ndarray) and len(fieldsOrig) == 1:
