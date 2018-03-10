@@ -201,12 +201,12 @@ def mpbPositionComplete(sP, id, extraFields=[]):
     SubhaloPos  = mpb['SubhaloPos'][::-1,:] # ascending snapshot order
     SnapNum     = mpb['SnapNum'][::-1] # ascending snapshot order
 
-    if np.array_equal(SnapNum, snaps):
-        return SnapNum, SubhaloPos
-
-    # extrapolate back to t=0 beyond the end of the (resolved) tree
     mpbTimes = cosmo.util.snapNumToRedshift(sP, snap=SnapNum, time=True)
 
+    if np.array_equal(SnapNum, snaps):
+        return SnapNum, mpbTimes, SubhaloPos
+
+    # extrapolate back to t=0 beyond the end of the (resolved) tree
     posComplete = np.zeros( (times.size,3), dtype=SubhaloPos.dtype )
     wExtrap = np.where( (times < mpbTimes.min()) | (times > mpbTimes.max()) )
 
@@ -219,7 +219,7 @@ def mpbPositionComplete(sP, id, extraFields=[]):
         assert posComplete[wExtrap,j].sum() == 0.0 # should be empty
         posComplete[wExtrap,j] = f(times[wExtrap])
 
-    return snaps, posComplete
+    return snaps, times, posComplete
 
 def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=[]):
     """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 
