@@ -8,8 +8,10 @@ from builtins import *
 import platform
 import numpy as np
 from os import path
+from functools import partial
+
 from util.units import units
-from cosmo.util import redshiftToSnapNum, snapNumToRedshift
+from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq
 from illustris_python.util import partTypeNum
 
 class simParams:
@@ -296,8 +298,8 @@ class simParams:
             self.groupOrdered   = True
 
             parentRes = 2048
+            self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift)
             self.zoomLevel = self.res # L11 (TNG1-3 or TNG300-3) to L13 (TNG1-1 or TNG300-1) to L14 (i.e. TNG100-1)
-            self.res = 2**res # i.e. 2048 for L11, 4096 for L12, 8192 for L13
 
             self.gravSoft = 16.0 / (res/1024)
             self.targetGasMass = 0.00182873 * (8 ** np.log2(8192/res))
@@ -480,7 +482,7 @@ class simParams:
                 self.winds  = 3
                 self.BHs    = 3
             if '_josh' in run:
-                assert self.variant in ['FP','MO','PO'] # full-physics, metal-line cooling, primordial only
+                assert self.variant in ['FP','MO','PO','FP1','FP2','FP3'] # full-physics, metal-line cooling, primordial only
             else:
                 assert self.variant == 'None'
 
@@ -497,6 +499,9 @@ class simParams:
                 if '_josh' in run and variant == 'PO': snStr = '_12 (Primordial Only)'
                 if '_josh' in run and variant == 'MO': snStr = '_12 (Primordial + Metal)'
                 if '_josh' in run and variant == 'FP': snStr = '_12 (Full Physics)'
+                if '_josh' in run and variant == 'FP1': snStr = '_12 (Full Physics high-time-res)'
+                if '_josh' in run and variant == 'FP2': snStr = '_12 (Full Physics high-time-res2)'
+                if '_josh' in run and variant == 'FP3': snStr = '_12 (Full Physics RecouplingDensity10)'
                 self.simName = 'L11%s' % snStr
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
@@ -582,7 +587,7 @@ class simParams:
         # ALL RUNS
         if self.boxSize == 0.0:
             raise Exception("Run not recognized.")
-        if res not in self.validResLevels:
+        if self.res not in self.validResLevels:
             raise Exception("Invalid resolution.")
 
         self.simPath   = self.arepoPath + 'output/'
@@ -618,6 +623,23 @@ class simParams:
         # if redshift passed in, convert to snapshot number and save, and attach units(z)
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)
+
+        # attach various functions pre-specialized to this sP, for convenience
+        from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList
+        from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, auxCat
+
+        self.redshiftToSnapNum = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift = partial(snapNumToRedshift, self)
+        self.periodicDists     = partial(periodicDists, sP=self)
+        self.periodicDistsSq   = partial(periodicDistsSq, sP=self)
+        self.validSnapList     = partial(validSnapList, sP=self)
+
+        self.snapshotSubset = partial(snapshotSubset, self)
+        self.snapshotHeader = partial(snapshotHeader, sP=self)
+        self.groupCatSingle = partial(groupCatSingle, sP=self)
+        self.groupCatHeader = partial(groupCatHeader, sP=self)
+        self.groupCat       = partial(groupCat, sP=self)
+        self.auxCat         = partial(auxCat, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
@@ -924,7 +946,7 @@ class simParams:
 
     @property
     def isSubbox(self):
-        return 'subbox' in self.variant
+        return self.subbox is not None
 
     @property
     def numMetals(self):

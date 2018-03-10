@@ -1230,8 +1230,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # cartesian to spherical coordinates
                 s_rad = np.sqrt(pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2)
                 s_lat = np.arctan2(pos[:,2], np.sqrt(pos[:,0]**2 + pos[:,1]**2)) # latitude (phi) in [-pi/2,pi/2], defined from XY plane up
-                ##s_lat = np.arccos(pos[:,2] / s_rad) # latitude (phi) in [0,pi], defined from z-axis down
                 s_long = np.arctan2(pos[:,1], pos[:,0]) # longitude (lambda) in [-pi,pi]
+
+                # restrict to sphere, instead of cube, to avoid differential ray lengths
+                w = np.where(s_rad > sP.boxSize/2)
+                mass[w] = 0.0
 
                 # hsml: convert from kpc to deg (compute angular diameter)
                 w = np.where(hsml_orig > 2*s_rad)
@@ -1245,7 +1248,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 hsml = hsml.astype('float32')
 
                 # we will project in this space, periodic on the boundaries
-                pos = np.zeros( (pos.shape[0],2), dtype=pos.dtype )
+                pos = np.zeros( (s_rad.size,2), dtype=pos.dtype )
                 pos[:,0] = s_long + np.pi # [0,2pi]
                 pos[:,1] = s_lat + np.pi/2 # [0,pi]
 
@@ -1558,10 +1561,10 @@ def addBoxMarkers(p, conf, ax):
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
 
-        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.12 * 960.0/conf.rasterPx[0]) # upper right
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.04 * 960.0/conf.rasterPx[0])
+        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02) # upper right
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)
         ax.text( xt, yt, zStr, color='white', alpha=1.0, 
-                 size=fontsize, ha='left', va='center') # same size as legend text
+                 size=fontsize, ha='right', va='top') # same size as legend text
 
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
@@ -1659,7 +1662,7 @@ def addBoxMarkers(p, conf, ax):
         else:
             # both Mhalo and Mstar
             legend_labels.append( str1 )
-            legend_labels.append( str2 )
+            if np.isfinite(stellarMass): legend_labels.append( str2 )
 
     if 'labelCustom' in p and p['labelCustom']:
         for label in p['labelCustom']:
@@ -1789,6 +1792,13 @@ def setAxisColors(ax, color2):
         ax.spines[s].set_color(color2)
     for a in ['x','y']:
         ax.tick_params(axis=a, colors=color2)
+
+def setColorbarColors(cb, color2):
+    """ Factor out common colorbar color commands. """
+    cb.ax.yaxis.label.set_color(color2)
+    cb.outline.set_edgecolor(color2)
+    cb.ax.yaxis.set_tick_params(color=color2)
+    plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
 
 def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
                        rowHeight, colWidth, bottomNorm, leftNorm, cmap=None):
@@ -2009,8 +2019,6 @@ def renderMultiPanel(panels, conf):
         fig.tight_layout()
         if nRows == 1 and nCols == 3: plt.subplots_adjust(top=0.97,bottom=0.06) # fix degenerate case
 
-        fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
-
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         barAreaHeight = np.max([0.035,0.12 / nRows]) if conf.colorbars else 0.0
@@ -2143,6 +2151,5 @@ def renderMultiPanel(panels, conf):
                 addCustomColorbars(fig, ax, conf, vConfig, heightFac, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, 0.4, bottomNorm, 0.55)
 
-        fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
-
+    fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
     plt.close(fig)
