@@ -332,14 +332,16 @@ def _radialRestriction(sP, nSubsTot, rad):
     return radRestrictIn2D, radSqMin, radSqMax
 
 def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, 
-                           ptRestriction=None, weighting=None, scope='subfind', minStellarMass=None):
+                           ptRestrictions=None, weighting=None, scope='subfind', minStellarMass=None):
     """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
         kpc, or as a string specifying a particular model for a variable cut radius). 
         Restricted to subhalo particles only if scope=='subfind' (default), or FoF particles if scope=='fof'.
         If scope=='global', currently a full non-chunked snapshot load and brute-force distance 
         computations to all particles for each subhalo.
-        ptRestriction applies a further cut to which particles are included (None, 'sfrgt0', 'sfreq0').
+        ptRestrictions apply further cuts to which particles are included, as a dictionary, where each 
+        key is the particle field to apply the restriction to, and the value is a list of two entries, 
+        the first being the inequality to apply ('gt','lt','eq') and the second the numeric value to compare to.
         if minStellarMass is not None, then only process subhalos with mstar_30pkpc_log above this value.
     """
     assert op in ['sum','mean','max','ufunc']
@@ -348,15 +350,16 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     # determine ptRestriction
     if ptType == 'stars':
-        assert ptRestriction is None # otherwise we have a collision
-        ptRestriction = 'real_stars'
+        if ptRestrictions is None:
+            ptRestrictions = {}
+        ptRestrictions['GFM_StellarFormationTime'] = ['gt',0.0] # real stars
 
     # config
     ptLoadType = sP.ptNum(ptType)
 
     desc   = "Quantity [%s] enclosed within a radius of [%s] for [%s]." % (ptProperty,rad,ptType)
-    if ptRestriction is not None:
-        desc += " (restriction = %s). " % ptRestriction
+    if ptRestrictions is not None:
+        desc += " (restriction = %s). " % ','.join([r for r in ptRestrictions])
     if weighting is not None:
         desc += " (weighting = %s). " % weighting
     if scope == 'subfind': desc  +=" (only subhalo particles included). "
@@ -434,19 +437,21 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     if rad is not None:
         fieldsLoad.append('pos')
-    if ptRestriction == 'real_stars':
-        fieldsLoad.append('sftime')
-    if ptRestriction in ['sfrgt0','sfreq0']:
-        fieldsLoad.append('sfr')
+
+    if ptRestrictions is not None:
+        for restrictionField in ptRestrictions:
+            fieldsLoad.append(restrictionField)
 
     if ptProperty == 'Krot':
-        if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
+        fieldsLoad.append('pos')
         fieldsLoad.append('vel')
         fieldsLoad.append('mass')
     if ptProperty == 'radvel':
-        if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
-        if 'vel' not in fieldsLoad: fieldsLoad.append('vel')
+        fieldsLoad.append('pos')
+        fieldsLoad.append('vel')
         gc['subhalos']['SubhaloVel'] = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloVel'], sq=True)
+
+    fieldsLoad = list(set(fieldsLoad)) # make unique
 
     particles = {}
     if len(fieldsLoad):
@@ -550,12 +555,17 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             validMask &= (rr <= radSqMax[subhaloID])
             validMask &= (rr >= radSqMin[subhaloID])
 
-        if ptRestriction == 'real_stars':
-            validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
-        if ptRestriction == 'sfrgt0':
-            validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
-        if ptRestriction == 'sfreq0':
-            validMask &= (particles['StarFormationRate'][i0:i1] == 0.0)
+        # apply particle-level restrictions
+        if ptRestrictions is not None:
+            for restrictionField in ptRestrictions:
+                inequality, val = ptRestrictions[restrictionField]
+
+                if inequality == 'gt':
+                    validMask &= (particles[restrictionField][i0:i1] > val)
+                if inequality == 'lt':
+                    validMask &= (particles[restrictionField][i0:i1] <= val)
+                if inequality == 'eq':
+                    validMask &= (particles[restrictionField][i0:i1] == val)
 
         wValid = np.where(validMask)
 
@@ -1829,7 +1839,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
     return rr, attrs
 
 def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=None, 
-                        proj2D=None, ptRestriction=None, subhaloIDsTodo=None):
+                        proj2D=None, ptRestrictions=None, subhaloIDsTodo=None):
     """ Compute a radial profile (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type. If scope=='global', then all snapshot particles are used, 
         and we do the accumulation in a chunked snapshot load. Self/other halo terms are decided based 
@@ -1871,16 +1881,17 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     # determine ptRestriction
     if ptType == 'stars':
-        assert ptRestriction is None # otherwise we have a collision
-        ptRestriction = 'real_stars'
+        if ptRestrictions is None:
+            ptRestrictions = {}
+        ptRestrictions['GFM_StellarFormationTime'] = ['gt',0.0] # real stars
 
     # config
     ptLoadType = sP.ptNum(ptType)
 
     desc   = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] with [%d] bins." % \
       (ptProperty,ptType,radMin,radMax,radNumBins)
-    if ptRestriction is not None:
-        desc += " (restriction = %s)." % ptRestriction
+    if ptRestrictions is not None:
+        desc += " (restriction = %s)." % ','.join([r for r in ptRestrictions])
     if weighting is not None:
         desc += " (weighting = %s)." % weighting
     if proj2D is not None:
@@ -2017,15 +2028,16 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = ['pos']
 
-    if ptRestriction == 'real_stars':
-        fieldsLoad.append('sftime')
-    if ptRestriction in ['sfrgt0','sfreq0']:
-        fieldsLoad.append('sfr')
+    if ptRestrictions is not None:
+        for restrictionField in ptRestrictions:
+            fieldsLoad.append(restrictionField)
 
     if ptProperty == 'radvel':
-        if 'pos' not in fieldsLoad: fieldsLoad.append('pos')
-        if 'vel' not in fieldsLoad: fieldsLoad.append('vel')
+        fieldsLoad.append('pos')
+        fieldsLoad.append('vel')
         gc['SubhaloVel'] = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloVel'], sq=True)
+
+    fieldsLoad = list(set(fieldsLoad))
 
     # so long as scope is not 'global', load the full particle set we need for these subhalos now
     if scope not in ['global','global_fof','subfind_global']:
@@ -2072,7 +2084,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         # if approximating the particle distribution with pre-accumulated subhalo based values, load now
         if scope in ['subfind_global']:
             assert nChunks == 1 # no need for more
-            assert ptRestriction is None # cannot apply particle restriction to subhalos
+            assert ptRestrictions is None # cannot apply particle restriction to subhalos
             particles = {}
 
             if len(ptProperty.split(" ")) == 3:
@@ -2166,12 +2178,17 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             validMask &= (rr <= radMaxSqCode)
 
-            if ptRestriction == 'real_stars':
-                validMask &= (particles['GFM_StellarFormationTime'][i0:i1] >= 0.0)
-            if ptRestriction == 'sfrgt0':
-                validMask &= (particles['StarFormationRate'][i0:i1] > 0.0)
-            if ptRestriction == 'sfreq0':
-                validMask &= (particles['StarFormationRate'][i0:i1] == 0.0)
+            # apply particle-level restrictions
+            if ptRestrictions is not None:
+                for restrictionField in ptRestrictions:
+                    inequality, val = ptRestrictions[restrictionField]
+
+                    if inequality == 'gt':
+                        validMask &= (particles[restrictionField][i0:i1] > val)
+                    if inequality == 'lt':
+                        validMask &= (particles[restrictionField][i0:i1] <= val)
+                    if inequality == 'eq':
+                        validMask &= (particles[restrictionField][i0:i1] == val)
 
             wValid = np.where(validMask)
 
@@ -2259,6 +2276,10 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     return r, attrs
 
+# common particle-level restrictions
+sfrgt0 = {'StarFormationRate':['gt',0.0]}
+sfreq0 = {'StarFormationRate':['eq',0.0]}
+
 # this dictionary contains a mapping between all auxCatalogs and their generating functions, where the 
 # first sP,pSplit inputs are stripped out with a partial func and the remaining arguments are hardcoded
 fieldComputeFunctionMapping = \
@@ -2276,7 +2297,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_puchwein10_Stars': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='p10'),
    'Subhalo_Mass_SFingGas' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestriction='sfrgt0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestrictions=sfrgt0),
 
    'Subhalo_Mass_30pkpc_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=30.0),
@@ -2305,11 +2326,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_AllGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None),
    'Subhalo_Mass_SF0Gas_Oxygen' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad=None,ptRestriction='sfreq0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad=None,ptRestrictions=sfreq0),
    'Subhalo_Mass_SF0Gas_Metal' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestriction='sfreq0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions=sfreq0),
    'Subhalo_Mass_SF0Gas' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestriction='sfreq0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestrictions=sfreq0),
    'Subhalo_Mass_HaloGas_Oxygen' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloGas_Metal' : \
@@ -2339,9 +2360,16 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r200crit',scope='global',minStellarMass=9.0),
 
    'Subhalo_CoolingTime_HaloGas' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestriction='sfreq0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestrictions=sfreq0),
    'Subhalo_CoolingTime_OVI_HaloGas' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',weighting='O VI mass',rad='r015_1rvir_halo',ptRestriction='sfreq0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',weighting='O VI mass',rad='r015_1rvir_halo',ptRestrictions=sfreq0),
+
+   'Subhalo_StellarMassFormed_10myr_30pkpc': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.01]}),
+   'Subhalo_StellarMassFormed_50myr_30pkpc': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.05]}),
+   'Subhalo_StellarMassFormed_100myr_30pkpc': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.1]}),
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
@@ -2395,9 +2423,9 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
 
    'Subhalo_Bmag_SFingGas_massWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='mass',ptRestriction='sfrgt0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='mass',ptRestrictions=sfrgt0),
    'Subhalo_Bmag_SFingGas_volWt' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='volume',ptRestriction='sfrgt0'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad=None,weighting='volume',ptRestrictions=sfrgt0),
    'Subhalo_Bmag_2rhalfstars_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='2rhalfstars',weighting='mass'),
    'Subhalo_Bmag_2rhalfstars_volWt' : \
