@@ -15,15 +15,16 @@ from cosmo.load import groupCatSingle
 from plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
 from vis.halo import renderSingleHalo
 
-def visualize_halo(conf=1, quadrant=False):
+def visualize_halo(conf=1, quadrant=False, snap=None):
     """ Visualize single final halo of h2_L11_12_FP (boosted, sims.zooms2) at z=2.25. """
     panels = []
 
     run        = 'zooms2_josh' # 'zooms2'
     res        = 11
-    redshift   = 2.25
     hInd       = 2
-    variant    = 'FP' # MO, PO, FP, None
+    variant    = 'FP3' # MO, PO, FP, FP1/FP2/FP3 None
+
+    redshift = 2.25 if snap is None else None
 
     rVirFracs  = [1.0]
     method     = 'sphMap_global'
@@ -40,7 +41,8 @@ def visualize_halo(conf=1, quadrant=False):
     sizeType   = 'pkpc'
     axesUnits  = 'kpc'
 
-    sP = simParams(res=res, run=run, redshift=redshift, variant=variant, hInd=hInd)
+    sP = simParams(res=res, run=run, redshift=redshift, snap=snap, variant=variant, hInd=hInd)
+    if redshift is None: redshift = sP.redshift
 
     if quadrant:
         # zoom in to upper right quadrant
@@ -80,7 +82,7 @@ def visualize_halo(conf=1, quadrant=False):
         plotStyle    = 'open'
         rasterPx     = int(nPixels[0]*1.0)
         colorbars    = True
-        saveFilename = './%s_%s_%s_%d_z%.2f_%d%s.pdf' % (sP.simName,panels[0]['partType'],panels[0]['partField'],res,redshift,size,sizeType)
+        saveFilename = './%s_%s_%s_%d_%d_z%.2f_%d%s.png' % (sP.simName,panels[0]['partType'],panels[0]['partField'],res,sP.snap,redshift,size,sizeType)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 

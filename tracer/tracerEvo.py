@@ -48,17 +48,16 @@ def guinevereData():
 
     # config
     parPartTypes = ['gas','stars']
-    toRedshift   = 0.5
+    toRedshift   = 2.0
     trFields     = ['tracer_windcounter'] 
     parFields    = ['pos','vel','temp','sfr']
     outPath      = sP.derivPath
 
-    # subhalo list
-    #subhaloIDs = np.loadtxt(sP.derivPath + 'guinevere.list.subs.txt', dtype='int32') # old (2016)
+    # subhalo list (TNG, new Lagrangian matching 2018)
     sPtng = simParams(res=1820, run='tng', redshift=0.0)
-    subhaloIDs = np.genfromtxt(sPtng.derivPath+'new_mw_sample_fgas.txt',comments='#',delimiter=',',dtype='int32') # TNG (2017)
+    subhaloIDs = np.genfromtxt(sPtng.derivPath+'new_mw_sample_fgas.txt',comments='#',delimiter=',',dtype='int32')
     subhaloIDs = list(set(subhaloIDs[:,1]).union(set(subhaloIDs[:,2])))
-    subhaloIDs.remove(-1) # all unique successful matches in Illustris-1
+    subhaloIDs.remove(-1) # all unique successful matches, both methods, in Illustris-1
     subhaloIDs = np.array(subhaloIDs)
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)

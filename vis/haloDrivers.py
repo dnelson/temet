@@ -72,7 +72,7 @@ def oneHaloSingleField(conf=0, haloID=None):
         size = 2.5
         sizeType = 'rVirial'
     if 1:
-        size = 5000.0
+        size = 6000.0
         sizeType = 'pkpc'
 
     class plotConfig:

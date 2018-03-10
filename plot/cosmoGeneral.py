@@ -21,7 +21,7 @@ from util.helper import running_median, running_median_sub, logZeroNaN, loadColo
 from cosmo.util import cenSatSubhaloIndices
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
-from vis.common import setAxisColors
+from vis.common import setAxisColors, setColorbarColors
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
@@ -364,10 +364,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     # colorbar
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
     cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel(clabel, color=color2)
-    cb.outline.set_edgecolor(color2)
-    cb.ax.yaxis.set_tick_params(color=color2)
-    plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
+    cb.ax.set_ylabel(clabel)
+    setColorbarColors(cb, color2)
 
     # finish plot and save
     finishFlag = False

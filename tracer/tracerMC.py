@@ -150,6 +150,8 @@ def match3(ar1, ar2, firstSorted=False):
         ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by 
         bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= 
         O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1. """
+    assert ar1.ndim == ar2.ndim == 1
+    
     if debug:
         start = time.time()
         assert np.unique(ar1).size == len(ar1)

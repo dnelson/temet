@@ -18,6 +18,49 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def new_mw_fgas_sample():
+    """ Sample of Guinevere. """
+    from plot.quantities import simSubhaloQuantity
+    from cosmo.util import crossMatchSubhalosBetweenRuns
+
+    sP_illustris = simParams(res=1820, run='illustris', redshift=0.0)
+    sP_tng = simParams(res=1820, run='tng', redshift=0.0)
+
+    mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_200']) # [msun]
+    mstar = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mstar_30pkpc']) # [msun]
+    #fgas  = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['fgas_2rhalf']) # m_gas/m_b within 2rhalfstars
+    fgas,_,_,_ = simSubhaloQuantity(sP_tng, 'fgas2')
+    is_central = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['central_flag'])
+
+    inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) & (is_central == 1))[0]
+
+    inds_ill_pos = crossMatchSubhalosBetweenRuns(sP_tng, sP_illustris, inds_tng, method='Positional')
+    inds_ill_la  = crossMatchSubhalosBetweenRuns(sP_tng, sP_illustris, inds_tng, method='Lagrange')
+
+    header = 'subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)\n'
+    with open('new_mw_sample_fgas2.txt','w') as f:
+        f.write(header)
+        for i in range(inds_tng.size):
+            f.write('%d, %d, %d\n' % (inds_tng[i], inds_ill_la[i], inds_ill_pos[i]))
+
+    mhalo_ill = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['mhalo_200'])
+    mstar_ill = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['mstar_30pkpc'])
+
+    for i in range(inds_tng.size):
+        if inds_tng[i] == -1 or inds_ill_la[i] == -1:
+            print(i, 'no match')
+        else:
+            ratio_mhalo = mhalo[inds_tng[i]] / mhalo_ill[inds_ill_la[i]]
+            ratio_mstar = mstar[inds_tng[i]] / mstar_ill[inds_ill_la[i]]
+            mhalo1 = np.log10( mhalo[inds_tng[i]] )
+            mhalo2 = np.log10( mhalo_ill[inds_ill_la[i]] )
+            mstar1 = np.log10( mstar[inds_tng[i]] )
+            mstar2 = np.log10( mstar_ill[inds_ill_la[i]] )
+
+            print(i,mhalo1,mhalo2,mstar1,mstar2,ratio_mhalo,ratio_mstar)
+
+    import pdb; pdb.set_trace()
+
 def bh_details_check():
     """ Check gaps in TNG100-1 blackhole_details.hdf5. """
     with file('out.txt','r') as f:

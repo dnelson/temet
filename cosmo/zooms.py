@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 from collections import OrderedDict
 from scipy.spatial import ConvexHull
 from scipy.stats import binned_statistic
@@ -17,6 +18,7 @@ from cosmo.util import periodicDists
 from cosmo.perf import loadCpuTxt
 from util.simParams import simParams
 from util.helper import logZeroNaN
+from vis.halo import renderSingleHalo
 
 def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 
@@ -65,7 +67,7 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
     # calculate radial profiles
     rlim  = [0.0, np.max(rVirFacs)*r200]
-    nbins = 50
+    nbins = 30
 
     r_count_hr, rr = np.histogram(dists_hr, bins=nbins, range=rlim)
     r_count_lr, _  = np.histogram(dists_lr, bins=nbins, range=rlim)
@@ -82,7 +84,7 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
 def check_contamination():
     """ Check level of low-resolution contamination (DM particles) in zoom run. """
-    hInd = 50
+    hInd = 8
     zoomRes = 13
     variant = 'sf2'
 
@@ -113,6 +115,7 @@ def check_contamination():
 
     ax.set_xlabel('Distance [ckpc/h]')
     ax.set_ylabel('Low-res DM Contamination Fraction [log]')
+    ax.xaxis.set_minor_locator(MultipleLocator(500))
     ax.set_xlim([0.0, rr.max()])
     ax.set_ylim(ylim)
 
@@ -126,35 +129,37 @@ def check_contamination():
     ax2 = ax.twiny()
     ax2.set_xlabel('Distance [$R_{\\rm 200,crit}$]')
     ax2.set_xlim([0.0, rr.max()/halo_zoom['Group_R_Crit200']])
+    ax2.xaxis.set_minor_locator(MultipleLocator(1))
 
     ax.legend(loc='lower right')
     fig.tight_layout()    
     fig.savefig('contamination_profile_%s_%d.pdf' % (sPz.simName,sPz.snap))
     plt.close(fig)
 
-    # convex hull, time evo
-    for snap in range(sPz.snap,0,-1):
-        sPz.setSnap(snap)
-        x = snapshotSubset(sPz, 'dm', 'pos')
-        hull = ConvexHull(x)
-        print('[%3d] z = %5.2f high-res volume frac = %.3f%%' % (snap,sPz.redshift,hull.volume/sP.boxSize**3*100))
+    # time evo of convex hull volume
+    if 0:
+        for snap in range(sPz.snap,0,-1):
+            sPz.setSnap(snap)
+            x = snapshotSubset(sPz, 'dm', 'pos')
+            hull = ConvexHull(x)
+            print('[%3d] z = %5.2f high-res volume frac = %.3f%%' % (snap,sPz.redshift,hull.volume/sP.boxSize**3*100))
 
-        # plot points scatter
-        continue # disable
-        fig = plt.figure(figsize=(16,16))
-        ax = fig.add_subplot(111)
+            # plot points scatter
+            continue # disable
+            fig = plt.figure(figsize=(16,16))
+            ax = fig.add_subplot(111)
 
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_xlim([0,sP.boxSize])
-        ax.set_ylim([0,sP.boxSize])
-        ax.plot(x[:,0], x[:,1], '.')
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_xlim([0,sP.boxSize])
+            ax.set_ylim([0,sP.boxSize])
+            ax.plot(x[:,0], x[:,1], '.')
 
-        fig.tight_layout()    
-        fig.savefig('check_zoom-%d.png' % snap)
-        plt.close(fig)
+            fig.tight_layout()    
+            fig.savefig('check_zoom-%d.png' % snap)
+            plt.close(fig)
 
-def sizefac_comparison():
+def sizefacComparison():
     """ Compare SizeFac 2,3,4 runs (contamination and CPU times) in the testing set. """
 
     # config
@@ -252,3 +257,46 @@ def sizefac_comparison():
     fig.tight_layout()    
     fig.savefig('sizefac_comparison.pdf')
     plt.close(fig)
+
+def parentBoxVisualComparison(haloID, variant='sf2', conf=0):
+    """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations. """
+    sPz = simParams(run='tng_zoom_dm', res=13, hInd=haloID, redshift=0.0, variant=variant)
+
+    # render config
+    rVirFracs  = [0.5, 1.0] # None
+    method     = 'sphMap_global' # sphMap
+    nPixels    = [1920,1920]
+    axes       = [0,1]
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    labelHalo  = True
+    relCoords  = True
+    size       = 6000.0
+    sizeType   = 'pkpc'
+
+    # setup panels
+    if conf == 0:
+        # dm column density
+        p = {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 9.5]}
+    if conf == 2:
+        # gas column density
+        p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]}
+
+    panel_zoom = p.copy()
+    panel_parent = p.copy()
+
+    parSubID = groupCatSingle(sPz.sP_parent, haloID=haloID)['GroupFirstSub']
+
+    panel_zoom.update( {'run':sPz.run, 'res':sPz.res, 'redshift':sPz.redshift, 'variant':sPz.variant, 'hInd':haloID})
+    panel_parent.update( {'run':sPz.sP_parent.run, 'res':sPz.sP_parent.res, 'redshift':sPz.sP_parent.redshift, 'hInd':parSubID})
+
+    panels = [panel_zoom, panel_parent]
+
+    class plotConfig:
+        plotStyle    = 'open'
+        rasterPx     = nPixels[0]
+        colorbars    = True
+        saveFilename = './zoomParentBoxVisualComparison_%s_z%.1f_%s.pdf' % (sPz.simName,sPz.redshift,p['partType'])
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
