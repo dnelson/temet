@@ -1,5 +1,5 @@
 """
-projects/oxygen.py
+projects/outflows.py
   Plots: Outflows paper (TNG50 presentation).
   in prep.
 """
@@ -8,25 +8,30 @@ from builtins import *
 
 import numpy as np
 import h5py
+import time
 import hashlib
+
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, colorConverter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.backends.backend_pdf import PdfPages
+
+import multiprocessing as mp
+from functools import partial
 from scipy.stats import binned_statistic, binned_statistic_2d
 from os.path import isfile, isdir
 from os import mkdir
 
 from util import simParams
 from plot.config import *
-from util.helper import loadColorTable, running_median, logZeroNaN, iterable, closest
+from util.helper import loadColorTable, running_median, logZeroNaN, iterable, closest, getWhiteBlackColors
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
-from cosmo.mergertree import loadMPBs
+from cosmo.mergertree import loadMPBs, mpbPositionComplete
 from plot.general import plotHistogram1D, plotPhaseSpace2D
 from plot.quantities import simSubhaloQuantity
 from tracer.tracerMC import match3
-from vis.common import gridBox
+from vis.common import gridBox, setAxisColors, setColorbarColors
 
 def halo_selection(sP, minM200=11.5):
     """ Make a quick halo selection above some mass limit and sorted based on energy 
@@ -165,15 +170,52 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
 
     data = {'snap':snap}
 
+    if not sP.isSubbox:
+        # temporary file already exists, then skip
+        tempSaveName = sP.derivPath + 'haloevo/evo_temp_%d.dat' % snap
+        if isfile(tempSaveName):
+            print('Temporary file [%s] already exists, skipping...' % tempSaveName)
+            return data
+
+    maxAperture_sq = np.max([np.max(limits['rad']), np.max(apertures['histo2d']), np.max(apertures['histo1d'])])**2
+
     # particle data load
     for ptType in scalarFields.keys():
         data[ptType] = {}
-        fieldsToLoad = list(set( ['Coordinates'] + scalarFields[ptType] + loadFields[ptType] )) # unique
 
-        x = snapshotSubset(sP, ptType, fieldsToLoad)
-
+        # first load global coordinates
+        x = snapshotSubset(sP, ptType, 'Coordinates', sq=False, float32=True)
         if x['count'] == 0:
             continue
+
+        # create load mask
+        mask = np.zeros( x['count'], dtype='bool' )
+        for i, haloInd in enumerate(haloInds):
+            if snap < minSnap[i] or snap > maxSnap[i]:
+                continue
+
+            # localize to this subhalo
+            subPos = centerPos[i,snap,:]
+            dists_sq = sP.periodicDistsSq(subPos, x['Coordinates'])
+
+            w = np.where(dists_sq <= maxAperture_sq)
+            mask[w] = True
+
+        load_inds = np.where(mask)[0]
+        mask = None
+
+        if len(load_inds) == 0:
+            continue
+
+        x['Coordinates'] = x['Coordinates'][load_inds]
+
+        # load remaining datasets, restricting each to those particles within relevant distances
+        fieldsToLoad = list(set( scalarFields[ptType] + loadFields[ptType] )) # unique
+
+        for field in fieldsToLoad:
+            x[field] = snapshotSubset(sP, ptType, field, inds=load_inds)
+        
+        load_inds = None
 
         # subhalo loop
         for i, haloInd in enumerate(haloInds):
@@ -184,43 +226,58 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
                 continue
 
             # localize to this subhalo
-            dists_sq = (x['Coordinates'][:,0]-subPos[0])**2 + (x['Coordinates'][:,1]-subPos[1])**2 + (x['Coordinates'][:,2]-subPos[2])**2
+            dists_sq = sP.periodicDistsSq(subPos, x['Coordinates'])
+            w_max = np.where( dists_sq <= maxAperture_sq )
+
+            if len(w_max[0]) == 0:
+                continue
+
+            x_local = {}
+            for key in x:
+                if key == 'count': continue
+                x_local[key] = x[key][w_max]
+
+            x_local['dists_sq'] = dists_sq[w_max]
 
             # scalar fields: select relevant particles and save
-            w = np.where(dists_sq <= apertures['scalar']**2)
+            for key in scalarFields[ptType]:
+                data_loc[key] = np.zeros( len(apertures['scalar']), dtype='float32' )
 
-            if len(w[0]) > 0:
-                for key in scalarFields[ptType]:
-                    if ptType == 'bhs':
-                        data_loc[key] = x[key][w].max() # MAX
-                    if ptType == 'gas':
-                        data_loc[key] = x[key][w].sum() # TOTAL (unused)
+            for j, aperture in enumerate(apertures['scalar']):
+                w = np.where(x_local['dists_sq'] <= aperture**2)
+
+                if len(w[0]) > 0:
+                    for key in scalarFields[ptType]:
+                        if ptType == 'bhs':
+                            data_loc[key][j] = x_local[key][w].max() # MAX
+                        if ptType in ['gas','stars']:
+                            data_loc[key][j] = x_local[key][w].sum() # TOTAL (sfr, masses)
 
             if len(histoNames1D[ptType]) + len(histoNames2D[ptType]) == 0:
+                data[ptType][haloInd] = data_loc
                 continue
 
             # common computations
             if ptType == 'gas':
-                # first compute subVel using gas
-                w = np.where( (dists_sq <= apertures['sfgas']**2) & (x['StarFormationRate'] > 0.0) )
-                subVel = np.mean( x['Velocities'][w,:], axis=1 )
-                # todo: may need to smooth vel in time?
-                # todo: alternatively, use MBID pos/vel evolution
+                # first compute an approximate subVel using gas
+                w = np.where( (x_local['dists_sq'] <= apertures['sfgas']**2) & (x_local['StarFormationRate'] > 0.0) )
+                subVel = np.mean( x_local['vel'][w,:], axis=1 )
+                # todo: may need to smooth vel in time? alternatively, use MBID pos/vel evolution
                 # or, we have the Potential saved in subboxes, could use particle with min(Potential) inside rad
 
-            rad = np.sqrt(dists_sq) # i.e. 'rad', code units, [ckpc/h]
-            radlog = np.log10(rad)
-            vrad = sP.units.particleRadialVelInKmS(x['Coordinates'], x['Velocities'], subPos, subVel)
+            # calculate values only within maxAperture
+            rad = np.sqrt(x_local['dists_sq']) # i.e. 'rad', code units, [ckpc/h]
+            vrad = sP.units.particleRadialVelInKmS(x_local['Coordinates'], x_local['vel'], subPos, subVel)
 
-            vrel = sP.units.particleRelativeVelInKmS(x['Velocities'], subVel)
+            vrel = sP.units.particleRelativeVelInKmS(x_local['vel'], subVel)
             vrel = np.sqrt( vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2 )
 
-            vals = {'rad':rad, 'radlog':radlog, 'vrad':vrad, 'vrel':vrel}
+            vals = {'rad':rad, 'radlog':np.log10(rad), 'vrad':vrad, 'vrel':vrel}
 
             if ptType == 'gas':
-                vals['numdens'] = np.log10( x['numdens'] )
-                vals['temp'] = np.log10( x['temp_linear'] )
-                vals['templinear'] = x['temp_linear']
+                vals['numdens'] = np.log10( x_local['numdens'] )
+                vals['temp'] = np.log10( x_local['temp_linear'] )
+                vals['templinear'] = x_local['temp_linear']
 
             # 2D histograms: compute and save
             for histoName in histoNames2D[ptType]:
@@ -234,7 +291,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
 
                 if color == 'massfrac':
                     # mass distribution in this 2D plane
-                    weight = x['Masses']
+                    weight = x_local['mass']
                     zz, _, _ = np.histogram2d(xvals, yvals, bins=[histoNbins, histoNbins], range=[xlim,ylim], normed=True, weights=weight)
                 else:
                     # each pixel colored according to its mean value of a third quantity
@@ -257,7 +314,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
 
                 # loop over apertures (always code units)
                 for j, aperture in enumerate(apertures['histo1d']):
-                    w = np.where(dists_sq <= aperture**2)
+                    w = np.where(x_local['dists_sq'] <= aperture**2)
 
                     if yaxis == 'count':
                         # 1d histogram of a quantity
@@ -271,23 +328,26 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
 
             data[ptType][haloInd] = data_loc # add dict for this subhalo to the byPartType dict, with haloInd as key
 
+    # fullbox? save dump now so we can restart
+    if not sP.isSubbox:
+        import pickle
+        f = open(tempSaveName,'wb')
+        pickle.dump(data,f)
+        f.close()
+        print('Wrote temp file %d.' % snap)
+
     return data
 
-def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, largeLimits=False):
+def haloTimeEvoData(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, largeLimits=False):
     """ For one or more halos (defined by their evolving centerPos locations), iterate over all subbox/normal snapshots and 
     record a number of properties for each halo at each timestep. minSnap/maxSnap define the range over which to consider 
     each halo. sP can be a fullbox or subbox, which sets the data origin. One save file is made per halo. """
-    import multiprocessing as mp
-    from functools import partial
-    import time
 
     # config
-    scalarFields = {'gas'  :['StarFormationRate'], 
-                    'stars':[],
-                    'bhs'  :['BH_CumEgyInjection_QM','BH_CumEgyInjection_RM','BH_Mass']}
-    if not np.array_equal(haloInds,[296]): # just legacy
-        scalarFields['bhs'] += ['BH_Mdot', 'BH_MdotEddington', 'BH_MdotBondi', 'BH_Progs']
-
+    scalarFields = {'gas'  :['StarFormationRate','mass'], 
+                    'stars':['mass'],
+                    'bhs'  :['BH_CumEgyInjection_QM','BH_CumEgyInjection_RM','BH_Mass',
+                             'BH_Mdot', 'BH_MdotEddington', 'BH_MdotBondi', 'BH_Progs']}
     histoNames1D = {'gas'  :['rad_numdens','rad_temp','rad_vrad','rad_vrel','temp_vrad',
                              'radlog_numdens','radlog_temp','radlog_vrad','radlog_vrel',
                              'vrad_count','vrel_count','temp_count'],
@@ -300,13 +360,14 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
                     'bhs'  :[]}
     loadFields =   {'gas'  :['mass','vel','temp_linear','numdens'],
                     'stars':['mass','vel'],
-                    'bhs'  :[]} # anything needed to achieve histograms
+                    'bhs'  :[]} # everything needed to achieve histograms
 
     histoNbins = 300
 
-    apertures = {'scalar'  : 30.0 , # code units, within which scalar quantities are accumulated
+    apertures = {'scalar'  : [10.0,30.0,100.0] , # code units, within which scalar quantities are accumulated
                  'sfgas'   : 20.0,  # code units, select SFR>0 gas within this aperture to calculate subVel
-                 'histo1d' : [10,50,100,1000]} # code units, for1D histograms/relations
+                 'histo1d' : [10,50,100,1000], # code units, for 1D histograms/relations
+                 'histo2d' : 1000.0} # code units, for 2D histograms where x is not rad/radlog (i.e. phase diagrams)
 
     limits = {'rad'     : [0.0, 800.0],
               'radlog'  : [0.0, 3.0],
@@ -318,8 +379,8 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
     if largeLimits:
         # e.g. looking at M_halo > 12 with the action of the low-state BH winds, expand limits
         limits['rad'] = [0, 1200]
-        limits['vrad'] = [-1000, 2000]
-        limits['vrel'] = [0, 3000]
+        limits['vrad'] = [-1000, 2500]
+        limits['vrel'] = [0, 3500]
 
     # existence check, immediate load and return if so
     sbStr = '_'+sP.variant if 'subbox' in sP.variant else ''
@@ -355,8 +416,7 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
                    histoNames1D=histoNames1D, histoNames2D=histoNames2D, apertures=apertures, 
                    limits=limits, histoNbins=histoNbins)
 
-    #snaps = range( np.min(minSnap),np.max(maxSnap)+1 ) #[2687]
-    snaps = range( 1,np.max(maxSnap)+1 ) #[2687]
+    snaps = range( np.min(minSnap),np.max(maxSnap)+1 ) #[2687]
 
     start_time = time.time()
 
@@ -379,8 +439,7 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
         for ptType in scalarFields.keys():
             data[ptType] = {}
             for field in scalarFields[ptType]:
-                data[ptType][field] = np.zeros( numSnaps , dtype='float32' )
-
+                data[ptType][field] = np.zeros( (numSnaps,len(apertures['scalar'])) , dtype='float32' )
             for name in histoNames2D[ptType]:
                 data[ptType]['histo2d_'+name] = \
                   np.zeros( (numSnaps,histoNbins,histoNbins), dtype='float32' )
@@ -405,7 +464,7 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
 
                 for field in scalarFields[ptType]:
                     if field not in result[ptType][haloInd]: continue
-                    data[ptType][field][snap] = result[ptType][haloInd][field]
+                    data[ptType][field][snap,:] = result[ptType][haloInd][field]
 
                 for name in histoNames2D[ptType]:
                     if name not in result[ptType][haloInd]: continue
@@ -414,6 +473,16 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
                 for name in histoNames1D[ptType]:
                     if name not in result[ptType][haloInd]: continue
                     data[ptType]['histo1d_'+name][snap,:,:] = result[ptType][haloInd][name]
+
+        # selective update
+        if 0:
+            assert 0 # careful, one-off runs
+            saveFilename = savePath % (haloIndsSnap,haloInd,sbStr,hashStr)
+            with h5py.File(saveFilename) as f:
+                for dset in data['bhs']:
+                    f['bhs'][dset][:] = data['bhs'][dset]
+            print('Updated [%s].' % saveFilename)
+            continue
 
         # save
         saveFilename = savePath % (haloIndsSnap,haloInd,sbStr,hashStr)
@@ -426,7 +495,7 @@ def save_haloevo_data(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, l
 
     return data
 
-def save_haloevo_data_subbox(sP, sbNum, selInds, minM200=11.5):
+def haloTimeEvoDataSubbox(sP, sbNum, selInds, minM200=11.5):
     """ For one or more halos, iterate over all subbox snapshots and record a number of 
     properties for those halo at each subbox snap. Halos are specified by selInds, which 
     index the result of selection_subbox_overlap() which intersects the SubboxSubhaloList 
@@ -448,14 +517,12 @@ def save_haloevo_data_subbox(sP, sbNum, selInds, minM200=11.5):
 
     largeLimits = False if minM200 == 11.5 else True
 
-    return save_haloevo_data(sP_sub, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
+    return haloTimeEvoData(sP_sub, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
 
-def save_haloevo_data_fullbox(sP, haloInds):
+def haloTimeEvoDataFullbox(sP, haloInds):
     """ For one or more halos, iterate over all fullbox snapshots and record a number of 
     properties for those halo at each snasphot. Use SubLink MPB for positioning, extrapolating 
     back to snapshot zero. """
-    from cosmo.mergertree import mpbPositionComplete
-
     posSet  = []
     minSnap = []
     maxSnap = []
@@ -463,7 +530,7 @@ def save_haloevo_data_fullbox(sP, haloInds):
     # acquire complete positional tracks at all snapshots
     for haloInd in haloInds:
         halo = groupCatSingle(sP, haloID=haloInd)
-        snaps, pos = mpbPositionComplete(sP, halo['GroupFirstSub'])
+        snaps, _, pos = mpbPositionComplete(sP, halo['GroupFirstSub'])
 
         posSet.append(pos)
         minSnap.append(0)
@@ -478,9 +545,9 @@ def save_haloevo_data_fullbox(sP, haloInds):
     # compute and save, or return, time evolution data
     largeLimits = True if sP.units.codeMassToLogMsun(halo['Group_M_Crit200']) > 12.1 else False
 
-    return save_haloevo_data(sP, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
+    return haloTimeEvoData(sP, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
 
-def _render_single_subbox_image(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos):
+def _renderSingleImage(snap, sP, subhaloPos):
     """ Multipricessing pool target. """
     # constant config
     method     = 'sphMap'
@@ -491,34 +558,29 @@ def _render_single_subbox_image(snap, sP_sub, minSBsnap, maxSBsnap, subhaloPos):
     rotCenter  = None
     projType   = 'ortho'
     projParams = {}
-    boxSize    = 2000.0 # code units
+    boxSizes   = [20.0,200.0,2000.0] # code units
+    partType   = 'gas'
+    partField  = 'coldens_msunkpc2'
 
-    if snap < minSBsnap or snap > maxSBsnap:
-        return
-
-    sP_sub.setSnap(snap)
+    # snapshot parallel for subboxes, so set snap now, while for fullboxes we are looping this with a pre-caching
+    if sP.snap != snap:
+        sP.setSnap(snap)
 
     # configure render at this snapshot
     subPos = subhaloPos[snap,:]
     boxCenter = subPos[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
-    boxSizeImg = boxSize * np.array([1.0, 1.0, 1.0]) # same width, height, and depth
 
-    # call gridBox
-    partType = 'gas'
-    partField = 'coldens_msunkpc2'
-    gridBox(sP_sub, method, partType, partField, nPixels, axes, projType, projParams,
-        boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter)
+    # loop over more than one boxsize if desired
+    for boxSize in boxSizes:
+        boxSizeImg = boxSize * np.array([1.0, 1.0, 1.0]) # same width, height, and depth
 
-def prerender_subbox_images(sP, sbNum, selInd, minM200=11.5):
-    """ Testing subbox. """
-    import multiprocessing as mp
-    from functools import partial
+        # call gridBox
+        gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams,
+            boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter)
 
-    assert minM200 == 11.5
-
-    # load
+def preRenderSubboxImages(sP, sbNum, selInd, minM200=11.5):
+    """ Pre-render a number of images for selInd in sP(sbNum), through all snapshots. """
     sel = halo_selection(sP, minM200=minM200)
-
     _, _, minSBsnap, maxSBsnap, subhaloPos, _, _ = selection_subbox_overlap(sP, sbNum, sel)
 
     sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
@@ -529,8 +591,7 @@ def prerender_subbox_images(sP, sbNum, selInd, minM200=11.5):
     # thread parallelize by snapshot
     nThreads = 4
     pool = mp.Pool(processes=nThreads)
-    func = partial(_render_single_subbox_image, sP_sub=sP_sub, minSBsnap=minSBsnap[selInd], 
-                   maxSBsnap=maxSBsnap[selInd], subhaloPos=subhaloPos[selInd,:,:])
+    func = partial(_renderSingleImage, sP=sP_sub, subhaloPos=subhaloPos[selInd,:,:])
 
     if nThreads > 1:
         pool.map(func, snaps)
@@ -538,12 +599,40 @@ def prerender_subbox_images(sP, sbNum, selInd, minM200=11.5):
         for snap in snaps:
             func(snap)
 
-def vis_subbox_data(sP, sbNum, selInd, extended=False):
+def preRenderFullboxImages(sP, haloInds):
+    """ Pre-render a number of images for haloInds at sP, through all snapshots. """
+    posSets = []
+    partType = 'gas'
+
+    for haloInd in haloInds:
+        halo = groupCatSingle(sP, haloID=haloInd)
+        snaps, snapTimes, haloPos = mpbPositionComplete(sP, halo['GroupFirstSub'])
+        posSets.append(haloPos)
+
+    # snapshot loop
+    for snap in snaps:
+        sP.setSnap(snap)
+        if snap < 1: # temporary
+            continue
+
+        # global pre-cache of selected fields into memory
+        for field in ['Coordinates','Masses']:
+            cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field)
+            print('[%s] Caching [%s] now...' % (snap,field))
+            sP.data[cache_key] = snapshotSubset(sP, partType, field)
+        print('All caching done.')
+
+        # render in serial loop, using pre-cached particle level data
+        for pos, ind in zip(posSets,haloInds):
+            _renderSingleImage(snap, sP, pos)
+
+def visHaloTimeEvo(sP, data, haloPos, snapTimes, extended=False, pStyle='white'):
     """ Visualize subbox data. 3x2 panel image sequence, or 5x3 if extended == True. """
 
     def _histo2d_helper(gs,i,pt,xaxis,yaxis,color,clim):
         """ Add one panel of a 2D phase diagram. """
-        ax = plt.subplot(gs[i])
+        ax = plt.subplot(gs[i], facecolor=color1)
+        setAxisColors(ax, color2)
 
         xlim   = data['limits'][xaxis]
         ylim   = data['limits'][yaxis]
@@ -574,6 +663,7 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
                 if np.isfinite(colMax): zz[:,i] /= colMax
             zz = logZeroNaN(zz)
 
+        # render
         norm = Normalize(vmin=clim[0], vmax=clim[1], clip=False)
         im = plt.imshow(zz, extent=[xlim[0],xlim[1],ylim[0],ylim[1]], 
                    cmap=cmap, norm=norm, origin='lower', interpolation='nearest', aspect='auto')
@@ -582,6 +672,7 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
         cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.15)
         cb = plt.colorbar(im, cax=cbar_ax)
         cb.ax.set_ylabel(clabel)
+        setColorbarColors(cb, color2)
 
         # legend (lower right)
         y0 = 0.04
@@ -594,7 +685,9 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
             yd = -yd
 
         legend_labels = ['snap = %6d' % snap, 'zred  = %6.3f' % redshifts[snap], 't/gyr = %6.3f' % tage[snap]]
-        textOpts = {'fontsize':fontsizeTime, 'horizontalalignment':'center', 'verticalalignment':'center'}
+        textOpts = {'fontsize':fontsizeTime, 'color':color2, 
+                    'horizontalalignment':'center', 'verticalalignment':'center'}
+
         for j, label in enumerate(legend_labels):
             ax.text(x0, y0+yd*j, label, transform=ax.transAxes, **textOpts)
 
@@ -602,7 +695,8 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
 
     def _histo1d_helper(gs,i,pt,xaxis,yaxis,ylim):
         """ Add one panel of a 1D profile, all the available apertures by default. """
-        ax = plt.subplot(gs[i])
+        ax = plt.subplot(gs[i], facecolor=color1)
+        setAxisColors(ax, color2)
         
         key    = 'histo1d_%s_%s' % (xaxis,yaxis)
         xlim   = data['limits'][xaxis]
@@ -643,12 +737,15 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
                     ax.plot(xx, yy, '-', lw=lw, alpha=0.3, label='z = %d' % z)
 
         # legend
-        ax.legend(loc='upper right', prop={'size':fontsizeLegend})
+        l = ax.legend(loc='upper right', prop={'size':fontsizeLegend})
+        if l is not None:
+            for text in l.get_texts(): text.set_color(color2)
         return ax
 
     def _image_helper(gs, i, pt, field, axes, boxSize):
         """ Add one panel of a gridBox() rendered image projection. """
-        ax = plt.subplot(gs[i])
+        ax = plt.subplot(gs[i], facecolor=color1)
+        setAxisColors(ax, color2)
 
         # render config
         method     = 'sphMap'
@@ -659,18 +756,19 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
         projType   = 'ortho'
         projParams = {}
         boxSizeImg = np.array([boxSize,boxSize,boxSize])
-        boxCenter  = subhaloPos[selInd,snap,:]
+        boxCenter  = haloPos[snap,:]
 
         # load/render
-        sP_sub = simParams(res=sP.res, run=sP.run, snap=snap, variant='subbox%d' % sbNum)
+        sPr = simParams(res=sP.res, run=sP.run, variant=sP.variant, snap=snap)
 
         boxCenter  = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
-        grid, config = gridBox(sP_sub, method, pt, field, nPixels, axes, projType, projParams, 
+        grid, config = gridBox(sPr, method, pt, field, nPixels, axes, projType, projParams, 
                                boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter)
 
         # plot config
         valMinMax = [5.5, 8.0] # todo generalize
-        if boxSize >= 500.0: valMinMax[0] -= 1.0
+        if boxSize >= 500.0: valMinMax = [4.5, 8.0]
+        if boxSize <= 50.0: valMinMax = [5.2,8.2]
         cmap = loadColorTable(config['ctName'], valMinMax=valMinMax)
 
         extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0], 
@@ -689,76 +787,71 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
         cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.15)
         cb = plt.colorbar(cax=cax)
         cb.ax.set_ylabel(config['label'])
+        setColorbarColors(cb, color2)
 
-    def _lineplot_helper(gs,i):
+    def _lineplot_helper(gs,i,conf=1):
         """ Add one panel of a composite line plot of various component masses and BH energies. """
-        ax = plt.subplot(gs[i])
+        ax = plt.subplot(gs[i], facecolor=color1)
+        setAxisColors(ax, color2)
         ax.set_xlabel('Redshift')
-        ax.set_ylabel('Masses [log M$_{\\rm sun}$]')
 
-        # blackhole mass
-        yy = sP.units.codeMassToLogMsun( data['bhs']['BH_Mass'] )
-        l, = ax.plot(redshifts[w], yy[w], '-', lw=lw, alpha=0.5, label='BH Mass')
+        if conf == 1:
+            # various mass components on y-axis 1, BH energetics on y-axis 2
+            ax.set_ylabel('Masses [log M$_{\\rm sun}$]')
+            ax.set_ylim([5.0, 8.0])
+            yy = sP.units.codeMassToLogMsun( data['bhs']['BH_Mass'][:,bh_apInd] )
+            yy_label = 'BH Mass'
+        if conf == 2:
+            # BH mdot and SFR on y-axis 1
+            ax.set_ylabel('SFR or $\dot{M}_{\\rm BH}$ [log M$_{\\rm sun}$ / yr]')
+            yy = bh_mdot
+            yy_label = 'BH Mdot'
+
+        # y-axis 1: first property
+        l, = ax.plot(redshifts[w], yy[w], '-', lw=lw, alpha=0.5, label=yy_label)
         ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=l.get_color())
         ax.set_xlim(ax.get_xlim()[::-1]) # time increasing to the right
         for t in ax.get_yticklabels(): t.set_color(l.get_color())
 
-        # additional info from extended SubboxSubhaloList?
-        linestyles = ['-','--',':'] # for the three apertures
-        apertures = ['30pkpc', '30ckpc/h', '50ckpc/h']
-
-        for key in ['SubhaloGas_Mass','SubhaloStars_Mass']:
-            if key in extInfo:
+        # y-axis 1: additional properties
+        if conf == 1:
+            for key in ['gas','stars']:
                 c = ax._get_lines.prop_cycler.next()['color']
-                for j, aperture in enumerate(apertures):
-                    yy = sP.units.codeMassToLogMsun( extInfo[key][selInd,j,:])
+                for j, aperture in enumerate(data['apertures']['scalar']):
+                    yy = sP.units.codeMassToLogMsun( data[key]['mass'][:,j])
                     yy -= 3.0 # 3 dex offset to get within range of M_BH
-                    label = key.split('Subhalo')[1] + '/$10^3$' if j == 0 else ''
+                    label = key.capitalize() + 'Mass/$10^3$' if j == 0 else ''
                     l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
                     ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
-
-        # blackhole energetics
-        ax2 = ax.twinx()
-        ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
-        c = ax._get_lines.prop_cycler.next()['color']
-        ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7, color=c)
-        ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=c)
-        ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-        ax2.plot(redshifts[snap], dy_low[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-        for t in ax2.get_yticklabels(): t.set_color(c)
-
-        handles, labels = ax.get_legend_handles_labels()
-        sExtra = [plt.Line2D((0,1), (0,0), color='black', marker='', lw=lw, linestyle=ls) for ls in linestyles]
-        ax.legend(handles+sExtra, labels+apertures, loc='lower right', prop={'size':fontsizeLegend})
-
-    def _lineplot_helper2(gs,i):
-        """ Add one panel of a composite line plot SFR(t) and BH_Mdot(t). """
-        ax = plt.subplot(gs[i])
-        ax.set_xlabel('Redshift')
-        ax.set_ylabel('SFR or $\dot{M}_{\\rm BH}$ [log M$_{\\rm sun}$ / yr]')
-
-        # BH mdot
-        c = ax._get_lines.prop_cycler.next()['color']
-        ax.plot(redshifts[w], bh_mdot[w], '-', lw=lw, alpha=0.7, color=c, label='BH_Mdot')
-        ax.plot(redshifts[snap], bh_mdot[snap], 'o', markersize=14.0, color=c, alpha=0.6)
-        ax.set_xlim(ax.get_xlim()[::-1]) # time increasing to the right
-
-        # gas SFR
-        linestyles = ['-','--',':'] # for the three apertures
-        apertures = ['30pkpc', '30ckpc/h', '50ckpc/h']
-
-        key = 'SubhaloGas_SFR'
-        if key in extInfo:
+        if conf == 2:
             c = ax._get_lines.prop_cycler.next()['color']
-            for j, aperture in enumerate(apertures):
-                yy = logZeroNaN( extInfo[key][selInd,j,:] )
+            for j, aperture in enumerate(data['apertures']['scalar']):
+                yy = logZeroNaN( data['gas']['StarFormationRate'][:,j] )
                 label = 'Gas_SFR' if j == 0 else ''
                 l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
                 ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
 
+        # y-axis 2
+        if conf == 1:
+            # blackhole energetics
+            ax2 = ax.twinx()
+            setAxisColors(ax2, color2)
+            ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
+            c = ax._get_lines.prop_cycler.next()['color']
+            ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7, color=c)
+            ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=c)
+            ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=c, alpha=0.6)
+            ax2.plot(redshifts[snap], dy_low[snap], 'o', markersize=14.0, color=c, alpha=0.6)
+            for t in ax2.get_yticklabels(): t.set_color(c)
+
+            ax2.set_ylim([54,60])
+
+        # legend
         handles, labels = ax.get_legend_handles_labels()
-        sExtra = [plt.Line2D((0,1), (0,0), color='black', marker='', lw=lw, linestyle=ls) for ls in linestyles]
-        ax.legend(handles+sExtra, labels+apertures, loc='lower right', prop={'size':fontsizeLegend})
+        sExtra = [plt.Line2D((0,1), (0,0), color=color2, marker='', lw=lw, linestyle=ls) for ls in linestyles]
+        apertures = ['%dckpc/h' % aperture for aperture in data['apertures']['scalar']]
+        l = ax.legend(handles+sExtra, labels+apertures, loc='lower right', prop={'size':fontsizeLegend})
+        for text in l.get_texts(): text.set_color(color2)
 
     # config
     lw = 2.0
@@ -782,25 +875,24 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
     lim3 = [-5.0, -1.5] # histo1d
     lim4 = [4.0, 6.5] # temp
 
-    # load
-    data = save_subbox_data(sP, sbNum, selInd)
+    linestyles = ['-','--',':'] # for the three apertures
 
-    sel = halo_selection(sP, minM200=11.5)
-    _, _, _, _, subhaloPos, subboxScaleFac, extInfo = selection_subbox_overlap(sP, sbNum, sel)
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
     # derive blackhole differential energetics (needed for _lineplot_helpers)
-    redshifts = 1.0 / subboxScaleFac - 1.0
+    redshifts = 1.0 / snapTimes - 1.0
     tage = sP.units.redshiftToAgeFlat(redshifts)
     dtyr = np.diff(tage * 1e9, n=1)
     dtyr = np.append(dtyr, dtyr[-1])
 
-    yy_high = sP.units.codeEnergyToErg(data['bhs']['BH_CumEgyInjection_QM'], log=True)
-    yy_low  = sP.units.codeEnergyToErg(data['bhs']['BH_CumEgyInjection_RM'], log=True)
+    bh_apInd = 0 # aperture to use for BH derived lines (all going to be the same)
+    yy_high = sP.units.codeEnergyToErg(data['bhs']['BH_CumEgyInjection_QM'][:,bh_apInd], log=True)
+    yy_low  = sP.units.codeEnergyToErg(data['bhs']['BH_CumEgyInjection_RM'][:,bh_apInd], log=True)
     dy_high = np.diff(10.0**yy_high, n=1) # dy[i] is delta_E between snap=i and snap=i+1
     dy_low  = np.diff(10.0**yy_low, n=1)
     dy_high = logZeroNaN( np.append(dy_high, dy_high[-1]) ) # restore to original size, then log
     dy_low  = logZeroNaN( np.append(dy_low, dy_low[-1]) )
-    bh_mdot = np.diff(sP.units.codeMassToMsun(data['bhs']['BH_Mass']) / dtyr[::-1], n=1)
+    bh_mdot = np.diff(sP.units.codeMassToMsun(data['bhs']['BH_Mass'][:,bh_apInd]) / dtyr[::-1], n=1)
     bh_mdot = logZeroNaN( np.append(bh_mdot, bh_mdot[-1]) )
     wmax = np.where(bh_mdot == np.nanmax(bh_mdot)) # spurious spike due to seed event
     bh_mdot[wmax] = np.nan
@@ -833,7 +925,7 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
 
             # lower right: (top) masses/blackhole energetics, (bottom) vrad histograms
             gs_local = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[5], height_ratios=[2,1], hspace=0.20)
-            _lineplot_helper(gs_local,i=0)
+            _lineplot_helper(gs_local,i=0,conf=1)
             _histo1d_helper(gs_local,i=1,pt='gas',xaxis='vrad',yaxis='count',ylim=lim3)
 
         # extended configuration (5x3 panels, 1.67 aspect ratio)
@@ -852,12 +944,12 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
             _histo2d_helper(gs,i=2,pt='gas',xaxis='rad',yaxis='vrel',color='massfracnorm',clim=lim2)
 
             # upper col3: gas radial density profile, vrad vs. temp relation
-            gs_local = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[3], wspace=0.35)
+            gs_local = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[3], hspace=0.25)
             _histo1d_helper(gs_local,i=0,pt='gas',xaxis='radlog',yaxis='numdens',ylim=[-6.0,1.0])
-            _histo1d_helper(gs_local,i=1,pt='gas',xaxis='temp',yaxis='vrad',ylim=[-200, 400])
+            _histo1d_helper(gs_local,i=1,pt='gas',xaxis='radlog',yaxis='temp',ylim=[3.5,6.0])
 
             # upper col4: SFR and BH Mdot
-            _lineplot_helper2(gs,i=4)
+            _lineplot_helper(gs,i=4,conf=2)
 
             # center col0: 2dhisto [dens,temp] mass frac
             _histo2d_helper(gs,i=5,pt='gas',xaxis='numdens',yaxis='temp',color='massfrac',clim=[-4.0,-0.5])
@@ -870,7 +962,7 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
 
             # center col3: gas vrad 1d histograms
             _histo1d_helper(gs,i=8,pt='gas',xaxis='vrad',yaxis='count',ylim=lim3)
-           
+            
             # center col4: gas vrel/temp 1d histograms
             gs_local = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[9], hspace=0.25)
             _histo1d_helper(gs_local,i=0,pt='gas',xaxis='vrel',yaxis='count',ylim=lim3)
@@ -879,8 +971,9 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
             # bottom col0: 2dhisto [dens,temp] mean vrad
             _histo2d_helper(gs,i=10,pt='gas',xaxis='numdens',yaxis='temp',color='vrad',clim=[-100,300])
 
-            # bottom col1: gas dens image, 200 kpc, xz
-            _image_helper(gs,i=11,pt='gas',field='coldens_msunkpc2',axes=[0,2],boxSize=200.0)
+            # bottom col1: gas dens image, 200 kpc, xz (or 20kpc, xy)
+            #_image_helper(gs,i=11,pt='gas',field='coldens_msunkpc2',axes=[0,2],boxSize=200.0)
+            _image_helper(gs,i=11,pt='gas',field='coldens_msunkpc2',axes=[0,1],boxSize=20.0)
 
             # bottom col2: gas dens image, 200 kpc, xy
             _image_helper(gs,i=12,pt='gas',field='coldens_msunkpc2',axes=[0,1],boxSize=200.0)
@@ -889,14 +982,37 @@ def vis_subbox_data(sP, sbNum, selInd, extended=False):
             _image_helper(gs,i=13,pt='gas',field='coldens_msunkpc2',axes=[0,1],boxSize=2000.0)
 
             # bottom col4: line plot, masses and blackhole diagnostics
-            _lineplot_helper(gs,i=14)
+            _lineplot_helper(gs,i=14,conf=1)
 
         # finish
         fig.tight_layout()
-        fig.savefig('vis_%s_sbNum-%d_selInd-%d%s_%04d.png' % \
-            (sP.simName,sbNum,selInd,'_extended' if extended else '',snap), 
-            dpi=(75 if extended else 100))
+        fig.savefig('vis_%s%s_%04d.png' % (sP.simName,'_extended' if extended else '',snap), 
+            dpi=(75 if extended else 100),facecolor=color1)
         plt.close(fig)
+
+def visHaloTimeEvoSubbox(sP, sbNum, selInd, minM200=11.5, extended=False, pStyle='black'):
+    """ Visualize halo time evolution as a series of complex multi-panel images, for subbox-based tracking. """
+    sel = halo_selection(sP, minM200=11.5)
+    _, _, _, _, subhaloPos, subboxScaleFac, _ = selection_subbox_overlap(sP, sbNum, sel)
+
+    # slice out information for only the selected halo
+    subhaloPos = np.squeeze( subhaloPos[selInd,:,:] )
+
+    # load data and call render
+    data = haloTimeEvoDataSubbox(sP, sbNum, selInd, minM200=11.5)
+    sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
+
+    visHaloTimeEvo(sP_sub, data, subhaloPos, subboxScaleFac, extended=extended, pStyle=pStyle)
+
+def visHaloTimeEvoFullbox(sP, haloInd, extended=False, pStyle='white'):
+    """ As above, but for full-box based tracking. """
+    halo = groupCatSingle(sP, haloID=haloInd)
+    snaps, snapTimes, haloPos = mpbPositionComplete(sP, halo['GroupFirstSub'])
+
+    # load data and call render
+    data = haloTimeEvoDataFullbox(sP, haloInd)
+
+    visHaloTimeEvo(sP, data, haloPos, snapTimes, extended=extended, pStyle=pStyle)
 
 def explore_vrad_selection(sP):
     """ Testing. A variety of plots looking at halo-centric gas/wind radial velocities. For entire selection. """
@@ -1046,9 +1162,6 @@ def explore_vrad_halos(sP, haloIndsPlot):
             meancolors=['vrad'], weights=None, haloID=haloID, clim=vrad_lim, pdf=pdf)
 
     pdf.close()
-   
-def outflow_rates(sP):
-    pass
 
 def sample_comparison_z2_sins_ao(sP):
     """ Compare available galaxies vs. the SINS-AO sample of ~35 systems. """
@@ -1140,20 +1253,33 @@ def paperPlots():
             _ = selection_subbox_overlap(TNG50, sbNum, sel, verbose=True)
 
     if 0:
-        # save data (phase diagrams) through time
-        save_haloevo_data_subbox(TNG50, sbNum=0, selInds=[2,3])
-        #prerender_subbox_images(TNG50, sbNum=0, selInd=0)
-
-    if 0:
-        # vis
-        vis_subbox_data(TNG50, sbNum=0, selInd=0, extended=False)
-
-    if 1:
-        # load fullbox test, first 20 halos of 12.0 selection all at once...
-        sel = halo_selection(TNG50, minM200=12.0)
-        save_haloevo_data_fullbox(TNG50, haloInds=sel['haloInds'][0:20])
-
-    if 0:
         # sample comparison against SINS-AO survey at z=2 (M*, SFR)
         TNG50.setRedshift(2.0)
         sample_comparison_z2_sins_ao(TNG50)
+
+    # -----------------------
+
+    if 0:
+        # subbox: save data through time
+        haloTimeEvoDataSubbox(TNG50, sbNum=0, selInds=[0,1,2,3])
+
+    if 0:
+        # fullbox: save data through time, first 20 halos of 12.0 selection all at once
+        sel = halo_selection(TNG50, minM200=12.0)
+        haloTimeEvoDataFullbox(TNG50, haloInds=sel['haloInds'][0:20])
+
+    if 1:
+        # subbox: vis image sequence
+        #preRenderSubboxImages(TNG50, sbNum=0, selInd=0)
+        visHaloTimeEvoSubbox(TNG50, sbNum=0, selInd=0, extended=True)
+
+    if 0:
+        # fullbox: vis image sequence
+        sel = halo_selection(TNG50, minM200=12.0)
+        preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
+        #visHaloTimeEvoFullbox(TNG50, haloInd=sel['haloInds'][0], extended=False)
+
+    if 0:
+        # TNG50_3 test
+        sel = halo_selection(TNG50_3, minM200=12.0)
+        haloTimeEvoDataFullbox(TNG50_3, haloInds=sel['haloInds'][0:20])

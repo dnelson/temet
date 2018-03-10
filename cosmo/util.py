@@ -498,6 +498,7 @@ def periodicDists(pt, vecs, sP, chebyshev=False):
 
     # distances from a vector of points [N,3] to another vector of other points [N,3]
     if pt.ndim == 2:
+        assert vecs.shape[0] == pt.shape[0]
         xDist = vecs[:,0] - pt[:,0]
         yDist = vecs[:,1] - pt[:,1]
         zDist = vecs[:,2] - pt[:,2]
@@ -525,8 +526,9 @@ def periodicDistsSq(pt, vecs, sP):
         xDist = vecs[:,0] - pt[0]
         yDist = vecs[:,1] - pt[1]
 
-        correctPeriodicDistVecs(xDist, sP)
-        correctPeriodicDistVecs(yDist, sP)
+        if not sP.isSubbox:
+            correctPeriodicDistVecs(xDist, sP)
+            correctPeriodicDistVecs(yDist, sP)
 
         return xDist*xDist + yDist*yDist
     
@@ -535,9 +537,10 @@ def periodicDistsSq(pt, vecs, sP):
     yDist = vecs[:,1] - pt[1]
     zDist = vecs[:,2] - pt[2]
 
-    correctPeriodicDistVecs(xDist, sP)
-    correctPeriodicDistVecs(yDist, sP)
-    correctPeriodicDistVecs(zDist, sP)
+    if not sP.isSubbox:
+        correctPeriodicDistVecs(xDist, sP)
+        correctPeriodicDistVecs(yDist, sP)
+        correctPeriodicDistVecs(zDist, sP)
 
     return xDist*xDist + yDist*yDist + zDist*zDist
 
