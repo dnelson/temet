@@ -2082,7 +2082,7 @@ def renderMultiPanel(panels, conf):
 
             pos = [leftNorm, bottomNorm, colWidth, rowHeight]
 
-            ax = fig.add_axes(pos, axisbg=color1)
+            ax = fig.add_axes(pos, facecolor=color1)
             ax.set_axis_off()
             setAxisColors(ax, color2)
 
