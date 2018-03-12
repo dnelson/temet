@@ -48,7 +48,7 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
     sizefac = sfclean if clean else 1.0
 
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-    ax = fig.add_subplot(111, axisbg=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
     setAxisColors(ax, color2)
 
     ax.set_xlim(rMinMax)
@@ -188,7 +188,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
         fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*1.2**ratioSubPlot),facecolor=color1)
         gs = gridspec.GridSpec(1+ratioSubPlot, 1, height_ratios=[3.5,1])
-        ax = fig.add_subplot(gs[0], axisbg=color1)
+        ax = fig.add_subplot(gs[0], facecolor=color1)
         setAxisColors(ax, color2)
 
         if not ratioSubPlot:
@@ -202,7 +202,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
         # ratio sub-plot on the bottom?
         if ratioSubPlot:
-            ax_sub = fig.add_subplot(gs[1], axisbg=color1, sharex=ax)
+            ax_sub = fig.add_subplot(gs[1], facecolor=color1, sharex=ax)
             ax_sub.set_xlim(rMinMax)
             ax_sub.set_xlabel(rLabel)
             ax_sub.set_ylim(yMinMaxSub)
@@ -389,7 +389,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
 
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
     gs = gridspec.GridSpec(1, 1)
-    ax = fig.add_subplot(gs[0], axisbg=color1)
+    ax = fig.add_subplot(gs[0], facecolor=color1)
     setAxisColors(ax, color2)
 
     ax.set_xlim(rMinMax)

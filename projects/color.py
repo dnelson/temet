@@ -801,11 +801,11 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     if fig_subplot[0] is None:
         sizefac = sfclean if clean else 1.0
         fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-        ax = fig.add_subplot(111, axisbg=color1)
+        ax = fig.add_subplot(111, facecolor=color1)
     else:
         # add requested subplot to existing figure
         fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1], axisbg=color1)
+        ax = fig.add_subplot(fig_subplot[1], facecolor=color1)
 
     setAxisColors(ax, color2)
 
@@ -1191,7 +1191,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*2),facecolor=color1)
 
     # top panel: mu_{red,blue}
-    ax = fig.add_subplot(212, axisbg=color1)
+    ax = fig.add_subplot(212, facecolor=color1)
     setAxisColors(ax, color2)
 
     ax.set_xlim(xMinMax)
@@ -1202,7 +1202,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     _fig_helper(ax,iterNum=1)
 
     # bottom panel: sigma_{red,blue}
-    ax = fig.add_subplot(211, axisbg=color1)
+    ax = fig.add_subplot(211, facecolor=color1)
     setAxisColors(ax, color2)
 
     ax.set_xlim(xMinMax)
@@ -1281,7 +1281,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             print(iterNum,i,data_index,mass)
 
             # start plot
-            ax = fig.add_subplot(5,2,i+1, axisbg=color1)
+            ax = fig.add_subplot(5,2,i+1, facecolor=color1)
 
             setAxisColors(ax, color2)
             ax.set_xlim(mag_range)
@@ -1333,7 +1333,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     for iterNum in [0,1,2]:
         fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
 
-        ax = fig.add_subplot(111, axisbg=color1)
+        ax = fig.add_subplot(111, facecolor=color1)
 
         setAxisColors(ax, color2)
         ax.set_xlim(mMinMax)
@@ -1389,7 +1389,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     # (E) start plot, red fraction (ratio of counts in red vs red+blue gaussians)
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
 
-    ax = fig.add_subplot(111, axisbg=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
 
     setAxisColors(ax, color2)
     ax.set_xlim(mMinMax)
@@ -1430,7 +1430,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
 
     # (F) 2d histogram of counts given the binning setup
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
-    ax = fig.add_subplot(1,1,1, axisbg=color1)
+    ax = fig.add_subplot(1,1,1, facecolor=color1)
 
     setAxisColors(ax, color2)
     ax.set_ylim(mag_range)
@@ -1714,7 +1714,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
                     sizeAdjust=1.0):
         """ Helper for histogram plots with all css combined. """
         fig = plt.figure(figsize=(figsize[0]*sizefac*sizeAdjust,figsize[1]*sizefac*sizeAdjust),facecolor=color1)
-        ax = fig.add_subplot(111, axisbg=color1)
+        ax = fig.add_subplot(111, facecolor=color1)
 
         if xMinMax is None: xMinMax = fieldMinMax[fieldName]
         xLabel = fieldLabels[fieldName] if sizeAdjust >= 1.0 else fieldLabelsShort[fieldName]
@@ -1880,7 +1880,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     def _fig_helper2(xAxis, yAxis, saveBase='', plotCSS=cenSatSelects, sizeAdjust=1.0):
         """ Helper for histogram plots with all css combined. """
         fig = plt.figure(figsize=(figsize[0]*sizefac*sizeAdjust,figsize[1]*sizefac*sizeAdjust),facecolor=color1)
-        ax = fig.add_subplot(111, axisbg=color1)
+        ax = fig.add_subplot(111, facecolor=color1)
 
         xLabel = fieldLabels[xAxis] if sizeAdjust >= 1.0 else fieldLabelsShort[xAxis]
 
@@ -2114,7 +2114,7 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
 
     # start plot
     fig = plt.figure(figsize=(figsize[0]*sizefac*xSizeFac,figsize[1]*sizefac),facecolor=color1)
-    ax = fig.add_subplot(111, axisbg=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
     setAxisColors(ax, color2)
 
     if 0:

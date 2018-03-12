@@ -14,8 +14,7 @@ from matplotlib.colors import LogNorm
 import illustris_python as il
 from util import units
 from util.helper import isUnique, nUnique, iterable, logZeroNaN, sampleColorTable, getWhiteBlackColors
-from cosmo.util import correctPeriodicDistVecs, correctPeriodicPosVecs, periodicDists, \
-  crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatSubhaloIndices
+from cosmo.util import crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatSubhaloIndices
 from cosmo.color import loadSimGalColors, gfmBands
 from cosmo.mergertree import loadMPB
 from plot.quantities import simSubhaloQuantity
@@ -23,108 +22,6 @@ from plot.cosmoGeneral import tngModel_chi
 from vis.common import setAxisColors
 from plot.config import *
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
-
-def subhaloDetails(sP,shID):
-    """ Load/calculate some values for a single subhalo. """
-    r = {}
-
-    # load groupcat info
-    gc = groupCatSingle(sP, subhaloID=shID)
-
-    print('  Subhalo Pos: [' + ' '.join([str(xyz) for xyz in gc['SubhaloPos']]) + ']')
-
-    # load snapshot data
-    stars = snapshotSubset(sP,'stars',['Coordinates','Masses'],subhaloID=shID)
-
-    print('  Stars: [' , stars['count'] , ']')
-
-    # data handling
-    for i in [0,1,2]:
-        stars['Coordinates'][:,i] -= gc['SubhaloPos'][i]
-
-    correctPeriodicDistVecs(stars['Coordinates'], sP)
-
-    r['stars'] = stars
-    return r
-
-def multiPanelOverview(sP1,sP2,matchPath,shID1):
-    """ Create a 2x2 multi-panel overview comparison of a single subhalo between two runs. """    
-    # get subhalo ID of sim2 from matching catalog
-    f = h5py.File(matchPath + "subhalos_Illustris1_" + str(sP1.snap).zfill(3) + ".hdf5")
-    shID2 = f['SubhaloIndex'][shID1]
-    f.close()
-
-    print('Matched shID1 [' + str(shID1) + '] to shID2 [' + str(shID2) + ']')
-    
-    if shID2 < 0:
-        terminate('Error: Unmatched.')
-    
-    # load
-    sh1 = subhaloDetails(sP1,shID1)
-    sh2 = subhaloDetails(sP2,shID2)   
- 
-    # init plot
-    fig = plt.figure(figsize=(12,9)) #, facecolor='white')    
-    
-    # (1) sim1: stellar density 2d histogram
-    ax = fig.add_subplot(221)
-    
-    x = sh1['stars']['Coordinates'][:,0]
-    y = sh1['stars']['Coordinates'][:,1]
-    
-    ax.plot(x,y,'r.')
-    
-    # (2) sim1: 2d histo test
-    ax = fig.add_subplot(222)
-    
-    x = sh1['stars']['Coordinates'][:,0]
-    y = sh1['stars']['Coordinates'][:,1]
-    
-    nBins = 100
-    ax.hist2d(x,y,bins=nBins,norm=LogNorm())
-   
-    # (1) sim2: stellar density 2d histogram
-    ax = fig.add_subplot(223)
-
-    x = sh2['stars']['Coordinates'][:,0]
-    y = sh2['stars']['Coordinates'][:,1]
-
-    #ax.plot(x,y,'r.',s=1,lw=0) #rasterized=true
-    ax.scatter(x,y,marker='.',lw=0,s=1,facecolor='0.0')
-
-    # (2) sim2: 2d histo test
-    ax = fig.add_subplot(224)
-
-    x = sh2['stars']['Coordinates'][:,0]
-    y = sh2['stars']['Coordinates'][:,1]
-
-    nBins = 100
-    ax.hist2d(x,y,bins=nBins,norm=LogNorm())
-
-    # save plot
-    fig.savefig('out.pdf')
-    plt.close(fig)
-    
-    #pdb.set_trace()
-
-def gcIDList(basePath,snapNum):
-    """ Get separated list of primary/secondary subhalo indices from group catalog. """
-    gr = il.groupcat.loadHalos(basePath,snapNum,fields=['GroupFirstSub'])
-    gr = gr.astype('int32') # incorrectly given as uint32 in HDF5 Subfind output (wraps -1 to 4294967295)
-    sh = il.groupcat.loadSubhalos(basePath,snapNum,fields=['SubhaloGrNr'])
-    
-    subInds = np.arange(0,len(sh))
-    
-    r = {}
-    r['pri'] = np.where(gr[sh] == subInds)[0]
-    #r['sec'] = np.where((gr[sh] != subInds) & (gr[sh] != -1))[0]
-    r['sec'] = np.where(gr[sh] != subInds)[0]
-
-    if len(r['pri']) + len(r['sec']) != len(sh):
-        raise Exception('failed')    
-    
-    print(' pri: ' + str(len(r['pri'])) + ' sec: ' + str(len(r['sec'])))
-    return r
     
 def matchedUniqueGCIDs(gc1,gc2,matchPath,snapNum):
     """ Return i1,i2 two sets of indices into gc1,gc2 based on matching results, such that
@@ -162,11 +59,11 @@ def priSecMatchedGCIDs(ind1,ind2,basePath1,snapNum):
         pri/sec (centrals/satellites) based on status in run1. """
         
     # get pri/sec indices of run1
-    ps1 = gcIDList(basePath1,snapNum)
+    ps1_pri, ps1_all, ps1_sec = cenSatSubhaloIndices(sP)
     
     # intersect pri/sec with run1 indices
-    pri_inds = np.in1d( ind1, ps1['pri'], assume_unique=True ).nonzero()[0]
-    sec_inds = np.in1d( ind1, ps1['sec'], assume_unique=True ).nonzero()[0]
+    pri_inds = np.in1d( ind1, ps1_pri, assume_unique=True ).nonzero()[0]
+    sec_inds = np.in1d( ind1, ps1_sec, assume_unique=True ).nonzero()[0]
     
     # create new run1 and run2 indices separated by pri/sec
     r = {}
@@ -180,7 +77,7 @@ def priSecMatchedGCIDs(ind1,ind2,basePath1,snapNum):
     if True:
         if not isUnique(ind1) or not isUnique(ind2):
             raise Exception('failed')
-        if not isUnique(ps1['pri']) or not isUnique(ps1['sec']):
+        if not isUnique(ps1_pri) or not isUnique(ps1_sec):
             raise Exception('failed')
             
         print(' pri: ' + str(len(r['pri1'])) + ' sec: ' + str(len(r['sec1'])))
@@ -278,29 +175,6 @@ def globalCatComparison(sP1,sP22,matchPath):
         fig.tight_layout()        
         fig.savefig('test_' + fieldName + '.pdf')
         plt.close(fig)    
-    
-    #pdb.set_trace()
-    
-def illustrisPrimeComp():
-    """ Driver for Illustris-1 vs. IllustrisPrime-1 comparison plots. """
-    from util import simParams
-
-    # config
-    redshift = 0.5
-    sP1 = simParams(res=1820, run='illustris', redshift=redshift)
-    sP2 = simParams(res=1820, run='illustrisprime', redshift=redshift)
-    matchPath = '/n/home07/dnelson/sims.illustris/IllustrisPrime-1/postprocessing/HaloMatching/'
-    
-    print(sP1.snap)
-    print(sP2.snap)
-
-    # multiPanelOverview: run single
-    shID1 = 228421
-    multiPanelOverview(sP1,sP2,matchPath,shID1)
-    
-    # globalCatComparison
-    #globalCatComparison(basePath1,basePath2,matchPath,snapNum)
-    
 
 def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
     """ A few panels of time-series evolution of two subhalos shID1 and shID2 from sP1 and sP2, 
@@ -335,10 +209,10 @@ def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
     # top panel: mu_{red,blue}
     for i in range(nPanels):
         if i == 0:
-            ax0 = fig.add_subplot(nPanels,1,i+1, axisbg=color1)
+            ax0 = fig.add_subplot(nPanels,1,i+1, facecolor=color1)
             ax = ax0
         else:
-            ax = fig.add_subplot(nPanels,1,i+1, axisbg=color1, sharex=ax0)
+            ax = fig.add_subplot(nPanels,1,i+1, facecolor=color1, sharex=ax0)
         setAxisColors(ax, color2)
 
         ax.set_xlim(xMinMax)

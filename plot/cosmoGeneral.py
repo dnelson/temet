@@ -180,11 +180,11 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     # start plot
     if fig_subplot[0] is None:
         fig = plt.figure(figsize=figsize,facecolor=color1)
-        ax = fig.add_subplot(111, axisbg=color1)
+        ax = fig.add_subplot(111, facecolor=color1)
     else:
         # add requested subplot to existing figure
         fig = fig_subplot[0]
-        ax = fig.add_subplot(fig_subplot[1], axisbg=color1)
+        ax = fig.add_subplot(fig_subplot[1], facecolor=color1)
 
     setAxisColors(ax, color2)
 
