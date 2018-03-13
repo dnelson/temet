@@ -8,13 +8,24 @@ from builtins import *
 
 import numpy as np
 import h5py
+import time
+import hashlib
+from os.path import isfile, isdir
+from os import mkdir
+
 from collections import OrderedDict
+import multiprocessing as mp
+from functools import partial
+from scipy.stats import binned_statistic, binned_statistic_2d
 
 from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs
 from cosmo.load import groupCatOffsetListIntoSnap
+from cosmo.mergertree import loadMPBs
+from plot.quantities import simSubhaloQuantity
 from util.helper import pSplitRange
 from util.treeSearch import calcParticleIndices, buildFullTree
-
+from tracer.tracerMC import match3
+from util import simParams
 
 def halo_selection(sP, minM200=11.5):
     """ Make a quick halo selection above some mass limit and sorted based on energy 
@@ -33,7 +44,7 @@ def halo_selection(sP, minM200=11.5):
         return r
 
     # halo selection: all centrals above 10^12 Mhalo
-    m200 = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+    m200 = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
     with np.errstate(invalid='ignore'):
         w = np.where(m200 >= minM200)
     subInds = w[0]
@@ -83,7 +94,7 @@ def halo_selection(sP, minM200=11.5):
     r['bh_dedt_low'] = bh_dedt_low
 
     # get fof halo IDs
-    haloInds = groupCat(sP, fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+    haloInds = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])['subhalos']
     r['haloInds'] = haloInds[r['subInds']]
 
     # save cache
@@ -167,7 +178,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
         data[ptType] = {}
 
         # first load global coordinates
-        x = snapshotSubset(sP, ptType, 'Coordinates', sq=False, float32=True)
+        x = sP.snapshotSubset(ptType, 'Coordinates', sq=False, float32=True)
         if x['count'] == 0:
             continue
 
@@ -196,7 +207,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
         fieldsToLoad = list(set( scalarFields[ptType] + loadFields[ptType] )) # unique
 
         for field in fieldsToLoad:
-            x[field] = snapshotSubset(sP, ptType, field, inds=load_inds)
+            x[field] = sP.snapshotSubset(ptType, field, inds=load_inds)
         
         load_inds = None
 
@@ -512,7 +523,7 @@ def haloTimeEvoDataFullbox(sP, haloInds):
 
     # acquire complete positional tracks at all snapshots
     for haloInd in haloInds:
-        halo = groupCatSingle(sP, haloID=haloInd)
+        halo = sP.groupCatSingle(haloID=haloInd)
         snaps, _, pos = mpbPositionComplete(sP, halo['GroupFirstSub'])
 
         posSet.append(pos)
