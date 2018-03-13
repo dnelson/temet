@@ -868,29 +868,34 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
     ParentID = None
     ParentIDSortInds = None
 
-    # for each subhalo, get a list of all child tracer IDs of parPartTypes
-    trIDsBySubhalo = {}
-    trCounts = np.zeros( subhaloIDs.size, dtype='uint32' )
+    if 0:
+        # for each subhalo, get a list of all child tracer IDs of parPartTypes
+        trIDsBySubhalo = {}
+        trCounts = np.zeros( subhaloIDs.size, dtype='uint32' )
 
-    for i, subhaloID in enumerate(subhaloIDs):
-        if debug:
-            shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
-            print('['+str(i).zfill(3)+'] subhaloID = '+str(subhaloID) + \
-                  '  LenType: '+' '.join([str(l) for l in shDetails['SubhaloLenType']]))
+        for i, subhaloID in enumerate(subhaloIDs):
+            if debug:
+                shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+                print('['+str(i).zfill(3)+'] subhaloID = '+str(subhaloID) + \
+                      '  LenType: '+' '.join([str(l) for l in shDetails['SubhaloLenType']]))
 
-        subhaloTrIDs = subhaloTracerChildren(sP,subhaloID=subhaloID,parPartTypes=parPartTypes,
-                                             ParentID=ParentID,ParentIDSortInds=ParentIDSortInds)
+            subhaloTrIDs = subhaloTracerChildren(sP,subhaloID=subhaloID,parPartTypes=parPartTypes,
+                                                 ParentID=ParentID,ParentIDSortInds=ParentIDSortInds)
 
-        trIDsBySubhalo[subhaloID] = subhaloTrIDs
-        trCounts[i] = len(subhaloTrIDs)
+            trIDsBySubhalo[subhaloID] = subhaloTrIDs
+            trCounts[i] = len(subhaloTrIDs)
 
-    # concatenate all tracer IDs into a single search list
-    trSearchIDs = np.zeros( trCounts.sum(), dtype=subhaloTrIDs.dtype )
-    offset = 0
+        # concatenate all tracer IDs into a single search list
+        trSearchIDs = np.zeros( trCounts.sum(), dtype=subhaloTrIDs.dtype )
+        offset = 0
 
-    for i, subhaloID in enumerate(subhaloIDs):
-        trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[subhaloID]
-        offset += trCounts[i]
+        for i, subhaloID in enumerate(subhaloIDs):
+            trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[subhaloID]
+            offset += trCounts[i]
+
+    with h5py.File('cache.hdf5','r') as f:
+        trSearchIDs = f['trSearchIDs'][()]
+    print('REMOVE THIS USE OF TEMPORARY cache.hdf5 and IF 0 ABOVE!')
 
     # follow tracer and tracer parent properties over the requested snapshot range
     tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift)

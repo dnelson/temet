@@ -24,6 +24,125 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       indRange     : if a tuple/list, load only the specified range of data (field and  e.g. subhaloIDs)
       onlyMeta     : load only attributes and coverage information 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
+    def _concatSplitFiles(field, datasetName):
+        # specified chunk exists, do all exist? check and record sizes
+        allExist = True
+        allCount = 0
+        allCountPart = 0
+
+        for i in range(pSplit[1]):
+            auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+            if not isfile(auxCatPathSplit_i):
+                allExist = False
+                continue
+
+            # record counts and dataset shape
+            with h5py.File(auxCatPathSplit_i,'r') as f:
+                allShape = f[datasetName].shape
+
+                if len(allShape) > 1 and allShape[condAxis] > condThresh:
+                    # very high dimensionality auxCat (e.g. full spectra), save only non-nan
+                    assert f[datasetName].ndim == 2
+                    assert 'partInds' not in f or f['partInds'][()] == -1
+
+                    temp_r = f[datasetName][()]
+                    w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )
+                    allCount += len(w[0])
+                    print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
+                else:
+                    # normal, save full Subhalo size
+                    allCount += f['subhaloIDs'].size
+                    if 'partInds' in f: allCountPart += f['partInds'].size
+
+        if not allExist:
+            print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
+            #r[field] = None
+            return
+            
+        # all chunks exist, concatenate them now and continue
+        catIndFieldName = 'subhaloIDs'
+
+        if allCountPart > 0:
+            # can relax this if we ever do Particle* auxCat with pts other than stars:
+            assert allCountPart == snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
+            
+            # proceed with 1-per-particle based concatenation, then 'subhaloIDs' = 'partInds'
+            allCount = allCountPart
+            catIndFieldName = 'partInds'
+
+        allShape = np.array(allShape)
+        allShape[0] = allCount # size
+        offset = 0
+
+        new_r = np.zeros( allShape, dtype='float32' )
+        subhaloIDs = np.zeros( allCount, dtype='int32' )
+        attrs = {}
+
+        new_r.fill(-1.0) # does validly contain nan
+        subhaloIDs.fill(-1)
+
+        print(' Concatenating into shape: ', new_r.shape)
+
+        for i in range(pSplit[1]):
+            auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+
+            with h5py.File(auxCatPathSplit_i,'r') as f:
+                # load
+                length = f[catIndFieldName].size
+                temp_r = f[datasetName][()]
+
+                if length == 0: continue
+
+                if len(allShape) > 1 and allShape[condAxis] >= condThresh or f[datasetName].ndim > 3:
+                    # want to condense, stamp in to dense indices
+                    subhaloIDsToSave = f[catIndFieldName][()]
+
+                    if f[datasetName].ndim == 2 and 'Subhalo_SDSSFiberSpectra' in field:
+                        # splits saved all subhalos (sdss spectra)
+                        #assert 'Subhalo_SDSSFiberSpectra' in field # otherwise check
+                        w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )[0]
+                        length = len(w)
+                        temp_r = temp_r[w,:]
+                        subhaloIDsToSave = subhaloIDsToSave[w]
+
+                    subhaloIDs[offset : offset+length] = subhaloIDsToSave
+                    subhaloIndsStamp = np.arange(offset,offset+length)
+                else:
+                    # full, stamp in to indices corresponding to subhalo indices
+                    subhaloIndsStamp = f[catIndFieldName][()]
+                    subhaloIDs[subhaloIndsStamp] = subhaloIndsStamp
+
+                # save into final array
+                new_r[subhaloIndsStamp,...] = temp_r
+
+                for attr in f[datasetName].attrs:
+                    attrs[attr] = f[datasetName].attrs[attr]
+
+                offset += length
+
+                if 'wavelength' in f: attrs['wavelength'] = f['wavelength'][()]
+
+        assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
+        assert np.count_nonzero(new_r == -1.0) == 0
+
+        # auxCat already exists? only allowed if we are processing multiple fields
+        if isfile(auxCatPath):
+            with h5py.File(auxCatPath,'r') as f:
+                assert field+'_0' in f
+                assert datasetName not in f
+
+        # save (or append to) new auxCat
+        with h5py.File(auxCatPath) as f:
+            f.create_dataset(datasetName, data=new_r)
+            if catIndFieldName == 'subhaloIDs' and catIndFieldName not in f:
+                f.create_dataset(catIndFieldName, data=subhaloIDs)
+            for attrName, attrValue in attrs.iteritems():
+                f[datasetName].attrs[attrName] = attrValue
+
+        print(' Concatenated new [%s] and saved.' % auxCatPath.split("/")[-1])
+        print(' All chunks concatenated, please manually delete them now.')
+        return
+
     from cosmo import auxcatalog
     import datetime
     import getpass
@@ -53,131 +172,20 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         # split the calculation over multiple jobs? check if all chunks already exist
         if pSplit is not None:
             assert indRange is None # for load only
+
             auxCatPathSplit = pathStr2 % (field,sP.snap,pSplit[0],pSplit[1])
 
             if isfile(auxCatPathSplit) and not reCalculate:
-                # specified chunk exists, do all exist? check and record sizes
-                allExist = True
-                allCount = 0
-                allCountPart = 0
+                # setup combine, for 1 dataset or for multiple
+                with h5py.File(auxCatPathSplit,'r') as f:
+                    readFields = [field]
+                    if field not in f:
+                        assert field+'_0' in f # multiple datasets
+                        readFields = sorted([key for key in f.keys() if field in key])
 
-                for i in range(pSplit[1]):
-                    auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
-                    if not isfile(auxCatPathSplit_i):
-                        allExist = False
-                        continue
-
-                    # record counts and dataset shape
-                    with h5py.File(auxCatPathSplit_i,'r') as f:
-                        allShape = f[field].shape
-
-                        if len(allShape) > 1 and allShape[condAxis] > condThresh:
-                            # very high dimensionality auxCat (e.g. full spectra), save only non-nan
-                            assert f[field].ndim == 2
-                            assert 'partInds' not in f or f['partInds'][()] == -1
-
-                            temp_r = f[field][()]
-                            w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )
-                            allCount += len(w[0])
-                            print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
-                        else:
-                            # normal, save full Subhalo size
-                            allCount += f['subhaloIDs'].size
-                            if 'partInds' in f: allCountPart += f['partInds'].size
-
-                if allExist:
-                    # all chunks exist, concatenate them now and continue
-                    catIndFieldName = 'subhaloIDs'
-
-                    if allCountPart > 0:
-                        # can relax this if we ever do Particle* auxCat with pts other than stars:
-                        assert allCountPart == snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
-                        
-                        # proceed with 1-per-particle based concatenation, then 'subhaloIDs' = 'partInds'
-                        allCount = allCountPart
-                        catIndFieldName = 'partInds'
-
-                    allShape = np.array(allShape)
-                    allShape[0] = allCount # size
-                    offset = 0
-
-                    new_r = np.zeros( allShape, dtype='float32' )
-                    subhaloIDs = np.zeros( allCount, dtype='int32' )
-                    attrs = {}
-
-                    new_r.fill(-1.0) # does validly contain nan
-                    subhaloIDs.fill(-1)
-
-                    print(' Concatenating into shape: ', new_r.shape)
-
-                    for i in range(pSplit[1]):
-                        auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
-
-                        with h5py.File(auxCatPathSplit_i,'r') as f:
-                            # load
-                            length = f[catIndFieldName].size
-                            temp_r = f[field][()]
-
-                            if length == 0: continue
-
-                            if len(allShape) > 1 and allShape[condAxis] >= condThresh:
-                                # want to condense, stamp in to dense indices
-                                subhaloIDsToSave = f[catIndFieldName][()]
-
-                                if f[field].ndim == 2 and 'Subhalo_SDSSFiberSpectra' in field:
-                                    # splits saved all subhalos (sdss spectra)
-                                    #assert 'Subhalo_SDSSFiberSpectra' in field # otherwise check
-                                    w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )[0]
-                                    length = len(w)
-                                    temp_r = temp_r[w,:]
-                                    subhaloIDsToSave = subhaloIDsToSave[w]
-
-                                if f[field].ndim == 3:
-                                    # splits saved a subset of subhalos
-                                    assert 'Subhalo_RadProfile' in field # otherwise check why we are here
-
-                                subhaloIDs[offset : offset+length] = subhaloIDsToSave
-                                subhaloIndsStamp = np.arange(offset,offset+length)
-                            else:
-                                # full, stamp in to indices corresponding to subhalo indices
-                                subhaloIndsStamp = f[catIndFieldName][()]
-                                subhaloIDs[subhaloIndsStamp] = subhaloIndsStamp
-
-                            # save into final array
-                            if f[field].ndim == 1:
-                                new_r[subhaloIndsStamp] = temp_r
-                            if f[field].ndim == 2:
-                                new_r[subhaloIndsStamp, :] = temp_r
-                            if f[field].ndim == 3:
-                                new_r[subhaloIndsStamp, :, :] = temp_r
-
-                            assert f[field].ndim in [1,2,3]
-
-                            for attr in f[field].attrs:
-                                attrs[attr] = f[field].attrs[attr]
-
-                            offset += length
-
-                            if 'wavelength' in f: attrs['wavelength'] = f['wavelength'][()]
-
-                    assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
-                    assert np.count_nonzero(new_r == -1.0) == 0
-
-                    # save new auxCat
-                    assert not isfile(auxCatPath)
-                    with h5py.File(auxCatPath,'w') as f:
-                        f.create_dataset(field, data=new_r)
-                        if catIndFieldName == 'subhaloIDs':
-                            f.create_dataset(catIndFieldName, data=subhaloIDs)
-                        for attrName, attrValue in attrs.iteritems():
-                            f[field].attrs[attrName] = attrValue
-
-                    print(' Concatenated new [%s] and saved.' % auxCatPath.split("/")[-1])
-                    print(' All chunks concatenated, please manually delete them now.')
-                else:
-                    print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
-                    r[field] = None
-                    continue
+                # combine now
+                for readField in readFields:
+                    _concatSplitFiles(field, readField)
 
         # done with chunk logic.
         # just checking for existence? (do not calculate right now if missing)
@@ -190,20 +198,32 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             #print('Load existing: ['+field+'] '+auxCatPath)
             with h5py.File(auxCatPath,'r') as f:
                 # load data
+                readFields = [field]
+                if field not in f:
+                    assert field+'_0' in f # list of ndarrays
+                    readFields = sorted([key for key in f.keys() if field in key])
+
                 if not onlyMeta:
-                    if indRange is None:
-                        r[field] = f[field][()]
+                    # read 1 or more datasets, keep list only if >1
+                    rr = []
+
+                    for readField in readFields:
+                        if indRange is None:
+                            data = f[readField][()]
+                        else:
+                            data = f[readField][indRange[0]:indRange[1],...]
+                            data = np.squeeze(data) # remove any degenerate dimensions
+                        rr.append(data)
+
+                    if len(rr) == 1:
+                        r[field] = rr[0]
                     else:
-                        if f[field].ndim == 1: r[field] = f[field][indRange[0]:indRange[1]]
-                        if f[field].ndim == 2: r[field] = f[field][indRange[0]:indRange[1],:]
-                        if f[field].ndim == 3: r[field] = f[field][indRange[0]:indRange[1],:,:]
-                        r[field] = np.squeeze(r[field]) # remove any degenerate dimensions
-                        assert f[field].ndim in [1,2,3]
+                        r[field] = rr
 
                 # load metadata
                 r[field+'_attrs'] = {}
-                for attr in f[field].attrs:
-                    r[field+'_attrs'][attr] = f[field].attrs[attr]
+                for attr in f[readFields[0]].attrs:
+                    r[field+'_attrs'][attr] = f[readFields[0]].attrs[attr]
 
                 # load subhaloIDs, partInds if present
                 for attrName in largeAttrNames:
@@ -215,6 +235,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
             # subhaloIDs indicates computation only for partial set of subhalos?
             if expandPartial:
+                assert len(readFields) == 1
                 nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
                 
                 if 'subhaloIDs' in r and (r['subhaloIDs'].size < nSubsTot) and expandPartial:
@@ -222,9 +243,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     shape[0] = nSubsTot
                     new_data = np.zeros( shape, dtype=r[field].dtype )
                     new_data.fill(np.nan)
-                    if r[field].ndim == 1: new_data[r['subhaloIDs']] = r[field]
-                    if r[field].ndim == 2: new_data[r['subhaloIDs'],:] = r[field]
-                    if r[field].ndim == 3: new_data[r['subhaloIDs'],:,:] = r[field]
+                    new_data[r['subhaloIDs'],...] = r[field]
                     print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].size,new_data.size,field))
                     r[field] = new_data
 
@@ -253,18 +272,26 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
         # save new dataset (or overwrite existing)
         with h5py.File(savePath,'w') as f:
-            f.create_dataset(field, data=r[field])
+            if isinstance(r[field],list):
+                # list of ndarrays, save each as separate dataset
+                for i in range(len(r[field])):
+                    f.create_dataset(field+'_'+str(i), data=r[field][i])
+                fieldAttrSave = field + '_0' # save attributes to this dataset
+            else:
+                # single ndarray (typical case)
+                f.create_dataset(field, data=r[field])
+                fieldAttrSave = field
 
             # save metadata and any additional descriptors as attributes
-            f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
-            f[field].attrs['CreatedRev']  = curRepoVersion()
-            f[field].attrs['CreatedBy']   = getpass.getuser()
+            f[fieldAttrSave].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
+            f[fieldAttrSave].attrs['CreatedRev']  = curRepoVersion()
+            f[fieldAttrSave].attrs['CreatedBy']   = getpass.getuser()
             
             for attrName, attrValue in attrs.iteritems():
                 if attrName in largeAttrNames:
                     f.create_dataset(attrName, data=r[field+'_attrs'][attrName])
                     continue # typically too large to store as an attribute
-                f[field].attrs[attrName] = attrValue
+                f[fieldAttrSave].attrs[attrName] = attrValue
 
         if not reCalculate:
             print(' Saved new [%s].' % savePath)

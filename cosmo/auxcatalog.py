@@ -15,6 +15,9 @@ from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundi
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe
 from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 
+# generative functions
+from projects.outflows_analysis import instantaneousMassFluxes
+
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
 
@@ -446,10 +449,13 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         fieldsLoad.append('pos')
         fieldsLoad.append('vel')
         fieldsLoad.append('mass')
+        allocSize = (nSubsDo,4)
+
     if ptProperty == 'radvel':
         fieldsLoad.append('pos')
         fieldsLoad.append('vel')
         gc['subhalos']['SubhaloVel'] = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloVel'], sq=True)
+        allocSize = (nSubsDo,)
 
     fieldsLoad = list(set(fieldsLoad)) # make unique
 
@@ -467,10 +473,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     if op == 'ufunc': 
-        if ptProperty == 'Krot':
-            r = np.zeros( (nSubsDo,4), dtype='float32' )
-        else:
-            r = np.zeros( nSubsDo, dtype='float32' )
+        r = np.zeros( allocSize, dtype='float32' )
     else:
         if particles[ptProperty].ndim == 1:
             r = np.zeros( nSubsDo, dtype='float32' )
@@ -1847,10 +1850,9 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         'subfind' then restrict to FoF/subhalo particles only, respectively, and do a restricted load 
         according to pSplit. In this case, only the self-halo term is computed. If scope=='subfind_global' 
         then only the other-halo term is computed, approximating the particle distribution using an 
-        already computed subhalo-based accumlation auxCat, e.g. 'Subhalo_Mass_OVI'. Weighting is 
-        currently unsupported, but in the future e.g. mass weighted mean temperature profiles would be 
-        possible. If proj2D is None, do 3D profiles, otherwise 2-tuple specifying (i) integer coordinate 
-        axis in [0,1,2] to project along, and (ii) depth in code units (None for full box). 
+        already computed subhalo-based accumlation auxCat, e.g. 'Subhalo_Mass_OVI'. If proj2D is None, 
+        do 3D profiles, otherwise 2-tuple specifying (i) integer coordinate axis in [0,1,2] to project 
+        along, and (ii) depth in code units (None for full box). 
         If subhaloIDsTodo is not None, then process this explicit list of subhalos.
     """
     from scipy.stats import binned_statistic
@@ -2370,6 +2372,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.05]}),
    'Subhalo_StellarMassFormed_100myr_30pkpc': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.1]}),
+   'Subhalo_GasSFR_30pkpc': \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='sfr',op='sum',rad=30.0),
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
@@ -2644,6 +2648,15 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global'),
    'Subhalo_RadProfile2Dz_2Mpc_Global_Stars_Mass' : \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global',proj2D=[2,2000]),
+
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : \
+     partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind' : \
+     partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz'),
+   'Subhalo_RadialMassFlux_Global_Gas' : \
+     partial(instantaneousMassFluxes,ptType='gas',scope='global'),
+   'Subhalo_RadialMassFlux_Global_Wind' : \
+     partial(instantaneousMassFluxes,ptType='wind',scope='global'),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 
