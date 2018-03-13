@@ -29,6 +29,7 @@ from util.helper import loadColorTable, running_median, logZeroNaN, iterable, cl
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.mergertree import loadMPBs, mpbPositionComplete
 from plot.general import plotHistogram1D, plotPhaseSpace2D
+from plot.cosmoGeneral import quantMedianVsSecondQuant
 from plot.quantities import simSubhaloQuantity
 from tracer.tracerMC import match3
 from vis.common import gridBox, setAxisColors, setColorbarColors
@@ -599,21 +600,22 @@ def preRenderSubboxImages(sP, sbNum, selInd, minM200=11.5):
         for snap in snaps:
             func(snap)
 
-def preRenderFullboxImages(sP, haloInds):
-    """ Pre-render a number of images for haloInds at sP, through all snapshots. """
+def preRenderFullboxImages(sP, haloInds, snaps=None):
+    """ Pre-render a number of images for haloInds at sP, through all snapshots or some 
+    subset as specified. """
     posSets = []
     partType = 'gas'
 
     for haloInd in haloInds:
         halo = groupCatSingle(sP, haloID=haloInd)
-        snaps, snapTimes, haloPos = mpbPositionComplete(sP, halo['GroupFirstSub'])
+        snaps_loc, snapTimes, haloPos = mpbPositionComplete(sP, halo['GroupFirstSub'])
         posSets.append(haloPos)
+
+    if snaps is None: snaps = snaps_loc
 
     # snapshot loop
     for snap in snaps:
         sP.setSnap(snap)
-        if snap < 1: # temporary
-            continue
 
         # global pre-cache of selected fields into memory
         for field in ['Coordinates','Masses']:
@@ -1225,6 +1227,26 @@ def sample_comparison_z2_sins_ao(sP):
     fig.savefig('sample_comparison_%s_sfrFullSub=%s.pdf' % (sP.simName,fullSubhaloSFR))
     plt.close(fig)
 
+def sfms_smoothing_comparison(sP):
+    """ Compare instantaneous vs. timescale smoothed galaxy SFRs, vs stellar mass. """
+
+    xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    xlim = [8.0, 12.0]
+    yQuants = ['sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
+               'ssfr_30pkpc_instant','ssfr_30pkpc_10myr','ssfr_30pkpc_50myr','ssfr_30pkpc_100myr']
+    cenSatSelect = 'cen'
+
+    sQuant = None #'color_C_gr','mstar_out_100kpc_frac_r200'
+    sLowerPercs = None #[10,50]
+    sUpperPercs = None #[90,50]
+
+    pdf = PdfPages('sfms_smoothing_comparison.pdf')
+    for yQuant in yQuants:
+        quantMedianVsSecondQuant([sP], pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                                 #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
+                                 xlim=xlim, scatterPoints=True)
+    pdf.close()
+
 # -------------------------------------------------------------------------------------------------
 
 def paperPlots():
@@ -1257,6 +1279,9 @@ def paperPlots():
         TNG50.setRedshift(2.0)
         sample_comparison_z2_sins_ao(TNG50)
 
+    if 0:
+        sfms_smoothing_comparison(TNG50)
+
     # -----------------------
 
     if 0:
@@ -1270,8 +1295,8 @@ def paperPlots():
 
     if 1:
         # subbox: vis image sequence
-        #preRenderSubboxImages(TNG50, sbNum=0, selInd=0)
-        visHaloTimeEvoSubbox(TNG50, sbNum=0, selInd=0, extended=True)
+        #preRenderSubboxImages(TNG50, sbNum=0, selInd=1)
+        visHaloTimeEvoSubbox(TNG50, sbNum=0, selInd=1, extended=True)
 
     if 0:
         # fullbox: vis image sequence

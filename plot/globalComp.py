@@ -1848,7 +1848,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig_subplot=[None,None]):
     """ X-ray bolometric luminosity scaling relation vs halo mass (e.g. Schaye Fig 16). """
     lumTypes = ['Subhalo_XrayBolLum','Group_XrayBolLum_Crit500'] #,'Subhalo_XrayBolLum_2rhalfstars']
-    if clean: lumTypes = [lumTypes[0]]
+    if clean: lumTypes = [lumTypes[1]]
 
     # plot setup
     if fig_subplot[0] is None:
@@ -1863,8 +1863,9 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
     ax.set_xlim([10.0,12.0])
     ax.set_ylim([38,45])
 
+    rStr = '(r$_{\\rm 500}$) ' if (len(lumTypes)==1 and 'Crit500' in lumTypes[0]) else ''
     xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
-    ylabel = 'L$_{\\rm X}$ Bolometric [ log erg/s ]'
+    ylabel = 'L$_{\\rm X}$ %sBolometric [ log erg/s ]' % rStr
 
     if not clean:
         if use30kpc: xlabel += ' [ < 30 pkpc ]'
@@ -2088,7 +2089,7 @@ def plots():
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2107,8 +2108,8 @@ def plots():
 
     if 1:
         # testing
-        pdf = PdfPages('fig_tests.pdf')
-        HIMassFraction(sPs, pdf, simRedshift=0.0)
+        pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0)
         pdf.close()
         return
 
