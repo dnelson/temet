@@ -175,11 +175,6 @@ def sizefacComparison():
 
     for hInd in hInds:
         for sizeFac in sizeFacs:
-            print('Load hInd=%2d sizeFac=%d' % (hInd,sizeFac))
-            if hInd == 8 and sizeFac == 4:
-                print(' skipping h8sf4 for now (not done).')
-                continue
-
             variant = 'sf%d' % sizeFac
             sP = simParams(run=run, res=zoomRes, hInd=hInd, redshift=redshift, variant=variant)
 
@@ -191,6 +186,8 @@ def sizefacComparison():
             halo = groupCatSingle(sP, haloID=0)
             haloMass = sP.units.codeMassToLogMsun( halo['Group_M_Crit200'] )
             haloRvir = halo['Group_R_Crit200']
+
+            print('Load hInd=%2d sizeFac=%d minDist=%.1f' % (hInd,sizeFac,min_dist_lr))
 
             r = {'hInd':hInd, 'sizeFac':sizeFac, 'cpuHours':cpuHours, 'haloMass':haloMass, 'haloRvir':haloRvir, 
                  'contam_min':min_dist_lr, 'contam_rvirfacs':rVirFacs, 'contam_counts':counts}

@@ -315,6 +315,86 @@ def _treeSearch(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nex
     return numNgbInH, numNgbWeightedInH, quantResult
 
 @jit(nopython=True, nogil=True, cache=True)
+def _treeSearchIndices(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nextnode):
+    """ Helper routine for calcParticleIndices(), see below. """
+    boxHalf = 0.5 * boxSizeSim
+
+    h2 = h * h
+    hinv = 1.0 / h
+
+    numNgbInH = 0
+
+    # allocate, unfortunately unclear how safe we have to be here
+    inds = np.empty( NumPart, dtype=np.int64 )
+
+    # 3D-normalized kernel
+    C1 = 2.546479089470  # COEFF_1
+    C2 = 15.278874536822 # COEFF_2
+    C3 = 5.092958178941  # COEFF_5
+    CN = 4.188790204786  # NORM_COEFF (4pi/3)
+
+    # start search
+    no = NumPart
+
+    while no >= 0:
+        if no < NumPart:
+            # single particle
+            assert next_node[no] != no # Going into infinite loop.
+
+            p = no
+            no = next_node[no]
+
+            # box-exclusion along each axis
+            dx = _NEAREST( pos[p,0] - xyz[0], boxHalf, boxSizeSim )
+            if dx < -h or dx > h:
+                continue
+
+            dy = _NEAREST( pos[p,1] - xyz[1], boxHalf, boxSizeSim )
+            if dy < -h or dy > h:
+                continue
+
+            dz = _NEAREST( pos[p,2] - xyz[2], boxHalf, boxSizeSim )
+            if dz < -h or dz > h:
+                continue
+
+            # spherical exclusion if we've made it this far
+            r2 = dx*dx + dy*dy + dz*dz
+            if r2 >= h2:
+                continue
+
+            # count
+            inds[numNgbInH] = p
+            numNgbInH += 1
+
+        else:
+            # internal node
+            ind = no-NumPart
+            no = sibling[ind] # in case the node can be discarded
+
+            if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                continue
+            if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                continue
+
+            if _NEAREST( center[1,ind] - xyz[1], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                continue
+            if _NEAREST( center[1,ind] - xyz[1], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                continue
+
+            if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                continue
+            if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                continue
+
+            no = nextnode[ind] # we need to open the node
+
+    if numNgbInH > 0:
+        inds = inds[0:numNgbInH]
+        return inds
+
+    return None
+
+@jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
                           next_node,length,center,sibling,nextnode,weighted_num):
     """ Helper routine for calcHsml(), see below. """
@@ -576,13 +656,13 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
       hsml[N]/hsml[1] : array of search distances, or scalar value if constant
       op              : 'min', 'max', 'mean', 'kernel_mean', 'sum', 'count'
       boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      posSearch[N,3]  : search coordinates (optional)
       treePrec        : construct the tree using 'single' or 'double' precision for coordinates
       tree            : if not None, should be a list of all the needed tree arrays (pre-computed), 
                         i.e the exact return of buildFullTree()
       nThreads        : do multithreaded calculation (on treefind, while tree construction remains serial)
     """
     # input sanity checks
-    nDims = pos.shape[1]
     ops = {'sum':1, 'max':2, 'min':3, 'mean':4, 'kernel_mean':5, 'count':6}
     treeDims  = [3]
 
@@ -682,6 +762,45 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
         result[thread.ind0 : thread.ind1 + 1] = thread.result
 
     #print(' calcQuantReduction(): took [%g] sec.' % (time.time()-build_done_time))
+    return result
+
+def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, treePrec='single', tree=None):
+    """ Find and return the actual particle indices (indexing pos, hsml) within the search radius hsml 
+    of the posSearch location. Serial by construction, since we do only one search.
+
+      pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords for 2D)
+      posSearch[3]   : search postion
+      hsmlSearch[1]  : search distance
+      boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      treePrec       : construct the tree using 'single' or 'double' precision for coordinates
+      tree           : if not None, should be a list of all the needed tree arrays (pre-computed), 
+                       i.e the exact return of buildFullTree()
+    """
+    # input sanity checks
+    treeDims  = [3]
+
+    if isinstance(hsmlSearch,int): hsmlSearch = float(hsmlSearch)
+    assert isinstance(hsmlSearch,(float))
+    hsmlSearch = np.array(hsmlSearch, dtype='float32')
+
+    assert pos.ndim == 2 and pos.shape[1] in treeDims, 'Strange dimensions of pos.'
+    assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
+    assert pos.shape[1] in treeDims, 'Invalid ndims specification (3D only).'
+
+    # build tree
+    if tree is None:
+        NextNode, length, center, sibling, nextnode = buildFullTree(pos,boxSizeSim,treePrec)
+    else:
+        NextNode, length, center, sibling, nextnode = tree # split out list
+
+    build_done_time = time.time()
+
+    # single threaded
+    NumPart = pos.shape[0]
+
+    result = _treeSearchIndices(posSearch,hsmlSearch,NumPart,boxSizeSim,pos,NextNode,length,center,sibling,nextnode)
+
+    #print(' calcParticleIndices(): took [%g] sec (serial).' % (time.time()-build_done_time))
     return result
 
 def benchmark():
