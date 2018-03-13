@@ -8,8 +8,6 @@ from builtins import *
 
 import numpy as np
 import h5py
-import time
-import hashlib
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -19,19 +17,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import multiprocessing as mp
 from functools import partial
-from scipy.stats import binned_statistic, binned_statistic_2d
-from os.path import isfile, isdir
-from os import mkdir
 
 from util import simParams
 from plot.config import *
 from util.helper import loadColorTable, running_median, logZeroNaN, iterable, closest, getWhiteBlackColors
-from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
-from cosmo.mergertree import loadMPBs, mpbPositionComplete
+from cosmo.mergertree import mpbPositionComplete
 from plot.general import plotHistogram1D, plotPhaseSpace2D
 from plot.cosmoGeneral import quantMedianVsSecondQuant
-from plot.quantities import simSubhaloQuantity
-from tracer.tracerMC import match3
 from vis.common import gridBox, setAxisColors, setColorbarColors
 from projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox
 
@@ -94,7 +86,7 @@ def preRenderFullboxImages(sP, haloInds, snaps=None):
     partType = 'gas'
 
     for haloInd in haloInds:
-        halo = groupCatSingle(sP, haloID=haloInd)
+        halo = sP.groupCatSingle(haloID=haloInd)
         snaps_loc, snapTimes, haloPos = mpbPositionComplete(sP, halo['GroupFirstSub'])
         posSets.append(haloPos)
 
@@ -108,7 +100,7 @@ def preRenderFullboxImages(sP, haloInds, snaps=None):
         for field in ['Coordinates','Masses']:
             cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field)
             print('[%s] Caching [%s] now...' % (snap,field))
-            sP.data[cache_key] = snapshotSubset(sP, partType, field)
+            sP.data[cache_key] = sP.snapshotSubset(partType, field)
         print('All caching done.')
 
         # render in serial loop, using pre-cached particle level data
@@ -495,7 +487,7 @@ def visHaloTimeEvoSubbox(sP, sbNum, selInd, minM200=11.5, extended=False, pStyle
 
 def visHaloTimeEvoFullbox(sP, haloInd, extended=False, pStyle='white'):
     """ As above, but for full-box based tracking. """
-    halo = groupCatSingle(sP, haloID=haloInd)
+    halo = sP.groupCatSingle(haloID=haloInd)
     snaps, snapTimes, haloPos = mpbPositionComplete(sP, halo['GroupFirstSub'])
 
     # load data and call render
@@ -678,7 +670,7 @@ def sample_comparison_z2_sins_ao(sP):
     sfrField = 'SubhaloSFR' if fullSubhaloSFR else 'SubhaloSFRinRad'
     fieldsSubhalos = ['SubhaloMassInRadType',sfrField,'central_flag']
 
-    gc = groupCat(sP, fieldsSubhalos=fieldsSubhalos)
+    gc = sP.groupCat(fieldsSubhalos=fieldsSubhalos)
 
     xx_code = gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')]
     xx = sP.units.codeMassToLogMsun( xx_code )
@@ -752,7 +744,7 @@ def paperPlots():
     if 0:
         # vrad plots, single halo
         subInd = 389836 # first one in subbox0 intersecting with >11.5 selection
-        haloInd = groupCatSingle(TNG50, subhaloID=subInd)['SubhaloGrNr']
+        haloInd = TNG50.groupCatSingle(subhaloID=subInd)['SubhaloGrNr']
         explore_vrad_halos(TNG50, haloIndsPlot=[haloInd])
 
     if 0:
