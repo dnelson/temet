@@ -157,6 +157,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
 
         for snap in snaps:
             fileName = cosmo.load.snapPath(sP.simPath, snap, checkExists=True)
+            if fileName is None: continue
             with h5py.File(fileName,'r') as f:
                 if 'PartType'+str(sP.ptNum('tracer')) in f:
                     w.append(snap)
@@ -725,6 +726,8 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
             r[ptName][1] += last_sub_length[ sP.ptNum(ptName) ] - 1
 
         assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1 # otherwise we read the last/unused element of offsets_pt
+
+    r['wind'] = r['stars']
 
     return r
 
