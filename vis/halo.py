@@ -16,7 +16,7 @@ from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
 from util import simParams
 
-def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, **kwargs):
+def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
     assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','pkpc']
 
@@ -95,6 +95,9 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
     extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0], 
                boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
 
+    # modify depth?
+    boxSizeImg[2] *= depthFac
+
     # make coordinates relative
     if relCoords:
         extent[0:2] -= boxCenter[0]
@@ -163,6 +166,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
+    depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
     sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
@@ -262,6 +266,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
+    depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y

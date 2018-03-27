@@ -232,7 +232,7 @@ def groupCutoutFromSnap(run='tng'):
     ptTypes = ['gas','dm','bhs','stars']
 
     # subhaloIDs
-    samplePath = '/home/extdylan/sims.TNG/L75n1820TNG/data.files/new_mw_sample_fgas.txt'
+    samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/data.files/new_mw_sample_fgas.txt'
     data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
 
     # subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)

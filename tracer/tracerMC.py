@@ -868,7 +868,7 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
     ParentID = None
     ParentIDSortInds = None
 
-    if 0:
+    if 1:
         # for each subhalo, get a list of all child tracer IDs of parPartTypes
         trIDsBySubhalo = {}
         trCounts = np.zeros( subhaloIDs.size, dtype='uint32' )
@@ -892,10 +892,6 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         for i, subhaloID in enumerate(subhaloIDs):
             trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[subhaloID]
             offset += trCounts[i]
-
-    with h5py.File('cache.hdf5','r') as f:
-        trSearchIDs = f['trSearchIDs'][()]
-    print('REMOVE THIS USE OF TEMPORARY cache.hdf5 and IF 0 ABOVE!')
 
     # follow tracer and tracer parent properties over the requested snapshot range
     tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift)

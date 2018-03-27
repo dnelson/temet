@@ -664,8 +664,8 @@ def compareRuns_PhaseDiagram():
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
-    yAxis = 'temp'
-    xAxis = 'numdens'
+    yQuant = 'temp'
+    xQuant = 'numdens'
 
     # get list of all 512 method runs via filesystem search
     sP = simParams(res=512,run='tng',redshift=0.0,variant='0000')
@@ -679,7 +679,27 @@ def compareRuns_PhaseDiagram():
         sP = simParams(res=512,run='tng',redshift=0.0,variant=variant)
         if sP.simName == 'DM only': continue
         print(variant,sP.simName)
-        plotPhaseSpace2D(sP, yAxis, xAxis=xAxis, haloID=None, pdf=pdf)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, haloID=None, pdf=pdf)
+
+    pdf.close()
+
+def oneRun_PhaseDiagram():
+    """ Driver. """
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    # config
+    yQuant = 'temp'
+    xQuant = 'numdens'
+    xlim   = [-9.0, 2.0]
+    ylim   = [2.0, 8.5]
+    clim   = [-6.0,-0.2]
+
+    sP = simParams(res=1820,run='illustris',redshift=0.0)
+
+    # start PDF, add one page per run
+    pdf = PdfPages('phaseDiagram_%s_%d.pdf' % (sP.simName,sP.snap))
+
+    plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
 
     pdf.close()
 

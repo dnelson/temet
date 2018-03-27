@@ -23,11 +23,11 @@ def oneHaloSingleField(conf=0, haloID=None):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    run        = 'tng_zoom_dm' #'tng_zoom_dm'
-    res        = 13
-    variant    = 'sf2' # None
+    run        = 'tng' #'tng_zoom_dm'
+    res        = 2160
+    variant    = None #'sf2' # None
 
-    redshift   = 0.0
+    redshift   = 1.0
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
     nPixels    = [1920,1920]
@@ -66,12 +66,15 @@ def oneHaloSingleField(conf=0, haloID=None):
         panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
     if conf == 5:
         # magnetic field strength
-        panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
+        #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
+        panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.0,3.5]} )
+    if conf == 6:
+        panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
-    if 0:
+    if 1:
         size = 2.5
         sizeType = 'rVirial'
-    if 1:
+    if 0:
         size = 6000.0
         sizeType = 'pkpc'
 
@@ -804,6 +807,65 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
         rotStr = '_' + panels[0]['rotation'] if 'rotation' in panels[0] else ''
         plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_%s-%s%s.pdf' % \
                                   (sP.simName,sP.snap,binInd,panels[0]['partType'],panels[0]['partField'],rotStr)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def galaxyMosaic_topN(numHalosInd,panelNum=1):
+    """ Mosaic, top N most massive. """
+    res        = 2160
+    redshift   = 1.0
+    run        = 'tng'
+    rVirFracs  = None
+    method     = 'sphMap'
+    nPixels    = [960,960]
+    sizeType   = 'codeUnits'
+    axes       = [0,1]
+    rotation   = 'face-on'
+
+    class plotConfig:
+        plotStyle = 'edged'
+        rasterPx  = 240
+        nRows     = 1 # overriden below
+        colorbars = False
+
+    # configure panels
+    panels = []
+
+    starsMM = [6.5,10.0] # coldens_msunkpc2
+    gasMM   = [7.0,8.5]
+
+    # combined plot of centrals in mass bins
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
+    cen_inds = np.where(np.isfinite(mhalo))[0]
+
+    if numHalosInd == 0:
+        hIDs = cen_inds[0:0+8] # eight total
+        plotConfig.nRows = 4 # 4x2
+    if numHalosInd == 1:
+        hIDs = cen_inds[8:8+40] # 40 total, skipping the first eight
+        plotConfig.nRows = 8 # 8x5
+    if numHalosInd == 2:
+        hIDs = cen_inds[0:29*26] # 754 total, starting again at the first
+        plotConfig.nRows = 29 # 29x26 = aspect ratio about half of 16:9
+
+    for hID in hIDs:
+        # set semi-adaptive size (code units)
+        loc_size = 80.0
+        if mhalo[hID] <= 12.5:
+            loc_size = 60.0
+        if mhalo[hID] <= 12.1:
+            loc_size = 40.0
+
+        # either stars or gas, face-on
+        if panelNum == 1:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        if panelNum == 2: 
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+
+    plotConfig.saveFilename = savePathDefault + 'renderHalos_%s-%d_n%d_%s.png' % \
+                              (sP.simName,sP.snap,plotConfig.nRows,panels[0]['partType'])
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 

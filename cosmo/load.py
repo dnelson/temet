@@ -21,7 +21,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now 
-      indRange     : if a tuple/list, load only the specified range of data (field and  e.g. subhaloIDs)
+      indRange     : if a tuple/list, load only the specified range of data (field and e.g. subhaloIDs)
       onlyMeta     : load only attributes and coverage information 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
     def _concatSplitFiles(field, datasetName):
@@ -1078,6 +1078,11 @@ def snapshotSubset(sP, partType, fields,
             u  = snapshotSubset(sP, partType, 'u', **kwargs)
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.UToTemp(u,ne,log=True)
+
+            #print('TEMP REMOVE')
+            #sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
+            #w = np.where(sfr > 0.0)
+            #r[field][w] = 3.0 # set SFRing gas to cold phase temperature, instead of effective temperature
 
         # temperature (from u,nelec) [linear K]
         if field.lower() in ["temp_linear"]:
