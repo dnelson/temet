@@ -41,7 +41,6 @@ class units(object):
     helium_massfrac   = 0.24            # Y (solar)
     mu                = 0.6             # for ionized primordial (e.g. hot halo gas)
     Gravity           = 6.673e-8        # G in cgs, cm**3/g/s**2
-    H0_kmsMpc         = 70.0            # km/s/Mpc
     H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km)
     Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
     L_sun             = 3.839e33        # solar luminosity [erg/s]
@@ -62,6 +61,7 @@ class units(object):
 
     # derived constants (code units without h factors)
     H0          = None    # km/s/kpc (hubble constant at z=0)
+    H0_kmsMpc   = None     # km/s/Mpc
     G           = None    # kpc (km/s)**2 / 1e10 msun
     rhoCrit     = None    # 1e10 msun / kpc**3 (critical density, z=0)
 
@@ -127,6 +127,7 @@ class units(object):
         self.G  = self.Gravity / self.UnitLength_in_cm**3.0 * self.UnitMass_in_g * self.UnitTime_in_s**2.0
 
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0*np.pi*self.G) #code, z=0
+        self.H0_kmsMpc = self.H0 * 1000.0
 
         # derived constants / cosmology parameters
         self.mag2cgs = np.log10( self.L_sun / (4.0 * np.pi * (10*self.pc_in_cm)**2))
