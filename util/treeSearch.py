@@ -13,7 +13,7 @@ from numba import jit, void, int32
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
-@jit(nopython=True, nogil=True)#, cache=True)
+@jit(nopython=True, nogil=True, cache=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     """ Helper routine for calcHsml(), see below. """
     pp = 0
@@ -406,6 +406,8 @@ def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
         h_guess = 1.0
 
     iter_num = 0
+    dummy_in = -1
+    dummy_in2 = np.zeros(1,dtype=np.int32)
 
     while 1:
         iter_num += 1
@@ -413,7 +415,8 @@ def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
         assert iter_num < 1000 # Convergence failure, too many iterations.
 
         numNgbInH, numNgbWeightedInH, dummy = _treeSearch(xyz,h_guess,NumPart,boxSizeSim,pos,
-                                                          next_node,length,center,sibling,nextnode,-1,-1)
+                                                          next_node,length,center,sibling,nextnode,
+                                                          dummy_in2,dummy_in)
 
         # looking for h enclosing the SPH kernel weighted number, instead of the actual number?
         if weighted_num:
