@@ -16,7 +16,8 @@ from os import mkdir
 from os import remove, rename
 from glob import glob
 from scipy.interpolate import interp1d
-from util.helper import closest, tail
+from util.helper import closest, tail, getWhiteBlackColors
+from vis.common import setAxisColors
 from plot.config import *
 
 def getCpuTxtLastTimestep(filePath):
@@ -200,6 +201,9 @@ def loadTimebinsTxt(basePath):
     cols = None
 
     def _getTimsbinsLastTimestep():
+        if not isfile(filePath):
+            return 0.0, 0.0, 0.0, 0.0 # no recalculate
+
         lines = tail(filePath, 30)
         binNums = []
         for line in lines.split('\n')[::-1]:
@@ -585,7 +589,7 @@ def plotTimebins():
 
     # run config and load/parse
     saveBase = expanduser('~') + '/timebins_%s.pdf'
-    numPtsAvg = 500 # average time series down to 1000 total points
+    numPtsAvg = 500 # average time series down to N total points
 
     sPs = []
     sPs.append( simParams(res=128, run='tng', variant='0000') )
@@ -721,6 +725,128 @@ def plotTimebins():
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), prop={'size':13})
 
         fig.savefig(saveBase % 'cpufrac_stack_%s' % sP.simName)
+        plt.close(fig)
+
+def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
+    """ Plot analysis of timebins at one timestep. """
+    from util import simParams
+
+    # run config and load/parse
+    barWidth = 0.4
+    lw = 4.5
+
+    if timesteps is None:
+        timesteps = [6987020] # 4741250, 6977020
+
+    #sP = simParams(res=256, run='tng', variant='0000')
+    sP = simParams(res=2160, run='tng')
+
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
+
+    # load
+    data = loadTimebinsTxt(sP.arepoPath)
+    xx = data['bin_num'][::-1]
+
+    data['n_grav'] -= data['n_hydro'] # convert 'grav' (which includes gas) into dm/stars only
+    numPart = float(data['n_grav'][:,0].sum())
+
+    #import pdb; pdb.set_trace()
+
+    ylim = [5e-11, 3.0] #[0.5,data['n_hydro'].max()*2.5]
+
+    yticks = [numPart/1e0,numPart/1e1,numPart/1e2,numPart/1e3,numPart/1e4,numPart/1e5,
+              numPart/1e6,numPart/1e7,numPart/1e8,numPart/1e9,numPart/1e10]
+    ytickv = [val/numPart for val in yticks]
+
+    # loop over timesteps
+    for i, tsNum in enumerate(timesteps):
+        # start plot
+        print(tsNum)
+
+        fig = plt.figure(figsize=[19.2,10.8])
+        ax = fig.add_subplot(111, facecolor=color1)
+        setAxisColors(ax, color2)
+
+        ax.set_xlim([xx.max()+1,xx.min()-1])
+        ax.set_ylim(ylim)
+        ax.set_xlabel('Timebin')
+        ax.set_ylabel('Particle Fraction')
+        ax.set_yscale('log')
+        ax.minorticks_off()
+        ax.set_xticks(xx)
+        ax.set_yticks(ytickv)
+        ax.set_yticklabels(['$10^{%d}$' % np.log10(val/numPart) for val in yticks])
+
+        # config 0
+        yy1 = data['n_hydro'][:,tsNum][::-1] / numPart # reverse
+        yy2 = data['n_grav'][:,tsNum][::-1] / numPart
+        yy3 = data['cpu_frac'][:,tsNum][::-1] # 0-100%
+
+        alpha = 1.0 if conf == 0 else 0.6
+
+        r1 = ax.bar(xx - barWidth/2, yy1, barWidth,label='Hydrodynamical Cells', alpha=alpha)
+        r2 = ax.bar(xx + barWidth/2, yy2, barWidth,label='Collisionless DM/Stars', alpha=alpha)
+
+        active = data['active'][:,tsNum][::-1]
+        w = np.where(active)
+        ax.plot(xx[w] - barWidth/2, np.zeros(len(w[0]))+7e-11, 'o', markersize=5.0, color=color2, alpha=alpha)
+
+        if conf == 1:
+            # add particle fraction line (ax)
+            w = np.where(yy1 > 0)
+            ax.plot(xx[w] - barWidth/2, yy1[w], '-', lw=lw, alpha=0.9, color=color2)
+
+        # make top axis (timestep in dscale factor)
+        axTop = ax.twiny()
+        setAxisColors(axTop, color2)
+        axTop.set_xscale(ax.get_xscale())
+        axTop.set_xticks(xx)
+        topLabels = ['%.1f' % logda for logda in np.log10(data['bin_dt'][::-1])]
+        axTop.set_xticklabels(topLabels)
+        axTop.set_xlabel('Timestep [ log $\Delta a$ ]', labelpad=10)
+        axTop.set_xlim(ax.get_xlim())
+
+        # make right axis (particle fraction)
+        axRight = ax.twinx()
+        setAxisColors(axRight, color2)
+
+        if conf == 0:
+            axRight.set_yscale('log')
+            axRight.set_yticks(ytickv)
+            axRight.set_yticklabels(['$10^{%d}$' % np.log10(val) for val in yticks])
+            axRight.set_ylabel('Number of Cells / Particles')
+            axRight.set_ylim(ylim)
+            axRight.minorticks_off()
+
+        if conf == 1:
+            axRight.set_yscale('linear')
+            axRight.set_ylabel('Fraction of CPU Time Used by Timebin')
+            yticks2 = np.linspace(0,100,21)
+            axRight.set_yticks(yticks2)
+            axRight.set_yticklabels(['%d%%' % v for v in yticks2])
+            axRight.set_ylim([0,30])
+
+            w = np.where(yy3 > 0)
+            textOpts = {'fontsize':22, 'color':color2, 
+                        'horizontalalignment':'center', 'verticalalignment':'center'}
+            if len(w[0]):
+                axRight.plot(xx[w] - barWidth/2, yy3[w], ':', lw=lw, alpha=0.9, color=color2)
+                axRight.text(xx[w][-1]-1.0, yy3[w][-1], '%.1f%%'%yy3[w][-1], **textOpts)
+
+        # legend/texts
+        handles, labels = ax.get_legend_handles_labels()
+        sExtra = [plt.Line2D( (0,1), (0,0), color=color2, marker='', lw=0.0),
+                  plt.Line2D( (0,1), (0,0), color=color2, marker='', lw=0.0)]
+        lExtra = ['ts # %d' % data['step'][tsNum],
+                  'z = %7.3f' % ( 1/data['time'][tsNum]-1 )]
+        if conf == 1:
+            sExtra.append( plt.Line2D( (0,1), (0,0), color=color2, marker='', lw=lw, linestyle=':') )
+            lExtra.append('CPU Fraction')
+        legend = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
+        for text in legend.get_texts(): text.set_color(color2)
+
+        fig.savefig('timebins_%s_%04d.png' % (sP.simName,i), facecolor=color1)
+        fig.tight_layout()
         plt.close(fig)
 
 def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
