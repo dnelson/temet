@@ -22,7 +22,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
     run        = 'zooms2_josh' # 'zooms2'
     res        = 11
     hInd       = 2
-    variant    = 'FP3' # MO, PO, FP, FP1/FP2/FP3 None
+    variant    = 'FP' # MO, PO, FP, FP1/FP2/FP3 None
 
     redshift = 2.25 if snap is None else None
 
@@ -40,6 +40,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
     size       = 180.0 #400.0
     sizeType   = 'pkpc'
     axesUnits  = 'kpc'
+    depthFac   = 1.0
 
     sP = simParams(res=res, run=run, redshift=redshift, snap=snap, variant=variant, hInd=hInd)
     if redshift is None: redshift = sP.redshift
@@ -47,10 +48,9 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
     if quadrant:
         # zoom in to upper right quadrant
         halo = groupCatSingle(sP, haloID=sP.zoomSubhaloID)
-        cenShift = [halo['Group_R_Crit200']*0.25,halo['Group_R_Crit200']*0.25,0]
-        size = sP.units.codeLengthToKpc(halo['Group_R_Crit200']*0.5)
+        cenShift = [halo['Group_R_Crit200']*(0.25+0.05),halo['Group_R_Crit200']*(0.25+0.05),0]
+        size = sP.units.codeLengthToKpc(halo['Group_R_Crit200']*0.4)
         labelHalo = False
-        relCoords = False
 
     if conf == 0:
         # stellar mass column density
@@ -67,7 +67,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
         panels.append( {'partType':'gas', 'partField':'Mg II', 'valMinMax':vMM} )
     if conf == 4:
         # temperature
-        panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.3,6.3]} )
+        panels.append( {'partType':'gas', 'partField':'temp', 'valMinMax':[4.2,5.9]} )
     if conf == 5:
         # radial velocity
         panels.append( {'partType':'gas', 'partField':'radvel', 'valMinMax':[-260,260]} )
@@ -82,7 +82,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
         plotStyle    = 'open'
         rasterPx     = int(nPixels[0]*1.0)
         colorbars    = True
-        saveFilename = './%s_%s_%s_%d_%d_z%.2f_%d%s.png' % (sP.simName,panels[0]['partType'],panels[0]['partField'],res,sP.snap,redshift,size,sizeType)
+        saveFilename = './%s_%s_%s_%d_%d_z%.2f_%d%s.pdf' % (sP.simName,panels[0]['partType'],panels[0]['partField'],res,sP.snap,redshift,size,sizeType)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
