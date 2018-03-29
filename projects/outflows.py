@@ -14,18 +14,85 @@ import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize, colorConverter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.signal import savgol_filter
 
+from collections import OrderedDict
 import multiprocessing as mp
 from functools import partial
 
 from util import simParams
-from plot.config import *
 from util.helper import loadColorTable, running_median, logZeroNaN, iterable, closest, getWhiteBlackColors
-from cosmo.mergertree import mpbPositionComplete
+from plot.config import *
 from plot.general import plotHistogram1D, plotPhaseSpace2D
 from plot.cosmoGeneral import quantMedianVsSecondQuant
+from cosmo.mergertree import mpbPositionComplete
 from vis.common import gridBox, setAxisColors, setColorbarColors
+from vis.halo import renderSingleHalo
 from projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox
+from tracer.tracerMC import match3
+
+def galaxyMosaics(conf=1, rotation='face-on'):
+    """ Mosaic, top N most massive. 
+      todo: multi-redshift
+      todo: inclined/'random' orientation
+      todo: pick systems by hand instead of top N
+      todo: more than 1 mass bin?
+      todo: balance between 1 or 2 flagship examples, vs. large mosaic"""
+    res        = 2160
+    redshift   = 2.0
+    run        = 'tng'
+    rVirFracs  = None
+    method     = 'histo' #'sphMap' #'histo'
+    nPixels    = [960,960]
+    sizeType   = 'codeUnits'
+    axes       = [0,1]
+    #rotation   = 'face-on'
+    labelHalo  = 'Mstar'
+
+    class plotConfig:
+        plotStyle = 'edged'
+        rasterPx  = 960
+        nRows     = 4 # 4x3 panels
+        colorbars = True
+
+    # combined plot of centrals in mass bins
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    cen_flag = sP.groupCat(fieldsSubhalos=['central_flag'])
+    cen_inds = np.where(cen_flag)[0]
+    hIDs = cen_inds[0:0+12] # 12
+
+    # configure panels
+    panels = []
+
+    for i, hID in enumerate(hIDs):
+        # set semi-adaptive size (code units)
+        loc_size = 80.0
+
+        # either stars or gas, face-on
+        if conf == 1:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-3.0,1.0]} )
+        if conf == 2: 
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[7.0,8.5]} )
+        if conf == 3:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
+        if conf == 4:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los_sfrwt', 'valMinMax':[-300,300]} )
+            if rotation is None or rotation == 'edge-on': panels[-1]['valMinMax'] = [-400,400]
+        if conf == 5:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
+        if conf == 6:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
+
+        if i == 0: # upper left
+            panels[-1]['labelScale'] = 'physical'
+        if i == 2: # upper right
+            panels[-1]['labelZ'] = True
+
+    hStr = '_HISTO' if method == 'histo' else ''
+    plotConfig.saveFilename = 'renderHalos_%s-%d_%s_%s%s.pdf' % (sP.simName,sP.snap,panels[0]['partField'],rotation,hStr)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
 def _renderSingleImage(snap, sP, subhaloPos):
     """ Multipricessing pool target. """
@@ -726,6 +793,351 @@ def sfms_smoothing_comparison(sP):
                                  xlim=xlim, scatterPoints=True)
     pdf.close()
 
+def _fluxhelper(sP, scope, ptType, thirdQuant=None):
+    """ Helper to load RadialMassFlux aux catalogs and compute the total outflow rate (msun/yr) in radial and 
+    radial velocity bins, independent of any other properties of the gas. If thirdQuant is not None, then 
+    should be one of temp,z_solar,numdens, in which case the returned mdot is not [Nsubs,nRad,nVradcuts] but 
+    instead [Nsubs,nRad,nVradcuts,nThirdQuantBins]. """
+    assert ptType in ['Gas','Wind']
+    if thirdQuant is not None:
+        assert ptType == 'Gas'
+        assert thirdQuant in ['temp','z_solar','numdens']
+
+    acField = 'Subhalo_RadialMassFlux_%s_%s' % (scope,ptType)
+
+    if ptType == 'Gas':
+        dsetName = 'rad.vrad.temp' # will use this 3D histogram and collapse the temperature axis if thirdQuant == None
+        if thirdQuant is not None:
+            dsetName = 'rad.vrad.%s' % thirdQuant
+    if ptType == 'Wind':
+        dsetName = 'rad.vrad'
+
+    # load group catalog and auxCat
+    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+    gcIDs = np.arange(0, sP.numSubhalos)
+
+    ac = sP.auxCat(acField)
+
+    # locate dataset we want and its binning configuration
+    for key, value in ac[acField + '_attrs'].iteritems():
+        if isinstance(value,basestring):
+            if value == dsetName:
+                selNum = int( key.split('_')[1] )
+
+    binConfig = OrderedDict()
+    numBins   = OrderedDict()
+
+    for field in dsetName.split('.'):
+        key = 'bins_%d_%s' % (selNum,field)
+        binConfig[field] = ac[acField + '_attrs'][key]
+        numBins[field] = binConfig[field].size - 1
+
+    if isinstance(ac[acField],list):
+        dset = ac[acField][selNum] # Gas
+    else:
+        dset = ac[acField]
+        assert selNum == 0 # Wind, only 1 histogram and so not returned as a list
+
+    assert dset.ndim == len(binConfig.keys())+1
+    for i, field in enumerate(binConfig):
+        assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
+
+    # collapse (sum over) temperature bins, since we don't care here
+    if ptType == 'Gas' and thirdQuant is None:
+        dset = np.sum( dset, axis=(3,) )
+
+    # now have a [nSubhalos,nRad,nVRad] shaped array, derive scalar quantities for each subhalo in auxCat
+    #  --> in each radial shell, sum massflux over all temps, for vrad > vcut, taking vcut as all >= 0 vrad bins
+    vcut_inds = np.where(binConfig['vrad'] >= 0.0)[0][:-1] # last is np.inf
+    vcut_vals = binConfig['vrad'][vcut_inds]
+
+    # allocate
+    mdot_shape = [ac['subhaloIDs'].size,numBins['rad'],vcut_vals.size]
+    if thirdQuant is not None:
+        mdot_shape.append( numBins[thirdQuant] )
+
+    mdot = np.zeros(mdot_shape, dtype='float32')
+
+    for i, vcut_ind in enumerate(vcut_inds):
+        # sum over all vrad > vcut bins for this vcut value
+        if thirdQuant is None:
+            dset_local = np.sum( dset[:,:,vcut_ind:], axis=2 ) 
+            mdot[:,:,i] = dset_local
+        else:
+            dset_local = np.sum( dset[:,:,vcut_ind:,:], axis=2 ) 
+            mdot[:,:,i,:] = dset_local
+
+    # cross-match
+    gc_inds, ac_inds = match3(gcIDs, ac['subhaloIDs'])
+    assert ac_inds.size == ac['subhaloIDs'].size
+
+    mstar = mstar[gc_inds]
+
+    return mdot, mstar, binConfig, numBins, vcut_vals
+
+def gasOutflowRatesVsMstar(sP):
+    """ Explore radial mass flux data, aggregating into a single Msun/yr value for each galaxy, and plotting 
+    trends as a function of stellar mass. """
+
+    # config
+    scope = 'SubfindWithFuzz' # or 'Global'
+    ptType = 'Gas' #'Wind'
+
+    # plot config
+    xlim = [7.5, 11.0]
+    ylim = [-2.8, 2.5]
+
+    binSize = 0.2 # in M*
+    markersize = 0.0 # 4.0, or 0.0 to disable
+    malpha = 0.4
+    lw = 2.0
+    linestyles = ['-','--',':','-.']
+
+    def _plotHelper(vcutIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None):
+        """ Plot a radii series, vcut series, or both. """
+        # plot setup
+        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+        
+        if ylimLoc is None: ylimLoc = ylim
+
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylimLoc)
+
+        ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ]')
+        ax.set_ylabel('%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType)
+
+        labels_sec = []
+
+        # loop over radii or vcut selections
+        for i, rad_ind in enumerate(radIndsPlot):
+
+            if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
+                c = ax._get_lines.prop_cycler.next()['color'] # one color per rad, if cycling over both
+
+            for j, vcut_ind in enumerate(vcutIndsPlot):
+                # local data
+                yy = logZeroNaN( mdot[:,rad_ind,vcut_ind] ) # zero flux -> nan, skipped in median
+
+                # label and color
+                radMidPoint = 0.5*(binConfig['rad'][rad_ind] + binConfig['rad'][rad_ind+1])
+                if len(vcutIndsPlot) == 1:
+                    label = 'r = %3d kpc' % radMidPoint
+                    labelFixed = 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
+                if len(radIndsPlot) == 1:
+                    label = 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind]
+                    labelFixed = 'r = %3d kpc' % radMidPoint
+                if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
+                    label = 'r = %3d kpc' % radMidPoint # primary label radius, by color
+                    labels_sec.append( 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind] ) # second legend: vcut by ls
+                    if j > 0: label = ''
+
+                if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
+                    c = ax._get_lines.prop_cycler.next()['color']
+
+                # symbols for each system
+                if markersize > 0:
+                    ax.plot(mstar, yy, 'o', color=c, markersize=markersize, alpha=malpha)                    
+
+                # mark those at absolute zero just above the bottom of the y-axis
+                if markersize > 0:
+                    off = 0.4
+                    w_zero = np.where(np.isnan(yy))
+                    yy_zero = np.random.uniform( size=len(w_zero[0]), low=ylim[0]+off/2, high=ylim[0]+off )
+                    ax.plot(mstar[w_zero], yy_zero, 'o', alpha=malpha/2, markersize=markersize, color=c)
+
+                # median line and 1sigma band
+                xm, ym, sm, pm = running_median(mstar,yy,binSize=binSize,percs=[16,84])
+
+                if xm.size > sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+                lsInd = j if len(vcutIndsPlot) < 4 else i
+                l, = ax.plot(xm[:-1], ym[:-1], linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
+
+                if i == 0 or j == 0:
+                    y_down = pm[0,:-1] #np.array(ym[:-1]) - sm[:-1]
+                    y_up   = pm[-1,:-1] #np.array(ym[:-1]) + sm[:-1]
+                    ax.fill_between(xm[:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
+
+        # legends and finish plot
+        if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
+            line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
+            legend2 = ax.legend([line], [labelFixed], loc='lower right')
+            ax.add_artist(legend2)
+
+        if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
+            lines = [ plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[j]) for j in range(len(vcutIndsPlot)) ]
+            legend2 = ax.legend(lines, labels_sec, loc='lower right')
+            ax.add_artist(legend2)
+
+        legend1 = ax.legend(loc='upper left')
+
+        fig.tight_layout()
+        if saveName is not None:
+            fig.savefig(saveName)
+        if pdf is not None:
+            pdf.savefig()
+        plt.close(fig)
+
+    # load simulation points
+    mdot, mstar, binConfig, numBins, vcut_vals = _fluxhelper(sP, scope, ptType)
+
+    # (A) plot for a given vcut, at many radii
+    radInds = [1,3,4,5,6,7]
+
+    pdf = PdfPages('outflowRate_%s_mstar_A_%s_%d.pdf' % (ptType,sP.simName,sP.snap))
+
+    for vcut_ind in range(vcut_vals.size):
+        _plotHelper(vcutIndsPlot=[vcut_ind],radIndsPlot=radInds,pdf=pdf)
+
+    pdf.close()
+
+    # (B) plot for a given radii, at many vcuts
+    vcutInds = [0,1,2,3,4]
+
+    pdf = PdfPages('outflowRate_%s_mstar_B_%s_%d.pdf' % (ptType,sP.simName,sP.snap))
+
+    for rad_ind in range(numBins['rad']):
+        _plotHelper(vcutIndsPlot=vcutInds,radIndsPlot=[rad_ind],pdf=pdf)
+
+    pdf.close()
+
+    # (C) single-panel combination of both radial and vcut variations
+    saveName = 'outflowRate_%s_mstar_C_%s_%d.pdf' % (ptType,sP.simName,sP.snap)
+
+    if ptType == 'Gas':
+        vcutIndsPlot = [0,2,3]
+        radIndsPlot = [1,2,5]
+        ylimLoc = [-2.5,2.0]
+
+    if ptType == 'Wind':
+        vcutIndsPlot = [0,2,4]
+        radIndsPlot = [1,2,5]
+        ylimLoc = [-3.0,1.0]
+
+    _plotHelper(vcutIndsPlot,radIndsPlot,saveName,ylimLoc=ylimLoc)
+
+    print('TODO: consider mean=True in running_median, or otherwise how to better consider zero outflow points?')
+
+def gasOutflowRatesVsQuantStackedInMstar(sP):
+    """ Explore radial mass flux data, as a function of one of the histogrammed quantities (x-axis), for single 
+    galaxies or stacked in bins of stellar mass. """
+
+    # config
+    scope = 'SubfindWithFuzz' # or 'Global'
+    ptType = 'Gas'
+
+    # plot config
+    ylim = [-3.0,1.0]
+    lw = 2.0
+    linestyles = ['-','--',':','-.']
+
+    labels = {'temp'    : 'Gas Temperature [ log K ]',
+              'z_solar' : 'Gas Metallicity [ log Z$_{\\rm sun}$ ]',
+              'numdens' : 'Gas Density [ log cm$^{-3}$ ]'}
+    limits = {'temp'    : [3.0,9.0],
+              'z_solar' : [-3.0,1.0],
+              'numdens' : [-6.0,4.0]}
+
+    def _plotHelper(vcut_ind,rad_ind,quant,mStarBins=None,indivInds=None,stat='mean',skipZeroFluxes=False,saveName=None,pdf=None):
+        """ Plot a radii series, vcut series, or both. """
+        # plot setup
+        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+        
+        ax.set_xlim(limits[quant])
+        ax.set_ylim(ylim)
+
+        ax.set_xlabel(labels[quant])
+        ax.set_ylabel('%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType)
+
+        labels_sec = []
+
+        # loop over stellar mass bins and stack
+        for i, mStarBin in enumerate(mStarBins):
+
+            c = ax._get_lines.prop_cycler.next()['color'] # one color per bin
+
+            # local data
+            w = np.where( (mstar > mStarBin[0]) & (mstar <= mStarBin[1]) )
+            mdot_local = np.squeeze( mdot[w,rad_ind,vcut_ind,:] )
+            #print(mStarBin, ' number of galaxies: ',len(w[0]))
+
+            # decision on mdot==0 systems: include (in medians/means and percentiles) or exclude?
+            if skipZeroFluxes:
+                w_zero = np.where(mdot_local == 0.0)
+                mdot_local[w_zero] = np.nan
+
+            if stat == 'median':
+                yy = np.nanmedian(mdot_local, axis=0) # median on subhalo axis
+            if stat == 'mean':
+                yy = np.nanmean(mdot_local, axis=0) # mean
+
+            yy = logZeroNaN(yy) # zero flux -> nan
+
+            # label and color
+            xx = 0.5*(binConfig[quant][:-1] + binConfig[quant][1:])
+
+            radMidPoint   = 0.5*(binConfig['rad'][rad_ind] + binConfig['rad'][rad_ind+1])
+            mStarMidPoint = 0.5*(mStarBin[0] + mStarBin[1])
+            labelFixed = 'r = %3d kpc, v$_{\\rm rad}$ > %3d km/s' % (radMidPoint,vcut_vals[vcut_ind])
+            label = 'M$^\star$ = %.1f' % mStarMidPoint
+
+            # median line and 1sigma band
+            pm = np.nanpercentile(mdot_local, [16,84], axis=0, interpolation='linear')
+            pm = logZeroNaN(pm)
+
+            yy  = savgol_filter(yy,sKn,sKo)
+            pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+            #l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, alpha=1.0, color=c, label=label)
+            l, = ax.plot(xx, yy, linestyles[0], lw=lw, alpha=1.0, color=c, label=label)
+
+            if i == 0 or i == len(mStarBins)-1:
+                w = np.where( np.isfinite(pm[0,:]) & np.isfinite(pm[-1,:]) )[0]
+                ax.fill_between(xx[w], pm[0,w], pm[-1,w], color=l.get_color(), interpolate=True, alpha=0.05)
+
+        # legends and finish plot
+        line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
+        legend2 = ax.legend([line], [labelFixed], handlelength=0.0, loc='upper left')
+        ax.add_artist(legend2)
+
+        legend1 = ax.legend(loc='upper right')
+
+        fig.tight_layout()
+        if saveName is not None:
+            fig.savefig(saveName)
+        if pdf is not None:
+            pdf.savefig()
+        plt.close(fig)
+
+    # vs temperature, load
+    quant     = 'numdens'
+    mStarBins = [ [7.9,8.1],[8.9,9.1],[9.4,9.6],[9.9,10.1],[10.3,10.7],[10.8,11.2],[11.3,11.7] ]
+
+    mdot, mstar, binConfig, numBins, vcut_vals = _fluxhelper(sP, scope, ptType, thirdQuant=quant)
+
+    for stat in ['mean','median']:
+        for skipZeros in [True,False]:
+            print(quant,stat,skipZeros)
+            # (A) vs temperature, composite at fixed rad/vcut
+            radInd  = 1
+            vcutInd = 0
+            saveName = 'outflowRate_%s_%s_mstar_%s_%d_%s_skipzeros-%s.pdf' % (ptType,quant,sP.simName,sP.snap,stat,skipZeros)
+            _plotHelper(vcutInd,radInd,quant,mStarBins,stat,skipZeroFluxes=skipZeros,saveName=saveName)
+
+            # (B) vs temperature, booklet across rad and vcut variations
+            pdf = PdfPages('outflowRate_B_%s_%s_mstar_%s_%d_%s_skipzeros-%s.pdf' % (ptType,quant,sP.simName,sP.snap,stat,skipZeros))
+
+            for radInd in [1,3,4,5,6,7]:
+                for vcutInd in [0,1,2,3,4]:
+                    _plotHelper(vcutInd,radInd,quant,mStarBins,stat,skipZeroFluxes=skipZeros,pdf=pdf)
+
+            pdf.close()
+
 # -------------------------------------------------------------------------------------------------
 
 def paperPlots():
@@ -736,6 +1148,7 @@ def paperPlots():
     TNG100  = simParams(res=1820,run='tng',redshift=redshift)
     #TNG50_2 = simParams(res=1080,run='tng',redshift=redshift) # on /isaac/ptmp/
     TNG50_3 = simParams(res=540,run='tng',redshift=redshift)
+    TNG50_4 = simParams(res=270,run='tng',redshift=redshift)
 
     if 0:
         # vrad plots, entire selection
@@ -748,12 +1161,6 @@ def paperPlots():
         explore_vrad_halos(TNG50, haloIndsPlot=[haloInd])
 
     if 0:
-        # print out subbox intersections with selection
-        sel = halo_selection(TNG50, minM200=11.5)
-        for sbNum in [0,1,2]:
-            _ = selection_subbox_overlap(TNG50, sbNum, sel, verbose=True)
-
-    if 0:
         # sample comparison against SINS-AO survey at z=2 (M*, SFR)
         TNG50.setRedshift(2.0)
         sample_comparison_z2_sins_ao(TNG50)
@@ -761,29 +1168,6 @@ def paperPlots():
     if 0:
         sfms_smoothing_comparison(TNG50)
 
-    # -----------------------
-
-    if 0:
-        # subbox: save data through time
-        haloTimeEvoDataSubbox(TNG50, sbNum=0, selInds=[0,1,2,3])
-
-    if 0:
-        # fullbox: save data through time, first 20 halos of 12.0 selection all at once
-        sel = halo_selection(TNG50, minM200=12.0)
-        haloTimeEvoDataFullbox(TNG50, haloInds=sel['haloInds'][0:20])
-
     if 1:
-        # subbox: vis image sequence
-        #preRenderSubboxImages(TNG50, sbNum=0, selInd=1)
-        visHaloTimeEvoSubbox(TNG50, sbNum=0, selInd=1, extended=True)
-
-    if 0:
-        # fullbox: vis image sequence
-        sel = halo_selection(TNG50, minM200=12.0)
-        preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
-        #visHaloTimeEvoFullbox(TNG50, haloInd=sel['haloInds'][0], extended=False)
-
-    if 0:
-        # TNG50_3 test
-        sel = halo_selection(TNG50_3, minM200=12.0)
-        haloTimeEvoDataFullbox(TNG50_3, haloInds=sel['haloInds'][0:20])
+        #gasOutflowRatesVsMstar(TNG50)
+        gasOutflowRatesVsQuantStackedInMstar(TNG50)
