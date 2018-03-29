@@ -1,5 +1,5 @@
 """
-projects/outflows.py
+projects/outflows_analysis.py
   Analysis: Outflows paper (TNG50 presentation).
   in prep.
 """
@@ -20,9 +20,9 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 
 from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs
 from cosmo.load import groupCatOffsetListIntoSnap
-from cosmo.mergertree import loadMPBs
+from cosmo.mergertree import loadMPBs, mpbPositionComplete
 from plot.quantities import simSubhaloQuantity
-from util.helper import pSplitRange
+from util.helper import pSplitRange, logZeroNaN, iterable
 from util.treeSearch import calcParticleIndices, buildFullTree
 from tracer.tracerMC import match3
 from util import simParams
@@ -403,7 +403,7 @@ def haloTimeEvoData(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, lar
             return data
 
     # thread parallelize by snapshot
-    nThreads = 32 if sP.isSubbox else 1 # assume ~full node memory usage when analyzing full boxes
+    nThreads = 8 if sP.isSubbox else 1 # assume ~full node memory usage when analyzing full boxes
     pool = mp.Pool(processes=nThreads)
     func = partial(_getHaloEvoDataOneSnap, sP=sP, haloInds=haloInds, minSnap=minSnap, maxSnap=maxSnap,
                    centerPos=centerPos, scalarFields=scalarFields, loadFields=loadFields, 
@@ -546,7 +546,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     rates (outflowing/inflowing), and compute high dimensional histograms of this gas mass 
     flux as a function of (rad,vrad,dens,temp,metallicity), as well as a few particular 2D 
     marginalized histograms of interest and 1D marginalized histograms. """
-    minStellarMass = 7.5 # log msun (30pkpc values)
+    minStellarMass = 7.4 # log msun (30pkpc values)
     cenSatSelect = 'cen' # cen, sat, all
 
     assert ptType in ['gas','wind']
@@ -702,6 +702,10 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     particles = sP.snapshotSubset(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
 
+    if ptType == 'gas':
+        particles['z_solar'] = np.log10(particles['z_solar']) # linear -> log
+        particles['numdens'] = np.log10(particles['numdens']) # linear -> log
+
     if ptType == 'wind':
         # processing wind mass fluxes: zero mass of all real stars
         sftime = sP.snapshotSubset(partType=ptType, fields='sftime', sq=True, indRange=indRange)
@@ -850,3 +854,44 @@ def massLoadingsBH(sP):
     """ Compute a 'blackhole mass loading' value by considering the BH Mdot instead of the SFR. """
     # instead of outflow_rate/BH_Mdot, maybe outflow_rate/(BH_dE/c^2)
     pass
+
+def run():
+    """ Perform all the (possibly expensive) analysis for the paper. """
+    from projects.outflows import preRenderSubboxImages, preRenderFullboxImages
+
+    redshift = 0.73 # last snapshot, 58
+
+    TNG50   = simParams(res=2160,run='tng',redshift=redshift)
+    TNG50_3 = simParams(res=540,run='tng',redshift=redshift)
+
+    if 1:
+        # print out subbox intersections with selection
+        sel = halo_selection(TNG50, minM200=12.0)
+        for sbNum in [0,1,2]:
+            _ = selection_subbox_overlap(TNG50, sbNum, sel, verbose=True)
+
+    if 1:
+        # subbox: save data through time
+        #haloTimeEvoDataSubbox(TNG50, sbNum=0, selInds=[0,1,2,3], minM200=11.5)
+        haloTimeEvoDataSubbox(TNG50, sbNum=2, selInds=[0,1,2,3,4], minM200=12.0)
+
+    if 0:
+        # fullbox: save data through time, first 20 halos of 12.0 selection all at once
+        sel = halo_selection(TNG50, minM200=12.0)
+        haloTimeEvoDataFullbox(TNG50, haloInds=sel['haloInds'][0:20])
+
+    if 0:
+        # subbox: vis image sequence
+        preRenderSubboxImages(TNG50, sbNum=2, selInd=0)
+        #visHaloTimeEvoSubbox(TNG50, sbNum=0, selInd=1, extended=True)
+
+    if 0:
+        # fullbox: vis image sequence
+        sel = halo_selection(TNG50, minM200=12.0)
+        preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
+        #visHaloTimeEvoFullbox(TNG50, haloInd=sel['haloInds'][0], extended=False)
+
+    if 0:
+        # TNG50_3 test
+        sel = halo_selection(TNG50_3, minM200=12.0)
+        haloTimeEvoDataFullbox(TNG50_3, haloInds=sel['haloInds'][0:20])
