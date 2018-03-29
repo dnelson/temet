@@ -60,7 +60,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
     #valMinMax  = [min,max]   # stretch colortable between minimum and maximum field values
-    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
+    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
     #hsmlFac     = 1.0        # multiplier on smoothing lengths for sphMap (dm 0.2) (gas 2.5)
@@ -143,7 +143,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
     #valMinMax  = [min,max]   # stretch colortable between minimum and maximum field values
-    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, voronoi_*, ...
+    method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = 960         # number of pixels per dimension of images when projecting
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
     #hsmlFac     = 2.5        # multiplier on smoothing lengths for sphMap

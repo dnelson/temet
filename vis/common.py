@@ -34,7 +34,7 @@ volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
                     'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2']
 totSumFields     = ['mass','sfr']
-velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los_sfrwt']
+velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False):
@@ -398,6 +398,8 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
     # place all coordinates back inside [0,sP.boxSize] if necessary:
     if shiftBack:
         correctPeriodicPosVecs(pos_in, sP)
+
+    pos_in = np.asarray(pos_in) # matrix to ndarray
 
     return pos_in, extent
 
@@ -1014,7 +1016,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label'] = '%s %s-Velocity [km/s]' % (ptStr,velDirection)
         config['ctName'] = 'RdBu_r'
 
-    if partField == 'velsigma_los_sfrwt':
+    if partField in ['velsigma_los','velsigma_los_sfrwt']:
         grid = np.sqrt(grid) # variance -> sigma
         config['label']  = '%s Line of Sight Velocity Dispersion [km/s]' % ptStr
         config['ctName'] = 'PuBuGn_r' # hot, magma
@@ -1157,10 +1159,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         # quantity is computed with respect to a pre-existing grid? load now
         refGrid = None
-        if partField == 'velsigma_los_sfrwt':
+        if partField in ['velsigma_los','velsigma_los_sfrwt']:
+            partFieldRef = partField.replace('sigma','') # e.g. 'velsigma_los_sfrwt' -> 'vel_los_sfrwt'
             projParamsLoc = dict(projParams)
             projParamsLoc['noclip'] = True
-            refGrid, _ = gridBox(sP, method, partType, 'vel_los_sfrwt', nPixels, axes, projType, projParamsLoc, 
+            refGrid, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc, 
                                  boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
 
         # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
@@ -1345,23 +1348,82 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                                          nPixels=nPixels, hsml_1=hsml_1, colDens=normCol, multi=True, 
                                          maxIntProj=maxIntProj, minIntProj=minIntProj, refGrid=refGrid )
 
-                # accumulate for chunked processing
-                if method in ['sphMap','sphMap_global']:
-                    grid_dens  += grid_d
-                    grid_quant += grid_q
+            elif method in ['histo']:
+                # simple 2D histogram, particles assigned to the bin which contains them
+                from scipy.stats import binned_statistic_2d
+                assert hsml_1 is None # not supported
 
-                if method in ['sphMap_minIP']:
-                    w = np.where(grid_q < grid_quant)
-                    grid_dens[w] = grid_d[w]
-                    grid_quant[w] = grid_q[w]
-                if method in ['sphMap_maxIP']:
-                    w = np.where(grid_q > grid_quant)
-                    grid_dens[w] = grid_d[w]
-                    grid_quant[w] = grid_q[w]
+                stat = 'sum'
+                if '_minIP' in method: stat = 'min'
+                if '_maxIP' in method: stat = 'max'
+
+                xMinMax = [-boxSizeImgMap[0]/2, +boxSizeImgMap[0]/2]
+                yMinMax = [-boxSizeImgMap[1]/2, +boxSizeImgMap[1]/2]
+
+                # make pos periodic relative to boxCenterMap, and slice in axes[2] dimension
+                for i in range(3):
+                    pos[:,i] -= boxCenterMap[i]
+                correctPeriodicDistVecs(pos, sP)
+
+                zvals = np.squeeze( pos[:,3-axes[0]-axes[1]] )
+                w = np.where( np.abs(zvals) <= boxSizeImgMap[2] * 0.5 )
+
+                xvals = np.squeeze( pos[w,axes[0]] )
+                yvals = np.squeeze( pos[w,axes[1]] )
+                mass  = mass[w]
+
+                # compute mass sum grid
+                grid_d, _, _, _ = binned_statistic_2d(xvals, yvals, mass, stat, bins=nPixels, range=[xMinMax,yMinMax])
+                grid_d = grid_d.T
+
+                if normCol:
+                    pixelArea = (boxSizeImg[0] / nPixels[0]) * (boxSizeImg[1] / nPixels[1])
+                    grid_d /= pixelArea
+
+                # mass-weighted quantity? compute mass*quant sum grid
+                grid_q = np.zeros( grid_d.shape, dtype=grid_d.dtype )
+
+                if quant is not None:
+                    quant = quant[w]
+
+                if quant is not None and partField != 'velsigma_los':
+                    grid_q, _, _, _ = binned_statistic_2d(xvals, yvals, mass*quant, stat, bins=nPixels, range=[xMinMax,yMinMax])
+                    grid_q = grid_q.T
+
+                # special behavior
+                #def _weighted_std(values, weights):
+                #    """ Return weighted standard deviation. Would enable e.g. velsigma_los_sfrwt, except that user 
+                #        functions in binned_statistic_2d() cannot accept any arguments beyond the list of values in a bin. 
+                #        So we cannot do a weighted f(), without rewriting the internals therein. """
+                #    avg = np.average(values, weights=weights)
+                #    delta = values - avg
+                #    var = np.average(delta*delta, weights=weights)
+                #    return np.sqrt(var)
+                if partField == 'velsigma_los':
+                    assert nChunks == 1 # otherwise not supported
+                    # refGrid loaded but not used, we let np.std() re-compute the per pixel mean
+                    grid_q, binx, biny, inds = binned_statistic_2d(xvals, yvals, quant, np.std, bins=nPixels, range=[xMinMax,yMinMax])
+                    grid_q = grid_q.T
+                    grid_q *= grid_d # pre-emptively undo normalization below == unweighted stddev(los_vel)
+                else:
+                    assert refGrid is None # not supported except for this one field
 
             else:
                 # todo: e.g. external calls to ArepoVTK for voronoi_* based visualization
                 raise Exception('Not implemented.')
+
+            # accumulate for chunked processing
+            if '_minIP' in method:
+                w = np.where(grid_q < grid_quant)
+                grid_dens[w] = grid_d[w]
+                grid_quant[w] = grid_q[w]
+            elif '_maxIP' in method:
+                w = np.where(grid_q > grid_quant)
+                grid_dens[w] = grid_d[w]
+                grid_quant[w] = grid_q[w]
+            else:
+                grid_dens  += grid_d
+                grid_quant += grid_q
 
         # normalize quantity
         grid_master = grid_dens
@@ -1596,7 +1658,7 @@ def addBoxMarkers(p, conf, ax):
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
-        if p['sP'].redshift >= 0.999:
+        if p['sP'].redshift >= 0.99:
             zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
