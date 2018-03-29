@@ -32,9 +32,9 @@ savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 # configure certain behavior types
 volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                    'xray','xray_lum','p_sync_ska','coldens_msun_ster']
-totSumFields     = ['mass']
-velLOSFieldNames = ['vlos','v_los','vel_los','velocity_los','vel_line_of_sight']
+                    'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2']
+totSumFields     = ['mass','sfr']
+velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False):
@@ -670,6 +670,9 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
         mass = snapshotSubset(sP, partType, 'xray', indRange=indRange)
 
+    if partField in ['sfr_msunyrkpc2']:
+        mass = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
+
     # flux/surface brightness (replace mass)
     if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
         # zero contribution from SFing gas cells?
@@ -715,6 +718,10 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
 
     if partField in ['masspart','particle_mass']:
         partFieldLoad = 'mass'
+
+    # weighted quantity, but using some property other than mass for the weighting (replace now)
+    if partField in ['vel_los_sfrwt','velsigma_los_sfrwt']:
+        mass = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
 
     # quantity and column density normalization
     normCol = False
@@ -782,6 +789,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
         config['label']  = '%s Particle Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'perula'
+
+    if partField == 'sfr':
+        grid = logZeroMin( grid )
+        config['label'] = 'Star Formation Rate [log M$_{\\rm sun}$/yr]'
+        config['ctName'] = 'inferno'
+
+    if partField == 'sfr_msunyrkpc2':
+        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) )
+        config['label'] = 'Star Formation Surface Density [log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$]'
+        config['ctName'] = 'inferno'
 
     # fractional total sum of sub-component relative to total (note: for now, grid is pure mass)
     if ' fracmass' in partField:
@@ -965,9 +982,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if partField in ['metal_solar','Z_solar']:
         grid = logZeroMin( grid )
-        config['label']  = '%s Metallicity [log Z$_{\\rm \odot}$]' % ptStr
-        config['ctName'] = 'gist_earth'
-        config['plawScale'] = 1.5
+        config['label']  = '%s Metallicity [log Z$_{\\rm sun}$]' % ptStr
+        config['ctName'] = 'viridis'
+        config['plawScale'] = 1.0
 
     if partField in ['SN_IaII_ratio_Fe']:
         grid = logZeroMin( grid )
@@ -988,14 +1005,19 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label']  = '%s Velocity Magnitude [km/s]' % ptStr
         config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
 
-    if partField in velLOSFieldNames:
+    if partField in ['vel_los','vel_los_sfrwt']:
         config['label']  = '%s Line of Sight Velocity [km/s]' % ptStr
         config['ctName'] = 'RdBu_r' # bwr, coolwarm, RdBu_r
 
-    if partField in velCompFieldNames:
+    if partField in ['vel_x','vel_y','velocity_x','velocity_y']:
         velDirection = partField.split("_")[1]
         config['label'] = '%s %s-Velocity [km/s]' % (ptStr,velDirection)
         config['ctName'] = 'RdBu_r'
+
+    if partField == 'velsigma_los_sfrwt':
+        grid = np.sqrt(grid) # variance -> sigma
+        config['label']  = '%s Line of Sight Velocity Dispersion [km/s]' % ptStr
+        config['ctName'] = 'PuBuGn_r' # hot, magma
 
     if partField in ['vrad','halo_vrad','radvel','halo_radvel']:
         config['label']  = '%s Radial Velocity [km/s]' % ptStr
@@ -1132,6 +1154,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             pt = sP.ptNum(partType)
             startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
             indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
+
+        # quantity is computed with respect to a pre-existing grid? load now
+        refGrid = None
+        if partField == 'velsigma_los_sfrwt':
+            projParamsLoc = dict(projParams)
+            projParamsLoc['noclip'] = True
+            refGrid, _ = gridBox(sP, method, partType, 'vel_los_sfrwt', nPixels, axes, projType, projParamsLoc, 
+                                 boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
 
         # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
         # a full tree construction to calculate hsml values
@@ -1313,7 +1343,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 grid_d, grid_q = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, ndims=3, 
                                          boxSizeSim=boxSizeSim, boxSizeImg=boxSizeImgMap, boxCen=boxCenterMap, 
                                          nPixels=nPixels, hsml_1=hsml_1, colDens=normCol, multi=True, 
-                                         maxIntProj=maxIntProj, minIntProj=minIntProj )
+                                         maxIntProj=maxIntProj, minIntProj=minIntProj, refGrid=refGrid )
 
                 # accumulate for chunked processing
                 if method in ['sphMap','sphMap_global']:
@@ -1337,6 +1367,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         grid_master = grid_dens
 
         if quant is not None:
+            # multi=True, so global normalization by per pixel 'mass' now
             w = np.where(grid_dens > 0.0)
             grid_quant[w] /= grid_dens[w]
             grid_master = grid_quant
@@ -1351,11 +1382,20 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     # temporary: something a bit peculiar here, request an entirely different grid and 
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
-    if partField in velLOSFieldNames:
+    if 0 and partField in velLOSFieldNames:
+        print('Clipping LOS velocity, visible at log(n_HI) > 19.0 only.')
         grid_nHI, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, projType, projParams, 
                               boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
 
         grid_master[grid_nHI < 19.0] = np.nan
+
+    if 1 and partField in velLOSFieldNames:
+        if 'noclip' not in projParams:
+            print('Clipping LOS velocity, visible at SFR surface density > 0.01 msun/yr/kpc^2 only.')
+            grid_sfrsd, _ = gridBox(sP, method, 'gas', 'sfr_msunyrkpc2', nPixels, axes, projType, projParams, 
+                                  boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, smoothFWHM=smoothFWHM)
+
+            grid_master[grid_sfrsd < -3.0] = np.nan
 
     # temporary: similar, truncate stellar_age projection at a stellar column density of 
     # ~log(3.2) [msun/kpc^2] equal to the bottom of the color scale for the illustris/tng sb0 box renders
@@ -1435,7 +1475,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
-    fontsize = int(conf.rasterPx[0] / 100.0 * 1.5) # 'xx-large'
+    fontsize = int(conf.rasterPx[0] / 100.0 * conf.nCols * 1.0)
 
     def _addCirclesHelper(p, ax, pos, radii, numToAdd):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
@@ -1556,7 +1596,7 @@ def addBoxMarkers(p, conf, ax):
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
-        if p['sP'].redshift >= 10.0:
+        if p['sP'].redshift >= 0.999:
             zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
@@ -1572,8 +1612,8 @@ def addBoxMarkers(p, conf, ax):
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
         scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units (kpc)
 
-        # if scale bar is more than 50% of width, reduce by 10x
-        if scaleBarLen >= 0.5 * (p['extent'][1]-p['extent'][0]):
+        # if scale bar is more than 40% of width, reduce by 10x
+        if scaleBarLen >= 0.4 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen /= 10.0
 
         # if scale bar is more than 1 Mpc (or 10Mpc), round to nearest 1 Mpc (or 10 Mpc)
@@ -1581,17 +1621,25 @@ def addBoxMarkers(p, conf, ax):
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
-        cmStr = 'c' if p['sP'].redshift > 0.0 else ''
+        # actually plot size in code units (e.g. ckpc/h)
+        scaleBarPlotLen = scaleBarLen * p['sP'].HubbleParam
+
+        if p['labelScale'] == 'physical':
+            # convert size from comoving to physical, which influences only the label below
+            scaleBarLen = np.round(scaleBarLen * p['sP'].units.scalefac)
+
+        # label
+        cmStr = 'c' if (p['sP'].redshift > 0.0 and p['labelScale'] != 'physical') else ''
         unitStrs = [cmStr+'pc',cmStr+'kpc',cmStr+'Mpc',cmStr+'Gpc'] # comoving (drop 'c' if at z=0)
         unitInd = 1 if p['sP'].mpcUnits is False else 2
 
-        scaleBarStr = "%g %s" % (scaleBarLen, unitStrs[unitInd])
+        scaleBarStr = "%d %s" % (scaleBarLen, unitStrs[unitInd])
         if scaleBarLen > 900: # use Mpc label
             scaleBarStr = "%g %s" % (scaleBarLen/1000.0, unitStrs[unitInd+1])
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 
-        lw = 2.0
+        lw = 2.0 * (conf.nCols/2)
         y_off = 0.03
 
         if conf.rasterPx[0] >= 1000:
@@ -1605,7 +1653,7 @@ def addBoxMarkers(p, conf, ax):
         yt_frac = y_off * (2 + conf.rasterPx[0]/5e3)
 
         x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx[0]) # upper left
-        x1 = x0 + (scaleBarLen * p['sP'].HubbleParam) # actually plot size in code units (e.g. ckpc/h)
+        x1 = x0 + scaleBarPlotLen
         yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx[0])
         yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(yt_frac * 960.0/conf.rasterPx[0])
 
@@ -1658,6 +1706,7 @@ def addBoxMarkers(p, conf, ax):
 
         if p['labelHalo'] == 'Mstar':
             # just Mstar
+            str2 = "log M$^\star$ = %.1f" % stellarMass
             legend_labels.append( str2 )
         else:
             # both Mhalo and Mstar
@@ -1809,8 +1858,8 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     factor  = 0.80 # bar length, fraction of column width, 1.0=whole
     height  = 0.04 # colorbar height, fraction of entire figure
     hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
-    tOffset = 0.15 # padding between top of bar and top of text label (fraction of bar height)
-    lOffset = 0.01 # padding between colorbar edges and end label (frac of bar width)
+    tOffset = 0.20 # padding between top of bar and top of text label (fraction of bar height)
+    lOffset = 0.02 # padding between colorbar edges and end label (frac of bar width)
 
     height *= heightFac
 
@@ -1843,12 +1892,10 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
-    size = 'xx-large'
-    #if conf.rasterPx[0] >= 1000:
-    #    size = int(conf.rasterPx[0] / 100.0 * 3)
+    textsize = int(conf.rasterPx[0] / 100.0 * conf.nCols * 1.0) # xx-large
 
     cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
-             size=size, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+             size=textsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
 
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
@@ -1857,15 +1904,15 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
 
     cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
-        color=colorsB[0], size=size, ha='left', va='center', transform=cax.transAxes)
+        color=colorsB[0], size=textsize, ha='left', va='center', transform=cax.transAxes)
     cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
-        color=colorsB[1], size=size, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[1], size=textsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
-        color=colorsB[2], size=size, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[2], size=textsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
-        color=colorsB[3], size=size, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[3], size=textsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
-        color=colorsB[4], size=size, ha='right', va='center', transform=cax.transAxes)
+        color=colorsB[4], size=textsize, ha='right', va='center', transform=cax.transAxes)
 
 def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
@@ -1898,6 +1945,8 @@ def renderMultiPanel(panels, conf):
     nRows   = np.floor(np.sqrt(len(panels))) if not hasattr(conf,'nRows') else conf.nRows 
     nCols   = np.ceil(len(panels) / nRows) if not hasattr(conf,'nCols') else conf.nCols
     aspect  = nRows/nCols
+
+    conf.nCols = nCols
 
     if conf.plotStyle in ['open','open_black']:
         # start plot
@@ -1959,8 +2008,8 @@ def renderMultiPanel(panels, conf):
 
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
            
-            #cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
-            #grid = np.ma.array(grid, mask=np.isnan(grid))
+            cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
+            grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
             if p['axesUnits'] == 'code':
@@ -2096,6 +2145,9 @@ def renderMultiPanel(panels, conf):
             ctName = p['ctName'] if 'ctName' in p else config['ctName']
 
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
+
+            cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
+            grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
