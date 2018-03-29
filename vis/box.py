@@ -70,7 +70,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     axes        = [0,1]       # e.g. [0,1] is x,y
     axesUnits   = 'code'      # code [ckpc/h], mpc, deg, arcmin
     labelZ      = False       # label redshift inside (upper right corner) of panel
-    labelScale  = False       # label spatial scale with scalebar (upper left of panel)
+    labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     plotHalos   = 20          # plot virial circles for the N most massive halos in the box
@@ -153,7 +153,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     axes        = [0,1]       # e.g. [0,1] is x,y
     axesUnits   = 'code'      # code [ckpc/h], Mpc, deg, arcmin
     labelZ      = False       # label redshift inside (upper right corner) of panel
-    labelScale  = False       # label spatial scale with scalebar (upper left of panel)
+    labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     plotHalos   = 0           # plot virial circles for the N most massive halos in the box
