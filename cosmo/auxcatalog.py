@@ -371,7 +371,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     select = "All Subhalos."
 
     # load group information
-    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
     gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
     nSubsTot = gc['header']['Nsubgroups_Total']
 
@@ -379,9 +379,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     if scope == 'fof':
         # replace 'SubhaloLenType' and 'SubhaloOffsetType' by parent FoF group values (for both cen/sat)
-        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])['halos']
         GroupOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
-        SubhaloGrNr = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+        SubhaloGrNr = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])['subhalos']
 
         gc['subhalos']['SubhaloLenType'] = GroupLenType[SubhaloGrNr,:]
         gc['subhalos']['SubhaloOffsetType'] = GroupOffsetType[SubhaloGrNr,:]
@@ -390,32 +390,38 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
     if pSplit is not None and scope != 'global':
-        # subdivide the global [variable ptType!] particle set, then map this back into a division of 
-        # subhalo IDs which will be better work-load balanced among tasks
-        gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
+        if 1:
+            # subdivide the global [variable ptType!] particle set, then map this back into a division of 
+            # subhalo IDs which will be better work-load balanced among tasks
+            gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
 
-        invSubs = inverseMapPartIndicesToSubhaloIDs(sP, gasSplit, ptType, debug=True, flagFuzz=False)
+            invSubs = inverseMapPartIndicesToSubhaloIDs(sP, gasSplit, ptType, debug=True, flagFuzz=False)
 
-        if pSplit[0] == pSplit[1] - 1:
-            invSubs[1] = nSubsTot
+            if pSplit[0] == pSplit[1] - 1:
+                invSubs[1] = nSubsTot
+            else:
+                assert invSubs[1] != -1
+
+            subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
         else:
-            assert invSubs[1] != -1
+            # subdivide the list of subhalo IDs directly (better balance if we aren't dominated by 
+            # work on a few big halos, but rather on the very numerous small halos)
+            subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
 
-        subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
         indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
     indRange = indRange[ptType] # choose index range for the requested particle type
 
     if scope == 'global':
         # all tasks, regardless of pSplit or not, do global load (at once, not chunked)
-        h = cosmo.load.snapshotHeader(sP)
+        h = sP.snapshotHeader()
         indRange = [0, h['NumPart'][sP.ptNum(ptType)]-1]
         i0 = 0 # never changes
         i1 = indRange[1] # never changes
 
     # stellar mass select
     if minStellarMass is not None:
-        masses = cosmo.load.groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log'])
+        masses = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
         masses = masses[subhaloIDsTodo]
         wSelect = np.where( masses >= minStellarMass )
 
@@ -454,19 +460,19 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     if ptProperty == 'radvel':
         fieldsLoad.append('pos')
         fieldsLoad.append('vel')
-        gc['subhalos']['SubhaloVel'] = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloVel'], sq=True)
+        gc['subhalos']['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'], sq=True)
         allocSize = (nSubsDo,)
 
     fieldsLoad = list(set(fieldsLoad)) # make unique
 
     particles = {}
     if len(fieldsLoad):
-        particles = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
+        particles = sP.snapshotSubsetP(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
 
     if op != 'ufunc':
         # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
         # eliminate the entire specialized ufunc logic herein
-        particles[ptProperty] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=[ptProperty], indRange=indRange)
+        particles[ptProperty] = sP.snapshotSubsetP(partType=ptType, fields=[ptProperty], indRange=indRange)
 
     if 'count' not in particles:
         particles['count'] = particles[ particles.keys()[0] ].shape[0]
@@ -497,7 +503,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
             # load additional fields, snapshot wide
             fieldsLoadMag = ['initialmass','metallicity']
-            magsLoad = cosmo.load.snapshotSubset(sP, partType=ptType, fields=fieldsLoadMag, indRange=indRange)
+            magsLoad = sP.snapshotSubset(partType=ptType, fields=fieldsLoadMag, indRange=indRange)
 
             # request magnitudes in this band
             band = weighting.split("-")[1]
@@ -510,7 +516,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
         else:
             # use a particle quantity as weights (e.g. 'mass', 'volume', 'O VI mass')
-            particles['weights'] = cosmo.load.snapshotSubset(sP, partType=ptType, fields=weighting, indRange=indRange)
+            particles['weights'] = sP.snapshotSubset(partType=ptType, fields=weighting, indRange=indRange)
 
     assert particles['weights'].ndim == 1 and particles['weights'].size == particles['count']
 
@@ -1874,11 +1880,18 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
         return (valwt_sum/wt_sum), bin_edges, bin_number
 
-    # config
-    radMin = 0.0 # log code units
-    radMax = 4.0 # log code units
-    radNumBins = 100
-    minHaloMass = 10.8 # log m200crit
+    # config (hard-coded for oxygen/outflows projects at the moment, could be generalized)
+    if sP.boxSize in [75000,205000]:
+        radMin = 0.0 # log code units
+        radMax = 4.0 # log code units
+        radNumBins = 100
+        minHaloMass = 10.8 # log m200crit
+    if sP.boxSize in [35000]:
+        radMin = 0.0 # log code units
+        radMax = 3.0 # log code units
+        radNumBins = 100
+        minHaloMass = 9.0 # log m200crit
+
     cenSatSelect = 'cen'
 
     # determine ptRestriction
@@ -2648,6 +2661,13 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global'),
    'Subhalo_RadProfile2Dz_2Mpc_Global_Stars_Mass' : \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global',proj2D=[2,2000]),
+
+   'Subhalo_RadProfile3D_FoF_SFR' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='sfr',op='sum',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_Gas_Metal_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass',op='sum',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_Gas_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='mass',op='sum',scope='fof'),
 
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : \
      partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
