@@ -626,7 +626,8 @@ class simParams:
 
         # attach various functions pre-specialized to this sP, for convenience
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList
-        from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, auxCat
+        from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
+                               auxCat, snapshotSubsetParallel
 
         self.redshiftToSnapNum = partial(redshiftToSnapNum, sP=self)
         self.snapNumToRedshift = partial(snapNumToRedshift, self)
@@ -634,6 +635,7 @@ class simParams:
         self.periodicDistsSq   = partial(periodicDistsSq, sP=self)
         self.validSnapList     = partial(validSnapList, sP=self)
 
+        self.snapshotSubsetP = partial(snapshotSubsetParallel, self)
         self.snapshotSubset = partial(snapshotSubset, self)
         self.snapshotHeader = partial(snapshotHeader, sP=self)
         self.groupCatSingle = partial(groupCatSingle, sP=self)

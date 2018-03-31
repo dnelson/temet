@@ -1641,3 +1641,100 @@ def snapshotSubset(sP, partType, fields,
     # todo: could inverse map altNames and multiDimSliceMaps such that return dict has key names exactly as requested
 
     return r
+
+
+
+def _func(sP,partType,field,indRangeLoad,indRangeSave,float32,array):
+    """ Multiprocessing target, which simply calls snapshotSubset() and writes the result 
+    directly into a shared memory array. Always called with only one field. """
+    data = sP.snapshotSubset(partType, field, indRange=indRangeLoad, sq=True, float32=float32)
+    array[ indRangeSave[0]:indRangeSave[1], ... ] = data
+    # note: could move this into il.snapshot.loadSubset() following the strategy of the 
+    # parallel groupCat() load, to actually avoid this intermediate memory usage
+
+def snapshotSubsetParallel(sP, partType, fields, indRange=None, 
+                           sq=True, haloSubset=False, float32=False, nThreads=32):
+    """ Identical to snapshotSubset() except split filesystem load over a number of 
+    concurrent python+h5py reader processes and gather the result. """
+    import multiprocessing as mp
+    import multiprocessing.sharedctypes
+    import ctypes
+    from functools import partial
+
+    if indRange is not None:
+        assert indRange[0] >= 0 and indRange[1] >= indRange[0]
+    if haloSubset and (not sP.groupOrdered or (indRange is not None)):
+        raise Exception("haloSubset only for groupordered snapshots, and not with indRange subset.")
+
+    # override path function
+    il.snapshot.snapPath = partial(snapPath, subbox=sP.subbox)
+    fields = list(iterable(fields))
+
+    # get total size, and dtype by loading one element
+    if indRange is None:
+        h = sP.snapshotHeader()
+        numPartTot = h['NumPart'][sP.ptNum(partType)]
+        indRange = [0, numPartTot-1]
+    else:
+        numPartTot = indRange[1] - indRange[0] + 1
+    
+    # haloSubset only? update indRange and continue
+    if haloSubset:
+        offsets_pt = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+        indRange = [0, offsets_pt[:,sP.ptNum(partType)].max()]
+
+    sample = snapshotSubset(sP, partType, fields, indRange=[0,0], sq=False, float32=float32)
+
+    # prepare return
+    r = {}
+
+    # do different fields in a loop, if more than one requested
+    for k in sample.keys():
+        if k == 'count':
+            continue
+
+        # prepare shape
+        shape = [numPartTot] 
+
+        if sample[k].ndim > 1:
+            shape.append( sample[k].shape[1] ) # i.e. Coordinates, append 3 as second dimension
+
+        # allocate global return
+        size = np.prod(shape) * sample[k].dtype.itemsize # bytes
+        ctype = ctypes.c_byte
+
+        shared_mem_array = mp.sharedctypes.RawArray(ctype, size)
+        numpy_array_view = np.frombuffer(shared_mem_array, sample[k].dtype).reshape(shape)
+
+        # spawn threads with indRange subsets
+        offset = 0
+        processes = []
+
+        for i in range(nThreads):
+            indRangeLoad = pSplitRange(indRange, nThreads, i)
+            if i < nThreads-1:
+                # pSplitRange() returns overlap as per np indexing convention, but snapshotSubset()
+                # indRange is inclusive of the last index
+                indRangeLoad[1] -= 1
+
+            numLoadLoc   = indRangeLoad[1] - indRangeLoad[0] + 1
+            indRangeSave = [offset, offset + numLoadLoc]
+            offset += numLoadLoc
+
+            args = (sP,partType,k,indRangeLoad,indRangeSave,float32,numpy_array_view)
+            p = mp.Process(target=_func, args=args)
+            processes.append(p)
+
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
+
+        # add into dict
+        r[k] = numpy_array_view
+
+    if len(r) == 1 and sq:
+        # single ndarray return
+        return r[fields[0]]
+
+    return r
