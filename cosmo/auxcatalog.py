@@ -1809,7 +1809,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
     from cosmo.hydrogen import calculateCDDF
 
     if omega:
-        mass = cosmo.load.snapshotSubset(sP, 'gas', species + ' mass')
+        mass = sP.snapshotSubset('gas', species + ' mass')
         code_dens = np.sum(mass) / sP.boxSize**3 # code units
         rr = sP.units.codeDensToCritRatio(code_dens, redshiftZero=True)
         desc = 'Omega_%s = (rho_%s / rho_crit,z=0)' % (species,species)

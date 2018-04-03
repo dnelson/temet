@@ -987,6 +987,49 @@ class units(object):
             return dist[0]
         return dist
 
+    def redshiftToComovingVolume(self, z):
+        """ Calculate total comoving volume from the present to redshift z (all-sky) in [cGpc^3]. """
+        return (4*np.pi/3)*self.redshiftToComovingDist(z)**3.0 / 1e9
+
+    def comovingVolumeDeltaRedshift(self, z1, z2, arcSeqSq=None, arcMinSq=None, arcDegSq=None, mpc3=False):
+        """ Calcuate comoving volume between z1 and z2 (all-sky). If any of arcSeqSq, arcMinSq, or arcDegSq 
+        are input, then return for this solid angle on the sky instead of 4pi. If mpc3, return in units of 
+        [cMpc^3] instead of the default [cGpc^3]. """
+        from scipy.integrate import quad
+        z1 = np.array(z1)
+        z2 = np.array(z2)
+        if z1.ndim == 0:
+            z1 = np.array([z1])
+            z2 = np.array([z2])
+        assert z1.shape == z2.shape
+
+        dist = np.zeros(z1.size, dtype='float32')
+        dist.fill(np.nan) # leave negative/nan redshifts unset
+
+        hubble_dist = self.c_cgs / self.H0_h1_s / self.Mpc_in_cm / self._sP.HubbleParam
+        solid_angle = 4 * np.pi # all-sky
+        gpc3_factor = 1e9
+
+        if arcDegSq is not None: solid_angle = arcDegSq * (np.pi/180)**2
+        if arcMinSq is not None: solid_angle = arcMinSq * (np.pi/180)**2 / 60**2
+        if arcSeqSq is not None: solid_angle = arcSeqSq * (np.pi/180)**2 / 3600**2
+        if mpc3: gpc3_factor = 1.0
+
+        def _qfunc(zz, omegaM, omegaL):
+            num = (1.0+zz)**2 * self.redshiftToAngDiamDist(zz)**2
+            denom = np.sqrt((1.0+zz)**2 * (omegaM * (1.0+zz)) + omegaL)
+            return num / denom
+
+        for i in range(len(dist)):
+            dist[i] = quad(_qfunc, z1[i], z2[i], args=(self._sP.omega_m,self._sP.omega_L))[0]
+            dist[i] /= gpc3_factor
+            dist[i] *= hubble_dist
+            dist[i] *= solid_angle
+
+        if len(dist) == 1:
+            return dist[0]
+        return dist
+
     def redshiftToAngDiamDist(self, z):
         """ Convert redshift z to angular diameter distance (in Mpc). This equals the 
         proper/physical transverse distance for theta=1 rad. Assumes flat. Peebles, p.325."""

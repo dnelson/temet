@@ -950,7 +950,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                     # either ionization fractions, or total mass in the ion
                     values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
                     if prop == 'mass':
-                        values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+                        values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
                 else:
                     # emission flux
                     lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
@@ -985,7 +985,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             # either ionization fractions, or total mass in the ion
             values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
             if prop == 'mass':
-                values *= snapshotSubset(sP, partType, 'Masses', **kwargs)
+                values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
         else:
             # emission flux
             lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeOrig)
@@ -1652,7 +1652,7 @@ def _func(sP,partType,field,indRangeLoad,indRangeSave,float32,array):
     # note: could move this into il.snapshot.loadSubset() following the strategy of the 
     # parallel groupCat() load, to actually avoid this intermediate memory usage
 
-def snapshotSubsetParallel(sP, partType, fields, indRange=None, 
+def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, 
                            sq=True, haloSubset=False, float32=False, nThreads=32):
     """ Identical to snapshotSubset() except split filesystem load over a number of 
     concurrent python+h5py reader processes and gather the result. """
@@ -1664,25 +1664,35 @@ def snapshotSubsetParallel(sP, partType, fields, indRange=None,
     if indRange is not None:
         assert indRange[0] >= 0 and indRange[1] >= indRange[0]
     if haloSubset and (not sP.groupOrdered or (indRange is not None)):
-        raise Exception("haloSubset only for groupordered snapshots, and not with indRange subset.")
+        raise Exception('haloSubset only for groupordered snapshots, and not with indRange subset.')
+    if haloID is not None or subhaloID is not None:
+        raise Exception('Not yet supported.')
 
     # override path function
     il.snapshot.snapPath = partial(snapPath, subbox=sP.subbox)
     fields = list(iterable(fields))
 
-    # get total size, and dtype by loading one element
+    # get total size
+    if inds is not None:
+        # load the range which bounds the minimum and maximum indices, then return subset
+        indRange = [inds.min(), inds.max()]
+
     if indRange is None:
         h = sP.snapshotHeader()
         numPartTot = h['NumPart'][sP.ptNum(partType)]
         indRange = [0, numPartTot-1]
     else:
         numPartTot = indRange[1] - indRange[0] + 1
+
+    if numPartTot == 0:
+        return {'count':0}
     
     # haloSubset only? update indRange and continue
     if haloSubset:
         offsets_pt = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
         indRange = [0, offsets_pt[:,sP.ptNum(partType)].max()]
 
+    # get shape and dtype by loading one element
     sample = snapshotSubset(sP, partType, fields, indRange=[0,0], sq=False, float32=float32)
 
     # prepare return
@@ -1731,10 +1741,14 @@ def snapshotSubsetParallel(sP, partType, fields, indRange=None,
             p.join()
 
         # add into dict
-        r[k] = numpy_array_view
+        if inds is not None:
+            r[k] = numpy_array_view[inds-inds.min()]
+        else:
+            r[k] = numpy_array_view
 
     if len(r) == 1 and sq:
         # single ndarray return
-        return r[fields[0]]
+        return r[r.keys()[0]]
 
+    r['count'] = numPartTot
     return r
