@@ -625,23 +625,25 @@ class simParams:
         self.setSnap(self.snap)
 
         # attach various functions pre-specialized to this sP, for convenience
-        from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList
+        from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
+                               cenSatSubhaloIndices
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                auxCat, snapshotSubsetParallel
 
-        self.redshiftToSnapNum = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift = partial(snapNumToRedshift, self)
-        self.periodicDists     = partial(periodicDists, sP=self)
-        self.periodicDistsSq   = partial(periodicDistsSq, sP=self)
-        self.validSnapList     = partial(validSnapList, sP=self)
+        self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift    = partial(snapNumToRedshift, self)
+        self.periodicDists        = partial(periodicDists, sP=self)
+        self.periodicDistsSq      = partial(periodicDistsSq, sP=self)
+        self.validSnapList        = partial(validSnapList, sP=self)
+        self.cenSatSubhaloIndices = partial(cenSatSubhaloIndices, sP=self)
 
         self.snapshotSubsetP = partial(snapshotSubsetParallel, self)
-        self.snapshotSubset = partial(snapshotSubset, self)
-        self.snapshotHeader = partial(snapshotHeader, sP=self)
-        self.groupCatSingle = partial(groupCatSingle, sP=self)
-        self.groupCatHeader = partial(groupCatHeader, sP=self)
-        self.groupCat       = partial(groupCat, sP=self)
-        self.auxCat         = partial(auxCat, self)
+        self.snapshotSubset  = partial(snapshotSubset, self)
+        self.snapshotHeader  = partial(snapshotHeader, sP=self)
+        self.groupCatSingle  = partial(groupCatSingle, sP=self)
+        self.groupCatHeader  = partial(groupCatHeader, sP=self)
+        self.groupCat        = partial(groupCat, sP=self)
+        self.auxCat          = partial(auxCat, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """

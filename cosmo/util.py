@@ -738,20 +738,29 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
         assert 'halos' in gc
         assert 'GroupFirstSub' in gc['halos'] and 'Group_M_Crit200' in gc['halos']
 
-    if gc is None:
-        # load what we need
-        assert sP is not None
-        gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
+    if 'css_inds_w1' in sP.data:
+        # load from cache
+        w1, w2, w3 = sP.data['css_inds_w1'], sP.data['css_inds_w2'], sP.data['css_inds_w3']
+    else:
+        if gc is None:
+            # load what we need
+            assert sP is not None
+            gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
 
-    nSubhalos = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+        nSubhalos = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
 
-    # halos with a primary subhalo
-    wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
+        # halos with a primary subhalo
+        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
 
-    # indices
-    w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
-    w2 = np.arange(nSubhalos) # centrals + satellites
-    w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+        # indices
+        w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
+        w2 = np.arange(nSubhalos) # centrals + satellites
+        w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+
+        # cache
+        sP.data['css_inds_w1'] = w1
+        sP.data['css_inds_w2'] = w2
+        sP.data['css_inds_w3'] = w3
 
     if cenSatSelect is None:
         return w1, w2, w3

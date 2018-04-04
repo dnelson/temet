@@ -24,6 +24,10 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       indRange     : if a tuple/list, load only the specified range of data (field and e.g. subhaloIDs)
       onlyMeta     : load only attributes and coverage information 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
+
+    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0] in sP.data:
+        return sP.data['ac_'+iterable(fields)[0]] # cached
+
     def _concatSplitFiles(field, datasetName):
         # specified chunk exists, do all exist? check and record sizes
         allExist = True
@@ -187,7 +191,6 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 for readField in readFields:
                     _concatSplitFiles(field, readField)
 
-        # done with chunk logic.
         # just checking for existence? (do not calculate right now if missing)
         if not isfile(auxCatPath) and searchExists:
             r[field] = None
@@ -246,6 +249,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     new_data[r['subhaloIDs'],...] = r[field]
                     print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].size,new_data.size,field))
                     r[field] = new_data
+
+            # cache
+            sP.data['ac_'+field] = {}
+            for key in r:
+                sP.data['ac_'+field][key] = r[key]
 
             continue
 
@@ -362,6 +370,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
 
+            # cache check
+            cacheKey = 'gc_sub_%s' % field
+            if cacheKey in sP.data:
+                r[field] = sP.data[cacheKey]
+                continue
+
             # halo mass (m200 or m500) of parent halo [code, msun, or log msun]
             if quant in ['mhalo_200','mhalo_200_log','mhalo_200_code',
                          'mhalo_500','mhalo_500_log','mhalo_200_code']:
@@ -447,10 +461,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
                 r[field] = gc['halos']['Group_R_Crit%d'%od][gc['subhalos']]
 
-                if '_code' not in quant:
-                    # conversion: code -> physical units
-                    r[field] = sP.units.codeLengthToKpc( r[field] )
-
+                if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
                 # satellites given nan
@@ -458,6 +469,14 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 mask[ gc['halos']['GroupFirstSub'] ] = 1
                 wSat = np.where(mask == 0)
                 r[field][wSat] = np.nan
+
+            # stellar half mass radii [code, pkpc, log pkpc]
+            if quant in ['size_stars_code','size_stars','size_stars_log','rhalf_stars_code','rhalf_stars','rhalf_stars_log']:
+                gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
+                r[field] = gc['subhalos'][:,sP.ptNum('stars')]
+
+                if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
             # radial distance to parent halo [code, pkpc, log pkpc, r200frac] (centrals will have 0)
             if quant in ['rdist_code','rdist','rdist_log','rdist_rvir']:
@@ -483,6 +502,10 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
+            # save cache
+            if field in r:
+                sP.data[cacheKey] = r[field]
+
         if len(r) >= 1:
             # have at least one custom subhalo field, were halos also requested? not allowed
             assert fieldsHalos is None
@@ -493,6 +516,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 for key in r.keys():
                     standardFields.remove(key)
                 gc = groupCat(sP, fieldsSubhalos=standardFields, sq=False)
+                import pdb; pdb.set_trace()
                 gc['subhalos'].update(r)
                 r = gc
 
@@ -523,7 +547,24 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
     r['header'] = il.groupcat.loadHeader(sP.simPath,sP.snap)
 
     if fieldsSubhalos is not None:
-        r['subhalos'] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=fieldsSubhalos)
+        # check cache
+        fieldsSubhalos = list(fieldsSubhalos)
+        r['subhalos'] = {}
+
+        for field in fieldsSubhalos:
+            cacheKey = 'gc_sub_%s' % field
+            if cacheKey in sP.data:
+                r['subhalos'][field] = sP.data[cacheKey]
+                fieldsSubhalos.remove(field)
+
+        # load
+        if len(fieldsSubhalos):
+            data = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=fieldsSubhalos)
+            if isinstance(data,dict):
+                r['subhalos'].update(data)
+            else:
+                assert isinstance(data,np.ndarray) and len(fieldsSubhalos) == 1
+                r['subhalos'][fieldsSubhalos[0]] = data
 
         # Illustris-1 metallicity fixes if needed
         if sP.run == 'illustris':
@@ -534,9 +575,32 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                     r['subhalos'][field] = il.groupcat.loadSubhalos(sP.simPath, sP.snap, fields=field)
             il.groupcat.gcPath = gcPath # restore
 
+        for field in r['subhalos']: # cache
+            sP.data['gc_sub_%s' % field] = r['subhalos'][field]
+
+        if len(r['subhalos'].keys()) == 1:
+            r['subhalos'] = data # keep old behavior of il.groupcat.loadSubhalos()
+
     if fieldsHalos is not None:
-        r['halos'] = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=fieldsHalos)
-    
+        # check cache
+        fieldsHalos = list(fieldsHalos)
+        r['halos'] = {}
+
+        for field in fieldsHalos:
+            cacheKey = 'gc_halo_%s' % field
+            if cacheKey in sP.data:
+                r['halos'][field] = sP.data[cacheKey]
+                fieldsHalos.remove(field)
+
+        # load
+        if len(fieldsHalos):
+            data = il.groupcat.loadHalos(sP.simPath, sP.snap, fields=fieldsHalos)
+            if isinstance(data,dict):
+                r['halos'].update(data)
+            else:
+                assert isinstance(data,np.ndarray) and len(fieldsHalos) == 1
+                r['halos'][fieldsHalos[0]] = data
+
         # Illustris-1 metallicity fixes if needed
         if sP.run == 'illustris':
             for field in fieldsHalos:
@@ -554,6 +618,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             if iterable(fieldsHalos)[0] == 'GroupFirstSub':
                 assert len(iterable(fieldsHalos)) == 1
                 r['halos'] = r['halos'].astype('int32')
+
+        for field in r['halos']: # cache
+            sP.data['gc_halo_%s' % field] = r['halos'][field]
+
+        if len(r['halos'].keys()) == 1:
+            r['halos'] = data # keep old behavior of il.groupcat.loadHalos()
 
     if sq:
         # remove 'halos'/'subhalos' subdict, and field subdict
@@ -1673,13 +1743,22 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     fields = list(iterable(fields))
 
     # get total size
+    h = sP.snapshotHeader()
+    numPartTot = h['NumPart'][sP.ptNum(partType)]
+
+    if numPartTot == 0:
+        return {'count':0}
+    if numPartTot < nThreads*2:
+        # low particle count, use serial
+        return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange,
+                              sq=sq, haloSubset=haloSubset, float32=float32)
+
+    # set indRange to load
     if inds is not None:
         # load the range which bounds the minimum and maximum indices, then return subset
         indRange = [inds.min(), inds.max()]
 
     if indRange is None:
-        h = sP.snapshotHeader()
-        numPartTot = h['NumPart'][sP.ptNum(partType)]
         indRange = [0, numPartTot-1]
     else:
         numPartTot = indRange[1] - indRange[0] + 1
