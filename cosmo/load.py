@@ -371,7 +371,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             quant = field.lower()
 
             # cache check
-            cacheKey = 'gc_sub_%s' % field
+            cacheKey = 'gc_subcustom_%s' % field
             if cacheKey in sP.data:
                 r[field] = sP.data[cacheKey]
                 continue
@@ -385,10 +385,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 r[field] = gc['halos']['Group_M_Crit%d'%od][gc['subhalos']]
 
-                if '_code' not in quant:
-                    # conversion: code -> physical units
-                    r[field] = sP.units.codeMassToMsun( r[field] )
-
+                if '_code' not in quant: r[field] = sP.units.codeMassToMsun( r[field] )
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
                 # satellites given nan
@@ -450,8 +447,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 r[field] = gc['subhalos']['SubhaloSFRinRad'] / mstar
 
-                if '_gyr' in quant:
-                    r[field] *= 1e9 # 1/yr to 1/Gyr
+                if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
             # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
@@ -516,7 +512,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 for key in r.keys():
                     standardFields.remove(key)
                 gc = groupCat(sP, fieldsSubhalos=standardFields, sq=False)
-                import pdb; pdb.set_trace()
+                if isinstance(gc['subhalos'],np.ndarray):
+                    assert len(standardFields) == 1
+                    gc['subhalos'] = {standardFields[0]:gc['subhalos']} # pack into dictionary as expected
                 gc['subhalos'].update(r)
                 r = gc
 
@@ -579,7 +577,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             sP.data['gc_sub_%s' % field] = r['subhalos'][field]
 
         if len(r['subhalos'].keys()) == 1:
-            r['subhalos'] = data # keep old behavior of il.groupcat.loadSubhalos()
+            r['subhalos'] = r['subhalos'][ r['subhalos'].keys()[0] ] # keep old behavior of il.groupcat.loadSubhalos()
 
     if fieldsHalos is not None:
         # check cache
@@ -623,7 +621,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             sP.data['gc_halo_%s' % field] = r['halos'][field]
 
         if len(r['halos'].keys()) == 1:
-            r['halos'] = data # keep old behavior of il.groupcat.loadHalos()
+            r['halos'] = r['halos'][ r['halos'].keys()[0] ] # keep old behavior of il.groupcat.loadHalos()
 
     if sq:
         # remove 'halos'/'subhalos' subdict, and field subdict
