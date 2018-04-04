@@ -187,7 +187,7 @@ def getTracerChildren(sP, parentSearchIDs, inds=False, ParentID=None, ParentIDSo
         global indices in the snap). """
     # if global ParentID for the snapshot is not previously loaded and passed in, load it now
     if ParentID is None:
-        ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+        ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
 
     if debug:
         print(' ParentID: Size: '+str(ParentID.size)+' min: '+str(ParentID.min())+' max: '+str(ParentID.max()))
@@ -224,7 +224,7 @@ def getTracerChildren(sP, parentSearchIDs, inds=False, ParentID=None, ParentIDSo
         return trInds
 
     # otherwise, the tracer IDs need to be loaded    
-    trIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID', inds=trInds)
+    trIDs = sP.snapshotSubsetP('tracer', 'TracerID', inds=trInds)
 
     if debug:
         print(' trIDs: Size: '+str(trIDs.size)+' min: '+str(trIDs.min())+' max: '+str(trIDs.max()))
@@ -249,7 +249,7 @@ def mapParentIDsToIndsByType(sP, parentIDs):
     nMatched = 0
 
     for ptName in r['partTypes'][::-1]:
-        parIDsType = cosmo.load.snapshotSubset(sP, ptName, 'id')
+        parIDsType = sP.snapshotSubsetP(ptName, 'id')
 
         # no particles of this type in the snapshot
         if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
@@ -435,7 +435,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         assert ParentIDSortInds is None # both should be None, or both should be not None
 
         # load and sort the parent IDs of all tracers in this snapshot
-        ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+        ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
         ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
         ParentID = ParentID[ParentIDSortInds]
 
@@ -496,7 +496,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
                 offset += (i1-i0)
 
         # load global IDs of this type
-        parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', inds=inds, indRange=indRange)
+        parIDsType = sP.snapshotSubsetP(parPartType, 'id', inds=inds, indRange=indRange)
 
         # no particles of this type in the snapshot
         if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
@@ -512,7 +512,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         trInds = ParentIDSortInds[trInds]
 
         # convert indices to IDs and save into dict
-        trIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID', inds=trInds)
+        trIDs = sP.snapshotSubsetP('tracer', 'TracerID', inds=trInds)
         trIDs = trIDs[parIndsSortInds] # make order consistent with parIDsType
 
         trIDsByParType[parPartType] = trIDs
@@ -623,7 +623,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             m = 0 # write over previous snapshot in r[], and save in this loop
 
         # for the tracers we search for: get their indices at this snapshot
-        tracerIDsLocal  = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
+        tracerIDsLocal  = sP.snapshotSubsetP('tracer', 'TracerID')
 
         tracerIndsLocal,_ = match3(tracerIDsLocal, tracerSearchIDs)
         tracerIDsLocalCheck = tracerIDsLocal[tracerIndsLocal]
@@ -646,11 +646,11 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             if debug:
                 print(' '+field)
 
-            r[field][m,:] = cosmo.load.snapshotSubset(sP, 'tracer', field, inds=tracerIndsLocal)
+            r[field][m,:] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
 
         # get parent IDs and then indices by-type
         if len(parFields):
-            tracerParIDsLocal = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=tracerIndsLocal)
+            tracerParIDsLocal = sP.snapshotSubsetP('tracer', 'ParentID', inds=tracerIndsLocal)
             tracerParsLocal = mapParentIDsToIndsByType(sP, tracerParIDsLocal)
 
             if debug:
@@ -751,7 +751,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 # general properties
                 if field not in halo_rel_fields:
                     # load parent property
-                    data = cosmo.load.snapshotSubset(sP, ptName, field, inds=indsType)
+                    data = sP.snapshotSubsetP(ptName, field, inds=indsType)
 
                     # save directly (by dimension) if not calculating further
                     if data.ndim == 1:
@@ -805,7 +805,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 # load required raw fields(s) from the snapshot
                 data = {}
                 for fName in halo_rel_fields[field]:
-                    data[fName] = cosmo.load.snapshotSubset(sP, ptName, fName, inds=indsType)
+                    data[fName] = sP.snapshotSubsetP(ptName, fName, inds=indsType)
 
                 # compute (the 4 halo properties can be scalar or arrays of the same size of indsType)
                 if field in ['rad','rad_rvir']:
@@ -1003,7 +1003,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
     if subhalos is True: assert haloTracerOffsets is not None # required for subhalo-based offsets
 
     # load and sort the parent IDs of all tracers in this snapshot
-    ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+    ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
 
     if histoMethod:
         # if the IDs of parents are dense enough, use a histogram counting approach
@@ -1051,7 +1051,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         print(parPartType)
 
         ptNum = sP.ptNum(parPartType)
-        parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id')
+        parIDsType = sP.snapshotSubsetP(parPartType, 'id')
 
         # no particles of this type in the snapshot
         if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
@@ -1296,11 +1296,11 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         trVals['TracerIDs'] = trIDs
 
         # save the parent IDs of these tracers in the same order
-        TracerID = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
+        TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
         trInds,_ = match3(TracerID,trIDs)
         assert trInds.size == trIDs.size
 
-        trVals['ParentIDs'] = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=trInds)
+        trVals['ParentIDs'] = sP.snapshotSubsetP('tracer', 'ParentID', inds=trInds)
 
         # compute lengths/offsets by halo
         trCounts, trOffsets = globalTracerLength(sP, halos=True)
@@ -1343,8 +1343,8 @@ def checkTracerMeta(sP):
     h = cosmo.load.groupCatHeader(sP)
     
     # load and sort the parent IDs of all tracers in this snapshot
-    ParentIDorig = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
-    TracerID = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
+    ParentIDorig = sP.snapshotSubsetP('tracer', 'ParentID')
+    TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
     ParentIDSortInds = np.argsort(ParentIDorig, kind='mergesort')
     ParentID = ParentIDorig[ParentIDSortInds]
 
