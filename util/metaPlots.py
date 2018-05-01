@@ -7,7 +7,7 @@ from builtins import *
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.dates import DateFormatter, HourLocator, WeekdayLocator
+from matplotlib.dates import DateFormatter, DayLocator, HourLocator, WeekdayLocator
 from datetime import datetime
 from os.path import isfile, isdir, expanduser
 
@@ -232,9 +232,10 @@ def periodic_slurm_status(nosave=False):
 
     # config
     saveDataFile = 'historical.hdf5'
-    partName = 'p.24h'
+    partNames = ['p.24h','p.gpu']
     coresPerNode = 40
     cpusPerNode = 2
+    nHyper = 1 # 2 to enable HTing accounting
 
     numRacks = 4
     rackPrefix = 'opasw'
@@ -276,11 +277,16 @@ def periodic_slurm_status(nosave=False):
     n_pending_resources  = pending_reasons.count('Resources')
     n_pending_userheld   = pending_reasons.count('JobHeldUser')
 
-    next_job_starting = jobs_pending[ pending_reasons.index('Resources') ] # always just 1?
-    next_job_starting['user_name'] = pwd.getpwuid(next_job_starting['user_id'])[0]
+    if 'Resources' in pending_reasons:
+        next_job_starting = jobs_pending[ pending_reasons.index('Resources') ] # always just 1?
+        next_job_starting['user_name'] = pwd.getpwuid(next_job_starting['user_id'])[0]
+    else:
+        next_job_starting = None
 
     # restrict nodes to those in main partition (skip login nodes, etc)
-    nodesInPart = _expandNodeList( parts[partName]['nodes'] )
+    nodesInPart = []
+    for partName in partNames:
+        nodesInPart += _expandNodeList( parts[partName]['nodes'] )
 
     for _, node in nodes.iteritems():
         if node['cpu_load'] == 4294967294: node['cpu_load'] = 0 # fix uint32 overflow
@@ -321,13 +327,15 @@ def periodic_slurm_status(nosave=False):
         (len(nodes_main), n_nodes_idle, n_nodes_alloc, n_nodes_down))
     print('Misc nodes: [%d] total.' % len(nodes_misc))
 
-    if parts[partName]['total_nodes'] != len(nodes_main):
+    if np.sum(parts[partName]['total_nodes'] for partName in partNames) != len(nodes_main):
         print('WARNING: Node count mismatch.')
     if len(nodes_main) != n_nodes_idle + n_nodes_alloc + n_nodes_down:
         print('WARNING: Nodes not all accounted for.')
 
-    nCores = parts[partName]['total_nodes'] * coresPerNode
-    nCores_alloc = np.sum([j['num_cpus'] for j in jobs_running]) / 2
+    nCores = 0
+    for partName in partNames:
+        nCores += parts[partName]['total_nodes'] * coresPerNode
+    nCores_alloc = np.sum([j['num_cpus'] for j in jobs_running]) / nHyper
     nCores_idle = nCores - nCores_alloc
 
     print('Cores: [%d] total, of which [%d] are allocated, [%d] are idle or unavailable.' % (nCores,nCores_alloc,nCores_idle))
@@ -338,14 +346,14 @@ def periodic_slurm_status(nosave=False):
     # cluster: statistics
     cluster_load = float(nCores_alloc) / nCores * 100
 
-    cpu_load_allocnodes_mean = np.mean( [float(node['cpu_load'])/(node['cpus']/2) for node in nodes_alloc] )
-    cpu_load_allnodes_mean = np.mean( [float(node['cpu_load'])/(node['cpus']/2) for node in nodes_main] )
+    cpu_load_allocnodes_mean = np.mean( [float(node['cpu_load'])/(node['cpus']/nHyper) for node in nodes_alloc] )
+    cpu_load_allnodes_mean = np.mean( [float(node['cpu_load'])/(node['cpus']/nHyper) for node in nodes_main] )
 
     print('Cluster: [%.1f%%] global load, with mean per-node CPU loads: [%.1f%% %.1f%%].' % \
         (cluster_load,cpu_load_allocnodes_mean,cpu_load_allnodes_mean))
 
     # time series data file: create if it doesn't exist already
-    nSavePts = 10000
+    nSavePts = 100000
     saveDataFields = ['cluster_load','cpu_load_allocnodes_mean','n_jobs_running','n_jobs_pending',
                       'n_nodes_down','n_nodes_idle','n_nodes_alloc']
 
@@ -432,7 +440,9 @@ def periodic_slurm_status(nosave=False):
                         facecolor=color, alpha=0.3)
 
             # load
-            load = float(nodes[name]['cpu_load']) / (nodes[name]['cpus']/2)
+            load = 0.0
+            if nodes[name]['cpu_load'] is not None:
+                load = float(nodes[name]['cpu_load']) / (nodes[name]['cpus']/nHyper)
             ax.text(xmax+padx*10, j, '%.1f%%' % load, color='#333333', **textOpts)
 
             # node name
@@ -459,7 +469,7 @@ def periodic_slurm_status(nosave=False):
     ylim = [50,100]
     fontsize = 11
 
-    ax = fig.add_axes([0.754, 0.39, 0.234, 0.20]) # left,bottom,width,height
+    ax = fig.add_axes([0.754, 0.38, 0.234, 0.18]) # left,bottom,width,height
     #ax.set_ylabel('CPU / Cluster Load [%]')
     ax.set_ylim(ylim)
 
@@ -472,13 +482,37 @@ def periodic_slurm_status(nosave=False):
     ax.tick_params(axis='y', direction='in', pad=-30)
     ax.yaxis.set_ticks(yticks)
     ax.yaxis.set_ticklabels([str(yt)+'%' for yt in yticks])
-    ax.xaxis.set_major_locator(HourLocator(byhour=[0]))
+    #ax.xaxis.set_major_locator(HourLocator(byhour=[0]))
     ax.xaxis.set_major_formatter(DateFormatter('%a')) #%Hh
-    ax.xaxis.set_minor_locator(HourLocator(byhour=[12]))
+    #ax.xaxis.set_minor_locator(HourLocator(byhour=[12]))
     ax.legend(loc='lower right', fontsize=fontsize)
 
     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
         item.set_fontsize(fontsize)
+
+    # time seris plot (6 months)
+    if 0:
+        numMonths = 2
+
+        ax = fig.add_axes([0.754, 0.59, 0.234, 0.18]) # left,bottom,width,height
+        ax.set_ylim(ylim)
+
+        minTs = stats['req_time'] - 24*60*60*30*numMonths
+        w = np.where( data['timestamp'] > minTs )[0]
+        dates = [datetime.fromtimestamp(ts) for ts in data['timestamp'] if ts > minTs]
+
+        ax.plot_date(dates, data['cluster_load'][w], '-', label='cluster load')
+        ax.plot_date(dates, data['cpu_load_allocnodes_mean'][w], '-', label='<node load>')
+        ax.tick_params(axis='y', direction='in', pad=-30)
+        ax.yaxis.set_ticks(yticks)
+        ax.yaxis.set_ticklabels([str(yt)+'%' for yt in yticks])
+        ax.xaxis.set_major_locator(DayLocator(bymonthday=1)) #bymonthday=0
+        ax.xaxis.set_major_formatter(DateFormatter('%b'))
+        ax.xaxis.set_minor_locator(DayLocator(bymonthday=[7,14,21]))
+        ax.legend(loc='lower right', fontsize=fontsize)
+
+        for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
+            item.set_fontsize(fontsize)
 
     # text
     timeStr = 'Last updated %s.' % curTime.strftime('%A (%d %b) %H:%M')
@@ -489,8 +523,10 @@ def periodic_slurm_status(nosave=False):
         (cluster_load,cpu_load_allocnodes_mean)
     jobsStr = 'jobs: [%d] running, [%d] waiting,' % (n_jobs_running,n_pending_priority+n_pending_resources)
     jobsStr2 = '[%d] userheld, & [%d] dependent.' % (n_pending_userheld,n_pending_dependency)
-    next_job_starting['name2'] =  next_job_starting['name'][:6]+'...' if len(next_job_starting['name']) > 8 else next_job_starting['name'] # truncate
-    nextJobsStr = 'next to run: id=%d %s (%s)' % (next_job_starting['job_id'],next_job_starting['name2'],next_job_starting['user_name'])
+
+    if next_job_starting is not None:
+        next_job_starting['name2'] =  next_job_starting['name'][:6]+'...' if len(next_job_starting['name']) > 8 else next_job_starting['name'] # truncate
+        nextJobsStr = 'next to run: id=%d %s (%s)' % (next_job_starting['job_id'],next_job_starting['name2'],next_job_starting['user_name'])
 
     ax.annotate('FREYA Status', [0.995,0.95], xycoords='figure fraction', fontsize=56.0, horizontalalignment='right', verticalalignment='center')
     ax.annotate(timeStr, [0.995, 0.90], xycoords='figure fraction', fontsize=16.0, horizontalalignment='right', verticalalignment='center')
@@ -499,7 +535,16 @@ def periodic_slurm_status(nosave=False):
     ax.annotate(loadStr, [0.012, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(jobsStr, [0.73, 0.98], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
     ax.annotate(jobsStr2, [0.73, 0.943], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
-    ax.annotate(nextJobsStr, [0.73, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
+    if next_job_starting is not None:
+        ax.annotate(nextJobsStr, [0.73, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
+
+    # disk usage text
+    df = subprocess.check_output('df -h /virgo /freya/u /freya/ptmp', shell=True).strip().split('\n')
+    for i, line in enumerate(df):
+        fsStr = line.split('%')[0] + '%'
+        fsStr = fsStr.replace('Size','   Size')
+        fsStr = fsStr.replace('gpfsvirgo','/virgo/          ').replace('freya_u','/freya/u/    ').replace('freya_ptmp','/freya/ptmp/')
+        ax.annotate(fsStr, [0.754, 0.70-i*0.036], xycoords='figure fraction', fontsize=19.0, horizontalalignment='left', verticalalignment='center')
 
     # save
     fig.savefig('freya_stat_1.png', dpi=100) # 1890x920 pixels
