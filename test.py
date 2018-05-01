@@ -18,6 +18,115 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+from numba import jit
+@jit(nopython=True, nogil=True, cache=True)
+def _numba_argsort(x):
+    return np.argsort(x)
+
+def benchmark_sort():
+    """ Testing sort speed. """
+    import time
+    from tracer.tracerMC import match3, _match3
+
+    N = 20000000
+    N2 = 10000
+    maxNum = 6000000000 # 6 billion
+    dtype = np.int64
+
+    np.random.seed(424242)
+    x = np.random.randint(1, maxNum, size=N, dtype=dtype)
+
+    y = x.copy()
+    np.random.shuffle(y)
+    y = y[0:N2] # random subset of these
+
+    # sort
+    start_time = time.time()
+
+    nLoops = 4
+
+    for i in np.arange(nLoops):
+        print(i)
+        #q = np.argsort(x, kind='mergesort')
+        #q = _numba_argsort(x)
+        q = _match3(x, y)
+
+    print('%d mergesorts or match3 took [%g] sec on avg' % (nLoops,(time.time()-start_time)/nLoops))
+
+    import pdb; pdb.set_trace()
+
+def vis_cholla_snapshot():
+    """ Testing. """
+    basePath = '/u/dnelson/sims.idealized/gpu.cholla/'
+    num = 999
+
+    files = glob.glob(basePath + '/output/%d.h5.*' % num)
+
+    # get size from first file and allocate
+    with h5py.File(files[0],'r') as f:
+        attrs = dict(f.attrs.items())
+        fields = f.keys()
+
+    for key in attrs:
+        print(key,attrs[key])
+
+    data = {}
+    for field in fields:
+        data[field] = np.zeros( attrs['dims'], dtype='float32' )
+
+    for file in files:
+        print(file)
+        with h5py.File(file,'r') as f:
+            # get local dataset sizes and location
+            offset = f.attrs['offset']
+            dims   = f.attrs['dims_local']
+            assert dims[2] == 1 # 2D
+
+            # read all datasets
+            for field in f:
+                data[field][offset[0]:offset[0]+dims[0],offset[1]:offset[1]+dims[1],0] = f[field][()]
+
+    # limits
+    xlim = [0, attrs['domain'][0]]
+    ylim = [0, attrs['domain'][1]]
+
+    clims = {'Energy':[6.0,7.2],
+             'density':[1.0,2.0],
+             'momentum_x':[-1.0,1.0],
+             'momentum_y':[-1.0,1.0],
+             'momentum_z':[0.0, 1.0]}
+
+    # start plot
+    from plot.config import figsize, sfclean
+    from util.helper import loadColorTable
+    from  matplotlib.colors import Normalize
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    for field in data:
+        print('plotting: [%s]' % field)
+
+        aspect = float(attrs['dims'][0])/attrs['dims'][1]
+        fig = plt.figure(figsize=[figsize[0]*sfclean*aspect, figsize[1]*sfclean])
+        ax = fig.add_subplot(1,1,1)
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+
+        cmap = loadColorTable('viridis')
+        norm = Normalize(vmin=clims[field][0], vmax=clims[field][1], clip=False)
+        zz = np.squeeze( data[field].T ) # 2D
+
+        im = plt.imshow(zz, extent=[xlim[0],xlim[1],ylim[0],ylim[1]], 
+                   cmap=cmap, norm=norm, origin='lower', interpolation='nearest', aspect=1.0)
+
+        fig.subplots_adjust(right=0.89)
+        cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.15)
+        cb = plt.colorbar(im, cax=cbar_ax)
+        cb.ax.set_ylabel(field)
+
+        fig.tight_layout()
+        fig.savefig('cholla_%d_%s.pdf' % (num,field))
+        plt.close(fig)
+
 def new_mw_fgas_sample():
     """ Sample of Guinevere. """
     from plot.quantities import simSubhaloQuantity
@@ -26,25 +135,28 @@ def new_mw_fgas_sample():
     sP_illustris = simParams(res=1820, run='illustris', redshift=0.0)
     sP_tng = simParams(res=1820, run='tng', redshift=0.0)
 
-    mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_200']) # [msun]
+    #mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_200']) # [msun]
+    mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_subfind']) # [msun]
     mstar = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mstar_30pkpc']) # [msun]
     #fgas  = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['fgas_2rhalf']) # m_gas/m_b within 2rhalfstars
     fgas,_,_,_ = simSubhaloQuantity(sP_tng, 'fgas2')
     is_central = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['central_flag'])
 
-    inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) & (is_central == 1))[0]
+    #inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) & (is_central == 1))[0]
+    inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) )[0]
 
     inds_ill_pos = crossMatchSubhalosBetweenRuns(sP_tng, sP_illustris, inds_tng, method='Positional')
     inds_ill_la  = crossMatchSubhalosBetweenRuns(sP_tng, sP_illustris, inds_tng, method='Lagrange')
 
     header = 'subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)\n'
-    with open('new_mw_sample_fgas2.txt','w') as f:
+    with open('new_mw_sample_fgas3.txt','w') as f:
         f.write(header)
         for i in range(inds_tng.size):
             f.write('%d, %d, %d\n' % (inds_tng[i], inds_ill_la[i], inds_ill_pos[i]))
 
     mhalo_ill = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['mhalo_200'])
     mstar_ill = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['mstar_30pkpc'])
+    fgas_ill,_,_,_ = simSubhaloQuantity(sP_illustris, 'fgas2')
 
     for i in range(inds_tng.size):
         if inds_tng[i] == -1 or inds_ill_la[i] == -1:
@@ -56,8 +168,10 @@ def new_mw_fgas_sample():
             mhalo2 = np.log10( mhalo_ill[inds_ill_la[i]] )
             mstar1 = np.log10( mstar[inds_tng[i]] )
             mstar2 = np.log10( mstar_ill[inds_ill_la[i]] )
+            fgas1  = fgas[inds_tng[i]]
+            fgas2  = fgas_ill[inds_ill_la[i]]
 
-            print(i,mhalo1,mhalo2,mstar1,mstar2,ratio_mhalo,ratio_mstar)
+            print(i,mhalo1,mhalo2,mstar1,mstar2,ratio_mhalo,ratio_mstar,fgas1,fgas2)
 
     import pdb; pdb.set_trace()
 

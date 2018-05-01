@@ -232,7 +232,7 @@ def groupCutoutFromSnap(run='tng'):
     ptTypes = ['gas','dm','bhs','stars']
 
     # subhaloIDs
-    samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/data.files/new_mw_sample_fgas.txt'
+    samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/postprocessing/guinevere_cutouts/new_mw_sample_fgas_sat.txt'
     data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
 
     # subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)
@@ -257,6 +257,11 @@ def groupCutoutFromSnap(run='tng'):
             print('skip -1')
             continue
 
+        saveFilename = 'cutout_%s_%d_subhalo.hdf5' % (sP.simName,subhaloID)
+        if path.isfile(saveFilename):
+            print('skip, [%s] already exists' % saveFilename)
+            continue
+
         data = {}
 
         # load (subhalo restricted)
@@ -267,13 +272,15 @@ def groupCutoutFromSnap(run='tng'):
             data[gName] = cosmo.load.snapshotSubset(sP, partType, fields[gName], subhaloID=subhaloID)
 
         # write
-        with h5py.File('cutout_%s_%d_subhalo.hdf5' % (sP.simName,subhaloID),'w') as f:
+        with h5py.File(saveFilename,'w') as f:
             for gName in data:
                 g = f.create_group(gName)
                 for field in data[gName]:
                     g[field] = data[gName][field]
 
         # get parent fof, load (fof restricted)
+        continue # skip
+
         data = {}
         subh = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
         haloID = subh['SubhaloGrNr']
@@ -298,7 +305,7 @@ def tracerCutoutFromTracerTracksCat():
 
     # get subhaloIDs
     sP = simParams(res=1820,run='tng',redshift=0.0)
-    data = np.genfromtxt(sP.derivPath + 'new_mw_sample_fgas.txt', delimiter=',', dtype='int32')
+    data = np.genfromtxt(sP.postPath + 'guinevere_cutouts/new_mw_sample_fgas_sat.txt', delimiter=',', dtype='int32')
     subhaloIDs = data[:,0]
 
     # list of tracer quantities we know
@@ -322,6 +329,11 @@ def tracerCutoutFromTracerTracksCat():
         data = {}
         for ptType in ptTypes: data[ptType] = {}
 
+        saveFilename = 'tracers_%s_%d_subhalo.hdf5' % (sP.simName,subhaloID)
+        if path.isfile(saveFilename):
+            print('skip, [%s] already exists' % saveFilename)
+            continue
+
         # load from each existing cat
         for catName, catPath in cats.iteritems():
             if 'meta.hdf5' in catPath: continue
@@ -337,7 +349,7 @@ def tracerCutoutFromTracerTracksCat():
                 redshifts = f['redshifts'][()]
 
         # write
-        with h5py.File('tracers_%s_%d_subhalo.hdf5' % (sP.simName,subhaloID),'w') as f:
+        with h5py.File(saveFilename,'w') as f:
             for ptType in ptTypes:
                 g = f.create_group(ptType)
                 for field in data[ptType]:
