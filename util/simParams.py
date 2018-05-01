@@ -252,8 +252,8 @@ class simParams:
                         
                 # draco/freya: no subbox data copied yet
                 if 'freya' in platform.node() or 'draco' in platform.node():
-                    if 'subbox' in self.variant and self.res not in [455,2160]:
-                        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455TNG, L35n2160TNG.')
+                    if 'subbox' in self.variant and self.res not in [455,1820,2160]:
+                        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455, L75n1820, L35n2160.')
                 # end draco/freya
 
             # make paths and names
@@ -629,6 +629,7 @@ class simParams:
                                cenSatSubhaloIndices
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                auxCat, snapshotSubsetParallel
+        from plot.quantities import simSubhaloQuantity
 
         self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
         self.snapNumToRedshift    = partial(snapNumToRedshift, self)
@@ -636,6 +637,7 @@ class simParams:
         self.periodicDistsSq      = partial(periodicDistsSq, sP=self)
         self.validSnapList        = partial(validSnapList, sP=self)
         self.cenSatSubhaloIndices = partial(cenSatSubhaloIndices, sP=self)
+        self.simSubhaloQuantity   = partial(simSubhaloQuantity, self)
 
         self.snapshotSubsetP = partial(snapshotSubsetParallel, self)
         self.snapshotSubset  = partial(snapshotSubset, self)

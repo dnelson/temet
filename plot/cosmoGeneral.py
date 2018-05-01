@@ -520,7 +520,8 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, 
-                             scatterPoints=False, markSubhaloIDs=None, xlim=None, ylim=None, fig_subplot=[None,None]):
+                             scatterPoints=False, markSubhaloIDs=None, mark1to1=False,
+                             xlim=None, ylim=None, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -529,7 +530,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     subhalos on it according to sLowerPercs, sUpperPercs (above/below the given percentiles), for 
     each split plotting the sub-sample yQuant again versus xQuant.
     If scatterPoints, include all raw points with a scatterplot. 
-    If markSubhaloIDs, highlight these subhalos especially on the plot. """
+    If markSubhaloIDs, highlight these subhalos especially on the plot. 
+    If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     nRows = np.floor(np.sqrt(len(yQuants)))
@@ -662,6 +664,12 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if scatterPoints:
                 w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) ) # reduce PDF weight
                 ax.scatter(sim_xvals[w], sim_yvals[w], s=markersize, marker='o', color=c, edgecolors='none', alpha=0.2)
+
+            # 1-to-1 line?
+            if mark1to1:
+                x0 = np.min( [ax.get_xlim()[0], ax.get_ylim()[0]] )
+                x1 = np.max( [ax.get_xlim()[1], ax.get_ylim()[1]] )
+                ax.plot( [x0,x1], [x0,x1], ':', lw=lw, color='black', alpha=0.9, label='1-to-1')
 
             # highlight/overplot a single subhalo or a few subhalos?
             if markSubhaloIDs is not None:
@@ -814,11 +822,11 @@ def plots2():
 def plots3():
     """ Driver (exploration median trends). """
     sPs = []
-    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    xQuant = 'mhalo_200' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
     cenSatSelects = ['cen']
 
     sQuant = 'color_C_gr' #'mstar_out_100kpc_frac_r200'
@@ -826,7 +834,7 @@ def plots3():
     sUpperPercs = [90,50]
 
     yQuants = quantList(wCounts=False, wTr=True, wMasses=True)
-    yQuants = ['size_gas']
+    yQuants = ['mstar_30pkpc']
 
     # make plots
     for css in cenSatSelects:
@@ -834,7 +842,8 @@ def plots3():
             ('-'.join([sP.simName for sP in sPs]),xQuant,css,sQuant))
 
         # all quantities on one multi-panel page:
-        #quantMedianVsSecondQuant(sPs, pdf, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css)
+        quantMedianVsSecondQuant(sPs, pdf, yQuants=yQuants, xQuant=xQuant, cenSatSelect=css,
+                                 sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
 
         # individual plot per y-quantity:
         #for yQuant in yQuants:
@@ -850,10 +859,10 @@ def plots3():
 
 def plots4():
     """ Driver (single median trend). """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
+    sP = simParams(res=2160, run='tng', redshift=0.73)
 
-    xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'mhi_30pkpc'
+    xQuant = 'size_stars' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    yQuant = 're_stars_100pkpc_jwst_f115w'
     cenSatSelect = 'cen'
 
     sQuant = None #'color_C_gr','mstar_out_100kpc_frac_r200'
@@ -866,6 +875,7 @@ def plots4():
     # one quantity
     quantMedianVsSecondQuant([sP], pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
-                             scatterPoints=True, markSubhaloIDs=[252245])
+                             scatterPoints=True, markSubhaloIDs=[252245], 
+                             xlim=[0.0, 1.2], ylim=[0.0, 1.2], mark1to1=True)
 
     pdf.close()

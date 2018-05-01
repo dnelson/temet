@@ -36,7 +36,7 @@ def halo_selection(sP, minM200=11.5):
     r = {}
 
     # quick caching
-    saveFilename = '/u/dnelson/temp_haloselect_%.1f.hdf5' % minM200
+    saveFilename = '/u/dnelson/temp_haloselect_%d_%.1f.hdf5' % (sP.snap,minM200)
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             for key in f:
@@ -164,11 +164,15 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
 
     data = {'snap':snap}
 
-    if not sP.isSubbox:
-        # temporary file already exists, then skip
-        tempSaveName = sP.derivPath + 'haloevo/evo_temp_%d.dat' % snap
+    if 1:# not sP.isSubbox:
+        # temporary file already exists, then load now (i.e. skip)
+        tempSaveName = sP.derivPath + 'haloevo/evo_temp_sub_%d.dat' % snap
         if isfile(tempSaveName):
-            print('Temporary file [%s] already exists, skipping...' % tempSaveName)
+            import pickle
+            print('Temporary file [%s] exists, loading...' % tempSaveName)
+            f = open(tempSaveName,'rb')
+            data = pickle.load(f)
+            f.close()
             return data
 
     maxAperture_sq = np.max([np.max(limits['rad']), np.max(apertures['histo2d']), np.max(apertures['histo1d'])])**2
@@ -178,7 +182,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
         data[ptType] = {}
 
         # first load global coordinates
-        x = sP.snapshotSubset(ptType, 'Coordinates', sq=False, float32=True)
+        x = sP.snapshotSubsetP(ptType, 'Coordinates', sq=False, float32=True)
         if x['count'] == 0:
             continue
 
@@ -207,7 +211,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
         fieldsToLoad = list(set( scalarFields[ptType] + loadFields[ptType] )) # unique
 
         for field in fieldsToLoad:
-            x[field] = sP.snapshotSubset(ptType, field, inds=load_inds)
+            x[field] = sP.snapshotSubsetP(ptType, field, inds=load_inds)
         
         load_inds = None
 
@@ -323,7 +327,7 @@ def _getHaloEvoDataOneSnap(snap, sP, haloInds, minSnap, maxSnap, centerPos, scal
             data[ptType][haloInd] = data_loc # add dict for this subhalo to the byPartType dict, with haloInd as key
 
     # fullbox? save dump now so we can restart
-    if not sP.isSubbox:
+    if 1: #not sP.isSubbox:
         import pickle
         f = open(tempSaveName,'wb')
         pickle.dump(data,f)
@@ -403,7 +407,7 @@ def haloTimeEvoData(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, lar
             return data
 
     # thread parallelize by snapshot
-    nThreads = 8 if sP.isSubbox else 1 # assume ~full node memory usage when analyzing full boxes
+    nThreads = 1 if sP.isSubbox else 1 # assume ~full node memory usage when analyzing full boxes
     pool = mp.Pool(processes=nThreads)
     func = partial(_getHaloEvoDataOneSnap, sP=sP, haloInds=haloInds, minSnap=minSnap, maxSnap=maxSnap,
                    centerPos=centerPos, scalarFields=scalarFields, loadFields=loadFields, 
@@ -424,7 +428,7 @@ def haloTimeEvoData(sP, haloInds, haloIndsSnap, centerPos, minSnap, maxSnap, lar
     print('[%d] snaps and [%d] halos with [%d] threads took [%.2f] sec' % (len(snaps),len(haloInds),nThreads,time.time()-start_time))
 
     # save each individually
-    numSnaps = centerPos.shape[1]
+    numSnaps = np.max(maxSnap) + 1 #centerPos.shape[1]
 
     for i, haloInd in enumerate(haloInds):
         data = {}
@@ -826,29 +830,178 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     return rr, attrs
 
+def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, subIDs=False):
+    """ Helper to load RadialMassFlux aux catalogs and compute the total outflow rate (msun/yr) in radial and 
+    radial velocity bins, independent of any other properties of the gas. If thirdQuant is not None, then 
+    should be one of temp,z_solar,numdens, in which case the returned mdot is not [Nsubs,nRad,nVradcuts] but 
+    instead [Nsubs,nRad,nVradcuts,nThirdQuantBins]. If subIDs, the second return is a list of subhalo IDs 
+    for which the radial mass fluxes are available, otherwise 30pkpc mstar values are returned for each for convenience. """
+    assert ptType in ['Gas','Wind']
+    if thirdQuant is not None:
+        assert ptType == 'Gas'
+        assert thirdQuant in ['temp','z_solar','numdens']
+
+    acField = 'Subhalo_RadialMassFlux_%s_%s' % (scope,ptType)
+
+    if ptType == 'Gas':
+        dsetName = 'rad.vrad.temp' # will use this 3D histogram and collapse the temperature axis if thirdQuant == None
+        if thirdQuant is not None:
+            dsetName = 'rad.vrad.%s' % thirdQuant
+    if ptType == 'Wind':
+        dsetName = 'rad.vrad'
+
+    # load radial mass fluxes auxCat
+    ac = sP.auxCat(acField)
+
+    # locate dataset we want and its binning configuration
+    for key, value in ac[acField + '_attrs'].iteritems():
+        if isinstance(value,basestring):
+            if value == dsetName:
+                selNum = int( key.split('_')[1] )
+
+    binConfig = OrderedDict()
+    numBins   = OrderedDict()
+
+    for field in dsetName.split('.'):
+        key = 'bins_%d_%s' % (selNum,field)
+        binConfig[field] = ac[acField + '_attrs'][key]
+        numBins[field] = binConfig[field].size - 1
+
+    if isinstance(ac[acField],list):
+        dset = ac[acField][selNum] # Gas
+    else:
+        dset = ac[acField]
+        assert selNum == 0 # Wind, only 1 histogram and so not returned as a list
+
+    assert dset.ndim == len(binConfig.keys())+1
+    for i, field in enumerate(binConfig):
+        assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
+
+    # collapse (sum over) temperature bins, since we don't care here
+    if ptType == 'Gas' and thirdQuant is None:
+        dset = np.sum( dset, axis=(3,) )
+
+    # now have a [nSubhalos,nRad,nVRad] shaped array, derive scalar quantities for each subhalo in auxCat
+    #  --> in each radial shell, sum massflux over all temps, for vrad > vcut, taking vcut as all >= 0 vrad bins
+    vcut_inds = np.where(binConfig['vrad'] >= 0.0)[0][:-1] # last is np.inf
+    vcut_vals = binConfig['vrad'][vcut_inds]
+
+    # allocate
+    mdot_shape = [ac['subhaloIDs'].size,numBins['rad'],vcut_vals.size]
+    if thirdQuant is not None:
+        mdot_shape.append( numBins[thirdQuant] )
+
+    mdot = np.zeros(mdot_shape, dtype='float32')
+
+    for i, vcut_ind in enumerate(vcut_inds):
+        # sum over all vrad > vcut bins for this vcut value
+        if thirdQuant is None:
+            dset_local = np.sum( dset[:,:,vcut_ind:], axis=2 ) 
+            mdot[:,:,i] = dset_local
+        else:
+            dset_local = np.sum( dset[:,:,vcut_ind:,:], axis=2 ) 
+            mdot[:,:,i,:] = dset_local
+
+    # results with corresponding subhalo IDs?
+    if subIDs:
+        return mdot, ac['subhaloIDs'], binConfig, numBins, vcut_vals
+
+    # else, load some group catalog properties, crossmatch, and return for convenience
+    gcIDs = np.arange(0, sP.numSubhalos)
+
+    gc_inds, ac_inds = match3(gcIDs, ac['subhaloIDs'])
+    assert ac_inds.size == ac['subhaloIDs'].size
+
+    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+    mstar = mstar[gc_inds]
+
+    return mdot, mstar, binConfig, numBins, vcut_vals
+
 def tracerOutflowRates(sP):
     """ For every subhalo, use the existing tracer_tracks catalogs to follow the evolution of all 
     member tracers across adjacent snapshots to derive the mass fluxes. Then, bin as with the 
     instantaneous method using the parent properties, either at sP.snap or interpolated to the 
     times of interface crossing. """
-    pass
+    import pdb; pdb.set_trace() # todo
 
-def massLoadingsSN(sP, sfr_timescale=100):
+
+
+def massLoadingsSN(sP, sfr_timescale=100, outflowMethod='instantaneous'):
     """ Compute a mass loading factor eta_SN = Mdot_out / SFR for every subhalo. The outflow 
     rates can be derived using the instantaneous kinematic method, or the tracer tracks method. 
     The star formation rates can be instantaneous or smoothed over some appropriate timescale. """
+    import getpass
+    import datetime
+    from util.helper import curRepoVersion
+
     assert sfr_timescale in [0, 10, 50, 100] # Myr
     scope = 'SubfindWithFuzz' # or 'Global'
+    thirdQuant = None # None, temp, z_solar, numdens (give dependence on this parameter instead of integrating over)
 
     if outflowMethod == 'instantaneous':
-        outflow_rates_gas  = sP.auxCat('Subhalo_InstantaneousOutflowRates_%s_Gas' % scope) # msun/yr
-        outflow_rates_wind = sP.auxCat('Subhalo_InstantaneousOutflowRates_%s_Wind' % scope)
+        # load fluxes of gas cells as well as wind-phase gas particles
+        outflow_rates_gas  = loadRadialMassFluxes(sP, scope, 'Gas', thirdQuant=thirdQuant, subIDs=True)
+        outflow_rates_wind = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant, subIDs=True)
+
+        ac_subhaloIDs = outflow_rates_gas[1]
+        assert np.array_equal(outflow_rates_gas[1], outflow_rates_wind[1])
+
+        # sum the two
+        outflow_rates = outflow_rates_gas[0] + outflow_rates_wind[0]
+
+        # prepare metadata
+        binConfig = 'none' if thirdQuant is None else outflow_rates_gas[2][thirdQuant]
+        numBins   = 'none' if thirdQuant is None else outflow_rates_gas[3][thirdQuant]
+
+        attrs = {'binConfig':binConfig, 'numBins':numBins, 'rad':outflow_rates_gas[2]['rad'], 'vcut_vals':outflow_rates_gas[4]}
+
     elif outFlowMethod == 'tracer_shell_crossing':
         outflow_rates = tracerOutflowRates(sP)
+        ac_subhaloIDs = None
 
+    # cross-match with group catalog
+    gcIDs = np.arange(0, sP.numSubhalos)
+    gc_inds, ac_inds = match3(gcIDs, ac_subhaloIDs)
+    assert ac_inds.size == ac_subhaloIDs.size
+
+    # load star formation rates with the requested temporal smoothing
     sfr,_,_,_ = sP.simSubhaloQuantity('sfr_30pkpc_%dmyr' % sfr_timescale) # msun/yr
+    sfr = sfr[gc_inds]
 
-    eta = outflow_rates / sfr
+    # compute eta [linear dimensionless], simultaneously for all radial bins and vrad cuts
+    eta = outflow_rates
+    w = np.where(sfr > 0.0)[0]
+    eta[w,:,:] /= sfr[w, np.newaxis, np.newaxis]
+
+    # set NaN cases either of zero outflow, or zero SFR
+    w = np.where(outflow_rates == 0.0)
+    eta[w] = np.nan
+    w = np.where(sfr == 0.0)[0]
+    eta[w,:,:] = np.nan
+
+    # save as pseudo-auxCat
+    field = 'Subhalo_MassLoadingSN_%s_SFR-%dmyr_Outflow-%s' % (scope,sfr_timescale,outflowMethod)
+    outFileName = sP.derivPath + 'auxCat/%s_%03d.hdf5' % (field,sP.snap)
+
+    with h5py.File(outFileName,'w') as f:
+        f.create_dataset(field, data=eta)
+        f.create_dataset('subhaloIDs', data=ac_subhaloIDs)
+
+        for attrName, attrValue in attrs.iteritems():
+            f[field].attrs[attrName] = attrValue
+
+        # save metadata and any additional descriptors as attributes
+        f[field].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
+        f[field].attrs['CreatedRev']  = curRepoVersion()
+        f[field].attrs['CreatedBy']   = getpass.getuser()
+
+    print(' Saved new [%s].' % outFileName)
+
+    r = {}
+    r[field] = eta
+    r['subhaloIDs'] = ac_subhaloIDs
+    r[field+'_attrs'] = dict(attrs)
+    return r
 
 def massLoadingsBH(sP):
     """ Compute a 'blackhole mass loading' value by considering the BH Mdot instead of the SFR. """
@@ -857,8 +1010,6 @@ def massLoadingsBH(sP):
 
 def run():
     """ Perform all the (possibly expensive) analysis for the paper. """
-    from projects.outflows import preRenderSubboxImages, preRenderFullboxImages
-
     redshift = 0.73 # last snapshot, 58
 
     TNG50   = simParams(res=2160,run='tng',redshift=redshift)
@@ -873,23 +1024,12 @@ def run():
     if 1:
         # subbox: save data through time
         #haloTimeEvoDataSubbox(TNG50, sbNum=0, selInds=[0,1,2,3], minM200=11.5)
-        haloTimeEvoDataSubbox(TNG50, sbNum=2, selInds=[0,1,2,3,4], minM200=12.0)
+        haloTimeEvoDataSubbox(TNG50, sbNum=2, selInds=[0], minM200=12.0)
 
     if 0:
         # fullbox: save data through time, first 20 halos of 12.0 selection all at once
         sel = halo_selection(TNG50, minM200=12.0)
         haloTimeEvoDataFullbox(TNG50, haloInds=sel['haloInds'][0:20])
-
-    if 0:
-        # subbox: vis image sequence
-        preRenderSubboxImages(TNG50, sbNum=2, selInd=0)
-        #visHaloTimeEvoSubbox(TNG50, sbNum=0, selInd=1, extended=True)
-
-    if 0:
-        # fullbox: vis image sequence
-        sel = halo_selection(TNG50, minM200=12.0)
-        preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
-        #visHaloTimeEvoFullbox(TNG50, haloInd=sel['haloInds'][0], extended=False)
 
     if 0:
         # TNG50_3 test

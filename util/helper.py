@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import collections
 from scipy.optimize import leastsq, least_squares, curve_fit
+from numba import jit
 
 # --- utility functions ---
 
@@ -495,6 +496,162 @@ def reducedChiSq(sim_x, sim_y, data_x, data_y, data_yerr=None, data_yerr_up=None
     chi2v = chi2 / data_x.size
     
     return chi2v
+
+def sgolay2d(z, window_size, order, derivative=None):
+    """ Szalay-golay filter in 2D using FFT convolutions. """
+    from scipy.signal import fftconvolve
+
+    # number of terms in the polynomial expression
+    n_terms = ( order + 1 ) * ( order + 2)  / 2.0
+   
+    if window_size % 2 == 0:
+        raise ValueError('window_size must be odd')
+   
+    if window_size**2 < n_terms:
+        raise ValueError('order is too high for the window size')
+    half_size = window_size // 2
+    exps = [ (k-n, n) for k in range(order+1) for n in range(k+1) ]
+   
+    # coordinates of points
+    ind = np.arange(-half_size, half_size+1, dtype=np.float64)
+    dx = np.repeat( ind, window_size )
+    dy = np.tile( ind, [window_size, 1]).reshape(window_size**2, )
+
+    # build matrix of system of equation
+    A = np.empty( (window_size**2, len(exps)) )
+    for i, exp in enumerate( exps ):
+        A[:,i] = (dx**exp[0]) * (dy**exp[1])
+       
+    # pad input array with appropriate values at the four borders
+    new_shape = z.shape[0] + 2*half_size, z.shape[1] + 2*half_size
+    Z = np.zeros( (new_shape) )
+    # top band
+    band = z[0, :]
+    Z[:half_size, half_size:-half_size] =  band -  np.abs( np.flipud( z[1:half_size+1, :] ) - band )
+    # bottom band
+    band = z[-1, :]
+    Z[-half_size:, half_size:-half_size] = band  + np.abs( np.flipud( z[-half_size-1:-1, :] )  -band )
+    # left band
+    band = np.tile( z[:,0].reshape(-1,1), [1,half_size])
+    Z[half_size:-half_size, :half_size] = band - np.abs( np.fliplr( z[:, 1:half_size+1] ) - band )
+    # right band
+    band = np.tile( z[:,-1].reshape(-1,1), [1,half_size] )
+    Z[half_size:-half_size, -half_size:] =  band + np.abs( np.fliplr( z[:, -half_size-1:-1] ) - band )
+    # central band
+    Z[half_size:-half_size, half_size:-half_size] = z
+   
+    # top left corner
+    band = z[0,0]
+    Z[:half_size,:half_size] = band - np.abs( np.flipud(np.fliplr(z[1:half_size+1,1:half_size+1]) ) - band )
+    # bottom right corner
+    band = z[-1,-1]
+    Z[-half_size:,-half_size:] = band + np.abs( np.flipud(np.fliplr(z[-half_size-1:-1,-half_size-1:-1]) ) - band )
+   
+    # top right corner
+    band = Z[half_size,-half_size:]
+    Z[:half_size,-half_size:] = band - np.abs( np.flipud(Z[half_size+1:2*half_size+1,-half_size:]) - band )
+    # bottom left corner
+    band = Z[-half_size:,half_size].reshape(-1,1)
+    Z[-half_size:,:half_size] = band - np.abs( np.fliplr(Z[-half_size:, half_size+1:2*half_size+1]) - band )
+   
+    # solve system and convolve
+    if derivative == None:
+        m = np.linalg.pinv(A)[0].reshape((window_size, -1))
+        return fftconvolve(Z, m, mode='valid')
+    elif derivative == 'col':
+        c = np.linalg.pinv(A)[1].reshape((window_size, -1))
+        return fftconvolve(Z, -c, mode='valid')       
+    elif derivative == 'row':
+        r = np.linalg.pinv(A)[2].reshape((window_size, -1))
+        return fftconvolve(Z, -r, mode='valid')       
+    elif derivative == 'both':
+        c = np.linalg.pinv(A)[1].reshape((window_size, -1))
+        r = np.linalg.pinv(A)[2].reshape((window_size, -1))
+        return sfftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
+
+# --- numba accelerated ---
+
+@jit(nopython=True, nogil=True, cache=True)
+def weighted_std_binned(x, vals, weights, bins):
+    """ For a given set of bins (edges), histogram x into those bins, and then compute and 
+    return the standard deviation (unbiased) of vals weighted by weights, per-bin. Assumes 
+    'reliability' (non-random) weights, following 
+    https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Weighted_sample_variance. """
+
+    # histogram, bins[i] < x < bins[i+1], same convention as np.histogram()
+    bin_inds = np.digitize(x, bins) - 1 
+    
+    # protect against x.min() < bins[0]
+    if np.min(bin_inds) < 0:
+        for i in range(bin_inds.size):
+            if bin_inds[i] < 0:
+                bin_inds[i] = 0
+
+    # sort values and weights by bin
+    bin_counts = np.bincount(bin_inds)
+
+    sort_inds = np.argsort(bin_inds)
+
+    vals_sorted = vals[sort_inds]
+    weights_sorted = weights[sort_inds]
+
+    # allocate
+    std = np.zeros( bins.size-1, dtype=np.float32 )
+
+    # loop over bins
+    offset = 0
+    for i in range(bin_counts.size):
+        if bin_counts[i] <= 1:
+            std[i] = np.nan
+            continue
+
+        # get values and weights in this bin
+        end_i = offset + bin_counts[i]
+
+        loc_vals = vals_sorted[offset : end_i]
+        loc_wts  = weights_sorted[offset : end_i]
+
+        offset += bin_counts[i]
+
+        # sum weights
+        wt_sum = np.sum(loc_wts)
+        if wt_sum == 0.0:
+            std[i] = np.nan
+            continue
+
+        num_nonzero = 0
+        for j in range(bin_counts[i]):
+            if loc_wts[j] > 0.0:
+                num_nonzero += 1
+
+        if num_nonzero <= 1:
+            std[i] = np.nan
+            continue
+
+        # calculate weighted std
+        valwt_sum = np.sum(loc_vals*loc_wts)
+
+        weighted_mean = valwt_sum / wt_sum
+        diff_sq = (loc_vals - weighted_mean)**2.0
+
+        stdwt_sum = np.sum(diff_sq*loc_wts)
+
+        if stdwt_sum == 0.0:
+            std[i] = np.nan
+            continue
+
+        wt2_sum = np.sum(loc_wts*loc_wts)
+        normalization = (wt_sum - wt2_sum/wt_sum)
+
+        if normalization == 0.0:
+            # protect against wt_sum == wt2_sum (i.e. N=1)
+            normalization = wt_sum
+
+        variance = stdwt_sum / normalization
+
+        std[i] = np.sqrt(variance)
+        
+    return std
 
 # --- vis ---
 

@@ -277,7 +277,7 @@ class sps():
     stellarLib = ['miles','basel','csk'] # unused
     dustModels = ['none','cf00','cf00_res_eff','cf00b_res_conv','cf00_res_conv','cf00_res3_conv']
 
-    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3):
+    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3, redshifted=False):
         """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
         import fsps
 
@@ -291,11 +291,17 @@ class sps():
         self.order = order # bicubic interpolation by default (1 = bilinear)
         self.bands = fsps.find_filter('') # do them all (138, now 143 with ps1*)
         #self.bands = [b for b in self.bands if 'ps1_' not in b] # exclude new 5 ps1* bands (for now)
+        self.redshifted = redshifted # redshift magnitudes and spectra by sP.redshift, otherwise z=0 (absolute)
 
         self.dust = dustModel.split("_")[0]
         self.dustModel = dustModel
 
-        saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d.hdf5' % (iso,imf,self.dust,len(self.bands))
+        zStr = ''
+        if redshifted:
+            zStr = '_z=%.1f' % sP.redshift
+            print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
+
+        saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d%s.hdf5' % (iso,imf,self.dust,len(self.bands),zStr)
 
         # no saved table? compute now
         if not isfile(saveFilename):
@@ -378,8 +384,8 @@ class sps():
                                      dust_tesc = dust_tesc,
                                      dust1_index = dust1_index)
 
-        assert pop.libraries[1] == 'miles' 
-        assert pop.libraries[0] == 'pdva' # padova07, otherwise generalize this
+        #assert pop.libraries[1] == 'miles' # not in current version of python-fsps
+        #assert pop.libraries[0] == 'pdva' # padova07, otherwise generalize this
 
         # different tracks are available at discrete metallicities (linear mass_Z/mass_tot, not in solar!)
         # (unused)
@@ -417,7 +423,8 @@ class sps():
             # update metallicity step, request magnitudes in all bands
             pop.params['zmet'] = i + 1 # 1-indexed
 
-            x = pop.get_mags(bands=self.bands)
+            redshift = self.sP.redshift if self.redshifted else None
+            x = pop.get_mags(bands=self.bands, redshift=redshift) # by default, redshift zero
 
             w, s = pop.get_spectrum(peraa=False) # Lsun/Hz, Angstroms
             assert np.array_equal(w,wave0) # we assume same wavelengths for all metal indices
@@ -430,6 +437,8 @@ class sps():
             # save spectral array
             for j in range(pop.log_age.size):
                 spec[i,j,:] = s[j,:]
+                if self.redshifted:
+                    spec[i,j,:] = self.redshiftSpectrum(wave0, s[j,:])
 
         with h5py.File(saveFilename, 'w') as f:
             f['bands'] = self.bands
@@ -621,23 +630,34 @@ class sps():
         flux = spec_perAng * (self.sP.units.L_sun / (dL_cm*dL_cm)) / (4.0*np.pi)
         flux *= 1e17
 
+        # redshift
+        flux = self.redshiftSpectrum(self.wave, flux)
+
+        # could rebin onto a wavelength grid more like SDSS observations (log wave spaced)
+        # https://github.com/moustakas/impy/blob/master/lib/ppxf/ppxf_util.py
+        return flux
+
+    def redshiftSpectrum(self, wave, spec):
+        """ If self.sP.redshift > 0, attenuation the spectrum by the luminosity distance and redshift 
+        the wavelength. If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
+        assumed distance of 10pc (i.e. absolute magnitudes)."""
+        flux = spec.copy()
+
         # if z>0, redshift the wavelength axis
         if self.sP.redshift > 0.0:
-            wave_redshifted = self.wave * (1.0 + self.sP.redshift)
+            wave_redshifted = wave * (1.0 + self.sP.redshift)
 
             # and interpolate the shifted flux to the old, unshifted wavelength points
             f = interp1d(wave_redshifted, flux, kind='linear', assume_sorted=True, 
                          bounds_error=False, fill_value=np.nan)
 
-            flux = f(self.wave)
+            flux = f(wave)
 
             # account for (1+z)^2/(1+z) factors from redshifting of photon energies, arrival rates, 
             # and bandwidth delta_freq, s.t. flux density per unit bandwidth goes as (1+z)
             # e.g. Peebles 3.87 or MoVdBWhite 10.85
             flux *= (1.0 + self.sP.redshift)
 
-        # could rebin onto a wavelength grid more like SDSS observations (log wave spaced)
-        # https://github.com/moustakas/impy/blob/master/lib/ppxf/ppxf_util.py
         return flux
 
     def mags(self, band, ages_logGyr, metals_log, masses_logMsun):
