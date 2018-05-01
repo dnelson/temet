@@ -65,7 +65,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (auxcat)
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 'mass_gasall',
-               'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr']
+               'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
+               're_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w']
+
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                    'bmag_halo_masswt',   'bmag_halo_volwt', 
                    'pratio_halo_masswt', 'pratio_halo_volwt', 'pratio_2rhalf_masswt', 
@@ -340,6 +342,29 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'SFR [ log M$_{\\rm sun}$ yr$^{-1}$ ] (<%dpkpc, %s)' % (aperture,timeStr)
             minMax = [-2.0, 2.5]
             if tight: minMax = [-1.5, 2.0]
+
+    if 're_stars_' in quant:
+        # half light radii (effective optical radii R_e) of optical light from stars, in a given band [physical kpc]
+        # testing: z-axis 2D (random) projection
+        restrictStr = ''
+        if '_100pkpc' in quant:
+            restrictStr = '_rad100pkpc'
+            quant = quant.replace('_100pkpc','')
+
+        band = quant.split('re_stars_')[1]
+
+        fieldName = 'Subhalo_HalfLightRad_p07c_cf00dust_z' + restrictStr
+        ac = auxCat(sP, fieldName)
+
+        bands = list(ac[fieldName + '_attrs']['bands'])
+        assert band in bands
+        bandInd = bands.index(band)
+
+        vals = sP.units.codeLengthToKpc(ac[fieldName][:,bandInd])
+
+        label = 'Stellar R$_{\\rm e}$ [ log kpc ]'
+        minMax = [0.1, 1.6]
+        if tight: minMax = [0.2, 1.8]
 
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
@@ -1193,7 +1218,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         assert ptType == 'gas'
         label = 'Gas Temperature [ log K ]'
         lim = [3.5, 7.2]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty in ['nh','hdens']:
@@ -1283,19 +1308,19 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         assert ptType == 'gas'
         label = 'Gas Pressure [ log K cm$^{-3}$ ]'
         lim = [-1.0,7.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty == 'p_b_linear':
         label = 'Gas Magnetic Pressure [ log K cm$^{-3}$ ]'
         lim = [-15.0, 16.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:
         label = 'Gas Total Pressure [ log K cm$^{-3}$ ]'
         lim = [-15.0, 16.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     # todo: u_ke, p_tot, p_sync
@@ -1356,34 +1381,62 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
 
         label = 'Gas %s Mass Density [ log g cm$^{-3}$ ]' % metalStr
         lim = [-32.0,-25.5]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty in ['gravpot','gravpotential']:
         label = '%s Gravitational Potential [ (km/s)$^2$ ]' % typeStr
         lim = [-1e4, 1e5] # todo
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = False
 
     if ptProperty in ['tcool','cooltime']:
         assert ptType == 'gas'
         label = 'Gas Cooling Time [ log Gyr ]'
         lim = [-3.0,2.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
+        log = True
+
+    if ptProperty in ['coolrate','coolingrate']:
+        assert ptType == 'gas'
+        label = 'Gas Cooling Rate [ log erg/s/g ]'
+        lim = [-8.0, -2.0]
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
+        log = True
+
+    if ptProperty in ['heatrate','heatingrate']:
+        assert ptType == 'gas'
+        label = 'Gas Heating Rate [ log erg/s/g ]'
+        lim = [-8.0, -2.0]
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
+        log = True
+
+    if ptProperty in ['coolrate_powell']:
+        assert ptType == 'gas'
+        label = 'PowellSourceTerm Cooling Rate [ log erg/s/g ]'
+        lim = [-8.0, -2.0]
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
+        log = True
+
+    if ptProperty in ['coolrate_ratio']:
+        assert ptType == 'gas'
+        label = 'PowellCoolingTerm / Heating Rate [ log ]'
+        lim = [-3.0, 3.0]
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty == 'mass_sfr_dt':
         assert ptType == 'gas'
         label = 'Gas Mass / SFR / Timestep [ log ]'
         lim = [-2.0,5.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty == 'mass_sfr_dt_hydro':
         assert ptType == 'gas'
         label = 'Gas Mass / SFR / HydroTimestep [ log ]'
         lim = [-2.0,5.0]
-        if haloLims: print('todo, no haloLims for [%d] yet' % ptProperty)
+        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
     if ptProperty == 'dt_yr':

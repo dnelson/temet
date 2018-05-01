@@ -304,6 +304,17 @@ class units(object):
         b_gauss *= UnitMagneticField_in_cgs # [Gauss] = [g^(1/2) * cm^(-1/2) * s^(-1)]
         return b_gauss
 
+    def particleCodeDivBToGaussPerKpc(self, divb):
+        """ Convert magnetic field divergence into [Gauss/kpc] physical, input is PartType0/MagneticFieldDivergence. """
+        UnitMagneticField_in_cgs = np.float32( np.sqrt(self.UnitPressure_in_cgs) )
+
+        divb_phys = divb * self._sP.HubbleParam**2.0 # remove little h factors
+        divb_phys /= self.scalefac**3.0 # convert 'comoving' into physical
+
+        divb_phys *= UnitMagneticField_in_cgs # [Gauss] = [g^(1/2) * cm^(-1/2) * s^(-1)]
+        divb_phys /= (self.kpc_in_cm/self.UnitLength_in_cm) # account for non-kpc code lengths (could be checked)
+        return divb_phys
+
     def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
         """ Calculate particle angular momentum 3-vector in [Msun*kpc km/s] given input arrays of pos,vel,mass 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
@@ -432,14 +443,18 @@ class units(object):
 
         return p_vel
 
-    def codeDensToPhys(self, dens, cgs=False, numDens=False):
+    def codeDensToPhys(self, dens, cgs=False, numDens=False, totKpc3=False):
         """ Convert mass density comoving->physical and add little_h factors. 
             Input: dens in code units should have [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3].
-            Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or [1/cm^3 if cgs=True and numDens=True].
+            Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or 
+                    [1/cm^3 if cgs=True and numDens=True] or
+                    [(orig units)/kpc^3 if totKpc3=True].
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
+        if totKpc3 and (cgs or numDens):
+            raise Exception('Invalid combination.')
 
         dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3
 
@@ -447,6 +462,11 @@ class units(object):
             dens_phys *= self.UnitDensity_in_cgs
         if numDens:
             dens_phys /= self.mass_proton
+        if totKpc3:
+            # non-mass quantity input as numerator, assume it did not have an h factor
+            dens_phys *= self._sP.HubbleParam
+            dens_phys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
+
         return dens_phys
 
     def physicalDensToCode(self, dens, cgs=False, numDens=False):
@@ -469,7 +489,6 @@ class units(object):
             dens_code *= self.mass_proton # [g/cm^3] -> [1/cm^3]
 
         return dens_code
-
 
     def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, totKpc2=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
@@ -538,13 +557,36 @@ class units(object):
             u = logZeroSafe(u)
         return u
 
-    def coolingRateToCGS(self, coolrate):
-        """ Convert code units (du/dt) to erg/s/g (cgs). """
+    def coolingRateToCGS_unused(self, coolrate):
+        """ Convert code units (du/dt) to erg/s/g (cgs, specific). Unused. """
         coolrate_cgs = coolrate.astype('float32')
         coolrate_cgs *= self.UnitEnergy_in_cgs * self.UnitTime_in_s**(-1.0) * \
                        self.UnitMass_in_g**(-1.0) * self._sP.HubbleParam
 
         return coolrate_cgs
+
+    def coolingRateToCGS(self, code_dens, code_gfmcoolrate):
+        """ Convert cooling/heating rate to specific CGS [erg/s/g]. Input is PartType0/[Masses,Density,GFM_CoolingRate]. """
+        dens_cgs = self.codeDensToPhys(code_dens, cgs=True) # g/cm^3
+        ratefact = self.hydrogen_massfrac**2 / self.mass_proton**2 * dens_cgs # 1/(g*cm^3)
+        coolrate = code_gfmcoolrate * ratefact # erg cm^3/s * (1/g/cm^3) = erg/s/g (i.e. specific rate)
+
+        return coolrate # positive = heating, negative = cooling
+
+    def powellEnergyTermCGS(self, code_dens, code_divb, code_b, code_vel, code_vol):
+        """ Derive the 'Powell heating/cooling' energy source term (rightmost in Eqn. 21 Pakmor & Springel arxiv:1212.1452). """
+        vel_kpc_s = self.particleCodeVelocityToKms(code_vel) / self.kpc_in_km # kpc/s
+        b_gauss = self.particleCodeBFieldToGauss(code_b) # gauss
+        divb_gauss_kpc = self.particleCodeDivBToGaussPerKpc(code_divb) # gauss/kpc
+        vol_kpc3 = self.codeVolumeToKpc3(code_vol) # kpc^3
+
+        bvel = b_gauss[:,0] * vel_kpc_s[:,0] + b_gauss[:,1] * vel_kpc_s[:,1] + b_gauss[:,2] * vel_kpc_s[:,2] # gauss*kpc/s
+        energy_vol_rate = (-1.0/self.scalefac) * divb_gauss_kpc * bvel # gauss/kpc * gauss*kpc/s = gauss^2/s = [erg/s/cm^3]
+
+        dens_cgs = self.codeDensToPhys(code_dens, cgs=True) # g/cm^3
+        energy_rate = energy_vol_rate / dens_cgs # [erg/s/g]
+        
+        return energy_rate # positive = heating, negative = cooling
 
     def coolingTimeGyr(self, code_dens, code_gfmcoolrate, code_u):
         """ Calculate a cooling time in Gyr from three code units inputs (i.e. snapshot values) of Density, GFM_CoolingRate, InternalEnergy. """
