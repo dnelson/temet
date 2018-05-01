@@ -181,6 +181,42 @@ def match3(ar1, ar2, firstSorted=False):
 
     return ar1_inds, ar2_inds
 
+from numba import jit
+@jit(nopython=True, nogil=True, cache=True)
+def _match3(ar1, ar2, firstSorted=False):
+    """ Test. """
+    assert ar1.ndim == ar2.ndim == 1
+    
+    if not firstSorted:
+        # need a sorted copy of ar1 to run bisection against
+        index = np.argsort(ar1)
+        ar1_sorted = ar1[index]
+        ar1_sorted_index = np.searchsorted(ar1_sorted, ar2)
+
+        for i in range(ar1_sorted_index.size): # mode="clip"
+            if ar1_sorted_index[i] >= index.size:
+                ar1_sorted_index[i] = index.size
+
+        ar1_inds = np.take(index, ar1_sorted_index)
+    else:
+        # if we can assume ar1 is already sorted, then proceed directly
+        ar1_sorted_index = np.searchsorted(ar1, ar2)
+
+        for i in range(ar1_sorted_index.size): # mode="clip"
+            if ar1_sorted_index[i] >= index.size:
+                ar1_sorted_index[i] = index.size
+
+        ar1_inds = np.take(np.arange(ar1.size), ar1_sorted_index)
+
+    mask = (ar1[ar1_inds] == ar2)
+    ar2_inds = np.where(mask)[0]
+    ar1_inds = ar1_inds[ar2_inds]
+
+    if not len(ar1_inds):
+        return None,None
+
+    return ar1_inds, ar2_inds
+
 def getTracerChildren(sP, parentSearchIDs, inds=False, ParentID=None, ParentIDSortInds=None):
     """ For an input list of parent IDs (a UNIQUE list of an unknown mixture of gas/star/BH IDs), return 
         the complete list of child MC tracers belonging to those parents (either their IDs or their 
@@ -334,7 +370,7 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
         optionally restricted to input particle type(s). """
     trIDsByParType = {}
 
-    doCache = False
+    doCache = True
 
     # quick caching mechanism
     saveFilename = sP.derivPath + 'trChildren/snap_' + str(sP.snap) + '_sh_' + str(subhaloID) + \
@@ -453,7 +489,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
             haloOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
 
             nPartTotInHalosThisType = np.sum(gc['halos'][:,ptNum])
-            indRange = [0,nPartTotInHalosThisType-1]
+            indRange = [0,int(nPartTotInHalosThisType-1)]
 
             if debug:
                 offset = 0
@@ -496,6 +532,9 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
                 offset += (i1-i0)
 
         # load global IDs of this type
+        if nPartTotInHalosThisType == 0:
+            continue
+            
         parIDsType = sP.snapshotSubsetP(parPartType, 'id', inds=inds, indRange=indRange)
 
         # no particles of this type in the snapshot
@@ -861,37 +900,36 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
     """ For a set of subhaloIDs, determine all their child tracers at sP.redshift then record their 
         properties back in time. """
     # load global ParentID for all tracers at the starting snapshot, and pre-sort
-    #ParentID = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID')
+    #ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
     #ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
     #ParentID = ParentID[ParentIDSortInds]
     # or: if we have already cached all the initial subhaloTracerChildren(), can skip
     ParentID = None
     ParentIDSortInds = None
 
-    if 1:
-        # for each subhalo, get a list of all child tracer IDs of parPartTypes
-        trIDsBySubhalo = {}
-        trCounts = np.zeros( subhaloIDs.size, dtype='uint32' )
+    # for each subhalo, get a list of all child tracer IDs of parPartTypes
+    trIDsBySubhalo = {}
+    trCounts = np.zeros( subhaloIDs.size, dtype='uint32' )
 
-        for i, subhaloID in enumerate(subhaloIDs):
-            if debug:
-                shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
-                print('['+str(i).zfill(3)+'] subhaloID = '+str(subhaloID) + \
-                      '  LenType: '+' '.join([str(l) for l in shDetails['SubhaloLenType']]))
+    for i, subhaloID in enumerate(subhaloIDs):
+        if debug:
+            shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+            print('['+str(i).zfill(3)+'] subhaloID = '+str(subhaloID) + \
+                  '  LenType: '+' '.join([str(l) for l in shDetails['SubhaloLenType']]))
 
-            subhaloTrIDs = subhaloTracerChildren(sP,subhaloID=subhaloID,parPartTypes=parPartTypes,
-                                                 ParentID=ParentID,ParentIDSortInds=ParentIDSortInds)
+        subhaloTrIDs = subhaloTracerChildren(sP,subhaloID=subhaloID,parPartTypes=parPartTypes,
+                                             ParentID=ParentID,ParentIDSortInds=ParentIDSortInds)
 
-            trIDsBySubhalo[subhaloID] = subhaloTrIDs
-            trCounts[i] = len(subhaloTrIDs)
+        trIDsBySubhalo[subhaloID] = subhaloTrIDs
+        trCounts[i] = len(subhaloTrIDs)
 
-        # concatenate all tracer IDs into a single search list
-        trSearchIDs = np.zeros( trCounts.sum(), dtype=subhaloTrIDs.dtype )
-        offset = 0
+    # concatenate all tracer IDs into a single search list
+    trSearchIDs = np.zeros( trCounts.sum(), dtype=subhaloTrIDs.dtype )
+    offset = 0
 
-        for i, subhaloID in enumerate(subhaloIDs):
-            trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[subhaloID]
-            offset += trCounts[i]
+    for i, subhaloID in enumerate(subhaloIDs):
+        trSearchIDs[offset : offset+trCounts[i]] = trIDsBySubhalo[subhaloID]
+        offset += trCounts[i]
 
     # follow tracer and tracer parent properties over the requested snapshot range
     tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift)
@@ -1009,7 +1047,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         # if the IDs of parents are dense enough, use a histogram counting approach
         ParentID_min = ParentID.min()
         ParentID_max = ParentID.max()
-        assert ParentID_max - ParentID_min <= 30e9 # up to 8*30GB memory allocation here
+        assert ParentID_max - ParentID_min <= 68e9 # up to 507GB memory allocation here
 
         # offset ParentIDs by their minimum, cast into signed type, then histogram
         ParentID -= ParentID_min
