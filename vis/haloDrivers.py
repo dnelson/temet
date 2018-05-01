@@ -19,18 +19,18 @@ from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosB
                        cenSatSubhaloIndices
 from util import simParams
 
-def oneHaloSingleField(conf=0, haloID=None):
+def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
     run        = 'tng' #'tng_zoom_dm'
-    res        = 2160
+    res        = 1820
     variant    = None #'sf2' # None
 
-    redshift   = 1.0
+    redshift   = 0.0
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
-    nPixels    = [1920,1920]
+    nPixels    = [800,800] #[1920,1920]
     axes       = [0,1]
     labelZ     = True
     labelScale = True
@@ -43,8 +43,14 @@ def oneHaloSingleField(conf=0, haloID=None):
     sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID, variant=variant)
     
     if not sP.isZoom:
-        hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+        if haloID is not None:
+            # periodic box, FoF/Halo ID
+            hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+        else:
+            # periodic box, subhalo ID
+            hInd = subhaloID
     else:
+        # zoom, assume input haloID specifies the zoom simulation
         hInd = haloID
 
     if conf == 0:
@@ -63,7 +69,8 @@ def oneHaloSingleField(conf=0, haloID=None):
         panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
     if conf == 4:
         # gas column density
-        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
+        #panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
+        panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.0]} )
     if conf == 5:
         # magnetic field strength
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
@@ -71,18 +78,23 @@ def oneHaloSingleField(conf=0, haloID=None):
     if conf == 6:
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
-    if 1:
+    if 0:
         size = 2.5
         sizeType = 'rVirial'
     if 0:
         size = 6000.0
         sizeType = 'pkpc'
+    if 1:
+        size = 40.0
+        sizeType = 'rHalfMassStars'
+        rVirFracs = [2.0,10.0]
+        fracsType = 'rHalfMassStars'
 
     class plotConfig:
         plotStyle    = 'open'
-        rasterPx     = nPixels[0]
+        rasterPx     = 1200 #nPixels[0]
         colorbars    = True
-        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_haloID-%d.pdf' % (conf,run,res,redshift,haloID)
+        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_subhaloID-%d_%s.pdf' % (conf,run,res,redshift,subhaloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 

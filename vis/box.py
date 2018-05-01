@@ -14,7 +14,7 @@ from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 from util import simParams
 
-def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, **kwargs):
+def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, **kwargs):
     """ Factor out some box/image related calculations common to all whole box plots. 
     Image zoomFac fraction of entire fullbox/subbox, zooming around relCenPos 
     ([0.5,0.5] being box center point). """
@@ -38,6 +38,13 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, **kwargs):
 
         boxCenter2 = sP.subboxCen[sP.subbox][3-axes[0]-axes[1]]
         boxCenter  = np.array([boxCenter0, boxCenter1, boxCenter2])
+
+    # non-square aspect ratio
+    if isinstance(nPixels, (list,np.ndarray)):
+        aspect = float(nPixels[0]) / nPixels[1]
+        boxSizeImg[1] /= aspect # e.g. 16/9 = 1.778 decreases vertical height to 56.25% of original
+        #boxCenter[1] += 1000.0 # temporary, L75n1820TNGsb0 vel render
+        #print('REMOVE 1000 OFFSET')
 
     boxSizeImg[0] *= zoomFac
     boxSizeImg[1] *= zoomFac
@@ -240,7 +247,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
             #    p['valMinMax'][1] = np.max( [p['sP'].units.redshiftToAgeFlat(p['sP'].redshift), 3.0] )
             
         # request render and save
-        plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + '_%03d.png' % (frameNum)
+        plotConfig.saveFilename = plotConfig.savePath + plotConfig.saveFileBase + '_%04d.png' % (frameNum)
 
         if skipExisting and isfile(plotConfig.saveFilename):
             print('SKIP: ' + plotConfig.saveFilename)
