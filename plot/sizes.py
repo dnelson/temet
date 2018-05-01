@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.signal import savgol_filter
+from collections import OrderedDict
 
 from cosmo.load import groupCat, auxCat
 from util import simParams
@@ -486,4 +487,134 @@ def clumpSizes(sP):
     # finish figure
     fig.tight_layout()
     plt.savefig('sizes_diagnostic_cenOnly=%s_vsMstar=%s_%s_z=%.1f.png' % (centralsOnly,vsMstarXaxis,sP.simName,sP.redshift))
+    plt.close(fig)
+
+def characteristicSizes(sP, vsHaloMass=False):
+    """ Compare many different 'characteristic' halo/galaxy sizes as a function of mass. """
+    from util.loadExtern import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+
+    binSize = 0.2
+    reBand = 'jwst_f115w' # for half light radii
+
+    labels = {'stars'    : 'r$_{\\rm 1/2,\star}$',
+              'dm'       : 'r$_{\\rm 1/2,DM}$',
+              'gas'      : 'r$_{\\rm 1/2,gas}$',
+              'gas_sf'   : 'R$_{\\rm SF,H\\alpha}$',
+              'gas_hi'   : 'R$_{\\rm HI}$',
+              'stars_re' : 'R$_{\\rm e,stars}$',
+              'rvir'     : 'r$_{\\rm vir,halo}$'}
+
+    # plot setup
+    fig = plt.figure(figsize=[figsize[0]*sfclean,figsize[1]*sfclean])
+    ax = fig.add_subplot(111)
+
+    ax.set_ylim([0.2,4e2])
+
+    ylabel = 'Galaxy or Halo Size [ kpc ]'
+    ax.set_ylabel(ylabel)
+    ax.set_yscale('log')
+
+    if vsHaloMass:
+        ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
+        ax.set_xlim([10.0,14.0])
+        ax.set_ylim([0.7,8e2])
+    else:
+        ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]')
+        ax.set_xlim([6.5,11.5])
+
+    # observational points
+    if not vsHaloMass:
+        b = baldry2012SizeMass()
+
+        l1,_,_ = ax.errorbar(b['red']['stellarMass'], b['red']['sizeKpc'], 
+                             yerr=[b['red']['errorDown'],b['red']['errorUp']],
+                             color='#777777', ecolor='#777777', alpha=0.8, capsize=0.0, fmt='D')
+        l2,_,_ = ax.errorbar(b['blue']['stellarMass'], b['blue']['sizeKpc'], 
+                             yerr=[b['blue']['errorDown'],b['blue']['errorUp']],
+                             color='#444444', ecolor='#444444', alpha=0.8, capsize=0.0, fmt='o')
+
+        legend1 = ax.legend([l1,l2], [ b['red']['label'], b['blue']['label'] ], loc='lower right')
+        ax.add_artist(legend1)
+
+    # sim: load, select centrals only
+    gc = sP.groupCat(fieldsSubhalos=['central_flag','SubhaloHalfmassRadType'])
+    w = np.where(gc['subhalos']['central_flag'])
+
+    # x-axis: mass definition
+    if vsHaloMass:
+        xx = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])[w]
+    else:
+        xx = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])[w]
+
+    yy = OrderedDict()
+
+    # gas half mass radii
+    yy['gas'] = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('gas')]
+    yy['gas'] = sP.units.codeLengthToKpc( yy['gas'][w] )
+
+    # dark matter
+    #yy['dm'] = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('dm')]
+    #yy['dm'] = sP.units.codeLengthToKpc( yy['dm'][w] )
+
+    # stellar half mass radii
+    yy['stars'] = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')]
+    yy['stars'] = sP.units.codeLengthToKpc( yy['stars'][w] )
+
+    # halo virial radii
+    yy['rvir'] = sP.groupCat(fieldsSubhalos=['rhalo_200'])[w] # r200,crit [pkpc]
+
+    # stellar half light radii
+    fieldName = 'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc'
+    ac = sP.auxCat(fieldName)
+    bandInd = list(ac[fieldName + '_attrs']['bands']).index(reBand)
+    yy['stars_re'] = ac[fieldName][:,bandInd] # code units
+    yy['stars_re'] = sP.units.codeLengthToKpc( yy['stars_re'][w] )     
+
+    # gas halpha half light radii (half SFR radii)
+    fieldName = 'Subhalo_Gas_SFR_HalfRad'
+    ac = sP.auxCat(fieldName)[fieldName]
+    yy['gas_sf'] = sP.units.codeLengthToKpc( ac[w] )
+    sf_nan = np.where(np.isnan(yy['gas_sf']))
+    yy['gas_sf'][sf_nan] = 0.0 # convention, filtered below
+
+    # gas HI radii
+    fieldName = 'Subhalo_Gas_HI_HalfRad'
+    ac = sP.auxCat(fieldName)[fieldName]
+    yy['gas_hi'] = sP.units.codeLengthToKpc( ac[w] )
+    sf_nan = np.where(np.isnan(yy['gas_hi']))
+    yy['gas_hi'][sf_nan] = 0.0 # convention, filtered below
+
+    # if plotting vs halo mass, restrict our attention to those galaxies with sizes (e.g. nonzero 
+    # number of either gas cells or star particles)
+    if vsHaloMass:
+        ww = np.where( (yy['gas'] > 0.0) & (yy['stars'] > 0.0) )
+        xx = xx[ww]
+        for key in yy:
+            yy[key] = yy[key][ww]
+
+    # loop over size types
+    for key in yy:
+        # take median vs mass and smooth
+        xm, ym, sm, pm = running_median(xx, yy[key], binSize=binSize, skipZeros=True, percs=[16,84])
+
+        ww = np.where(ym > 0.0)
+        xm = xm[ww]
+
+        ym = savgol_filter(ym[ww], sKn, sKo)
+        sm = savgol_filter(sm[ww], sKn, sKo)
+        pm = savgol_filter(pm[:,ww[0]], sKn, sKo, axis=1)
+
+        # plot median
+        l, = ax.plot(xm, ym, linestyles[0], lw=lw, label=labels[key])
+
+        # band
+        y_down = np.array(ym) - sm
+        y_up   = np.array(ym) + sm
+        ax.fill_between(xm, pm[0,:], pm[1,:], color=l.get_color(), interpolate=True, alpha=0.3)
+
+    ax.legend(loc='upper left', ncol=2)
+
+    # finish figure
+    fig.tight_layout()
+    fig.savefig('characteristic_sizes_%s_%d.pdf' % (sP.simName,sP.snap))
     plt.close(fig)

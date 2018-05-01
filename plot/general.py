@@ -214,23 +214,25 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     ctNameHisto = 'viridis'
     contoursColor = 'k' # black
 
+    if meancolors is not None and '_ratio' in meancolors[0]: ctNameHisto = 'RdYlGn_r' # symmetric about clim centerpoint
+
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
-    xvals = snapshotSubset(sP, partType, xQuant, haloID=haloID)
+    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
 
     if xlog: xvals = np.log10(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = snapshotSubset(sP, partType, yQuant, haloID=haloID)
+    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
 
     if ylog: yvals = np.log10(yvals)
 
     if sfreq0:
         # restrict to non eEOS cells
-        sfr = snapshotSubset(sP, partType, 'sfr', haloID=haloID)
+        sfr = sP.snapshotSubsetP(partType, 'sfr', haloID=haloID)
         w_sfr = np.where(sfr == 0.0)
         xvals = xvals[w_sfr]
         yvals = yvals[w_sfr]
@@ -241,7 +243,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        weight = snapshotSubset(sP, partType, wtProp, haloID=haloID)
+        weight = sP.snapshotSubsetP(partType, wtProp, haloID=haloID)
 
         if sfreq0:
             weight = weight[w_sfr]
@@ -271,6 +273,13 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         if binnedStat:
             # plot 2D image, each pixel colored by the mean value of a third quantity
+            if 1:
+                # remove NaN weight points prior to binning (default op is mean, not nanmean)
+                w = np.where(np.isfinite(weight))
+                xvals = xvals[w]
+                yvals = yvals[w]
+                weight = weight[w]
+                
             clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloID is not None))
             wtStr = 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
@@ -363,7 +372,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     lw = 3.0
 
     # start plot
-    fig = plt.figure(figsize=(14,10))
+    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
     ax = fig.add_subplot(111)
 
     hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
@@ -423,6 +432,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
             ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
     ax.legend(loc='best')
+    fig.tight_layout()
 
     # finish plot
     sStr = '%s_z-%.1f' % (sPs[0].simName,sPs[0].redshift) if len(sPs) == 1 else 'sPn%d' % len(sPs)
@@ -767,16 +777,25 @@ def compareHaloSets_1DHists():
 
 def singleHaloProperties():
     """ Driver. Several phase/radial profile plots for a single halo. """
-    sP = simParams(res=455,run='tng',redshift=0.0)
+    sP = simParams(res=256,run='tng',redshift=0.0,variant='0000')
+
+    partType = 'gas'
+    xQuant = 'coolrate'
+    yQuant = 'coolrate_ratio'
 
     # pick a MW
-    gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupPos'])
-    haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
+    #gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupPos'])
+    #haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
 
-    haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
-    haloID = haloIDs[6] # random: 3, 4, 5, 6
+    #haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
+    #haloID = haloIDs[6] # random: 3, 4, 5, 6
 
-    plotParticleMedianVsSecondQuant([sP], partType='gas', xQuant='hdens', yQuant='Si_H_ratio', haloID=haloID, radMinKpc=6.0, radMaxKpc=9.0)
+    haloID = None
+    rMin = None
+    rMax = None
+
+    plotParticleMedianVsSecondQuant([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloID=haloID, 
+                                   radMinKpc=rMin, radMaxKpc=rMax)
 
     #for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
     #    plotStackedRadialProfiles1D([sP], halo=haloID, ptType='gas', ptProperty=prop)
@@ -799,3 +818,26 @@ def compareRuns_particleQuant():
         sPs.append(sP)
 
     plotParticleMedianVsSecondQuant(sPs, partType=ptType, xQuant=xQuant, yQuant=yQuant)
+
+def coolingPhase():
+    """ Driver. """
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    # config
+    yQuant = 'temp'
+    xQuant = 'numdens'
+    cQuants = ['coolrate','heatrate','coolrate_powell','coolrate_ratio']
+    xlim   = [-9.0, 2.0]
+    ylim   = [2.0, 8.0]
+
+    #sP = simParams(res=256,run='tng',redshift=0.0,variant='0000')
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+
+    # start PDF, add one page per run
+    pdf = PdfPages('phaseDiagram_B_%s_%d.pdf' % (sP.simName,sP.snap))
+
+    for cQuant in cQuants:
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=[cQuant], xlim=xlim, ylim=ylim, 
+                         weights=None, hideBelow=False, haloID=None, pdf=pdf)
+
+    pdf.close()
