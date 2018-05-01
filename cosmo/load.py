@@ -26,7 +26,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
 
     if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0] in sP.data:
-        return sP.data['ac_'+iterable(fields)[0]] # cached
+        return sP.data['ac_'+iterable(fields)[0]].copy() # cached, avoid view
 
     def _concatSplitFiles(field, datasetName):
         # specified chunk exists, do all exist? check and record sizes
@@ -1322,26 +1322,28 @@ def snapshotSubset(sP, partType, fields,
             if '_alpha15' in field: modelArgs['alpha'] = 1.5
             r[field] = sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
 
-        # hydrogen model mass calculation (todo: generalize to different molecular models)
-        if field.lower() in ['h i mass', 'hi mass', 'himass', 'h1mass', 'hi_mass']:
-            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
-            from cosmo.hydrogen import hydrogenMass
-            r[field] = hydrogenMass(None, sP, atomic=True, indRange=indRange)
-
-        if field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
-            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
-            from cosmo.hydrogen import hydrogenMass
-            if 'h2mass_' in field.lower():
-                molecularModel = field.lower().split('_')[1]
-            else:
-                molecularModel = 'BL06'
-                print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
-
-            r[field] = hydrogenMass(None, sP, molecular=molecularModel, indRange=indRange)
-
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
-            r[field] = _ionLoadHelper(sP, partType, field, kwargs)
+            # hydrogen model mass calculation (todo: generalize to different molecular models)
+            if field.lower() in ['h i mass', 'hi mass', 'himass', 'h1mass', 'hi_mass']:
+                assert haloID is None and subhaloID is None # otherwise handle, construct indRange
+                from cosmo.hydrogen import hydrogenMass
+                r[field] = hydrogenMass(None, sP, atomic=True, indRange=indRange)
+
+            elif field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
+                assert haloID is None and subhaloID is None # otherwise handle, construct indRange
+                from cosmo.hydrogen import hydrogenMass
+                if 'h2mass_' in field.lower():
+                    molecularModel = field.lower().split('_')[1]
+                else:
+                    molecularModel = 'BL06'
+                    print('Warning: using [%s] model for H2 by default since unspecified.' % molecularModel)
+
+                r[field] = hydrogenMass(None, sP, molecular=molecularModel, indRange=indRange)
+
+            else:
+                # cloudy-based calculation
+                r[field] = _ionLoadHelper(sP, partType, field, kwargs)
 
         if '_ionmassratio' in field:
             # per-cell ratio between two ionic masses, e.g. "O6_O8_ionmassratio"
@@ -1430,6 +1432,42 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
             r[field] = sP.units.coolingTimeGyr(dens, coolrate, u)
+
+        # cooling rate, specific (computed from saved GFM_CoolingRate) [erg/s/g]
+        if field.lower() in ['coolrate','coolingrate']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
+            coolheat = sP.units.coolingRateToCGS(dens, coolrate)
+            w = np.where(coolheat >= 0.0)
+            coolheat[w] = np.nan # cooling only
+            r[field] = -1.0 * coolheat # positive
+
+        # cooling rate, specific (computed from saved GFM_CoolingRate) [erg/s/g]
+        if field.lower() in ['heatrate','heatingrate']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
+            coolheat = sP.units.coolingRateToCGS(dens, coolrate)
+            w = np.where(coolheat <= 0.0)
+            coolheat[w] = np.nan # heating only, positive
+            r[field] = coolheat
+
+        # 'cooling rate' of Powell source term, specific (computed from saved DivB, GFM_CoolingRate) [erg/s/g]
+        if field.lower() in ['coolrate_powell']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            divb = snapshotSubset(sP, partType, 'MagneticFieldDivergence', **kwargs)
+            bfield = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
+            vel = snapshotSubset(sP, partType, 'Velocities', **kwargs)
+            vol = snapshotSubset(sP, partType, 'Volume', **kwargs)
+            coolheat = sP.units.powellEnergyTermCGS(dens, divb, bfield, vel, vol)
+            w = np.where(coolheat >= 0.0)
+            coolheat[w] = np.nan # cooling only
+            r[field] = -1.0 * coolheat # positive
+
+        # ratio of the above two terms, only gas with powell<0 (cooling) and coolrate>0 (heating)
+        if field.lower() in ['coolrate_ratio']:
+            heatrate = snapshotSubset(sP, partType, 'heatrate', **kwargs)
+            powell = snapshotSubset(sP, partType, 'coolrate_powell', **kwargs)
+            r[field] = powell / heatrate # positive by definition
 
         # total effective timestep, from snapshot [years]
         if field.lower() == 'dt_yr':
@@ -1561,6 +1599,8 @@ def snapshotSubset(sP, partType, fields,
             return r # return dictionary
 
     # alternate field names mappings
+    invNameMappings = {}
+
     altNames = [ [['center_of_mass','com'], 'Center-of-Mass'],
                  [['xyz','positions','pos'], 'Coordinates'],
                  [['dens','rho'], 'Density'],
@@ -1593,10 +1633,10 @@ def snapshotSubset(sP, partType, fields,
                ]
 
     for i,field in enumerate(fields):
-        for altLabels,toLabel in altNames:            
-            if field.lower() in altLabels: # alternate field name map
-                fields[i] = toLabel            
-            if field == toLabel.lower(): # lowercase versions accepted
+        for altLabels,toLabel in altNames:
+            # alternate field name map, lowercase versions accepted
+            if field.lower() in altLabels or field == toLabel.lower():
+                #invNameMappings[toLabel] = fields[i] # save inverse so we can undo
                 fields[i] = toLabel
 
     # inds and indRange based subset
@@ -1673,8 +1713,7 @@ def snapshotSubset(sP, partType, fields,
     for i,field in enumerate(fields):
         for multiDimMap in multiDimSliceMaps:
             if field in multiDimMap['names']:
-                #print('Multi-dimensional slice load: ' + field + ' -> ' + \
-                #      multiDimMap['field'] + ' [mdi=' + str(multiDimMap['fN']) + ']')
+                invNameMappings[multiDimMap['field']] = fields[i] # save inverse so we can undo
 
                 fields[i] = multiDimMap['field']
                 mdi[i] = multiDimMap['fN']
@@ -1706,11 +1745,13 @@ def snapshotSubset(sP, partType, fields,
         if fieldsOrig[0] == 'tracer_maxtemp':
             r = logZeroNaN(r) # [log Kelvin]
 
-    # todo: could inverse map altNames and multiDimSliceMaps such that return dict has key names exactly as requested
+    # inverse map multiDimSliceMaps such that return dict has key names exactly as requested
+    # todo: could also do for altNames (just uncomment above, but need to refactor codebase)
+    if isinstance(r,dict):
+        for newLabel,origLabel in invNameMappings.iteritems():
+            r[origLabel] = r.pop(newLabel) # change key label
 
     return r
-
-
 
 def _func(sP,partType,field,indRangeLoad,indRangeSave,float32,array):
     """ Multiprocessing target, which simply calls snapshotSubset() and writes the result 
@@ -1721,7 +1762,7 @@ def _func(sP,partType,field,indRangeLoad,indRangeSave,float32,array):
     # parallel groupCat() load, to actually avoid this intermediate memory usage
 
 def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, 
-                           sq=True, haloSubset=False, float32=False, nThreads=32):
+                           sq=True, haloSubset=False, float32=False, nThreads=8):
     """ Identical to snapshotSubset() except split filesystem load over a number of 
     concurrent python+h5py reader processes and gather the result. """
     import multiprocessing as mp
@@ -1808,14 +1849,18 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
             indRangeSave = [offset, offset + numLoadLoc]
             offset += numLoadLoc
 
+            #_func(sP,partType,k,indRangeLoad,indRangeSave,float32,numpy_array_view) # debugging only
             args = (sP,partType,k,indRangeLoad,indRangeSave,float32,numpy_array_view)
             p = mp.Process(target=_func, args=args)
             processes.append(p)
 
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
+        # wrap in try, to help avoid zombie processes and system issues
+        try:
+            for p in processes:
+                p.start()
+        finally:
+            for p in processes:
+                p.join()
 
         # add into dict
         if inds is not None:
