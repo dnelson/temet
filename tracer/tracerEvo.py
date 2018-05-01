@@ -42,22 +42,31 @@ def zoomDataDriver(sP, fields, snapStep=1):
     subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=snapStep)
 
 def guinevereData():
-    """ Data for Guinevere. """
+    """ Data for Guinevere (tracer cutouts for Illustris subhalos). """
     from util.simParams import simParams
-    sP = simParams(res=1820, run='illustris', redshift=0.0)
+
+    sP    = simParams(res=1820, run='illustris', redshift=0.0)
+    sPtng = simParams(res=1820, run='tng', redshift=0.0)
 
     # config
     parPartTypes = ['gas','stars']
     toRedshift   = 2.0
     trFields     = ['tracer_windcounter'] 
     parFields    = ['pos','vel','temp','sfr']
-    outPath      = sP.derivPath
+    outPath      = sP.postPath + '/guinevere_cutouts/'
+    txtCatPath   = sPtng.postPath + '/guinevere_cutouts/new_mw_sample_fgas_sat.txt'
 
-    # subhalo list (TNG, new Lagrangian matching 2018)
-    sPtng = simParams(res=1820, run='tng', redshift=0.0)
-    subhaloIDs = np.genfromtxt(sPtng.derivPath+'new_mw_sample_fgas.txt',comments='#',delimiter=',',dtype='int32')
+    # subhalo list (TNG, new Lagrangian matching 2018) (Apr/May: with satellites)
+    subhaloIDs = np.genfromtxt(txtCatPath,comments='#',delimiter=',',dtype='int32')
     subhaloIDs = list(set(subhaloIDs[:,1]).union(set(subhaloIDs[:,2])))
     subhaloIDs.remove(-1) # all unique successful matches, both methods, in Illustris-1
+    
+    # check for existence already, and skip if so
+    for subID in subhaloIDs:
+        path = sPtng.postPath + '/guinevere_cutouts/tracers_%s_subhalo_%d.hdf5' % (sP.simName,subID)
+        if(isfile(path)):
+            subhaloIDs.remove(subID)
+
     subhaloIDs = np.array(subhaloIDs)
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
