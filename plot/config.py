@@ -12,6 +12,8 @@ sfclean = 0.8     # sizefac to multiply figsize by if clean == True
 clean   = True    # make visually clean plots with less information
 pStyle  = 'white' # white or black background
 
+lw = 2.5 # default line width
+
 linestyles = ['-',':','--','-.'] # typically for analysis variations per run
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point)
 
