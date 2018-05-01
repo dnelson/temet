@@ -33,7 +33,7 @@ def subbox_4x2_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
+        savePath = '/u/dnelson/data/frames/%s_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 960
         colorbars = True
@@ -50,7 +50,7 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     panels = []
 
     panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.5], 'labelScale':True} )
-    panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelRedshift':True} )
+    panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
 
     run     = 'tng'
     variant = 'subbox2'
@@ -60,7 +60,7 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath = '/home/extdylan/data/frames/%s_sb0/' % run
+        savePath = '/u/dnelson/data/frames/%s_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = True
@@ -69,6 +69,47 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
         minZ      = 1.1
         maxZ      = 2.0 #50.0 # tng subboxes start at a=0.02
         #maxNSnaps = 1 #2700 # 90 seconds at 30 fps
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_movie(curTask=0, numTasks=1, conf='one'):
+    """ Render a 4K movie of a single field from one subbox. """
+    panels = []
+
+    run     = 'tng'
+    method  = 'sphMap'
+    nPixels = [3840,2160]
+    axes    = [0,1] # x,y
+
+    labelScale = 'physical'
+    labelZ     = True
+
+    if conf == 'one':
+        # TNG100
+        res = 1820
+        variant = 'subbox0'
+
+        panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[100,900]} )
+
+    if conf == 'two':
+        # TNG50
+        res = 2160
+        variant = 'subbox2'
+
+        panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1200]} )
+        #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
+        #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
+
+    class plotConfig:
+        savePath = '/u/dnelson/data/frames/%s%s/' % (res,variant)
+        plotStyle = 'edged_black'
+        rasterPx  = nPixels
+        colorbars = False
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02
+        maxNSnaps = None #1 #2700 # 90 seconds at 30 fps
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
@@ -95,7 +136,7 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     axes     = [0,1] # x,y
 
     class plotConfig:
-        savePath  = '/home/extdylan/data/frames/comp_gasdens_sb0/'
+        savePath  = '/u/dnelson/data/frames/comp_gasdens_sb0/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = True
@@ -128,7 +169,7 @@ def Illustris_vs_TNG_subbox0_4x2_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath  = '/home/extdylan/data/frames/comp_4x2_sb0/'
+        savePath  = '/u/dnelson/data/frames/comp_4x2_sb0/'
         plotStyle = 'edged_black'
         rasterPx  = 960
         colorbars = True
@@ -208,7 +249,7 @@ def planetarium_TychoBrahe_frames(curTask=0, numTasks=1, conf=0):
         panels.append( {'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
     class plotConfig:
-        savePath  = '/home/extdylan/data/frames_tycho/'
+        savePath  = '/u/dnelson/data/frames_tycho/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = False

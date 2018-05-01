@@ -200,9 +200,10 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
 
     return ang_mom_mean
 
-def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None):
+def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None, useStars=True):
     """ Calculate the moment of inertia tensor (3x3 matrix) for a subhalo or halo, given a load 
-    of its member gas and stars (at least within 2*rHalf==shHalfMassRadStars) and center position shPos. """
+    of its member gas and stars (at least within 2*rHalf==shHalfMassRadStars) and center position shPos. 
+    If useStars == True, then switch to stars if not enough SFing gas present, otherwise never use stars. """
     if subhaloID is not None:
         assert all(v is None for v in [gas,stars,rHalf])
         # load required particle data for this subhalo
@@ -218,8 +219,6 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
     if not gas['count'] and not stars['count']:
         print('Warning! momentOfInteriaTensor() no stars or gas in subhalo...')
         return np.identity(3)
-
-    useStars = True
 
     if gas['count'] and len(gas['Masses']) > 1:
         rad_gas = periodicDists(shPos, gas['Coordinates'], sP)
@@ -249,6 +248,9 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         xyz = stars['Coordinates'][wStars,:]
     else:
         # use all star-forming gas cells within 2*rHalf
+        if gas['count'] == 1:
+            return np.identity(3)
+            
         wGas = np.where( (rad_gas <= 2.0*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
 
         masses = gas['Masses'][wGas]
@@ -256,6 +258,9 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
 
     # shift
     xyz = np.squeeze(xyz)
+
+    if xyz.ndim == 1:
+        xyz = np.reshape( xyz, (1,3) )
 
     for i in range(3):
         xyz[:,i] -= shPos[i]
@@ -955,10 +960,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['plawScale'] = 0.7
 
     if partField in ['machnum','shocks_machnum']:
-        #grid = logZeroMin( grid )
-        config['label']  = 'Shock Mach Number' # [log]'
+        config['label']  = 'Shock Mach Number' # linear
         config['ctName'] = 'hot'
-        config['plawScale'] = 0.7
+        config['plawScale'] = 1.0 #0.7
 
     # gas: pressures
     if partField in ['P_gas']:
@@ -2132,8 +2136,9 @@ def renderMultiPanel(panels, conf):
 
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
-        barAreaHeight = np.max([0.035,0.12 / nRows]) if conf.colorbars else 0.0
-        if nRows == 1 and nCols == 1 and conf.colorbars: barAreaHeight = 0.05
+        aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
+        barAreaHeight = np.max([0.035 / aspect,0.12 / nRows / aspect]) if conf.colorbars else 0.0
+        if nRows == 1 and nCols == 1 and conf.colorbars: barAreaHeight = 0.05 / aspect
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes   = set()
@@ -2212,7 +2217,8 @@ def renderMultiPanel(panels, conf):
             grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
-            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
+            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
+            #import pdb; pdb.set_trace()
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
             if 'valMinMax' in p and cmap is not None:
                 plt.clim( p['valMinMax'] )
@@ -2245,7 +2251,7 @@ def renderMultiPanel(panels, conf):
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:
             heightFac = np.max([1.0/nRows, 0.35])
-            if nRows == 1: heightFac *= 1.0 #0.5 # reduce
+            if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2: heightFac *= 1.3 # increase
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
