@@ -57,7 +57,7 @@ def behrooziSFRAvgs():
     haloMassBins = np.linspace(10.0,15.0,26) # 0.2 spacing #[11.0,12.0,3.0,14.0,15.0]
     #basePath  = dataBasePath + 'behroozi/release-sfh_z0_z8_052913/sfr/' # from website
     basePath  = dataBasePath + 'behroozi/analysis/' # private communication
-    fileNames = ['sfr_corrected_'+str(haloMass)+'.dat' for haloMass in haloMassBins]
+    fileNames = ['sfr_corrected_%4.1f.dat' % haloMass for haloMass in haloMassBins]
 
     # filenames have halo mass at z=0 in log msun (e.g. 11.0 is halos from 11.0 to 11.2)
     # columns: Scale factor, SFR, Err_Up, Err_Down (all linear units)
@@ -1550,6 +1550,46 @@ def foersterSchreiber2018():
          'SFR':SFR,
          'sSFR':sSFR,
          'color_UV':color_UV}
+    return r
+
+def obuljen2018():
+    """ Load observational fits to M_HI/M_halo relation from Obuljen+ (2018). Fig 8 / Eqn 1. """
+    x_pts = np.log10(10.0**np.array([10.563, 10.757, 11.000, 11.314, 14.359, 15.004]) / 0.7) # log msun
+    y_low = np.log10(10.0**np.array([5.517, 6.967, 8.138, 8.994, 10.801, 11.047]) / 0.7) # log msun
+    y_mid = np.log10(10.0**np.array([7.045, 7.901, 8.599, 9.127, 10.883, 11.164]) / 0.7) # log msun
+    y_hi  = np.log10(10.0**np.array([7.943, 8.419, 8.821, 9.212, 10.959, 11.287]) / 0.7) # log msun
+
+    Mmin = 10.0**11.27 / 0.7 # msun
+    Mmin_1 = 10.0**(11.27+0.24) / 0.7 # msun, upper 1sigma
+    Mmin_0 = 10.0**(11.27-0.30) / 0.7 # msun, lower 1sigma
+    alpha = 0.44
+    alpha_1 = alpha + 0.08 # upper 1sigma
+    alpha_0 = alpha - 0.08 # lower 1sigma
+    M0   = 10.0**9.52 / 0.7 # msun
+    M0_1 = 10.0**(9.52+0.27) / 0.7 # msun, upper 1sigma
+    M0_0 = 10.0**(9.52-0.33) / 0.7 # msun, lower 1sigma
+
+    x = 10.0**np.linspace(8.0, 16.0, 100) # msun
+    m_HI = M0 * (x/Mmin)**alpha * np.exp(-Mmin/x)
+    #m_HI_1 = M0 * (x/Mmin)**alpha_1 * np.exp(-Mmin/x)
+    #m_HI_0 = M0 * (x/Mmin)**alpha_0 * np.exp(-Mmin/x)
+
+    mhalo = np.log10(x)
+    mHI   = np.log10(m_HI)
+
+    yy = interpolate.interp1d(x_pts, y_mid, kind='slinear', fill_value='extrapolate')(mhalo)
+    yy_low = interpolate.interp1d(x_pts, y_low, kind='slinear', fill_value='extrapolate')(mhalo)
+    yy_high = interpolate.interp1d(x_pts, y_hi, kind='slinear', fill_value='extrapolate')(mhalo)
+
+    yy_low = mHI - (yy-yy_low)
+    yy_high = mHI + (yy_high-yy)
+
+    r = {'label'    : 'Obuljen+ (2018) ALFALFA+SDSS',
+         'Mhalo'    : mhalo,
+         'mHI'      : mHI,
+         'mHI2'     : yy,
+         'mHI_low'  : yy_low,
+         'mHI_high' : yy_high}
     return r
 
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):

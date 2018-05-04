@@ -1059,9 +1059,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         pos_stars_rot, _ = rotateCoordinateArray(sP, pos_stars, rotMatrices[projNum], 
                                                                  projCen, shiftBack=False)
 
-                        # calculate 2D radii as rr2d (.A1 convert matrix to flattened ndarray)
-                        x_2d = pos_stars_rot[:,0].A1 # realize axes=[0,1]
-                        y_2d = pos_stars_rot[:,1].A1 # realize axes=[0,1]
+                        # calculate 2D radii as rr2d
+                        x_2d = pos_stars_rot[:,0] # realize axes=[0,1]
+                        y_2d = pos_stars_rot[:,1] # realize axes=[0,1]
                         rr2d = np.sqrt( x_2d*x_2d + y_2d*y_2d )
 
                         r[i,bandNum,projNum] = _findHalfLightRadius(rr2d,magsLocal)
@@ -1247,9 +1247,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                             pos_stars_rot, _ = rotateCoordinateArray(sP, pos_stars, rotMatrices[projNum], 
                                                                      projCen, shiftBack=False)
 
-                            # calculate 2D radii as rr2d (.A1 convert matrix to flattened ndarray)
-                            x_2d = pos_stars_rot[:,0].A1 # realize axes=[0,1]
-                            y_2d = pos_stars_rot[:,1].A1 # realize axes=[0,1]
+                            # calculate 2D radii as rr2d
+                            x_2d = pos_stars_rot[:,0] # realize axes=[0,1]
+                            y_2d = pos_stars_rot[:,1] # realize axes=[0,1]
                             rr2d = np.sqrt( x_2d*x_2d + y_2d*y_2d )
 
                             # get interpolated 2D half light radii
@@ -2417,8 +2417,11 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=100.0),
    'Subhalo_Mass_2rstars_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad='2rhalfstars'),
+   'Subhalo_Mass_FoF_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,scope='fof'),
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
+
 
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),

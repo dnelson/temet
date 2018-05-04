@@ -16,6 +16,7 @@ from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapH
 from cosmo.util import validSnapList, periodicDists
 from plot.sizes import galaxySizes
 from plot.cosmoGeneral import addRedshiftAgeAxes
+from plot.general import plotPhaseSpace2D
 from plot.config import *
 from projects.oxygen import nOVIcddf
 from projects.color import galaxyColorPDF, galaxyColor2DPDFs
@@ -760,7 +761,6 @@ def stellarMassFunctionMultiPanel(sPs, pdf, highMassEnd=False, centralsOnly=Fals
 def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
     """ HI mass function (number density of HI masses) at redshift zero. """
     acFields = ['Subhalo_Mass_100pkpc_HI','Subhalo_Mass_30pkpc_HI','Subhalo_Mass_HI']
-    lw = 3.0
 
     # plot setup
     if fig_subplot[0] is None:
@@ -850,7 +850,6 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
 def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
     """ HI mass fraction (M_HI/M*) vs M* at redshift zero. """
     acFields = ['Subhalo_Mass_100pkpc_HI','Subhalo_Mass_30pkpc_HI','Subhalo_Mass_HI']
-    lw = 3.0
 
     # plot setup
     if fig_subplot[0] is None:
@@ -956,6 +955,91 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         lExtra.append( acField )
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+def HIvsHaloMass(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
+    """ HI mass (M_HI) vs M_halo at redshift zero. """
+    acFields = ['Subhalo_Mass_FoF_HI','Subhalo_Mass_HI']
+
+    # plot setup
+    if fig_subplot[0] is None:
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+    
+    ax.set_ylim([6.0,11.5])
+    ax.set_xlim([9.5,14.0])
+
+    ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('M$_{\\rm HI}$ [ log M$_{\\rm sun}$ ]')
+
+    # observational points (Obuljen+ 2018)
+    o18 = obuljen2018()
+
+    color = '#222222'
+    l1, = ax.plot(o18['Mhalo'], o18['mHI'], color=color)
+    ax.fill_between(o18['Mhalo'], savgol_filter(o18['mHI_low'],sKn,sKo), savgol_filter(o18['mHI_high'],sKn,sKo), color=color, alpha=0.2)
+
+    legend1 = ax.legend([l1], [o18['label']], loc='lower right')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('HI/MHALO: '+sP.simName+' (z=%.1f)' % simRedshift)
+        sP.setRedshift(simRedshift)
+
+        # load halo masses, restrict to centrals only
+        gc = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+        w = np.where(np.isfinite(gc))
+        xx = gc[w]
+
+        # for each of the HI mass definitions, calculate HI masses and plot
+        for i, acField in enumerate(acFields):
+            # load HI masses under this definition
+            ac = auxCat(sP, fields=[acField])[acField]
+            yy = sP.units.codeMassToLogMsun(ac[w])
+
+            # calculate median            
+            xm, ym_i, sm_i, pm_i = running_median(xx,yy,binSize=binSize,skipZeros=True,percs=[10,25,75,90],mean=True)
+
+            if xm.size > sKn:
+                ym = savgol_filter(ym_i,sKn,sKo)
+                sm = savgol_filter(sm_i,sKn,sKo)
+                pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+
+            label = sP.simName+' z=%.1f'%sP.redshift if i == 0 else ''
+            color = l.get_color() if i > 0 else None
+            l, = ax.plot(xm, ym, linestyles[i], color=color, lw=lw, label=label)
+
+            if i == 0:
+                ax.fill_between(xm, pm[0,:], pm[-1,:], color=l.get_color(), interpolate=True, alpha=0.25)
+
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = []
+    lExtra = []
+    for i, acField in enumerate(acFields):
+        sExtra.append( plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[i]) )
+        lExtra.append( acField )
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
     # finish figure
     finishFlag = False
@@ -2081,15 +2165,15 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2099,17 +2183,17 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    #sPs.append( simParams(res=512, run='tng', variant='0000') )
-    #sPs.append( simParams(res=512, run='tng', variant='2302') )
-    #sPs.append( simParams(res=512, run='tng', variant='0011') )
+    sPs.append( simParams(res=512, run='tng', variant='0000') )
+    sPs.append( simParams(res=512, run='tng', variant='1006') )
+    sPs.append( simParams(res=512, run='tng', variant='5004') )
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
-    if 1:
+    if 0:
         # testing
-        pdf = PdfPages('globalComps_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0)
+        pdf = PdfPages('globalComps_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        HIvsHaloMass(sPs, pdf, simRedshift=0.0)
         pdf.close()
         return
 
@@ -2122,8 +2206,8 @@ def plots():
     stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=True, simRedshift=zZero)
     stellarMassHaloMass(sPs, pdf, ylog=True, use30kpc=True, simRedshift=zZero)
 
-    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True, redshifts=[1,2,3,6])
-    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True, redshifts=[1,2,3,6])
+    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=False, use30kpc=True, redshifts=[1,2,3,4]) #1,2,3,6
+    stellarMassHaloMassMultiPanel(sPs, pdf, ylog=True, use30kpc=True, redshifts=[1,2,3,4]) #1,2,3,6
 
     sfrAvgVsRedshift(sPs, pdf)
     sfrdVsRedshift(sPs, pdf, xlog=True)
@@ -2165,6 +2249,10 @@ def plots():
     haloSynchrotronPower(sPs, pdf, simRedshift=zZero)
     HIMassFunction(sPs, pdf, simRedshift=zZero)
     HIMassFraction(sPs, pdf, simRedshift=zZero)
+    HIvsHaloMass(sPs, pdf, simRedshift=zZero)
+
+    for sP in sPs:
+        plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

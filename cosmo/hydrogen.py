@@ -134,7 +134,7 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
     frac_nH0 = gas['NeutralHydrogenAbundance'].astype('float32')
 
     # number density [1/cm^3] of total hydrogen
-    nH = sP.units.codeDensToPhys(gas['Density'], cgs=True, numDens=True) * gas['GFM_Metals']
+    nH = sP.units.codeDensToPhys(gas['Density'], cgs=True, numDens=True) * gas['metals_H']
 
     # compare to physical density threshold for star formation [H atoms / cm^3]
     PhysDensThresh = 0.13
@@ -166,27 +166,24 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
         use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
         density. Return still in code units, e.g. [10^10 Msun/h].
     """
-    reqFields = ['Masses','GFM_Metals','NeutralHydrogenAbundance']
+    reqFields = ['Masses','metals_H','NeutralHydrogenAbundance']
     if totalNeutral or atomic or molecular:
         reqFields += ['Density']
 
     # load here?
     if gas is None:
         from cosmo.load import snapshotSubset
-        reqFieldsLoad = list(reqFields) # make copy
-        reqFieldsLoad.remove('GFM_Metals')
-        reqFieldsLoad.append('metals_H')
-        gas = snapshotSubset(sP, 'gas', reqFieldsLoad, indRange=indRange)
+        gas = snapshotSubset(sP, 'gas', list(reqFields), indRange=indRange)
         
     if not all( [f in gas for f in reqFields] ):
         raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')
     if sum( [total,totalNeutral,totalNeutralSnap,atomic,molecular] ) != 1:
         raise Exception('Must request exactly one of total, totalNeutral, atomic, or molecular.')
-    if gas['GFM_Metals'].ndim != 1:
-        raise Exception('Please load just "metals_H" into GFM_Metals to avoid ambiguity.')
+    if 'GFM_Metals' in gas:
+        raise Exception('Please load just "metals_H" instead of GFM_Metals to avoid ambiguity.')
 
     # total hydrogen mass (alternatively, just multiply by sP.units.hydrogen_massfrac=0.76)
-    massH = gas['Masses'] * gas['GFM_Metals']
+    massH = gas['Masses'] * gas['metals_H']
 
     # which fraction to apply?
     if total:
