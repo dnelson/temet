@@ -7,16 +7,12 @@ from builtins import *
 
 import numpy as np
 import h5py
-from datetime import datetime
 
 from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
-from plot.general import simSubhaloQuantity
 from util.helper import pSplit, logZeroNaN
-from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.mergertree import loadMPB
-from cosmo.util import snapNumToRedshift, redshiftToSnapNum, crossMatchSubhalosBetweenRuns, \
-                       cenSatSubhaloIndices
+from cosmo.util import crossMatchSubhalosBetweenRuns
 from util import simParams
 
 def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
@@ -173,7 +169,7 @@ def oneGalaxyThreeRotations(conf=0):
 
     # create panels, one per view
     sPloc = simParams(res=res, run=run, redshift=redshift)
-    sub   = groupCatSingle(sPloc, subhaloID=hInd)
+    sub   = sPloc.groupCatSingle(subhaloID=hInd)
     panels = []
 
     for i, rot in enumerate(rotations):
@@ -222,7 +218,7 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
     for fofHaloID, resLevel in zip(fofHaloIDs,resLevels):
         # get subhalo ID
         sP = simParams(res=resLevel, run=run, redshift=redshift, variant=variant)
-        h = groupCatSingle(sP, haloID=fofHaloID)
+        h = sP.groupCatSingle(haloID=fofHaloID)
         shID = h['GroupFirstSub']
         print('subhalo ID: ',shID)
 
@@ -457,7 +453,7 @@ def tngDwarf_firstNhalos(conf=0):
 
     # render one plot per halo
     for i in range(nHalos):
-        halo = groupCatSingle(sP, haloID=i)
+        halo = sP.groupCatSingle(haloID=i)
         print(sP.simName, sP.snap, sP.redshift, i, halo['GroupFirstSub'], halo['GroupPos'])
 
         panels = [ {'hInd':halo['GroupFirstSub']} ]
@@ -667,75 +663,6 @@ def loop_patterns():
         print(i)
         tngMethods2_windPatterns(conf=1, pageNum=i)
 
-def tngCluster_center_timeSeriesPanels(conf=0):
-    """ Plot a time series of panels from subsequent snapshots in the center of fof0. """
-    panels = []
-
-    zStart     = 0.3 # start plotting at this snapshot
-    nSnapsBack = 12   # one panel per snapshot, back in time
-
-    #hInd       = 0
-    run        = 'illustris'
-    res        = 1820
-    rVirFracs  = None #[0.05]
-    method     = 'sphMap'
-    nPixels    = [960,960]
-    size       = 100.0
-    sizeType   = 'codeUnits'
-    labelZ     = True
-    axes       = [1,0]
-    rotation   = None
-
-    if conf == 0:
-        partType   = 'gas'
-        partField  = 'coldens_msunkpc2'
-        valMinMax  = [6.5,9.0]
-    if conf == 1:
-        partType   = 'stars'
-        partField  = 'coldens_msunkpc2'
-        valMinMax  = [6.5,10.0]
-    if conf == 2:
-        partType   = 'gas'
-        partField  = 'metal_solar'
-        valMinMax  = [-0.5,0.5]
-    if conf == 3:
-        partType   = 'dm'
-        partField  = 'coldens2_msunkpc2'
-        valMinMax  = [15.0,16.0]
-    if conf == 4:
-        partType   = 'gas'
-        partField  = 'pressure_ratio'
-        valMinMax  = [-2.0,1.0]
-
-    # configure panels
-    sP = simParams(res=res, run=run, redshift=zStart)
-    for i in range(nSnapsBack):
-        hIndLoc = 0
-        if run == 'tng' and i < 2: hIndLoc = 1
-
-        halo = groupCatSingle(sP, haloID=hIndLoc)
-        print(sP.snap, sP.redshift, hIndLoc, halo['GroupFirstSub'], halo['GroupPos'])
-
-        panels.append( {'hInd':halo['GroupFirstSub'], 'redshift':snapNumToRedshift(sP)} )
-        sP.setSnap(sP.snap-1)
-
-    panels[0]['labelScale'] = True
-    panels[-1]['labelHalo'] = True
-
-    class plotConfig:
-        plotStyle    = 'edged_black'
-        colorbars    = True
-        rasterPx     = 960
-        saveFilename = savePathDefault + 'timePanels_%s_hInd-0_%s-%s_z%.1f_n%d.pdf' % \
-                       (sP.simName,partType,partField,zStart,nSnapsBack)
-
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-def loopTimeSeries():
-    """ Helper: Loop the above over configs. """
-    for i in range(5):
-        tngCluster_center_timeSeriesPanels(conf=i)
-
 def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None):
     """ For a series of mass bins (log Mhalo), take a uniform number of halos from each and 
     make either (i) a 3x2 plot with the top row face-on and the bottom row edge-on, one plot per galaxy, or 
@@ -777,7 +704,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
             print('Task past bin size, quitting.')
             return
 
-        haloInd = groupCatSingle(sP, subhaloID=hID)['SubhaloGrNr']
+        haloInd = sP.groupCatSingle(subhaloID=hID)['SubhaloGrNr']
         if binInd >= 2: size = 40.0
 
         panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelHalo':True} )
@@ -891,49 +818,6 @@ def loopMassBins():
             for j in range(8):
                 massBinsSample_3x2_EdgeOnFaceOn(res,'halos_combined', haloOrMassBinNum=i, panelNum=j)
 
-def zoomEvoMovies(conf):
-    """ Configurations to render movies of the sims.zooms2 runs (at ~400 total snapshots). """
-    panels = []
-
-    if conf == 'oneRes_DensTempEntr':
-        panels.append( {'res':11, 'partField':'coldens', 'valMinMax':[19.0,23.0], 'labelScale':True} )
-        panels.append( {'res':11, 'partField':'temp',    'valMinMax':[4.0, 6.5]} )
-        panels.append( {'res':11, 'partField':'entr',    'valMinMax':[6.0,9.0], 'labelHalo':True} )
-
-    if conf == 'threeRes_DensTemp':
-        panels.append( {'res':9,  'partField':'coldens', 'valMinMax':[19.0,23.0]} )
-        panels.append( {'res':10, 'partField':'coldens', 'valMinMax':[19.0,23.0]} )
-        panels.append( {'res':11, 'partField':'coldens', 'valMinMax':[19.0,23.0]} )
-        panels.append( {'res':9,  'partField':'temp',    'valMinMax':[4.0,6.5]} )
-        panels.append( {'res':10, 'partField':'temp',    'valMinMax':[4.0,6.5]} )
-        panels.append( {'res':11, 'partField':'temp',    'valMinMax':[4.0,6.5]} )
-
-    hInd       = 2
-    run        = 'zooms2'
-    partType   = 'gas'
-    rVirFracs  = [0.15,0.5,1.0]
-    method     = 'sphMap'
-    nPixels    = [1920,1920]
-    size       = 3.5
-    sizeType   = 'rVirial'
-    axes       = [1,0]
-    labelSim   = False
-    relCoords  = True
-    rotation   = None
-
-    class plotConfig:
-        plotStyle    = 'open'
-        rasterPx     = 1200
-        colorbars    = True
-        saveFileBase = '%s_evo_h%d_%s' % (run,hInd,conf)
-
-        # movie config
-        treeRedshift = 2.0
-        minRedshift  = 2.0
-        maxRedshift  = 100.0
-
-    renderSingleHaloFrames(panels, plotConfig, localVars)
-
 def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSample=False, 
                                      evo=False, curPage=None, conf=0):
     """ Plot stellar stamps red/blue galaxies around 10^10.5 Msun.
@@ -943,7 +827,6 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     If curPage specified, do a paged exploration instead. """
     from cosmo.color import loadSimGalColors
     from plot.config import defSimColorModel
-    from cosmo.util import redshiftToSnapNum
 
     # we have chosen by hand for L75n1820TNG z=0 from the massBin = [12.0,12.2] below these two sets
     # we define blue as (g-r)<0.6, red as (g-r)>0.7 and green as 0.5<(g-r)<0.7
@@ -1051,7 +934,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
             for field in fieldsToCache:
                 cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
                 print('Caching [%s] now...' % field)
-                dataCache[cache_key] = snapshotSubset(sP, partType, field)
+                dataCache[cache_key] = sP.snapshotSubset(partType, field)
             print('All caching done.')
 
     # load halos of this bin, from this run
@@ -1070,7 +953,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
             if blueSample: shIDs_z0 = blue_z0[(blueSample-1)*nRowsFig:(blueSample)*nRowsFig]
             if greenSample: shIDs_z0 = green_z0[(greenSample-1)*nRowsFig:(greenSample)*nRowsFig]
 
-            evo_snapshots = redshiftToSnapNum(evo_redshifts, sP)
+            evo_snapshots = sP.redshiftToSnapNum(evo_redshifts)
             shIDs = []
             redshifts = []
 
@@ -1108,8 +991,8 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     # load colors and morphs for custom labeling
     if not evo:
         gr_colors_z0, _ = loadSimGalColors(sP, defSimColorModel, bands=['g','r'], projs='random')
-        kappa_stars, _, _, _ = simSubhaloQuantity(sP, 'Krot_oriented_stars2')
-        mass_ovi, _, _, _ = simSubhaloQuantity(sP, 'mass_ovi')
+        kappa_stars, _, _, _ = sP.simSubhaloQuantity('Krot_oriented_stars2')
+        mass_ovi, _, _, _ = sP.simSubhaloQuantity('mass_ovi')
         mass_ovi = logZeroNaN(mass_ovi)
 
     # create panels, one per galaxy
@@ -1206,7 +1089,7 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
     if sample == 'guinevere':
         # verify which are centrals
         nRowsFig = 8
-        cen_flags = groupCat(sP, fieldsSubhalos=['cen_flag'])
+        cen_flags = sP.groupCat(fieldsSubhalos=['cen_flag'])
 
         if run != 'illustris':
             # write out text-file with matches
