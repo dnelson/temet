@@ -879,7 +879,7 @@ def groupCatOffsetListIntoSnap(sP):
         groupNsubs      = np.zeros( (totGroups,), dtype=np.int32 )
         subgroupLenType = np.zeros( (totSubGroups, sP.nTypes), dtype=np.int32 )
 
-        nChunks = snapNumChunks(sP.simPath, sP.snap)
+        nChunks = groupCatNumChunks(sP.simPath, sP.snap)
         print('Calculating new groupCatOffsetsListIntoSnap... ['+str(nChunks)+' chunks]')
 
         for i in range(1,nChunks+1):
