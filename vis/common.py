@@ -1674,7 +1674,7 @@ def addBoxMarkers(p, conf, ax):
 
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
-        if conf.rasterPx[0] >= 1000: scaleBarLen *= 2 # 20% of plot width if going to be visually small
+        #if conf.rasterPx[0] >= 1000: scaleBarLen *= 2 # 20% of plot width if going to be visually small
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
         scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units (kpc)
 
@@ -1701,7 +1701,8 @@ def addBoxMarkers(p, conf, ax):
 
         scaleBarStr = "%d %s" % (scaleBarLen, unitStrs[unitInd])
         if scaleBarLen > 900: # use Mpc label
-            scaleBarStr = "%g %s" % (scaleBarLen/1000.0, unitStrs[unitInd+1])
+            scaleText = '%.2f' % scaleBarLen/1000.0 if scaleBarLen/1000.0 < 10 else '%g' % scaleBarLen/1000.0
+            scaleBarStr = "%s %s" % (scaleText, unitStrs[unitInd+1])
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 

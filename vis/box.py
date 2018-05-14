@@ -14,7 +14,7 @@ from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 from util import simParams
 
-def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, **kwargs):
+def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxOffset, **kwargs):
     """ Factor out some box/image related calculations common to all whole box plots. 
     Image zoomFac fraction of entire fullbox/subbox, zooming around relCenPos 
     ([0.5,0.5] being box center point). """
@@ -43,12 +43,13 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, **kw
     if isinstance(nPixels, (list,np.ndarray)):
         aspect = float(nPixels[0]) / nPixels[1]
         boxSizeImg[1] /= aspect # e.g. 16/9 = 1.778 decreases vertical height to 56.25% of original
-        #boxCenter[1] += 1000.0 # temporary, L75n1820TNGsb0 vel render
-        #print('REMOVE 1000 OFFSET')
 
     boxSizeImg[0] *= zoomFac
     boxSizeImg[1] *= zoomFac
     boxSizeImg[2] *= sliceFac
+
+    for i in range(3):
+        boxCenter[i] += boxOffset[i]
 
     extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0],
                boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
@@ -75,6 +76,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
+    boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
     axesUnits   = 'code'      # code [ckpc/h], mpc, deg, arcmin
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
@@ -158,6 +160,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     absCenPos   = None        # [x,y,z] in simulation coordinates to place at center of image
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
+    boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
     axesUnits   = 'code'      # code [ckpc/h], Mpc, deg, arcmin
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
