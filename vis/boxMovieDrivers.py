@@ -88,6 +88,7 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         # TNG100
         res = 1820
         variant = 'subbox0'
+        boxOffset = [0,1000.0,0]
 
         panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[100,900]} )
 
@@ -96,7 +97,8 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         res = 2160
         variant = 'subbox2'
 
-        panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1200]} )
+        #panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
+        panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
         #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
         #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
 
@@ -109,7 +111,7 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         # movie config
         minZ      = 0.0
         maxZ      = 50.0 # tng subboxes start at a=0.02
-        maxNSnaps = None #1 #2700 # 90 seconds at 30 fps
+        maxNSnaps = 2400 #4500 # 2.5 min at 30 fps (1820sb0 render)
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
