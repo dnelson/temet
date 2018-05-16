@@ -333,7 +333,9 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
                   # fof only, in >1 files per snapshot, in subdirectory
                   basePath + 'groups_' + ext + '/fof_tab_' + ext + '.' + str(chunkNum) + '.hdf5',
                   # rewritten new group catalogs with offsets
-                  basePath + 'groups_' + ext + '/groups_' + ext + '.' + str(chunkNum) + '.hdf5'
+                  basePath + 'groups_' + ext + '/groups_' + ext + '.' + str(chunkNum) + '.hdf5',
+                  # single (non-split) file in subdirectory (i.e. Millennium rewrite)
+                  basePath + 'groups_' + ext + '/fof_subhalo_tab_' + ext + '.hdf5',
                 ]
 
     for fileName in fileNames:
@@ -706,6 +708,8 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
                   '/snap_' + sbStr1 + ext + '.' + str(chunkNum) + '.hdf5',
                   # single file per snapshot
                   basePath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5',
+                  # single file per snapshot, in subdirectory (i.e. Millennium rewrite)
+                  basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5',
                   # single groupordered file per snapshot
                   basePath + sbStr2 + 'snap-groupordered_' + ext + '.hdf5',
                   # multiple groupordered files
@@ -730,7 +734,7 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
 def snapNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a snapshot, by checking for existence of files inside directory. """
     _, sbStr1, sbStr2 = subboxVals(subbox)
-    path = basePath + sbStr2 + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
+    path = basePath + sbStr2 + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/snap*.hdf5'
 
     nChunks = len(glob.glob(path))
 
@@ -742,9 +746,9 @@ def snapNumChunks(basePath, snapNum, subbox=None):
 def groupCatNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a group catalog. """
     _, sbStr1, sbStr2 = subboxVals(subbox)
-    path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3) + '/*.hdf5'
+    path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3)
 
-    nChunks = len(glob.glob(path))
+    nChunks = len(glob.glob(path+'fof_*.hdf5')) + len(glob.glob(path+'groups_*.hdf5'))
 
     if nChunks == 0:
         nChunks = 1 # single file per snapshot
@@ -888,10 +892,19 @@ def groupCatOffsetListIntoSnap(sP):
             header = dict( f['Header'].attrs.items() )
             
             if header['Ngroups_ThisFile'] > 0:
-                groupLenType[groupCount:groupCount+header['Ngroups_ThisFile']] = f['Group']['GroupLenType']
+                if 'GroupLenType' in f['Group']:
+                    groupLenType[groupCount:groupCount+header['Ngroups_ThisFile']] = f['Group']['GroupLenType']
+                else:
+                    assert sP.targetGasMass == 0.0 # Millennium DMO with no types
+                    groupLenType[groupCount:groupCount+header['Ngroups_ThisFile'],sP.ptNum('dm')] = f['Group']['GroupLen']
+
                 groupNsubs[groupCount:groupCount+header['Ngroups_ThisFile']]   = f['Group']['GroupNsubs']
             if header['Nsubgroups_ThisFile'] > 0:
-                subgroupLenType[subgroupCount:subgroupCount+header['Nsubgroups_ThisFile']] = f['Subhalo']['SubhaloLenType']
+                if 'SubhaloLenType' in f['Subhalo']:
+                    subgroupLenType[subgroupCount:subgroupCount+header['Nsubgroups_ThisFile']] = f['Subhalo']['SubhaloLenType']
+                else:
+                    assert sP.targetGasMass == 0.0 # Millennium DMO with no types
+                    subgroupLenType[subgroupCount:subgroupCount+header['Nsubgroups_ThisFile'],sP.ptNum('dm')] = f['Subhalo']['SubhaloLen']
             
             groupCount += header['Ngroups_ThisFile']
             subgroupCount += header['Nsubgroups_ThisFile']
@@ -938,7 +951,14 @@ def _haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
 
     # load the length (by type) of this group/subgroup from the group catalog, and its offset within the snapshot
     with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
-        subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
+        if gcName+'LenType' in f[gcName]:
+            subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
+        else:
+            assert sP.targetGasMass == 0.0
+            print('Warning: Should be DMO (Millennium) simulation with no LenType.')
+            subset['lenType'] = np.zeros(sP.nTypes, dtype='int64')
+            subset['lenType'][sP.ptNum('dm')] = f[gcName][gcName+'Len'][groupOffset]
+
         subset['offsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsets'+gcName][gcID,:]
 
     return subset
@@ -1724,6 +1744,7 @@ def snapshotSubset(sP, partType, fields,
     # halo or subhalo based subset
     if haloID is not None or subhaloID is not None:
         subset = _haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
+        import pdb; pdb.set_trace()
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
     if len(fields) == 1 and mdi[0] is None and indRange is not None:

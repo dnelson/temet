@@ -62,6 +62,10 @@ def redshiftToSnapNum(redshifts=None, sP=None):
             if not isfile(fileName):
                 fileName = sP.simPath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5'
 
+            # single file per snapshot, in subdirectory (e.g. Millennium rewrite)
+            if not isfile(fileName):
+                fileName = sP.simPath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5'
+
             # single groupordered file per snapshot
             if not isfile(fileName):
                 fileName = sP.simPath + sbStr2 + 'snap-groupordered_' + ext + '.hdf5'
@@ -73,7 +77,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
             # if file doesn't exist yet, skip (e.g. missing/deleted snapshots are ok)
             if not isfile(fileName):
                 continue
-                
+
             with h5py.File(fileName, 'r') as f:
                 r['redshifts'][i] = f['Header'].attrs['Redshift']
                 r['times'][i]     = f['Header'].attrs['Time']
