@@ -14,6 +14,7 @@ from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundi
   cenSatSubhaloIndices
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe, weighted_std_binned
 from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
+from util.rotation import rotateCoordinateArray, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 
 # generative functions
 from projects.outflows_analysis import instantaneousMassFluxes
@@ -831,8 +832,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     from cosmo.stellarPop import sps
     from healpy.pixelfunc import nside2npix, pix2vec
     from cosmo.hydrogen import hydrogenMass
-    from vis.common import rotationMatrixFromVec, rotateCoordinateArray, momentOfInertiaTensor, \
-      rotationMatricesFromInertiaTensor, meanAngMomVector
 
     # mutually exclusive options, at most one can be enabled
     assert sum([sizes,indivStarMags,np.clip(fullSubhaloSpectra,0,1)]) in [0,1]
@@ -841,10 +840,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     pop = sps(sP, iso, imf, dust, redshifted=redshifted)
 
     # which bands? for now, to change, just recompute from scratch
-    #bands = ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
-    #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
-    #bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
     bands = []
+    bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
+    bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
+    bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
     bands += ['jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR wide
 
     if indivStarMags: bands = ['sdss_r']
@@ -1880,7 +1879,6 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         If subhaloIDsTodo is not None, then process this explicit list of subhalos.
     """
     from scipy.stats import binned_statistic
-    from vis.common import rotateCoordinateArray, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 
     assert op in ['sum','mean','median','count',np.std]
     assert scope in ['global','global_fof','subfind','fof','subfind_global']

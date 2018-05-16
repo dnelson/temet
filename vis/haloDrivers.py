@@ -752,7 +752,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
 def galaxyMosaic_topN(numHalosInd,panelNum=1):
     """ Mosaic, top N most massive. """
     res        = 2160
-    redshift   = 1.0
+    redshift   = 2.0 # 1.0 !
     run        = 'tng'
     rVirFracs  = None
     method     = 'sphMap'
