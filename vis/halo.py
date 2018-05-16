@@ -9,11 +9,11 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile
 
-from vis.common import renderMultiPanel, meanAngMomVector, rotationMatrixFromVec, savePathDefault, \
-                       momentOfInertiaTensor, rotationMatricesFromInertiaTensor, defaultHsmlFac
+from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
+from util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 from util import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):

@@ -66,9 +66,9 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
         colorbars = True
 
         # movie config
-        minZ      = 1.1
-        maxZ      = 2.0 #50.0 # tng subboxes start at a=0.02
-        #maxNSnaps = 1 #2700 # 90 seconds at 30 fps
+        minZ      = 0.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02
+        maxNSnaps = None #2700 # 90 seconds at 30 fps
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
@@ -81,8 +81,8 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
     nPixels = [3840,2160]
     axes    = [0,1] # x,y
 
-    labelScale = 'physical'
-    labelZ     = True
+    #labelScale = 'physical'
+    #labelZ     = True
 
     if conf == 'one':
         # TNG100
@@ -97,10 +97,11 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         res = 2160
         variant = 'subbox2'
 
-        #panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
-        panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
-        #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
+        #panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[250,1100]} )
+        #panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
+        panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
         #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
+        #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
 
     class plotConfig:
         savePath = '/u/dnelson/data/frames/%s%s/' % (res,variant)
@@ -109,9 +110,9 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         colorbars = False
 
         # movie config
-        minZ      = 0.0
-        maxZ      = 50.0 # tng subboxes start at a=0.02
-        maxNSnaps = 2400 #4500 # 2.5 min at 30 fps (1820sb0 render)
+        minZ      = 1.0
+        maxZ      = 1.2 # tng subboxes start at a=0.02
+        maxNSnaps = None #2400 #4500 # 2.5 min at 30 fps (1820sb0 render)
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 

@@ -841,6 +841,13 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                  'blue'  : ((0.0, 0.075, 0.075), (0.25, 0.447, 0.447), (0.4,0.357,0.357), (0.55,0.302,0.302), (0.7, 0.792, 0.792), (0.99, 1.0, 1.0), (1.0, 1.0, 1.0))}
         cmap = LinearSegmentedColormap(ctName, cdict, N=1024)
 
+    if ctName == 'gasdens_tng5':
+        # TNG gas matter density (shift yellow/dark blue transition lower)
+        cdict = {'red'   : ((0.0, 0.027, 0.027), (0.1, 0.168, 0.168), (0.4,0.980,0.980), (0.55,0.286,0.286), (0.7, 0.282, 0.282), (0.99, 1.0, 1.0), (1.0, 1.0, 1.0)),
+                 'green' : ((0.0, 0.055, 0.055), (0.1, 0.322, 0.322), (0.4,0.898,0.898), (0.55,0.702,0.702), (0.7, 0.557, 0.557), (0.99, 1.0, 1.0), (1.0, 1.0, 1.0)),
+                 'blue'  : ((0.0, 0.075, 0.075), (0.1, 0.447, 0.447), (0.4,0.357,0.357), (0.55,0.302,0.302), (0.7, 0.792, 0.792), (0.99, 1.0, 1.0), (1.0, 1.0, 1.0))}
+        cmap = LinearSegmentedColormap(ctName, cdict, N=1024)
+
     if ctName == 'blue_red_t10':
         # pure blue -> red using the tableau10 colors
         red_r = 214.0/255 ; red_g = 39.0/255 ; red_b = 40.0/255

@@ -13,7 +13,7 @@ from numba import jit, void, int32
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
-@jit(nopython=True, nogil=True, cache=True)
+@jit(nopython=True, nogil=True) #, cache=True)
 def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
     """ Helper routine for calcHsml(), see below. """
     pp = 0

@@ -16,7 +16,7 @@ from scipy.interpolate import interp1d
 
 from util.helper import logZeroMin, trapsum, iterable
 from util.sphMap import sphMap
-from vis.common import rotationMatrixFromVec, rotateCoordinateArray
+from util.rotation import rotationMatrixFromVec, rotateCoordinateArray
 
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
