@@ -504,6 +504,25 @@ class simParams:
                 if '_josh' in run and variant == 'FP3': snStr = '_12 (Full Physics RecouplingDensity10)'
                 self.simName = 'L11%s' % snStr
 
+        # MILLENNIUM
+        if run == 'millennium':
+            self.validResLevels = [2160]
+            self.boxSize        = 500.0
+            self.mpcUnits       = True # careful!
+            self.groupOrdered   = True # re-written HDF5 files
+
+            self.omega_m     = 0.25
+            self.omega_L     = 0.75
+            self.omega_b     = 0.0
+            self.HubbleParam = 0.73
+
+            self.gravSoft    = 5.0
+
+            self.arepoPath  = self.basePath + 'sims.millennium/Millennium1/'
+            self.savPrefix  = 'MIL'
+            self.simName    = 'Millennium-I'
+            self.colors     = ['#777777'] # gray
+
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
         if run == 'feedback':
             self.validResLevels = [128,256,512]
@@ -629,6 +648,7 @@ class simParams:
                                cenSatSubhaloIndices
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                auxCat, snapshotSubsetParallel
+        from cosmo.mergertree import loadMPB, loadMPBs
         from plot.quantities import simSubhaloQuantity
 
         self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
@@ -646,6 +666,8 @@ class simParams:
         self.groupCatHeader  = partial(groupCatHeader, sP=self)
         self.groupCat        = partial(groupCat, sP=self)
         self.auxCat          = partial(auxCat, self)
+        self.loadMPB         = partial(loadMPB, self)
+        self.loadMPBs        = partial(loadMPBs, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
