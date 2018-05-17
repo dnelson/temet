@@ -674,22 +674,25 @@ def compareRuns_PhaseDiagram():
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
+    redshift = 0.0
     yQuant = 'temp'
     xQuant = 'numdens'
 
     # get list of all 512 method runs via filesystem search
-    sP = simParams(res=512,run='tng',redshift=0.0,variant='0000')
+    sP = simParams(res=512,run='tng',redshift=redshift,variant='0000')
     dirs = glob.glob(sP.arepoPath + '../L25n512_*')
     variants = sorted([d.rsplit("_",1)[1] for d in dirs])
+    variants = ['0000','1006']
 
     # start PDF, add one page per run
     pdf = PdfPages('compareRunsPhaseDiagram.pdf')
 
     for variant in variants:
-        sP = simParams(res=512,run='tng',redshift=0.0,variant=variant)
+        sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
         if sP.simName == 'DM only': continue
         print(variant,sP.simName)
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, haloID=None, pdf=pdf)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=['coolrate_ratio'], weights=None, haloID=None, pdf=pdf)
 
     pdf.close()
 
