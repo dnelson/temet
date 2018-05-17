@@ -124,8 +124,9 @@ def zoomEvoMovies(conf):
 
     renderSingleHaloFrames(panels, plotConfig, locals())
 
-def singleEvoFrames_3x2(frame=0, subhaloID=402572):
-    """ Plot frames for a time-evolution movie of a single halo/galaxy. 3x2 panels: stars, DM, gas, galaxy-scale and halo-scale. """
+def singleEvoFrames_3x2(frame=0, subhaloID=402572, justStars=False):
+    """ Plot frames for a time-evolution movie (using merger tree) of a single halo/galaxy. 
+    3x2 panels: stars, DM, gas, galaxy-scale and halo-scale. Or 2x1 panels: just one component. """
     panels = []
 
     zStart     = 0.0
@@ -153,24 +154,32 @@ def singleEvoFrames_3x2(frame=0, subhaloID=402572):
     gal_size = 0.2
     halo_size = 1.5
 
-    panels.append( {'size':gal_size, 'sizeType':'rVirial', 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 9.0]} )
-    panels.append( {'size':gal_size, 'sizeType':'rVirial', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.0]} )
+    if not justStars:
+        panels.append( {'size':gal_size, 'sizeType':'rVirial', 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 9.0]} )
+        panels.append( {'size':gal_size, 'sizeType':'rVirial', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.0]} )
     panels.append( {'size':gal_size, 'sizeType':'rVirial', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
     # halo-scale
-    panels.append( {'size':halo_size, 'sizeType':'rVirial', 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 9.0]} )
-    panels.append( {'size':halo_size, 'sizeType':'rVirial', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5, 8.0]} )
-    panels.append( {'size':halo_size, 'sizeType':'rVirial', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]} )
+    if not justStars:
+        panels.append( {'size':halo_size, 'sizeType':'rVirial', 'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 9.0]} )
+        panels.append( {'size':halo_size, 'sizeType':'rVirial', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5, 8.0]} )
+    panels.append( {'size':halo_size, 'sizeType':'rVirial', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.5,8.0]} )
 
-    panels[2]['labelZ'] = True
-    panels[5]['labelScale'] = 'physical'
-    panels[5]['labelHalo'] = 'Mstar'
+    if justStars:
+        panels[0]['labelScale'] = 'physical'
+        panels[0]['labelZ'] = True
+    else:
+        panels[2]['labelZ'] = True # upper right
+    panels[-1]['labelScale'] = 'physical'
+    panels[-1]['labelHalo'] = 'Mstar'
 
     class plotConfig:
         plotStyle    = 'open'
         rasterPx     = 1080
+        nRows        = 2
         colorbars    = True
+        title        = False
 
-        saveFilename = savePathDefault + 'timePanels_%s_subhaloID-%d_%02d.png' % (sP.simName,subhaloID,frame)
+        saveFilename = savePathDefault + 'timePanels_%s_subhaloID-%d_%02d.pdf' % (sP.simName,subhaloID,frame)
 
     renderSingleHalo(panels, plotConfig, locals())

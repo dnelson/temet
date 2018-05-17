@@ -110,8 +110,8 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         colorbars = False
 
         # movie config
-        minZ      = 1.0
-        maxZ      = 1.2 # tng subboxes start at a=0.02
+        minZ      = 0.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02
         maxNSnaps = None #2400 #4500 # 2.5 min at 30 fps (1820sb0 render)
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)

@@ -1744,7 +1744,6 @@ def snapshotSubset(sP, partType, fields,
     # halo or subhalo based subset
     if haloID is not None or subhaloID is not None:
         subset = _haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
-        import pdb; pdb.set_trace()
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)
     if len(fields) == 1 and mdi[0] is None and indRange is not None:

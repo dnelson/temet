@@ -12,16 +12,24 @@ from os.path import isfile
 from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac
 from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
+from util.boxRemap import findCuboidRemapInds
 from util import simParams
 
-def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxOffset, **kwargs):
+def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxOffset, remapRatio, **kwargs):
     """ Factor out some box/image related calculations common to all whole box plots. 
     Image zoomFac fraction of entire fullbox/subbox, zooming around relCenPos 
     ([0.5,0.5] being box center point). """
     assert relCenPos is None or absCenPos is None
+    if remapRatio is not None: assert sP.subbox is None
     
     if sP.subbox is None:
-        boxSizeImg = np.array([sP.boxSize, sP.boxSize, sP.boxSize])
+        if remapRatio is None:
+            # standard periodic full-box
+            boxSizeImg = np.array([sP.boxSize, sP.boxSize, sP.boxSize])
+        else:
+            # periodic -> cuboid remapping
+            remapMatrix, newBoxSize = findCuboidRemapInds(remapRatio, nPixels)
+            boxSizeImg = np.array(newBoxSize) * sP.boxSize
 
         if absCenPos is None:
             boxCenter = [relCenPos[0],relCenPos[1],0.5] * np.array(boxSizeImg)
@@ -40,7 +48,7 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxO
         boxCenter  = np.array([boxCenter0, boxCenter1, boxCenter2])
 
     # non-square aspect ratio
-    if isinstance(nPixels, (list,np.ndarray)):
+    if isinstance(nPixels, (list,np.ndarray)) and remapRatio is None:
         aspect = float(nPixels[0]) / nPixels[1]
         boxSizeImg[1] /= aspect # e.g. 16/9 = 1.778 decreases vertical height to 56.25% of original
 
@@ -87,6 +95,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
+    remapRatio  = None        # [x,y,z] periodic->cuboid remapping ratios, or None
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
@@ -94,6 +103,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
         rasterPx  = [1400,1400]  # each panel will have this number of pixels if making a raster (png) output
                                  # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True         # include colorbars
+        title     = True         # include title (only for open* styles)
 
         saveFilename = savePathDefault + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
@@ -171,6 +181,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
     rotCenter   = None        # rotation center
+    remapRatio  = None        # [x,y,z] periodic->cuboid remapping ratios, or None
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
@@ -178,7 +189,8 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
         rasterPx  = [960,960]  # each panel will have this number of pixels if making a raster (png) output
                                # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True       # include colorbars
-
+        title     = True       # include title (only for open* styles)
+        
         savePath     = savePathDefault
         saveFileBase = 'renderBoxFrame' # filename base upon which frame numbers are appended
 
