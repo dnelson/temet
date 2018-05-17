@@ -989,7 +989,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             if sP.isPartType(partType, 'stars'):
                 pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
-                hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, method=3) # custom age-based clipping
+                hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
 
             # load: mass/weights, quantity, and render specifications required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
