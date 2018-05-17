@@ -1258,15 +1258,15 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
 
     # plot setup
     sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=[figsize[0]*sizefac*1.1, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
     if simRedshift == 0.0:
         ax.set_xlim([8.0, 11.5])
-        ax.set_ylim([-1.0,1.0])
+        ax.set_ylim([-1.2,1.0])
     if simRedshift == 0.7:
         ax.set_xlim([7.5, 11.5])
-        ax.set_ylim([-1.0,0.75])
+        ax.set_ylim([-1.25,0.75])
     
     ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
     ax.set_ylabel('Z$_{\\rm gas}$ [ log Z$_{\\rm sun}$ ] [ centrals and satellites ]')
@@ -2227,7 +2227,7 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 0:
+    if 1:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2

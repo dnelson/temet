@@ -27,7 +27,7 @@ from plot.general import plotHistogram1D, plotPhaseSpace2D
 from plot.cosmoGeneral import quantMedianVsSecondQuant
 from cosmo.mergertree import mpbPositionComplete
 from vis.common import gridBox, setAxisColors, setColorbarColors
-from vis.halo import renderSingleHalo
+from vis.halo import renderSingleHalo, selectHalosFromMassBin
 from projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox, \
     loadRadialMassFluxes
 from tracer.tracerMC import match3
@@ -35,10 +35,8 @@ from tracer.tracerMC import match3
 def galaxyMosaics(conf=1, rotation='face-on'):
     """ Mosaic, top N most massive. 
       todo: multi-redshift
-      todo: inclined/'random' orientation
       todo: pick systems by hand instead of top N
-      todo: more than 1 mass bin?
-      todo: balance between 1 or 2 flagship examples, vs. large mosaic"""
+      todo: more than 1 mass bin?"""
     res        = 2160
     redshift   = 1.0
     run        = 'tng'
@@ -50,18 +48,31 @@ def galaxyMosaics(conf=1, rotation='face-on'):
     #rotation   = 'face-on'
     labelHalo  = 'Mstar'
 
+    numGals    = 12
+    massBin    = None # if None, then top N
+    #iterNum    = 0
+
+    # subhaloIDs of twelve z=2 systems, 3 per 'mass bin', to show as a 3x4 mosaic
+    z2_inds = []
+    z1_evo_inds = []
+
     class plotConfig:
         plotStyle = 'edged'
         rasterPx  = 960
-        nRows     = 4 # 4x3 panels
+        nRows     = numGals/3 # 4x3 panels
         colorbars = True
 
     # combined plot of centrals in mass bins
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    cen_flag = sP.groupCat(fieldsSubhalos=['central_flag'])
-    cen_inds = np.where(cen_flag)[0]
-    hIDs = cen_inds[0:0+12] # 12
+    if massBin is None:
+        cen_flag = sP.groupCat(fieldsSubhalos=['central_flag'])
+        cen_inds = np.where(cen_flag)[0]
+        hIDs = cen_inds[0:0+numGals]
+        #hIDs = [0, 25239, 41129, 55632, 70415, 79612, 87125, 94859, 101009, 106001, 110862, 114772]
+    else:
+        hIDs, _ = selectHalosFromMassBin(sP, [massBin], numPerBin=np.inf, massBinInd=0)
+        import pdb; pdb.set_trace()
 
     # configure panels
     panels = []
@@ -1532,11 +1543,11 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
 
 def paperPlots(sPs=None):
     """ Construct all the final plots for the paper. """
-    redshift = 0.73 # last snapshot, 58
+    redshift = 0.73 # snapshot 58, where intermediate trees were constructed
 
     TNG50   = simParams(res=2160,run='tng',redshift=redshift)
     TNG100  = simParams(res=1820,run='tng',redshift=redshift)
-    #TNG50_2 = simParams(res=1080,run='tng',redshift=redshift) # on /isaac/ptmp/
+    TNG50_2 = simParams(res=1080,run='tng',redshift=redshift)
     TNG50_3 = simParams(res=540,run='tng',redshift=redshift)
     TNG50_4 = simParams(res=270,run='tng',redshift=redshift)
 

@@ -41,7 +41,7 @@ def zoomDataDriver(sP, fields, snapStep=1):
 
     subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=snapStep)
 
-def guinevereData():
+def guinevereData(snap=None):
     """ Data for Guinevere (tracer cutouts for Illustris subhalos). """
     from util.simParams import simParams
 
@@ -53,7 +53,7 @@ def guinevereData():
     toRedshift   = 2.0
     trFields     = ['tracer_windcounter'] 
     parFields    = ['pos','vel','temp','sfr']
-    outPath      = sP.postPath + '/guinevere_cutouts/'
+    outPath      = sP.postPath + '/guinevere_cutouts/tracers_%s' % sP.simName
     txtCatPath   = sPtng.postPath + '/guinevere_cutouts/new_mw_sample_fgas_sat.txt'
 
     # subhalo list (TNG, new Lagrangian matching 2018) (Apr/May: with satellites)
@@ -69,7 +69,7 @@ def guinevereData():
 
     subhaloIDs = np.array(subhaloIDs)
 
-    subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath)
+    subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath, onlySnap=snap)
 
 def tracersTimeEvo(sP, fieldName, snapStep=None, all=True, pSplit=None):
     """ Wrapper to handle zoom vs. box load. """

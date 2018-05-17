@@ -178,3 +178,93 @@ def figure1_res_statistics(conf=0):
         # Figure 1, upper panel
         plotSingleRadialProfile(sPs, haloIDs=haloIDs, ptType='gas', ptProperty='mass_msun', 
             colorOffs=[0,2], xlim=[2.0,4.7], scope='global')
+
+def tracer_ambient_hot_halo():
+    """ Check the existence of an ambient/pre-existing hot halo at r<0.25rvir, as opposed to the possibility that all 
+    hot gas is arising from wind. """
+    from tracer.tracerMC import match3
+
+    sP = simParams(res=11,run='zooms2_josh',redshift=2.25,variant='FP',hInd=2)
+
+    temp_bins = [ [4.0,4.5], [4.5, 4.8], [4.8,5.0], [5.0,5.2], [5.2,5.4], [5.4, 5.6], [5.6, 5.8], [5.8, 6.0], [6.0, 6.2], [6.2, 6.5]]
+    rad_min = 0.4
+    rad_max = 0.5
+
+    # load ParentIDs of tracer catalog
+    with h5py.File(sP.postPath + 'tracer_tracks/tr_all_groups_%d_meta.hdf5' % sP.snap) as f:
+        ParentIDs = f['ParentIDs'][()]
+
+    # load radius, sfr, make selection
+    rad = sP.snapshotSubset('gas', 'rad_rvir', subhaloID=0)
+    sfr = sP.snapshotSubset('gas', 'sfr', subhaloID=0)
+    ids = sP.snapshotSubset('gas', 'ids', subhaloID=0)
+
+    ww = np.where( (sfr == 0.0) & (rad > rad_min) & (rad < rad_max) )
+
+    print('Selected [%d] of [%d] gas cells.' % (len(ww[0]),sfr.size))
+
+    # load temperature histories
+    with h5py.File(sP.postPath + 'tracer_tracks/tr_all_groups_%d_temp.hdf5' % sP.snap) as f:
+        redshifts = f['redshifts'][()]
+        temp = f['temp'][()]
+
+    print('Loaded temperatures.')
+
+    # crossmatch and take selection
+    ind_cat, ind_snap = match3(ParentIDs, ids[ww])
+
+    print('Crossmatched.')
+
+    rad = rad[ind_snap]
+    temp = temp[:,ind_cat]
+
+    # in a number of temp bins, find mean temperature shift as a function of time backwards
+    temp_prev = np.zeros( (len(temp_bins), redshifts.size), dtype='float32' )
+    frac_prev = np.zeros( (len(temp_bins), redshifts.size), dtype='float32' )
+
+    for i, temp_bin in enumerate(temp_bins):
+        # locate at z_final
+        w = np.where( (temp[0,:] > temp_bin[0]) & (temp[0,:] <= temp_bin[1]) )[0]
+        assert len(w) > 0
+
+        loc_temps = temp[:,w]
+
+        temp_prev[i,:] = np.nanmean(loc_temps, axis=1)
+        frac_prev[i,:] = np.sum(loc_temps >= temp_bin[0], axis=1) / float(len(w))
+        print(i, len(w))
+
+    # plot
+    fig = plt.figure(figsize=[14.0, 10.0])
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlabel('redshift')
+    ax.set_ylabel('temperature [ log K ]')
+
+    ax.set_ylim([3.8,6.5])
+    ax.set_xlim([2.2,2.6])
+
+    for i, temp_bin in enumerate(temp_bins):
+        label = 'T$_{\\rm zf}$ $\in$ [%.1f, %.1f]' % (temp_bin[0],temp_bin[1])
+        ax.plot( redshifts, temp_prev[i,:], '-', lw=2.0, label=label)
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('temp_evo_rvir=%.2f-%.2f.pdf' % (rad_min,rad_max))
+    plt.close(fig)
+
+    # plot 2
+    fig = plt.figure(figsize=[14.0, 10.0])
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlabel('redshift')
+    ax.set_ylabel('fraction of original bin still above bin min temp')
+
+    ax.set_ylim([0.0, 1.0])
+    ax.set_xlim([2.2,2.6])
+
+    for i, temp_bin in enumerate(temp_bins):
+        label = 'T$_{\\rm zf}$ $\in$ [%.1f, %.1f]' % (temp_bin[0],temp_bin[1])
+        ax.plot( redshifts, frac_prev[i,:], '-', lw=2.0, label=label)
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('tempfrac_evo_rvir=%.2f-%.2f.pdf' % (rad_min,rad_max))
+    plt.close(fig)

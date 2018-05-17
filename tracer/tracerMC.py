@@ -591,7 +591,7 @@ def getEvoSnapList(sP, toRedshift=None, snapStep=1):
     return snaps, redshifts
 
 def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None, 
-                   saveFilename=None):
+                   saveFilename=None, onlySnap=None):
     """ For a given set of tracerIDs at sP.redshift, walk through snapshots either forwards or backwards 
         until reaching toRedshift. At each snapshot, re-locate the tracers and record trFields as a 
         time sequence (from fluid_properties). Then, locate their parents at each snapshot and record 
@@ -625,6 +625,15 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         else:
             with h5py.File(saveFilename,'r') as f:
                 done = f['done'][()]
+
+            if done.sum() == len(snaps):
+                print('Done, now loading from [%s]...' % saveFilename.split("/")[-1])
+                with h5py.File(saveFilename,'r') as f:
+                    for key in f:
+                        if key == 'done': continue
+                        r[key] = f[key][()]
+                return r
+            
             print('Restarting: [%s] [numDone = %d]' % (saveFilename.split("/")[-1],done.sum()))
 
     for field in parFields+trFields:
@@ -651,6 +660,11 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
     # walk through snapshots
     for m, snap in enumerate(snaps):
+
+        if onlySnap is not None:
+            if snap != onlySnap:
+                continue
+
         sP.setSnap(snap)
         print(' ['+str(sP.snap).zfill(3)+'] z = '+str(sP.redshift))
 
@@ -896,7 +910,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     sP.setSnap(startSnap)
     return r
 
-def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTypes,outPath):
+def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTypes,outPath,onlySnap=None):
     """ For a set of subhaloIDs, determine all their child tracers at sP.redshift then record their 
         properties back in time. """
     # load global ParentID for all tracers at the starting snapshot, and pre-sort
@@ -932,13 +946,13 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         offset += trCounts[i]
 
     # follow tracer and tracer parent properties over the requested snapshot range
-    tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift)
+    tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift, saveFilename='/u/dnelson/data/temp.hdf5', onlySnap=onlySnap)
 
     # separate back out by subhalo and save one data file per subhalo
     offset = 0
 
     for i, subhaloID in enumerate(subhaloIDs):
-        outFilePath = outPath + 'subhalo_' + str(subhaloID) + '.hdf5'
+        outFilePath = outPath + '_' +  str(subhaloID) + '_subhalo.hdf5'
 
         f = h5py.File(outFilePath,'w')
 

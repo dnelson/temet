@@ -577,6 +577,7 @@ class units(object):
         """ Derive the 'Powell heating/cooling' energy source term (rightmost in Eqn. 21 Pakmor & Springel arxiv:1212.1452). """
         vel_kpc_s = self.particleCodeVelocityToKms(code_vel) / self.kpc_in_km # kpc/s
         b_gauss = self.particleCodeBFieldToGauss(code_b) # gauss
+        b_gauss /= (4*np.pi) # to heaviside-lorentz (Bc in Eqn)
         divb_gauss_kpc = self.particleCodeDivBToGaussPerKpc(code_divb) # gauss/kpc
         vol_kpc3 = self.codeVolumeToKpc3(code_vol) # kpc^3
 
