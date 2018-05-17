@@ -172,6 +172,7 @@ def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
     # 16:9 remappings may need different optimal bounds:
     if remap:
         if conf == 0: panels[0]['valMinMax'] = [2.8, 6.3] # gas coldens_msunkpc2
+        if conf == 14: panels[0]['valMinMax'] = [0, 700] # gas velmag
 
     return panels, centerHaloID, nSlicesTot, curSlice
 
@@ -224,21 +225,20 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     renderBox(panels, plotConfig, locals())
 
-def TNG_remapImages(res, conf=0, variant=None):
+def TNG_remapImages(res, redshift=0.0, conf=0, variant=None):
     """ Create the full-box (full volume) remapped images. """
     panels, _, _, _ = _TNGboxFieldConfig(res, conf, thinSlice=False, remap=True)
 
     run        = 'tng'
-    redshift   = 0.0
     axes       = [0,1] # x,y
     labelZ     = False
     labelScale = True
     labelSim   = False
-    plotHalos  = False
+    plotHalos  = 100 # False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
-    nPixels    = [1920, 1070]
+    nPixels    = [7680, 4280] # 1080p x4
     remapRatio = [5.0, 2.7857, 0.0718] # about 16:9 aspect, 7% depth
 
     #nPixels    = [2000, 2000]
@@ -253,8 +253,8 @@ def TNG_remapImages(res, conf=0, variant=None):
         rasterPx   = nPixels
         colorbars  = False
 
-        saveFilename = './boxImage_%s_%s-%s_axes%d%d_ratio-%g-%g-%g.png' % \
-          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],remapRatio[0],remapRatio[1],remapRatio[2])
+        saveFilename = './boxImage_%s_z%.1f_%s-%s_axes%d%d_ratio-%g-%g-%g.png' % \
+          (sP.simName,redshift,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],remapRatio[0],remapRatio[1],remapRatio[2])
 
     renderBox(panels, plotConfig, locals())
 
