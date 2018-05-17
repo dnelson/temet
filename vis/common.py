@@ -1304,6 +1304,10 @@ def addBoxMarkers(p, conf, ax):
         countAdded = 0
         gcInd = 0
 
+        # remap? transform coordinates
+        if 'remapRatio' in p and p['remapRatio'] is not None:
+            pos, _ = remapPositions(p['sP'], pos, p['remapRatio'], p['nPixels'])
+
         while countAdded < numToAdd:
             xyzPos = pos[gcInd,:][ [p['axes'][0], p['axes'][1], 3-p['axes'][0]-p['axes'][1]] ]
             xyzDist = xyzPos - p['boxCenter']
