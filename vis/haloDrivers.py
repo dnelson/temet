@@ -752,7 +752,7 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
 def galaxyMosaic_topN(numHalosInd,panelNum=1):
     """ Mosaic, top N most massive. """
     res        = 2160
-    redshift   = 2.0 # 1.0 !
+    redshift   = 2.0 # 1.0
     run        = 'tng'
     rVirFracs  = None
     method     = 'sphMap'
@@ -765,7 +765,7 @@ def galaxyMosaic_topN(numHalosInd,panelNum=1):
         plotStyle = 'edged'
         rasterPx  = 240
         nRows     = 1 # overriden below
-        colorbars = False
+        colorbars = True
 
     # configure panels
     panels = []
@@ -803,7 +803,7 @@ def galaxyMosaic_topN(numHalosInd,panelNum=1):
         if panelNum == 2: 
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
-    plotConfig.saveFilename = savePathDefault + 'renderHalos_%s-%d_n%d_%s.png' % \
+    plotConfig.saveFilename = savePathDefault + 'renderHalos_%s-%d_n%d_%s.pdf' % \
                               (sP.simName,sP.snap,plotConfig.nRows,panels[0]['partType'])
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

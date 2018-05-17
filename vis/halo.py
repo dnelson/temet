@@ -196,6 +196,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
         rasterPx   = [1400,1400]  # each panel will have this number of pixels if making a raster (png) output
                                   # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars  = True         # include colorbars
+        title      = True         # include title (only for open* styles)
 
         saveFilename = savePathDefault + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
@@ -295,6 +296,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
         rasterPx   = [1200,1200]  # each panel will have this number of pixels if making a raster (png) output
                                   # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True          # include colorbars
+        title     = True          # include title (only for open* styles)
 
         savePath = savePathDefault
         saveFileBase = 'renderHaloFrame' # filename base upon which frame numbers are appended

@@ -112,7 +112,7 @@ def _TNGboxSliceConfig(res):
 
     return dmMM, gasMM, starsMM, gasFullMM, centerHaloID, nSlicesTot, curSlice
 
-def _TNGboxFieldConfig(res, conf, thinSlice):
+def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
     panels = []
 
     dmMM, gasMM, starsMM, gasFullMM, centerHaloID, nSlicesTot, curSlice = _TNGboxSliceConfig(res)
@@ -169,6 +169,10 @@ def _TNGboxFieldConfig(res, conf, thinSlice):
         if conf == 11: panels[0]['valMinMax'] = [28.5,37.0]; # gas xray_lum
         if conf == 12: panels[0]['valMinMax'] = [0, 8]; panels[0]['plawScale'] = 1.6 # gas shocks_machnum
 
+    # 16:9 remappings may need different optimal bounds:
+    if remap:
+        if conf == 0: panels[0]['valMinMax'] = [2.8, 6.3] # gas coldens_msunkpc2
+
     return panels, centerHaloID, nSlicesTot, curSlice
 
 def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
@@ -217,6 +221,40 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
         saveFilename = './boxImage_%s_%s-%s_axes%d%d%s%s.png' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],sliceStr,mStr)
+
+    renderBox(panels, plotConfig, locals())
+
+def TNG_remapImages(res, conf=0, variant=None):
+    """ Create the full-box (full volume) remapped images. """
+    panels, _, _, _ = _TNGboxFieldConfig(res, conf, thinSlice=False, remap=True)
+
+    run        = 'tng'
+    redshift   = 0.0
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = True
+    labelSim   = False
+    plotHalos  = False
+    method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+
+    nPixels    = [1920, 1070]
+    remapRatio = [5.0, 2.7857, 0.0718] # about 16:9 aspect, 7% depth
+
+    #nPixels    = [2000, 2000]
+    #remapRatio = [2.44, 2.44, 0.168] # square, 17% depth
+    #remapRatio = [5.0, 5.0, 0.04] # square, 4% depth
+
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    # render config (global)
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels
+        colorbars  = False
+
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d_ratio-%g-%g-%g.png' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],remapRatio[0],remapRatio[1],remapRatio[2])
 
     renderBox(panels, plotConfig, locals())
 
