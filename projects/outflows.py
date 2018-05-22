@@ -434,15 +434,17 @@ def gasOutflowRatesVsQuantStackedInMstar(sP, quant, mStarBins):
     ptType = 'Gas'
 
     # plot config
-    ylim = [-3.0,1.0]
+    ylim = [-3.0,2.0]
     linestyles = ['-','--',':','-.']
 
     labels = {'temp'    : 'Gas Temperature [ log K ]',
               'z_solar' : 'Gas Metallicity [ log Z$_{\\rm sun}$ ]',
-              'numdens' : 'Gas Density [ log cm$^{-3}$ ]'}
+              'numdens' : 'Gas Density [ log cm$^{-3}$ ]',
+              'theta'   : 'Galactocentric Angle [ 0, $\pm\pi$ = major axis ]'}
     limits = {'temp'    : [3.0,9.0],
               'z_solar' : [-3.0,1.0],
-              'numdens' : [-6.0,4.0]}
+              'numdens' : [-6.0,4.0],
+              'theta'   : [-np.pi,np.pi]}
 
     def _plotHelper(vcut_ind,rad_ind,quant,mStarBins=None,indivInds=None,stat='mean',skipZeroFluxes=False,saveName=None,pdf=None):
         """ Plot a radii series, vcut series, or both. """
@@ -455,6 +457,13 @@ def gasOutflowRatesVsQuantStackedInMstar(sP, quant, mStarBins):
 
         ax.set_xlabel(labels[quant])
         ax.set_ylabel('%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType)
+
+        if quant == 'theta':
+            # special x-axis labels for angle theta
+            ax.set_xticks([-np.pi, -np.pi/2, 0.0, np.pi/2, np.pi])
+            ax.set_xticklabels(['$-\pi$','$-\pi/2$ (minor axis)','$0$','$+\pi/2$','$+\pi$'])
+            ax.plot([-np.pi/2,-np.pi/2],ylim,'-',color='#aaaaaa',alpha=0.3)
+            ax.plot([+np.pi/2,+np.pi/2],ylim,'-',color='#aaaaaa',alpha=0.3)
 
         labels_sec = []
 
@@ -969,7 +978,8 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
 
 def paperPlots(sPs=None):
     """ Construct all the final plots for the paper. """
-    redshift = 0.73 # snapshot 58, where intermediate trees were constructed
+    #redshift = 0.73 # snapshot 58, where intermediate trees were constructed
+    redshift = 1.0
 
     TNG50   = simParams(res=2160,run='tng',redshift=redshift)
     TNG100  = simParams(res=1820,run='tng',redshift=redshift)
@@ -1001,14 +1011,14 @@ def paperPlots(sPs=None):
     if 0:
         sfms_smoothing_comparison(TNG50)
 
-    if 1:
+    if 0:
         # net outflow rates, fully marginalized, as a function of stellar mass
         for ptType in ['Gas','Wind']:
             gasOutflowRatesVsMstar(TNG50, ptType=ptType)
 
-    if 0:
+    if 1:
         # net outflow rate distributions, vs a single quantity (marginalized over all others), stacked in M* bins
-        for quant in ['temp','numdens','z_solar']:
+        for quant in ['temp','numdens','z_solar','theta']:
             gasOutflowRatesVsQuantStackedInMstar(TNG50, quant=quant, mStarBins=mStarBins)
 
     if 0:
@@ -1073,3 +1083,6 @@ def paperPlots(sPs=None):
             pdf.close()
 
         return sPs
+
+    # TODO: eta_E (energy), eta_Z (metal)
+    # TODO: plot 2D mass flux information (e.g. binConfigs 5, 6)

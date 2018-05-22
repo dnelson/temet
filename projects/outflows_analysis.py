@@ -24,6 +24,7 @@ from cosmo.mergertree import loadMPBs, mpbPositionComplete
 from plot.quantities import simSubhaloQuantity
 from util.helper import pSplitRange, logZeroNaN, iterable
 from util.treeSearch import calcParticleIndices, buildFullTree
+from util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTensor, rotateCoordinateArray
 from tracer.tracerMC import match3
 from util import simParams
 
@@ -570,6 +571,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     # secondary histogram configs (semi-marginalized, 1D and 2D, always binned by rad,vrad)
     if ptType == 'gas':
+        # 1D
         binConfig2 = OrderedDict()
         binConfig2['rad'] = binConfig1['rad']
         binConfig2['vrad'] = binConfig1['vrad']
@@ -585,6 +587,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         binConfig4['vrad'] = binConfig1['vrad']
         binConfig4['numdens'] = np.linspace(-8.0, 2.0, 201) # 0.05 dex spacing
 
+        # 2D
         binConfig5 = OrderedDict()
         binConfig5['rad'] = binConfig1['rad']
         binConfig5['vrad'] = binConfig1['vrad']
@@ -599,6 +602,35 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
         binConfigs += [binConfig2,binConfig3,binConfig4,binConfig5,binConfig6]
 
+        # fine-binning of vrad, and binning of angular theta
+        binConfig7 = OrderedDict()
+        binConfig7['rad'] = binConfig1['rad']
+        binConfig7['vrad'] = np.linspace(-500, 3500, 401) # 10 km/s spacing
+
+        binConfig8 = OrderedDict()
+        binConfig8['rad'] = binConfig1['rad']
+        binConfig8['temp'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
+        binConfig8['vrad'] = np.linspace(-500, 3500, 81) # 50 km/s spacing
+
+        binConfig9 = OrderedDict()
+        binConfig9['rad'] = binConfig1['rad']
+        binConfig9['vrad'] = binConfig1['vrad']
+        binConfig9['theta'] = np.linspace(-np.pi, np.pi, 73) # 5 deg spacing
+
+        binConfig10 = OrderedDict()
+        binConfig10['rad'] = binConfig1['rad']
+        binConfig10['vrad'] = binConfig1['vrad']
+        binConfig10['temp'] = binConfig1['temp']
+        binConfig10['theta'] = np.linspace(-np.pi, np.pi, 37) # 10 deg spacing
+
+        binConfig11 = OrderedDict()
+        binConfig11['rad'] = binConfig1['rad']
+        binConfig11['vrad'] = binConfig1['vrad']
+        binConfig11['temp'] = binConfig1['z_solar']
+        binConfig11['theta'] = np.linspace(-np.pi, np.pi, 37) # 10 deg spacing
+
+        binConfigs += [binConfig7,binConfig8,binConfig9,binConfig10,binConfig11]
+
     # derived from binning
     maxRad = np.max(binConfig1['rad'])
 
@@ -608,11 +640,13 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     # load group catalog
     ptNum = sP.ptNum(ptType)
-    fieldsSubhalos = ['SubhaloPos','SubhaloVel','SubhaloLenType']
+    ptNum_gas = sP.ptNum('gas')
+    ptNum_stars = sP.ptNum('stars')
+
+    fieldsSubhalos = ['SubhaloPos','SubhaloVel','SubhaloLenType','SubhaloHalfmassRadType']
 
     gc = sP.groupCat(fieldsSubhalos=fieldsSubhalos)
-    gc['subhalos']['SubhaloOffsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo'][:,ptNum]
-    gc['subhalos']['SubhaloLenType'] = gc['subhalos']['SubhaloLenType'][:,ptNum]
+    gc['subhalos']['SubhaloOffsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
     nSubsTot = gc['header']['Nsubgroups_Total']
 
     subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
@@ -647,16 +681,14 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
             assert invSubs[1] != -1
 
         subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
-        indRange = subhaloIDListToBoundingPartIndices(sP,subhaloIDsTodo)
-
-    indRange = indRange[ptType] # choose index range for the requested particle type
+        indRange = subhaloIDListToBoundingPartIndices(sP,subhaloIDsTodo) # dict by type
 
     if scope == 'global':
         # all tasks, regardless of pSplit or not, do global load (at once, not chunked)
         h = sP.snapshotHeader()
-        indRange = [0, h['NumPart'][sP.ptNum(ptType)]-1]
+        indRange = {ptType : [0, h['NumPart'][sP.ptNum(ptType)]-1]}
         i0 = 0 # never changes
-        i1 = indRange[1] # never changes
+        i1 = indRange[ptType][1] # never changes
 
     # stellar mass select
     if minStellarMass is not None:
@@ -703,8 +735,9 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     fieldsLoad = ['Coordinates','Velocities','Masses']
     if ptType == 'gas':
         fieldsLoad += ['temp','z_solar','numdens']
+        fieldsLoad += ['StarFormationRate'] # for rotation
 
-    particles = sP.snapshotSubset(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange)
+    particles = sP.snapshotSubset(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange[ptType])
 
     if ptType == 'gas':
         particles['z_solar'] = np.log10(particles['z_solar']) # linear -> log
@@ -712,10 +745,26 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     if ptType == 'wind':
         # processing wind mass fluxes: zero mass of all real stars
-        sftime = sP.snapshotSubset(partType=ptType, fields='sftime', sq=True, indRange=indRange)
+        sftime = sP.snapshotSubset(partType=ptType, fields='sftime', sq=True, indRange=indRange[ptType])
         wStars = np.where( sftime >= 0.0 )
         particles['Masses'][wStars] = 0.0
         sftime = None
+
+    # load stellar fields, required for rotation
+    if ptType == 'gas':
+        # particles is gas, now load stars
+        gas = particles
+
+        fieldsLoad = ['Coordinates','Masses','GFM_StellarFormationTime']
+        stars = sP.snapshotSubset(partType='stars', fields=fieldsLoad, sq=False, indRange=indRange['stars'])
+    else:
+        # particles is wind, now load gas
+        stars = particles
+        stars['Masses'] = sP.snapshotSubset(partType='stars', fields='mass', sq=True, indRange=indRange['stars'])
+        stars['GFM_StellarFormationTime'] = sP.snapshotSubset(partType='stars', fields='sftime', sq=True, indRange=indRange['stars'])
+
+        fieldsLoad = ['Coordinates','Masses','StarFormationRate']
+        gas = sP.snapshotSubset(partType='gas', fields=fieldsLoad, sq=False, indRange=indRange['gas'])
 
     # global? build octtree now
     if scope == 'global':
@@ -732,15 +781,15 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
         # slice starting/ending indices for gas local to this halo
         if scope == 'subhalo':
-            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID] - indRange[0]
-            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID]
+            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID, ptNum] - indRange[ptType][0]
+            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID, ptNum]
         if scope == 'subhalo_wfuzz':
-            i0 = gc['subhalos']['ParentGroup_OffsetType'][subhaloID] - indRange[0]
+            i0 = gc['subhalos']['ParentGroup_OffsetType'][subhaloID] - indRange[ptType][0]
             i1 = i0 + gc['subhalos']['ParentGroup_LenType'][subhaloID]
         if scope == 'global':
             pass # use constant i0, i1
 
-        assert i0 >= 0 and i1 <= (indRange[1]-indRange[0]+1)
+        assert i0 >= 0 and i1 <= (indRange[ptType][1]-indRange[ptType][0]+1)
 
         if i1 == i0:
             continue # zero length of this type
@@ -779,10 +828,10 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
             GroupNsubs    = gc['subhalos']['ParentGroup_GroupNsubs'][subhaloID]
 
             if GroupNsubs > 1:
-                firstSat_ind0 = gc['subhalos']['SubhaloOffsetType'][GroupFirstSub+1] - i0
-                firstSat_ind1 = firstSat_ind0 + gc['subhalos']['SubhaloLenType'][GroupFirstSub+1] - i0
-                lastSat_ind0 = gc['subhalos']['SubhaloOffsetType'][GroupFirstSub+GroupNsubs-1] - i0
-                lastSat_ind1 = lastSat_ind0 + gc['subhalos']['SubhaloLenType'][GroupFirstSub+GroupNsubs-1] - i0
+                firstSat_ind0 = gc['subhalos']['SubhaloOffsetType'][GroupFirstSub+1, ptNum] - i0
+                firstSat_ind1 = firstSat_ind0 + gc['subhalos']['SubhaloLenType'][GroupFirstSub+1, ptNum] - i0
+                lastSat_ind0 = gc['subhalos']['SubhaloOffsetType'][GroupFirstSub+GroupNsubs-1, ptNum] - i0
+                lastSat_ind1 = lastSat_ind0 + gc['subhalos']['SubhaloLenType'][GroupFirstSub+GroupNsubs-1, ptNum] - i0
 
                 p_local['Masses'][firstSat_ind0:lastSat_ind1] = 0.0
 
@@ -792,6 +841,41 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
         # compute weight, i.e. the halo-centric quantity 'radial mass flux'
         massflux = p_local['vrad'] * p_local['Masses'] # codemass km/s
+
+        # compute rotation matrix for edge-on projection
+        i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptNum_gas] - indRange['gas'][0]
+        i0s = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptNum_stars] - indRange['stars'][0]
+        i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,ptNum_gas]
+        i1s = i0s + gc['subhalos']['SubhaloLenType'][subhaloID,ptNum_stars]
+
+        assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
+        assert i0s >= 0 and i1s <= (indRange['stars'][1]-indRange['stars'][0]+1)
+
+        rHalf = gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
+        shPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
+
+        gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
+                     'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
+                     'StarFormationRate' : gas['StarFormationRate'][i0g:i1g],
+                     'count' : (i1g - i0g) }
+        starsLocal = { 'Masses' : stars['Masses'][i0s:i1s],
+                       'Coordinates' : np.squeeze(stars['Coordinates'][i0s:i1s,:]),
+                       'GFM_StellarFormationTime' : stars['GFM_StellarFormationTime'][i0s:i1s],
+                       'count' : (i1s - i0s) }
+
+        I = momentOfInertiaTensor(sP, gas=gasLocal, stars=starsLocal, rHalf=rHalf, shPos=shPos)
+        rotMatrix = rotationMatricesFromInertiaTensor(I)['edge-on'] # is edge-on-'largest'
+
+        # do rotation and calculate theta angle
+        projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
+        p_pos = p_local['Coordinates']
+        p_pos_rot, _ = rotateCoordinateArray(sP, p_pos, rotMatrix, projCen, shiftBack=False)
+
+        x_2d = p_pos_rot[:,0] # realize axes=[0,1]
+        y_2d = p_pos_rot[:,1] # realize axes=[0,1]
+
+        p_local['theta'] = np.arctan2(y_2d,x_2d) # theta=0 along +x axis (major axis), theta=+/-pi=180 deg along -x axis (major axis)
+                                                 # theta=pi/2=90 deg along +y (minor axis), theta=-pi/2=-90 deg along -y (minor axis)
 
         # loop over binning configurations
         for j, binConfig in enumerate(binConfigs):
@@ -839,7 +923,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, subIDs=False):
     assert ptType in ['Gas','Wind']
     if thirdQuant is not None:
         assert ptType == 'Gas'
-        assert thirdQuant in ['temp','z_solar','numdens']
+        assert thirdQuant in ['temp','z_solar','numdens','theta']
 
     acField = 'Subhalo_RadialMassFlux_%s_%s' % (scope,ptType)
 
