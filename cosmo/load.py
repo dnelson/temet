@@ -28,6 +28,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
     if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0] in sP.data:
         return sP.data['ac_'+iterable(fields)[0]].copy() # cached, avoid view
 
+    def _comparatorListInds(fieldName):
+        # transform e.g. 'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_13' into 13 (an integer) for sorting comparison
+        num = fieldName.rsplit('_', 1)[-1]
+        return int(num)
+
     def _concatSplitFiles(field, datasetName):
         # specified chunk exists, do all exist? check and record sizes
         allExist = True
@@ -204,7 +209,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 readFields = [field]
                 if field not in f:
                     assert field+'_0' in f # list of ndarrays
-                    readFields = sorted([key for key in f.keys() if field in key])
+                    readFields = sorted([key for key in f.keys() if field in key], key=_comparatorListInds)
 
                 if not onlyMeta:
                     # read 1 or more datasets, keep list only if >1
@@ -748,7 +753,7 @@ def groupCatNumChunks(basePath, snapNum, subbox=None):
     _, sbStr1, sbStr2 = subboxVals(subbox)
     path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3)
 
-    nChunks = len(glob.glob(path+'fof_*.hdf5')) + len(glob.glob(path+'groups_*.hdf5'))
+    nChunks = len(glob.glob(path+'/fof_*.hdf5')) + len(glob.glob(path+'/groups_*.hdf5'))
 
     if nChunks == 0:
         nChunks = 1 # single file per snapshot
