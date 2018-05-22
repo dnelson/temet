@@ -49,11 +49,14 @@ def getCpuTxtLastTimestep(filePath):
 def loadCpuTxt(basePath, keys=None, hatbMin=0):
     """ Load and parse Arepo cpu.txt, save into hdf5 format. If hatbMin>0, then save only timesteps 
     with active time bin above this value. """
-    filePath = basePath + 'output/cpu.txt'
     saveFilename = basePath + 'data.files/cpu.hdf5'
 
     if not isdir(basePath + 'data.files/'):
         saveFilename = basePath + 'postprocessing/cpu.hdf5'
+
+    filePath = basePath + 'output/cpu.txt'
+    if not isfile(filePath):
+        filePath = basePath + 'output/txt-files/cpu.txt'
 
     r = {}
 
@@ -77,6 +80,8 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
                 return loadCpuTxt(basePath, keys, hatbMin)
 
             for key in read_keys:
+                if key not in f:
+                    continue # e.g. hydro fields in DMO runs
                 r[key] = f[key][()]
             r['numCPUs'] = f['numCPUs'][()]
     else:
@@ -413,6 +418,7 @@ def plotCpuTimes():
     #sPs.append( simParams(res=625, run='tng') )
 
     sPs.append( simParams(res=2160, run='tng') )
+    sPs.append( simParams(res=2160, run='tng_dm') )
     #sPs.append( simParams(res=2160, run='tng', variant='halted') )
     #sPs.append( simParams(res=1080, run='tng') )
     #sPs.append( simParams(res=540, run='tng') )
@@ -420,12 +426,21 @@ def plotCpuTimes():
     #sPs.append( simParams(res=1024, run='tng', variant=0000) )
     #sPs.append( simParams(res=1024, run='tng', variant=4503) )
 
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2')) # n80
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n80s'))
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n160'))
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n160s'))
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n160s_mpc'))
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n320s'))
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n320'))
+    #sPs.append( simParams(run='tng_zoom', res=13, hInd=50, variant='sf2_n640s'))
+
     # L75n1820TNG cpu.txt error: there is a line:
     # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
     # after Step 6495017
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
                 'gradients','enrich','domain','i_o','restart']
-    plotKeys = ['total']
+    #plotKeys = ['total']
     lw = 2.0
 
     # multipage pdf: one plot per value
@@ -470,6 +485,9 @@ def plotCpuTimes():
 
             cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
 
+            if plotKey not in cpu.keys():
+                continue # e.g. hydro fields in DMO runs
+
             # include only bigish timesteps
             w = np.where( cpu['hatb'] >= cpu['hatb'].max()-6 )
 
@@ -485,7 +503,7 @@ def plotCpuTimes():
             l, = ax.plot(xx,yy,lw=lw,label=sP.simName)
 
             # total time predictions for runs which aren't yet done
-            if plotKey in ['total'] and xx.max() < 0.99: 
+            if plotKey in ['total'] and xx.max() < 0.99 and not sP.isZoom: 
                 if ax.get_yscale() == 'log': ax.set_ylim([1e-1,200])
 
                 fac_delta = 0.02
@@ -537,8 +555,8 @@ def plotCpuTimes():
 
             # total time prediction based on L75n1820TNG and L25n1024_4503 profiles
             if plotKey in ['total'] and xx.max() < 0.99 and sP.variant == 'None':
-                sPs_predict = [simParams(res=1820, run='tng'), 
-                               simParams(res=1024, run='tng', variant='4503')]
+                sPs_predict = [simParams(res=1820, run='tng')] 
+                               #simParams(res=1024, run='tng', variant='4503')]
                 ls = ['--','-.']
 
                 for j, sP_p in enumerate(sPs_predict):

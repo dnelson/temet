@@ -314,10 +314,9 @@ class simParams:
             if '_dm' in run:
                 self.targetGasMass = 0.0
 
-            # variants: testing only
+            # variants: testing only (high-res padding, core count scaling, etc)
             vStr = ''
             if self.variant != 'None':
-                assert self.variant in ['sf2','sf3','sf4','n40','n160','n320']
                 vStr = '_' + self.variant
 
             # paths

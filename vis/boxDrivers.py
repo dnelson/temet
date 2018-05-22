@@ -169,9 +169,13 @@ def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
         if conf == 11: panels[0]['valMinMax'] = [28.5,37.0]; # gas xray_lum
         if conf == 12: panels[0]['valMinMax'] = [0, 8]; panels[0]['plawScale'] = 1.6 # gas shocks_machnum
 
-    # 16:9 remappings may need different optimal bounds:
+    # 16:9 remappings may need different optimal bounds: (i.e. even thinner slices)
     if remap:
-        if conf == 0: panels[0]['valMinMax'] = [2.8, 6.3] # gas coldens_msunkpc2
+        if conf == 0: panels[0]['valMinMax'] = [3.1, 6.3] # gas coldens_msunkpc2
+        if conf == 1: panels[0]['valMinMax'] = [4.1, 8.0] # dm coldens_msunkpc2
+        if conf == 5: panels[0]['valMinMax'] = [-8.0, 6.0] # gas bmag_ug
+        if conf == 6: panels[0]['valMinMax'] = [-4.0,-0.2] # gas Z_solar
+        if conf == 7: panels[0]['valMinMax'] = [3.5,7.2] # gas temp
         if conf == 14: panels[0]['valMinMax'] = [0, 700] # gas velmag
 
     return panels, centerHaloID, nSlicesTot, curSlice
