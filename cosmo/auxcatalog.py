@@ -17,7 +17,7 @@ from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 from util.rotation import rotateCoordinateArray, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 
 # generative functions
-from projects.outflows_analysis import instantaneousMassFluxes
+from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -2816,6 +2816,10 @@ fieldComputeFunctionMapping = \
      partial(instantaneousMassFluxes,ptType='gas',scope='global'),
    'Subhalo_RadialMassFlux_Global_Wind' : \
      partial(instantaneousMassFluxes,ptType='wind',scope='global'),
+
+    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',thirdQuant=None),
+    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',thirdQuant=None),
+    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',thirdQuant=None),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 
@@ -2824,8 +2828,5 @@ manualFieldNames = \
 [   'Subhalo_SDSSFiberSpectraFits_NoVel-NoRealism_p07c_cf00dust_res_conv_z',
     'Subhalo_SDSSFiberSpectraFits_Vel-NoRealism_p07c_cf00dust_res_conv_z',
     'Subhalo_SDSSFiberSpectraFits_NoVel-Realism_p07c_cf00dust_res_conv_z',
-    'Subhalo_SDSSFiberSpectraFits_Vel-Realism_p07c_cf00dust_res_conv_z',
-    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr_Outflow-instantaneous',
-    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr_Outflow-instantaneous',
-    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr_Outflow-instantaneous',
+    'Subhalo_SDSSFiberSpectraFits_Vel-Realism_p07c_cf00dust_res_conv_z'
 ]
