@@ -263,6 +263,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             continue
 
         # either does not exist yet, or reCalculate requested
+        if field in auxcatalog.manualFieldNames:
+            raise Exception('Error: auxCat [%s] does not yet exist, but must be manually created.' % field)
+            
         pSplitStr = ''
         savePath = auxCatPath
 

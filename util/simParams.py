@@ -247,8 +247,8 @@ class simParams:
                                 method_run_names[line[0]] = line[8]
 
                     # freya: variants not accessible (on isaac)
-                    if 'freya' in platform.node() and self.variant not in ['0000','1006','5004']:
-                        raise Exception('No TNG variants except 0000 currently accessible from freya.')
+                    if 'freya' in platform.node() and self.variant not in ['0000','5005','5006']:
+                        raise Exception('No TNG variants except a few currently accessible from freya.')
                         
                 # draco/freya: no subbox data copied yet
                 if 'freya' in platform.node() or 'draco' in platform.node():

@@ -2184,8 +2184,8 @@ def plots():
 
     # add runs: TNG_methods
     sPs.append( simParams(res=512, run='tng', variant='0000') )
-    sPs.append( simParams(res=512, run='tng', variant='1006') )
-    sPs.append( simParams(res=512, run='tng', variant='5004') )
+    sPs.append( simParams(res=512, run='tng', variant='5005') )
+    #sPs.append( simParams(res=512, run='tng', variant='5006') )
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
