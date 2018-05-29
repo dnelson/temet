@@ -7,6 +7,7 @@ from . import metaPlots
 from . import rotation
 from simParams import simParams
 from . import sphMap
+from . import subfind
 from . import tpcf
 from . import treeSearch
 from units import units
