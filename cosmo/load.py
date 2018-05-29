@@ -1629,7 +1629,7 @@ def snapshotSubset(sP, partType, fields,
     # alternate field names mappings
     invNameMappings = {}
 
-    altNames = [ [['center_of_mass','com'], 'Center-of-Mass'],
+    altNames = [ [['center_of_mass','com','center'], 'CenterOfMass'],
                  [['xyz','positions','pos'], 'Coordinates'],
                  [['dens','rho'], 'Density'],
                  [['ne','nelec'], 'ElectronAbundance'],
@@ -1638,7 +1638,7 @@ def snapshotSubset(sP, partType, fields,
                  [['winddmveldisp'], 'GFM_WindDMVelDisp'],
                  [['metal','Z','gfm_metal','metallicity'], 'GFM_Metallicity'],
                  [['metals'], 'GFM_Metals'],
-                 [['u'], 'InternalEnergy'],
+                 [['u','utherm'], 'InternalEnergy'],
                  [['machnum','shocks_machnum'], 'Machnumber'],
                  [['dedt','energydiss','shocks_dedt','shocks_energydiss'], 'EnergyDissipation'],
                  [['b','bfield'], 'MagneticField'],
