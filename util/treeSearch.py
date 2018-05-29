@@ -61,7 +61,7 @@ def _updateNodeRecursive(no,sib,NumPart,last,suns,nextnode,next_node,sibling):
 
     return last # avoid use of global in numba
 
-@jit(nopython=True, nogil=True, cache=True)
+@jit(nopython=True, nogil=True) #, cache=True)
 def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode):
     """ Core routine for calcHsml(), see below. """
     subnode = 0
@@ -84,12 +84,12 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
         # periodic
         for j in range(3):
             center[j,nFree-NumPart] = 0.5 * boxSizeSim
-            length[j] = boxSizeSim
+        length[0] = boxSizeSim
     else:
         # non-periodic
         for j in range(3):
             xyzMin[j] = 1.0e35 # MAX_REAL_NUMBER
-            xyzMax[j] = 1.0e35 # MAX_REAL_NUMBER
+            xyzMax[j] = -1.0e35 # MAX_REAL_NUMBER
 
         for i in range(NumPart):
             for j in range(3):
@@ -106,7 +106,7 @@ def _constructTree(pos,boxSizeSim,next_node,length,center,suns,sibling,nextnode)
                 extent = xyzMax[j] - xyzMin[j]
 
             center[j,nFree-NumPart] = 0.5 * (xyzMin[j] + xyzMax[j])
-            length[j] = extent
+        length[0] = extent
 
     # daughter slots of root node all start empty
     for i in range(8):
