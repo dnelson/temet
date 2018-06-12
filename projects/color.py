@@ -2211,14 +2211,14 @@ def paperPlots():
     bands = ['g','r']
 
     # figure 1, (g-r) 1D color PDFs in six mstar bins (3x2) Illustris vs TNG100 vs SDSS
-    if 0:
+    if 1:
         simRedshift = 0.0
         sPs = [L75] #[L75FP, L75] # order reversed to put TNG100 on top, colors hardcoded
         dust = dust_C_all
 
-        pdf = PdfPages('figure1_%s_%s_petro.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
+        pdf = PdfPages('figure1_%s_%s.pdf' % ('_'.join([sP.simName for sP in sPs]),dust))
         galaxyColorPDF(sPs, pdf, bands=bands, simColorsModels=[dust], simRedshift=simRedshift, 
-                       addPetro=True)
+                       addPetro=False)
         pdf.close()
 
     # figure 2, 2x2 grid of different 2D color PDFs, TNG100 vs SDSS
@@ -2258,7 +2258,7 @@ def paperPlots():
             vis.boxDrivers.TNG_colorFlagshipBoxImage(part=part)
 
     # figure 6, grid of L205_cen 2d color histos vs. several properties (2x3)
-    if 1:
+    if 0:
         sP = L205
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         yQuant = 'color_C_gr'
