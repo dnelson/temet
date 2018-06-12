@@ -841,10 +841,11 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     # which bands? for now, to change, just recompute from scratch
     bands = []
-    bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
-    bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
+    #bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
+    #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
+    bands += ['sdss_r']
     bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
-    bands += ['jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR wide
+    bands += ['jwst_070w','jwst_090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
     if indivStarMags: bands = ['sdss_r']
 
@@ -900,14 +901,16 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 assert 0 # unhandled
 
     # prepare catalog metadata
-    desc = "Stellar light emission (total magnitudes) by subhalo"
-    if sizes: desc = "Stellar half light radii (code units) by subhalo"
-    if indivStarMags: desc = "Star particle individual magnitudes"
+    desc = "Stellar light emission (total AB magnitudes) by subhalo, multiple bands."
+    if sizes: desc = "Stellar half light radii (code units) by subhalo, multiple bands."
+    if indivStarMags: desc = "Star particle individual AB magnitudes, multiple bands."
     if fullSubhaloSpectra:
         desc = "Optical spectra by subhalo, [%d] wavelength points between [%.1f Ang] and [%.1f Ang]." % \
             (nBands,sdss_min_ang,sdss_max_ang)
+    if redshifted:
+        desc += " Redshifted, observed-frame bands/frequencies, apparent magnitudes."
     else:
-        desc  += ", in multiple rest-frame bands."
+        desc += " Unredshifted, rest-frame bands/frequencies, absolute magnitudes."
 
     select = "All Subfind subhalos"
     if indivStarMags: select = "All PartType4 particles in all subhalos"
@@ -2398,6 +2401,7 @@ fieldComputeFunctionMapping = \
    'Group_XrayBolLum_Crit500' : \
      partial(fofRadialSumType,ptProperty='xray_lum',ptType='gas',rad='Group_R_Crit500'),
 
+   # subhalo: masses
    'Subhalo_Mass_30pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
    'Subhalo_Mass_100pkpc_Stars' : \
@@ -2419,7 +2423,6 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,scope='fof'),
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
-
 
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
@@ -2472,6 +2475,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_r200_Gas_Global' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r200crit',scope='global',minStellarMass=9.0),
 
+   # subhalo
    'Subhalo_CoolingTime_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestrictions=sfreq0),
    'Subhalo_CoolingTime_OVI_HaloGas' : \
@@ -2588,7 +2592,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Ptot_B_halo' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='p_b_linear',op='sum',rad='r015_1rvir_halo'),
 
-
+   # light: rest-frame/absolute
    'Subhalo_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none'),
    'Subhalo_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 
@@ -2637,11 +2641,6 @@ fieldComputeFunctionMapping = \
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),
 
-   'Subhalo_HalfLightRad_p07c_cf00dust_z' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', sizes=True, redshifted=True),
-   'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True, redshifted=True),
-
    'Particle_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none', indivStarMags=True),
    'Particle_StellarPhot_p07c_cf00dust' : partial(subhaloStellarPhot, 
@@ -2656,6 +2655,22 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=2, Nside='z-axis'),
 
+   # light: redshifted/apparent
+   'Particle_StellarPhot_p07c_nodust_red' : partial(subhaloStellarPhot, 
+                                            iso='padova07', imf='chabrier', dust='none', indivStarMags=True, redshifted=True),
+   'Particle_StellarPhot_p07c_cf00dust_red' : partial(subhaloStellarPhot, 
+                                            iso='padova07', imf='chabrier', dust='cf00', indivStarMags=True, redshifted=True),
+   'Particle_StellarPhot_p07c_cf00dust_res_conv_z_red' : partial(subhaloStellarPhot, 
+                                            iso='padova07', imf='chabrier', dust='cf00_res_conv', indivStarMags=True, Nside='z-axis', redshifted=True),
+
+   'Subhalo_HalfLightRad_p07c_nodust_red' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside=None, sizes=True, redshifted=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_z_red' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', sizes=True, redshifted=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc_red' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True, redshifted=True),
+
+   # fullbox
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
    'Box_Grid_nHI_noH2'       : partial(wholeBoxColDensGrid,species='HI_noH2'),
    'Box_Grid_Z'              : partial(wholeBoxColDensGrid,species='Z'),
@@ -2702,6 +2717,7 @@ fieldComputeFunctionMapping = \
    'Box_Omega_OVII'                  : partial(wholeBoxCDDF,species='O VII',omega=True),
    'Box_Omega_OVIII'                 : partial(wholeBoxCDDF,species='O VIII',omega=True),
 
+    # temporal
    'Subhalo_SubLink_zForm_mm5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
                                          smoothing=['mm',5,'snap']),
    'Subhalo_SubLink_zForm_ma5' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
@@ -2726,6 +2742,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_BH_CumMassGrowth_High' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_QM',op='sum',rad=None),
 
+   # radial profiles
    'Subhalo_RadProfile3D_Global_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global'),
    'Subhalo_RadProfile3D_GlobalFoF_OVI_Mass' : \
@@ -2808,6 +2825,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadProfile2Dfaceon_FoF_Gas_LOSVelSigma_sfrWt' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,weighting='sfr',scope='fof',proj2D=['face-on',None]),
 
+   # outflows/inflows
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : \
      partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind' : \
