@@ -535,7 +535,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
     plt.close(fig)
 
 def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhaloIDs=None, haloIDs=None, 
-    xlog=True, xlim=None, sfreq0=False, colorOffs=None, scope='fof'):
+    xlog=True, xlim=None, ylog=None, ylim=None, sfreq0=False, colorOffs=None, scope='fof'):
     """ Radial profile of some quantity ptProperty of ptType vs. radius from halo center,
     where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs. 
@@ -557,7 +557,9 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
     if subhaloIDs is not None: assert (len(subhaloIDs) == len(sPs)) # one subhalo ID per sP
     if haloIDs is not None: assert (len(haloIDs) == len(sPs)) # one subhalo ID per sP
 
-    ylabel, ylim, ylog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=True)
+    ylabel, ylim_q, ylog_q = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean, haloLims=True)
+    if ylim is None: ylim = ylim_q
+    if ylog is None: ylog = ylog_q
 
     # start plot
     fig = plt.figure(figsize=(11.2,8.0)) #(14,10)

@@ -1453,6 +1453,8 @@ def convertGadgetICsToHDF5():
     loadPath = '/u/dnelson/sims.TNG/InitialConditions/L680n2048/output/ICs.%s' 
     savePath = '/u/dnelson/sims.TNG/L680n2048TNG_DM/output/snap_ics.hdf5'
 
+    ptNum = 1
+
     nChunks = len( glob.glob(loadPath % '*') )
     print('Found [%d] chunks, loading...' % nChunks)
 
@@ -1460,11 +1462,11 @@ def convertGadgetICsToHDF5():
     with open(loadPath % 0,'rb') as f:
         header = f.read(260)
 
-    npart      = struct.unpack('iiiiii', header[4:4+24])[1]
+    npart      = struct.unpack('iiiiii', header[4:4+24])[ptNum]
     mass       = struct.unpack('dddddd', header[28:28+48])
     scalefac   = struct.unpack('d', header[76:76+8])[0]
     redshift   = struct.unpack('d', header[84:84+8])[0]
-    #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[1]
+    #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[ptNum]
     nFiles     = struct.unpack('i', header[128:128+4])[0]
     BoxSize    = struct.unpack('d', header[132:132+8])[0]
     Omega0     = struct.unpack('d', header[140:140+8])[0]
@@ -1478,7 +1480,7 @@ def convertGadgetICsToHDF5():
     for i in range(nChunks):
         with open(loadPath % i,'rb') as f:
             header = f.read(28)
-            npart  = struct.unpack('iiiiii', header[4:4+24])[1]
+            npart  = struct.unpack('iiiiii', header[4:4+24])[ptNum]
         nPartTot += npart
     print('Found new nPartTot [%d]' % nPartTot)
 
@@ -1488,7 +1490,7 @@ def convertGadgetICsToHDF5():
     # write header
     header = fOut.create_group('Header')
     numPartTot = np.zeros( 6, dtype='int64' )
-    numPartTot[1] = nPartTot
+    numPartTot[ptNum] = nPartTot
     header.attrs['BoxSize'] = BoxSize
     header.attrs['HubbleParam'] = Hubble
     header.attrs['MassTable'] = np.array(mass, dtype='float64')
@@ -1502,7 +1504,7 @@ def convertGadgetICsToHDF5():
     header.attrs['Time'] = scalefac
 
     # create group and datasets
-    pt1 = fOut.create_group('PartType1')
+    pt1 = fOut.create_group('PartType%d' % ptNum)
 
     particle_pos = pt1.create_dataset('Coordinates', (nPartTot,3), dtype='float32' )
     particle_vel = pt1.create_dataset('Velocities', (nPartTot,3), dtype='float32' )
@@ -1517,7 +1519,7 @@ def convertGadgetICsToHDF5():
             data = f.read()
 
         # local particle counts
-        npart_local = struct.unpack('iiiiii', data[4:4+24])[1]
+        npart_local = struct.unpack('iiiiii', data[4:4+24])[ptNum]
 
         # cast and save
         start_pos = 268 + 0*npart_local

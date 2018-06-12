@@ -495,13 +495,14 @@ class simParams:
 
             if hInd == 2: # overrides for plots for paper.zooms2
                 snStr = ' (Primordial Only)'
-                if '_josh' in run and variant == 'PO': snStr = '_12 (Primordial Only)'
-                if '_josh' in run and variant == 'MO': snStr = '_12 (Primordial + Metal)'
-                if '_josh' in run and variant == 'FP': snStr = '_12 (Full Physics)'
-                if '_josh' in run and variant == 'FP1': snStr = '_12 (Full Physics high-time-res)'
-                if '_josh' in run and variant == 'FP2': snStr = '_12 (Full Physics high-time-res2)'
-                if '_josh' in run and variant == 'FP3': snStr = '_12 (Full Physics RecouplingDensity10)'
-                self.simName = 'L11%s' % snStr
+                if '_josh' in run and variant == 'PO': snStr = '_%d (Primordial Only)'
+                if '_josh' in run and variant == 'MO': snStr = '_%d (Primordial + Metal)'
+                if '_josh' in run and variant == 'FP': snStr = '_%d (Full Physics)'
+                if '_josh' in run and variant == 'FP1': snStr = '_%d (Full Physics high-time-res)'
+                if '_josh' in run and variant == 'FP2': snStr = '_%d (Full Physics high-time-res2)'
+                if '_josh' in run and variant == 'FP3': snStr = '_%d (Full Physics RecouplingDensity10)'
+                snStr = snStr % (self.res+1)
+                self.simName = 'L%d%s' % (self.res,snStr)
 
         # MILLENNIUM
         if run == 'millennium':
@@ -646,7 +647,7 @@ class simParams:
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
                                cenSatSubhaloIndices
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
-                               auxCat, snapshotSubsetParallel
+                               auxCat, snapshotSubsetParallel, snapHasField
         from cosmo.mergertree import loadMPB, loadMPBs
         from plot.quantities import simSubhaloQuantity
 
@@ -661,6 +662,7 @@ class simParams:
         self.snapshotSubsetP = partial(snapshotSubsetParallel, self)
         self.snapshotSubset  = partial(snapshotSubset, self)
         self.snapshotHeader  = partial(snapshotHeader, sP=self)
+        self.snapHasField    = partial(snapHasField, self)
         self.groupCatSingle  = partial(groupCatSingle, sP=self)
         self.groupCatHeader  = partial(groupCatHeader, sP=self)
         self.groupCat        = partial(groupCat, sP=self)

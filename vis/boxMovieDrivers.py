@@ -81,8 +81,8 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
     nPixels = [3840,2160]
     axes    = [0,1] # x,y
 
-    #labelScale = 'physical'
-    #labelZ     = True
+    labelScale = 'physical'
+    labelZ     = True
 
     if conf == 'one':
         # TNG100
@@ -102,6 +102,11 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
         #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
         #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
+
+        # TESTING STARS:
+        snapHsmlForStars = True # general 64 NGB DM smoothing
+        hsmlFac = 2.0
+        #alsoSFRgasForStars = True
 
     class plotConfig:
         savePath = '/u/dnelson/data/frames/%s%s/' % (res,variant)

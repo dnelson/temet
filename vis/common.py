@@ -39,21 +39,22 @@ totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
-def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False):
+def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False, alsoSFRgasForStars=False):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
     _, sbStr, _ = subboxVals(sP.subbox)
     irStr = '' if indRange is None else '.%d-%d' % (indRange[0],indRange[1])
     shStr = '' if snapHsmlForStars is False else '.sv'
     ngStr = '' if nNGB == 64 else '.ngb%d' % nNGB
-    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s%s%s.hdf5' % \
-                   (sbStr, sP.snap, partType, irStr, shStr, ngStr)
+    sfStr = '' if alsoSFRgasForStars is False else '.sfgas'
+    saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s%s%s%s.hdf5' % \
+                   (sbStr, sP.snap, partType, irStr, shStr, ngStr, sfStr)
 
     if not isdir(sP.derivPath + 'hsml/'):
         mkdir(sP.derivPath + 'hsml/')
 
     # cache?
-    useCache = (sP.isPartType(partType, 'stars') and not snapHsmlForStars) or \
+    useCache = (sP.isPartType(partType, 'stars') and (not snapHsmlForStars or sP.isSubbox)) or \
                (sP.isPartType(partType, 'dm') and not snapHasField(sP, partType, 'SubfindHsml'))
 
     if useCache and isfile(saveFilename):
@@ -81,11 +82,30 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
         if sP.isPartType(partType, 'stars'):
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
             if snapHsmlForStars:
-                hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+                if sP.snapHasField('stars', 'SubfindHsml'):
+                    hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+                else:
+                    # we will generate SubfindHsml
+                    indRange_dm = None
+                    assert indRange is None # otherwise generalize, derive indRange_dm to e.g. load only FoF-scope DM
+
+                    pos_stars = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+                    pos_dm = snapshotSubset(sP, 'dm', 'pos', indRange=indRange_dm)
+                    hsml = calcHsml(pos_dm, sP.boxSize, posSearch=pos_stars, nNGB=64, nNGBDev=4, treePrec='double')
+            elif alsoSFRgasForStars:
+                # compute: using SFR>0 gas as well as stars to define neighbors
+                indRange_gas = None
+                assert indRange is None  # otherwise generalize, derive indRange_gas to e.g. load only FoF-scope gas
+
+                pos_stars = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+                pos_sfgas = snapshotSubset(sP, 'gas_sf', 'pos', indRange=indRange_gas)
+                pos = np.vstack( (pos_stars,pos_sfgas) )
+                
+                hsml = calcHsml(pos, sP.boxSize, posSearch=pos_stars, nNGB=nNGB, nNGBDev=1, treePrec='double')
             else:
+                # compute: use only stars to define neighbors
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-                treePrec = 'double' #'single' if pos.dtype == np.float32 else 'double'
-                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=1, treePrec=treePrec)
+                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=1, treePrec='double')
 
         # save
         if useCache:
@@ -854,13 +874,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
 def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams, 
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
-            forceRecalculate=False, smoothFWHM=None, **kwargs):
+            forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, alsoSFRgasForStars=False, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     optionalStr = ''
     if projType != 'ortho':
         optionalStr += '_%s-%s' % (projType, '_'.join( [str(k)+'='+str(v) for k,v in projParams.iteritems()] ))
     if remapRatio is not None:
         optionalStr += '_remap-%g-%g-%g' % (remapRatio[0],remapRatio[1],remapRatio[2])
+    if snapHsmlForStars:
+        optionalStr += '_snapHsmlForStars'
+    if alsoSFRgasForStars:
+        optionalStr += '_alsoSFRgasForStars'
 
     m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
@@ -982,7 +1006,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             # load: sizes (hsml) and manipulate as needed
             if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
-                hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, snapHsmlForStars=False)
+                hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
+                                          snapHsmlForStars=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
             else:
                 hsml = getHsmlForPartType(sP, partType, indRange=indRange)
 
