@@ -21,7 +21,7 @@ from util.rotation import rotationMatrixFromVec, rotateCoordinateArray
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
     beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec,calzetti_case):
-    """ Helper for sps.dust_tau_model_mag(). Cannot JIT a class member function, so it sits here. """
+    """ Helper for sps.dust_tau_model_mags(). Cannot JIT a class member function, so it sits here. """
 
     # accumulate per star attenuated luminosity (wavelength dependent):
     obs_lum = np.zeros( wave.size, dtype=np.float32 )
@@ -147,7 +147,7 @@ def _dust_tau_model_lum(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda
 @jit(nopython=True, nogil=True, cache=True)
 def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_lambda_sol,redshift,
     beta,Z_solar,gamma,N_H0,f_scattering,metals,ages,wave_ang,spec,calzetti_case):
-    """ Helper for sps.dust_tau_model_mag(). Cannot JIT a class member function, so it sits here. """
+    """ Helper for sps.dust_tau_model_mags(). Cannot JIT a class member function, so it sits here. """
 
     # accumulate per star attenuated luminosity (wavelength dependent):
     obs_lum_indiv = np.zeros( (N_H.size, wave.size), dtype=np.float32 )
@@ -285,12 +285,14 @@ class sps():
         assert imf in self.imfTypes.keys()
         assert dustModel in self.dustModels
 
+        if not redshifted and sP.redshift > 0.0:
+            print(' WARNING: sP redshift = %.2f, but not redshifting SPS calculations!' % sP.redshift)
+
         self.sP    = sP
         self.data  = {} # band magnitudes
         self.spec  = {} # spectra
         self.order = order # bicubic interpolation by default (1 = bilinear)
-        self.bands = fsps.find_filter('') # do them all (138, now 143 with ps1*)
-        #self.bands = [b for b in self.bands if 'ps1_' not in b] # exclude new 5 ps1* bands (for now)
+        self.bands = fsps.find_filter('') # do them all (previously 138, now 143 with ps1*)
         self.redshifted = redshifted # redshift magnitudes and spectra by sP.redshift, otherwise z=0 (absolute)
 
         self.dust = dustModel.split("_")[0]
@@ -300,6 +302,8 @@ class sps():
         if redshifted:
             zStr = '_z=%.1f' % sP.redshift
             print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
+            # cosmology in FSPS is hard-coded (sps_vars.f90), and this has been set to TNG values
+            assert sP.omega_m == 0.3089 and sP.omega_L == 0.6911 and sP.HubbleParam == 0.6774
 
         saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d%s.hdf5' % (iso,imf,self.dust,len(self.bands),zStr)
 
@@ -307,7 +311,6 @@ class sps():
         if not isfile(saveFilename):
             print(' Computing new stellarPhotTable: [iso=%s imf=%s dust=%s bands=%d]...' % \
                 (iso,imf,dustModel,len(self.bands)))
-            print(' MAKE SURE sps_vars.f90 HAS iso=%s! THIS IS NOT VERIFIED HEREIN.' % iso)
             self.computePhotTable(iso, imf, saveFilename)
 
         # load
@@ -317,6 +320,10 @@ class sps():
             self.metals = f['metals_log'][()]
             self.wave   = f['wave_nm'][()]
             self.spec   = f['spec_lsun_hz'][()]
+
+            self.emline_names = f['emline_names']
+            self.emline_wave  = f['emline_wave_nm']
+            self.emline = f['emline_lsun'][()]
 
             for key in f:
                 if 'mags_' in key:
@@ -375,6 +382,7 @@ class sps():
         pop = fsps.StellarPopulation(sfh = 0, # SSP
                                      zmet = 1, # integer index of metallicity value (modified later)
                                      add_neb_continuum = True,
+                                     add_neb_emission = False, # must be True to get line lums, but modifies get_mags()
                                      add_dust_emission = True,
                                      imf_type = self.imfTypes[imf],
                                      dust_type = dust_type,
@@ -384,11 +392,10 @@ class sps():
                                      dust_tesc = dust_tesc,
                                      dust1_index = dust1_index)
 
-        #assert pop.libraries[1] == 'miles' # not in current version of python-fsps
-        #assert pop.libraries[0] == 'pdva' # padova07, otherwise generalize this
+        assert pop.spec_library == 'miles'
+        assert pop.isoc_library == 'pdva' # padova07, otherwise generalize this
 
         # different tracks are available at discrete metallicities (linear mass_Z/mass_tot, not in solar!)
-        # (unused)
         if iso == 'padova07':
             Zsolar = 0.019
             metals = [0.0002,0.0003,0.0004,0.0005,0.0006,0.0008,0.001,0.0012,0.0016,0.002,0.0025,
@@ -406,6 +413,8 @@ class sps():
             Zsolar = 0.0152
             metals = [0.0001,0.0002,0.0005,0.001,0.002,0.004,0.006,0.008,0.01,0.014,0.017,0.02,0.03,0.04,0.06]
 
+        assert len(metals) == pop.zlegend.size, 'Likely mismatch of isochrone choice here and in FSPS.'
+
         # get sizes of full spectra
         wave0, spec0 = pop.get_spectrum() # Lsun/Hz, Angstroms
 
@@ -416,9 +425,23 @@ class sps():
             mags[band] = np.zeros( (pop.zlegend.size, pop.log_age.size), dtype='float32' )
         spec = np.zeros( (pop.zlegend.size, pop.log_age.size, wave0.size), dtype='float32' )
 
-        # loop over metallicites, compute band magnitudes over an age grid for each
+        # get nebular emission line names, wavelengths
+        line_wave = pop.emline_wavelengths
+        line_file = self.basePath + '../fsps/data/emlines_info.dat'
+        with open(line_file,'r') as f:
+            line_file = [fline.strip() for fline in f.readlines()]
+
+        line_file = [fline.split(',') for fline in line_file]
+        line_wave_check = [float(fline[0]) for fline in line_file]
+        line_names = [fline[1].encode('ascii') for fline in line_file]
+
+        assert np.abs(line_wave - line_wave_check).max() < 0.5 # make sure order is correct
+
+        emline = np.zeros( (pop.zlegend.size, pop.log_age.size, line_wave.size), dtype='float32' )
+
+        # loop over metallicites, compute band magnitudes (and full spectra) over an age grid for each
         for i in range(pop.zlegend.size):
-            print('  [%d of %d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
+            print('  [%2d of %2d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
 
             # update metallicity step, request magnitudes in all bands
             pop.params['zmet'] = i + 1 # 1-indexed
@@ -440,6 +463,27 @@ class sps():
                 if self.redshifted:
                     spec[i,j,:] = self.redshiftSpectrum(wave0, s[j,:])
 
+        # loop again, this time compute nebular line emission luminosities (modify pop each time)
+        for i in range(pop.zlegend.size):
+            print('  [%2d of %2d] Z = %g (nebular)' % (i,pop.zlegend.size,pop.zlegend[i]))
+
+            pop = fsps.StellarPopulation(sfh = 0, # SSP
+                                         zmet = i+1,
+                                         add_neb_continuum = True,
+                                         add_neb_emission = True, # here True
+                                         add_dust_emission = True,
+                                         imf_type = self.imfTypes[imf],
+                                         dust_type = dust_type,
+                                         dust1 = dust1,
+                                         dust2 = dust2,
+                                         dust_index = dust_index,
+                                         dust_tesc = dust_tesc,
+                                         dust1_index = dust1_index)
+
+            for j in range(pop.log_age.size):
+                emline[i,j,:] = pop.emline_luminosity[j,:]
+
+        # save
         with h5py.File(saveFilename, 'w') as f:
             f['bands'] = self.bands
             f['ages_logGyr'] = np.array(pop.log_age - 9.0, dtype='float32') # log(yr) -> log(Gyr)
@@ -447,8 +491,12 @@ class sps():
             f['wave_nm']     = np.array(wave0 / 10.0, dtype='float32') # Ang -> nm
 
             for key in mags:
-                f['mags_' + key] = mags[key]
-            f['spec_lsun_hz'] = np.array(spec, dtype='float32') # Lsun/Hz
+                f['mags_' + key] = mags[key] # AB absolute
+            f['spec_lsun_hz'] = spec # Lsun/Hz
+
+            f['emline_wave_nm'] = line_wave / 10.0 # Ang -> nm
+            f['emline_lsun']  = emline # Lsun
+            f['emline_names'] = line_names
 
         print('Saved: [%s]' % saveFilename)
 
@@ -649,13 +697,13 @@ class sps():
 
             # and interpolate the shifted flux to the old, unshifted wavelength points
             f = interp1d(wave_redshifted, flux, kind='linear', assume_sorted=True, 
-                         bounds_error=False, fill_value=np.nan)
+                         bounds_error=False, fill_value=0.0)
 
             flux = f(wave)
 
             # account for (1+z)^2/(1+z) factors from redshifting of photon energies, arrival rates, 
             # and bandwidth delta_freq, s.t. flux density per unit bandwidth goes as (1+z)
-            # e.g. Peebles 3.87 or MoVdBWhite 10.85
+            # e.g. Peebles 3.87 or MoVdBWhite 10.85 (spec has units of Lsun/Hz, i.e. is f_nu)
             flux *= (1.0 + self.sP.redshift)
 
         return flux
@@ -671,7 +719,7 @@ class sps():
         assert np.min(ages_logGyr) >= -10.0
         assert np.max(ages_logGyr) < 2.0
         assert np.max(masses_logMsun) < 10.0
-        assert np.min(masses_logMsun) > 1.5 # we have such small stars it seems
+        #assert np.min(masses_logMsun) > 1.5 # we have stars as small as 1.5 at least
 
         # convert input interpolant point into fractional 2D (+bandNum) array indices
         # Note: we are clamping at [0,size-1], so no extrapolation (nearest grid edge value is returned)
@@ -925,6 +973,39 @@ class sps():
 
         return N_H, Z_g
 
+def debug_check_redshifting(redshift=1.0):
+    """ Verify we understand what is going on with redshifting and apparent vs. absolute magnitudes 
+    of the band magnitudes (from FSPS) and the band magnitudes derived from our convolving our 
+    spectra with the bandpass filters manually. """
+    from util import simParams
+    sP = simParams(res=1820,run='tng',redshift=redshift)
+    pop = sps(sP, 'padova07', 'chabrier', 'none', redshifted=True)
+
+    x_ind = 5
+    y_ind = 12
+
+    metal = np.array( (pop.metals[x_ind],) )
+    age   = np.array( (pop.ages[y_ind],) )
+
+    for band in ['sdss_r','sdss_z','jwst_f444w','wfc_acs_f814w']:
+        # select single spectrum, convolve with band, get band luminosity
+        obs_lum = pop.spec[x_ind,y_ind,:].copy()
+        obs_lum_conv = obs_lum * pop.trans_normed[band]
+
+        nn = pop.wave.size
+        band_lum = np.sum( np.abs(pop.wave_ang[1:nn-1]-pop.wave_ang[0:nn-2]) * \
+            (obs_lum_conv[1:nn-1] + obs_lum_conv[0:nn-2])*0.5 )
+
+        band_mag_abs = sP.units.lumToAbsMag(band_lum)
+        band_mag_app = sP.units.absMagToApparent(band_mag_abs)
+
+        # compare with band magnitude from FSPS-derived band magnitudes
+        mass_logmsun = np.array( (np.log10(1.0),) )
+
+        check_mag = pop.mags(band, age, metal, mass_logmsun)
+
+        print(band, band_mag_app, check_mag, 'diff: ',band_mag_app-check_mag)
+
 def debug_dust_plots():
     """ Plot intermediate aspects of the resolved dust calculation. """
     import matplotlib.pyplot as plt
@@ -1017,7 +1098,7 @@ def debug_dust_plots():
         metals_log = np.ones( NstarsTodo ) * metals_log
         masses_msun = np.ones( NstarsTodo ) * masses_msun
 
-        mag_f = pop.dust_tau_model_mag(band, N_H, Z_g, ages_logGyr, metals_log, masses_msun)
+        mag_f = pop.dust_tau_model_mags(band, N_H, Z_g, ages_logGyr, metals_log, masses_msun)
 
         print(band,mag_f,result_mag-2.5*np.log10(NstarsTodo)) #,result_mag_noatten,mag)
 

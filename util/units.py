@@ -865,6 +865,16 @@ class units(object):
         # 48.60 sets the zero-point of 3631 Jy
         return mag
 
+    def absMagToApparent(self, absolute_mag, redshift=None):
+        """ Convert an absolute magnitude to apparent. """
+        if redshift is None:
+            redshift = self._sP.redshift
+
+        d_L_cm = self.redshiftToLumDist(redshift) * 1e6 # Mpc -> pc
+
+        apparent_mag = absolute_mag + 5.0 * (np.log10(d_L_cm) - 1.0)
+        return apparent_mag
+
     def luminosityToFlux(self, lum, wavelength=None, redshift=None):
         """ Convert a luminosity in [erg/s] to a flux [photon/s/cm^2] for e.g. line emission at a 
         given wavelength in [Angstroms] if not None, from a source at the given redshift. 
