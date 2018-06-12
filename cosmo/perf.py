@@ -23,7 +23,7 @@ from plot.config import *
 def getCpuTxtLastTimestep(filePath):
     """ Parse cpu.txt for last timestep number and number of CPUs/tasks. """
     # hardcode Illustris-1 finalized data and complicated txt-files
-    if filePath == expanduser('~') + '/sims.illustris/L75n1820FP/output/cpu.txt':
+    if 'L75n1820FP/' in filePath:
         return 1.0, 912915, 8192
     if filePath == expanduser('~') + '/sims.illustris/L75n910FP/output/cpu.txt':
         return 1.0, 876580, 4096
@@ -407,21 +407,22 @@ def plotCpuTimes():
     # config
     sPs = []
     #sPs.append( simParams(res=1820, run='illustris') )
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=910, run='tng') )
     ##sPs.append( simParams(res=455, run='illustris') )
     ##sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )
 
+    #sPs.append( simParams(res=270, run='tng') )
+    #sPs.append( simParams(res=540, run='tng') )
+    #sPs.append( simParams(res=1080, run='tng') )
     sPs.append( simParams(res=2160, run='tng') )
     sPs.append( simParams(res=2160, run='tng_dm') )
     #sPs.append( simParams(res=2160, run='tng', variant='halted') )
-    #sPs.append( simParams(res=1080, run='tng') )
-    #sPs.append( simParams(res=540, run='tng') )
 
     #sPs.append( simParams(res=1024, run='tng', variant=0000) )
     #sPs.append( simParams(res=1024, run='tng', variant=4503) )
@@ -439,7 +440,7 @@ def plotCpuTimes():
     # fluxes 0.00 9.3% Step 6362063, Time: 0.26454, CPUs: 10752, MultiDomains: 8, HighestActiveTimeBin: 35
     # after Step 6495017
     plotKeys = ['total','total_log','treegrav','pm_grav','voronoi','blackholes','hydro',
-                'gradients','enrich','domain','i_o','restart']
+                'gradients','enrich','domain','i_o','restart','subfind']
     #plotKeys = ['total']
     lw = 2.0
 
@@ -447,8 +448,9 @@ def plotCpuTimes():
     #pdf = PdfPages('cpu_k' + str(len((plotKeys))) + '_n' + str(len(sPs)) + '.pdf')
     fName1 = expanduser('~') + '/plots/cpu_tng_new.pdf'
     fName2 = expanduser('~') + '/plots/cpu_tng.pdf'
-    pdf = PdfPages(fName1)
+    fName3 = expanduser('~') + '/plots/cpu_tng_b.pdf'
 
+    pdf = PdfPages(fName1)
     print(' -- run: %s --' % datetime.now().strftime('%d %B, %Y'))
 
     for plotKey in plotKeys:
@@ -600,6 +602,64 @@ def plotCpuTimes():
     # if we don't make it here successfully the old pdf will not be corrupted
     if isfile(fName2): remove(fName2)
     rename(fName1,fName2)
+
+    # singlepage pdf: all values on one panel
+    pdf = PdfPages(fName3)
+
+    for sP in sPs:
+        fig = plt.figure(figsize=(12.5,9))
+
+        ax = fig.add_subplot(111)
+        ax.set_xlim([0.0,1.0])
+        if sP.simName != 'TNG50-1':
+            ax.set_xlim([0.0,1.3])
+
+        ax.set_title('')
+        ax.set_xlabel('Scale Factor')
+
+        ind = 3 # 1=diff perc (missing in 3col format), 3=cum perc
+        ax.set_ylabel('CPU Percentage [' + plotKey + ']')
+        keys = ['time','hatb'] + plotKeys
+
+        # load select datasets from cpu.hdf5
+        if sP.run == 'tng' and sP.res in [1024,910,1820,1080,2160,1250,2500]:
+            hatbMin = 41
+        else:
+            hatbMin = 0
+
+        cpu = loadCpuTxt(sP.arepoPath, keys=keys, hatbMin=hatbMin)
+
+        # plot each
+        for plotKey in plotKeys:
+            if 'total' in plotKey:
+                continue
+
+            print(plotKey)
+
+            if plotKey not in cpu.keys():
+                continue # e.g. hydro fields in DMO runs
+
+            # include only bigish timesteps
+            w = np.where( cpu['hatb'] >= cpu['hatb'].max()-6 )
+
+            # loop over each run
+            xx = cpu['time'][w]
+            yy = np.squeeze( np.squeeze(cpu[plotKey])[w,ind] )
+
+            l, = ax.plot(xx,yy,lw=lw,label=plotKey)
+
+        axTop = _redshiftAxisHelper(ax)
+
+        handles, labels = ax.get_legend_handles_labels()
+        pLabels = [sP.simName]
+        pColors = [plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-')]
+        ax.legend(handles+pColors, labels+pLabels, loc='best') #, prop={'size':13})
+
+        fig.tight_layout()    
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
 
 def plotTimebins():
     """ Plot analysis of timebins throughout the course of a run. """
