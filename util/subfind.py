@@ -7,7 +7,6 @@ from __future__ import (absolute_import,division,print_function)#,unicode_litera
 from builtins import *
 
 import numpy as np
-#import threading
 import time
 import glob
 from numba import jit
@@ -23,26 +22,26 @@ integertime = np.int32 # ~ENLARGE_DYNAMIC_RANGE_IN_TIME
 GFM_N_CHEM_ELEMENTS = 10
 GFM_N_CHEM_TAGS = 6
 GRAVCOSTLEVELS = 6
+MAXSCALARS = GFM_N_CHEM_ELEMENTS + 1 + 1 # SECOND +1: BUG FROM GFM_DUST
 
-# L35n2160TNG:
 NTYPES = 6
-#NSOFTTYPES = 6
 NSOFTTYPES_HYDRO = 64 # ADAPTIVE_HYDRO_SOFTENING
-
-#MinimumComovingHydroSoftening = 0.05
 AdaptiveHydroSofteningSpacing = 1.2
 GasSoftFactor = 2.5
 ErrTolThetaSubfind = 0.7
 DesLinkNgb = 20
 
-#SofteningComoving = [0.390, 0.390, 0.390, 0.670, 1.15, 2.0]
-#SofteningMaxPhys  = [0.195, 0.195, 0.390, 0.670, 1.15, 2.0]
+# L35n2160TNG:
+NSOFTTYPES = 6
+MinimumComovingHydroSoftening = 0.05
+SofteningComoving = [0.390, 0.390, 0.390, 0.670, 1.15, 2.0]
+SofteningMaxPhys  = [0.195, 0.195, 0.390, 0.670, 1.15, 2.0]
 
 # L25n256_0000 TESTING:
-NSOFTTYPES = 5
-MinimumComovingHydroSoftening = 0.25
-SofteningComoving = [2.0, 2.0, 2.0, 3.42, 5.84]
-SofteningMaxPhys  = [1.0, 1.0, 2.0, 3.42, 5.84]
+#NSOFTTYPES = 5
+#MinimumComovingHydroSoftening = 0.25
+#SofteningComoving = [2.0, 2.0, 2.0, 3.42, 5.84]
+#SofteningMaxPhys  = [1.0, 1.0, 2.0, 3.42, 5.84]
 
 # define data types
 grad_data_dtype = np.dtype([
@@ -50,6 +49,7 @@ grad_data_dtype = np.dtype([
     ('dvel', MySingle, (3,3)),
     ('dpress', MySingle, 3),
     ('dB', MySingle, (3,3)), # MHD
+    ('dscalars', MySingle, (MAXSCALARS,3)), # MAXSCALARS
 ])
 
 SphP_dtype = np.dtype([
@@ -63,6 +63,7 @@ SphP_dtype = np.dtype([
     ('Pressure', MyFloat),
     ('Utherm', MySingle),
     ('FullGravAccel', MySingle, 3), # HIERARCHICAL_GRAVITY
+    ('MaxMach', MyFloat), # BUG: defined(TRACER_MC_MACHMAX)
     # variables for mesh
     ('Center', MyDouble, 3),
     ('VelVertex', MySingle, 3),
@@ -92,7 +93,7 @@ SphP_dtype = np.dtype([
     ('Ne', MyFloat), # COOLING
     ('Sfr', MySingle), # USE_SFR
     ('HostHaloMass', MySingle), # GFM_WINDS_VARIABLE
-    ('DMVelDisp', MySingle), # GFM_WINDS_VARIABLE
+    #('DMVelDisp', MySingle), # GFM_WINDS_VARIABLE (UNION)
     ('AGNBolIntensity', MySingle), # GFM_AGN_RADIATION
     ('Injected_BH_Energy', MySingle), # BH_THERMALFEEDBACK
     ('Injected_BH_Wind_Momentum', MyFloat, 3), # BH_ADIOS_WIND
@@ -100,11 +101,35 @@ SphP_dtype = np.dtype([
     ('first_connection', np.int32), # VORONOI_DYNAMIC_UPDATE
     ('last_connection', np.int32), # VORONOI_DYNAMIC_UPDATE
     ('SepVector', MySingle, 3), # REFINEMENT_SPLIT_CELLS
-    ('TimeLastPrimUpdate', np.float64)
+    ('TimeLastPrimUpdate', np.float64),
+])
+
+SphP_dtype_mem = np.dtype([
+    # conserved variables
+    ('Energy', MyFloat),
+    ('Momentum', MyFloat, 3),
+    ('Volume', MyFloat),
+    # primitive variables
+    ('Density', MyFloat),
+    ('Pressure', MyFloat),
+    ('Utherm', MySingle),
+    # variables for mesh
+    ('Center', MyDouble, 3),
+    ('Machnumber', MySingle), # SHOCK_FINDER_BEFORE_OUTPUT
+    ('EnergyDissipation', MySingle), # SHOCK_FINDER_BEFORE_OUTPUT
+    # MHD
+    ('B', MyFloat, 3),
+    ('DivB', MyFloat),
+    # GFM_STELLAR_EVOLUTION
+    ('Metallicity', MyFloat),
+    ('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS),
+    ('Ne', MyFloat), # COOLING
+    ('Sfr', MySingle), # USE_SFR
 ])
 
 StarP_dtype = np.dtype([ # GFM
     ('PID', np.uint32),
+    ('pad_0', np.int32), # STRUCT PADDING
     ('BirthTime', MyFloat),
     ('BirthPos', MyFloat, 3),
     ('BirthVel', MyFloat, 3),
@@ -147,14 +172,8 @@ BHP_dtype = np.dtype([ # BLACK_HOLES
     ('CellDensity', MyFloat),
     ('CellUtherm', MyFloat),
     ('DrainBucketMass', MyDouble),
-    # BH_ADIOS_WIND
-    ('BH_WindEnergy', MyFloat),
-    # BH_ADIOS_RANDOMIZED
-    ('Asum', MyFloat),
-    ('Bsum', MyFloat),
-    ('Msum', MyFloat),
-    ('Qsum', MyFloat, 3),
-    ('WindDir', MyFloat, 3),
+    ('BH_WindEnergy', MyFloat), # BH_ADIOS_WIND
+    ('WindDir', MyFloat, 3), # BH_ADIOS_RANDOMIZED
     ('HostHaloMass', MyFloat), # GFM_AGN_RADIATION
     ('BH_DMVelDisp', MyFloat), # GFM_WINDS_VARIABLE
     ('BH_ThermEnergy', MyFloat), # BH_THERMALFEEDBACK,
@@ -167,8 +186,8 @@ P_dtype = np.dtype([
     ('Vel', MyFloat, 3),
     ('GravAccel', MySingle, 3),
     ('GravPM', MySingle, 3), # PMGRID
-    ('BirthPos', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF
-    ('BirthVel', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF
+    #('BirthPos', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF
+    #('BirthVel', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF
     ('Potential', MySingle), # EVALPOTENTIAL
     ('PM_Potential', MySingle), # EVALPOTENTIAL & PMGRID
     ('AuxDataID', MyIDType), # GFM || BLACK_HOLES
@@ -178,6 +197,7 @@ P_dtype = np.dtype([
     ('OriginTask', np.int32),
     # general
     ('ID', MyIDType),
+    ('pad_0', np.int32, 2), # STRUCT PADDING
     ('TI_Current', integertime),
     ('OldAcc', np.float32),
     ('GravCost', np.float32, GRAVCOSTLEVELS),
@@ -185,6 +205,17 @@ P_dtype = np.dtype([
     ('SofteningType', np.uint8),
     ('TimeBinGrav', np.int8),
     ('TimeBinHydro', np.int8)
+])
+
+P_dtype_mem = np.dtype([
+    ('Pos', MyDouble, 3),
+    ('Mass', MyDouble),
+    ('Vel', MyFloat, 3),
+    ('Potential', MySingle), # EVALPOTENTIAL
+    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES
+    ('ID', MyIDType),
+    ('Type', np.uint8),
+    ('SofteningType', np.uint8),
 ])
 
 PS_dtype = np.dtype([
@@ -199,6 +230,24 @@ PS_dtype = np.dtype([
     ('submark', np.int32),
     ('originindex', np.int32),
     ('origintask', np.int32),
+    ('Utherm', MyFloat),
+    ('Density', MyFloat),
+    ('Potential', MyFloat),
+    ('Hsml', MyFloat),
+    ('BindingEnergy', MyFloat),
+    ('Center', MyDouble, 3), # CELL_CENTER_GRAVITY
+    # SAVE_HSML_IN_SNAPSHOT
+    ('SubfindHsml', MyFloat),
+    ('SubfindDensity', MyFloat),
+    ('SubfindDMDensity', MyFloat),
+    ('SubfindVelDisp', MyFloat)
+])
+
+PS_dtype_mem = np.dtype([
+    ('GrNr', np.int32),
+    # SUBFIND
+    ('SubNr', np.int32),
+    ('OldIndex', np.int32),
     ('Utherm', MyFloat),
     ('Density', MyFloat),
     ('Potential', MyFloat),
@@ -230,27 +279,175 @@ ud_dtype = np.dtype([
 
 def load_custom_dump(sP, GrNr):
     """ Load groups_{snapNum}/fof_{fofID}.{taskNum} custom binary data dump. """
-    filePath = sP.basePath + 'groups_%03d/fof_%d' % (sP.snap,GrNr)
+    import struct
+
+    filePath = sP.simPath + 'groups_%03d/fof_%d/fof_%d' % (sP.snap,GrNr,GrNr)
+
+    headerSize = 4*5 + 4*5 + 4*4
 
     # first loop: load all headers, accumulate total counts
     nChunks = len(glob.glob(filePath + '.*'))
+    print('nChunks: [%d], reading headers...' % nChunks)
+
+    NumP = 0
+    NumSphP = 0
+    NumStarP = 0
+    NumBHP = 0
 
     for i in range(nChunks):
         file = '%s.%d' % (filePath,i)
-        # todo
+        if i % 100 == 0: print(file)
+        with open(file,'rb') as f:
+            header = f.read(headerSize)
+
+        TargetGrNr, NumP_loc, NumSphP_loc, NumStarP_loc, NumBHP_loc = struct.unpack('iiiii', header[0:20])
+        min_ind, max_ind, min_sph_ind, max_sph_ind = struct.unpack('iiii', header[20:36])
+        size_PS, size_P, size_SphP, size_StarP, size_BHP = struct.unpack('iiiii', header[36:56])
+
+        NumP += NumP_loc
+        NumSphP += NumSphP_loc
+        NumStarP += NumStarP_loc
+        NumBHP += NumBHP_loc
+
+        # verify struct configurations (ugh padding)
+        assert TargetGrNr == GrNr
+        assert size_PS == PS_dtype.itemsize
+        assert size_P == P_dtype.itemsize
+        assert size_SphP == SphP_dtype.itemsize
+        assert size_StarP == StarP_dtype.itemsize
+        assert size_BHP == BHP_dtype.itemsize
 
     # allocate
+    group = sP.groupCatSingle(haloID=GrNr)
+    print('GrNr', GrNr, ' has LenType: ', group['GroupLenType'], ' Len:', group['GroupLen'])
 
+    NumDM = NumP - NumSphP - NumStarP - NumBHP
+    print('Save files have total lenType: ', NumSphP, NumDM, NumStarP, NumBHP, ' Len:', NumP)
 
-    # second loop: load all data
-    # https://stackoverflow.com/questions/7569563/efficient-way-to-create-numpy-arrays-from-binary-files
+    sizeBytes = NumP*size_P + NumP*size_PS + NumSphP*size_SphP + NumStarP*size_StarP + NumBHP*size_BHP
+    sizeGB = sizeBytes / 1024.0**3
+    print('Memory allocation for full arrays, all particles, would require [%.2f GB]' % sizeGB)
 
-    #BEGRUN: Size of particle structure       192  [bytes]
-    #BEGRUN: Size of sph particle structure   1152  [bytes]
-    #BEGRUN: Size of star particle structure  248  [bytes]
-    #BEGRUN: Size of BH particle structure    272  [bytes]
+    sizeBytes = group['GroupLen'] * size_P + \
+                group['GroupLen'] * size_PS + \
+                group['GroupLenType'][sP.ptNum('gas')] * size_SphP + \
+                group['GroupLenType'][sP.ptNum('stars')] * size_StarP + \
+                group['GroupLenType'][sP.ptNum('bhs')] * size_BHP
+    sizeGB = sizeBytes / 1024.0**3
+    print('Memory allocation for full arrays, group members only, would require [%.2f GB]' % sizeGB)
 
-    # assert SphP_dtype.itemsize == SphP_size (loaded from header)
+    sizeBytes = group['GroupLen'] * P_dtype_mem.itemsize + \
+                group['GroupLen'] * PS_dtype_mem.itemsize + \
+                group['GroupLenType'][sP.ptNum('gas')] * SphP_dtype_mem.itemsize + \
+                group['GroupLenType'][sP.ptNum('stars')] * StarP_dtype.itemsize + \
+                group['GroupLenType'][sP.ptNum('bhs')] * BHP_dtype.itemsize
+    sizeGB = sizeBytes / 1024.0**3
+    print('Memory allocation for partial arrays, group members only, will require [%.2f GB]' % sizeGB)
+
+    P     = np.zeros(group['GroupLen'], dtype=P_dtype_mem)
+    PS    = np.zeros(group['GroupLen'], dtype=PS_dtype_mem) # memset(0) in fof.c
+    SphP  = np.empty(group['GroupLenType'][sP.ptNum('gas')], dtype=SphP_dtype_mem)
+    StarP = np.empty(group['GroupLenType'][sP.ptNum('stars')], dtype=StarP_dtype)
+    BHP   = np.empty(group['GroupLenType'][sP.ptNum('bhs')], dtype=BHP_dtype)
+
+    NumP = 0
+    NumSphP = 0
+    NumStarP = 0
+    NumBHP = 0
+
+    for i in range(nChunks):
+        file = '%s.%d' % (filePath,i)
+
+        with open(file,'rb') as f:
+            header = f.read(headerSize)
+            TargetGrNr, NumP_loc, NumSphP_loc, NumStarP_loc, NumBHP_loc = struct.unpack('iiiii', header[0:20])
+            min_ind, max_ind, min_sph_ind, max_sph_ind = struct.unpack('iiii', header[20:36])
+
+            PS_temp    = np.fromfile(f, dtype=PS_dtype, count=NumP_loc)
+            P_temp     = np.fromfile(f, dtype=P_dtype, count=NumP_loc)
+            SphP_temp  = np.fromfile(f, dtype=SphP_dtype, count=NumSphP_loc)
+            StarP_temp = np.fromfile(f, dtype=StarP_dtype, count=NumStarP_loc)
+            BHP_temp   = np.fromfile(f, dtype=BHP_dtype, count=NumBHP_loc)
+
+        # particles
+        w = np.where(PS_temp['GrNr'] == GrNr)
+        gr_NumP = len(w[0])
+        print('[%4d] [%7d of %7d] particles belong to group, now have [%9d of %9d] total.' % (i,gr_NumP,PS_temp.size,NumP+gr_NumP,group['GroupLen']))
+
+        # only save needed fields to optimize memory usage
+        for field in PS_dtype_mem.names:
+            PS[field][NumP:NumP+gr_NumP] = PS_temp[field][w]
+        for field in P_dtype_mem.names:
+            P[field][NumP:NumP+gr_NumP] = P_temp[field][w]
+
+        assert P_temp['Type'].min() >= 0 and P_temp['Type'].max() < NTYPES # sanity check for struct padding success
+        assert P_temp['TimeBinGrav'].min() >= 25 and P_temp['TimeBinGrav'].max() <= 52
+        assert P_temp['Pos'].min() >= 0.0 and P_temp['Pos'].max() <= sP.boxSize
+
+        # gas
+        if NumSphP_loc:
+            w_gas = np.where(P_temp['Type'] == 0)
+            assert min_sph_ind == 0
+            if len(w_gas[0]) == NumSphP_loc: # full
+                assert max_sph_ind == NumSphP_loc - 1
+            else:
+                print(' first partial gas')
+
+            w_gas = np.where( (P_temp['Type'] == 0) & (PS_temp['GrNr'] == GrNr) )
+            assert len(w_gas[0]) == NumSphP_loc
+
+            for field in SphP_dtype_mem.names:
+                # only save needed fields to optimize memory usage
+                SphP[field][NumSphP:NumSphP+NumSphP_loc] = SphP_temp[field][w_gas]
+
+            NumSphP += len(w_gas[0]) # == NumSphP_loc
+
+        # note: AuxDataID's will be good (file local), since we always write full StarP/BHP,
+        # but aux[].PID will need to be adjusted by min_ind (not used anyways in subfind)
+
+        # stars
+        if NumStarP_loc:
+            w_star = np.where( (P_temp['Type'] == 4) & (PS_temp['GrNr'] == GrNr) )
+            Pw_aux = P_temp['AuxDataID'][w_star]
+            assert Pw_aux.min() >= 0 and Pw_aux.max() < NumStarP_loc
+
+            StarP[NumStarP:NumStarP+NumStarP_loc] = StarP_temp[Pw_aux]
+
+            # reassign AuxData ID as indices into new global StarP
+            #P[NumP:NumP+gr_NumP][w_star]['AuxDataID'] = np.arange( len(w_star[0]) ) + NumStarP # TODO
+            StarP[NumStarP:NumStarP+NumStarP_loc]['PID'] = w_star[0] + gr_NumP
+            #assert np.array_equal(P_temp['AuxDataID'][ StarP_temp[Pw_aux]['PID'] ], Pw_aux) # TODO
+
+            NumStarP += len(w_star[0]) # != NumStarP_loc !
+
+        # bhs
+        if NumBHP_loc:
+            w_bhs = np.where( (P_temp['Type'] == 5) & (PS_temp['GrNr'] == GrNr) )
+            Pw_aux = P_temp['AuxDataID'][w_bhs]
+            assert Pw_aux.min() >= 0 and Pw_aux.max() < NumBHP_loc
+
+            BHP[NumBHP:NumBHP+NumBHP_loc] = BHP_temp[Pw_aux]
+
+            # reassign AuxData ID as indices into new global BHP
+            #P[NumP:NumP+gr_NumP][w_bhs]['AuxDataID'] = np.arange( len(w_bhs[0]) ) + NumBHP # TODO
+            StarP[NumBHP:NumBHP+NumBHP_loc]['PID'] = w_bhs[0] + gr_NumP
+            #assert np.array_equal(P_temp['AuxDataID'][ BHP_temp[Pw_aux]['PID'] ], Pw_aux) # TODO
+
+            NumBHP += len(w_bhs[0]) # != NumBHP_loc !
+
+        NumP += gr_NumP        
+
+    # final checks
+    assert NumP == group['GroupLen']
+    assert NumSphP == group['GroupLenType'][sP.ptNum('gas')]
+    assert NumStarP == group['GroupLenType'][sP.ptNum('stars')]
+    assert NumBHP == group['GroupLenType'][sP.ptNum('bhs')]
+
+    print('Particle counts of all types verified, match expected Group [%d] lengths.' % GrNr)
+
+    PS['OldIndex'] = np.arange(group['GroupLen'])
+
+    return P, PS, SphP, StarP, BHP
 
 def load_snapshot_data(sP, GrNr):
     """ Load the FoF particles from an actual snapshot for testing. """
@@ -1535,7 +1732,6 @@ def run_test():
 
     # load
     P, PS, SphP, StarP, BHP = load_snapshot_data(sP, GrNr=100) # testing
-    #P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=0)
 
     SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
 
@@ -1548,4 +1744,16 @@ def run_test():
     candidates = subfind_properties_1(candidates)
     test = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, sP.scalefac, sP.units.H_z, sP.units.G, sP.boxSize)
 
+    import pdb; pdb.set_trace()
+
+def run_test2():
+    """ Testing. """
+    from util.simParams import simParams
+    # snap=5 is fof0 SKIPPED (with new fof_0 dump), snap=4 is normal (with corrupt fof_0 dump)
+    #sP = simParams(res=512,run='tng',snap=5,variant='5006')
+
+    # L35n2160TNG started skipping fof0 subfind at snapshot 69 and onwards
+    sP = simParams(res=2160,run='tng',snap=69)
+
+    P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=0)
     import pdb; pdb.set_trace()
