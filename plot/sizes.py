@@ -390,7 +390,7 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
             assert bandNum1 == bandNum2
 
             mags1 = np.squeeze( ac[acPre+acField1][w,bandNum1] )
-            lums1 = np.power(10.0, -0.4 * mags1)
+            lums1 = sP.units.absMagToLuminosity(mags1)
 
             print(sP.redshift,band)
 
@@ -401,7 +401,7 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
                 else:
                     mags2 = np.squeeze( ac[acPre+acField2][w,bandNum2] )
 
-                lums2 = np.power(10.0, -0.4 * mags2)
+                lums2 = sP.units.absMagToLuminosity(mags2)
 
                 ratio = lums2 / lums1
                 assert ratio.shape == xx.shape

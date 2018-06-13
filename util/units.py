@@ -865,6 +865,12 @@ class units(object):
         # 48.60 sets the zero-point of 3631 Jy
         return mag
 
+    def absMagToLuminosity(self, mag):
+        """ Convert from input AB absolute magnitudes to (linear) luminosity units of [Lsun/Hz]. """
+        log_lum = (mag + 48.60 + 2.5*self.mag2cgs) / (-2.5)
+        lum = 10.0**log_lum
+        return lum
+
     def absMagToApparent(self, absolute_mag, redshift=None):
         """ Convert an absolute magnitude to apparent. """
         if redshift is None:

@@ -660,10 +660,11 @@ class sps():
             # pre-divide out Angstroms
             self.trans_normed[band] = trans_val / self.wave_ang
 
-    def convertSpecToSDSSUnitsAndRedshift(self, spec):
+    def convertSpecToSDSSUnitsAndAttenuate(self, spec):
         """ Convert a spectrum from FSPS in [Lsun/Hz] to SDSS units [10^-17 erg/cm^2/s/Ang] and, 
-        if self.sP.redshift > 0, attenuation the spectrum by the luminosity distance and redshift 
-        the wavelength. If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
+        if self.sP.redshift > 0, attenuate the spectrum by the luminosity distance. Note that 
+        spectrum has already been shifted in wavelength, since FSPS saved spectral tables call 
+        redshiftSpectrum(). If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
         assumed distance of 10pc (i.e. absolute magnitudes). """
 
         # convert [Lsun/Hz] -> [Lsun/Ang]
@@ -677,9 +678,6 @@ class sps():
         # convert [Lsun/Ang] -> [erg/s/Ang] -> [erg/s/cm^2/Ang], i.e. luminosities into fluxes at this dist
         flux = spec_perAng * (self.sP.units.L_sun / (dL_cm*dL_cm)) / (4.0*np.pi)
         flux *= 1e17
-
-        # redshift
-        flux = self.redshiftSpectrum(self.wave, flux)
 
         # could rebin onto a wavelength grid more like SDSS observations (log wave spaced)
         # https://github.com/moustakas/impy/blob/master/lib/ppxf/ppxf_util.py
@@ -709,7 +707,7 @@ class sps():
         return flux
 
     def mags(self, band, ages_logGyr, metals_log, masses_logMsun):
-        """ Interpolate table to compute magnitudes in requested band for input stars. """
+        """ Interpolate table to compute magnitudes [AB absolute] in requested band for input stars. """
         assert band.lower() in self.bands
         assert ages_logGyr.size == metals_log.size == masses_logMsun.size
         assert ages_logGyr.ndim == metals_log.ndim == masses_logMsun.ndim == 1
@@ -769,7 +767,8 @@ class sps():
     def calcStellarLuminosities(self, sP, band, indRange=None):
         """ Compute (linear) luminosities in the given band, using either snapshot-stored values or 
         on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
-        returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). """
+        returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). 
+        Current return is arbitrary units. """
         assert isinstance(band, basestring)
 
         if 'snap_' in band:
@@ -793,12 +792,12 @@ class sps():
                                         stars['GFM_Metallicity'], stars['GFM_InitialMass'], 
                                         retFullSize=True)
 
-        # convert to luminosities
+        # convert to luminosities in [Lsun/Hz]
         lums = np.zeros( mags.size, dtype='float32' )
         lums.fill(np.nan)
 
         ww = np.isfinite(mags)
-        lums[ww] = np.power(10.0, -0.4 * mags[ww])
+        lums[ww] = self.sP.units.absMagToLuminosity(mags[ww])
         
         return lums
 
@@ -810,7 +809,9 @@ class sps():
         transmission function of multiple bands, returning a dict of magnitudes, one for 
         each band. If ret_indiv==True, then the individual magnitudes for every member star are
         instead returned separately. If ret_full_spectrum==True, the full aggregate spectrum, 
-        summed over all member stars, as a function of wavelength, is instead returned."""
+        summed over all member stars, as a function of wavelength, is instead returned. 
+        Note: Will return either absolute or apparent magnitudes (or spectra) if self.sP.redshift 
+        is zero or nonzero, respectively. """
         assert N_H.size == Z_g.size == ages_logGyr.size == metals_log.size == masses_msun.size
         assert N_H.ndim == Z_g.ndim == ages_logGyr.ndim == metals_log.ndim == masses_msun.ndim == 1
 
@@ -837,38 +838,41 @@ class sps():
                                   self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
                                   self.metals,self.ages,self.wave_ang,self.spec,calzetti_case)
 
-        if ret_full_spectrum and rel_vel is None:
+        if ret_full_spectrum:
             # we want an aggregate summed spectrum for all member stars, not all individual spectra
             assert not ret_indiv
 
+            if rel_vel is None:
+                obs_lum_1d = obs_lum
+            else:
+                # support for an array of rel_vel in [km/s], positive or negative, giving the 
+                # relative velocity of each star particle such that its spectrum should be shifted 
+                # in wavelength space by the appropriate doppler shift, e.g.
+                assert rel_vel.ndim == 1 and rel_vel.size == N_H.size
+                assert obs_lum.ndim == 2
+
+                # allocate 1d spectrum return
+                obs_lum_1d = np.zeros( self.wave.size, dtype='float32' )
+
+                # (lambda_obs/lambda_emit = 1 + peculiar_velocity/c) such that if rel_vel>0 (receeding), 
+                # lambda_obs > lambda_emit, otherwise if rel_vel<0 then lambda_obs < lambda_edit
+                doppler_factor = 1.0 + rel_vel / self.sP.units.c_km_s
+
+                for i in range(rel_vel.size):
+                    # create shifted wavelength grid
+                    wave_shifted = self.wave * doppler_factor[i]
+
+                    # interpolate fluxes onto original grid
+                    f = interp1d(wave_shifted, obs_lum[i,:], kind='linear', assume_sorted=True, 
+                                 bounds_error=False, fill_value=0.0)
+
+                    obs_lum_1d += f(self.wave)
+
+            # unit conversion into SDSS spectra units, and attenuate by distance to sP.redshift
+            spectrum = self.convertSpecToSDSSUnitsAndAttenuate(obs_lum_1d)
+
             # early return before any band convolutions (the corresponding wavelengths are self.wave)
-            return obs_lum
-
-        if ret_full_spectrum and rel_vel is not None:
-            # support for an array of rel_vel in [km/s], positive or negative, giving the 
-            # relative velocity of each star particle such that its spectrum should be shifted 
-            # in wavelength space by the appropriate doppler shift, e.g.
-            assert rel_vel.ndim == 1 and rel_vel.size == N_H.size
-            assert obs_lum.ndim == 2
-
-            # allocate 1d spectrum return
-            obs_lum_1d = np.zeros( self.wave.size, dtype='float32' )
-
-            # (lambda_obs/lambda_emit = 1 + peculiar_velocity/c) such that if rel_vel>0 (receeding), 
-            # lambda_obs > lambda_emit, otherwise if rel_vel<0 then lambda_obs < lambda_edit
-            doppler_factor = 1.0 + rel_vel / self.sP.units.c_km_s
-
-            for i in range(rel_vel.size):
-                # create shifted wavelength grid
-                wave_shifted = self.wave * doppler_factor[i]
-
-                # interpolate fluxes onto original grid
-                f = interp1d(wave_shifted, obs_lum[i,:], kind='linear', assume_sorted=True, 
-                             bounds_error=False, fill_value=0.0)
-
-                obs_lum_1d += f(self.wave)
-
-            return obs_lum_1d
+            return spectrum
 
         for band in bands:
             if '_eff' in self.dustModel:
@@ -905,7 +909,12 @@ class sps():
 
                     assert band_lum > 0.0
 
-                    r[band][i] = self.sP.units.lumToAbsMag(band_lum)
+                    r[band][i] = band_lum
+                r[band] = self.sP.units.lumToAbsMag(r[band])
+
+            # optionally convert to apparent magnitude
+            if self.sP.redshift > 0:
+                r[band] = self.sP.units.absMagToApparent(r[band])
 
         return r
 

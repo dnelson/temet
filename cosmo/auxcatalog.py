@@ -513,7 +513,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                                      magsLoad['GFM_InitialMass'], retFullSize=True)
 
             # use the (linear) luminosity in this band as the weight
-            particles['weights'] = np.power(10.0, -0.4 * mags)
+            particles['weights'] = sP.units.absMagToLuminosity(mags)
 
         else:
             # use a particle quantity as weights (e.g. 'mass', 'volume', 'O VI mass')
@@ -777,7 +777,7 @@ def _findHalfLightRadius(rad,mags,vals=None):
     if mags is not None: assert rad.size == mags.size
 
     if vals is None:
-        # convert individual mags to luminosities
+        # convert individual mags to luminosities [arbitrary units]
         lums = np.power(10.0, -0.4 * mags)
     else:
         # take input values unchanged (assume e.g. linear masses or light quantities already)
@@ -1013,11 +1013,11 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                 if not sizes and not indivStarMags:
                     # convert mags to luminosities, sum together
-                    totalLum = np.nansum( np.power(10.0, -0.4 * magsLocal) )
+                    totalLum = np.nansum( sP.units.absMagToLuminosity(magsLocal) )
 
                     # convert back to a magnitude in this band
                     if totalLum > 0.0:
-                        r[i,bandNum,0] = -2.5 * np.log10( totalLum )
+                        r[i,bandNum,0] = sP.units.lumToAbsMag(totalLum)
                 elif indivStarMags:
                     # save raw magnitudes per particle (wind/outside subhalo entries left at NaN)
                     saveInds = np.arange(i0, i1)
@@ -1283,9 +1283,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     # request stacked spectrum of all stars, optionally handle doppler velocity shifting
                     spectrum = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun,
                                                         ret_full_spectrum=True, rel_vel=rel_vel_los)
-
-                    # unit conversion into SDSS spectra units, and redshift to sP.redshift
-                    spectrum = pop.convertSpecToSDSSUnitsAndRedshift(spectrum)
 
                     # save spectrum within valid wavelength range
                     r[i,:,projNum] = spectrum[sdss_min_ind:sdss_max_ind]
