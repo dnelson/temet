@@ -564,9 +564,9 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
     # sort indices along periodic(axis3) for both pos and posTarget
     for i in range(NumPart):
-        pos_axis3[i] = _NEAREST(pos_axis3[i]-min_axis3,BoxHalf[i],boxSizeSim[i])
+        pos_axis3[i] = _NEAREST(pos_axis3[i]-min_axis3,BoxHalf[2],boxSizeSim[2])
     for i in range(NumTarget):
-        posTarget_axis3[i] = _NEAREST(posTarget_axis3[i]-min_axis3,BoxHalf[i],boxSizeSim[i]) 
+        posTarget_axis3[i] = _NEAREST(posTarget_axis3[i]-min_axis3,BoxHalf[2],boxSizeSim[2]) 
 
     pos_sortInds = np.argsort(pos_axis3) # requires numba 0.28+
     posTarget_sortInds = np.argsort(posTarget_axis3)
@@ -602,7 +602,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
         w  = quant[k] if quant.size > 1 else 0.0
 
         # (A) check target list
-        while _NEAREST(p2T-p2,BoxHalf[axis3],boxSizeSim[axis3]) <= 0.0:
+        while _NEAREST(p2T-p2,BoxHalf[axis3],boxSizeSim[2]) <= 0.0:
             # target z-coordinate has been passed, record grid value now
             dens_interp, quant_interp = _gridInterp(posTarget,kT,axes,boxCen,boxSizeImg,boxSizeSim,
                                           nPixels,pixelSizeX,pixelSizeY,invPixelArea,dens_out,quant_out)
@@ -618,7 +618,7 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
             if targetInd >= NumTarget:
                 # exit while loop and never re-enter
-                p2T = boxSizeSim[axis3] * 2.0
+                p2T = boxSizeSim[2] * 2.0
                 break
 
             kT = posTarget_sortInds[targetInd]
