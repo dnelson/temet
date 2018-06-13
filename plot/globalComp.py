@@ -758,6 +758,143 @@ def stellarMassFunctionMultiPanel(sPs, pdf, highMassEnd=False, centralsOnly=Fals
                             use30kpc=use30kpc, use30H=use30H, useP10=useP10, 
                             simRedshift=redshift, dataRedshift=redshift, fig_subplot=[fig,ind])
 
+def uvLuminosityFunction(sPs, pdf, centralsOnly=False, use30kpc=False, absoluteMags=True, 
+                         simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
+    """ Stellar mass function (number density of galaxies) at redshift zero, or above. """
+
+    # config
+    dustModels = ['nodust','cf00dust','cf00dust_res_conv_z_rad30pkpc']
+
+    acs = []
+    for dustModel in dustModels:
+        acs.append( 'Subhalo_StellarPhot_p07c_%s_red' % dustModel)
+
+    if use30kpc:
+        raise Exception('Implement (modify acs names).')
+
+    if simRedshift == 8.0:
+        band = 'wfc3_ir_f160w' # Oesch+ 12 (H160)
+        band = 'jwst_f150w' # Lovell+ 18 (Fig 6 lower panel check)
+    elif simRedshift == 4.0:
+        band = 'jwst_f070w'
+    elif simRedshift == 1.0:
+        band = 'wfc_acs_f606w' # not actually UV at z=1
+    else:
+        raise Exception('Generalize, choose observed band which is closest to rest-frame UV at this redshift.')
+
+    # plot setup
+    if fig_subplot[0] is None:
+        sizefac = 1.0 if not clean else sfclean
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+    
+    ax.set_ylim([1e-6,1e-1])
+    if absoluteMags:
+        ax.set_xlim([-17.0,-24.0]) # absolute
+        xlabel = 'M$_{\\rm UV}$ [ AB mag absolute ] (%s obs)' % band
+    else:
+        ax.set_xlim([20, 35]) # apparent
+        xlabel = 'm$_{\\rm %s}$ [ AB mag apparent ]' % band.replace('_',',')
+    
+    if use30kpc:
+        xlabel += ' [ < 30 pkpc]'
+    ax.set_xlabel(xlabel)
+
+    if centralsOnly:
+        ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ mag$^{-1}$ ] [ only centrals ]')
+        cenSatSelect = 'cen'
+    else:
+        ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ mag$^{-1}$ ] [ centrals & satellites ]')
+        cenSatSelect = 'all'
+
+    ax.set_yscale('log')
+
+    # observational points
+    data = []
+    lines = []
+
+    #if dataRedshift == 8.0:
+    #    data.append( oesch12UVLF() )
+
+    symbols = ['D','o','p','s','x']
+    colors = ['#bbbbbb','#888888','#555555','#222222','#000000']
+
+    for i, d in enumerate(data):
+        ll = d['lowerLimits'] if 'lowerLimits' in d else False
+        if 'errorUp' in d:
+            l,_,_ = ax.errorbar(d['stellarMass'], d['numDens'], yerr=[d['errorDown'],d['errorUp']],
+                         color=colors[i], ecolor=colors[i], alpha=0.9, capsize=0.0, fmt=symbols[i], lolims=ll)
+        if 'error' in d:
+            l,_,_ = ax.errorbar(d['stellarMass'], d['numDens'], yerr=d['error'], 
+                         color=colors[i], ecolor=colors[i], alpha=0.9, capsize=0.0, fmt=symbols[i], lolims=ll)
+
+        lines.append(l)
+
+    legend1 = ax.legend(lines, [d['label'] for d in data],loc='upper right')
+    ax.add_artist(legend1)
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        for redshift in iterable(simRedshift):
+            # loop over redshifts if more than 1
+            print('UVLF: '+sP.simName+' (z=%.1f)' % redshift)
+            sP.setRedshift(redshift)
+
+            w = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+
+            # for each of the magnitude definitions/dust models/apertures, calculate UVLF and plot
+            for i, field in enumerate(acs):
+                # load
+                ac = auxCat(sP, fields=[field]) # AB apparent mag
+                band_ind = list(ac[field+'_attrs']['bands']).index(band)
+                print(field,ac[field].shape)
+                mags_apparent = np.squeeze( ac[field][w,band_ind] )
+                if absoluteMags:
+                    print('Have not compensated for the <1 transmission of the filter (and bandpass?) to get M_UV (WIP).')
+                    # should maybe avoid this apparent->abs conversion, and instead do rest-frame calculations based on idealized/tophat 
+                    # filters centered at e.g. 1500 angstroms
+                    xx = sP.units.apparentMagToAbsolute( mags_apparent )
+                else:
+                    xx = mags_apparent
+
+                # create luminosity function
+                normFac = sP.boxSizeCubicComovingMpc * binSize
+                xm, ym_i = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
+                ym = savgol_filter(ym_i,sKn,sKo)
+
+                print(xm)
+                print(ym)
+
+                # plot
+                label = sP.simName+' z=%.1f'%sP.redshift if i == 0 else ''
+                color = l.get_color() if i > 0 else None
+                l, = ax.plot(xm[3:], ym[3:], linestyles[i], color=color, lw=3.0, label=label)
+
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    sExtra = []
+    lExtra = []
+
+    legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
 def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
     """ HI mass function (number density of HI masses) at redshift zero. """
     acFields = ['Subhalo_Mass_100pkpc_HI','Subhalo_Mass_30pkpc_HI','Subhalo_Mass_HI']
@@ -2178,22 +2315,22 @@ def plots():
     #sPs.append( simParams(res=625, run='tng') )  
 
     #sPs.append( simParams(res=2160, run='tng') )  
-    #sPs.append( simParams(res=1080, run='tng') )  
+    sPs.append( simParams(res=1080, run='tng') )  
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    sPs.append( simParams(res=512, run='tng', variant='0000') )
-    sPs.append( simParams(res=512, run='tng', variant='5005') )
+    #sPs.append( simParams(res=512, run='tng', variant='0000') )
+    #sPs.append( simParams(res=512, run='tng', variant='5005') )
     #sPs.append( simParams(res=512, run='tng', variant='5006') )
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
-    if 0:
+    if 1:
         # testing
         pdf = PdfPages('globalComps_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        HIvsHaloMass(sPs, pdf, simRedshift=0.0)
+        uvLuminosityFunction(sPs, pdf, simRedshift=1.0, dataRedshift=8.0, absoluteMags=False)
         pdf.close()
         return
 

@@ -717,6 +717,8 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags):
 
         indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
+    invSubs = [0,0]
+
     if pSplit is not None:
         if 0:
             # split up subhaloIDs in round-robin scheme (equal number of massive/centrals per job)
@@ -845,9 +847,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
     bands += ['sdss_r']
     bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
-    bands += ['jwst_070w','jwst_090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
+    bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
-    if indivStarMags: bands = ['sdss_r']
+    #if indivStarMags: bands = ['sdss_r']
 
     nBands = len(bands)
 
@@ -1082,7 +1084,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         # prep: resolved dust attenuation uses simulated gas distribution in each subhalo
         loadFields = ['pos','metal','mass','NeutralHydrogenAbundance']
         gas = cosmo.load.snapshotSubset(sP, 'gas', fields=loadFields, indRange=indRange['gas'])
-        gas['GFM_Metals'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', indRange=indRange['gas']) # H only
+        gas['metals_H'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', indRange=indRange['gas']) # H only
 
         # prep: override 'Masses' with neutral hydrogen mass (model or snapshot value), free some memory
         if modelH:
@@ -1110,7 +1112,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         if not fullSubhaloSpectra: print(' Bands: [%s].' % ', '.join(bands))
 
         for i, subhaloID in enumerate(subhaloIDsTodo):
-            print('[%d] subhalo = %d' % (i,subhaloID))
+            #print('[%d] subhalo = %d' % (i,subhaloID))
             if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
@@ -2656,6 +2658,13 @@ fieldComputeFunctionMapping = \
                                          fullSubhaloSpectra=2, Nside='z-axis'),
 
    # light: redshifted/apparent
+   'Subhalo_StellarPhot_p07c_nodust_red'   : partial(subhaloStellarPhot,
+                                             iso='padova07', imf='chabrier', dust='none', redshifted=True),
+   'Subhalo_StellarPhot_p07c_cf00dust_red' : partial(subhaloStellarPhot,
+                                             iso='padova07', imf='chabrier', dust='cf00', redshifted=True),
+   'Subhalo_StellarPhot_p07c_cf00dust_res_conv_z_rad30pkpc_red' : partial(subhaloStellarPhot,
+                                             iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', rad=30.0, redshifted=True),
+
    'Particle_StellarPhot_p07c_nodust_red' : partial(subhaloStellarPhot, 
                                             iso='padova07', imf='chabrier', dust='none', indivStarMags=True, redshifted=True),
    'Particle_StellarPhot_p07c_cf00dust_red' : partial(subhaloStellarPhot, 
@@ -2667,8 +2676,8 @@ fieldComputeFunctionMapping = \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside=None, sizes=True, redshifted=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_z_red' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', sizes=True, redshifted=True),
-   'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc_red' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True, redshifted=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_z_red' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True, redshifted=True),
 
    # fullbox
    'Box_Grid_nHI'            : partial(wholeBoxColDensGrid,species='HI'),
