@@ -142,7 +142,7 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     minVal = np.nanmin(X)
     if skipZeros:
-        minVal = np.nanmin( X[X > 0.0] )
+        minVal = np.nanmin( X[X != 0.0] )
 
     if binSize is not None:
         nBins = round( (np.nanmax(X)-minVal) / binSize )
@@ -195,7 +195,7 @@ def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs
     more percentile thresholds is used. """
     minVal = np.nanmin(X)
     if skipZeros:
-        minVal = np.nanmin( X[X > 0.0] )
+        minVal = np.nanmin( X[X != 0.0] )
 
     if binSize is not None:
         nBins = round( (np.nanmax(X)-minVal) / binSize )
@@ -274,7 +274,7 @@ def running_histogram(X, nBins=100, binSize=None, normFac=None, skipZeros=False)
     """ Create a adaptive histogram of a (x) point set using some number of bins. """
     minVal = np.nanmin(X)
     if skipZeros:
-        minVal = np.nanmin( X[X > 0.0] )
+        minVal = np.nanmin( X[X != 0.0] )
 
     if binSize is not None:
         nBins = round( (np.nanmax(X)-minVal) / binSize )

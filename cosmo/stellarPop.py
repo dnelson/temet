@@ -719,7 +719,7 @@ class sps():
         assert np.min(ages_logGyr) >= -10.0
         assert np.max(ages_logGyr) < 2.0
         assert np.max(masses_logMsun) < 10.0
-        #assert np.min(masses_logMsun) > 1.5 # we have stars as small as 1.5 at least
+        assert np.min(masses_logMsun) > 1.5 # we have stars as small as 1.5 at least
 
         # convert input interpolant point into fractional 2D (+bandNum) array indices
         # Note: we are clamping at [0,size-1], so no extrapolation (nearest grid edge value is returned)
