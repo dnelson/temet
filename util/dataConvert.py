@@ -1454,16 +1454,17 @@ def convertGadgetICsToHDF5():
     savePath = '/u/dnelson/sims.TNG/L680n2048TNG_DM/output/snap_ics.hdf5'
 
     ptNum = 1
+    longids = True # 64 bit, else 32 bit
 
+    # reader header of first snapshot chunk
     nChunks = len( glob.glob(loadPath % '*') )
     print('Found [%d] chunks, loading...' % nChunks)
 
-    # reader header of first snapshot chunk
     with open(loadPath % 0,'rb') as f:
         header = f.read(260)
 
     npart      = struct.unpack('iiiiii', header[4:4+24])[ptNum]
-    mass       = struct.unpack('dddddd', header[28:28+48])
+    masstable  = struct.unpack('dddddd', header[28:28+48])
     scalefac   = struct.unpack('d', header[76:76+8])[0]
     redshift   = struct.unpack('d', header[84:84+8])[0]
     #nPartTot   = struct.unpack('iiiiii', header[100:100+24])[ptNum]
@@ -1474,6 +1475,15 @@ def convertGadgetICsToHDF5():
     Hubble     = struct.unpack('d', header[156:156+8])[0]
 
     assert nFiles == nChunks
+
+    if longids:
+        ids_type = 'q'
+        ids_size = 8
+        ids_dtype = 'int64'
+    else:
+        ids_type = 'i'
+        ids_size = 4
+        ids_dtype = 'int32'
 
     # nPartTot is wrong, has no highword, so read and accumulate manually
     nPartTot = 0
@@ -1493,7 +1503,7 @@ def convertGadgetICsToHDF5():
     numPartTot[ptNum] = nPartTot
     header.attrs['BoxSize'] = BoxSize
     header.attrs['HubbleParam'] = Hubble
-    header.attrs['MassTable'] = np.array(mass, dtype='float64')
+    header.attrs['MassTable'] = np.array(masstable, dtype='float64')
     header.attrs['NumFilesPerSnapshot'] = 1
     header.attrs['NumPart_ThisFile'] = numPartTot
     header.attrs['NumPart_Total'] = numPartTot
@@ -1504,11 +1514,14 @@ def convertGadgetICsToHDF5():
     header.attrs['Time'] = scalefac
 
     # create group and datasets
-    pt1 = fOut.create_group('PartType%d' % ptNum)
+    pt = fOut.create_group('PartType%d' % ptNum)
 
-    particle_pos = pt1.create_dataset('Coordinates', (nPartTot,3), dtype='float32' )
-    particle_vel = pt1.create_dataset('Velocities', (nPartTot,3), dtype='float32' )
-    particle_ids = pt1.create_dataset('ParticleIDs', (nPartTot,), dtype='int64' )
+    particle_pos = pt.create_dataset('Coordinates', (nPartTot,3), dtype='float32' )
+    particle_vel = pt.create_dataset('Velocities', (nPartTot,3), dtype='float32' )
+    particle_ids = pt.create_dataset('ParticleIDs', (nPartTot,), dtype=ids_dtype )
+
+    if masstable[ptNum] == 0:
+        particle_mass = pt.create_dataset('Masses', (nPartTot,), dtype='float32' )
 
     # load all snapshot IDs
     offset = 0
@@ -1525,15 +1538,22 @@ def convertGadgetICsToHDF5():
         start_pos = 268 + 0*npart_local
         start_vel = 276 + 12*npart_local
         start_ids = 284 + 24*npart_local
+        start_mass = 292 + (24+ids_size)*npart_local
 
         pos = struct.unpack('f' * npart_local*3, data[start_pos:start_pos + npart_local*12])
         vel = struct.unpack('f' * npart_local*3, data[start_vel:start_vel + npart_local*12])
-        ids = struct.unpack('q' * npart_local*1, data[start_ids:start_ids + npart_local*8])
+        ids = struct.unpack(ids_type * npart_local*1, data[start_ids:start_ids + npart_local*ids_size])
+
+        if masstable[ptNum] == 0:
+            mass = struct.unpack('f' * npart_local*1, data[start_mass:start_mass + npart_local*4])
 
         # write
         particle_pos[offset : offset+npart_local,:] = np.reshape( pos, (npart_local,3) )
         particle_vel[offset : offset+npart_local,:] = np.reshape( vel, (npart_local,3) )
         particle_ids[offset : offset+npart_local] = ids
+
+        if masstable[ptNum] == 0:
+            particle_mass[offset : offset+npart_local] = mass
 
         print('[%3d] Snap chunk has [%8d] particles, from [%10d] to [%10d].' % (i, npart_local, offset, offset+npart_local))
         offset += npart_local
