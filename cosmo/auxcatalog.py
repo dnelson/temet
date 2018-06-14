@@ -14,7 +14,7 @@ from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundi
   cenSatSubhaloIndices
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe, weighted_std_binned
 from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
-from util.rotation import rotateCoordinateArray, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 
 # generative functions
 from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN
@@ -1214,6 +1214,12 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 rotMatrices = [rots['edge-on'], rots['face-on'], rots['edge-on-smallest'],
                                rots['edge-on-random'], rots['identity']]
                 rotMatrices.extend(rotMatrices) # append to itself, now has (5 2d + 5 3d) = 10 elements
+            else:
+                # construct rotation matrices for each specified projection vector direction (align with z-axis)
+                rotMatrices = []
+                targetVec = np.array( [0,0,1], dtype='float32' )
+                for projNum in range(nProj):
+                    rotMatrices.append( rotationMatrixFromVec(projVecs[projNum,:], targetVec) )
 
             # loop over all different viewing directions
             for projNum in range(nProj):
@@ -1226,13 +1232,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     quant_z = gas['GFM_Metallicity'][i0g:i1g]
 
                     # compute line of sight integrated quantities (choose appropriate projection)
-                    if efrDirs:
-                        N_H, Z_g = pop.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, pos_stars, 
-                                                             projCen, rotMatrix=rotMatrices[projNum])
-                    else:
-                        projVec = projVecs[projNum,:]
-                        N_H, Z_g = pop.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, 
-                                                             pos_stars, projCen, projVec=projVec)
+                    N_H, Z_g = pop.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, pos_stars, 
+                                                         projCen, rotMatrix=rotMatrices[projNum])
                 else:
                     # set columns to zero
                     N_H = np.zeros( len(wValid), dtype='float32' )
