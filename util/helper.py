@@ -672,7 +672,7 @@ def getWhiteBlackColors(pStyle):
 
     return color1, color2, color3, color4
 
-def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None):
+def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None, numColors=None):
     """ Load a custom or built-in color table specified by ctName.
       valMinMax: required for some custom colormaps, and for some adjustments.
       plawScale: return the colormap modified as cmap_new = cmap_old**plawScale
@@ -680,6 +680,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         the numerical value cmapCenterVal, given the bounds valMinMax (e.g. zero, 
         for any symmetric colormap, say for positive/negative radial velocities)
       fracSubset: a 2-tuple in [0,1] e.g. [0.2,0.8] to use only part of the original colormap range
+      numColors: if not None, integer number of discrete colors of the desired colortable (matplotlib colormaps only)
     """
     if ctName is None: return None
 
@@ -689,7 +690,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
     # matplotlib
     if ctName in cm.cmap_d:
-        cmap = cm.get_cmap(ctName)
+        cmap = cm.get_cmap(ctName, lut=numColors)
 
     # cubehelix (with arbitrary parameters)
     # ...
