@@ -959,7 +959,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             numBins = pickle.loads(f['numBins'][()])
             vcut_vals = f['vcut_vals'][()]
 
-        print('Loading from cached [%s].' % cacheFile)
+        #print('Loading from cached [%s].' % cacheFile)
         return mdot, mstar, subhaloIDs, binConfig, numBins, vcut_vals
 
     # load radial mass fluxes auxCat
