@@ -15,7 +15,7 @@ from collections import OrderedDict
 
 from cosmo.load import groupCat, auxCat
 from util import simParams
-from util.helper import running_median
+from util.helper import running_median, logZeroNaN
 from plot.config import *
 
 def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], addHalfLightRad=None):
@@ -212,6 +212,94 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         lExtra = [r'stars',r'gas']
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower right')
+
+    # finish figure
+    finishFlag = False
+    if fig_subplot[0] is not None: # add_subplot(abc)
+        digits = [int(digit) for digit in str(fig_subplot[1])]
+        if digits[2] == digits[0] * digits[1]: finishFlag = True
+
+    if fig_subplot[0] is None or finishFlag:
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+def galaxyHISizeMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
+    """ Galaxy HI size-mass relation, at redshift zero. """
+
+    # plot setup
+    if fig_subplot[0] is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+    else:
+        # add requested subplot to existing figure
+        fig = fig_subplot[0]
+        ax = fig.add_subplot(fig_subplot[1])
+
+    cenSatSelect = 'cen'
+    ylabel = 'D$_{\\rm HI}$ [ log kpc ]'
+    if clean: ylabel += ' [ Halfmass Radius ] [ only centrals ]'
+    ax.set_ylabel(ylabel)
+
+    xlabel = 'M$_{\\rm HI}$ [ log M$_{\\rm sun}$ ]'
+    if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
+    ax.set_xlabel(xlabel)
+
+    ax.set_ylim([-0.7, 2.5])
+    ax.set_xlim([5.0, 11.5])
+
+    # observational points (Wang, J.+ 2016)
+    # todo
+    xx_obs = np.array([5.0, 11.5])
+    yy_obs = 0.506 * xx_obs - 3.293 # log pkpc
+
+    ax.plot(xx_obs, yy_obs, '-', color='black', label='Wang+ (2016)')
+    ax.plot(xx_obs, yy_obs + 0.06*3, ':', color='black') # 3sigma
+    ax.plot(xx_obs, yy_obs - 0.06*3, ':', color='black') # 3sigma
+
+    # loop over each fullbox run
+    for sP in sPs:
+        if sP.isZoom:
+            continue
+
+        print('HI Sizes: '+sP.simName)
+        sP.setRedshift(simRedshift)
+
+        # centrals only
+        w = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+
+        # x-axis: mass definition
+        fieldName = 'Subhalo_Mass_100pkpc_HI'
+        ac = sP.auxCat(fieldName)[fieldName]
+        xx = sP.units.codeMassToLogMsun( ac[w] )
+
+        # sizes
+        fieldName = 'Subhalo_Gas_HI_HalfRad'
+        ac = sP.auxCat(fieldName)[fieldName]
+        yy = logZeroNaN( sP.units.codeLengthToKpc( ac[w] ) )
+
+        # take median vs mass and smooth
+        xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=[5,16,50,84,95],skipZeros=True)
+
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+            sm = savgol_filter(sm,sKn,sKo)
+            pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+        label = sP.simName
+        if sP.redshift > 0.0: label += ' z=%.1f' % sP.redshift
+        l, = ax.plot(xm, ym, linestyles[0], lw=lw, label=label)
+
+        if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
+            ax.fill_between(xm, pm[0,:], pm[-1,:], color=l.get_color(), interpolate=True, alpha=0.05)
+            ax.fill_between(xm, pm[1,:], pm[-2,:], color=l.get_color(), interpolate=True, alpha=0.25)
+            #ax.fill_between(xm[1:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.3)
+
+        print(xm,sm)
+
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles, labels, loc='lower right')
 
     # finish figure
     finishFlag = False
@@ -480,7 +568,7 @@ def clumpSizes(sP):
     xx = xx[ww]
     yy_stars = yy_stars[ww]
 
-    xm_stars, ym_stars, _ = running_median(xx,yy_stars,binSize=0.2,skipZeros=True)
+    xm_stars, ym_stars, _ = running_median(xx,yy_stars,binSize=binSize,skipZeros=True)
 
     ax.plot(xm_stars[1:-1], ym_stars[1:-1], '-', lw=3.0, label=sP.simName)
 
@@ -493,7 +581,6 @@ def characteristicSizes(sP, vsHaloMass=False):
     """ Compare many different 'characteristic' halo/galaxy sizes as a function of mass. """
     from util.loadExtern import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
 
-    binSize = 0.2
     reBand = 'jwst_f115w' # for half light radii
 
     labels = {'stars'    : 'r$_{\\rm 1/2,\star}$',
