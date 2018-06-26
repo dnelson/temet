@@ -410,8 +410,8 @@ def plotCpuTimes():
     sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=910, run='tng') )
-    ##sPs.append( simParams(res=455, run='illustris') )
-    ##sPs.append( simParams(res=455, run='tng') )
+    #sPs.append( simParams(res=455, run='illustris') )
+    #sPs.append( simParams(res=455, run='tng') )
 
     sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
@@ -458,6 +458,7 @@ def plotCpuTimes():
 
         ax = fig.add_subplot(111)
         ax.set_xlim([0.0,1.0])
+        ax.tick_params(labeltop=False, labelright=True)
 
         ax.set_title('')
         ax.set_xlabel('Scale Factor')
@@ -633,8 +634,6 @@ def plotCpuTimes():
         for plotKey in plotKeys:
             if 'total' in plotKey:
                 continue
-
-            print(plotKey)
 
             if plotKey not in cpu.keys():
                 continue # e.g. hydro fields in DMO runs

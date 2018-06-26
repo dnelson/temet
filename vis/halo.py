@@ -189,6 +189,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     projParams  = {}            # dictionary of parameters associated to this projection type
     rotation    = None          # 'face-on', 'edge-on', or None
     mpb         = None          # use None for non-movie/single frame
+    remapRatio  = None          # [x,y,z] periodic->cuboid remapping ratios, always None for single halos
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:
@@ -289,6 +290,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     projType    = 'ortho'         # projection type, 'ortho', 'equirectangular'
     projParams  = {}              # dictionary of parameters associated to this projection type
     rotation    = None            # 'face-on', 'edge-on', or None
+    remapRatio  = None            # [x,y,z] periodic->cuboid remapping ratios, always None for single halos
 
     # defaults (global plot configuration options)
     class plotConfigDefaults:

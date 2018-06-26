@@ -541,16 +541,16 @@ def barnes_check3():
     from numpy.polynomial.polynomial import polyfit
 
     result1 = linregress(x[::-1],y[::-1])
-    print('Slope and intercept: %g, %g' % (result1.slope,result1.intercept))
+    print('Slope and intercept: %g, %g (linregress)' % (result1.slope,result1.intercept))
 
     sigma = ((y-y_down) + (y_up-y)) / 2 # avg
     weights = 1/sigma
     result2 = polyfit(x, y, deg=1, w=weights)
-    print('Slope and intercept: %g, %g' % (result2[1], result2[0]))
+    print('Slope and intercept: %g, %g (polyfit avg)' % (result2[1], result2[0]))
 
     sigma_max = np.max( np.vstack( ((y-y_down), (y_up-y)) ), axis=0 ) # max
     result3 = polyfit(x, y, deg=1, w=1/sigma_max)
-    print('Slope and intercept: %g, %g' % (result3[1], result3[0]))
+    print('Slope and intercept: %g, %g (polyfit max)' % (result3[1], result3[0]))
 
     def error_function(params, x, y, y_err_up, y_err_down):
         y_fit = params[1]*x + params[0]
@@ -575,6 +575,15 @@ def barnes_check3():
 
     print('Slope and intercept: %g, %g (data)' % (result5[1], result5[0]))
 
+    # requires: linfit.py
+    #sigmay = y_up-y
+    #result6, covarmat, info6 = linfit(x, y, sigmay=sigmay, relsigma=False, return_all=True)
+    #print('Slope and intercept: %g, %g (error: %g, %g)' % (result6[0], result6[1],info6.fiterr[0],info6.fiterr[1]))
+
+    #sigmay_obs = ((obs_y-obs_y_down) + (obs_y_up-obs_y)) / 2 # avg
+    #result7, covarmat, info7 = linfit(obs_x, obs_y, sigmay=sigmay_obs, relsigma=False, return_all=True)
+    #print('Slope and intercept: %g, %g (error: %g, %g) (data)' % (result7[0], result7[1],info7.fiterr[0],info7.fiterr[1]))
+
     # plot
     fig = plt.figure(figsize=(14,10))
     ax = fig.add_subplot(111)
@@ -592,6 +601,7 @@ def barnes_check3():
     ax.plot(xx, result3[1]*xx + result3[0], '-', label='polyfit weighted max symmetric error (%.3f)' % result3[1])
     ax.plot(xx, result4[1]*xx + result4[0], '-', label='leastsq weighted asymmetric error (%.3f)' % result4[1])
     ax.plot(xx, result5[1]*xx + result5[0], '--', color='black', label='obs-fit leastsq weighted asymmetric error (%.3f)' % result5[1])
+    #ax.plot(xx, result6[0]*xx + result6[1], '-', label='linfit (%.3f)' % result6[0])
 
     ax.legend()
     fig.tight_layout()    
