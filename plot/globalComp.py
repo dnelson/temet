@@ -14,7 +14,7 @@ from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroNaN, iterable
 from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
 from cosmo.util import validSnapList, periodicDists
-from plot.sizes import galaxySizes
+from plot.sizes import galaxySizes, galaxyHISizeMass
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.general import plotPhaseSpace2D
 from plot.config import *
@@ -2302,7 +2302,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -2315,7 +2315,7 @@ def plots():
     #sPs.append( simParams(res=625, run='tng') )  
 
     #sPs.append( simParams(res=2160, run='tng') )  
-    sPs.append( simParams(res=1080, run='tng') )  
+    #sPs.append( simParams(res=1080, run='tng') )  
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
@@ -2330,7 +2330,7 @@ def plots():
     if 1:
         # testing
         pdf = PdfPages('globalComps_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        uvLuminosityFunction(sPs, pdf, simRedshift=1.0, dataRedshift=8.0, absoluteMags=False)
+        galaxyHISizeMass(sPs, pdf, simRedshift=0.0)
         pdf.close()
         return
 
