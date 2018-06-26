@@ -255,9 +255,9 @@ def TNG_remapImages(res, redshift=0.0, conf=0, variant=None):
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = nPixels
-        colorbars  = False
+        colorbars  = True
 
-        saveFilename = './boxImage_%s_z%.1f_%s-%s_axes%d%d_ratio-%g-%g-%g.png' % \
+        saveFilename = './boxImage_%s_z%.1f_%s-%s_axes%d%d_ratio-%g-%g-%g.pdf' % \
           (sP.simName,redshift,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],remapRatio[0],remapRatio[1],remapRatio[2])
 
     renderBox(panels, plotConfig, locals())

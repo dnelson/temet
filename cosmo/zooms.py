@@ -19,6 +19,7 @@ from cosmo.perf import loadCpuTxt
 from util.simParams import simParams
 from util.helper import logZeroNaN
 from vis.halo import renderSingleHalo
+from plot.config import *
 
 def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 
@@ -110,7 +111,6 @@ def check_contamination():
     # plot contamination profiles
     fig = plt.figure(figsize=(14,10))
     ax = fig.add_subplot(111)
-    lw = 2.5
     ylim = [-4.0, 0.0]
 
     ax.set_xlabel('Distance [ckpc/h]')
@@ -119,12 +119,12 @@ def check_contamination():
     ax.set_xlim([0.0, rr.max()])
     ax.set_ylim(ylim)
 
-    ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw-1, alpha=0.5, label='10%')
-    ax.plot([0,rr[-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw-1, alpha=0.2, label='1%')
+    ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw, alpha=0.5, label='10%')
+    ax.plot([0,rr[-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw, alpha=0.2, label='1%')
     ax.plot(rr, logZeroNaN(r_frac), '-', lw=lw, label='by number')
     ax.plot(rr, logZeroNaN(r_massfrac), '-', lw=lw, label='by mass')
 
-    ax.plot([min_dist_lr,min_dist_lr], ylim, ':', color='#555555', lw=lw-1, alpha=0.5, label='closest LR' )
+    ax.plot([min_dist_lr,min_dist_lr], ylim, ':', color='#555555', lw=lw, alpha=0.5, label='closest LR' )
 
     ax2 = ax.twiny()
     ax2.set_xlabel('Distance [$R_{\\rm 200,crit}$]')
@@ -136,28 +136,55 @@ def check_contamination():
     fig.savefig('contamination_profile_%s_%d.pdf' % (sPz.simName,sPz.snap))
     plt.close(fig)
 
-    # time evo of convex hull volume
-    if 0:
-        for snap in range(sPz.snap,0,-1):
-            sPz.setSnap(snap)
-            x = snapshotSubset(sPz, 'dm', 'pos')
-            hull = ConvexHull(x)
-            print('[%3d] z = %5.2f high-res volume frac = %.3f%%' % (snap,sPz.redshift,hull.volume/sP.boxSize**3*100))
+def compare_contamination():
+    """ Compare contamination radial profiles between runs. """
+    zoomRes = 13
+    hInds = [8,50,51,90]
+    variants = ['sf2','sf3','sf4']
 
-            # plot points scatter
-            continue # disable
-            fig = plt.figure(figsize=(16,16))
-            ax = fig.add_subplot(111)
+    # start plot
+    fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+    ylim = [-4.0, 0.0]
 
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_xlim([0,sP.boxSize])
-            ax.set_ylim([0,sP.boxSize])
-            ax.plot(x[:,0], x[:,1], '.')
+    ax = fig.add_subplot(111)
 
-            fig.tight_layout()    
-            fig.savefig('check_zoom-%d.png' % snap)
-            plt.close(fig)
+    ax.set_xlabel('Distance [$R_{\\rm 200,crit}$]')
+    ax.set_ylabel('Low-res DM Contamination Fraction [log]')
+    ax.set_xlim([0.0, 5.0])
+    ax.set_ylim(ylim)
+
+    # loop over hInd/variant combination
+    for hInd in hInds:
+        c = ax._get_lines.prop_cycler.next()['color']
+
+        for j, variant in enumerate(variants):
+            # load zoom: group catalog
+            print(hInd,variant)
+            sPz = simParams(res=zoomRes, run='tng_zoom_dm', hInd=hInd, redshift=0.0, variant=variant)
+
+            halo_zoom = groupCatSingle(sPz, haloID=0)
+            halos_zoom = groupCat(sPz, fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
+            subs_zoom = groupCat(sPz, fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
+
+            # load contamination statistics and plot
+            min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
+            rr /= halo_zoom['Group_R_Crit200']
+            min_dist_lr /= halo_zoom['Group_R_Crit200']
+
+            l, = ax.plot(rr, logZeroNaN(r_frac), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
+            #l, = ax.plot(rr, logZeroNaN(r_massfrac), '--', lw=lw, color=c)
+
+            ax.plot([min_dist_lr,min_dist_lr], [ylim[0],ylim[0]+0.5], linestyles[j], color=c, lw=lw, alpha=0.5)
+
+    ax.plot([0,rr[-1]], [-1.0, -1.0], '-', color='#888888', lw=lw-1.0, alpha=0.4, label='10%')
+    ax.plot([0,rr[-1]], [-2.0, -2.0], '-', color='#bbbbbb', lw=lw-1.0, alpha=0.4, label='1%')
+    ax.plot([1.0,1.0], ylim, '-', color='#bbbbbb', lw=lw-1.0, alpha=0.2)
+    ax.plot([2.0,2.0], ylim, '-', color='#bbbbbb', lw=lw-1.0, alpha=0.2)
+
+    ax.legend(loc='upper left')
+    fig.tight_layout()    
+    fig.savefig('contamination_comparison_L%d_h%s_%s.pdf' % (zoomRes,'-'.join([str(h) for h in hInds]),'-'.join(variants)))
+    plt.close(fig)
 
 def sizefacComparison():
     """ Compare SizeFac 2,3,4 runs (contamination and CPU times) in the testing set. """
@@ -195,7 +222,6 @@ def sizefacComparison():
 
     # start plot
     fig = plt.figure(figsize=(22,12))
-    lw = 2.5
 
     for rowNum in [0,1]:
         xlabel = 'Halo ID' if rowNum == 0 else 'Halo Mass [log M$_{\\rm sun}$]'
