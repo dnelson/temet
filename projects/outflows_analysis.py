@@ -602,7 +602,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
         binConfigs += [binConfig2,binConfig3,binConfig4,binConfig5,binConfig6]
 
-        # fine-binning of vrad, and binning of angular theta
+        # fine-binning of vrad
         binConfig7 = OrderedDict()
         binConfig7['rad'] = binConfig1['rad']
         binConfig7['vrad'] = np.linspace(-500, 3500, 401) # 10 km/s spacing
@@ -612,6 +612,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         binConfig8['temp'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
         binConfig8['vrad'] = np.linspace(-500, 3500, 81) # 50 km/s spacing
 
+        # binning of angular theta
         binConfig9 = OrderedDict()
         binConfig9['rad'] = binConfig1['rad']
         binConfig9['vrad'] = binConfig1['vrad']
@@ -736,7 +737,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     # load snapshot
     fieldsLoad = ['Coordinates','Velocities','Masses']
     if ptType == 'gas':
-        fieldsLoad += ['temp','z_solar','numdens']
+        fieldsLoad += ['temp','z_solar','numdens'] # TODO: option to set temp for eEOS gas to some non-effective value...
         fieldsLoad += ['StarFormationRate'] # for rotation
 
     particles = sP.snapshotSubset(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange[ptType])
@@ -945,11 +946,16 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     if ptType == 'Wind':
         dsetName = '%s.%s' % (firstQuant,secondQuant)
 
+    cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,sP.snap)
+
+    # overrides (after cache filename)
     if dsetName == 'rad.rad.vrad':
         dsetName = 'rad.vrad' # fine-grained vrad sampling (need to differentiate from '%s.%s.temp' case above, could be cleaned up)
+    if dsetName == 'rad.vrad.vrad':
+        dsetName = 'rad.vrad' # fine-grained vrad sampling (e.g. 1D plot of outflow rates vs vrad)
+        thirdQuant = None
 
     # quick file cache, since these auxCat's are large
-    cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,sP.snap)
     if isfile(cacheFile):
         with h5py.File(cacheFile,'r') as f:
             mdot = f['mdot'][()]
@@ -966,10 +972,14 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     ac = sP.auxCat(acField)
 
     # locate dataset we want and its binning configuration
+    selNum = None
+
     for key, value in ac[acField + '_attrs'].iteritems():
         if isinstance(value,basestring):
             if value == dsetName:
                 selNum = int( key.split('_')[1] )
+
+    assert selNum is not None, 'Dataset not found.'
 
     binConfig = OrderedDict()
     numBins   = OrderedDict()
@@ -989,7 +999,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     for i, field in enumerate(binConfig):
         assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
 
-    if secondQuant == 'vrad':
+    if secondQuant == 'vrad' and dsetName != 'rad.vrad':
         # standard case, i.e. rad.vrad.* datasets
 
         # collapse (sum over) temperature bins, since we don't care here (dsetName == 'rad.vrad.temp')
