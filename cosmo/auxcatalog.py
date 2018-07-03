@@ -17,7 +17,7 @@ from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 
 # generative functions
-from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN
+from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
 
 """ Relatively 'hard-coded' analysis decisions that can be changed. For reference, they are attached 
     as metadata attributes in the auxCat file. """
@@ -1940,7 +1940,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         assert len(proj2D) == 2
         proj2Daxis, proj2Ddepth = proj2D
 
-        if proj2Daxis == 0: p_inds = [1,2,3]
+        if proj2Daxis == 0: p_inds = [1,2,3] # seems wrong (unused), should be e.g. [1,2,0]
         if proj2Daxis == 1: p_inds = [0,2,1]
         if proj2Daxis == 2: p_inds = [0,1,2]
         if isinstance(proj2Daxis,basestring):
@@ -2094,7 +2094,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
         if proj2Daxis in [0,1,2]:
             # load component along one of the cartesian axes (line of sight direction)
-            fieldsLoad.append('vel_%s' % ['x','y','z'][proj2Daxis])
+            vel_key = 'vel_%s' % ['x','y','z'][proj2Daxis]
+            fieldsLoad.append(vel_key)
             gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'], sq=True)[:,proj2Daxis]
         else:
             # load full velocity 3-vector for later, per-subhalo rotation
@@ -2309,9 +2310,10 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
                 if ptProperty in ['losvel','losvel_abs']:
                     if rotMatrix is None:
-                        p_vel   = sP.units.particleCodeVelocityToKms( particles['Velocities'][i0:i1][wValid] )
-                        p_vel   = p_vel[:,p_inds[2]]
-                        haloVel = sP.units.subhaloCodeVelocityToKms( gc['SubhaloVel'][subhaloID] )[p_inds[2]]
+                        p_vel   = sP.units.particleCodeVelocityToKms( particles[vel_key][i0:i1][wValid] )
+                        assert p_vel.ndim == 1 # otherwise, do the following (old)
+                        #p_vel   = p_vel[:,p_inds[2]]
+                        haloVel = sP.units.subhaloCodeVelocityToKms( gc['SubhaloVel'][subhaloID] )#[p_inds[2]]
                     else:
                         p_vel   = sP.units.particleCodeVelocityToKms( np.squeeze(particles['Velocities'][i0:i1,:][wValid,:]) )
                         haloVel = sP.units.subhaloCodeVelocityToKms( gc['SubhaloVel'][subhaloID,:] )
@@ -2636,6 +2638,8 @@ fieldComputeFunctionMapping = \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_efr_rad30pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),   
+   'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),   
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \
@@ -2829,22 +2833,25 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,scope='fof',proj2D=[2,None]),
    'Subhalo_RadProfile2Dz_FoF_Gas_LOSVelSigma_sfrWt' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,weighting='sfr',scope='fof',proj2D=[2,None]),
+   'Subhalo_RadProfile2Dedgeon_FoF_Gas_LOSVelSigma_sfrWt' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,weighting='sfr',scope='fof',proj2D=['edge-on',None]),
    'Subhalo_RadProfile2Dfaceon_FoF_Gas_LOSVelSigma_sfrWt' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,weighting='sfr',scope='fof',proj2D=['face-on',None]),
 
    # outflows/inflows
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : \
-     partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
-   'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind' : \
-     partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz'),
-   'Subhalo_RadialMassFlux_Global_Gas' : \
-     partial(instantaneousMassFluxes,ptType='gas',scope='global'),
-   'Subhalo_RadialMassFlux_Global_Wind' : \
-     partial(instantaneousMassFluxes,ptType='wind',scope='global'),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz'),
+   'Subhalo_RadialMassFlux_Global_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='global'),
+   'Subhalo_RadialMassFlux_Global_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='global'),
 
-    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',thirdQuant=None),
-    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',thirdQuant=None),
-    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',thirdQuant=None),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_MgII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Mg II mass'),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_NaI' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Na I mass'),
+
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',thirdQuant=None),
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',thirdQuant=None),
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',thirdQuant=None),
+
+   'Subhalo_OutflowVelocity_SubfindWithFuzz' : partial(outflowVelocities),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 
