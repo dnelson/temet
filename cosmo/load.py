@@ -25,8 +25,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       onlyMeta     : load only attributes and coverage information 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
 
-    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0] in sP.data:
-        return sP.data['ac_'+iterable(fields)[0]].copy() # cached, avoid view
+    epStr = '_ep' if expandPartial else ''
+    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0]+epStr in sP.data:
+        return sP.data['ac_'+iterable(fields)[0]+epStr].copy() # cached, avoid view
 
     def _comparatorListInds(fieldName):
         # transform e.g. 'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_13' into 13 (an integer) for sorting comparison
@@ -252,13 +253,13 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     new_data = np.zeros( shape, dtype=r[field].dtype )
                     new_data.fill(np.nan)
                     new_data[r['subhaloIDs'],...] = r[field]
-                    print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].size,new_data.size,field))
+                    print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
                     r[field] = new_data
 
             # cache
-            sP.data['ac_'+field] = {}
+            sP.data['ac_'+field+epStr] = {}
             for key in r:
-                sP.data['ac_'+field][key] = r[key]
+                sP.data['ac_'+field+epStr][key] = r[key]
 
             continue
 

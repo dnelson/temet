@@ -21,7 +21,7 @@ from util import simParams
 from util.helper import running_median, logZeroNaN, nUnique, loadColorTable, sgolay2d, sampleColorTable
 from plot.config import *
 from plot.general import plotHistogram1D, plotPhaseSpace2D
-from plot.cosmoGeneral import quantMedianVsSecondQuant
+from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from projects.outflows_analysis import halo_selection, loadRadialMassFluxes
 from tracer.tracerMC import match3
 
@@ -926,7 +926,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                 plt.setp(legend2.get_texts(), color='white')
 
                 # colorbar(s)
-                if len(mStarBins) > 1:
+                if len(mStarBins) > 1 or yAxis != 'vrad':
                     # some panels with each colorbar
                     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
                     if yAxis == 'vrad' and i % 2 == 1:
@@ -1563,8 +1563,8 @@ def paperPlots(sPs=None):
     # --------------------------------------------------------------------------------------------------------------------------------------
 
     if 0:
-        # net outflow rates (2D): dependence on radius and vcut, for four stellar mass bins
-        mStarBins = [ [8.7,9.3],[9.9,10.1],[10.3,10.7],[10.8,11.2] ]
+        # net outflow rates (2D): dependence on radius and vcut, for one/four stellar mass bins
+        mStarBins = [ [9.9,10.1] ] #[ [8.7,9.3],[9.9,10.1],[10.3,10.7],[10.8,11.2] ]
         clims     = [ [-3.0,2.0] ]
         config    = {'stat':'mean', 'skipZeros':False}
 
@@ -1605,7 +1605,7 @@ def paperPlots(sPs=None):
 
             gasOutflowRatesVsQuantStackedInMstar(TNG50, quant=quant, mStarBins=mStarBinsLoc, redshifts=redshifts)
 
-    if 1:
+    if 0:
         # explore: net 2D outflow rates/mass loadings, for several M* bins in three different configurations:
         #  (i) multi-panel, one per M* bin, at one redshift
         #  (ii) single-panel, many contours for each M* bin, at one redshift
@@ -1613,9 +1613,11 @@ def paperPlots(sPs=None):
         # 2D here render binConfigs: 2,3,4, 5,6, 7,8,9,10,11 (haven't actually used #1...)
         for eta in [True,False]:
             # special case:
+            z_contours = [-0.5-1*eta]
+
             gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, clims=[[-3.0,2.0-1*eta]], eta=eta)
             gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=[-0.5, 0.0, 0.5], eta=eta)
-            gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=[0.0], redshifts=redshifts, eta=eta)
+            gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=z_contours, redshifts=redshifts, eta=eta)
 
             # set contour levels
             if eta:
@@ -1624,7 +1626,7 @@ def paperPlots(sPs=None):
                 contours = [-1.0, -0.5, 0.0] # msun/yr
 
             optsSets = [ {'mStarBins':mStarBinsSm, 'contours':contours, 'eta':eta}, # multi-contour, single redshift
-                         {'mStarBins':mStarBinsSm, 'contours':[0.0], 'redshifts':redshifts, 'eta':eta},  # single-contour, multi-redshift
+                         {'mStarBins':mStarBinsSm, 'contours':z_contours, 'redshifts':redshifts, 'eta':eta},  # single-contour, multi-redshift
                          {'mStarBins':mStarBinsSm, 'clims':[[-3.0,0.5-1*eta]], 'eta':eta} ] # no contours, instead many panels
 
             for opts in optsSets:
@@ -1646,13 +1648,13 @@ def paperPlots(sPs=None):
         if sPs is None: sPs = [TNG50]
         cenSatSelect = 'cen'
 
-        for field in radProfileFields:
+        for field in ['Gas_LOSVelSigma_sfrWt']: #radProfileFields:
             pdf = PdfPages('radprofiles_%s_%s_%d_%s.pdf' % (field,sPs[0].simName,sPs[0].snap,cenSatSelect))
 
-            for projDim in ['2Dz','3D']: # ['2Dedgeon']
+            for projDim in ['2Dz','3D','2Dfaceon','2Dedgeon']:
                 if projDim == '3D' and '_LOSVel' in field: continue
 
-                for xaxis in ['log_pkpc','pkpc','log_rvir','rvir','log_rhalf','rhalf','log_re','re']:
+                for xaxis in ['re']: #['log_pkpc','pkpc','log_rvir','rvir','log_rhalf','rhalf','log_re','re']:
                     stackedRadialProfiles(sPs, field, xaxis=xaxis, cenSatSelect='cen', 
                                           projDim=projDim, mStarBins=mStarBins, pdf=pdf)
             pdf.close()
@@ -1686,4 +1688,61 @@ def paperPlots(sPs=None):
 
         return sPs
 
+    # exploration: eta_M vs stellar/halo mass, split by everything else
+    if 1:
+        sPs = [TNG50]
+
+        css = 'cen'
+        #quants = quantList(wCounts=False, wTr=False, wMasses=True)
+        quants = ['ssfr']
+        priQuant = 'vout_99_all' #'etaM_100myr_10kpc_0kms'
+        sLowerPercs = [10,50]
+        sUpperPercs = [90,50]
+
+        for xQuant in ['mstar_30pkpc','mhalo_200_log']:
+            # individual plot per y-quantity:
+            pdf = PdfPages('medianTrends_%s_x=%s_%s_slice=%s.pdf' % (sPs[0].simName,xQuant,css,priQuant))
+            for yQuant in quants:
+                quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=priQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+            pdf.close()
+
+            # individual plot per s-quantity:
+            pdf = PdfPages('medianTrends_%s_x=%s_%s_y=%s.pdf' % (sPs[0].simName,xQuant,css,priQuant))
+            for sQuant in quants:
+                quantMedianVsSecondQuant(sPs, pdf, yQuants=[priQuant], xQuant=xQuant, cenSatSelect=css,
+                                         sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs)
+
+            pdf.close()
+
+    # exporation: 2d histos
+    if 0:
+        sP = TNG50
+        figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
+        xQuants = ['mstar_30pkpc_log','mhalo_200_log']
+        cQuant = 'etaM_100myr_10kpc_0kms'
+
+        yQuants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo_volwt','mass_z']
+        yQuants2 = ['surfdens1_stars','Z_stars','color_B_gr','size_stars','Krot_oriented_stars2','Krot_oriented_gas2']
+        yQuants3 = ['nh_halo_volwt','fgas_r200','pratio_halo_volwt','BH_CumEgy_low','M_BH_actual','_dummy_']
+
+        yQuantSets = [yQuants1, yQuants2, yQuants3]
+
+        for i, xQuant in enumerate(xQuants):
+            yQuants3[-1] = xQuants[1-i] # include the other
+
+            for j, yQuants in enumerate(yQuantSets):
+                params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
+
+                pdf = PdfPages('histo2d_x=%s_set-%d_%sb.pdf' % (xQuant,j,sP.simName))
+                fig = plt.figure(figsize=figsize_loc)
+                quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[2], fig_subplot=[fig,323], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[3], fig_subplot=[fig,324], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[4], fig_subplot=[fig,325], **params)
+                quantHisto2D(sP, pdf, yQuant=yQuants[5], fig_subplot=[fig,326], **params)
+                pdf.close()
+
+    # TODO: custom plots of vout vs. M* (percs/rad variations) (to eventually include obs data points)
     # TODO: eta_E (energy), eta_Z (metal)

@@ -87,6 +87,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur']
 
+    quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms','eta_M_100myr_0kpc_50kms',
+                      'vout_50_10kpc', 'vout_50_all', 'vout_90_20kpc', 'vout_99_20kpc']
+
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
     #         'zform_ma5', 'zform_poly7'
@@ -116,7 +119,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # assembly sub-subset of quantities as requested
     if wCounts: quants1 = [None] + quants1
 
-    quantList = quants1 + quants2 + quants2_mhd + quants3 + quants4 + quants5 + quants_misc + quants_color
+    quantList = quants1 + quants2 + quants2_mhd + quants3 + quants4 + quants5 + quants_misc + quants_color + quants_outflow
     if wTr: quantList += trQuants
     if wMasses: quants1 += quants_mass
     if onlyTr: quantList = trQuants
@@ -161,6 +164,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             fieldName = 'SubhaloMassInRadType'
             radStr = '2'
 
+        if sP.boxSize < 50000: minMax = np.array(minMax) - 1.0
+
         # stellar/gas mass (within 1 or 2 r1/2stars), optionally already returned in log
         gc = groupCat(sP, fieldsSubhalos=[fieldName])
         vals = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum(partName)] )
@@ -184,6 +189,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = logZeroNaN(vals)
 
         minMax = [9.0, 12.0]
+        if sP.boxSize < 50000: minMax = [8.0, 11.0]
         label = 'M$_{\\rm \star}(<30pkpc)$ [ log M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm \star}$ [ log M$_{\\rm sun}$ ]'
 
@@ -209,6 +215,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = logZeroNaN(vals)
 
         minMax = [8.0, 11.5]
+        if sP.boxSize < 50000: minMax = [7.0, 10.5]
         label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr2
 
     if quant in ['mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
@@ -238,7 +245,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = logZeroNaN(vals)
 
         minMax = [11.0, 15.0]
-        if '_500' in quant: minMax = [11.0, 15.0]
+        if sP.boxSize < 50000: minMax = [10.0, 13.5]
         label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ log M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
@@ -306,6 +313,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if speciesStr == 'AllGas_Metal':
             minMax = [7.0, 9.5]
             if tight: minMax = [6.5, 11.0]
+
+        minMax[0] -= sP.redshift/2
+        minMax[1] -= sP.redshift/2
 
     if quant in ['sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
                  'ssfr_30pkpc_instant','ssfr_30pkpc_10myr','ssfr_30pkpc_50myr','ssfr_30pkpc_100myr']:
@@ -383,8 +393,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'log sSFR [ Gyr$^{-1}$ ]'
         if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
 
-        minMax = [-3.0, 0.0]
-        if tight: minMax = [-3.5, 0.0]
+        minMax = [-3.0, 0.5]
+        if tight: minMax = [-3.5, 0.5]
+
+        minMax[0] += sP.redshift/2
+        minMax[1] += sP.redshift/2
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
@@ -453,6 +466,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [1.0, 2.8]
         if tight: minMax = [1.4, 3.0]
 
+        minMax[0] -= sP.redshift/4
+        minMax[1] -= sP.redshift/4
+
     if quant == 'size_stars':
         gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
         vals = sP.units.codeLengthToKpc( gc['subhalos'][:,sP.ptNum('stars')] )
@@ -505,6 +521,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if quant == 'fgas2': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <2r$_{\star,1/2})$'
         minMax = [-3.5,0.0]
         if tight: minMax = [-4.0, 0.0]
+
+        minMax[0] += sP.redshift/2
 
     if quant in ['stellarage']:
         ageType = '4pkpc_rBandLumWt'
@@ -706,7 +724,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_%s_%s_%s' % (rtStr,selStr,wtStr)
 
-        ac = auxCat(sP, fields=[fieldName], searchExists=True)
+        ac = auxCat(sP, fields=[fieldName])
         vals = ac[fieldName]
 
         if 'pratio_' in quant: label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (%s)' % selDesc
@@ -730,7 +748,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Ptot_%s_halo' % (selStr)
 
-        ac = auxCat(sP, fields=[fieldName], searchExists=True)
+        ac = auxCat(sP, fields=[fieldName])
         vals = ac[fieldName]
 
         if not clean:
@@ -830,6 +848,55 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         takeLog = False
         minMax = bandMagRange(bands,tight=tight)
         label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
+
+    if quant[0:5] == 'etaM_':
+        # outflows: mass loading factors
+        _, sfr_timescale, rad, vcut = quant.split('_')
+
+        fieldName = 'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-%s' % sfr_timescale
+        ac = auxCat(sP, fields=[fieldName], expandPartial=True)
+        
+        # figure out which (radius,vcut) selection
+        radBins = ac[fieldName + '_attrs']['rad']
+        vcutVals = ac[fieldName + '_attrs']['vcut_vals']
+        radBinsMid = (radBins[:-1] + radBins[1:]) / 2
+
+        radInd = list(radBinsMid).index( float(rad.replace('kpc','')) )
+        vcutInd = list(vcutVals).index( float(vcut.replace('kms','')) )
+
+        vals = ac[fieldName][:,radInd,vcutInd]
+
+        minMax = [-1.0, 1.5]
+        if tight: minMax = [-1.5, 2.5]
+        label = 'Mass Loading $\eta_{\\rm M}$ (%s,v>%s) [ log ]' % (rad,vcut)
+
+    if quant[0:5] == 'vout_':
+        # outflows: [mass/ion]-weighted outflow velocity [physical km/s], e.g. 50,75,90 values
+        _, perc, rad = quant.split('_')
+
+        fieldName = 'Subhalo_OutflowVelocity_SubfindWithFuzz'
+        ac = auxCat(sP, fields=[fieldName], expandPartial=True)
+
+        # figure out which (radius,perc) selection
+        radBins = ac[fieldName + '_attrs']['rad']
+        percs = ac[fieldName + '_attrs']['percs']
+
+        if rad == 'all':
+            # last bin accumulates across all radii
+            radInd = radBins.size - 1
+        else:
+            # all other bins addressed by their midpoint (e.g. '10kpc')
+            radBinsMid = (radBins[:-1] + radBins[1:]) / 2
+            radInd = list(radBinsMid).index( float(rad.replace('kpc','')) )
+
+        percInd = list(percs).index(int(perc))
+
+        vals = ac[fieldName][:,radInd,percInd]
+
+        minMax = [0, 800]
+        if tight: minMax = [0, 1000]
+        takeLog = False
+        label = 'Outflow Velocity $v_{\\rm out,%s}$ (r = %s) [ km/s ]' % (perc,rad)
 
     if quant in ['M_BH','M_BH_actual']:
         # either dynamical (particle masses) or "actual" BH masses excluding gas reservoir
@@ -1152,6 +1219,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # average gas temperature in halo (always mass weighted)
         minMax = [4.0, 8.0]
         if tight: minMax = [4.5, 7.5]
+
+        minMax[1] -= sP.redshift/4
 
         wtStr = 'massWt' if not '_volwt' in quant else 'volWt'
         fieldName = 'Subhalo_Temp_halo_%s' % wtStr
