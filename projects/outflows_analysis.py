@@ -850,6 +850,8 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         p_local['rad']  = sP.units.codeLengthToKpc( sP.periodicDists(haloPos, p_local['Coordinates']) )
         p_local['vrad'] = sP.units.particleRadialVelInKmS( p_local['Coordinates'], p_local['Velocities'], haloPos, haloVel )
 
+        assert particles['Masses'].shape == particles[massField].shape
+
         # compute weight, i.e. the halo-centric quantity 'radial mass flux'
         massflux = p_local['vrad'] * p_local[massField] # codemass km/s
 
@@ -959,6 +961,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,sP.snap)
 
     # overrides (after cache filename)
+    dsetNameOrig = dsetName
     if dsetName == 'rad.rad.vrad':
         dsetName = 'rad.vrad' # fine-grained vrad sampling (need to differentiate from '%s.%s.temp' case above, could be cleaned up)
     if dsetName == 'rad.vrad.vrad':
@@ -975,7 +978,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             numBins = pickle.loads(f['numBins'][()])
             vcut_vals = f['vcut_vals'][()]
 
-        print('Loading from cached [%s].' % cacheFile)
+        #print('Loading from cached [%s].' % cacheFile)
         return mdot, mstar, subhaloIDs, binConfig, numBins, vcut_vals
 
     # load radial mass fluxes auxCat
@@ -1009,7 +1012,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     for i, field in enumerate(binConfig):
         assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
 
-    if secondQuant == 'vrad' and dsetName != 'rad.vrad':
+    if secondQuant == 'vrad' and dsetNameOrig != 'rad.vrad.vrad':
         # standard case, i.e. rad.vrad.* datasets
 
         # collapse (sum over) temperature bins, since we don't care here (dsetName == 'rad.vrad.temp')
