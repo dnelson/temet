@@ -1058,6 +1058,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
                 print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))
             print('Saved: [%s].' % cacheFile.split(sP.derivPath)[1])
+            kwargs['indRange'] = indRangeOrig # restore
 
         # load from existing cache
         print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
