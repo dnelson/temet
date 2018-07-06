@@ -279,7 +279,6 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None):
             ax.add_artist(legend2)
 
         legend1 = ax.legend(loc='upper right' if eta else 'upper left')
-        print(eta)
 
         fig.tight_layout()
         if saveName is not None:
@@ -345,6 +344,239 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None):
 
             saveName = '%s%s_mstar_C_%s_%d_%s_skipzeros-%s.pdf' % (saveBase,ptStr,sP.simName,sP.snap,stat,skipZeros)
             _plotHelper(vcutIndsPlot,radIndsPlot,saveName,ylimLoc=ylimLoc,stat=stat,skipZeroVals=skipZeros)
+
+def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None):
+    """ Explore outflow velocity, aggregating into a single vout [km/s] value for each galaxy, and plotting 
+    trends as a function of stellar mass. """
+
+    sP = simParams(res=sP_in.res, run=sP_in.run, redshift=sP_in.redshift, variant=sP_in.variant) # copy
+
+    # config
+    scope = 'SubfindWithFuzz' # or 'Global'
+
+    mdotThreshVcutInd = 0 # vrad>0 km/s
+    mdotThreshValue   = 0.0 # msun/yr
+
+    # plot config
+    xlim = [7.5, 11.0]
+    ylim = [0, 1200]
+
+    ylabel = 'Outflow Velocity [ km/s ]'
+    saveBase = 'outflowVelocity'
+    ptStr = '_total'
+
+    binSize = 0.2 # in M*
+    markersize = 0.0 # 4.0, or 0.0 to disable
+    malpha = 0.2
+    zStr = str(sP.snap) if len(redshifts) == 1 else 'z='+'-'.join(['%.1f'%z for z in redshifts])
+
+    def _plotHelper(percIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False):
+        """ Plot a radii series, vcut series, or both. """
+        if len(redshifts) > 1: assert len(radIndsPlot) == 1 # otherwise needs generalization
+
+        # plot setup
+        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+        
+        if ylimLoc is None: ylimLoc = ylim
+
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylimLoc)
+        ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ]')
+        ax.set_ylabel(ylabel)
+
+        labels_sec = []
+
+        # TNG minimum velocity band
+        ax.fill_between(xlim, [0,0], [350,350], color='#cccccc', alpha=0.05)
+        ax.plot(xlim, [350,350], '-', lw=lw, color='#cccccc', alpha=0.5)
+        ax.text(xlim[0] + (xlim[1]-xlim[0])*0.03, 370.0, 'TNG v$_{\\rm wind,min}$ at Injection', color='#cccccc', alpha=0.8)
+
+        # loop over redshifts
+        for k, redshift in enumerate(redshifts):
+            # get local data
+            mdot, mstar, binConfig, numBins, vals, percs = data[k]
+
+            # loop over radii or vcut selections
+            for i, rad_ind in enumerate(radIndsPlot):
+
+                if (len(percIndsPlot) > 1 and len(radIndsPlot) > 1) or len(redshifts) > 1:
+                    c = ax._get_lines.prop_cycler.next()['color'] # one color per rad, if cycling over both
+
+                # local data (outflow rates in this radial bin)
+                if rad_ind < mdot.shape[1]:
+                    mdot_local = mdot[:,rad_ind]
+                else:
+                    mdot_local = np.sum(mdot, axis=1) # 'all'
+
+                for j, perc_ind in enumerate(percIndsPlot):
+                    # local data (velocities in this radial/perc bin)
+                    yy = np.squeeze( vals[:,rad_ind,perc_ind] ).copy() # zero flux -> nan, skipped in median
+
+                    # decision on mdot==0 (or etaM==0) systems: include (in medians/means and percentiles) or exclude?
+                    if skipZeroVals:
+                        w_zero = np.where(yy == 0.0)
+                        yy[w_zero] = np.nan
+
+                    # mdot < threshold: exclude
+                    w_below = np.where(mdot_local < mdotThreshValue)
+                    yy[w_below] = np.nan
+
+                    # label and color
+                    labelFixed = None
+                    if rad_ind == numBins['rad']:
+                        radMidPoint = 'all'
+                    else:
+                        radMidPoint = '%3d kpc' % (0.5*(binConfig['rad'][rad_ind] + binConfig['rad'][rad_ind+1]))
+
+                    if len(percIndsPlot) == 1:
+                        label = 'r = %s' % radMidPoint
+                        labelFixed = 'v$_{\\rm out,%d}$' % percs[perc_ind]
+                    if len(radIndsPlot) == 1:
+                        label = 'v$_{\\rm out,%d}$' % percs[perc_ind]
+                        labelFixed = 'r = %s' % radMidPoint
+                    if len(percIndsPlot) > 1 and (len(radIndsPlot) > 1 or len(redshifts) > 1):
+                        label = 'r = %s' % radMidPoint # primary label radius, by color
+                        labels_sec.append( 'v$_{\\rm out,%d}$' % percs[perc_ind] ) # second legend: vcut by ls
+                        if j > 0: label = ''
+                    if len(redshifts) == 1:
+                        if labelFixed is None:
+                            labelFixed = 'z = %.1f' % sP.redshift
+                        else:
+                            labelFixed += ', z = %.1f' % sP.redshift
+
+                    if len(redshifts) > 1:
+                        label = 'z = %.1f' % redshift
+                    if len(redshifts) > 1 and j > 0:
+                        label = '' # move percs to separate labels
+
+                    if (len(percIndsPlot) == 1 or len(radIndsPlot) == 1) and len(redshifts) == 1:
+                        c = ax._get_lines.prop_cycler.next()['color']
+
+                    # symbols for each system
+                    if markersize > 0:
+                        ax.plot(mstar, yy, 's', color=c, markersize=markersize, alpha=malpha, rasterized=True)                    
+
+                        # mark those at absolute zero just above the bottom of the y-axis
+                        off = 10
+                        w_zero = np.where(np.isnan(yy))
+                        yy_zero = np.random.uniform( size=len(w_zero[0]), low=ylim[0]+off/2, high=ylim[0]+off )
+                        ax.plot(mstar[w_zero], yy_zero, 'o', alpha=malpha/2, markersize=markersize, color=c)
+
+                    # median line and 1sigma band
+                    xm, ym, sm, pm = running_median(mstar,yy,binSize=binSize,percs=[16,84],mean=(stat == 'mean'))
+
+                    if xm.size > sKn:
+                        ym = savgol_filter(ym,sKn,sKo)
+                        sm = savgol_filter(sm,sKn,sKo)
+                        pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+                    lsInd = j if len(percIndsPlot) < 4 else i
+                    if markersize > 0: lsInd = 0
+                    l, = ax.plot(xm[:-1], ym[:-1], linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
+
+                    # shade percentile band?
+                    if i == j or markersize > 0:
+                        nSkip = 1
+                        y_down = pm[0,:-nSkip] #np.array(ym[:-1]) - sm[:-1]
+                        y_up   = pm[-1,:-nSkip] #np.array(ym[:-1]) + sm[:-1]
+
+                        # repairs
+                        w = np.where(np.isnan(y_up))[0]
+                        if len(w) and len(w) < len(y_up):
+                            lastGoodInd = np.max(w) + 1
+                            lastGoodVal = y_up[lastGoodInd] - ym[:-nSkip][lastGoodInd]
+                            y_up[w] = ym[:-nSkip][w] + lastGoodVal
+
+                        w = np.where(np.isnan(y_down) & np.isfinite(ym[:-nSkip]))
+                        y_down[w] = ylimLoc[0] # off bottom
+
+                        # plot bottom
+                        ax.fill_between(xm[:-nSkip], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
+
+        # legends and finish plot
+        if len(percIndsPlot) == 1 or len(radIndsPlot) == 1:
+            line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
+            legend2 = ax.legend([line], [labelFixed], loc='lower right')
+            ax.add_artist(legend2)
+
+        if len(percIndsPlot) > 1 and len(radIndsPlot) > 1:
+            lines = [ plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[j]) for j in range(len(percIndsPlot)) ]
+            legend2 = ax.legend(lines, labels_sec, loc='lower right')
+            ax.add_artist(legend2)
+
+        handles, labels = ax.get_legend_handles_labels()
+        if len(redshifts) > 1 and len(percIndsPlot) > 1:
+            handles += [ plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[j]) for j in range(len(percIndsPlot)) ]
+            labels += labels_sec
+        legend1 = ax.legend(handles, labels, loc='upper left')
+
+        fig.tight_layout()
+        if saveName is not None:
+            fig.savefig(saveName)
+        if pdf is not None:
+            pdf.savefig()
+        plt.close(fig)
+
+
+    # load outflow rates and outflow velocities (total)
+    data = []
+
+    for redshift in redshifts:
+        if redshift is not None:
+            sP.setRedshift(redshift)
+
+        mdot, mstar, _, binConfig, numBins, _ = loadRadialMassFluxes(sP, scope, 'Gas')
+        mdot = mdot[:,:,mdotThreshVcutInd]
+
+        acField = 'Subhalo_OutflowVelocity_%s' % scope
+        ac = sP.auxCat(acField)
+
+        vals  = ac[acField]
+        percs = ac[acField + '_attrs']['percs']
+
+        data.append( [mdot,mstar,binConfig,numBins,vals,percs] )
+
+    allRadInd = vals.shape[1] - 1 # last bin is not a radial bin, but all radii combined
+
+    # one specific plot requested? make now and exit
+    if config is not None:
+        saveName = '%s%s_mstar_%s_%s_nr%d_np%d_%s_skipzeros-%s.pdf' % \
+          (saveBase,ptStr,sP.simName,zStr,len(config['radInds']),len(config['percInds']),config['stat'],config['skipZeros'])
+        if 'saveName' in config: saveName = config['saveName']
+        if 'ylim' not in config: config['ylim'] = None
+        if 'markersize' in config: markersize = config['markersize']
+
+        _plotHelper(percIndsPlot=config['percInds'],radIndsPlot=config['radInds'],saveName=saveName,
+                    ylimLoc=config['ylim'],stat=config['stat'],skipZeroVals=config['skipZeros'])
+        return
+
+    # plot
+    for stat in ['mean']:#['mean','median']:
+        for skipZeros in [False]:#[True,False]:
+            # (A) plot for a given perc, at many radii
+            radInds = [1,3,4,5,6,7,allRadInd]
+
+            pdf = PdfPages('%s%s_mstar_A_%s_%s_%s_skipzeros-%s.pdf' % (saveBase,ptStr,sP.simName,zStr,stat,skipZeros))
+            for perc_ind in range(percs.size):
+                _plotHelper(percIndsPlot=[perc_ind],radIndsPlot=radInds,pdf=pdf,stat=stat,skipZeroVals=skipZeros)
+            pdf.close()
+
+            # (B) plot for a given radii, at many percs
+            percInds = [0,1,2,3,4,5]
+
+            pdf = PdfPages('%s%s_mstar_B_%s_%s_%s_skipzeros-%s.pdf' % (saveBase,ptStr,sP.simName,zStr,stat,skipZeros))
+            for rad_ind in range(numBins['rad']+1): # last one is 'all'
+                _plotHelper(percIndsPlot=percInds,radIndsPlot=[rad_ind],pdf=pdf,stat=stat,skipZeroVals=skipZeros)
+            pdf.close()
+
+            # (C) single-panel combination of both radial and perc variations
+            percIndsPlot = [1,2,4]
+            radIndsPlot = [1,2,13]
+            ylimLoc = [0,800]
+
+            saveName = '%s%s_mstar_C_%s_%s_%s_skipzeros-%s.pdf' % (saveBase,ptStr,sP.simName,zStr,stat,skipZeros)
+            _plotHelper(percIndsPlot,radIndsPlot,saveName,ylimLoc=ylimLoc,stat=stat,skipZeroVals=skipZeros)
 
 def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[None], config=None):
     """ Explore radial mass flux data, as a function of one of the histogrammed quantities (x-axis), for single 
@@ -836,7 +1068,6 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
             # labels for M* bins
             leg_lines = lines
             leg_labels = labels1
-            
 
             if len(contours) > 1: # labels for contour levels
                 for i, contour in enumerate(contours):
@@ -1432,20 +1663,21 @@ def paperPlots(sPs=None):
     # --------------------------------------------------------------------------------------------------------------------------------------
 
     # TODO: eta_E (energy), eta_Z (metal)
-
-    if 1:
-        # outflow velocity as a function of M* at one redshift
-        # TODO: custom plots of vout vs. M* (percs/rad variations) (to eventually include obs data points)
-        pass
+    # TODO: add vlos,r2d as quantities calculated in instantaneousMassFluxes(), can then simply bin (for a reasonable 2d aperture)
+    # vlos instead of vrad, getting quite close to slit/fiber/down the barrel spectra
+    # TODO: add r/rvir, v/vir as quantities in instantaneousMassFluxes(), so we can also bin in these
+    # TODO: obs data points for vout and eta
+    # TODO: check results of MgII velocities and mass loadings (at face value)
+    # TODO: play with 'total mass absorption spectra' (or even e.g. MgII, CIV), down the barrel, R_e aperture, need Voigt profile or maybe not
 
     if 0:
-        # fig 2: mass loading as a function of M* at one redshift, few variations in both (radius,vcut)
+        # fig 1: mass loading as a function of M* at one redshift, few variations in both (radius,vcut)
         config = {'vcutInds':[0,2,3], 'radInds':[1,2,5], 'stat':'mean', 'skipZeros':False}
 
         gasOutflowRatesVsMstar(TNG50, ptType='total', eta=True, config=config)
 
     if 0:
-        # fig 3: net outflow rates (2D): dependence on radius and vcut, for one/four stellar mass bins
+        # fig 2: net outflow rates (2D): dependence on radius and vcut, for one/four stellar mass bins
         mStarBins = [ [9.9,10.1] ] #[ [8.7,9.3],[9.9,10.1],[10.3,10.7],[10.8,11.2] ]
         clims     = [ [-3.0,2.0] ]
         config    = {'stat':'mean', 'skipZeros':False}
@@ -1453,13 +1685,31 @@ def paperPlots(sPs=None):
         gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBins, clims=clims, config=config)
 
     if 0:
-        # fig 3: mass loading 2D contours in (radius,vcut) plane: dependence on eta thresholds, at fixed redshift
+        # fig 2: mass loading 2D contours in (radius,vcut) plane: dependence on eta thresholds, at fixed redshift
         contours = [-0.5, 0.0, 0.5]
         gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=contours, eta=True)
 
-        # fig 4: mass loading 2D contours in (radius,vcut) plane: redshift evolution
+        # fig 3: mass loading 2D contours in (radius,vcut) plane: redshift evolution
         contours = [-1.5]
         gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=contours, redshifts=redshifts, eta=True)
+
+    if 1:
+        # fig 4: outflow velocity as a function of M* at one redshift, two v_perc values with individual markers
+        config = {'percInds':[2,4], 'radInds':[1], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False, 'markersize':4.0}
+        gasOutflowVelocityVsMstar(TNG50, config=config)
+
+        # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
+        config = {'percInds':[1,2,4], 'radInds':[1,2,13], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False}
+        gasOutflowVelocityVsMstar(TNG50, config=config)
+
+    if 1:
+        # fig 4: redshift evo
+        config = {'percInds':[3], 'radInds':[1], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False}
+        redshifts_loc = [1.0, 2.0, 3.0, 4.0, 6.0]
+        gasOutflowVelocityVsMstar(TNG50, redshifts=redshifts_loc, config=config)
+
+        #config['percInds'] = [4,1]
+        #gasOutflowVelocityVsMstar(TNG50, redshifts=redshifts_loc, config=config)
 
     if 0:
         # fig 5: distribution of radial velocities
@@ -1492,7 +1742,7 @@ def paperPlots(sPs=None):
         gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vrad', mStarBins=mStarBins, clims=[[-3.0,0.5]], config=config)
 
     if 0:
-        # fig 10: angular dependence: 2D histogram of outflow rate vs theta, for 2 demonstrative stellar mass bins
+        # fig 9: angular dependence: 2D histogram of outflow rate vs theta, for 2 demonstrative stellar mass bins
         mStarBins = [[9.8,10.2],[10.8,11.2]]
         clims     = [[-2.5,-1.0],[-1.5,0.0]]
         config    = {'stat':'mean', 'skipZeros':False, 'vcutInd':[3,5]}
@@ -1500,6 +1750,11 @@ def paperPlots(sPs=None):
         gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, config=config)
 
     # --------------------------------------------------------------------------------------------------------------------------------------
+
+    if 0:
+        # explore: outflow velocity as a function of M* at one redshift
+        gasOutflowVelocityVsMstar(TNG50)
+        gasOutflowVelocityVsMstar(TNG50, redshifts=redshifts)
 
     if 0:
         # explore: net outflow rates (and mass loading factors), fully marginalized, as a function of stellar mass

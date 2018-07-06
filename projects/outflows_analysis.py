@@ -978,7 +978,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             numBins = pickle.loads(f['numBins'][()])
             vcut_vals = f['vcut_vals'][()]
 
-        #print('Loading from cached [%s].' % cacheFile)
+        print('Loading from cached [%s].' % cacheFile)
         return mdot, mstar, subhaloIDs, binConfig, numBins, vcut_vals
 
     # load radial mass fluxes auxCat
@@ -1012,7 +1012,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     for i, field in enumerate(binConfig):
         assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
 
-    if secondQuant == 'vrad' and dsetNameOrig != 'rad.vrad.vrad':
+    if secondQuant == 'vrad' and dsetNameOrig not in ['rad.vrad','rad.vrad.vrad']:
         # standard case, i.e. rad.vrad.* datasets
 
         # collapse (sum over) temperature bins, since we don't care here (dsetName == 'rad.vrad.temp')
