@@ -409,6 +409,40 @@ class simParams:
             self.arepoPath  = self.basePath + 'sims.illustris/' + self.simName + '/'
             self.savPrefix  = 'C'
 
+        # EAGLE
+        if run in ['eagle','eagle_dm']:
+            self.validResLevels = [1504]
+            self.boxSize        = 67770.0
+            self.groupOrdered   = True
+
+            self.omega_m     = 0.307
+            self.omega_L     = 0.693
+            self.omega_b     = 0.0482519
+            self.HubbleParam = 0.6777
+
+            if res == 1504: self.gravSoft = 2.66
+
+            bs = str( round(self.boxSize/1000) )
+
+            if run == 'eagle': # FP
+                self.trMCPerCell = 0
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
+                self.metals      = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+                self.winds       = 1
+                self.BHs         = 1
+
+                if res == 1504: self.targetGasMass = 1.225e-4
+
+                self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'FP/'
+                self.savPrefix  = 'E'
+
+                if res == 1504: self.simName = 'Eagle-L68n1504FP'
+
+            if run == 'eagle_dm': # DM-only
+                self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'
+                self.savPrefix  = 'EDM'
+                self.simName    = 'Eagle-L68n1504DM'
+
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
             self.boxSize      = 20000.0
@@ -481,13 +515,17 @@ class simParams:
                 self.winds  = 3
                 self.BHs    = 3
             if '_josh' in run:
-                assert self.variant in ['FP','MO','PO','FP1','FP2','FP3'] # full-physics, metal-line cooling, primordial only
+                assert self.variant in ['FP','MO','PO','FP1','FP2','FP3','FPorig'] # full-physics, metal-line cooling, primordial only
             else:
                 assert self.variant == 'None'
 
             bs = str(round(self.boxSize/1000))
-            ls = str(self.levelMax) if run != 'zooms2_josh' else '%d_%d_%s' % (self.levelMax,self.levelMax+1,self.variant) # CGM_ZOOM boosted
+            ls = str(self.levelMax)
             ts = 't' if '_tng' in run else ''
+
+            if run == 'zooms2_josh':
+                ls = '%d_%d_%s' % (self.levelMax,self.levelMax+1,self.variant) # CGM_ZOOM boosted
+                if variant == 'FPorig': ls = '%d_FP' % (self.levelMax) # UNBOOSTED
 
             self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+ls+ts+'/'
             self.savPrefix  = 'Z2'
@@ -498,10 +536,11 @@ class simParams:
                 if '_josh' in run and variant == 'PO': snStr = '_%d (Primordial Only)'
                 if '_josh' in run and variant == 'MO': snStr = '_%d (Primordial + Metal)'
                 if '_josh' in run and variant == 'FP': snStr = '_%d (Full Physics)'
+                if '_josh' in run and variant == 'FPorig': snStr = ' (Full Physics)'
                 if '_josh' in run and variant == 'FP1': snStr = '_%d (Full Physics high-time-res)'
                 if '_josh' in run and variant == 'FP2': snStr = '_%d (Full Physics high-time-res2)'
                 if '_josh' in run and variant == 'FP3': snStr = '_%d (Full Physics RecouplingDensity10)'
-                snStr = snStr % (self.res+1)
+                if '_josh' in run and variant != 'FPorig': snStr = snStr % (self.res+1)
                 self.simName = 'L%d%s' % (self.res,snStr)
 
         # MILLENNIUM

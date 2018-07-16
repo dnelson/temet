@@ -47,6 +47,7 @@ class units(object):
     Msun_in_g         = 1.98892e33      # solar mass [g]
     c_cgs             = 2.9979e10       # speed of light in [cm/s]
     c_km_s            = 2.9979e5        # speed of light in [km/s]
+    c_kpc_Gyr         = 3.06595e5       # speed of light in [kpc/Gyr]
     sigma_thomson     = 6.6524e-25      # thomson cross section [cm^2]
     electron_charge   = 4.8032e-10      # esu [=cm*sqrt(dyne) = g^(1/2)cm^(3/2)s^(-1)]
     rydberg_ang       = 0.00109737      # rydberg constant in 1/angstrom
@@ -189,11 +190,12 @@ class units(object):
             Tvir = logZeroSafe(Tvir)
         return Tvir
 
-    def codeBHMassToMdotEdd(self, mass):
+    def codeBHMassToMdotEdd(self, mass, eps_r=None):
         """ Convert a code mass (of a blackhole) into dM/dt_eddington in Msun/yr. """
         mass_msun = self.codeMassToMsun(mass)
 
-        eps_r = 0.2 # radiative efficiency, unchanged in Illustris and TNG models
+        if eps_r is None:
+            eps_r = 0.2 # radiative efficiency, unchanged in Illustris and TNG models
 
         # Mdot(Edd) = 4*pi*G*M_BH*m_p / (eps_r*sigma_T*c) in Msun/s
         mdot_edd = 4*np.pi*self.Gravity*mass_msun*self.mass_proton / (eps_r*self.sigma_thomson*self.c_cgs)

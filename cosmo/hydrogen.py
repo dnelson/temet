@@ -95,14 +95,17 @@ def uvbPhotoionAtten(log_hDens, log_temp, redshift):
     # photUVBratio is attenuation fraction, e.g. multiply by gamma_UVB_z to get actual Gamma_photon
     return photUVBratio, gamma_UVB_z
 
-def neutral_fraction(nH, sP, temp=1e4):
+def neutral_fraction(nH, sP, temp=1e4, redshift=None):
     """ The neutral fraction from Rahmati+ (2012) Eqn. A8. """
     # recombination rate from Rahmati+ (2012) Eqn. A3, also Hui & Gnedin (1997). [cm^3 / s] """
     lamb    = 315614.0/temp
     alpha_A = 1.269e-13*lamb**1.503 / (1+(lamb/0.522)**0.47)**1.923 
     
     # photoionization rate
-    _, gamma_UVB_z = uvbPhotoionAtten(np.log10(nH), np.log10(temp), sP.redshift)
+    if redshift is None:
+        redshift = sP.redshift
+
+    _, gamma_UVB_z = uvbPhotoionAtten(np.log10(nH), np.log10(temp), redshift)
 
     # A6 from Theuns 98
     LambdaT = 1.17e-10*temp**0.5*np.exp(-157809.0/temp)/(1+np.sqrt(temp/1e5))
