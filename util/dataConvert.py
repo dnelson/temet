@@ -1456,7 +1456,7 @@ def convertGadgetICsToHDF5():
     ptNum = 1
     longids = True # 64 bit, else 32 bit
 
-    # reader header of first snapshot chunk
+    # read header of first snapshot chunk
     nChunks = len( glob.glob(loadPath % '*') )
     print('Found [%d] chunks, loading...' % nChunks)
 
@@ -1638,5 +1638,214 @@ def splitSingleHDF5IntoChunks():
                         g[field] = data[gName][field][start[gName]:stop[gName]]
                     else:
                         g[field] = data[gName][field][start[gName]:stop[gName],:]
+
+    print('Done.')
+
+def convertEagleSnapshot(snap=20):
+    """ Convert an EAGLE simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
+    from util.simParams import simParams
+    from cosmo.hydrogen import neutral_fraction
+    from scipy.ndimage.interpolation import map_coordinates
+    from os.path import isdir
+    from os import mkdir
+
+    loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
+    #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
+    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
+
+    gfmPhotoPath = '/u/dnelson/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
+
+    sP = simParams(res=1504,run='eagle') # for units only
+
+    metalNamesOrdered = ['Hydrogen','Helium','Carbon','Nitrogen','Oxygen','Neon','Magnesium','Silicon','Iron']
+    metalTagsOrdered  = ['MetalMassFracFromSNIa','MetalMassFracFromSNII','MetalMassFracFromAGB','skip','SmoothedIronMassFracFromSNIa','skip']
+    photoBandsOrdered = ['U','B','V','K','g','r','i','z']
+
+    fieldRenames = {'Velocity':'Velocities',
+                    'Mass':'Masses',
+                    'SmoothedMetallicity':'GFM_Metallicity',
+                    'InitialMass':'GFM_InitialMass',
+                    'StellarFormationTime':'GFM_StellarFormationTime',
+                    'BH_CumlAccrMass':'BH_CumMassGrowth_QM',
+                    'BH_CumlNumSeeds':'BH_Progs',
+                    'BH_AccretionLength':'BH_Hsml'}
+
+    def snapPath(chunkNum):
+        return loadPath + snapDir + '/%s.%s.hdf5' % (snapBase,chunkNum)
+
+    def writePath(chunkNum):
+        return savePath + 'snapdir_%03d/snap_%03d.%d.hdf5' % (snap,snap,chunkNum)
+
+    # locate the snapshot directory and find number of chunks
+    snapPaths = glob.glob(loadPath + 'snapshot_*')
+    for path in snapPaths:
+        if 'snapshot_%03d' % snap in path:
+            snapDir = path.rsplit('/')[-1]
+
+    snapBase = 'snap_%03d_%s' % (snap,snapDir.split('_')[-1])
+    nChunks = len(glob.glob(snapPath('*')))
+
+    print('Loading [%d] chunks from: [%s]' % (nChunks,snapDir))
+
+    # load the photometrics table first
+    gfm_photo = {}
+    with h5py.File(gfmPhotoPath,'r') as f:
+        for key in f:
+            gfm_photo[key] = f[key][()]
+
+    # output directory
+    if not isdir(savePath + 'snapdir_%03d' % snap):
+        mkdir(savePath + 'snapdir_%03d' % snap)
+
+    # loop over input chunks
+    for chunkNum in range(nChunks):
+        print(chunkNum)
+
+        # load full file
+        data = {}
+
+        for gName in ['PartType0','PartType1','PartType4','PartType5']:
+            data[gName] = {}
+
+        with h5py.File(snapPath(chunkNum), 'r') as f:
+            header = dict(f['Header'].attrs)
+
+            # dm
+            print(' dm')
+            for key in ['Coordinates','ParticleIDs','Velocity']:
+                data['PartType1'][key] = f['PartType1'][key][()]
+
+            if 'DMONLY' in loadPath:
+                continue
+
+            # gas
+            print(' gas')
+            for key in ['Coordinates','Density','InternalEnergy','Mass','ParticleIDs',
+                        'SmoothedMetallicity','StarFormationRate','Temperature','Velocity']:
+                data['PartType0'][key] = f['PartType0'][key][()]
+
+            # stars
+            print(' stars')
+            for key in ['Coordinates','Mass','ParticleIDs','InitialMass',
+                        'SmoothedMetallicity','StellarFormationTime','Velocity']:
+                data['PartType4'][key] = f['PartType4'][key][()]
+
+            # gas + stars
+            print(' gas+stars')
+            for pt in ['PartType0','PartType4']:
+                data[pt]['GFM_Metals'] = np.zeros( (data[pt]['ParticleIDs'].size,10), dtype='float32' )
+                data[pt]['GFM_MetalsTagged'] = np.zeros( (data[pt]['ParticleIDs'].size,6), dtype='float32' )
+
+                for i, el in enumerate(metalNamesOrdered):
+                    data[pt]['GFM_Metals'][:,i] = f[pt]['SmoothedElementAbundance'][el][()]
+                for i, name in enumerate(metalTagsOrdered):
+                    if name == 'skip': continue
+                    data[pt]['GFM_MetalsTagged'][:,i] = f[pt][name][()]
+
+            # BHs
+            print(' bhs')
+            for key in ['BH_CumlAccrMass','BH_CumlNumSeeds','BH_Density','BH_Mass','BH_Mdot','BH_Pressure',
+                        'BH_SoundSpeed', 'BH_SurroundingGasVel', 'BH_WeightedDensity', 'BH_AccretionLength',
+                        'Coordinates','Mass','ParticleIDs','Velocity']:
+                data['PartType5'][key] = f['PartType5'][key][()]
+
+            for key in ['BH_BPressure','BH_CumEgyInjection_RM','BH_CumMassGrowth_RM','BH_HostHaloMass','BH_U']: # missing
+                data['PartType5'][key] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
+
+
+        # cleanup header
+        for key in ['E(z)','H(z)','RunLabel']:
+            del header[key]
+        header['Time'] = header.pop('ExpansionFactor')
+        header['UnitLength_in_cm'] = 3.08568e+21
+        header['UnitMass_in_g'] = 1.989e+43
+        header['UnitVelocity_in_cm_per_s'] = 100000
+
+        # field renames
+        for pt in data.keys():
+            for from_name, to_name in fieldRenames.iteritems():
+                if from_name in data[pt]:
+                    data[pt][to_name] = data[pt].pop(from_name)
+
+        data['PartType0']['CenterOfMass'] = data['PartType0']['Coordinates']
+
+        # unit conversions
+        for pt in data.keys():
+            if 'Coordinates' in data[pt]:
+                data[pt]['Coordinates'] *= 1e3 # cMpc/h -> cKpc/h
+            if 'Velocities' in data[pt]:
+                data[pt]['Velocities'] /= np.sqrt(header['Time']) # peculiar -> sqrt(a) units
+            if 'GFM_Metallicity' in data[pt]:
+                w = np.where(data[pt]['GFM_Metallicity'] < 1e-20)
+                data[pt]['GFM_Metallicity'][w] = 1e-20 # GFM_MIN_METAL
+            if 'GFM_MetalsTagged' in data[pt]:
+                w = np.where(data[pt]['GFM_MetalsTagged'] < 0.0)
+                data[pt]['GFM_MetalsTagged'][w] = 0.0 # enforce >=0
+
+        data['PartType0']['Density'] /= 1e9 # Mpc^-3 -> Kpc^-3
+        data['PartType5']['BH_Density'] /= 1e9
+
+        # gas: ne
+        x_h = data['PartType0']['GFM_Metals'][:,0]
+        mean_mol_wt = data['PartType0']['Temperature'] * sP.units.boltzmann / ((5.0/3.0-1) * data['PartType0']['InternalEnergy'] * 1e10)
+        nelec = (sP.units.mass_proton * 4.0 / mean_mol_wt - 1.0 - 3.0*x_h) / (4*x_h)
+        data['PartType0']['ElectronAbundance'] = nelec
+
+        # gas: nH
+        sP.redshift = header['Redshift']
+        sP.units.scalefac = header['Time']
+        nH = sP.units.codeDensToPhys(data['PartType0']['Density'], cgs=True, numDens=True) * data['PartType0']['GFM_Metals'][:,0]
+        frac_nH0 = neutral_fraction(nH, sP=None, redshift=header['Redshift'])
+        data['PartType0']['NeutralHydrogenAbundance'] = frac_nH0
+
+        # stars: photometrics
+        data['PartType4']['GFM_StellarPhotometrics'] = np.zeros( (data['PartType4']['Masses'].size,8), dtype='float32' )
+
+        stars_formz = 1/data['PartType4']['GFM_StellarFormationTime'] - 1
+        stars_logagegyr = np.log10( sP.units.redshiftToAgeFlat(header['Redshift']) - sP.units.redshiftToAgeFlat(stars_formz) )
+        stars_logz = np.log10( data['PartType4']['GFM_Metallicity'] )
+        stars_masslogmsun = sP.units.codeMassToLogMsun( data['PartType4']['GFM_InitialMass'])
+
+        i1 = np.interp( stars_logz, gfm_photo['LogMetallicity_bins'], np.arange(gfm_photo['LogMetallicity_bins'].size) )
+        i2 = np.interp( stars_logagegyr,  gfm_photo['LogAgeInGyr_bins'],  np.arange(gfm_photo['LogAgeInGyr_bins'].size) )
+        iND = np.vstack( (i1,i2) )
+
+        for i, band in enumerate(photoBandsOrdered):
+            mags_1msun = map_coordinates( gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
+            data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
+        
+        # BHs: bondi and eddington mdot (should be checked more carefully)
+        vrel = data['PartType5']['BH_SurroundingGasVel']
+        vrel_mag = np.sqrt(vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2)
+        vel_term = (data['PartType5']['BH_SoundSpeed']**2 + vrel_mag**2)**(3.0/2.0)
+        mdot_bondi = 4 * np.pi * sP.units.G**2 * data['PartType5']['BH_Mass']**2 * data['PartType5']['BH_Density'] / vel_term
+        data['PartType5']['BH_MdotBondi'] = mdot_bondi / 10.22
+
+        data['PartType5']['BH_MdotEddington'] = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) / 10.22
+
+        # BHs: cum egy injection
+        bh_E = 0.15 * 0.1 * sP.units.codeMassToMsun(data['PartType5']['BH_CumMassGrowth_QM']) * header['HubbleParam']**2  / header['Time']**2
+        bh_E *= sP.units.c_kpc_Gyr**2 * sP.units.redshiftToAgeFlat(header['Redshift']) * 1e9 # (msun/yr) (ckpc/h)^2
+        #data['PartType5']['BH_CumEgyInjection_QM'] = bh_E / 10.22 # (msun/yr) -> (1e10 Msun/h)/(0.978 Gyr/h) # needs fix
+        data['PartType5']['BH_CumEgyInjection_QM'] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
+
+        # debug
+        #for pt in data.keys():
+        #    for field in data[pt].keys():
+        #        print(pt,field,data[pt][field].min(), data[pt][field].max(), data[pt][field].mean())
+
+        # write
+        with h5py.File(writePath(chunkNum), 'w') as f:
+            # header
+            h = f.create_group('Header')
+            for key in header:
+                h.attrs[key] = header[key]
+
+            # particle groups
+            for gName in data:
+                g = f.create_group(gName)
+
+                for key in data[gName]:
+                    g[key] = data[gName][key]
 
     print('Done.')
