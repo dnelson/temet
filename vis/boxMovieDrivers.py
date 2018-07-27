@@ -97,9 +97,9 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         res = 2160
         variant = 'subbox2'
 
-        panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
+        #panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
         #panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
-        #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
+        panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
         #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
         #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
 

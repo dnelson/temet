@@ -531,7 +531,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
     plt.close(fig)
 
 def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kpc=False, use30H=False, 
-                        useP10=False, simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
+                        useP10=False, haloMasses=False, simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
     """ Stellar mass function (number density of galaxies) at redshift zero, or above. """
     # config
     mts = ['SubhaloMassInRadType','SubhaloMassInHalfRadType','SubhaloMassType']
@@ -577,6 +577,11 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < min(2r$_{\star,1/2}$,30 pkpc) ]')
     if useP10:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < puchwein2010 r$_{\\rm cut}$ ]')
+
+    if haloMasses:
+        ax.set_xlim([9.0,14.5])
+        ax.set_ylabel('Mass Functioon $\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ]')
+        ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ 200crit ]')
 
     # observational points
     data = []
@@ -702,6 +707,11 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                 if not use30kpc and not useP10 and not use30H:
                     xx = gc['subhalos'][mt][w,sP.ptNum('stars')]
                     xx = sP.units.codeMassToLogMsun(xx)
+
+                if haloMasses:
+                    # HALO mass instead, testing
+                    xx = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
+                    print('using halo masses instead')
 
                 normFac = sP.boxSizeCubicComovingMpc * binSize
                 xm, ym_i = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
@@ -1202,7 +1212,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
     if clean: acMetalFields = [acMetalFields[0]]
 
     minNumStars = 1
-    if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
+    if clean: minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
     if clean: from plot.config import figsize # do not override
 
     # plot setup
@@ -1299,11 +1309,13 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
                 yy_loc = yy[ww]
                 xx_loc = xx[ww]
 
-                xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,
+                xm, ym, sm, pm = running_median(xx_loc,yy_loc,binSize=binSize,
                                                       skipZeros=True,percs=[10,25,75,90])
-                ym = savgol_filter(ym_i,sKn,sKo)
-                sm = savgol_filter(sm_i,sKn,sKo)
-                pm = savgol_filter(pm_i,sKn,sKo,axis=1) # P[10,90]
+
+                if xm.size >= sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
                 if i_num == 1:
                     # only show Guidi correction for [restricted] applicable mass range
@@ -1898,7 +1910,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
     if clean: ageTypes = [ageTypes[0]]
 
     minNumStars = 1
-    if clean: minNumStars = 100 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
+    if clean: minNumStars = 1 # log(Mstar) ~= 8.2 (1820) or 9.1 (2500)
     if clean: from plot.config import figsize # do not override
 
     # plot setup
@@ -1998,11 +2010,12 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
                 yy_loc = yy[ww]
                 xx_loc = xx[ww]
 
-                xm, ym_i, sm_i, pm_i = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
+                xm, ym, sm, pm = running_median(xx_loc,yy_loc,binSize=binSize,percs=[10,25,75,90])
 
-                ym = savgol_filter(ym_i,sKn,sKo)
-                sm = savgol_filter(sm_i,sKn,sKo)
-                pm = savgol_filter(pm_i,sKn,sKo,axis=1)
+                if xm.size >= sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1)
 
                 if i_num == 1:
                     # only show Guidi correction for [restricted] applicable mass range
@@ -2310,7 +2323,7 @@ def plots():
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2320,17 +2333,17 @@ def plots():
     #sPs.append( simParams(res=270, run='tng') )
 
     # add runs: TNG_methods
-    #sPs.append( simParams(res=512, run='tng', variant='0000') )
-    #sPs.append( simParams(res=512, run='tng', variant='5005') )
-    #sPs.append( simParams(res=512, run='tng', variant='5006') )
+    #sPs.append( simParams(res=128, run='tng', variant='6003') )
+    #sPs.append( simParams(res=128, run='tng', variant='6004') )
+    #sPs.append( simParams(res=128, run='tng', variant='6005') )
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
-    if 1:
+    if 0:
         # testing
         pdf = PdfPages('globalComps_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        galaxyHISizeMass(sPs, pdf, simRedshift=0.0)
+        stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=False, simRedshift=4.0, dataRedshift=None, haloMasses=True)
         pdf.close()
         return
 
@@ -2387,6 +2400,7 @@ def plots():
     HIMassFunction(sPs, pdf, simRedshift=zZero)
     HIMassFraction(sPs, pdf, simRedshift=zZero)
     HIvsHaloMass(sPs, pdf, simRedshift=zZero)
+    galaxyHISizeMass(sPs, pdf, simRedshift=zZero)
 
     for sP in sPs:
         plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
