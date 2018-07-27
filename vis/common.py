@@ -65,7 +65,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
 
     else:
         # dark matter
-        if sP.isPartType(partType, 'dm'):
+        if sP.isPartType(partType, 'dm') or sP.isPartType(partType, 'dmlowres'):
             if not snapHasField(sP, partType, 'SubfindHsml'):
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'
@@ -125,6 +125,8 @@ def defaultHsmlFac(partType, partField):
         return 1.0 # times nNGB=32 CalcHsml search
     if partType == 'dm':
         return 0.5 # times SubfindHsml or nNGB=64 CalcHsml search
+    if partType == 'dmlowres':
+        return 4.0
 
     raise Exception('Unrecognized partType [%s].' % partType)
 
@@ -552,9 +554,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     """ Perform any final unit conversions on grid output and set field-specific plotting configuration. """
     config = {}
 
-    if sP.isPartType(partType,'dm'):    ptStr = 'DM'
-    if sP.isPartType(partType,'gas'):   ptStr = 'Gas'
-    if sP.isPartType(partType,'stars'): ptStr = 'Stellar'
+    if sP.isPartType(partType,'dm'):       ptStr = 'DM'
+    if sP.isPartType(partType,'dmlowres'): ptStr = 'DM (lowres)'
+    if sP.isPartType(partType,'gas'):      ptStr = 'Gas'
+    if sP.isPartType(partType,'stars'):    ptStr = 'Stellar'
 
     # volume densities
     if partField in volDensityFields:
@@ -609,11 +612,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
             config['label'] = 'DM Annihilation Radiation [log GeV$^{-1}$ cm$^{-2}$ s$^{-1}$ kpc$^{-2}$]'
 
-        if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
-        if sP.isPartType(partType,'gas'):   config['ctName'] = 'gasdens_tng5'
-        #if sP.isPartType(partType,'gas'):   config['ctName'] = 'cubehelix' #'perula' #(methods2)
-        #if sP.isPartType(partType,'gas'):   config['plawScale'] = 1.0 # default
-        if sP.isPartType(partType,'stars'): config['ctName'] = 'gray' # copper
+        if sP.isPartType(partType,'dm'):       config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
+        if sP.isPartType(partType,'dmlowres'): config['ctName'] = 'dmdens_tng'
+        if sP.isPartType(partType,'gas'):      config['ctName'] = 'gasdens_tng5'
+        #if sP.isPartType(partType,'gas'):     config['ctName'] = 'cubehelix' #'perula' #(methods2)
+        #if sP.isPartType(partType,'gas'):     config['plawScale'] = 1.0 # default
+        if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray' # copper
 
     if partField in ['coldens_msun_ster']:
         assert projType == 'equirectangular' # otherwise generalize
@@ -1920,7 +1924,9 @@ def renderMultiPanel(panels, conf):
                 cb.ax.set_ylabel(config['label'])
 
             # towards font-size invariance with changing rasterPx
-            fontsize = int(conf.rasterPx[0] / 100.0 * 1.2)
+            nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
+            fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.0)
+
             padding = conf.rasterPx[0] / 240.0
             ax.tick_params(axis='x', which='major', labelsize=fontsize)
             ax.tick_params(axis='y', which='major', labelsize=fontsize)

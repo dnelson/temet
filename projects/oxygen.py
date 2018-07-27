@@ -752,9 +752,9 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                     yy = unitConversionFunc(yy, cgs=True)
                 else:
                     # from e.g. [code mass / code length^3] -> [ions/cm^3]
-                    assert ion[0] == 'O' # oxygen
+                    species = ion.replace('I','').replace('V','').replace('X','') # e.g. 'OVI' -> 'O'
                     yy = unitConversionFunc(yy, cgs=True, numDens=True) 
-                    yy /= ionData.atomicMass(ion[0]) # [H atoms/cm^3] to [ions/cm^3]
+                    yy /= ionData.atomicMass(species) # [H atoms/cm^3] to [ions/cm^3]
 
                 # loop over mass bins
                 for k, massBin in enumerate(massBins):
@@ -801,8 +801,12 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         yy_local[yy_local == 0.0] = np.nan
 
                         # calculate mean profile and scatter
-                        yy_mean = np.nansum( yy_local, axis=0 ) / len(w[0])
-                        yp = np.nanpercentile( yy_local, percs, axis=0 )
+                        if yy_local.ndim > 1:
+                            yy_mean = np.nansum( yy_local, axis=0 ) / len(w[0])
+                            yp = np.nanpercentile( yy_local, percs, axis=0 )
+                        else:
+                            yy_mean = yy_local # single profile
+                            yp = np.vstack( (yy_local,yy_local) ) # no scatter
 
                         # log both axes
                         yy_mean = logZeroNaN(yy_mean)
@@ -1956,7 +1960,7 @@ def paperPlots():
                 redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True, secondTopAxis=True)
 
     # figure 9: average radial profiles
-    if 1:
+    if 0:
         redshift = 0.0
         sPs = [TNG100]
         ions = ['OVI'] # OVII, OVIII

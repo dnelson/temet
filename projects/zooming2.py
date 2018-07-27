@@ -9,11 +9,40 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from os.path import isfile
+from scipy.signal import savgol_filter
+from scipy.interpolate import interp1d
 
 from util.simParams import simParams
+from util.helper import running_median, logZeroNaN
 from cosmo.load import groupCatSingle
 from plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
 from vis.halo import renderSingleHalo
+from vis.box import renderBox
+from plot.config import *
+
+def check_box(snap):
+    panels = []
+
+    run        = 'zooms2_tng'
+    res        = 11
+    hInd       = 2
+    nPixels    = [1000,1000]
+    zoomFac    = 0.1
+
+    sP = simParams(res=res, run=run, hInd=hInd, snap=snap)
+    redshift = sP.redshift
+
+    panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.5]} )
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = nPixels if isinstance(nPixels,list) else [nPixels,nPixels]
+        colorbars  = True
+
+        saveFilename = './boxImage_%s_%d_%s-%s.png' % (sP.simName,snap,panels[0]['partType'],panels[0]['partField'])
+
+    renderBox(panels, plotConfig, locals())
 
 def visualize_halo(conf=1, quadrant=False, snap=None):
     """ Visualize single final halo of h2_L11_12_FP (boosted, sims.zooms2) at z=2.25. """
@@ -71,13 +100,15 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
     if conf == 5:
         # radial velocity
         panels.append( {'partType':'gas', 'partField':'radvel', 'valMinMax':[-260,260]} )
+        nPixels = [600,600]
     if conf == 6:
         # magnitude of specific angular momentum
         panels.append( {'partType':'gas', 'partField':'specj_mag', 'valMinMax':[2.0,4.2]} )
     if conf == 7:
         # gas metallicity
         panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-2.0,0.0]} )
-
+        nPixels = [600,600]
+        
     class plotConfig:
         plotStyle    = 'open'
         rasterPx     = int(nPixels[0]*1.0)
@@ -97,13 +128,13 @@ def phase_diagram_ovi():
     xMinMax = [-6.0,0.0]
     yMinMax = [3.5,7.0]
     contours = [-3.0, -2.0, -1.0]
-    massFracMinMax = [-4.0, -1.0] #[-10.0, 0.0]
+    cMinMax = [-4.0, -1.0] #[-10.0, 0.0]
     hideBelow = True
     smoothSigma = 1.5
     haloID = 0 # None for fullbox
 
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
-                     massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                     clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
                      contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
 def phase_diagram_coolingtime():
@@ -117,14 +148,36 @@ def phase_diagram_coolingtime():
     meancolors = ['cooltime']
     xMinMax = [-6.0,0.0]
     yMinMax = [3.5,7.0]
+    cMinMax = [-3.0, 1.0] # 1 Myr to 10 Gyr
     contours = [-2.0, -1.0, 0.0]
-    massFracMinMax = [-3.0, 1.0] # 1 Myr to 10 Gyr
     hideBelow = False
     smoothSigma = 1.5
 
     plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, 
-                     massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
+                     clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
                      contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+
+def phase_diagram_vs_L11():
+    # phase diagram (gas), comparing L11_FP to L11_12_FP
+    sP1 = simParams(res=11,run='zooms2_josh',variant='FP',hInd=2,redshift=2.25)
+    sP2 = simParams(res=11,run='zooms2_josh',variant='FPorig',hInd=2,redshift=2.25)
+
+    ptType = 'gas'
+    xQuant = 'hdens'
+    yQuant = 'temp'
+    weights = ['mass']
+    meancolors = None
+    xMinMax = [-6.0,0.0]
+    yMinMax = [3.5,7.0]
+    contours = [-2.0, -1.0, 0.0]
+    cMinMax = [-3.0, 1.0] # 1 Myr to 10 Gyr
+    hideBelow = False
+    smoothSigma = 1.5
+
+    plotPhaseSpace2D(sP1, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, clim=cMinMax, 
+                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+    plotPhaseSpace2D(sP2, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, clim=cMinMax, 
+                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
 def phase_diagram_ovi_tng50_comparison():
     # TNG50 analog for comparison
@@ -139,22 +192,21 @@ def phase_diagram_ovi_tng50_comparison():
     xMinMax = [-6.0,0.0]
     yMinMax = [3.5,7.0]
     contours = [-3.0, -2.0, -1.0]
-    massFracMinMax = [-4.0, 0.0] #[-10.0, 0.0]
+    cMinMax = [-4.0, 0.0] #[-10.0, 0.0]
     hideBelow = True
     smoothSigma = 1.0
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
-                     massFracMinMax=massFracMinMax,xMinMaxForce=xMinMax, yMinMaxForce=yMinMax, 
-                     contours=contours, smoothSigma=smoothSigma, hideBelow=True)
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, clim=cMinMax, 
+                     xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
 def figure1_res_statistics(conf=0):
     """ Figure 1: resolution statistics in mass/size for gas cells, comparing runs. """
     sPs = []
 
     if conf in [0,3]:
-        # 4 run comparison
+        # 3 run comparison
         sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='PO',redshift=2.25) )
-        sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='MO',redshift=2.25) )
+        #sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='MO',redshift=2.25) )
         sPs.append( simParams(res=11,run='zooms2_josh',hInd=2,variant='FP',redshift=2.25) )
         sPs.append( simParams(res=11,run='zooms2',hInd=2,redshift=2.25) )
     if conf in [1,2]:
@@ -267,4 +319,414 @@ def tracer_ambient_hot_halo():
     ax.legend()
     fig.tight_layout()
     fig.savefig('tempfrac_evo_rvir=%.2f-%.2f.pdf' % (rad_min,rad_max))
+    plt.close(fig)
+
+def gas_components_time_evo():
+    """ Plot redshift evolution of total mass in different halo gas components (Fig 4). """
+    sPs = []
+    data = []
+
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, variant='FP') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, variant='FPorig') )
+
+    # get data
+    for sP in sPs:
+        saveFilename = sP.derivPath + 'components_time_evo.hdf5'
+
+        # load existing save file
+        if isfile(saveFilename):
+            data_loc = {}
+            with h5py.File(saveFilename,'r') as f:
+                for key in f:
+                    data_loc[key] = f[key][()]
+
+            data.append(data_loc)
+            print('Loaded: [%s]' % saveFilename)
+            continue
+
+        # calculate now
+        snaps = np.arange(53)
+
+        data_loc = {'mass_m200' : np.zeros(snaps.size, dtype='float32'),
+                    'mass_halo' : np.zeros(snaps.size, dtype='float32'),
+                    'mass_gal'  : np.zeros(snaps.size, dtype='float32'),
+                    'mass_cgm'  : np.zeros(snaps.size, dtype='float32'),
+                    'mass_cgm_cooldense' : np.zeros(snaps.size, dtype='float32'),
+                    'mass_cgm_non'       : np.zeros(snaps.size, dtype='float32'),
+                    'snaps' : snaps,
+                    'redshifts' : sP.snapNumToRedshift(snaps) }
+
+        for i, snap in enumerate(snaps):
+            sP.setSnap(snap)
+            print(i)
+            gas = sP.snapshotSubset('gas', ['Masses','temp','StarFormationRate','nh','rad_rvir'], haloID=0)
+
+            subhalo = sP.groupCatSingle(subhaloID=0)
+            halo    = sP.groupCatSingle(haloID=0)
+
+            gal_mass = sP.units.codeMassToLogMsun( subhalo['SubhaloMassInRadType'][sP.ptNum('stars')] )
+            gal_radius = interp1d([6,7,8,9,10,11], [1,4,6,8,10,20]) (gal_mass)
+            gal_rad_rvir = gal_radius / halo['Group_R_Crit200']
+
+            # define selections
+            w_halo = np.where(gas['rad_rvir'] <= 1.0)
+            w_gal  = np.where( (gas['rad_rvir'] <= 1.0) & ((gas['rad_rvir'] <= gal_rad_rvir) | (gas['StarFormationRate'] > 0.0)) )
+            w_cgm  = np.where( (gas['rad_rvir'] <= 1.0) & (gas['rad_rvir'] > gal_rad_rvir) & (gas['StarFormationRate'] == 0.0) )
+
+            w_cooldense = np.where( (gas['nh'][w_cgm] > 1e-3)  & (gas['temp'][w_cgm] < 5.0) )
+            w_non       = np.where( (gas['nh'][w_cgm] <= 1e-3) | (gas['temp'][w_cgm] >= 5.0) )
+
+            assert len(w_cooldense[0]) + len(w_non[0]) == len(w_cgm[0])
+
+            # save masses
+            data_loc['mass_m200'][i] = sP.units.codeMassToLogMsun( halo['Group_M_Crit200'] )
+            data_loc['mass_halo'][i] = sP.units.codeMassToLogMsun( gas['Masses'][w_halo].sum() )
+            data_loc['mass_gal'][i]  = sP.units.codeMassToLogMsun( gas['Masses'][w_gal].sum() + halo['GroupMassType'][sP.ptNum('stars')] )
+            data_loc['mass_cgm'][i]  = sP.units.codeMassToLogMsun( gas['Masses'][w_cgm].sum() )
+
+            data_loc['mass_cgm_cooldense'][i] = sP.units.codeMassToLogMsun( gas['Masses'][w_cgm][w_cooldense].sum() )
+            data_loc['mass_cgm_non'][i]       = sP.units.codeMassToLogMsun( gas['Masses'][w_cgm][w_non].sum() )
+
+        data.append(data_loc)
+
+        # save
+        with h5py.File(saveFilename,'w') as f:
+            for key in data_loc:
+                f[key] = data_loc[key]
+        print('Saved: [%s]' % saveFilename)
+
+    # plot
+    fig = plt.figure(figsize=[10.0, 7.0])
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlabel('Redshift')
+    ax.set_ylabel('Mass of Component [ log M$_{\\rm sun}$ ]')
+
+    ax.set_ylim([8.0,12.0])
+    ax.set_xlim([6.0,2.25])
+
+    lines = [plt.Line2D( (0,1), (0,0), color='black', marker='', linestyle=linestyles[i], lw=lw) for i in range(len(sPs))]
+    legend2 = ax.legend(lines, [sP.simName for sP in sPs], loc='upper left')
+    ax.add_artist(legend2)
+
+    colors = []
+    for i in range(5):
+        colors.append( ax._get_lines.prop_cycler.next()['color'])
+
+    for i, sP in enumerate(sPs):
+        z = data[i]['redshifts']
+
+        ax.plot(z, data[i]['mass_m200'], linestyles[i], color='black', lw=lw, label='Halo' if i == 0 else '')
+        ax.plot(z, data[i]['mass_gal'], linestyles[i], color=colors[0], lw=lw, label='Galaxies (Stars+ISM)' if i == 0 else '')
+
+        #ax.plot(z, data[i]['mass_halo'], linestyles[i], color=colors[1], lw=lw, label='Halo Gas' if i == 0 else '')
+        ax.plot(z, data[i]['mass_cgm'], linestyles[i], color=colors[2], lw=lw, label='CGM' if i == 0 else '')
+
+        ax.plot(z, data[i]['mass_cgm_cooldense'], linestyles[i], color=colors[3], lw=lw, label='CGM (cool+dense)' if i == 0 else '')
+        ax.plot(z, data[i]['mass_cgm_non'], linestyles[i], color=colors[4], lw=lw, label='CGM (not cool+dense)' if i == 0 else '')
+
+    ax.legend(loc='lower right')
+    fig.tight_layout()
+    fig.savefig('figure_4.pdf')
+    plt.close(fig)
+
+def gas_components_radial_profiles():
+    """ Compare CGM cool-dense and non-cool-dense radial profiles between runs. """
+    sPs = []
+    redshift = 2.25
+    binSize = 0.02
+
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FP') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='PO') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FPorig') )
+
+    # start plot
+    fig = plt.figure(figsize=[10.0, 7.0])
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlabel('R / R$_{\\rm vir}$')
+    ax.set_ylabel('Density n$_{\\rm H}$ [ cm$^{-3}$ ]')
+
+    ax.set_ylim([-5.0, 0.0])
+    ax.set_xlim([0.0, 1.2])
+
+    lines = [plt.Line2D( (0,1), (0,0), color='black', marker='', linestyle=linestyles[i], lw=lw) for i in range(2)]
+    legend2 = ax.legend(lines, ['cool-dense', 'not cool-dense'], loc='lower left')
+    ax.add_artist(legend2)
+
+    for sP in sPs:
+        # load
+        gas = sP.snapshotSubset('gas', ['pos','Masses','temp','StarFormationRate','nh','rad_rvir'], haloID=0)
+
+        mask = np.zeros( gas['Masses'].size, dtype='int16' )
+
+        gc = sP.groupCat(fieldsHalos=['GroupNsubs'], fieldsSubhalos=['SubhaloPos','SubhaloMassInRadType'])
+        nSubs = gc['halos'][0] # of first halo
+        sub_mstar = sP.units.codeMassToLogMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )[0:nSubs]
+        sub_pos = gc['subhalos']['SubhaloPos'][0:nSubs,:]
+
+        w = np.where(np.isfinite(sub_mstar))
+        sub_mstar = sub_mstar[w]
+        sub_pos = sub_pos[w[0],:]
+
+        sub_radius = interp1d([3,7,8,9,10,11], [1,4,6,8,10,20]) (sub_mstar)
+
+        for sub_nr in range(sub_mstar.size):
+            dists = sP.periodicDists( sub_pos[sub_nr,:], gas['Coordinates'] )
+            w = np.where(dists <= sub_radius[sub_nr])
+            mask[w] = 1
+
+        # select
+        w_cgm  = np.where( (gas['rad_rvir'] > 0.15) & (gas['StarFormationRate'] == 0.0) & (mask == 0) )
+        w_cooldense = np.where( (gas['nh'][w_cgm] > 1e-3)  & (gas['temp'][w_cgm] < 5.0) )
+        w_non = np.where( (gas['nh'][w_cgm] <= 1e-3) | (gas['temp'][w_cgm] >= 5.0) )
+
+        # median
+        xx = gas['rad_rvir'][w_cgm]
+        yy = np.log10( gas['nh'][w_cgm] )
+
+        xm1, ym1, sm1 = running_median(xx[w_cooldense],yy[w_cooldense],binSize=binSize) # ,skipZeros=True
+        xm2, ym2, sm2 = running_median(xx[w_non],yy[w_non],binSize=binSize) # ,skipZeros=True
+
+        # plot
+        l, = ax.plot(xm1, ym1, ls=linestyles[0], lw=lw, label=sP.simName)
+        ax.plot(xm2, ym2, ls=linestyles[1], lw=lw, color=l.get_color())
+
+    # finish plot
+    ax.legend(loc='upper right')
+    fig.tight_layout()
+    fig.savefig('figure_5.pdf')
+    plt.close(fig)
+
+def mgii_radial_profile():
+    """ Compare MgII column density profiles. """
+    from cosmo.cloudy import cloudyIon
+    from tracer.tracerMC import match3
+
+    redshift = 2.25
+
+    sPs = []
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FP') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='PO') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FPorig') )
+
+    ion = 'MgII'
+    cenSatSelect = 'cen'
+    haloMassBins = [[11.3,12.0]]
+    projDim = '2Dz_2Mpc'
+    combine2Halo = True
+    radRelToVirRad = False
+
+    # plot setup
+    lw = 3.0
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    ax = fig.add_subplot(111)
+    
+    radStr = 'Radius' if '3D' in projDim else 'Impact Parameter'
+    if radRelToVirRad:
+        ax.set_xlim([-2.0, 2.0])
+        ax.set_xlabel('%s / Virial Radius [ log ]' % radStr)
+    else:
+        ax.set_xlim([0.0, 100])
+        ax.set_xlabel('%s [ pkpc ]' % radStr)
+
+    # 2D mass/column density
+    ax.set_ylim([12.0, 17.0])
+    ax.set_ylabel('Column Number Density $N_{\\rm %s}$ [ log cm$^{-2}$ ]' % ion)
+
+    # init
+    ionData = cloudyIon(None)
+    colors = []
+
+    # loop over each fullbox run
+    for i, sP in enumerate(sPs):
+        # load halo/stellar masses and CSS
+        sP.setRedshift(redshift)
+        cssInds = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+
+        # load virial radii
+        rad = sP.groupCat(fieldsSubhalos=['rhalo_200_code'])
+        rad = rad[cssInds]
+
+        fieldName = 'Subhalo_RadProfile%s_GlobalFoF_%s_Mass' % (projDim,ion)
+        print('[%s]: %s' % (ion,sP.simName))
+
+        ac = sP.auxCat(fields=[fieldName])
+        if ac[fieldName] is None: continue
+
+        # crossmatch 'subhaloIDs' to cssInds
+        ac_inds, css_inds = match3( ac['subhaloIDs'], cssInds )
+        ac[fieldName] = ac[fieldName][ac_inds,:]
+        rad_loc = rad[css_inds]
+
+        # unit conversions: mass per bin to (space mass density) or (space number density)
+        yy = ac[fieldName]
+
+        if '3D' in projDim:
+            normField = 'bin_volumes_code'
+            unitConversionFunc = sP.units.codeDensToPhys
+        else:
+            normField = 'bin_areas_code' # 2D
+            unitConversionFunc = sP.units.codeColDensToPhys
+
+        if ac[fieldName].ndim == 2:
+            yy /= ac[fieldName+'_attrs'][normField]
+            nRadTypes = 1
+        else:
+            for radType in range(ac[fieldName].shape[2]):
+                yy[:,:,radType] /= ac[fieldName+'_attrs'][normField]
+            nRadTypes = 4
+
+        # from e.g. [code mass / code length^3] -> [ions/cm^3]
+        species = ion.replace('I','').replace('V','').replace('X','') # e.g. 'OVI' -> 'O'
+        yy = unitConversionFunc(yy, cgs=True, numDens=True) 
+        yy /= ionData.atomicMass(species) # [H atoms/cm^3] to [ions/cm^3]
+
+        # select
+        w = [0]
+
+        rvir_pkpc = sP.units.codeLengthToKpc( rad_loc[w] )
+        radType = 0 # total only
+
+        # sum and calculate percentiles in each radial bin
+        if yy.ndim == 3:
+            yy_local = np.squeeze( yy[w,:,radType] )
+
+            # combine diffuse into other-halo term, and skip separate line?
+            if combine2Halo and radType == 2:
+                yy_local += np.squeeze( yy[w,:,radType+1] )
+            if combine2Halo and radType == 3:
+                continue
+        else:
+            yy_local = np.squeeze( yy[w,:] )
+
+        rr = ac[fieldName+'_attrs']['rad_bins_pkpc']
+
+        # for low res runs, combine the inner bins which are poorly sampled
+        if sP.boxSize == 25000.0:
+            nInner = int( 20 / (sP.res/256) )
+            rInner = np.mean( rr[0:nInner] )
+
+            for dim in range(yy_local.shape[0]):
+                yy_local[dim,nInner-1] = np.nanmedian( yy_local[dim,0:nInner] )
+            yy_local = yy_local[:,nInner-1:]
+            rr = np.hstack( [rInner,rr[nInner:]] )
+
+        # replace zeros by nan so they are not included in percentiles
+        yy_local[yy_local == 0.0] = np.nan
+
+        # single profile
+        yy_mean = yy_local # single profile
+
+        # log both axes
+        yy_mean = logZeroNaN(yy_mean)
+        if radRelToVirRad:
+            rr = np.log10(rr)
+
+        if rr.size > sKn:
+            yy_mean = savgol_filter(yy_mean,sKn,sKo)
+
+        # determine color
+        c = ax._get_lines.prop_cycler.next()['color']
+
+        # plot median line
+        label = sP.simName
+        ax.plot(rr, yy_mean, lw=lw, color=c, linestyle=linestyles[radType], label=label)
+
+        # draw rvir lines (or 300pkpc lines if x-axis is already relative to rvir)
+        yrvir = ax.get_ylim()
+        yrvir = np.array([ yrvir[1], yrvir[1] - (yrvir[1]-yrvir[0])*0.1]) - 0.25
+
+        xrvir = [rvir_pkpc, rvir_pkpc]
+        textStr = 'R$_{\\rm vir}$'
+
+        ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
+        ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
+                fontsize=20.0, alpha=0.1, rotation=90)
+
+    # legend
+    legend2 = ax.legend(loc='upper right')
+
+    fig.tight_layout()
+    fig.savefig('figure_9.pdf')
+    plt.close(fig)
+
+def hi_covering_frac():
+    """ Plot radial profiles of HI covering fractions. """
+    from obs.galaxySample import addIonColumnPerSystem, ionCoveringFractions
+
+    redshift = 2.25
+
+    sPs = []
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FP') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='PO') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FPorig') )
+
+    ion = 'HI'
+    config = 'HI_rudie'
+    colDensThresholds = [15.0, 17.2, 19.0, 20.3] # usual pLLS/LLS/DLA definitions
+
+    # single halo 0, dummy b
+    sim_sample = {'snaps':np.array([52]), 
+                  'selected_inds':np.zeros((1,1),dtype='int32'), 
+                  'impact_parameter':np.zeros((1,1)) + 100.0} 
+
+    # plot setup
+    fig = plt.figure(figsize=[figsize[0], figsize[1]])
+
+    colors = []
+
+    # loop over each column density threshold
+    for j, thresh in enumerate(colDensThresholds):
+
+        # start panel
+        ax = fig.add_subplot(2,2,j+1)
+        ax.set_title('N > %.1f cm$^{-2}$' % thresh)
+
+        ax.set_xlim([0.0, 2.2])
+        ax.set_ylim([0.0, 1.0])
+        ax.set_xlabel('Impact Parameter / R$_{\\rm vir}$')
+        ax.set_ylabel('f$_{\\rm cover}$ (<r)')
+
+        # overplot obs (Rudie 2012, Table 5)
+        obs_1rvir = [0.9, 0.3, 0.1, 0.0]
+        obs_1rvir_err = [0.09,0.14,0.09,0.1]
+        obs_2rvir = [0.68,0.28,0.08,0.04]
+        obs_2rvir_err = [0.09,0.09,0.05,0.04]
+
+        label = 'Rudie+ (2012)' if j == 1 else ''
+        ax.errorbar([1.0], [obs_1rvir[j]], yerr=[obs_1rvir_err[j]], color='black', alpha=0.7, fmt='o', label=label)
+        ax.errorbar([2.0], [obs_2rvir[j]], yerr=[obs_2rvir_err[j]], color='black', alpha=0.7, fmt='o')
+
+        # loop over each fullbox run (different linestyles)
+        for i, sP in enumerate(sPs):
+            # load
+            print('[%s]: %s' % (sP.simName,thresh))
+
+            sim_sample = addIonColumnPerSystem(sP, sim_sample, config=config)
+
+            cf = ionCoveringFractions(sP, sim_sample, config=config)
+
+            # which index for the requested col density threshold?
+            assert thresh in cf['colDensThresholds']
+            ind = np.where(cf['colDensThresholds'] == thresh)[0]
+
+            rvir = sP.units.codeLengthToKpc(sP.groupCatSingle(haloID=0)['Group_R_Crit200'])
+            relStr = ''
+            xx = cf['radBins%s' % relStr] / rvir
+            yy = np.squeeze( cf['all_percs%s' % relStr][ind,:,3] )
+
+            # plot middle line                
+            if j == 0:
+                c = ax._get_lines.prop_cycler.next()['color']
+                colors.append(c)
+            else:
+                c = colors[i]
+
+            ax.plot(xx, yy, lw=lw, color=c, linestyle='-', label=sP.simName if j == len(colDensThresholds)-1 else '')
+
+        legend = ax.legend(loc='upper right')
+
+    # finish
+    fig.tight_layout()
+    fig.savefig('figure_8.pdf')
     plt.close(fig)

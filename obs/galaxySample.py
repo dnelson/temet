@@ -274,8 +274,6 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         gridRes   = 2.0 # pkpc, pixel size
         axes      = [0,1] # x,y
 
-        nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
-
     if config in ['eCGM','eCGMfull']:
         # grid parameters (Johnson+ 2015)
         partType  = 'gas'
@@ -285,7 +283,14 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         gridRes   = 2.0 # pkpc, pixel size
         axes      = [0,1] # x,y
 
-        nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
+    if config == 'HI_rudie':
+        # grid parameters (zooms.II)
+        partType  = 'gas'
+        ionName   = 'H I'
+        projDepth = 4000.0 # should be 1000 km/s to match Josh
+        gridSize  = 600.0 # need out to 2rvir
+        gridRes   = 2.0
+        axes      = [0,1] # x,y
 
     # save file exists?
     saveFilename = sP.derivPath + "obsMatchedColumns_%s_%d.hdf5" % (config,sim_sample['selected_inds'].size)
@@ -310,6 +315,8 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
     origSnap = sP.snap
     ion = cloudyIon(None)
     np.random.seed(4242 + sim_sample['selected_inds'].size)
+
+    nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
 
     def _gridFilePath():
         gridPath = sP.derivPath + 'grids/%s/' % config
@@ -470,6 +477,16 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
         sim_sample['halo_env'] = np.zeros( shape, dtype='int16' )
         for i in range(numRealizations): sim_sample['halo_env'][:,i] = env
 
+    if config == 'HI_rudie':
+        # grid parameters (zooms.II)
+        gridSize  = 600.0 # need out to 2rvir
+        gridRes   = 2.0
+        axes      = [0,1] # x,y
+
+        gal_subsets = ['all'] # single halo
+        halo_Rh = [sP.units.codeLengthToKpc(sP.groupCatSingle(haloID=0)['Group_R_Crit200'])]
+        colDensThresholds = [15.0, 17.2, 19.0, 20.3] # usual pLLS/LLS/DLA definitions
+
     nPixels = [int(gridSize / gridRes), int(gridSize / gridRes)] # square
 
     # grids all exist already?
@@ -564,7 +581,7 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
                     rad_masks = []
                     num_in_rad = []
 
-                    if config in ['eCGM','eCGMfull']:
+                    if config in ['eCGM','eCGMfull','HI_rudie']:
                         local_halo_radius = halo_Rh[gal_num]
                     if config in ['COS-Halos','SimHalos_115-125']:
                         local_halo_radius = np.nanmean( halo_Rh[inds] )
