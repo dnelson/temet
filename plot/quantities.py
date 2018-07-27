@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from util.helper import logZeroNaN
+from util.helper import logZeroNaN, running_median_clipped
 from cosmo.load import groupCat, groupCatHeader, auxCat
 from cosmo.cloudy import cloudyIon
 from plot.config import *
@@ -53,7 +53,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (groupcat)
     quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2',
-               'surfdens1_stars', 'surfdens2_stars']
+               'surfdens1_stars', 'surfdens2_stars', 'delta_sfms']
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
@@ -398,6 +398,40 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax[0] += sP.redshift/2
         minMax[1] += sP.redshift/2
+
+    if quant == 'delta_sfms':
+        # offset from the star-formation main sequence (SFMS), taken as the clipped sim median (Genel+18), in dex
+        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
+        mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+
+        with np.errstate(invalid='ignore'): # mstar==0 values generate ssfr==nan
+            log_ssfr = logZeroNaN(gc['subhalos']['SubhaloSFRinRad'] / mstar * 1e9) # 1/yr to 1/Gyr
+
+        # construct SFMS (in sSFR) values as a function of stellar mass (skip zeros, clip 10% tails)
+        # fix minVal and maxVal for consistent bins
+        binSize = 0.2 # dex 
+        mstar = logZeroNaN(mstar)
+        med_mstar, med_log_ssfr, mstar_bins = running_median_clipped(mstar, log_ssfr, binSize=binSize, minVal=6.0, maxVal=12.0, 
+                                                                     skipZerosX=True, skipZerosY=True, clipPercs=[10,90])
+
+        # constant value beyond the end of the MS
+        with np.errstate(invalid='ignore'):
+            w = np.where(med_mstar >= 10.5)
+        ind_last_sfms_bin = w[0][0] - 1
+        med_log_ssfr[w[0][0]:] = med_log_ssfr[ind_last_sfms_bin]
+
+        # for every subhalo, locate the value to compare to (its mstar bin)
+        inds = np.searchsorted(mstar_bins, mstar, side='left') - 1
+        comp_log_ssfr = med_log_ssfr[inds]
+
+        vals = log_ssfr - comp_log_ssfr # dex
+
+        takeLog = False
+        label = '$\Delta$SFMS [ dex ]'
+        if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
+
+        minMax = [-0.5, 0.5]
+        if tight: minMax = [-1.0, 1.0]
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
@@ -866,7 +900,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = ac[fieldName][:,radInd,vcutInd]
 
-        minMax = [-1.0, 1.5]
+        minMax = [-0.5, 1.5]
         if tight: minMax = [-1.5, 2.5]
         label = 'Mass Loading $\eta_{\\rm M}$ (%s,v>%s) [ log ]' % (rad,vcut)
 

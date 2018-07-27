@@ -112,7 +112,7 @@ def plotUVB(uvbName='fg11'):
     fig.savefig('uvb_%s.pdf' % uvbName)
     plt.close(fig)
 
-def plotIonAbundances(res='lg', elements=['Sodium']):
+def plotIonAbundances(res='lg', elements=['Carbon']):
     """ Debug plots of the cloudy element ion abundance trends with (z,dens,Z,T). """
     from util import simParams   
 

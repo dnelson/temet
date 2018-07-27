@@ -142,7 +142,7 @@ def sample_comparison_z2_sins_ao(sP):
     fig.savefig('sample_comparison_%s_sfrFullSub=%s.pdf' % (sP.simName,fullSubhaloSFR))
     plt.close(fig)
 
-def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None):
+def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None, massField='Masses'):
     """ Explore radial mass flux data, aggregating into a single Msun/yr value for each galaxy, and plotting 
     trends as a function of stellar mass. """
 
@@ -150,18 +150,28 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None):
     scope = 'SubfindWithFuzz' # or 'Global'
     ptTypes = ['Gas','Wind','total']
     assert ptType in ptTypes
-    if eta: assert ptType == 'total' # to avoid ambiguation, since massLoadingsSN() is always total
+    if eta and massField == 'Masses': assert ptType == 'total' # to avoid ambiguity, since massLoadingsSN() is always total
+    if massField != 'Masses': assert ptType == 'Gas' # to avoid ambiguity, since other massField's only exist for Gas
 
     # plot config
-    xlim = [7.5, 11.0]
+    xlim = [7.5, 11.25]
 
     if eta:
         saveBase = 'massLoading'
-        ylabel = 'Mass Loading $\eta = \dot{M}_{\\rm w} / \dot{M}_\star$ [ log ]'
+        pStr1 = ''
+        pStr2 = 'w' # 'wind'
         ylim = [-2.0, 2.0] # mass loadings default
+        if massField != 'Masses':
+            pStr1 = '_{\\rm %s}' % massField
+            pStr2 = massField
+            ylim = [-10.0, -2.0]
+            saveBase += massField
+        ylabel = 'Mass Loading $\eta%s = \dot{M}_{\\rm %s} / \dot{M}_\star$ [ log ]' % (pStr1,pStr2)
+
     else:
         saveBase = 'outflowRate'
         pStr = '%s ' % ptType if ptType != 'total' else ''
+        if massField != 'Masses': pStr = '%s ' % massField
         ylabel = '%sOutflow Rate [ log M$_{\\rm sun}$ / yr ]' % pStr
         ylim = [-2.8, 2.5] # outflow rates default
     
@@ -289,12 +299,19 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None):
 
     # load outflow rates
     mdot = {}
-    mdot['Gas'],  mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(sP, scope, 'Gas')
-    mdot['Wind'], mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(sP, scope, 'Wind')
-    mdot['total'] = mdot['Gas'] + mdot['Wind']
+    mdot['Gas'],  mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(sP, scope, 'Gas', massField=massField)
+
+    if massField == 'Masses':
+        mdot['Wind'], mstar, subids, binConfig, numBins, vcut_vals = loadRadialMassFluxes(sP, scope, 'Wind', massField=massField)
+        mdot['total'] = mdot['Gas'] + mdot['Wind']
+    else:
+        mdot['total'] = mdot['Gas']
 
     # load mass loadings (total)
     acField = 'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr'
+    if massField != 'Masses':
+        acField = 'Subhalo_MassLoadingSN_%s_SubfindWithFuzz_SFR-100myr' % massField
+
     etaM = sP.auxCat(acField)[acField]
 
     if eta:
@@ -345,7 +362,7 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None):
             saveName = '%s%s_mstar_C_%s_%d_%s_skipzeros-%s.pdf' % (saveBase,ptStr,sP.simName,sP.snap,stat,skipZeros)
             _plotHelper(vcutIndsPlot,radIndsPlot,saveName,ylimLoc=ylimLoc,stat=stat,skipZeroVals=skipZeros)
 
-def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None):
+def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None, massField='Masses'):
     """ Explore outflow velocity, aggregating into a single vout [km/s] value for each galaxy, and plotting 
     trends as a function of stellar mass. """
 
@@ -361,9 +378,14 @@ def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None):
     xlim = [7.5, 11.0]
     ylim = [0, 1200]
 
-    ylabel = 'Outflow Velocity [ km/s ]'
-    saveBase = 'outflowVelocity'
-    ptStr = '_total'
+    if massField == 'Masses':
+        ylabel = 'Outflow Velocity [ km/s ]'
+        saveBase = 'outflowVelocity'
+        ptStr = '_total'
+    else:
+        ylabel = '%s Outflow Velocity [ km/s ]' % massField
+        saveBase = 'outflowVelocity%s' % massField
+        ptStr = '_Gas'
 
     binSize = 0.2 # in M*
     markersize = 0.0 # 4.0, or 0.0 to disable
@@ -526,10 +548,13 @@ def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None):
         if redshift is not None:
             sP.setRedshift(redshift)
 
-        mdot, mstar, _, binConfig, numBins, _ = loadRadialMassFluxes(sP, scope, 'Gas')
+        mdot, mstar, _, binConfig, numBins, _ = loadRadialMassFluxes(sP, scope, 'Gas', massField=massField)
         mdot = mdot[:,:,mdotThreshVcutInd]
 
         acField = 'Subhalo_OutflowVelocity_%s' % scope
+        if massField != 'Masses':
+            acField = 'Subhalo_OutflowVelocity_%s_%s' % (massField,scope)
+
         ac = sP.auxCat(acField)
 
         vals  = ac[acField]
@@ -1307,22 +1332,25 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
                   'Gas_Fraction'          : 'f$_{\\rm gas}$ = $\\rho_{\\rm gas}$ / $\\rho_{\\rm b}$',
                   'Gas_Metal_Mass'        : '$\\rho_{\\rm metals}$ [ M$_{\\rm sun}$ kpc$^{-3}$ ]',
                   'Gas_Metallicity'       : 'Gas Metallicity (unweighted) [ log Z$_{\\rm sun}$ ]',
-                  'Gas_Metallicity_sfrWt' : 'Gas Metallicity (SFR weighted) [ log Z$_{\\rm sun}$ ]'}
+                  'Gas_Metallicity_sfrWt' : 'Gas Metallicity (SFR weighted) [ log Z$_{\\rm sun}$ ]',
+                  'Gas_Bmag'              : 'Gas Magnetic Field Strength [ log Gauss ]'}
     ylims_3d   = {'SFR'                   : [-10.0, 0.0],
                   'Gas_Mass'              : [0.0, 9.0],
                   'Stars_Mass'            : [0.0, 11.0],
                   'Gas_Fraction'          : [0.0, 1.0],
                   'Gas_Metal_Mass'        : [-4.0,  8.0],
                   'Gas_Metallicity'       : [-2.0, 1.0],
-                  'Gas_Metallicity_sfrWt' : [-1.5, 1.0]}
+                  'Gas_Metallicity_sfrWt' : [-1.5, 1.0],
+                  'Gas_Bmag'              : [-9.0, -4.0]}
 
     ylabels_2d = {'SFR'                   : '$\dot{\Sigma}_\star$ [ M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$ ]',
                   'Gas_Mass'              : '$\Sigma_{\\rm gas}$ [ M$_{\\rm sun}$ kpc$^{-2}$ ]',
                   'Stars_Mass'            : '$\Sigma_{\\rm stars}$ [ M$_{\\rm sun}$ kpc$^{-2}$ ]',
                   'Gas_Fraction'          : 'f$_{\\rm gas}$ = $\Sigma_{\\rm gas}$ / $\Sigma_{\\rm b}$',
                   'Gas_Metal_Mass'        : '$\Sigma_{\\rm metals}$ [ M$_{\\rm sun}$ kpc$^{-2}$ ]',
-                  'Gas_Metallicity'       : 'Gas Metallicity (unweighted) [ log Z$_{\\rm sun}$ ]',
-                  'Gas_Metallicity_sfrWt' : 'Gas Metallicity (SFR weighted) [ log Z$_{\\rm sun}$ ]',
+                  'Gas_Metallicity'       : ylabels_3d['Gas_Metallicity'],
+                  'Gas_Metallicity_sfrWt' : ylabels_3d['Gas_Metallicity_sfrWt'],
+                  'Gas_Bmag'              : ylabels_3d['Gas_Bmag'],
                   'Gas_LOSVel_sfrWt'      : 'Gas Velocity v$_{\\rm LOS}$ (SFR weighted) [ km/s ]',
                   'Gas_LOSVelSigma'       : 'Gas Velocity Dispersion $\sigma_{\\rm LOS,1D}$ [ km/s ]',
                   'Gas_LOSVelSigma_sfrWt' : 'Gas Velocity Dispersion $\sigma_{\\rm LOS,1D,SFRw}$ [ km/s ]'}
@@ -1331,8 +1359,9 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
                   'Stars_Mass'            : [3.0, 11.0],
                   'Gas_Fraction'          : [0.0, 1.0],
                   'Gas_Metal_Mass'        : [0.0, 8.0],
-                  'Gas_Metallicity'       : [-2.0, 1.0],
-                  'Gas_Metallicity_sfrWt' : [-1.5, 1.0],
+                  'Gas_Metallicity'       : ylims_3d['Gas_Metallicity'],
+                  'Gas_Metallicity_sfrWt' : ylims_3d['Gas_Metallicity_sfrWt'],
+                  'Gas_Bmag'              : ylims_3d['Gas_Bmag'],
                   'Gas_LOSVel_sfrWt'      : [0, 350],
                   'Gas_LOSVelSigma'       : [0, 350],
                   'Gas_LOSVelSigma_sfrWt' : [0, 350]}
@@ -1662,19 +1691,26 @@ def paperPlots(sPs=None):
 
     # --------------------------------------------------------------------------------------------------------------------------------------
 
-    # TODO: eta_E (energy), eta_Z (metal)
+    # future:
+    # TODO: eta_E (energy), eta_p (momentum), eta_Z (metal)
     # TODO: add vlos,r2d as quantities calculated in instantaneousMassFluxes(), can then simply bin (for a reasonable 2d aperture)
     # vlos instead of vrad, getting quite close to slit/fiber/down the barrel spectra
     # TODO: add r/rvir, v/vir as quantities in instantaneousMassFluxes(), so we can also bin in these
+    # TODO: play with 'total mass absorption spectra' (or even e.g. MgII, CIV), down the barrel, R_e aperture, need Voigt profile or maybe not
+
+    # now:
     # TODO: obs data points for vout and eta
     # TODO: check results of MgII velocities and mass loadings (at face value)
-    # TODO: play with 'total mass absorption spectra' (or even e.g. MgII, CIV), down the barrel, R_e aperture, need Voigt profile or maybe not
+    # TODO (thurs): 2D histogram plots where colorbar becomes 'fraction' of galaxies in that bin satisfying cut
+    # let cut be generic list of dicts, {fieldName:[min,max]}, where None values allow one-sided restrictions
+    # then decide some approximately right 'detectable outflow' or 'strong outflow' criterion to make FS+18, and look
 
     if 0:
         # fig 1: mass loading as a function of M* at one redshift, few variations in both (radius,vcut)
         config = {'vcutInds':[0,2,3], 'radInds':[1,2,5], 'stat':'mean', 'skipZeros':False}
 
         gasOutflowRatesVsMstar(TNG50, ptType='total', eta=True, config=config)
+        gasOutflowRatesVsMstar(TNG50, ptType='Gas', eta=True, config=config, massField='MgII') # testing MgII
 
     if 0:
         # fig 2: net outflow rates (2D): dependence on radius and vcut, for one/four stellar mass bins
@@ -1697,12 +1733,13 @@ def paperPlots(sPs=None):
         # fig 4: outflow velocity as a function of M* at one redshift, two v_perc values with individual markers
         config = {'percInds':[2,4], 'radInds':[1], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False, 'markersize':4.0}
         gasOutflowVelocityVsMstar(TNG50, config=config)
+        gasOutflowVelocityVsMstar(TNG50, config=config, massField='MgII') # testing MgII
 
         # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
         config = {'percInds':[1,2,4], 'radInds':[1,2,13], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False}
         gasOutflowVelocityVsMstar(TNG50, config=config)
 
-    if 1:
+    if 0:
         # fig 4: redshift evo
         config = {'percInds':[3], 'radInds':[1], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False}
         redshifts_loc = [1.0, 2.0, 3.0, 4.0, 6.0]
@@ -1820,7 +1857,7 @@ def paperPlots(sPs=None):
                 if projDim == '3D' and '_LOSVel' in field: continue
 
                 for xaxis in ['re']: #['log_pkpc','pkpc','log_rvir','rvir','log_rhalf','rhalf','log_re','re']:
-                    stackedRadialProfiles(sPs, field, xaxis=xaxis, cenSatSelect='cen', 
+                    stackedRadialProfiles(sPs, field, xaxis=xaxis, cenSatSelect=cenSatSelect, 
                                           projDim=projDim, mStarBins=mStarBins, pdf=pdf)
             pdf.close()
 
@@ -1846,7 +1883,7 @@ def paperPlots(sPs=None):
 
                 for xaxis in ['log_pkpc','log_rvir','log_rhalf','pkpc']:
                     for i, mStarBin in enumerate(mStarBins):
-                        stackedRadialProfiles(sPs, field, xaxis=xaxis, cenSatSelect='cen', 
+                        stackedRadialProfiles(sPs, field, xaxis=xaxis, cenSatSelect=cenSatSelect, 
                             projDim=projDim, mStarBins=[mStarBin], colorOff=i, pdf=pdf)
 
             pdf.close()
@@ -1883,6 +1920,20 @@ def paperPlots(sPs=None):
     # exporation: 2d histos
     if 0:
         sP = TNG50
+        figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
+        xQuant = 'mstar_30pkpc_log'
+        cQuant = 'vout_99_all' #'etaM_100myr_10kpc_0kms'
+
+        yQuant = 'delta_sfms'
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
+
+        pdf = PdfPages('histo2d_x=%s_%s.pdf' % (xQuant,sP.simName))
+        fig = plt.figure(figsize=figsize_loc)
+        quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
+        pdf.close()
+
+    if 0:
+        sP = TNG50_3
         figsize_loc = [figsize[0]*2*0.7, figsize[1]*3*0.7]
         xQuants = ['mstar_30pkpc_log','mhalo_200_log']
         cQuant = 'etaM_100myr_10kpc_0kms'
@@ -1899,7 +1950,7 @@ def paperPlots(sPs=None):
             for j, yQuants in enumerate(yQuantSets):
                 params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant}
 
-                pdf = PdfPages('histo2d_x=%s_set-%d_%sb.pdf' % (xQuant,j,sP.simName))
+                pdf = PdfPages('histo2d_x=%s_set-%d_%s.pdf' % (xQuant,j,sP.simName))
                 fig = plt.figure(figsize=figsize_loc)
                 quantHisto2D(sP, pdf, yQuant=yQuants[0], fig_subplot=[fig,321], **params)
                 quantHisto2D(sP, pdf, yQuant=yQuants[1], fig_subplot=[fig,322], **params)

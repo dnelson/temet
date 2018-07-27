@@ -188,6 +188,60 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
 
     return bin_centers, running_median, running_std
 
+def running_median_clipped(X, Y_in, nBins=100, minVal=None, maxVal=None, binSize=None, skipZerosX=False, skipZerosY=False, clipPercs=[10,90]):
+    """ Create a constant-bin median line of a (x,y) point set, clipping outliers above/below clipPercs. """
+    if minVal is None:
+        if skipZerosX:
+            minVal = np.nanmin( X[X != 0.0] )
+        else:
+            minVal = np.nanmin(X)
+    if maxVal is None:
+        maxVal = np.nanmax(X)
+
+    Y = Y_in
+    if skipZerosY:
+        # filter out
+        Y = Y_in.copy()
+        w = np.where(Y == 0.0)
+        Y[w] = np.nan
+
+    if binSize is not None:
+        nBins = round( (maxVal-minVal) / binSize ) + 1
+
+    if nBins <= 0: nBins = 1
+    bins = np.linspace(minVal, maxVal, nBins)
+    delta = bins[1]-bins[0] if nBins >= 2 else np.inf
+
+    running_median = np.zeros(nBins, dtype='float32')
+    bin_centers    = np.zeros(nBins, dtype='float32')
+
+    running_median.fill(np.nan)
+    bin_centers.fill(np.nan)
+
+    with np.errstate(invalid='ignore'): # both X and Y contain nan, silence np.where() warnings
+        for i, bin in enumerate(bins):
+            binMin = bin
+            binMax = bin + delta
+            w = np.where((X >= binMin) & (X < binMax))
+
+            if len(w[0]) == 0:
+                continue
+
+            # compute percentiles
+            percs = np.nanpercentile(Y[w], clipPercs,interpolation='linear')
+
+            # filter
+            w_unclipped = np.where( (Y[w] >= percs[0]) & (Y[w] <= percs[1]) )
+
+            if len(w_unclipped[0]) == 0:
+                continue
+
+            # compute median on points inside sigma-clipped region only
+            running_median[i] = np.nanmedian(Y[w][w_unclipped])
+            bin_centers[i] = np.nanmedian(X[w][w_unclipped])
+
+    return bin_centers, running_median, bins
+
 def running_median_sub(X, Y, S, nBins=100, binSize=None, skipZeros=False, sPercs=[25,50,75], 
                        percs=[16,84], minNumPerBin=10):
     """ Create a adaptive median line of a (x,y) point set using some number of bins, where in each 
