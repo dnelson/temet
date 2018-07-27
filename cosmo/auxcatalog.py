@@ -843,9 +843,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     # which bands? for now, to change, just recompute from scratch
     bands = []
-    #bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
+    bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
     #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
-    bands += ['sdss_g','sdss_r']
     bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
     bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
@@ -1913,7 +1912,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         radMax = 4.0 # log code units
         radNumBins = 100
         minHaloMass = 10.8 # log m200crit
-    if sP.boxSize in [35000]:
+    if sP.boxSize in [20000,35000]:
         radMin = -0.5 # log code units
         radMax = 3.0 # log code units
         radNumBins = 100
@@ -2794,6 +2793,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadProfile3D_Global_Gas_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='mass',op='sum',scope='global'),
 
+   'Subhalo_RadProfile3D_GlobalFoF_MgII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof'),
+   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_MgII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',proj2D=[2,2000]),
+
    'Subhalo_RadProfile3D_Global_Stars_Mass' : \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global'),
    'Subhalo_RadProfile2Dz_2Mpc_Global_Stars_Mass' : \
@@ -2815,6 +2819,9 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass',op='sum',scope='fof'),
    'Subhalo_RadProfile2Dz_FoF_Gas_Metal_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass',op='sum',scope='fof',proj2D=[2,None]),
+
+   'Subhalo_RadProfile3D_FoF_Gas_Bmag' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='bmag',op='mean',scope='fof'),
 
    'Subhalo_RadProfile3D_FoF_Gas_Metallicity' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='z_solar',op='mean',scope='fof'),
@@ -2847,11 +2854,16 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_MgII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Mg II mass'),
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_NaI' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Na I mass'),
 
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',thirdQuant=None),
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',thirdQuant=None),
-   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',thirdQuant=None),
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous'),
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous'),
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous'),
+
+   'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',massField='MgII'),
+   'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',massField='MgII'),
+   'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',massField='MgII'),
 
    'Subhalo_OutflowVelocity_SubfindWithFuzz' : partial(outflowVelocities),
+   'Subhalo_OutflowVelocity_MgII_SubfindWithFuzz' : partial(outflowVelocities,massField='MgII'),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 

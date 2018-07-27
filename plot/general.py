@@ -73,7 +73,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     if xlim is None: xlim = xlim_quant
 
     # start plot
-    fig = plt.figure(figsize=(14,10)) #(11.2,8.0)
+    fig = plt.figure(figsize=(11.2,8.0)) # (14,10)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel(xlabel)
@@ -156,7 +156,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             #if xx.size > sKn:
             #    yy = savgol_filter(yy,sKn,sKo)
 
-            label = '%s [%d]' % (sP.simName,objID)
+            label = '%s [%d]' % (sP.simName,objID) if not clean else sP.simName
             ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
             l, = ax.plot(xx, yy, linestyle=ls, lw=lw, label=label)
 
@@ -219,14 +219,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
-    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
+    xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
 
     if xlog: xvals = np.log10(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
+    yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
 
     if ylog: yvals = np.log10(yvals)
 
@@ -243,7 +243,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        weight = sP.snapshotSubsetP(partType, wtProp, haloID=haloID)
+        weight = sP.snapshotSubset(partType, wtProp, haloID=haloID)
 
         if sfreq0:
             weight = weight[w_sfr]
@@ -562,7 +562,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
     if ylog is None: ylog = ylog_q
 
     # start plot
-    fig = plt.figure(figsize=(11.2,8.0)) #(14,10)
+    fig = plt.figure(figsize=(11.2,8.0)) #(11.2,8.0) #(14,10)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel('Galactocentric Radius [ log pkpc ]')

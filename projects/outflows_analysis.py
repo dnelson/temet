@@ -1085,32 +1085,38 @@ def tracerOutflowRates(sP):
 
 
 
-def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous', scope='SubfindWithFuzz', thirdQuant=None):
+def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous', scope='SubfindWithFuzz', thirdQuant=None, massField='Masses'):
     """ Compute a mass loading factor eta_SN = eta_M = Mdot_out / SFR for every subhalo. The outflow 
     rates can be derived using the instantaneous kinematic method, or the tracer tracks method. 
     The star formation rates can be instantaneous or smoothed over some appropriate timescale. 
     Return has shape [nSubsInAuxCat,nRadBins,nVradCuts].
     If thirdQuant is not None, then can be one of (temp,z_solar,numdens,theta), in which the 
-    dependence on this parameter is given instead of integrated over, and the return has one more dimension. """
+    dependence on this parameter is given instead of integrated over, and the return has one more dimension. 
+    If massField is something other than 'Masses', the radial mass flux of this mass component (e.g. 'Mg II') is used instead. """
     assert sfr_timescale in [0, 10, 50, 100] # Myr
     assert pSplit is None # not supported
 
     if outflowMethod == 'instantaneous':
         # load fluxes of gas cells as well as wind-phase gas particles
-        gas_mdot, gas_mstar, ac_subhaloIDs, gas_binconf, gas_nbins, gas_vcutvals = loadRadialMassFluxes(sP, scope, 'Gas', thirdQuant=thirdQuant)
-        wind_mdot, wind_mstar, wind_subids, wind_binconf, wind_nbins, wind_vcutvals = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant)
+        gas_mdot, _, ac_subhaloIDs, gas_binconf, gas_nbins, gas_vcutvals = loadRadialMassFluxes(sP, scope, 'Gas', thirdQuant=thirdQuant, massField=massField)
 
-        assert np.array_equal(ac_subhaloIDs, wind_subids)
+        if massField == 'Masses':
+            wind_mdot, _, wind_subids, wind_binconf, wind_nbins, wind_vcutvals = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant, massField=massField)
 
-        # sum the two
-        outflow_rates = gas_mdot + wind_mdot
+            assert np.array_equal(ac_subhaloIDs, wind_subids)
+
+            # sum the two
+            outflow_rates = gas_mdot + wind_mdot
+        else:
+            # gas mass sub-component (phase), so no analogy in wind (i.e. current model assumption: wind particles have no ionic mass)
+            outflow_rates = gas_mdot
 
         # prepare metadata
         binConfig = 'none' if thirdQuant is None else gas_binconf[thirdQuant]
         numBins   = 'none' if thirdQuant is None else gas_nbins[thirdQuant]
 
         attrs = {'binConfig':binConfig, 'numBins':numBins, 'rad':gas_binconf['rad'], 'vcut_vals':gas_vcutvals}
-        desc = "Mass loading factor, computed using instantaneous gas fluxes and 30pkpc %d Myr SFRs." % sfr_timescale
+        desc = "Mass loading factor, computed using instantaneous gas fluxes [%s] and 30pkpc %d Myr SFRs." % (massField,sfr_timescale)
 
     elif outFlowMethod == 'tracer_shell_crossing':
         outflow_rates = tracerOutflowRates(sP)
@@ -1150,20 +1156,25 @@ def massLoadingsBH(sP):
     # instead of outflow_rate/BH_Mdot, maybe outflow_rate/(BH_dE/c^2)
     pass
 
-def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithFuzz'):
+def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithFuzz', massField='Masses'):
     """ Compute an 'outflow velocity' for every subhalo. 
     Return has shape [nSubsInAuxCat,nRadBins+1,nPercentiles], where the final radial bin considers gas at all radii (in the scope). """
     assert pSplit is None # not supported
 
     # load fluxes of gas cells as well as wind-phase gas particles
     thirdQuant = 'vrad'
-    gas_mdot, gas_mstar, ac_subhaloIDs, gas_binconf, gas_nbins, _ = loadRadialMassFluxes(sP, scope, 'Gas', thirdQuant=thirdQuant)
-    wind_mdot, wind_mstar, wind_subids, wind_binconf, wind_nbins, _ = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant, selNum=1)
+    gas_mdot, _, ac_subhaloIDs, gas_binconf, gas_nbins, _ = loadRadialMassFluxes(sP, scope, 'Gas', thirdQuant=thirdQuant, massField=massField)
 
-    assert np.array_equal(ac_subhaloIDs, wind_subids)
+    if massField == 'Masses':
+        wind_mdot, _, wind_subids, _, _, _ = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant, selNum=1, massField=massField)
 
-    # sum the two = [msun/yr] ~ [msun] since the normalization is everywhere constant
-    outflow_mass = gas_mdot + wind_mdot
+        assert np.array_equal(ac_subhaloIDs, wind_subids)
+
+        # sum the two = [msun/yr] ~ [msun] since the normalization is everywhere constant
+        outflow_mass = gas_mdot + wind_mdot
+    else:
+        # gas mass sub-component (phase), so no analogy in wind (i.e. current model assumption: wind particles have no ionic mass)
+        outflow_mass = gas_mdot
 
     # get radial velocity bins, restrict to vrad>0 (outflow)
     binConfig = gas_binconf[thirdQuant]
@@ -1220,7 +1231,7 @@ def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithF
 
     # return
     attrs = {'vradBinEdges':vradBinEdges, 'vradBins':vradBins, 'numVradBins':numVradBins, 'rad':gas_binconf['rad'], 'percs':percs}
-    desc = "Outflow velocities, computed using instantaneous gas fluxes."
+    desc = "Outflow velocities, computed using instantaneous gas [%s] fluxes." % massField
     select = "All Subfind subhalos (the subset which have computed radial mass fluxes)."
 
     attrs = dict(attrs)
