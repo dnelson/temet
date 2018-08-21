@@ -587,8 +587,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for field in r['subhalos']: # cache
             sP.data['gc_sub_%s' % field] = r['subhalos'][field]
 
-        if len(r['subhalos'].keys()) == 1:
-            r['subhalos'] = r['subhalos'][ r['subhalos'].keys()[0] ] # keep old behavior of il.groupcat.loadSubhalos()
+        if len(r['subhalos'].keys()) == 2: # keep old behavior of il.groupcat.loadSubhalos()
+            key = r['subhalos'].keys().remove('count')
+            r['subhalos'] = r['subhalos'][key]
 
     if fieldsHalos is not None:
         # check cache
@@ -631,8 +632,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for field in r['halos']: # cache
             sP.data['gc_halo_%s' % field] = r['halos'][field]
 
-        if len(r['halos'].keys()) == 1:
-            r['halos'] = r['halos'][ r['halos'].keys()[0] ] # keep old behavior of il.groupcat.loadHalos()
+        if len(r['halos'].keys()) == 2: # keep old behavior of il.groupcat.loadHalos()
+            key = r['halos'].keys().remove('count')
+            r['halos'] = r['halos'][key] 
 
     if sq:
         # remove 'halos'/'subhalos' subdict, and field subdict
@@ -757,7 +759,9 @@ def groupCatNumChunks(basePath, snapNum, subbox=None):
     _, sbStr1, sbStr2 = subboxVals(subbox)
     path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3)
 
-    nChunks = len(glob.glob(path+'/fof_*.hdf5')) + len(glob.glob(path+'/groups_*.hdf5'))
+    nChunks = len(glob.glob(path+'/fof_*.hdf5'))
+    if nChunks == 0:
+        nChunks += len(glob.glob(path+'/groups_*.hdf5'))
 
     if nChunks == 0:
         nChunks = 1 # single file per snapshot

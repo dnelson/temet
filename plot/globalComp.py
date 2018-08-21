@@ -356,7 +356,7 @@ def sfrAvgVsRedshift(sPs, pdf):
     pdf.savefig()
     plt.close(fig)
 
-def sfrdVsRedshift(sPs, pdf, xlog=True):
+def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
     """ Star formation rate density of the universe, vs redshift, vs observational points. """
     # plot setup
     sizefac = 1.0 if not clean else sfclean
@@ -392,7 +392,41 @@ def sfrdVsRedshift(sPs, pdf, xlog=True):
         print('SFRD: '+sP.simName)
         s = sfrTxt(sP)
 
-        ax.plot(s['redshift'], s['sfrd'], '-', lw=2.5, label=sP.simName)
+        ax.plot(s['redshift'], s['sfrd'], '-', lw=lw, label=sP.simName)
+
+        # load subhalo-based derivation of SFRD (optional)
+        if addSubhalosOnly:
+            saveFilename = sP.derivPath + 'sfrd_sub.hdf5'
+
+            if isfile(saveFilename):
+                # read existing
+                print('Read: [%s]' % saveFilename)
+                with h5py.File(saveFilename,'r') as f:
+                    z = f['z'][()]
+                    sfrd = f['sfrd'][()]
+            else:
+                # calculate new
+                print('Calculating new: [%s]' % saveFilename)
+                sP.setRedshift(0.0)
+
+                z = np.zeros( sP.snap, dtype='float32' )
+                sfrd = np.zeros( sP.snap, dtype='float32' )
+                sfrd.fill(np.nan)
+
+                for snap in range(0,sP.snap):
+                    print(snap)
+                    sP.setSnap(snap)
+                    gc = sP.groupCat(fieldsSubhalos=['SubhaloSFRinRad'])
+                    sfrd[snap] = gc['subhalos'].sum() / sP.boxSizeCubicComovingMpc # msun/yr/mpc^3
+                    z[snap] = sP.redshift
+
+                # save
+                with h5py.File(saveFilename,'w') as f:
+                    f['z'] = z
+                    f['sfrd'] = sfrd
+                print('Wrote: [%s]' % saveFilename)
+
+            ax.plot(z, sfrd, '-', lw=lw, label=sP.simName + ' (sub)')
 
     # second legend
     legend2 = ax.legend(loc='lower left')
@@ -2319,11 +2353,11 @@ def plots():
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    #sPs.append( simParams(res=1820, run='illustris') )
+    sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2331,6 +2365,8 @@ def plots():
     #sPs.append( simParams(res=1080, run='tng') )  
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
+
+    sPs.append( simParams(res=1504, run='eagle') )
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=128, run='tng', variant='6003') )
@@ -2340,10 +2376,10 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
-    if 0:
+    if 1:
         # testing
-        pdf = PdfPages('globalComps_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=False, simRedshift=4.0, dataRedshift=None, haloMasses=True)
+        pdf = PdfPages('globalComps_test2_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        sfrAvgVsRedshift(sPs, pdf)
         pdf.close()
         return
 
@@ -2368,6 +2404,7 @@ def plots():
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
+    stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=False, simRedshift=zZero, dataRedshift=None, haloMasses=True)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)
     stellarMassFunction(sPs, pdf, highMassEnd=True, simRedshift=zZero)
     stellarMassFunctionMultiPanel(sPs, pdf, use30kpc=True, highMassEnd=False, redshifts=[3,4])

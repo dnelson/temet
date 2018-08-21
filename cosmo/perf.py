@@ -547,8 +547,8 @@ def plotCpuTimes():
                 pColors.append( plt.Line2D( (0,1), (0,0), color=l.get_color(), marker='', linestyle=':') )
 
                 # quick estimate to a specific target redshift
-                if 0:
-                    targetRedshift = 6.0
+                if 1:
+                    targetRedshift = 0.0
                     targetA = 1/(1+targetRedshift)
                     _, ww = closest(xp,targetA)
                     print('  * To z = %.3f estimate %.2f Mhs' % (1.0/xp[ww]-1.0,yPredicted[ww]))

@@ -1712,27 +1712,32 @@ def convertEagleSnapshot(snap=20):
 
             # dm
             print(' dm')
-            for key in ['Coordinates','ParticleIDs','Velocity']:
-                data['PartType1'][key] = f['PartType1'][key][()]
+            if 'PartType1' in f:
+                for key in ['Coordinates','ParticleIDs','Velocity']:
+                    data['PartType1'][key] = f['PartType1'][key][()]
 
             if 'DMONLY' in loadPath:
                 continue
 
             # gas
             print(' gas')
-            for key in ['Coordinates','Density','InternalEnergy','Mass','ParticleIDs',
-                        'SmoothedMetallicity','StarFormationRate','Temperature','Velocity']:
-                data['PartType0'][key] = f['PartType0'][key][()]
+            if 'PartType0' in f:
+                for key in ['Coordinates','Density','InternalEnergy','Mass','ParticleIDs',
+                            'SmoothedMetallicity','StarFormationRate','Temperature','Velocity']:
+                    data['PartType0'][key] = f['PartType0'][key][()]
 
             # stars
             print(' stars')
-            for key in ['Coordinates','Mass','ParticleIDs','InitialMass',
-                        'SmoothedMetallicity','StellarFormationTime','Velocity']:
-                data['PartType4'][key] = f['PartType4'][key][()]
+            if 'PartType4' in f:
+                for key in ['Coordinates','Mass','ParticleIDs','InitialMass',
+                            'SmoothedMetallicity','StellarFormationTime','Velocity']:
+                    data['PartType4'][key] = f['PartType4'][key][()]
 
             # gas + stars
             print(' gas+stars')
             for pt in ['PartType0','PartType4']:
+                if pt not in f:
+                    continue
                 data[pt]['GFM_Metals'] = np.zeros( (data[pt]['ParticleIDs'].size,10), dtype='float32' )
                 data[pt]['GFM_MetalsTagged'] = np.zeros( (data[pt]['ParticleIDs'].size,6), dtype='float32' )
 
@@ -1744,13 +1749,14 @@ def convertEagleSnapshot(snap=20):
 
             # BHs
             print(' bhs')
-            for key in ['BH_CumlAccrMass','BH_CumlNumSeeds','BH_Density','BH_Mass','BH_Mdot','BH_Pressure',
-                        'BH_SoundSpeed', 'BH_SurroundingGasVel', 'BH_WeightedDensity', 'BH_AccretionLength',
-                        'Coordinates','Mass','ParticleIDs','Velocity']:
-                data['PartType5'][key] = f['PartType5'][key][()]
+            if 'PartType5' in f:
+                for key in ['BH_CumlAccrMass','BH_CumlNumSeeds','BH_Density','BH_Mass','BH_Mdot','BH_Pressure',
+                            'BH_SoundSpeed', 'BH_SurroundingGasVel', 'BH_WeightedDensity', 'BH_AccretionLength',
+                            'Coordinates','Mass','ParticleIDs','Velocity']:
+                    data['PartType5'][key] = f['PartType5'][key][()]
 
-            for key in ['BH_BPressure','BH_CumEgyInjection_RM','BH_CumMassGrowth_RM','BH_HostHaloMass','BH_U']: # missing
-                data['PartType5'][key] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
+                for key in ['BH_BPressure','BH_CumEgyInjection_RM','BH_CumMassGrowth_RM','BH_HostHaloMass','BH_U']: # missing
+                    data['PartType5'][key] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
 
 
         # cleanup header
@@ -1760,6 +1766,7 @@ def convertEagleSnapshot(snap=20):
         header['UnitLength_in_cm'] = 3.08568e+21
         header['UnitMass_in_g'] = 1.989e+43
         header['UnitVelocity_in_cm_per_s'] = 100000
+        header['Flag_DoublePrecision'] = 1 if data['PartType0']['Coordinates'].itemsize == 8 else 0
 
         # field renames
         for pt in data.keys():
@@ -1783,7 +1790,8 @@ def convertEagleSnapshot(snap=20):
                 data[pt]['GFM_MetalsTagged'][w] = 0.0 # enforce >=0
 
         data['PartType0']['Density'] /= 1e9 # Mpc^-3 -> Kpc^-3
-        data['PartType5']['BH_Density'] /= 1e9
+        if 'BH_Density' in data['PartType5']:
+            data['PartType5']['BH_Density'] /= 1e9
 
         # gas: ne
         x_h = data['PartType0']['GFM_Metals'][:,0]
@@ -1799,35 +1807,37 @@ def convertEagleSnapshot(snap=20):
         data['PartType0']['NeutralHydrogenAbundance'] = frac_nH0
 
         # stars: photometrics
-        data['PartType4']['GFM_StellarPhotometrics'] = np.zeros( (data['PartType4']['Masses'].size,8), dtype='float32' )
+        if 'Masses' in data['PartType4']:
+            data['PartType4']['GFM_StellarPhotometrics'] = np.zeros( (data['PartType4']['Masses'].size,8), dtype='float32' )
 
-        stars_formz = 1/data['PartType4']['GFM_StellarFormationTime'] - 1
-        stars_logagegyr = np.log10( sP.units.redshiftToAgeFlat(header['Redshift']) - sP.units.redshiftToAgeFlat(stars_formz) )
-        stars_logz = np.log10( data['PartType4']['GFM_Metallicity'] )
-        stars_masslogmsun = sP.units.codeMassToLogMsun( data['PartType4']['GFM_InitialMass'])
+            stars_formz = 1/data['PartType4']['GFM_StellarFormationTime'] - 1
+            stars_logagegyr = np.log10( sP.units.redshiftToAgeFlat(header['Redshift']) - sP.units.redshiftToAgeFlat(stars_formz) )
+            stars_logz = np.log10( data['PartType4']['GFM_Metallicity'] )
+            stars_masslogmsun = sP.units.codeMassToLogMsun( data['PartType4']['GFM_InitialMass'])
 
-        i1 = np.interp( stars_logz, gfm_photo['LogMetallicity_bins'], np.arange(gfm_photo['LogMetallicity_bins'].size) )
-        i2 = np.interp( stars_logagegyr,  gfm_photo['LogAgeInGyr_bins'],  np.arange(gfm_photo['LogAgeInGyr_bins'].size) )
-        iND = np.vstack( (i1,i2) )
+            i1 = np.interp( stars_logz, gfm_photo['LogMetallicity_bins'], np.arange(gfm_photo['LogMetallicity_bins'].size) )
+            i2 = np.interp( stars_logagegyr,  gfm_photo['LogAgeInGyr_bins'],  np.arange(gfm_photo['LogAgeInGyr_bins'].size) )
+            iND = np.vstack( (i1,i2) )
 
-        for i, band in enumerate(photoBandsOrdered):
-            mags_1msun = map_coordinates( gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
-            data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
+            for i, band in enumerate(photoBandsOrdered):
+                mags_1msun = map_coordinates( gfm_photo['Magnitude_%s' % band], iND, order=1, mode='nearest')
+                data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
         
         # BHs: bondi and eddington mdot (should be checked more carefully)
-        vrel = data['PartType5']['BH_SurroundingGasVel']
-        vrel_mag = np.sqrt(vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2)
-        vel_term = (data['PartType5']['BH_SoundSpeed']**2 + vrel_mag**2)**(3.0/2.0)
-        mdot_bondi = 4 * np.pi * sP.units.G**2 * data['PartType5']['BH_Mass']**2 * data['PartType5']['BH_Density'] / vel_term
-        data['PartType5']['BH_MdotBondi'] = mdot_bondi / 10.22
+        if 'BH_SurroundingGasVel' in data['PartType5']:
+            vrel = data['PartType5']['BH_SurroundingGasVel']
+            vrel_mag = np.sqrt(vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2)
+            vel_term = (data['PartType5']['BH_SoundSpeed']**2 + vrel_mag**2)**(3.0/2.0)
+            mdot_bondi = 4 * np.pi * sP.units.G**2 * data['PartType5']['BH_Mass']**2 * data['PartType5']['BH_Density'] / vel_term
+            data['PartType5']['BH_MdotBondi'] = mdot_bondi / 10.22
 
-        data['PartType5']['BH_MdotEddington'] = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) / 10.22
+            data['PartType5']['BH_MdotEddington'] = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) / 10.22
 
-        # BHs: cum egy injection
-        bh_E = 0.15 * 0.1 * sP.units.codeMassToMsun(data['PartType5']['BH_CumMassGrowth_QM']) * header['HubbleParam']**2  / header['Time']**2
-        bh_E *= sP.units.c_kpc_Gyr**2 * sP.units.redshiftToAgeFlat(header['Redshift']) * 1e9 # (msun/yr) (ckpc/h)^2
-        #data['PartType5']['BH_CumEgyInjection_QM'] = bh_E / 10.22 # (msun/yr) -> (1e10 Msun/h)/(0.978 Gyr/h) # needs fix
-        data['PartType5']['BH_CumEgyInjection_QM'] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
+            # BHs: cum egy injection
+            bh_E = 0.15 * 0.1 * sP.units.codeMassToMsun(data['PartType5']['BH_CumMassGrowth_QM']) * header['HubbleParam']**2  / header['Time']**2
+            bh_E *= sP.units.c_kpc_Gyr**2 * sP.units.redshiftToAgeFlat(header['Redshift']) * 1e9 # (msun/yr) (ckpc/h)^2
+            #data['PartType5']['BH_CumEgyInjection_QM'] = bh_E / 10.22 # (msun/yr) -> (1e10 Msun/h)/(0.978 Gyr/h) # needs fix
+            data['PartType5']['BH_CumEgyInjection_QM'] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
 
         # debug
         #for pt in data.keys():
