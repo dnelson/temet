@@ -436,12 +436,12 @@ class simParams:
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'FP/'
                 self.savPrefix  = 'E'
 
-                if res == 1504: self.simName = 'Eagle-L68n1504FP'
+                if res == 1504: self.simName = 'Eagle100-1' #'Eagle-L68n1504FP'
 
             if run == 'eagle_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'
                 self.savPrefix  = 'EDM'
-                self.simName    = 'Eagle-L68n1504DM'
+                self.simName    = 'Eagle100-1-Dark' #'Eagle-L68n1504DM'
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
@@ -557,7 +557,7 @@ class simParams:
 
             self.gravSoft    = 5.0
 
-            self.arepoPath  = self.basePath + 'sims.millennium/Millennium1/'
+            self.arepoPath  = self.basePath + 'sims.other/Millennium1/'
             self.savPrefix  = 'MIL'
             self.simName    = 'Millennium-I'
             self.colors     = ['#777777'] # gray
