@@ -153,6 +153,19 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         print(' All chunks concatenated, please manually delete them now.')
         return
 
+    def _expand_partial():
+        """ Helper, expand a subhalo-partial aC into a subhalo-complete array. """
+        nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
+        
+        if 'subhaloIDs' in r and (r['subhaloIDs'].size < nSubsTot):
+            shape = np.array(r[field].shape)
+            shape[0] = nSubsTot
+            new_data = np.zeros( shape, dtype=r[field].dtype )
+            new_data.fill(np.nan)
+            new_data[r['subhaloIDs'],...] = r[field]
+            print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
+            return new_data
+
     from cosmo import auxcatalog
     import datetime
     import getpass
@@ -245,16 +258,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             # subhaloIDs indicates computation only for partial set of subhalos?
             if expandPartial:
                 assert len(readFields) == 1
-                nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
-                
-                if 'subhaloIDs' in r and (r['subhaloIDs'].size < nSubsTot) and expandPartial:
-                    shape = np.array(r[field].shape)
-                    shape[0] = nSubsTot
-                    new_data = np.zeros( shape, dtype=r[field].dtype )
-                    new_data.fill(np.nan)
-                    new_data[r['subhaloIDs'],...] = r[field]
-                    print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
-                    r[field] = new_data
+                r[field] = _expand_partial()
 
             # cache
             sP.data['ac_'+field+epStr] = {}
@@ -314,7 +318,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             print(' Saved new [%s].' % savePath)
         else:
             print(' Saved over existing [%s].' % savePath)
-                    
+
+        # subhaloIDs indicates computation only for partial set of subhalos? modify for immediate return
+        if expandPartial:
+            r[field] = _expand_partial()
+
     return r
 
 def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
@@ -587,8 +595,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for field in r['subhalos']: # cache
             sP.data['gc_sub_%s' % field] = r['subhalos'][field]
 
-        if len(r['subhalos'].keys()) == 2: # keep old behavior of il.groupcat.loadSubhalos()
-            key = r['subhalos'].keys().remove('count')
+        if len(r['subhalos'].keys()) == 1 and r['subhalos'].keys()[0] != 'count': # keep old behavior of il.groupcat.loadSubhalos()
+            key = r['subhalos'].keys()[0]
             r['subhalos'] = r['subhalos'][key]
 
     if fieldsHalos is not None:
@@ -632,8 +640,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for field in r['halos']: # cache
             sP.data['gc_halo_%s' % field] = r['halos'][field]
 
-        if len(r['halos'].keys()) == 2: # keep old behavior of il.groupcat.loadHalos()
-            key = r['halos'].keys().remove('count')
+        if len(r['halos'].keys()) == 1 and r['halos'].keys()[0] != 'count': # keep old behavior of il.groupcat.loadHalos()
+            key = r['halos'].keys()[0]
             r['halos'] = r['halos'][key] 
 
     if sq:
