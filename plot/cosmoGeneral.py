@@ -78,15 +78,18 @@ def tngModel_chi(M_BH):
 
 # ------------------------------------------------------------------------------------------------------
 
-def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, 
-                 cStatistic=None, minCount=None, fig_subplot=[None,None], pStyle='white'):
+def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, 
+                 cStatistic=None, minCount=None, cRel=None, fig_subplot=[None,None], pStyle='white'):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
     empty bins are white, and bins whose cStatistic is NaN (e.g. any NaNs in bin) are gray. Or, if 
     '_nan' is in cStatistic, then empty bins remain white, while the cStatistic for bins with any 
     non-NaN values is computed ignoring NaNs (e.g. np.nanmean() instead of np.mean()), and bins 
-    which are non-empty but contain only NaN values are gray. """
+    which are non-empty but contain only NaN values are gray. If cRel is not None, then should be a 
+    3-tuple of [relMin,relMax,takeLog] in which case the colors are not of the physical cQuant itself, 
+    but rather the value of that quantity relative to the median at that value of the x-axis (e.g. mass). 
+    If xlim or ylim are not None, then override the respective axes ranges with these [min,max] bounds. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
 
@@ -112,10 +115,12 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
     sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
     if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
+    if xlim is not None: xMinMax = xlim
 
     # y-axis: load/calculate simulation colors, cached in sP.data
     sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
     if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
+    if ylim is not None: yMinMax = ylim
 
     # c-axis: load properties for color mappings
     if cQuant is None:
@@ -222,6 +227,18 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     if minCount is not None:
         cc[nn < minCount] = np.nan
+
+    # relative coloring as a function of the x-axis?
+    if cRel is not None:
+        # override min,max of color and whether or not to log
+        cMinMax[0], cMinMax[1], cLog = cRel
+
+        # normalize each column by median
+        medVals = np.nanmedian(cc, axis=0)
+        cc /= medVals[np.newaxis, :]
+
+        cmap   = loadColorTable('coolwarm') # diverging
+        clabel = 'Relative ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
 
     # for now: log on density and all color quantities
     cc2d = cc
@@ -383,24 +400,35 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
                 facecolor=fig.get_facecolor())
         plt.close(fig)
 
-def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', fig_subplot=[None,None]):
+def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=None, xlim=None, ylim=None, 
+                 sizefac=None, fig_subplot=[None,None]):
     """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
     sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
     For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against xQuant, with any additional configuration 
-    provided by xQuantSpec. Supports multiple sPs which are overplotted. Multiple yQuants results in a grid. """
+    provided by xQuantSpec. Supports multiple sPs which are overplotted. Multiple yQuants results in a grid. 
+    If xlim or ylim are not None, then override the respective axes ranges with these [min,max] bounds. 
+    If sRange is a list of lists, then overplot multiple different slice ranges. If yRel is not None, then should be a 
+    3-tuple of [relMin,relMax,takeLog] or 4-tuple of [relMin,relMax,takeLog,yLabel] in which case the y-axis is not 
+    of the physical yQuants themselves, but rather the value of the quantity relative to the median in the slice (e.g. mass)."""
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     if len(yQuants) == 0: return
     nRows = np.floor(np.sqrt(len(yQuants)))
     nCols = np.ceil(len(yQuants) / nRows)
 
+    # just a single sRange? wrap in an outer list
+    sRanges = sRange
+    if not isinstance(sRange[0],list):
+        sRanges = [sRange]
+
     # hard-coded config
     lw = 2.5
     ptPlotThresh = 2000
 
-    sizefac = 1.0 if not clean else sfclean
-    if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
+    if sizefac is None:
+        sizefac = 1.0 if not clean else sfclean
+        if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
 
     # start plot
     if fig_subplot[0] is None:
@@ -422,6 +450,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
             # y-axis: load galaxy properties (in histo2D were the color mappings)
             sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+            if ylim is not None: yMinMax = ylim
 
             if sim_yvals is None:
                 print('   skip')
@@ -429,7 +458,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             if yLog is True: sim_yvals = logZeroNaN(sim_yvals)
 
             # slice values: load fullbox galaxy property to slice on (e.g. Mstar or Mhalo)
-            sim_svals, _, _, _ = simSubhaloQuantity(sP, sQuant, clean)
+            sim_svals, slabel, _, _ = simSubhaloQuantity(sP, sQuant, clean)
 
             if sim_svals is None:
                 print('   skip')
@@ -437,11 +466,28 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
             # x-axis: load/calculate x-axis quantity (e.g. simulation colors), cached in sP.data
             sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+            if xlim is not None: xMinMax = xlim
 
             if sim_xvals is None:
                 print('   skip')
                 continue
             if xLog is True: sim_xvals = logZeroNaN(sim_xvals)
+
+            # relative coloring relative to the median in the slice?
+            if yRel is not None:
+                # override min,max of y-axis and whether or not to log
+                assert yLog is False # otherwise handle in a general way (and maybe undo?)
+                if len(yRel) == 3:
+                    yMinMax[0], yMinMax[1], yLog = yRel
+                    ylabel = 'Relative ' + ylabel.split('[')[0] + ('[ log ]' if yLog else '')
+                if len(yRel) == 4:
+                    yMinMax[0], yMinMax[1], yLog, ylabel = yRel
+                
+
+            ax.set_xlim(xMinMax)
+            ax.set_ylim(yMinMax)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
 
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -456,41 +502,43 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             sim_yvals = sim_yvals[wFinite]
             sim_svals = sim_svals[wFinite]
 
-            # make slice selection
-            wSlice = np.where( (sim_svals >= sRange[0]) & (sim_svals < sRange[1]) )
-            sim_xvals = sim_xvals[wSlice]
-            sim_yvals = sim_yvals[wSlice]
-            sim_svals = sim_svals[wSlice]
+            # loop over slice ranges
+            for sRange in sRanges:
+                # make slice selection
+                wSlice = np.where( (sim_svals >= sRange[0]) & (sim_svals < sRange[1]) )
+                xx = sim_xvals[wSlice]
+                yy = sim_yvals[wSlice]
 
-            ax.set_xlim(xMinMax)
-            ax.set_ylim(yMinMax)
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
+                # relative coloring relative to the median in the slice?
+                if yRel is not None:
+                    yy /= np.nanmedian(yy)
 
-            # plot points
-            c = ax._get_lines.prop_cycler.next()['color']
+                # plot points
+                c = ax._get_lines.prop_cycler.next()['color']
 
-            if sim_xvals.size < ptPlotThresh:
-                ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=0.3)
+                if xx.size < ptPlotThresh:
+                    ax.plot(xx, yy, 'o', color=c, alpha=0.3)
 
-            # median and 10/90th percentile lines
-            nBins = 30
-            if sim_xvals.size >= ptPlotThresh:
-                nBins *= 2
+                # median and 10/90th percentile lines
+                nBins = 30
+                if xx.size >= ptPlotThresh:
+                    nBins *= 2
 
-            binSize = (xMinMax[1]-xMinMax[0]) / nBins
+                binSize = (xMinMax[1]-xMinMax[0]) / nBins
 
-            xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-            if xm.size > sKn:
-                ym = savgol_filter(ym,sKn,sKo)
-                sm = savgol_filter(sm,sKn,sKo)
-                pm = savgol_filter(pm,sKn,sKo,axis=1)
+                xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=[5,10,25,75,90,95])
+                if xm.size > sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-            ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=sP.simName)
+                sName = slabel.split('[')[0].rstrip() # shortened version (remove units) of split quant name for legend
+                label = sP.simName if len(sRanges) == 1 else '%.1f < %s < %.1f' % (sRange[0],sName,sRange[1])
+                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
 
-            # percentile band:
-            if sim_xvals.size >= ptPlotThresh:
-                ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+                # percentile band:
+                if xx.size >= ptPlotThresh:
+                    ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
         # legend
         if i == 0:
