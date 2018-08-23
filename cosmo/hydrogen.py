@@ -74,9 +74,9 @@ def uvbPhotoionAtten(log_hDens, log_temp, redshift):
     # Note: The values given for z > 5 are calculated by fitting a power law and extrapolating.
     # Gray power law: -1.12e-19*(zz-3.5)+2.1e-18 fit to z > 2.
     # gamma_UVB: -8.66e-14*(zz-3.5)+4.84e-13
-    gray_opac = [2.59e-18,2.37e-18,2.27e-18,2.15e-18,2.02e-18,1.94e-18,1.82e-18, 1.71e-18,1.60e-18]
-    gamma_UVB = [3.99e-14,3.03e-13,6e-13,   5.53e-13,4.31e-13,3.52e-13,2.678e-13,1.81e-13,9.43e-14]
-    zz        = [0,       1,       2,       3,       4,       5,       6,        7,       8]
+    gray_opac = [2.59e-18,2.37e-18,2.27e-18,2.15e-18,2.02e-18,1.94e-18,1.82e-18, 1.71e-18,1.60e-18,2.8e-20]
+    gamma_UVB = [3.99e-14,3.03e-13,6e-13,   5.53e-13,4.31e-13,3.52e-13,2.678e-13,1.81e-13,9.43e-14,1e-20]
+    zz        = [0,       1,       2,       3,       4,       5,       6,        7,       8,       22]
 
     gamma_UVB_z    = spi.interp1d(zz, gamma_UVB) (redshift) [()] # 1/s (1.16e-12 is HM01 at z=3)
     gray_opacity_z = spi.interp1d(zz, gray_opac) (redshift) [()] # cm^2 (2.49e-18 is HM01 at z=3)

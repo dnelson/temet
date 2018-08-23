@@ -917,7 +917,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if rad == 'all':
             # last bin accumulates across all radii
-            radInd = radBins.size - 1
+            radInd = len(radBins) - 1
         else:
             # all other bins addressed by their midpoint (e.g. '10kpc')
             radBinsMid = (radBins[:-1] + radBins[1:]) / 2
@@ -930,7 +930,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [0, 800]
         if tight: minMax = [0, 1000]
         takeLog = False
-        label = 'Outflow Velocity $v_{\\rm out,%s}$ (r = %s) [ km/s ]' % (perc,rad)
+        label = 'Outflow Velocity $v_{\\rm out,%s,r=%s}$ [ km/s ]' % (perc,rad)
 
     if quant in ['M_BH','M_BH_actual']:
         # either dynamical (particle masses) or "actual" BH masses excluding gas reservoir

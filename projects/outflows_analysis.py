@@ -557,6 +557,9 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     minStellarMass = 7.4 # log msun (30pkpc values)
     cenSatSelect = 'cen' # cen, sat, all
 
+    if sP.boxSize == 75000.0: minStellarMass = 7.9
+    if sP.boxSize == 205000.0: minStellarMass = 8.4
+
     assert ptType in ['gas','wind']
     assert scope in ['subhalo','subhalo_wfuzz','global']
     if massField != 'Masses': assert ptType == 'gas' # no other masses for accumulation, that can be computed for stars

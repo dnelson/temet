@@ -18,6 +18,33 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_reza_vrel():
+    sub_id = 24462
+    r_in = 0.086578019
+    r_out = 0.14138131
+    v_shell = [ -80.0085907 , -465.78796387, 81.7454834 ]
+
+    sP = simParams(res=2160,run='millennium',snap=58)
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloVel'])['subhalos']
+
+    print(gc['SubhaloPos'][sub_id,:])
+
+    pos = sP.snapshotSubsetP('dm','pos')
+    dists = sP.periodicDists(gc['SubhaloPos'][sub_id,:], pos)
+
+    w = np.where( (dists >= r_in) & (dists < r_out) )
+
+    print(len(w[0]))
+
+    pos = None
+    vel = sP.snapshotSubset('dm','vel',inds=w[0])
+    for i in range(3):
+        print(vel[:,i].sum() / len(w[0]))
+
+    ids = sP.snapshotSubset('dm','ids',inds=w[0])
+
+    import pdb; pdb.set_trace()
+
 from numba import jit
 @jit(nopython=True, nogil=True, cache=True)
 def _numba_argsort(x):
