@@ -156,8 +156,13 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
     def _expand_partial():
         """ Helper, expand a subhalo-partial aC into a subhalo-complete array. """
         nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
+
+        assert 'subhaloIDs' in r # else check why we are here
+
+        if r['subhaloIDs'].size == nSubsTot:
+            return r[field]
         
-        if 'subhaloIDs' in r and (r['subhaloIDs'].size < nSubsTot):
+        if r['subhaloIDs'].size < nSubsTot:
             shape = np.array(r[field].shape)
             shape[0] = nSubsTot
             new_data = np.zeros( shape, dtype=r[field].dtype )
