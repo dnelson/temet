@@ -295,8 +295,6 @@ def galaxyHISizeMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
             ax.fill_between(xm, pm[1,:], pm[-2,:], color=l.get_color(), interpolate=True, alpha=0.25)
             #ax.fill_between(xm[1:-1], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.3)
 
-        print(xm,sm)
-
     # second legend
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles, labels, loc='lower right')

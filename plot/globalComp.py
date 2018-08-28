@@ -2286,6 +2286,9 @@ def haloSynchrotronPower(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
         if sP.isZoom:
             continue
 
+        if not sP.snapHasField('gas','MagneticField'):
+            continue # non-MHD runs
+
         # load
         gc = groupCat(sP, fieldsSubhalos=['mhalo_500_log'])
         ac = auxCat(sP, fields=acField)
@@ -2376,10 +2379,10 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
 
-    if 1:
+    if 0:
         # testing
         pdf = PdfPages('globalComps_test2_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        sfrAvgVsRedshift(sPs, pdf)
+        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=0.0)
         pdf.close()
         return
 
