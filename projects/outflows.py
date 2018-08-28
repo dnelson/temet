@@ -181,7 +181,7 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None, massField='Masses
     malpha = 0.2
     linestyles = ['-','--',':','-.']
 
-    def _plotHelper(vcutIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False):
+    def _plotHelper(vcutIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False,addModelTNG=False):
         """ Plot a radii series, vcut series, or both. """
         # plot setup
         fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
@@ -196,6 +196,41 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None, massField='Masses
 
         labels_sec = []
         colors = []
+
+        if addModelTNG:
+            # load mass loading (of TNG model at injection) analysis
+            sP_method = simParams(res=512,run='tng',redshift=sP.redshift,variant='0000') # L25n512_0000 box
+            windPropPath = sP_method.postPath + 'haloprops/windprops_%03d.hdf5' % sP_method.snap
+            print(windPropPath)
+            with h5py.File(windPropPath,'r') as f:
+                GFM_NotThermalWindMassLoading_sf_mean = f['Subhalo/GFM_NotThermalWindMassLoading_sf_mean'][()]
+
+            GFM_WindVel_mstar = sP_method.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+            assert GFM_NotThermalWindMassLoading_sf_mean.shape == GFM_WindVel_mstar.shape
+
+            # plot points
+            #w = np.where(GFM_NotThermalWindMassLoading_sf_mean > 0)
+            #ax.plot(GFM_WindVel_mstar[w], logZeroNaN(GFM_NotThermalWindMassLoading_sf_mean[w]), 'o', color='black', alpha=0.2)
+
+            # fit (1)
+            def _fun(x,params,fixed=None):
+                return params[0] + params[1] * x
+
+            w = np.where( (GFM_NotThermalWindMassLoading_sf_mean > 0) & (GFM_WindVel_mstar > 7.5) )
+            x_fit = GFM_WindVel_mstar[w]
+            y_fit = logZeroNaN(GFM_NotThermalWindMassLoading_sf_mean[w])
+            x0 = np.array([1.0, -2.0])
+
+            # fit (2)
+            result, resids, rank, singv, rcond = np.polyfit(x_fit,y_fit,2,full=True,cov=False)
+            xx = np.linspace(7.5,11.5,30)
+            yy = np.polyval(result,xx)
+
+            # plot fit
+            alpha = 0.2 if len(radIndsPlot) == 1 else 0.1
+            ax.fill_between(xx, yy-0.1, yy+0.1, color='black', interpolate=True, alpha=alpha)
+            ax.plot(xx, yy, '-', lw=lw, color='black', alpha=1.0)#, label='TNG Model (at Injection)')
+            #import pdb; pdb.set_trace()
 
         # loop over radii and/or vcut selections
         for i, rad_ind in enumerate(radIndsPlot):
@@ -334,10 +369,11 @@ def gasOutflowRatesVsMstar(sP, ptType, eta=False, config=None, massField='Masses
           (saveBase,ptStr,sP.simName,sP.snap,len(config['vcutInds']),len(config['radInds']),config['stat'],config['skipZeros'])
         if 'saveName' in config: saveName = config['saveName']
         if 'markersize' in config: markersize = config['markersize']
+        if 'addModelTNG' not in config: config['addModelTNG'] = False
         if 'ylim' not in config: config['ylim'] = None
 
         _plotHelper(vcutIndsPlot=config['vcutInds'],radIndsPlot=config['radInds'],saveName=saveName,
-                    stat=config['stat'],skipZeroVals=config['skipZeros'],ylimLoc=config['ylim'])
+                    stat=config['stat'],skipZeroVals=config['skipZeros'],ylimLoc=config['ylim'],addModelTNG=config['addModelTNG'])
         return
 
     # plot
@@ -404,7 +440,7 @@ def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None, massField='M
     malpha = 0.2
     zStr = str(sP.snap) if len(redshifts) == 1 else 'z='+'-'.join(['%.1f'%z for z in redshifts])
 
-    def _plotHelper(percIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False):
+    def _plotHelper(percIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False,addModelTNG=False):
         """ Plot a radii series, vcut series, or both. """
         if len(redshifts) > 1: assert len(radIndsPlot) == 1 # otherwise needs generalization
 
@@ -425,6 +461,45 @@ def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None, massField='M
         ax.fill_between(xlim, [0,0], [350,350], color='#cccccc', alpha=0.05)
         ax.plot(xlim, [350,350], '-', lw=lw, color='#cccccc', alpha=0.5)
         ax.text(xlim[0] + (xlim[1]-xlim[0])*0.03, 370.0, 'TNG v$_{\\rm wind,min}$ at Injection', color='#cccccc', alpha=0.8)
+
+        if addModelTNG:
+            # load velocity (of TNG model at injection) analysis
+            sP_method = simParams(res=512,run='tng',redshift=sP.redshift,variant='0000') # L25n512_0000 box
+            windPropPath = sP_method.postPath + 'haloprops/windprops_%03d.hdf5' % sP_method.snap
+            print(windPropPath)
+            with h5py.File(windPropPath,'r') as f:
+                GFM_WindVel_sf_mean = f['Subhalo/GFM_WindVel_sf_mean'][()]
+
+            GFM_WindVel_mstar = sP_method.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+            assert GFM_WindVel_sf_mean.shape == GFM_WindVel_mstar.shape
+
+            # plot points
+            #w = np.where(GFM_WindVel_sf_mean > 0)
+            #ax.plot(GFM_WindVel_mstar[w], GFM_WindVel_sf_mean[w], 'o', color='black', alpha=0.2)
+
+            # fit (1)
+            def _fun(x,params,fixed=None):
+                return params[0] + params[1] * x
+
+            w = np.where( (GFM_WindVel_sf_mean > 0) & (GFM_WindVel_mstar > 8.7) )
+            x_fit = GFM_WindVel_mstar[w]
+            y_fit = GFM_WindVel_sf_mean[w]
+            x0 = np.array([100.0, 10.0])
+            #res = least_squares(fun, x0, args=(x_fit,y_fit))
+
+            from util.helper import leastsq_fit
+            args = (x_fit,y_fit)
+            res = leastsq_fit(_fun, x0, args)
+
+            # fit (2)
+            result, resids, rank, singv, rcond = np.polyfit(x_fit,y_fit,2,full=True,cov=False)
+            xx = np.linspace(8.7,11.5,20)
+            yy = np.polyval(result,xx)
+
+            # plot fit
+            ax.fill_between(xx, yy-25, yy+25, color='black', interpolate=True, alpha=0.1)
+            ax.plot(xx, yy, '-', lw=lw, color='black', alpha=1.0, label='TNG Model (at Injection)')
+            #import pdb; pdb.set_trace()
 
         # loop over redshifts
         for k, redshift in enumerate(redshifts):
@@ -582,10 +657,12 @@ def gasOutflowVelocityVsMstar(sP_in, redshifts=[None], config=None, massField='M
           (saveBase,ptStr,sP.simName,zStr,len(config['radInds']),len(config['percInds']),config['stat'],config['skipZeros'])
         if 'saveName' in config: saveName = config['saveName']
         if 'ylim' not in config: config['ylim'] = None
+        if 'addModelTNG' not in config: config['addModelTNG'] = False
         if 'markersize' in config: markersize = config['markersize']
 
         _plotHelper(percIndsPlot=config['percInds'],radIndsPlot=config['radInds'],saveName=saveName,
-                    ylimLoc=config['ylim'],stat=config['stat'],skipZeroVals=config['skipZeros'])
+                    ylimLoc=config['ylim'],stat=config['stat'],skipZeroVals=config['skipZeros'],
+                    addModelTNG=config['addModelTNG'])
         return
 
     # plot
@@ -1712,20 +1789,17 @@ def paperPlots(sPs=None):
 
     # now:
     # TODO: obs data points for vout and eta
-    # TODO (thurs): 2D histogram plots where colorbar becomes 'fraction' of galaxies in that bin satisfying cut
-    # let cut be generic list of dicts, {fieldName:[min,max]}, where None values allow one-sided restrictions
-    # then decide some approximately right 'detectable outflow' or 'strong outflow' criterion to make FS+18, and look
 
     if 1:
         # fig 1: mass loading as a function of M* at one redshift, three v_rad values with individual markers
-        config = {'vcutInds':[0,2,3], 'radInds':[1], 'stat':'mean', 'ylim':[-0.55,2.05], 'skipZeros':False, 'markersize':4.0}
+        config = {'vcutInds':[0,2,3], 'radInds':[1], 'stat':'mean', 'ylim':[-0.55,2.05], 'skipZeros':False, 'markersize':4.0, 'addModelTNG':True}
         gasOutflowRatesVsMstar(TNG50, ptType='total', eta=True, config=config)
 
         # fig 1: mass loading as a function of M* at one redshift, few variations in both (radius,vcut)
-        config = {'vcutInds':[1,2,4], 'radInds':[1,2,5], 'stat':'mean', 'skipZeros':False}
+        config = {'vcutInds':[1,2,4], 'radInds':[1,2,5], 'stat':'mean', 'skipZeros':False, 'addModelTNG':True}
 
         gasOutflowRatesVsMstar(TNG50, ptType='total', eta=True, config=config)
-        gasOutflowRatesVsMstar(TNG50, ptType='Gas', eta=True, config=config, massField='MgII') # testing MgII
+        #gasOutflowRatesVsMstar(TNG50, ptType='Gas', eta=True, config=config, massField='MgII') # testing MgII
 
         # fig 1: mass loading 2D contours in (radius,vcut) plane: dependence on eta thresholds, at fixed redshift
         #contours = [-0.5, 0.0, 0.5]
@@ -1745,12 +1819,12 @@ def paperPlots(sPs=None):
 
     if 0:
         # fig 3: outflow velocity as a function of M* at one redshift, two v_perc values with individual markers
-        config = {'percInds':[2,4], 'radInds':[1], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False, 'markersize':4.0}
+        config = {'percInds':[2,4], 'radInds':[1], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False, 'markersize':4.0, 'addModelTNG':True}
         gasOutflowVelocityVsMstar(TNG50, config=config)
-        gasOutflowVelocityVsMstar(TNG50, config=config, massField='MgII') # testing MgII
+        #gasOutflowVelocityVsMstar(TNG50, config=config, massField='MgII') # testing MgII
 
         # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
-        config = {'percInds':[1,2,4], 'radInds':[1,2,13], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False}
+        config = {'percInds':[1,2,4], 'radInds':[1,2,13], 'ylim':[0,800], 'stat':'mean', 'skipZeros':False, 'addModelTNG':True}
         gasOutflowVelocityVsMstar(TNG50, config=config)
 
     if 0:
@@ -1972,15 +2046,20 @@ def paperPlots(sPs=None):
 
     # exporation: 2d histos
     if 0:
+        # TODO (thurs): 2D histogram plots where colorbar becomes 'fraction' of galaxies in that bin satisfying cut
+        # let cut be generic list of dicts, {fieldName:[min,max]}, where None values allow one-sided restrictions
+        # then decide some approximately right 'detectable outflow' or 'strong outflow' criterion to make FS+18, and look
         sP = simParams(res=2160,run='tng',redshift=2.0)
         figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
         xQuant = 'mstar_30pkpc_log'
-        cQuant = 'vout_50_all'
+        cQuant = 'vout_75_all'
         #cQuant = 'etaM_100myr_10kpc_0kms'
+        nBins = 50
 
         yQuant = 'delta_sfms'
-        cRel   = [0.7,1.3,False] # [cMin,cMax,cLog] #None
-        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 'cRel':cRel}
+        cRel   = None #[0.7,1.3,False] # [cMin,cMax,cLog] #None
+        cFrac  = [200, np.inf, False]
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 'cRel':cRel, 'cFrac':cFrac, 'nBins':nBins}
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
