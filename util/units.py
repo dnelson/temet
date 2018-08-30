@@ -217,7 +217,7 @@ class units(object):
     def codeLengthToComovingKpc(self, x):
         """ Convert length/distance in code units to comoving kpc. """
         x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam # remove little h factor
-        x_phys *= (self.kpc_in_cm/self.UnitLength_in_cm) # account for non-kpc code lengths
+        x_phys *= (self.UnitLength_in_cm/self.kpc_in_cm) # account for non-kpc code lengths
 
         return x_phys
 
@@ -260,7 +260,7 @@ class units(object):
         assert self._sP.redshift is not None
 
         x_comoving = np.array(x, dtype='float32') / self.scalefac
-        x_comoving /= (self.kpc_in_cm/self.UnitLength_in_cm) # account for non-kpc code lengths
+        x_comoving /= (self.UnitLength_in_cm/self.kpc_in_cm) # account for non-kpc code lengths
         x_comoving *= self._sP.HubbleParam # add little h factor
 
         return x_comoving
@@ -314,7 +314,7 @@ class units(object):
         divb_phys /= self.scalefac**3.0 # convert 'comoving' into physical
 
         divb_phys *= UnitMagneticField_in_cgs # [Gauss] = [g^(1/2) * cm^(-1/2) * s^(-1)]
-        divb_phys /= (self.kpc_in_cm/self.UnitLength_in_cm) # account for non-kpc code lengths (could be checked)
+        divb_phys /= (self.UnitLength_in_cm/self.kpc_in_cm) # account for non-kpc code lengths (could be checked)
         return divb_phys
 
     def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
@@ -467,7 +467,7 @@ class units(object):
         if totKpc3:
             # non-mass quantity input as numerator, assume it did not have an h factor
             dens_phys *= self._sP.HubbleParam
-            dens_phys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
+            dens_phys *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
 
         return dens_phys
 
@@ -517,11 +517,11 @@ class units(object):
             colDensPhys /= self.mass_proton # 1/cm^2
         if msunKpc2:
             colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g) # remove 10^10 factor
-            colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
+            colDensPhys *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
         if totKpc2:
             # non-mass quantity input as numerator, assume it did not have an h factor
             colDensPhys *= self._sP.HubbleParam
-            colDensPhys *= (3.085678e21/self.UnitLength_in_cm)**2.0 # account for non-kpc units
+            colDensPhys *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys
 
