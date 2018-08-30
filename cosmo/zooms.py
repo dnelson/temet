@@ -40,9 +40,10 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     dists_lr = periodicDists( halo['GroupPos'], pos_lr, sP=sPzoom )
     dists_hr = periodicDists( halo['GroupPos'], pos_hr, sP=sPzoom )
 
-    min_dist_lr = dists_lr.min()
+    min_dist_lr = dists_lr.min() # code units
+    min_dist_lr = sPzoom.units.codeLengthToMpc(min_dist_lr)
     if verbose:
-        print('min dists from halo to closest low-res DM: ', min_dist_lr)
+        print('min dists from halo to closest low-res DM [pMpc]: ', min_dist_lr)
 
     # allocate
     counts    = np.zeros( len(rVirFacs), dtype='int32' )   # number low-res DM
@@ -190,10 +191,14 @@ def sizefacComparison():
     """ Compare SizeFac 2,3,4 runs (contamination and CPU times) in the testing set. """
 
     # config
-    hInds    = [8,50,51,90]
-    sizeFacs = [2,3,4]
+    #hInds    = [8,50,51,90]
+    #variants = ['sf2','sf3','sf4']
+    #run      = 'tng_zoom_dm'
 
-    run      = 'tng_zoom_dm'
+    hInds    = [50]
+    variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf3']
+    run      = 'tng_zoom'
+
     zoomRes  = 13
     redshift = 0.0
 
@@ -201,8 +206,7 @@ def sizefacComparison():
     results = []
 
     for hInd in hInds:
-        for sizeFac in sizeFacs:
-            variant = 'sf%d' % sizeFac
+        for variant in variants:
             sP = simParams(run=run, res=zoomRes, hInd=hInd, redshift=redshift, variant=variant)
 
             cpu = loadCpuTxt(sP.arepoPath, keys=['total'])
@@ -214,9 +218,9 @@ def sizefacComparison():
             haloMass = sP.units.codeMassToLogMsun( halo['Group_M_Crit200'] )
             haloRvir = halo['Group_R_Crit200']
 
-            print('Load hInd=%2d sizeFac=%d minDist=%.1f' % (hInd,sizeFac,min_dist_lr))
+            print('Load hInd=%2d variant=%s minDist=%.2f' % (hInd,variant,min_dist_lr))
 
-            r = {'hInd':hInd, 'sizeFac':sizeFac, 'cpuHours':cpuHours, 'haloMass':haloMass, 'haloRvir':haloRvir, 
+            r = {'hInd':hInd, 'variant':variant, 'cpuHours':cpuHours, 'haloMass':haloMass, 'haloRvir':haloRvir, 
                  'contam_min':min_dist_lr, 'contam_rvirfacs':rVirFacs, 'contam_counts':counts}
             results.append(r)
 
@@ -227,26 +231,26 @@ def sizefacComparison():
         xlabel = 'Halo ID' if rowNum == 0 else 'Halo Mass [log M$_{\\rm sun}$]'
         ax = fig.add_subplot(2,3,rowNum*3+1)
 
-        # set up unique coloring by sizeFac
+        # set up unique coloring by variant/sizeFac
         colors = OrderedDict()
 
-        for sizeFac in sizeFacs:
+        for variant in variants:
             c = ax._get_lines.prop_cycler.next()['color']
-            colors[ sizeFac ] = c
+            colors[ variant ] = c
 
         handles = [plt.Line2D((0,1), (0,0), color=colors[sf], marker='o', lw=lw) for sf in colors.keys()]
 
         # (A) contamination dist kpc
         ylim = [-4.0, 0.0]
         ax.set_xlabel(xlabel)
-        ax.set_ylabel('Min LR Dist [ckpc/h]')
+        ax.set_ylabel('Min LR Dist [pMpc]')
 
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
-            color = colors[ result['sizeFac'] ]
+            color = colors[ result['variant'] ]
             ax.plot( xx, result['contam_min'], 'o', color=color, label='')
         
-        ax.legend(handles, ['sf=%d'%sf for sf in colors.keys()], loc='best')
+        ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')
 
         # (B) contamination rvir
         ax = fig.add_subplot(2,3,rowNum*3+2)
@@ -255,14 +259,14 @@ def sizefacComparison():
 
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
-            color = colors[ result['sizeFac'] ]
+            color = colors[ result['variant'] ]
             ax.plot( xx, result['contam_min']/result['haloRvir'], 'o', color=color, label='')
 
         xlim = ax.get_xlim()
         for rVirFac in [5,2,1]:
             ax.plot( xlim, [rVirFac,rVirFac], '-', color='#bbbbbb', alpha=0.4 )
 
-        ax.legend(handles, ['sf=%d'%sf for sf in colors.keys()], loc='best')
+        ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')
 
         # (C) cpu hours
         ax = fig.add_subplot(2,3,rowNum*3+3)
@@ -271,10 +275,10 @@ def sizefacComparison():
 
         for result in results:
             xx = result['hInd'] if rowNum == 0 else result['haloMass']
-            color = colors[ result['sizeFac'] ]
+            color = colors[ result['variant'] ]
             ax.plot( xx, np.log10(result['cpuHours']/1e3), 'o', color=color, label='')
 
-        ax.legend(handles, ['sf=%d'%sf for sf in colors.keys()], loc='best')
+        ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')
 
     # finish
     fig.tight_layout()    

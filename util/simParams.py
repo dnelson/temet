@@ -319,6 +319,10 @@ class simParams:
             if self.variant != 'None':
                 vStr = '_' + self.variant
 
+            # mpc? all except testing
+            if '_mpc' in self.variant or ('_dm' not in run and variant == 'sf3'):
+                self.mpcUnits = True
+
             # paths
             bs = str(int(self.boxSize/1000.0))
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
@@ -378,36 +382,6 @@ class simParams:
                 self.savPrefix  = 'IDM'
                 self.simName    = 'ILLUSTRIS_DM'
                 self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
-
-        if run in ['cosmo0_v6']:
-            self.validResLevels = [128,256,512]
-            self.boxSize        = 25000.0
-            self.groupOrdered   = True
-
-            self.omega_m     = 0.2726
-            self.omega_L     = 0.7274
-            self.omega_b     = 0.0456
-            self.HubbleParam = 0.704
-
-            # note: grav softenings comoving until z=1,: fixed at z=1 value after (except DM)
-            if res == 128: self.gravSoft = 4.0
-            if res == 256: self.gravSoft = 2.0
-            if res == 512: self.gravSoft = 1.0
-
-            bs = str( round(self.boxSize/1000) )
-
-            self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe']
-            self.winds  = 1
-            self.BHs    = 1
-
-            if res == 128: self.targetGasMass = 5.66834e-3
-            if res == 256: self.targetGasMass = 7.08542e-4
-            if res == 512: self.targetGasMass = 8.85678e-5
-
-            self.simName = 'Cosmo0_V6_L'+bs+'n'+str(res)
-
-            self.arepoPath  = self.basePath + 'sims.illustris/' + self.simName + '/'
-            self.savPrefix  = 'C'
 
         # EAGLE
         if run in ['eagle','eagle_dm']:
@@ -547,7 +521,7 @@ class simParams:
         if run == 'millennium':
             self.validResLevels = [2160]
             self.boxSize        = 500.0
-            self.mpcUnits       = True # careful!
+            self.mpcUnits       = True
             self.groupOrdered   = True # re-written HDF5 files
 
             self.omega_m     = 0.25

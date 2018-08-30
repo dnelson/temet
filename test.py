@@ -19,18 +19,23 @@ from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
 def check_reza_vrel():
-    sub_id = 24462
-    r_in = 0.086578019
-    r_out = 0.14138131
-    v_shell = [ -80.0085907 , -465.78796387, 81.7454834 ]
+    #sub_id = 24462
+    #r_in = 0.086578019
+    #r_out = 0.14138131
+    #v_shell = [ -80.0085907 , -465.78796387, 81.7454834 ]
+
+    r_in = 0.013103109 * 0.96
+    r_out = 0.022275893
 
     sP = simParams(res=2160,run='millennium',snap=58)
     gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloVel'])['subhalos']
 
-    print(gc['SubhaloPos'][sub_id,:])
+    #sub_pos = gc['SubhaloPos'][sub_id,:]
+    sub_pos = np.array([  7.49061203,  12.36560631,   6.19869804])
 
+    print(sub_pos)
     pos = sP.snapshotSubsetP('dm','pos')
-    dists = sP.periodicDists(gc['SubhaloPos'][sub_id,:], pos)
+    dists = sP.periodicDists(sub_pos, pos)
 
     w = np.where( (dists >= r_in) & (dists < r_out) )
 
