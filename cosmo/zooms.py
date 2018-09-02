@@ -196,7 +196,7 @@ def sizefacComparison():
     #run      = 'tng_zoom_dm'
 
     hInds    = [50]
-    variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf3']
+    variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
     run      = 'tng_zoom'
 
     zoomRes  = 13
@@ -287,7 +287,7 @@ def sizefacComparison():
 
 def parentBoxVisualComparison(haloID, variant='sf2', conf=0):
     """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations. """
-    sPz = simParams(run='tng_zoom_dm', res=13, hInd=haloID, redshift=0.0, variant=variant)
+    sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
 
     # render config
     rVirFracs  = [0.5, 1.0] # None
