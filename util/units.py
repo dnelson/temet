@@ -58,11 +58,11 @@ class units(object):
     c_ang_per_sec = None    # speed of light in [Angstroms/sec]
 
     # code parameters
-    CourantFac  = 0.3     # typical (used only in load:dt_courant)
+    CourantFac     = 0.3         # typical (used only in load:dt_courant)
 
     # derived constants (code units without h factors)
     H0          = None    # km/s/kpc (hubble constant at z=0)
-    H0_kmsMpc   = None     # km/s/Mpc
+    H0_kmsMpc   = None    # km/s/Mpc
     G           = None    # kpc (km/s)**2 / 1e10 msun
     rhoCrit     = None    # 1e10 msun / kpc**3 (critical density, z=0)
 
@@ -191,7 +191,7 @@ class units(object):
         return Tvir
 
     def codeBHMassToMdotEdd(self, mass, eps_r=None):
-        """ Convert a code mass (of a blackhole) into dM/dt_eddington in Msun/yr. """
+        """ Convert a code mass (of a blackhole) into dM/dt_eddington in [Msun/yr]. """
         mass_msun = self.codeMassToMsun(mass)
 
         if eps_r is None:
@@ -459,6 +459,7 @@ class units(object):
             raise Exception('Invalid combination.')
 
         dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3
+        dens_phys *= (self.kpc_in_cm/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         if cgs:
             dens_phys *= self.UnitDensity_in_cgs
@@ -467,7 +468,6 @@ class units(object):
         if totKpc3:
             # non-mass quantity input as numerator, assume it did not have an h factor
             dens_phys *= self._sP.HubbleParam
-            dens_phys *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
 
         return dens_phys
 
@@ -481,6 +481,7 @@ class units(object):
 
         # cosmological factors
         dens_code = dens.astype('float32') * self.scalefac**3 / self._sP.HubbleParam**2
+        dens_code *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
 
         # unit system
         if cgs:
@@ -509,7 +510,7 @@ class units(object):
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
         colDensPhys = colDens.astype('float32') * self._sP.HubbleParam / self.scalefac**2.0
-
+        
         if cgs:
             UnitColumnDensity_in_cgs = self.UnitMass_in_g / self.UnitLength_in_cm**2.0
             colDensPhys *= UnitColumnDensity_in_cgs # g/cm^2
@@ -517,11 +518,11 @@ class units(object):
             colDensPhys /= self.mass_proton # 1/cm^2
         if msunKpc2:
             colDensPhys *= (self.UnitMass_in_g/self.Msun_in_g) # remove 10^10 factor
-            colDensPhys *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
+            colDensPhys *= (self.kpc_in_cm/self.UnitLength_in_cm)**2.0 # account for non-kpc units
         if totKpc2:
             # non-mass quantity input as numerator, assume it did not have an h factor
             colDensPhys *= self._sP.HubbleParam
-            colDensPhys *= (self.UnitLength_in_cm/self.kpc_in_cm)**2.0 # account for non-kpc units
+            colDensPhys *= (self.kpc_in_cm/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
         return colDensPhys
 

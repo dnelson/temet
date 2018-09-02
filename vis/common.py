@@ -1465,7 +1465,11 @@ def addBoxMarkers(p, conf, ax):
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
-        scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest 100 code units (kpc)
+
+        if p['sP'].mpcUnits:
+            scaleBarLen = 1.0 * np.ceil(scaleBarLen/1.0) # round to nearest ~1 Mpc
+        else:
+            scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest ~100 kpc
 
         # if scale bar is more than 40% of width, reduce by 10x
         if scaleBarLen >= 0.4 * (p['extent'][1]-p['extent'][0]):
@@ -1476,7 +1480,8 @@ def addBoxMarkers(p, conf, ax):
             scaleBarLen *= 4
 
         # if scale bar is more than 1 Mpc (or 10Mpc), round to nearest 1 Mpc (or 10 Mpc)
-        for roundScale in [10000.0, 1000.0]:
+        roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0]
+        for roundScale in roundScales:
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
@@ -1845,6 +1850,7 @@ def renderMultiPanel(panels, conf):
 
             axStrs = {'code':'[ ckpc/h ]', 'kpc':'[ pkpc ]', 'mpc':'[ Mpc ]', 'arcmin':'[ arcminutes ]', 'deg':'[ degrees ]', 
                       'rad_pi':' [ radians / $\pi$ ]'}
+            if p['sP'].mpcUnits: axStrs['code'] = '[ cMpc/h ]'
             axStr = axStrs[ p['axesUnits'] ]
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' ' + axStr)
             ax.set_ylabel( ['x','y','z'][p['axes'][1]] + ' ' + axStr)
