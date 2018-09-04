@@ -1002,7 +1002,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
 
     for field in dsetName.split('.'):
         key = 'bins_%d_%s' % (selNum,field)
-        binConfig[field] = ac[acField + '_attrs'][key]
+        binConfig[field] = np.array(ac[acField + '_attrs'][key])
         numBins[field] = len(binConfig[field]) - 1
 
     if isinstance(ac[acField],list):
@@ -1015,11 +1015,12 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     for i, field in enumerate(binConfig):
         assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
 
-    if secondQuant == 'vrad' and dsetNameOrig not in ['rad.vrad','rad.vrad.vrad']:
-        # standard case, i.e. rad.vrad.* datasets
+    if secondQuant == 'vrad' and dsetNameOrig not in ['rad.vrad.vrad']:
+        # standard case, i.e. rad.vrad or rad.vrad.* datasets
 
         # collapse (sum over) temperature bins, since we don't care here (dsetName == 'rad.vrad.temp')
-        if ptType == 'Gas' and thirdQuant is None:
+        # note: for 'rad.vrad' this 2D hist only exists for Wind, so skip this accumulate and go straight to vcut processing
+        if ptType == 'Gas' and thirdQuant is None and dsetNameOrig not in ['rad.vrad']:
             dset = np.sum( dset, axis=(3,) )
 
         # now have a [nSubhalos,nRad,nVRad] shaped array, derive scalar quantities for each subhalo in auxCat
@@ -1107,6 +1108,7 @@ def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous',
             wind_mdot, _, wind_subids, wind_binconf, wind_nbins, wind_vcutvals = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant, massField=massField)
 
             assert np.array_equal(ac_subhaloIDs, wind_subids)
+            assert gas_mdot.shape == wind_mdot.shape
 
             # sum the two
             outflow_rates = gas_mdot + wind_mdot
