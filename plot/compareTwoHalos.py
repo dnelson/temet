@@ -18,7 +18,6 @@ from cosmo.util import crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatS
 from cosmo.color import loadSimGalColors, gfmBands
 from cosmo.mergertree import loadMPB
 from plot.quantities import simSubhaloQuantity
-from plot.cosmoGeneral import tngModel_chi
 from vis.common import setAxisColors
 from plot.config import *
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
@@ -282,10 +281,7 @@ def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
                 bh_medd = sP.units.codeBHMassToMdotEdd( mpbs[j]['SubhaloBHMass'] )
 
                 bh_lowStateFlag = np.zeros( bh_mdot.size, dtype='int32' )
-                if 'Illustris' in sP.simName:
-                    w = np.where( bh_mdot/bh_medd < 0.2 )
-                else:
-                    w = np.where( bh_mdot/bh_medd < tngModel_chi(bh_mass) )
+                w = np.where( bh_mdot/bh_medd < sP.units.BH_chi(bh_mass) )
                 bh_lowStateFlag[w] = 1
 
                 # split plot with np.where into low,high with squares,circles respectively

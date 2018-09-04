@@ -479,13 +479,16 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         particles['count'] = particles[ particles.keys()[0] ].shape[0]
 
     # allocate, NaN indicates not computed except for mass where 0 will do
+    dtype = particles[ptProperty].dtype
+    assert dtype in ['float32','float64'] # otherwise check, when does this happen?
+
     if op == 'ufunc': 
-        r = np.zeros( allocSize, dtype='float32' )
+        r = np.zeros( allocSize, dtype=dtype )
     else:
         if particles[ptProperty].ndim == 1:
-            r = np.zeros( nSubsDo, dtype='float32' )
+            r = np.zeros( nSubsDo, dtype=dtype )
         else:
-            r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype='float32' )
+            r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype=dtype )
 
     if op not in ['sum']:
         r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
@@ -2506,6 +2509,14 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_Mdot',op='max',rad=None),
    'Subhalo_BH_MdotEdd_largest' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_MdotEddington',op='max',rad=None),
+   'Subhalo_BH_BolLum_largest' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_BolLum',op='max',rad=None),
+   'Subhalo_BH_BolLum_basic_largest' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_BolLum_basic',op='max',rad=None),
+   'Subhalo_BH_EddRatio_largest' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_EddRatio',op='max',rad=None),
+   'Subhalo_BH_dEdt_largest' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_dEdt',op='max',rad=None),
 
    'Subhalo_SynchrotronPower_SKA' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='p_sync_ska',op='sum',rad=None),

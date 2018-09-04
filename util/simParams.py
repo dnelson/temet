@@ -82,8 +82,8 @@ class simParams:
     
     # phyiscal models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=PrimeTests Models, 3=FinalTNG Model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=PrimeTests Models, 3=FinalTNG Model)
+    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=FinalTNG Model)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=FinalTNG Model)
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
                        haloInd=None, subhaloInd=None):
@@ -187,8 +187,8 @@ class simParams:
 
             # common: physics models
             self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
-            self.winds  = 3
-            self.BHs    = 3
+            self.winds  = 2
+            self.BHs    = 2
 
             # DM-only runs:
             if '_dm' in run:
@@ -226,6 +226,11 @@ class simParams:
                     self.omega_L     = 0.7274
                     self.omega_b     = 0.0456
                     self.HubbleParam = 0.704
+
+                if self.variant == '0010':
+                    # Illustris model
+                    self.winds = 1
+                    self.BHs   = 1
 
                 # sims.TNG_method variations (e.g. L25n512_1002)
                 if self.variant.isdigit():
@@ -312,7 +317,12 @@ class simParams:
             self.HubbleParam = 0.6774
 
             if '_dm' in run:
+                # DMO
                 self.targetGasMass = 0.0
+            else:
+                # baryonic, TNG fiducial models
+                self.winds = 2
+                self.BHs   = 2
 
             # variants: testing only (high-res padding, core count scaling, etc)
             vStr = ''
@@ -486,8 +496,8 @@ class simParams:
                 self.trMCFields = [0,1,2,3,4,5,6,7,-1,-1,-1,-1,-1,-1,8] # shock_maxmach added
                 
                 self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
-                self.winds  = 3
-                self.BHs    = 3
+                self.winds  = 2
+                self.BHs    = 2
             if '_josh' in run:
                 assert self.variant in ['FP','MO','PO','FP1','FP2','FP3','FPorig'] # full-physics, metal-line cooling, primordial only
             else:

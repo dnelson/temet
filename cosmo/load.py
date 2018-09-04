@@ -1357,6 +1357,44 @@ def snapshotSubset(sP, partType, fields,
 
         # ------------------------------------------------------------------------------------------------------
 
+        # blackhole bolometric luminosity [erg/s] (model-dependent)
+        if field.lower() in ['bh_lbol','bh_bollum']:
+            bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
+            bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
+            r[field] = sP.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot)
+
+        if field.lower() in ['bh_lbol_basic','bh_bollum_basic']:
+            bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
+            bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
+            r[field] = sP.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, basic_model=True)
+
+        # blackhole eddington ratio [dimensionless linear]
+        if field.lower() in ['lambda_edd','edd_ratio','eddington_ratio','bh_eddratio']:
+            bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
+            bh_mdot_edd = snapshotSubset(sP, partType, 'BH_MdotEddington', **kwargs)
+            r[field] = (bh_mdot / bh_mdot_edd) # = (lum_bol / lum_edd)
+
+        # blackhole eddington luminosity [erg/s linear]
+        if field.lower() in ['ledd','bh_ledd','lumedd','bh_lumedd','eddington_lum']:
+            bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
+            r[field] = sP.units.codeBHMassToLumEdd(bh_mass)
+
+        # blackhole feedback energy injection rate [erg/s linear]
+        if field.lower() in ['bh_dedt','bh_edot']:
+            bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
+            bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
+            bh_mdot_bondi = snapshotSubset(sP, partType, 'BH_MdotBondi', **kwargs)
+            bh_mdot_edd = snapshotSubset(sP, partType, 'BH_MdotEddington', **kwargs)
+            bh_density  = snapshotSubset(sP, partType, 'BH_Density', **kwargs)
+
+            r[field] = sP.units.codeBHMassMdotToInstantaneousEnergy(bh_mass, bh_mdot, bh_density, bh_mdot_bondi, bh_mdot_edd)
+
+        # gas cell (SF-driven winds) feedback energy injection rate [erg/s linear]
+        if field.lower() in ['sf_dedt','sf_edot']:
+            assert 0 # TODO
+
+        # ------------------------------------------------------------------------------------------------------
+
         # synchrotron power model [W/Hz]
         if field.lower() in ['p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)

@@ -74,8 +74,10 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'ptot_gas_halo', 'ptot_b_halo',
                    'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']
 
-    quants3 = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high', 'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
-               'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio', 'Mdot_BH_edd']
+    quants_bh = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high', 'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
+                 'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio', 'Mdot_BH_edd', 
+                 'BH_BolLum', 'BH_BolLum_basic', 'BH_EddRatio', 'BH_dEdt']
+    # TODO: SFR_Edot, etaE_X, etaP_X
 
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
@@ -119,11 +121,11 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # assembly sub-subset of quantities as requested
     if wCounts: quants1 = [None] + quants1
 
-    quantList = quants1 + quants2 + quants2_mhd + quants3 + quants4 + quants5 + quants_misc + quants_color + quants_outflow
+    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5 + quants_misc + quants_color + quants_outflow
     if wTr: quantList += trQuants
     if wMasses: quants1 += quants_mass
     if onlyTr: quantList = trQuants
-    if onlyBH: quantList = quants3
+    if onlyBH: quantList = quants_bh
     if onlyMHD: quantList = quants2_mhd
 
     return quantList
@@ -245,7 +247,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = logZeroNaN(vals)
 
         minMax = [11.0, 15.0]
-        if sP.boxSize < 50000: minMax = [10.0, 13.5]
+        if sP.boxSize < 50000: minMax = [10.5, 13.5]
         label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ log M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
@@ -511,6 +513,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [0.1, 1.6]
         if tight: minMax = [0.2, 1.8]
 
+        if sP.redshift >= 1.0:
+            minMax[0] -= 0.2
+            minMax[1] -= 0.2
+        elif sP.redshift >= 2.0:
+            minMax[0] -= 0.6
+            minMax[1] -= 0.6
+
     if quant in ['surfdens1_stars','surfdens2_stars']:
         if '1_' in quant:
             selStr = 'HalfRad'
@@ -556,7 +565,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [-3.5,0.0]
         if tight: minMax = [-4.0, 0.0]
 
-        minMax[0] += sP.redshift/2
+        if sP.redshift >= 1.0:
+            minMax[0] += 1.0
+        elif sP.redshift >= 2.0:
+            minMax[0] += 2.0
 
     if quant in ['stellarage']:
         ageType = '4pkpc_rBandLumWt'
@@ -883,6 +895,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = bandMagRange(bands,tight=tight)
         label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
 
+        if sP.redshift >= 1.0:
+            minMax[0] -= 0.2
+        elif sP.redshift >= 2.0:
+            minMax[0] -= 0.3
+
     if quant[0:5] == 'etaM_':
         # outflows: mass loading factors
         _, sfr_timescale, rad, vcut = quant.split('_')
@@ -952,7 +969,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if quant == 'B_MH': label += ' w/ reservoir'
             if quant == 'B_MH_actual': label += ' w/o reservoir'
         minMax = [6.0,9.0]
-        if tight: minMax = [6.0,10.0] #[7.5,8.5]
+        if tight:
+            minMax = [6.0,10.0] #[7.5,8.5]
+        minMax[1] = np.clip(minMax[1] - sP.redshift/2, 8.0, None)
 
     if quant in ['Mdot_BH_edd']:
         # blackhole mass accretion rate normalized by its eddington rate
@@ -964,6 +983,28 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ac = auxCat(sP, fields=fields)
 
         vals = ac['Subhalo_BH_Mdot_largest'] / ac['Subhalo_BH_MdotEdd_largest']
+
+    if quant in ['BH_BolLum', 'BH_BolLum_basic', 'BH_EddRatio', 'BH_dEdt']:
+        # blackhole bolometric luminosity, complex or simple model, eddington ratio, energy injection rate
+        if quant in ['BH_BolLum','BH_BolLum_basic']:
+            label = 'Blackhole $L_{\\rm bol}$ [ log erg/s ]'
+            minMax = [43.0, 46.0]
+            if tight: minMax = [41.0, 46.0]
+            if not clean and '_basic' in quant: label += ' [basic]'
+
+        if quant in ['BH_EddRatio']:
+            label = 'Blackhole $\lambda_{\\rm edd}$ [ log ]'
+            minMax = [-4.0, 0.0]
+            if tight: minMax = [-5.0, 0.0]
+
+        if quant in ['BH_dEdt']:
+            label = '$\dot{E}_{\\rm BH}$ [ log erg/s ]'
+            minMax = [42.0, 45.0]
+            if tight: minMax = [41.0, 45.0]
+
+        acName = 'Subhalo_%s_largest' % quant
+        ac = auxCat(sP, fields=[acName])
+        vals = ac[acName]
 
     if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio','BH_CumEgy_ratioInv',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:
@@ -1212,6 +1253,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if '_volwt' in quant:
                 minMax = [-5.0, -3.0]
                 if tight: minMax = [-6.0, -3.0]
+
+        if sP.redshift >= 1.0:
+            minMax[0] += 1.0
+            minMax[1] += 1.0
+        elif sP.redshift >= 2.0:
+            minMax[0] += 2.0
+            minMax[1] += 2.0
 
         wtStr = 'massWt' if not '_volwt' in quant else 'volWt'
 
