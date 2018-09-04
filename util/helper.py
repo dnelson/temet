@@ -727,7 +727,8 @@ def getWhiteBlackColors(pStyle):
     return color1, color2, color3, color4
 
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None, numColors=None):
-    """ Load a custom or built-in color table specified by ctName.
+    """ Load a custom or built-in color table specified by ctName. Note that appending '_r' to most default colormap names 
+    requests the colormap in reverse order (e.g. changing light->dark to dark->light).
       valMinMax: required for some custom colormaps, and for some adjustments.
       plawScale: return the colormap modified as cmap_new = cmap_old**plawScale
       cmapCenterVal: return the colormap modified such that its middle point lands at 
@@ -740,11 +741,16 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
     from matplotlib.pyplot import cm
     from matplotlib.colors import LinearSegmentedColormap
+    import cmocean
     cmap = None
 
     # matplotlib
     if ctName in cm.cmap_d:
         cmap = cm.get_cmap(ctName, lut=numColors)
+
+    # cmocean
+    if 'cmo.%s' % ctName in cm.cmap_d:
+        cmap = cm.get_cmap('cmo.%s' % ctName, lut=numColors)
 
     # cubehelix (with arbitrary parameters)
     # ...

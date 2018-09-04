@@ -66,20 +66,10 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
     addUniverseAgeAxis(ax, sP)
 
-def tngModel_chi(M_BH):
-    """ Return chi(M_BH) for the fiducial TNG model parameters. M_BH in Msun. """
-    chi0 = 0.002
-    beta = 2.0
-    chi_max = 0.1
-
-    chi_bh = np.clip( chi0 * (M_BH / 1e8)**beta, 0.0, chi_max )
-
-    return chi_bh
-
 # ------------------------------------------------------------------------------------------------------
 
 def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, 
-                 cStatistic=None, minCount=None, cRel=None, fig_subplot=[None,None], pStyle='white'):
+                 cStatistic=None, minCount=None, cRel=None, cFrac=None, nBins=None, fig_subplot=[None,None], pStyle='white'):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
@@ -88,13 +78,19 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     non-NaN values is computed ignoring NaNs (e.g. np.nanmean() instead of np.mean()), and bins 
     which are non-empty but contain only NaN values are gray. If cRel is not None, then should be a 
     3-tuple of [relMin,relMax,takeLog] in which case the colors are not of the physical cQuant itself, 
-    but rather the value of that quantity relative to the median at that value of the x-axis (e.g. mass). 
+    but rather the value of that quantity relative to the median at that value of the x-axis (e.g. mass).
+    If cFrac is not None, then a 4-tuple of [fracMin,fracMax,takeLog,label] specifying a criterion on the values 
+    of cQuant such that the colors are not of the physical cQuant itself, but rather represent the fraction of 
+    subhalos in each pixel satisfying (fracMin <= cQuant < fracMax), where +/-np.inf is allowed for one-sided, 
+    takeLog should be True or False, and label is either a string or None for automatic.
     If xlim or ylim are not None, then override the respective axes ranges with these [min,max] bounds. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
+    assert np.count_nonzero([cRel,cFrac]) <= 1 # at most one
 
     # hard-coded config
-    nBins    = 80
+    if nBins is None: 
+        nBins = 80
     cmap     = loadColorTable('viridis') # plasma
     colorMed = 'black'
     lwMed    = 2.0
@@ -240,6 +236,54 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         cmap   = loadColorTable('coolwarm') # diverging
         clabel = 'Relative ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
 
+    # color based on fraction of systems in a pixel which satisfy some criterion?
+    if cFrac is not None:
+        # override min,max of color and whether or not to log
+        fracMin, fracMax, cLog, fracLabel = cFrac
+        cMinMax = [0.0, 1.0] if not cLog else [-1.5,0.0]
+
+        # select sim values which satisfy criterion, and re-count
+        w = np.where( (sim_cvals >= fracMin) & (sim_cvals < fracMax) )
+
+        nn_sat, _, _, _ = binned_statistic_2d(sim_xvals[w], sim_yvals[w], sim_cvals[w], 'count', 
+                                          bins=nBins2D, range=[xMinMax,yMinMax])
+        nn_sat = nn_sat.T
+
+        with np.errstate(invalid='ignore'):
+            # set each pixel value to the fraction (= N_sat / N_tot)
+            cc = nn_sat / nn
+
+            # set absolute zeros to a small finite value, to avoid special (gray) coloring
+            w = np.where(cc == 0.0)
+        cc[w] = 1e-10
+
+        # modify colortable and label
+        cmap = loadColorTable('matter_r') # haline, thermal, solar, deep_r, dense_r, speed_r, amp_r, matter_r
+
+        qStr = clabel.split('[')[0] # everything to the left of the units
+        if '$' in clabel:
+            qStr = '$%s$' % clabel.split('$')[1] # just the label symbol, if one is present
+        qUnitStr = ''
+        if '[' in clabel:
+            qUnitStr = ' ' + clabel.split('[')[1].split(']')[0].strip()
+            if qUnitStr == ' log': qUnitStr = ''
+
+        # 1 digit after the decimal point if the bounds numbers are not roundable to ints, else just integers
+        qDigits = 1 if ((np.isfinite(fracMin) & ~float(fracMin).is_integer()) | (np.isfinite(fracMax) & ~float(fracMax).is_integer())) else 0
+
+        clabel = 'Fraction ('
+        if np.isinf(fracMin):
+            clabel += '%s < %.*f%s)' % (qStr,qDigits,fracMax,qUnitStr)
+        elif np.isinf(fracMax):
+            clabel += '%s > %.*f%s)' % (qStr,qDigits,fracMin,qUnitStr)
+        else:
+            clabel += '%.*f < %s [%s] < %.*f)' % (qDigits,fracMin,qStr,qUnitStr,qDigits,fracMax)
+        clabel += (' [ log ]' if cLog else '')
+
+        # manually specified label?
+        if fracLabel is not None:
+            clabel = fracLabel
+
     # for now: log on density and all color quantities
     cc2d = cc
     if cQuant is None or cLog is True:
@@ -376,12 +420,15 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
         color = sampleColorTable('tableau10','purple')
         ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
-        ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color=color, size=17)
+        ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color=color, size=20)
 
     # colorbar
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
     cb = plt.colorbar(cax=cax)
     cb.ax.set_ylabel(clabel)
+    if len(clabel) > 45:
+        newsize = 23 - (len(clabel)-45)/5
+        cb.ax.set_ylabel(clabel, size=newsize) # default: 24.192 (14 * x-large)
     setColorbarColors(cb, color2)
 
     # finish plot and save
@@ -774,7 +821,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     # derive eddington ratio transition as a function of x-axis (e.g. M_star)
                     linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
                     if bhPropName == 'M_BH_actual':
-                        ym_bh = tngModel_chi(ym_bh)
+                        ym_bh = sP.units.BH_chi(ym_bh)
 
                     ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
 

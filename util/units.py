@@ -57,8 +57,12 @@ class units(object):
     mag2cgs       = None    # Lsun/Hz to cgs [erg/s/cm^2] at d=10pc
     c_ang_per_sec = None    # speed of light in [Angstroms/sec]
 
-    # code parameters
+    # code/model parameters
     CourantFac     = 0.3         # typical (used only in load:dt_courant)
+    BH_eps_r       = 0.2         # BH radiative efficiency, unchanged in Illustris and TNG models
+    BH_eps_f_high  = 0.10        # BH high-state efficiency, TNG fiducial model (is 0.05 for Illustris)
+    BH_f_thresh    = 0.05        # multiplier on the star-formation threshold modulating eps_f_low, TNG fiducial model
+    PhysDensThresh = 7.54654e-4  # star-formation threshold density (code units, comoving) = 0.232 h^2/cm^3
 
     # derived constants (code units without h factors)
     H0          = None    # km/s/kpc (hubble constant at z=0)
@@ -149,7 +153,7 @@ class units(object):
     def codeMassToMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (msun). """
         if not isinstance(mass, np.ndarray): mass = np.array(mass)
-        if mass.size == 1: mass = np.array([mass])
+        #if mass.size == 1: mass = np.array([mass]) # this is a bad idea, creates a nested array=[[val]] (TODO: remove)
         
         mass_msun = mass.astype('float32') * (self.UnitMass_in_Msun) / self._sP.HubbleParam
         
@@ -190,12 +194,16 @@ class units(object):
             Tvir = logZeroSafe(Tvir)
         return Tvir
 
+    def codeMassOverTimeToMsunPerYear(self, mass_over_time_val):
+        """ Convert a code [mass/time] value (e.g. BH_Mdot) into [Msun/yr]. The usual 10.22 factor. """
+        return mass_over_time_val * (self.UnitMass_in_Msun/self.UnitTime_in_yr)
+
     def codeBHMassToMdotEdd(self, mass, eps_r=None):
-        """ Convert a code mass (of a blackhole) into dM/dt_eddington in [Msun/yr]. """
+        """ Convert a code mass (of a blackhole) into dM/dt_eddington in [Msun/yr]. Also available directly as 'BH_MdotEddington' field. """
         mass_msun = self.codeMassToMsun(mass)
 
         if eps_r is None:
-            eps_r = 0.2 # radiative efficiency, unchanged in Illustris and TNG models
+            eps_r = self.BH_eps_r # BH radiative efficiency, unchanged in Illustris and TNG models
 
         # Mdot(Edd) = 4*pi*G*M_BH*m_p / (eps_r*sigma_T*c) in Msun/s
         mdot_edd = 4*np.pi*self.Gravity*mass_msun*self.mass_proton / (eps_r*self.sigma_thomson*self.c_cgs)
@@ -203,6 +211,81 @@ class units(object):
         mdot_edd_msun_yr = mdot_edd * self.s_in_yr
 
         return mdot_edd_msun_yr
+
+    def codeBHMassToLumEdd(self, mass):
+        """ Convert a code mass (of a blackhole) into its Eddington luminosity [erg/s]. """
+        mass_msun = self.codeMassToMsun(mass).astype('float64') # prevent overflow
+
+        # L(Edd) = 4*pi*G*M_BH*m_p*c / sigma_T [msun/s * cm^2/s^2] = 1.26e38 * mass_msun [erg/s]
+        lum_edd = 4 * np.pi * self.Gravity * mass_msun * self.mass_proton * self.c_cgs / self.sigma_thomson
+        lum_edd *= self.Msun_in_g # [g/s * cm^2/s^2] = [erg/s]
+
+        return lum_edd
+
+    def codeBHMassMdotToBolLum(self, mass, mdot, basic_model=False):
+        """ Convert a (BH mass, BH mdot) pair to a bolometric luminosity [erg/s]. """
+        mdot_edd = self.codeBHMassToMdotEdd(mass)
+        lum_edd = self.codeBHMassToLumEdd(mass)
+
+        mdot_msun_yr = self.codeMassOverTimeToMsunPerYear(mdot).astype('float64') # prevent overflow
+
+        # Weinberger+ (2018) Eqn 12, i.e. Churazov+ (2005)
+        Lbol = np.zeros( mdot_edd.size, dtype='float64' )
+        w_high = np.where(mdot_msun_yr >= 0.1 * mdot_edd)
+        w_low  = np.where(mdot_msun_yr < 0.1 * mdot_edd)
+
+        assert len(w_high[0]) + len(w_low[0]) == mdot_edd.size
+
+        Lbol[w_high] = self.BH_eps_r * mdot_msun_yr[w_high] * self.Msun_in_g * self.c_cgs**2 / self.s_in_yr # erg/s
+        Lbol[w_low]  = (10.0 * (mdot_msun_yr[w_low]/mdot_edd[w_low]))**2 * 0.1 * lum_edd[w_low]
+
+        # alternatively, the simplest option (not by default):
+        if basic_model:
+            Lbol = self.BH_eps_r * mdot_msun_yr * self.Msun_in_g * self.c_cgs**2 / self.s_in_yr # erg/s
+
+        return Lbol
+
+    def BH_chi(self, M_BH):
+        """ Return chi(M_BH) threshold for the fiducial Illustris/TNG model parameters. M_BH in Msun. """
+        if self._sP.BHs == 1:
+            # fiducial Illustris model
+            return 0.2
+
+        elif self._sP.BHs == 2:
+            # fiducial TNG model
+            chi0 = 0.002
+            beta = 2.0
+            chi_max = 0.1
+
+            chi_bh = np.clip( chi0 * (M_BH / 1e8)**beta, 0.0, chi_max )
+
+        else:
+            raise Exception('Unimplemented (or DMO or other strangeness).')
+
+        return chi_bh
+
+    def codeBHMassMdotToInstantaneousEnergy(self, bh_mass, bh_mdot, bh_density, bh_mdot_bondi, bh_mdot_edd):
+        """ Convert the instantaneous mass/accretion properties of a BH, all in code units, to an instantaneous amount of 
+        energy being injected as per the (mode-dependent) feedback model of the simulation, in [erg/s]. """
+        assert self._sP.BHs == 2 # denotes fiducial TNG model, otherwise generalize to Illustris and/or orthers
+
+        mass_msun = self.codeMassToMsun(bh_mass)
+        bh_chi = self.BH_chi(mass_msun) # low-state/high-state threshold
+        mdot_g_s = self.codeMassOverTimeToMsunPerYear(bh_mdot).astype('float64') * self.Msun_in_g / self.s_in_yr # g/s
+
+        dEdt = np.zeros( bh_mass.size, dtype='float64' )
+
+        w_high = np.where(bh_mdot_bondi/bh_mdot_edd >= bh_chi)
+        w_low  = np.where(bh_mdot_bondi/bh_mdot_edd < bh_chi)
+
+        assert len(w_high[0]) + len(w_low[0]) == bh_mass.size
+
+        BH_eps_f_low = np.clip(bh_density / (self.BH_f_thresh * self.PhysDensThresh), None, 0.2) # max of 0.2
+
+        dEdt[w_high] = self.BH_eps_f_high * self.BH_eps_r * mdot_g_s[w_high] * self.c_cgs**2 # erg/s
+        dEdt[w_low]  = BH_eps_f_low[w_low] * mdot_g_s[w_low] * self.c_cgs**2 # erg/s
+
+        return dEdt
 
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
