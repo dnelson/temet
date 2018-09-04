@@ -22,6 +22,7 @@ from plot.config import *
 from cosmo.mergertree import mpbPositionComplete
 from vis.common import gridBox, setAxisColors, setColorbarColors
 from vis.halo import renderSingleHalo, selectHalosFromMassBin
+from vis.box import renderBox
 from projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox
 
 def galaxyMosaics(conf=1, rotation='face-on'):
@@ -30,7 +31,7 @@ def galaxyMosaics(conf=1, rotation='face-on'):
       todo: pick systems by hand instead of top N
       todo: more than 1 mass bin?"""
     res        = 2160
-    redshift   = 1.0
+    redshift   = 4.0
     run        = 'tng'
     rVirFracs  = None
     method     = 'sphMap' #'histo'
@@ -87,6 +88,8 @@ def galaxyMosaics(conf=1, rotation='face-on'):
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
         if conf == 6:
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
+        if conf == 7:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
 
         if i == 0: # upper left
             panels[-1]['labelScale'] = 'physical'
@@ -95,6 +98,65 @@ def galaxyMosaics(conf=1, rotation='face-on'):
 
     hStr = '_HISTO' if method == 'histo' else ''
     plotConfig.saveFilename = 'renderHalos_%s-%d_%s_%s%s.pdf' % (sP.simName,sP.snap,panels[0]['partField'],rotation,hStr)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def galaxyMosaic_topN(numHalosInd,panelNum=1):
+    """ Mosaic, top N most massive. """
+    res        = 2160
+    redshift   = 2.0 # 1.0
+    run        = 'tng'
+    rVirFracs  = None
+    method     = 'sphMap'
+    nPixels    = [960,960]
+    sizeType   = 'codeUnits'
+    axes       = [0,1]
+    rotation   = 'face-on'
+
+    class plotConfig:
+        plotStyle = 'edged'
+        rasterPx  = 240
+        nRows     = 1 # overriden below
+        colorbars = True
+
+    # configure panels
+    panels = []
+
+    starsMM = [6.5,10.0] # coldens_msunkpc2
+    gasMM   = [7.0,8.5]
+
+    # combined plot of centrals in mass bins
+    sP = simParams(res=res, run=run, redshift=redshift)
+
+    mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
+    cen_inds = np.where(np.isfinite(mhalo))[0]
+
+    if numHalosInd == 0:
+        hIDs = cen_inds[0:0+8] # eight total
+        plotConfig.nRows = 4 # 4x2
+    if numHalosInd == 1:
+        hIDs = cen_inds[8:8+40] # 40 total, skipping the first eight
+        plotConfig.nRows = 8 # 8x5
+    if numHalosInd == 2:
+        hIDs = cen_inds[0:29*26] # 754 total, starting again at the first
+        plotConfig.nRows = 29 # 29x26 = aspect ratio about half of 16:9
+
+    for hID in hIDs:
+        # set semi-adaptive size (code units)
+        loc_size = 80.0
+        if mhalo[hID] <= 12.5:
+            loc_size = 60.0
+        if mhalo[hID] <= 12.1:
+            loc_size = 40.0
+
+        # either stars or gas, face-on
+        if panelNum == 1:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        if panelNum == 2: 
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+
+    plotConfig.saveFilename = savePathDefault + 'renderHalos_%s-%d_n%d_%s.pdf' % \
+                              (sP.simName,sP.snap,plotConfig.nRows,panels[0]['partType'])
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -588,6 +650,84 @@ def visHaloTimeEvoFullbox(sP, haloInd, extended=False, pStyle='white'):
 
     visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=extended, pStyle=pStyle)
 
+def singleHaloDemonstrationImage():
+    """ Projections of a big halo showing outflow characteristics. """
+    panels = []
+
+    run        = 'tng'
+    res        = 1080
+    redshift   = 1.6
+    rVirFracs  = [0.5, 1.0] # None
+    method     = 'sphMap'
+    nPixels    = [1920,1080]
+    axes       = [0,1]
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    labelHalo  = True
+    relCoords  = True
+    rotation   = None
+
+    size = 1000.0
+    sizeType = 'pkpc'
+
+    haloID = 4
+
+    sP = simParams(res=res, run=run, redshift=redshift)
+    
+    hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+
+    #panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
+    panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[0, 900]} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = nPixels[0] #1200 #nPixels[0]
+        colorbars    = True
+        saveFilename = './oneHaloSingleField_%s_%d_z%.1f_haloID-%d.pdf' % (run,res,redshift,haloID)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def subboxSingleVelocityFrame():
+    """ Grab one of the velocity frames from SB2. """
+    panels = []
+
+    run     = 'tng'
+    method  = 'sphMap'
+    nPixels = [3840,2160]
+    axes    = [0,1] # x,y
+
+    labelScale = 'physical'
+    labelZ     = True
+    plotHalos  = False
+
+    res      = 2160
+    redshift = 1.68
+    variant = 'subbox2'
+
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
+    #panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
+    #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
+    #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
+    #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
+
+    class plotConfig:
+        saveFilename = 'vis_%s_%d_%s_%s.pdf' % (sP.simName,sP.snap,panels[0]['partType'],panels[0]['partField'])
+        #savePath = '/u/dnelson/data/frames/%s%s/' % (res,variant)
+        plotStyle = 'edged'
+        rasterPx  = nPixels
+        colorbars = True
+
+        # movie config
+        #minZ      = 0.0
+        #maxZ      = 50.0 # tng subboxes start at a=0.02
+        #maxNSnaps = None #2400 #4500 # 2.5 min at 30 fps (1820sb0 render)
+
+    renderBox(panels, plotConfig, locals())
+    #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
 def run():
     """ Run. """
     redshift = 0.73 # snapshot 58, where intermediate trees were constructed
@@ -605,3 +745,4 @@ def run():
         sel = halo_selection(TNG50, minM200=12.0)
         #preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
         visHaloTimeEvoFullbox(TNG50, haloInd=sel['haloInds'][0], extended=True)
+

@@ -85,7 +85,7 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
     labelZ     = True
 
     if conf == 'one':
-        # TNG100
+        # TNG100 subbox0
         res = 1820
         variant = 'subbox0'
         boxOffset = [0,1000.0,0]
@@ -93,23 +93,18 @@ def subbox_movie(curTask=0, numTasks=1, conf='one'):
         panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[100,900]} )
 
     if conf == 'two':
-        # TNG50
+        # TNG50 subbox2
         res = 2160
         variant = 'subbox2'
 
         #panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
-        #panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
-        panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
+        panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
+        #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
         #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
         #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
 
-        # TESTING STARS:
-        #snapHsmlForStars = True # general 64 NGB DM smoothing
-        #hsmlFac = 2.0
-        ###alsoSFRgasForStars = True
-
     class plotConfig:
-        savePath = '/u/dnelson/data/frames/%s%s/' % (res,variant)
+        savePath = '/u/dnelson/data/frames/%s%s_temp/' % (res,variant)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
