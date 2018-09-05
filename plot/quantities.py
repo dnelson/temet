@@ -142,9 +142,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     k = 'sim_' + quant + '_'
 
     if k+'vals' in sP.data:
-        # data already exists in sP cache?
+        # data already exists in sP cache? return copies rather than views in case data or metadata are modified
         vals, label, minMax, takeLog = \
-          sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog']
+          sP.data[k+'vals'].copy(), sP.data[k+'label'], list(sP.data[k+'minMax']), sP.data[k+'takeLog']
 
         return vals, label, minMax, takeLog
 
@@ -1338,7 +1338,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     k = 'sim_' + quant + '_'
     sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog'] = \
-        vals, label, minMax, takeLog
+        vals.copy(), label, list(minMax), takeLog # copy instead of view in case data or metadata is modified
 
     # return
     return vals, label, minMax, takeLog
