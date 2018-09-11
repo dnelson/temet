@@ -267,11 +267,88 @@ def _generate_grid(level, i, j, k, Radius, Angle, pIndex, BoxSize, MaxLevel, Min
             P_Mass[pIndex] = 1.0 / (dim*dim*dim)
             pIndex += 1
 
+def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
+    """ Helper function for below, return the DM particle indices from the ICs snapshot corresponding to dmIDs_halo. """
+    from util.helper import pSplitRange
+    from tracer.tracerMC import match3
+    from os.path import isfile
+    from sys import stdout
+
+    if simpleMethod:
+        # OLD: non-caching method, identical return
+        start_time = time.time()
+        sP.setSnap('ics')
+        dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')
+        print(' load done, took [%g] sec.' % (time.time()-start_time))
+        next_time = time.time()
+
+        inds_ics, inds_halo = match3(dmIDs_ics, dmIDs_halo)
+        assert inds_ics.size == inds_halo.size == dmIDs_halo.size
+        print(' match done, took [%g] sec.' % (time.time()-next_time))
+
+        return inds_ics
+
+    # NEW method
+    assert 0 # needs to be debugged
+    idCacheFile = sP.derivPath + 'cache/sorted_dm_ids_ics.hdf5'
+    if not isfile(idCacheFile):
+        # make new
+        sP.setSnap('ics')
+        dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')
+        print(' load done, took [%g] sec.' % (time.time()-start_time))
+        next_time = time.time()
+
+        # sort and save
+        sort_inds = np.argsort(dmIDs_ics)
+        ids_sorted = dmIDs_ics[sort_inds]
+        dmIDs_ics = None
+
+        with h5py.File(idCacheFile,'w') as f:
+            f['sort_inds'] = sort_inds
+            f['ids_sorted'] = ids_sorted
+
+        print('Wrote [%s], quit and restart for memory.')
+        return
+
+    # load sorted IDs chunk by chunk, run an independent match() on each
+    print('Using cache file: [%s]' % idCacheFile)
+    nDMPart = sP.snapshotHeader()['NumPart'][sP.ptNum('dm')]
+    nChunks = 10
+
+    nMatched = 0
+    inds_ics = np.zeros( dmIDs_halo.size, dtype='int64' )
+
+    for i in range(nChunks):
+        range_loc = pSplitRange([0,nDMPart], nChunks, i)
+        print(' %d%%' % (float(i)/nChunks*100), end='')
+        stdout.flush()
+
+        with h5py.File(idCacheFile,'r') as f:
+            sort_inds = f['sort_inds'][range_loc[0]:range_loc[1]]
+            ids_sorted = f['ids_sorted'][range_loc[0]:range_loc[1]]
+
+        next_time = time.time()
+        inds_ics_loc, inds_halo = match3(ids_sorted, dmIDs_halo, firstSorted=True)
+
+        if inds_halo is None:
+            continue # no matches in current chunk
+
+        # unsort indices and stamp
+        inds_ics[nMatched : nMatched+inds_ics_loc.size] = sort_inds[inds_ics_loc]
+        nMatched += inds_ics_loc.size
+
+        if nMatched > dmIDs_halo.size:
+            raise Exception('Not expected.')
+        if nMatched == dmIDs_halo.size:
+            break # done early
+
+    assert nMatched == dmIDs_halo.size
+    print(' done.')
+    return inds_ics
+
 def generate(fofID, EnlargeHighResFactor=None):
     """ Create zoom particle load and save. """
     from util.simParams import simParams
-    from cosmo.load import groupCatSingle, snapshotSubset
-    from tracer.tracerMC import match3
 
     # config
     sP = simParams(res=2048,run='tng_dm',redshift=0.0)
@@ -286,9 +363,10 @@ def generate(fofID, EnlargeHighResFactor=None):
     saveFilename = 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
 
     # load halo DM positions and IDs at target snapshot
+    sP_snap = sP.snap
     start_time = time.time()
 
-    halo = groupCatSingle(sP, haloID=fofID)
+    halo = sP.groupCatSingle(haloID=fofID)
     haloLen    = halo['GroupLenType'][sP.ptNum('dm')]
     haloPos    = halo['GroupPos']
     haloVirRad = sP.units.codeLengthToMpc(halo['Group_R_Crit200'])
@@ -297,23 +375,14 @@ def generate(fofID, EnlargeHighResFactor=None):
     print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], m200 [%.2f] rvir [%.2f pMpc], loading IDs and crossmatching for positions...' % \
         (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen,haloM200,haloVirRad))
 
-    dmIDs_halo = snapshotSubset(sP, 'dm', 'ids', haloID=fofID)
+    dmIDs_halo = sP.snapshotSubset('dm', 'ids', haloID=fofID)
     assert haloLen == dmIDs_halo.size
 
-    # load parent box initial conditions
-    sP_snap = sP.snap
-    sP.setSnap('ics')
-    dmIDs_ics = snapshotSubset(sP, 'dm', 'ids')
-    print(' load done, took [%g] sec.' % (time.time()-start_time))
-    next_time = time.time()
+    # locate dm particle indices in ICs of this halo
+    inds_ics = _get_ic_inds(sP, dmIDs_halo, simpleMethod=True)
 
-    inds_ics, inds_halo = match3(dmIDs_ics, dmIDs_halo)
-    assert inds_ics.size == inds_halo.size == dmIDs_halo.size
-    print(' match done, took [%g] sec.' % (time.time()-next_time))
-    dmIDs_ics = None
-
-    # locate dm particles in ICs, load positions of halo DM particles
-    posInitial = snapshotSubset(sP, 'dm', 'pos', inds=inds_ics)
+    # for dm particles in ICs, load positions of halo DM particles
+    posInitial = sP.snapshotSubsetP('dm', 'pos', inds=inds_ics)
     ext_min = np.min(posInitial, axis=0)
     ext_max = np.max(posInitial, axis=0)
     extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
@@ -411,8 +480,8 @@ def generate(fofID, EnlargeHighResFactor=None):
     print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
 
 def generate_set():
-    haloIDs = [50,51,90]
-    sizeFacs = [2.0,3.0,4.0]
+    haloIDs = [3232] #[50,51,90]
+    sizeFacs = [3.0] #[2.0,3.0,4.0]
 
     for haloID in haloIDs:
         for sizeFac in sizeFacs:

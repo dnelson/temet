@@ -21,6 +21,21 @@ from util.helper import logZeroNaN
 from vis.halo import renderSingleHalo
 from plot.config import *
 
+def pick_halos():
+    """ Testing. """
+    from vis.halo import selectHalosFromMassBins
+    sP = simParams(res=2048, run='tng_dm', redshift=0.0)
+    #sP = simParams(res=2500, run='tng', redshift=0.0)
+
+    # config
+    bins = [ [x+0.0,x+0.1] for x in np.linspace(14.0,15.4,15) ]
+    numPerBin = 10
+
+    hInds = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
+
+    for i, bin in enumerate(bins):
+        print(bin,hInds[i])
+
 def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 
     as the minimum distance to any low-res DM particle, and a radial profile of 
