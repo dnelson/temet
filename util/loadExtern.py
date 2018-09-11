@@ -1552,6 +1552,137 @@ def foersterSchreiber2018():
          'color_UV':color_UV}
     return r
 
+def chen10():
+    """ Load observational data points from Chen+ (2010) Fig 17, outflow velocity vs SFR (literature compilation). """
+    path = dataBasePath + 'chen/chen10_fig17.txt'
+
+    # load first table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    ref  = []
+    sfr  = np.zeros( nLines, dtype='float32' ) # msun/yr
+    vout = np.zeros( nLines, dtype='float32' ) # km/s
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split(',')
+        ref.append(line[0])
+        sfr[i] = float(line[1])
+        vout[i] = float(line[2])
+        i += 1
+
+    labels = list(set(ref)) # unique entries
+    labels = sorted(labels)[::-1] # place Chen last
+
+    r = {'ref'    : np.array(ref),
+         'sfr'    : np.log10(sfr), # log[msun/yr]
+         'vout'   : np.log10(vout), # log[km/s]
+         'labels' : labels} # list of unique reference names
+
+    return r
+
+def rubin14():
+    """ Load observational data points from Rubin+ (2014) Tables 2-4, outflows based on MgII/FeII at z~0.5. """
+    path1 = dataBasePath + 'rubin/rubin14_table2.txt'
+    path2 = dataBasePath + 'rubin/rubin14_table3.txt'
+
+    # load first table
+    nHeader = 54
+    with open(path1,'r') as f:
+        lines = f.readlines()
+
+    gal_names = []
+
+    sfr      = np.zeros( len(lines), dtype='float32' ) # msun
+    sfr_up   = np.zeros( len(lines), dtype='float32' )
+    sfr_down = np.zeros( len(lines), dtype='float32' )
+
+    mstar    = np.zeros( len(lines), dtype='float32' ) # log msun
+    mstar_up = np.zeros( len(lines), dtype='float32' )
+    mstar_down = np.zeros( len(lines), dtype='float32' )
+
+    vflow      = np.zeros( len(lines), dtype='float32' ) # km/s
+    vflow_up   = np.zeros( len(lines), dtype='float32' )
+    vflow_down = np.zeros( len(lines), dtype='float32' )
+
+    sfr.fill(np.nan)
+    vflow.fill(np.nan)
+
+    i = 0
+
+    for line in lines:
+        if i < nHeader:
+            i += 1
+            gal_names.append('')
+            continue
+
+        gal_name = line[0:14].strip()
+        gal_names.append(gal_name)
+
+        if line[80:85].strip() == '': continue
+
+        sfr[i]      = float(line[80:85]) # msun/yr
+        sfr_up[i]   = float(line[86:90]) # upper uncertainty
+        sfr_down[i] = float(line[91:95]) # lower uncertainty
+
+        mstar[i]      = float(line[96:101]) # log msun
+        mstar_up[i]   = float(line[102:106]) # upper uncertainty
+        mstar_down[i] = float(line[107:111]) # lower uncertainty
+
+        i += 1
+
+    gal_names = np.array(gal_names)
+
+    # load MgII-data table, pull out those 'wind (Mg, Fe)' entries
+    nHeader = 57
+    with open(path2,'r') as f:
+        lines = f.readlines()
+
+    for i, line in enumerate(lines):
+        if i < nHeader: continue
+        gal_name = line[0:14].strip()
+        category = line[15:29].strip()
+        if category != 'wind (Mg,Fe)': continue
+
+        # cross-match to table 2
+        w = np.where(gal_names == gal_name)
+        assert len(w[0]) == 1
+
+        vflow[w]      = -1.0 * float(line[123:127]) # km/s, negative sign
+        vflow_up[w]   = float(line[128:131]) # upper uncertainty
+        vflow_down[w] = float(line[132:135]) # lower uncertainty
+
+    # select only valid entries
+    w = np.where(np.isfinite(vflow))
+
+    r = {'sfr'    : np.log10(sfr[w]), # log[msun/yr]
+         'vout'   : np.log10(vflow[w]), # log[km/s]
+         'mstar'  : mstar[w], # log[msun]
+         'label'  : 'Rubin+ (2014)'} 
+
+    return r
+
+def robertsborsani18():
+    """ Load observational data points from Roberts-Borsani+ (2018) Fig 9 (left), outflows based on NaD from SDSS. """
+    sfr    = [0.36, 0.38, 0.39, 0.37, 0.74, 0.69, 0.68, 0.70, 0.73, 0.77, 0.73, 1.18, 1.18, 1.16, 1.11, 1.10, 1.12, 1.13]
+    dvflow = [162.19, 156.95, 152.37, 124.83, 132.84, 151.17, 161.66, 193.78, 197.07, 200.36, 
+              373.38, 365.03, 239.84, 235.90, 145.43, 161.16, 78.58, 73.34] # km/s
+
+    r = {'sfr'   : sfr, # log[msun/yr] 
+         'vout'  : np.log10(dvflow), # log[km/s]
+         'label' : 'Roberts-Borsani+ (2018)'}
+
+    return r
+
+
 def obuljen2018():
     """ Load observational fits to M_HI/M_halo relation from Obuljen+ (2018). Fig 8 / Eqn 1. """
     x_pts = np.log10(10.0**np.array([10.563, 10.757, 11.000, 11.314, 14.359, 15.004]) / 0.7) # log msun
