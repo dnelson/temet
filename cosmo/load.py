@@ -26,7 +26,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
 
     epStr = '_ep' if expandPartial else ''
-    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0]+epStr in sP.data:
+    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0]+epStr in sP.data and not reCalculate:
         return sP.data['ac_'+iterable(fields)[0]+epStr].copy() # cached, avoid view
 
     def _comparatorListInds(fieldName):
@@ -816,7 +816,7 @@ def snapOffsetList(sP):
     """ Make the offset table (by type) for the snapshot files, to be able to quickly determine within 
         which file(s) a given offset+length will exist. """
     _, sbStr1, sbStr2 = subboxVals(sP.subbox)
-    saveFilename = sP.derivPath + 'offsets/%ssnapshot_%d.hdf5' % (sbStr2,sP.snap)
+    saveFilename = sP.derivPath + 'offsets/%ssnapshot_%s.hdf5' % (sbStr2,sP.snap)
 
     if not isdir(sP.derivPath+'offsets/%s' % sbStr2):
         makedirs(sP.derivPath+'offsets/%s' % sbStr2)
@@ -1389,9 +1389,33 @@ def snapshotSubset(sP, partType, fields,
 
             r[field] = sP.units.codeBHMassMdotToInstantaneousEnergy(bh_mass, bh_mdot, bh_density, bh_mdot_bondi, bh_mdot_edd)
 
-        # gas cell (SF-driven winds) feedback energy injection rate [erg/s linear]
-        if field.lower() in ['sf_dedt','sf_edot']:
-            assert 0 # TODO
+        # wind model (gas cells): feedback energy injection rate [10^51 erg/s linear]
+        if field.lower() in ['wind_dedt','wind_edot','sn_dedt','sn_edot','sf_dedt','sf_edot']:
+            sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
+            metal = snapshotSubset(sP, partType, 'metallicity', **kwargs)
+
+            r[field] = sP.units.codeSfrZToWindEnergyRate(sfr, metal)
+
+        # wind model (gas cells): feedback momentum injection rate [10^51 g*cm/s^2 linear]
+        if field.lower() in ['wind_dpdt','wind_pdot','sn_dpdt','sn_pdot','sf_dpdt','sf_pdot']:
+            sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
+            metal = snapshotSubset(sP, partType, 'metallicity', **kwargs)
+            dm_veldisp = snapshotSubset(sP, partType, 'SubfindVelDisp', **kwargs)
+
+            r[field] = sP.units.codeSfrZToWindMomentumRate(sfr, metal, dm_veldisp)
+
+        # wind model (gas cells): launch velocity [km/s]
+        if field.lower() in ['wind_vel']:
+            dm_veldisp = snapshotSubset(sP, partType, 'SubfindVelDisp', **kwargs)
+            r[field] = sP.units.sigmaDMToWindVel(dm_veldisp)
+
+        # wind model (gas cells): mass loading factor [linear dimensionless]
+        if field.lower() in ['wind_eta','wind_etam','wind_massloading']:
+            sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
+            metal = snapshotSubset(sP, partType, 'metallicity', **kwargs)
+            dm_veldisp = snapshotSubset(sP, partType, 'SubfindVelDisp', **kwargs)
+
+            r[field] = sP.units.codeSfrZSigmaDMToWindMassLoading(sfr, metal, dm_veldisp)
 
         # ------------------------------------------------------------------------------------------------------
 

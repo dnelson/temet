@@ -160,10 +160,14 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
 
     for i, bin in enumerate(bins):
         binMax = bin + delta
-        w = np.where((X >= binLeft) & (X < binMax))
+        with np.errstate(invalid='ignore'): # expect X may contain NaN which should not be included
+            w = np.where((X >= binLeft) & (X < binMax))
 
         # non-empty bin, or last bin with at least minNumPerBin/2 elements
         if len(w[0]) >= minNumPerBin or (i == len(bins)-1 and len(w[0]) >= minNumPerBin/2):
+
+            if np.isnan(Y[w]).all():
+                continue
 
             binLeft = binMax
             if mean:

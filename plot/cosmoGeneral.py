@@ -194,7 +194,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    print(' ',cQuant,sP.simName,ylabel,xQuant,cenSatSelect,cStatistic,minCount)
+    print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect,cStatistic,minCount)
     if not clean:
         pass
         #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))

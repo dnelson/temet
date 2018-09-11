@@ -63,6 +63,15 @@ class units(object):
     BH_eps_f_high  = 0.10        # BH high-state efficiency, TNG fiducial model (is 0.05 for Illustris)
     BH_f_thresh    = 0.05        # multiplier on the star-formation threshold modulating eps_f_low, TNG fiducial model
     PhysDensThresh = 7.54654e-4  # star-formation threshold density (code units, comoving) = 0.232 h^2/cm^3
+    N_SNII         = 0.0118008   # winds: number of SNII per Msun formed (IMF integrated between CCSN mass limits), TNG fiducial model
+    E_SNII51       = 1.0         # winds: available energy per CC SN in units of 10^51 erg (=unity in Illustris/TNG)
+    winds_tau      = 0.1         # winds: thermal energy fraction
+    winds_fZ       = 0.25        # winds: Z-dependence reduction factor
+    winds_Zref     = 0.002       # winds: Z-dependence reference metallicity
+    winds_gamma_Z  = 2.0         # winds: Z-dependence reduction power
+    winds_e        = 3.6         # winds: energy factor, TNG fiducial model (1.09 in Illustris)
+    winds_kappa    = 7.4         # winds: velocity factor, TNG fiducial model (3.7 in Illustris)
+    winds_vmin     = 350.0       # winds: injection velocity floor, TNG fiducial model (0.0 in Illustris)
 
     # derived constants (code units without h factors)
     H0          = None    # km/s/kpc (hubble constant at z=0)
@@ -82,6 +91,7 @@ class units(object):
     # unit conversions
     s_in_yr       = 3.155693e7
     pc_in_cm      = 3.085680e18
+    km_in_cm      = 1e5
     arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
     erg_in_J      = 1e-7       # 1 erg in joules
@@ -152,9 +162,7 @@ class units(object):
 
     def codeMassToMsun(self, mass):
         """ Convert mass from code units (10**10 msun/h) to (msun). """
-        if not isinstance(mass, np.ndarray): mass = np.array(mass)
-        #if mass.size == 1: mass = np.array([mass]) # this is a bad idea, creates a nested array=[[val]] (TODO: remove)
-        
+        mass = np.atleast_1d(mass)        
         mass_msun = mass.astype('float32') * (self.UnitMass_in_Msun) / self._sP.HubbleParam
         
         return mass_msun
@@ -286,6 +294,53 @@ class units(object):
         dEdt[w_low]  = BH_eps_f_low[w_low] * mdot_g_s[w_low] * self.c_cgs**2 # erg/s
 
         return dEdt
+
+    def codeMetallicityToWindSpecificEnergy(self, metal_code):
+        """ Convert the SFR [Msun/yr] of a gas cell into the dot{E}_SN of total wind energy available [10^51 erg/msun]. """
+        assert self._sP.winds == 2 # otherwise generalize
+
+        metal_fac = self.winds_fZ + (1.0 - self.winds_fZ) / (1 + (metal_code/self.winds_Zref)**self.winds_gamma_Z)
+        energy_w = self.winds_e * metal_fac * self.N_SNII * self.E_SNII51 # 10^51 erg/msun
+
+        return energy_w
+
+    def codeSfrZToWindEnergyRate(self, sfr_msunyr, metal_code):
+        """ Convert the SFR [Msun/yr] of a gas cell into the dot{E}_SN of total wind energy available [10^51 erg/s] """
+        energy_w = self.codeMetallicityToWindSpecificEnergy(metal_code)
+        dedt_w = energy_w * (sfr_msunyr/self.s_in_yr) # 10^51 erg/s
+
+        return dedt_w
+
+    def codeSfrZToWindMomentumRate(self, sfr_msunyr, metal_code, dm_veldisp):
+        """ Convert the SFR [Msun/yr] of a gas cell into the dot{E}_SN of total wind energy available [10^51 g*cm/s^2] """
+        eta_w = self.codeSfrZSigmaDMToWindMassLoading(sfr_msunyr, metal_code, dm_veldisp)
+        vel_w = self.sigmaDMToWindVel(dm_veldisp) * self.km_in_cm # cm/s
+        sfr = sfr_msunyr.astype('float64') * self.Msun_in_g / self.s_in_yr # g/s
+        dpdt_w = eta_w * vel_w * sfr / 1e51 # 10^51 g*cm/s^2
+
+        return dpdt_w.astype('float32')
+
+    def sigmaDMToWindVel(self, dm_veldisp):
+        """ Convert a code (3D) velocity dispersion, i.e. the 'SubfindVelDisp', into the wind launch velocity of the model [km/s]. """
+        assert self._sP.winds == 2 # otherwise generalize
+
+        veldisp_1d = dm_veldisp / np.sqrt(3)
+        vel_wind = self.winds_kappa * veldisp_1d * (self.H0/self.H_z)**(1.0/3.0)
+        vel_wind = np.clip(vel_wind, self.winds_vmin, None)
+
+        return vel_wind
+
+    def codeSfrZSigmaDMToWindMassLoading(self, sfr_msunyr, metal_code, dm_veldisp):
+        """ Convert a gas cell SFR [Msun/yr], metallicity [code], and 3D vel disp [km/s] into the mass loading factor of the 
+        wind model [dimensionless linear]. """
+        assert self._sP.winds == 2 # otherwise generalize
+
+        energy_w = self.codeMetallicityToWindSpecificEnergy(metal_code) # 10^51 erg/msun
+        energy_w_erg_g = energy_w * (1e51/self.Msun_in_g)
+        vel_w_cgs = self.sigmaDMToWindVel(dm_veldisp) * 1e5 # cm/s
+        eta_w = (2.0 / vel_w_cgs**2) * energy_w_erg_g * (1 - self.winds_tau) # s^2/cm^2 * g cm^2/s^2 / g = dimensionless
+
+        return eta_w
 
     def logMsunToVirTemp(self, mass, meanmolwt=None, log=False):
         """ Convert halo mass (in log msun, no little h) to virial temperature at specified redshift. """
@@ -713,7 +768,7 @@ class units(object):
 
     def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, log=False):
         """ Following Navarro+ (1994) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
-        in [10^-30 erg/s] for individual gas cells, based only on their density and temperature. Assumes 
+        in [10^30 erg/s] for individual gas cells, based only on their density and temperature. Assumes 
         simplified (primordial) high-temp cooling function, and only free-free (bremsstrahlung) 
         emission contribution from T>10^6 Kelvin gas. All inputs in code units. """
         hmassfrac = self.hydrogen_massfrac
@@ -740,7 +795,7 @@ class units(object):
         temp = np.log10(temp)
         Lx *= np.clip( (temp-5.8)/0.2, 0.0, 1.0 )
 
-        Lx *= 1e-30 # work in this unit system of [10^-30 erg/s] for xray to avoid overflows to inf
+        Lx *= 1e-30 # work in this unit system of [10^30 erg/s] for xray to avoid overflows to inf
 
         if log:
             Lx = logZeroSafe(Lx)

@@ -74,10 +74,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'ptot_gas_halo', 'ptot_b_halo',
                    'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']
 
-    quants_bh = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high', 'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
+    quants_bh = ['M_BH_actual',   'BH_CumEgy_low',  'BH_CumEgy_high',   'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio', 'Mdot_BH_edd', 
-                 'BH_BolLum', 'BH_BolLum_basic', 'BH_EddRatio', 'BH_dEdt']
-    # TODO: SFR_Edot, etaE_X, etaP_X
+                 'BH_BolLum',     'BH_BolLum_basic','BH_EddRatio',      'BH_dEdt']
 
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
@@ -89,8 +88,10 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur']
 
-    quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms','eta_M_100myr_0kpc_50kms',
+    quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms','etaM_100myr_0kpc_50kms',
+                      'etaE_10kpc_0kms','etaE_10kpc_50kms','etaP_10kpc_0kms','etaP_10kpc_50kms',
                       'vout_50_10kpc', 'vout_50_all', 'vout_90_20kpc', 'vout_99_20kpc']
+    quants_wind =    ['wind_vel','wind_etaM','wind_dEdt','wind_dPdt'] # GFM wind model, derived from SFing gas
 
     # unused: 'Krot_stars', 'Krot_oriented_stars', 'Arot_stars', 'specAngMom_stars',
     #         'Krot_gas',   'Krot_oriented_gas',   'Arot_gas',   'specAngMom_gas',
@@ -121,7 +122,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # assembly sub-subset of quantities as requested
     if wCounts: quants1 = [None] + quants1
 
-    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5 + quants_misc + quants_color + quants_outflow
+    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5
+    quantList += quants_misc + quants_color + quants_outflow + quants_wind
     if wTr: quantList += trQuants
     if wMasses: quants1 += quants_mass
     if onlyTr: quantList = trQuants
@@ -912,6 +914,36 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vcutVals = ac[fieldName + '_attrs']['vcut_vals']
         radBinsMid = (radBins[:-1] + radBins[1:]) / 2
 
+        vcutInd = list(vcutVals).index( float(vcut.replace('kms','')) )
+
+        if rad == 'all':
+            if ac[fieldName].shape[1] == radBinsMid.size: # temporary, can remove later
+                raise Exception('Need to delete and recompute RadialMassFlux CACHE (and/or MassLoadingSN) associated with [%s,%d]!' % (fieldName,sP.snap))
+            # last bin accumulates across all radii
+            radInd = len(radBins) - 1 
+        else:
+            radInd = list(radBinsMid).index( float(rad.replace('kpc','')) )
+
+        vals = ac[fieldName][:,radInd,vcutInd]
+
+        minMax = [0.0, 3.0]
+        if tight: minMax = [0.0, 2.0]
+        label = 'Mass Loading $\eta_{\\rm M,r=%s,v>%s}$ [ log ]' % (rad,vcut)
+
+    if quant[0:5] == 'etaE_' or quant[0:5] == 'etaP_':
+        # outflows: energy/momentum loading factors
+        etaType, rad, vcut = quant.split('_')
+        if 'etaE_' in quant: acStr = 'Energy'
+        if 'etaP_' in quant: acStr = 'Momentum'
+
+        fieldName = 'Subhalo_%sLoadingSN_SubfindWithFuzz' % acStr
+        ac = auxCat(sP, fields=[fieldName], expandPartial=True)
+        
+        # figure out which (radius,vcut) selection
+        radBins = ac[fieldName + '_attrs']['rad']
+        vcutVals = ac[fieldName + '_attrs']['vcut_vals']
+        radBinsMid = (radBins[:-1] + radBins[1:]) / 2
+
         radInd = list(radBinsMid).index( float(rad.replace('kpc','')) )
         vcutInd = list(vcutVals).index( float(vcut.replace('kms','')) )
 
@@ -919,11 +951,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax = [-0.5, 1.5]
         if tight: minMax = [-1.5, 2.5]
-        label = 'Mass Loading $\eta_{\\rm M}$ (%s,v>%s) [ log ]' % (rad,vcut)
+        label = '%s Loading $\eta_{\\rm %s}$ (%s,v>%s) [ log ]' % (acStr,etaType[-1],rad,vcut)
 
     if quant[0:5] == 'vout_':
         # outflows: [mass/ion]-weighted outflow velocity [physical km/s], e.g. 50,75,90 values
-        _, perc, rad = quant.split('_')
+        _, perc, rad = quant.replace('_log','').split('_')
 
         fieldName = 'Subhalo_OutflowVelocity_SubfindWithFuzz'
         ac = auxCat(sP, fields=[fieldName], expandPartial=True)
@@ -944,10 +976,18 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = ac[fieldName][:,radInd,percInd]
 
-        minMax = [0, 800]
-        if tight: minMax = [0, 1000]
-        takeLog = False
-        label = 'Outflow Velocity $v_{\\rm out,%s,r=%s}$ [ km/s ]' % (perc,rad)
+        if quant[-4:] == '_log':
+            takeLog = True
+            minMax = [1.5, 3.5]
+            if tight: minMax = [1.5, 3.5]
+            logStr = 'log '
+        else:
+            minMax = [0, 800]
+            if tight: minMax = [0, 1000]
+            takeLog = False
+            logStr = ''
+
+        label = 'Outflow Velocity $v_{\\rm out,%s,r=%s}$ [ %skm/s ]' % (perc,rad,logStr)
 
     if quant in ['M_BH','M_BH_actual']:
         # either dynamical (particle masses) or "actual" BH masses excluding gas reservoir
@@ -988,7 +1028,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # blackhole bolometric luminosity, complex or simple model, eddington ratio, energy injection rate
         if quant in ['BH_BolLum','BH_BolLum_basic']:
             label = 'Blackhole $L_{\\rm bol}$ [ log erg/s ]'
-            minMax = [43.0, 46.0]
+            minMax = [41.0, 45.0]
             if tight: minMax = [41.0, 46.0]
             if not clean and '_basic' in quant: label += ' [basic]'
 
@@ -1005,6 +1045,37 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         acName = 'Subhalo_%s_largest' % quant
         ac = auxCat(sP, fields=[acName])
         vals = ac[acName]
+
+    if quant in ['wind_vel','wind_etaM','wind_dEdt','wind_dPdt']:
+        # wind model: injection properties (vel, etaM, dEdt, dPdt) from star-forming gas cells
+        if quant in ['wind_vel']:
+            label = 'Wind Injection Velocity [ log km/s ]'
+            minMax = [1.0,3.0]
+            if tight: minMax = [1.0,3.0]
+
+        if '_dPdt' in quant:
+            str1 = 'Momentum'
+            str2 = 'P'
+        if '_dEdt' in quant:
+            str1 = 'Energy'
+            str2 = 'E'
+
+        if quant in ['wind_etaM']:
+            label = 'Wind Mass Loading $\eta_{\\rm M}% [ log ]'
+            minMax = [-1.0, 2.0]
+            if tight: minMax = [-2.0, 2.0]
+
+        if quant in ['wind_dEdt','wind_dPdt']:
+            label = 'Wind %s Injection Rate $\dot{%s}_{\\rm SN}$ [ log erg/s ]' % (str1,str2)
+            minMax = [39.0, 42.0]
+            if tight: minMax = [38.0, 43.0]
+
+        acName = 'Subhalo_Gas_Wind_%s' % quant.split('_')[1]
+        ac = auxCat(sP, fields=[acName])
+        vals = ac[acName]
+
+        if quant in ['wind_dEdt','wind_dPdt']: # unit conversion: remove 10^51 factor (both e,p)
+            vals = vals.astype('float64') * 1e51
 
     if quant in ['BH_CumEgy_low','BH_CumEgy_high','BH_CumEgy_ratio','BH_CumEgy_ratioInv',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio']:
@@ -1142,7 +1213,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             acField = 'Subhalo_XrayBolLum'
             if not clean: label += ' [ subhalo ]'
 
-        # load auxCat, unit conversion: [10^-30 erg/s] -> [erg/s]
+        # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
         ac = auxCat(sP, fields=[acField])[acField]
         vals = ac.astype('float64') * 1e30
 
