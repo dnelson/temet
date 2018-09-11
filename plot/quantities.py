@@ -53,7 +53,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (groupcat)
     quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2',
-               'surfdens1_stars', 'surfdens2_stars', 'delta_sfms']
+               'surfdens1_stars', 'surfdens2_stars', 'delta_sfms',
+               'sfr1', 'sfr2', 'sfr1_surfdens', 'sfr2_surfdens']
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
@@ -65,7 +66,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (auxcat)
     quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 'mass_gasall',
-               'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
+               'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr','sfr_surfdens_30pkpc_100myr',
                're_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w']
 
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
@@ -322,8 +323,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax[1] -= sP.redshift/2
 
     if quant in ['sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
-                 'ssfr_30pkpc_instant','ssfr_30pkpc_10myr','ssfr_30pkpc_50myr','ssfr_30pkpc_100myr']:
+                 'ssfr_30pkpc_instant','ssfr_30pkpc_10myr','ssfr_30pkpc_50myr','ssfr_30pkpc_100myr',
+                 'sfr_surfdens_30pkpc_instant','sfr_surfdens_30pkpc_10myr','sfr_surfdens_30pkpc_50myr','sfr_surfdens_30pkpc_100myr']:
         # SFR or sSFR within 30pkpc aperture, either instantaneous or smoothed over some timescale
+        # or surface densities of these same quantities (normalized by pi*aperture^2)
         aperture = 30.0
 
         if '_instant' in quant:
@@ -352,6 +355,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'sSFR [ log yr$^{-1}$ ] (<%dpkpc, %s)' % (aperture,timeStr)
             minMax = [-11.0, -9.0]
             if tight: minMax = [-11.0, -9.0]
+        elif 'surfdens_' in quant:
+            # surface density of SFR
+            area = np.pi * aperture**2 # pkpc^2
+            vals /= area
+
+            label = '$\Sigma_{\\rm SFR}$ [ log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$ ] (<%dpkpc, %s)' % (aperture,timeStr)
+            minMax = [-7.0, -1.0]
+            if tight: minMax = [-7.0, 0.0]
         else:
             label = 'SFR [ log M$_{\\rm sun}$ yr$^{-1}$ ] (<%dpkpc, %s)' % (aperture,timeStr)
             minMax = [-2.0, 2.5]
@@ -402,6 +413,35 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax[0] += sP.redshift/2
         minMax[1] += sP.redshift/2
+
+    if quant in ['sfr1','sfr2','sfr1_surfdens','sfr2_surfdens']:
+        # SFR or SFR surface density within either 1 or 2 times 2r1/2stars
+        if '1' in quant:
+            hStr = 'Half'
+            hFac = 1.0
+        else:
+            hStr = ''
+            hFac = 2.0
+
+        fields = ['SubhaloSFRin%sRad' % hStr]
+        if 'surfdens' in quant: fields.append('SubhaloHalfmassRadType')
+        gc = groupCat(sP, fieldsSubhalos=fields)['subhalos']
+
+        if 'surfdens' in quant:
+            aperture = sP.units.codeLengthToKpc( gc['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] * hFac )
+            with np.errstate(invalid='ignore'):
+                vals = gc['SubhaloSFRin%sRad' % hStr] / (np.pi * aperture**2)
+
+            label = '$\Sigma_{\\rm SFR}$ [ log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$ ] (<%d$r_{\\rm 1/2,\star}$)' % hFac
+            minMax = [-5.0, 1.0]
+            if tight: minMax = [-4.0, 2.0]
+
+        else:
+            vals = gc['SubhaloSFRin%sRad' % hStr]
+
+            label = 'Star Formation Rate (<%d$r_{\\rm 1/2,\star}, instant)' % hFac
+            minMax = [-2.5, 1.0]
+            if tight: minMax = [-3.0, 2.0]
 
     if quant == 'delta_sfms':
         # offset from the star-formation main sequence (SFMS), taken as the clipped sim median (Genel+18), in dex
@@ -537,7 +577,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         size = sP.units.codeLengthToKpc( gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] )
         if '2_' in quant: size *= 2.0
 
-        vals = mass / (np.pi*size*size)
+        with np.errstate(invalid='ignore'):
+            vals = mass / (np.pi*size*size)
         label = '$\Sigma_{\star%s}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]' % detailsStr
 
         minMax = [6.5, 9.0]

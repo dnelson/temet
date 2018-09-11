@@ -1556,7 +1556,7 @@ def chen10():
     """ Load observational data points from Chen+ (2010) Fig 17, outflow velocity vs SFR (literature compilation). """
     path = dataBasePath + 'chen/chen10_fig17.txt'
 
-    # load first table
+    # load table
     with open(path,'r') as f:
         lines = f.readlines()
 
@@ -1670,6 +1670,94 @@ def rubin14():
 
     return r
 
+def heckman15():
+    """ Load observational data points from Heckman+ (2015) Tables 1-2, outflows of ionized gas at low-z. """
+    path1 = dataBasePath + 'heckman/heckman15_table1.txt'
+    path2 = dataBasePath + 'heckman/heckman15_table2.txt'
+
+    # load first table
+    with open(path1,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    gal_names = []
+
+    z      = np.zeros( nLines, dtype='float32' ) # -
+    rstar  = np.zeros( nLines, dtype='float32' ) # kpc
+    mstar  = np.zeros( nLines, dtype='float32' ) # log msun
+    vcirc  = np.zeros( nLines, dtype='float32' ) # km/s
+    sfr    = np.zeros( nLines, dtype='float32' ) # msun/yr
+    ssfr   = np.zeros( nLines, dtype='float32' ) # log 1/yr
+    sfrd   = np.zeros( nLines, dtype='float32' ) # log msun/yr/kpc^2
+    zgas   = np.zeros( nLines, dtype='float32' ) # 12 + log[O/H]
+    tau_uv = np.zeros( nLines, dtype='float32' ) # -
+    vout   = np.zeros( nLines, dtype='float32' ) # km/s
+    mdot   = np.zeros( nLines, dtype='float32' ) # msun/yr
+    etaM   = np.zeros( nLines, dtype='float32' ) # [log]
+    pdot_out    = np.zeros( nLines, dtype='float32' ) # log dyne
+    pdot_star   = np.zeros( nLines, dtype='float32' ) # log dyne
+    pdot_crit_c = np.zeros( nLines, dtype='float32' ) # log dyne
+    pdot_crit_s = np.zeros( nLines, dtype='float32' ) # log dyne
+    NH          = np.zeros( nLines, dtype='float32' ) # log cm^-2
+
+    i = 0
+
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split('&')
+        gal_names.append(line[0])
+
+        z[i]      = float(line[1])
+        rstar[i]  = float(line[2])
+        mstar[i]  = float(line[3])
+        vcirc[i]  = float(line[4])
+        sfr[i]    = float(line[5])
+        ssfr[i]   = float(line[6])
+        sfrd[i]   = float(line[7])
+        zgas[i]   = float(line[8])
+        tau_uv[i] = float(line[9])
+
+        i += 1
+
+    gal_names = np.array(gal_names)
+
+    # load second table
+    with open(path2,'r') as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split('&')
+        gal_name = line[0]
+
+        # cross-match to table 1
+        w = np.where(gal_names == gal_name)
+        assert len(w[0]) == 1
+        
+        vout[w] = float(line[1].replace('<','')) # set value to upper limit
+        mdot[w] = float(line[2].replace('<','')) # set value to upper limit
+        etaM[w] = float(line[3].replace('<','')) # set value to upper limit
+        pdot_out[w]    = float(line[4].replace('<','')) # set value to upper limit
+        pdot_star[w]   = float(line[5])
+        pdot_crit_c[w] = float(line[6])
+        pdot_crit_s[w] = float(line[7])
+        NH[w] = float(line[8])
+
+    r = {'mstar'    : mstar, # log[msun]
+         'sfr'      : np.log10(sfr), # log[msun/yr]
+         'sfr_surfdens' :sfrd, # log[msun/yr/kpc^2]
+         'vout'     : np.log10(vout), # log[km/s]
+         'Mdot'     : np.log10(mdot), # log[msun/yr]
+         'etaM'     : etaM, # [log]
+         'pdot_out' : pdot_out, # log dyne
+         'pdot_sf'  : pdot_star, # log dyne
+         'label'  : 'Heckman+ (2015)'}
+
+    return r
+
 def robertsborsani18():
     """ Load observational data points from Roberts-Borsani+ (2018) Fig 9 (left), outflows based on NaD from SDSS. """
     sfr    = [0.36, 0.38, 0.39, 0.37, 0.74, 0.69, 0.68, 0.70, 0.73, 0.77, 0.73, 1.18, 1.18, 1.16, 1.11, 1.10, 1.12, 1.13]
@@ -1682,6 +1770,137 @@ def robertsborsani18():
 
     return r
 
+def erb12():
+    """ Load observational data points from Erb+ (2012) Fig 13 (lower left), outflows based on FeII at 1<z<1 (stack points). """
+    sfr  = [1.00, 2.11] # log msun/yr
+    vmax = [575, 594] # km/s
+
+    r = {'sfr'   : sfr,
+         'vout'  : np.log10(vmax),
+         'label' : 'Erb+ (2012)'}
+
+    return r
+
+def fiore17():
+    """ Load observational data points from Fiore+ (2017) Table B1, AGN-driven outflow properties (literature compilation). """
+    path = dataBasePath + 'fiore/fiore17.txt'
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    z     = np.zeros( nLines, dtype='float32' )
+    Lbol  = np.zeros( nLines, dtype='float32' ) # log erg/s
+    Mdot  = np.zeros( nLines, dtype='float32' ) # log Msun/yr
+    Edot  = np.zeros( nLines, dtype='float32' ) # log erg/s (kinetic)
+    vmax  = np.zeros( nLines, dtype='float32' ) # km/s
+    rad   = np.zeros( nLines, dtype='float32' ) # kpc, outflow radius
+    sfr   = np.zeros( nLines, dtype='float32' ) # log Msun/yr
+    mstar = np.zeros( nLines, dtype='float32' ) # log Msun
+    mgas  = np.zeros( nLines, dtype='float32' ) # log Msun
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split('&')
+        name.append(line[0])
+        z[i]     = float(line[1])
+        Lbol[i]  = float(line[2]) if line[2].strip() != '' else np.nan
+        Mdot[i]  = float(line[3]) if line[3].strip() != '' else np.nan
+        Edot[i]  = float(line[4])
+        vmax[i]  = float(line[5])
+        rad[i]   = float(line[6]) if '-' not in line[6] else np.mean([float(x) for x in line[6].split('-')])
+        sfr[i]   = float(line[7]) if line[7].strip() != '' else np.nan
+        mstar[i] = float(line[8]) if line[8].strip() != '' else np.nan
+        mgas[i]  = float(line[9]) if line[9].strip() != '' else np.nan
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'Lbol'   : Lbol, # log erg/s
+         'Mdot'   : Mdot, # log msun/yr
+         'Edot'   : Edot, # log erg/s
+         'vout'   : np.log10(vmax), # log km/s
+         'rad'    : rad, # kpc
+         'sfr'    : sfr, # log msun/yr
+         'etaM'   : np.log10( 10.0**Mdot / 10.0**sfr ), # log
+         'mstar'  : mstar, # log msun
+         'mgas'   : mgas, # log msun
+         'label'  : 'Fiore+ (2017)'}
+
+    return r
+
+def fluetsch18(ionized=False):
+    """ Load observational data points from Fluetsch+ (2018) Tables 1+2, AGN-driven outflow properties (partial literature compilation). """
+    path = dataBasePath + 'fluetsch/fluetsch18.txt'
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    z     = np.zeros( nLines, dtype='float32' )
+    sfr   = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    Lbol  = np.zeros( nLines, dtype='float32' ) # log erg/s
+    mstar = np.zeros( nLines, dtype='float32' ) # log Msun
+    mH2   = np.zeros( nLines, dtype='float32' ) # log Msun
+    mHI   = np.zeros( nLines, dtype='float32' ) # log Msun
+    mOut  = np.zeros( nLines, dtype='float32' ) # log Msun
+    rad   = np.zeros( nLines, dtype='float32' ) # pc, outflow radius
+    vout  = np.zeros( nLines, dtype='float32' ) # km/s
+    Mdot_H2  = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    Mdot_ion = np.zeros( nLines, dtype='float32' ) # Msun/yr
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split('&')
+        name.append(line[0])
+        z[i]     = float(line[2])
+        sfr[i]   = float(line[4])
+        Lbol[i]  = float(line[5].replace('<','')) # place value at upper limits
+        mstar[i] = float(line[6])
+        mH2[i]   = float(line[7].replace('<','')) # place value at upper limits
+        mHI[i]   = float(line[8]) if line[8].strip() != '' else np.nan
+
+        mOut[i]  = float(line[12].replace('<','')) # place value at upper limits
+        rad[i]   = float(line[13].replace('<','')) # place value at upper limits
+        vout[i]  = float(line[14].replace('<','')) # place value at upper limits
+        Mdot_H2[i]  = float(line[15].replace('<','')) # place value at upper limits
+        Mdot_ion[i] = float(line[19]) if line[19].strip() != '' else np.nan
+
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'Lbol'   : Lbol, # log erg/s
+         'Mdot'   : np.log10(Mdot_H2), # log msun/yr
+         'vout'   : np.log10(vout), # log km/s
+         'rad'    : rad/1e3, # kpc
+         'sfr'    : np.log10(sfr), # log msun/yr
+         'etaM'   : np.log10( Mdot_H2 / sfr ), # log
+         'mstar'  : mstar, # log msun
+         'mH2'    : mH2, # log msun
+         'mHI'    : mHI, # log msun
+         'label'  : 'Fluetsch+ (2018)'}
+
+    if ionized:
+        # molecular Mdot/etaM by default, unless ionized == True
+        r['Mdot'] = np.log10(Mdot_ion)
+        r['etaM'] = np.log10(Mdot_ion / sfr)
+
+    return r
 
 def obuljen2018():
     """ Load observational fits to M_HI/M_halo relation from Obuljen+ (2018). Fig 8 / Eqn 1. """
