@@ -143,7 +143,7 @@ def sample_comparison_z2_sins_ao(sP):
     fig.savefig('sample_comparison_%s_sfrFullSub=%s.pdf' % (sP.simName,fullSubhaloSFR))
     plt.close(fig)
 
-def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=None, massField='Masses'):
+def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=None, colorOff=0, massField='Masses'):
     """ Explore radial mass flux data, aggregating into a single Msun/yr value for each galaxy, and plotting 
     trends as a function of stellar mass or any other galaxy/halo property. """
 
@@ -188,6 +188,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
     binSize = 0.2 # in M*
     markersize = 0.0 # 4.0, or 0.0 to disable
     malpha = 0.2
+    percs = [16,84]
     linestyles = ['-','--',':','-.']
 
     def _plotHelper(vcutIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False,addModelTNG=False):
@@ -202,6 +203,9 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
         ax.set_ylim(ylimLoc)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+
+        if config is not None and 'xlabel' in config: ax.set_xlabel(config['xlabel'])
+        if config is not None and 'ylabel' in config: ax.set_ylabel(config['ylabel'])
 
         labels_sec = []
         colors = []
@@ -240,6 +244,9 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
             else:
                 ax.text(10.78, -0.24, 'TNG Model', color='black', alpha=0.6, rotation=-43.0)
                 ax.text(10.69, -0.32, '(at Injection)', color='black', alpha=0.6, rotation=-43.0)
+
+        for _ in range(colorOff):
+            c = ax._get_lines.prop_cycler.next()['color']
 
         # loop over radii and/or vcut selections
         for i, rad_ind in enumerate(radIndsPlot):
@@ -295,7 +302,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                     ax.plot(xvals[w_zero], yy_zero, 's', alpha=malpha/2, markersize=size, color=c)
 
                 # median line and 1sigma band
-                xm, ym, sm, pm = running_median(xvals,yy,binSize=binSize,percs=[16,84],mean=(stat == 'mean'))
+                xm, ym, sm, pm = running_median(xvals,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'))
 
                 if not skipZeroVals:
                     # take log after running mean/median, instead of before, allows skipZeros=False to have an impact
@@ -313,52 +320,75 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                 l, = ax.plot(xm, ym, linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
 
                 # shade percentile band?
-                if i == j or markersize > 0:
-                    if 0:
-                        nSkip = 1
-                        y_down = pm[0,:-nSkip] #np.array(ym[:-1]) - sm[:-1]
-                        y_up   = pm[-1,:-nSkip] #np.array(ym[:-1]) + sm[:-1]
+                if i == j or markersize > 0 or 'mstar' not in xQuant:
+                    y_down = pm[0,:] #np.array(ym[:-1]) - sm[:-1]
+                    y_up   = pm[-1,:] #np.array(ym[:-1]) + sm[:-1]
 
-                        # repairs
-                        w = np.where(np.isnan(y_up))[0]
-                        if len(w) and len(w) < len(y_up):
-                            lastGoodInd = np.max(w) + 1
-                            lastGoodVal = y_up[lastGoodInd] - ym[:-nSkip][lastGoodInd]
-                            y_up[w] = ym[:-nSkip][w] + lastGoodVal
+                    # repairs
+                    w = np.where(np.isnan(y_up))[0]
+                    if len(w) and len(w) < len(y_up):
+                        lastGoodInd = np.max(w) + 1
+                        lastGoodVal = y_up[lastGoodInd] - ym[:][lastGoodInd]
+                        y_up[w] = ym[:][w] + lastGoodVal
 
-                        w = np.where(np.isnan(y_down) & np.isfinite(ym[:-nSkip]))
-                        y_down[w] = ylimLoc[0] # off bottom
+                    w = np.where(np.isnan(y_down) & np.isfinite(ym[:]))
+                    y_down[w] = ylimLoc[0] # off bottom
 
-                        # plot bottom
-                        ax.fill_between(xm[:-nSkip], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
-                    if 1:
-                        y_down = pm[0,:] #np.array(ym[:-1]) - sm[:-1]
-                        y_up   = pm[-1,:] #np.array(ym[:-1]) + sm[:-1]
+                    # plot bottom
+                    ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
 
-                        # repairs
-                        w = np.where(np.isnan(y_up))[0]
-                        if len(w) and len(w) < len(y_up):
-                            lastGoodInd = np.max(w) + 1
-                            lastGoodVal = y_up[lastGoodInd] - ym[:][lastGoodInd]
-                            y_up[w] = ym[:][w] + lastGoodVal
+        # special plotting behavior (including observational data sets)
+        from util.loadExtern import heckman15, fiore17, fluetsch18
 
-                        w = np.where(np.isnan(y_down) & np.isfinite(ym[:]))
-                        y_down[w] = ylimLoc[0] # off bottom
+        color = '#555555'
+        labels = []
 
-                        # plot bottom
-                        ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
+        if 'BolLum' in xQuant:
+            # obs data: etaM vs Lbol
+            for i, obs in enumerate([fiore17(), fluetsch18()]):
+                ax.plot( obs['Lbol'], obs['etaM'], markers[i], color=color)
+                labels.append( obs['label'] )
+
+        if 'sfr_' in xQuant:
+            # obs data: etaM vs SFR
+            for i, obs in enumerate([fiore17(), fluetsch18()]):
+                ax.plot( obs['sfr'], obs['etaM'], markers[i], color=color)
+                labels.append( obs['label'] )
+
+        if '_surfdens' in xQuant:
+            # obs data: etaM vs SFR surface density
+            for i, obs in enumerate([heckman15()]):
+                ax.plot( obs['sfr_surfdens'], obs['etaM'], markers[i], color=color)
+                labels.append( obs['label'] )
+
+        # legend: obs data
+        legParams = {'frameon':1, 'framealpha':0.9, 'fancybox':False} # to add white background to legends
+
+        loc3 = 'upper left' if (config is None or 'loc3' not in config) else config['loc3']
+        if len(labels):
+            handles = [ plt.Line2D( (0,1), (0,0), color=color, marker=markers[i], lw=lw, linestyle='') for i in range(len(labels)) ]
+            locParams = {} if (config is None or 'leg3white' not in config) else legParams
+            ncol = 1 if (config is None or 'leg3ncol' not in config) else config['leg3ncol']
+            legend3 = ax.legend(handles, labels, ncol=ncol, columnspacing=1.0, fontsize=18.0, loc=loc3, **locParams)
+            ax.add_artist(legend3)
 
         # legends and finish plot
-        if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
-            line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
-            legend2 = ax.legend([line], [labelFixed], loc='lower right' if len(radIndsPlot) > 1 else 'lower left', 
-                                handlelength=-0.5, frameon=1, framealpha=0.5, borderpad=0.2, fancybox=False)
-            #for text in legend2.get_texts(): text.set_color('white')
-            frame = legend2.get_frame()
-            frame.set_facecolor('white')
-            ax.add_artist(legend2)
+        loc1 = 'upper right' if eta else 'upper left'
+        loc2 = 'lower right' if len(radIndsPlot) > 1 else 'lower left'
+        if config is not None and 'loc1' in config: loc1 = config['loc1']
+        if config is not None and 'loc2' in config: loc2 = config['loc2']
 
-            legend1 = ax.legend(loc='upper right' if eta else 'upper left')
+        if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
+            if loc2 is not None:
+                line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
+                legend2 = ax.legend([line], [labelFixed], loc=loc2, handlelength=-0.5, **legParams)
+                #for text in legend2.get_texts(): text.set_color('white')
+                #frame = legend2.get_frame()
+                #frame.set_facecolor('white')
+                #ax.add_artist(legend2) # r = X kpc, z = Y
+
+            locParams = {} if (config is None or 'leg1white' not in config) else legParams
+            if loc1 is not None: legend1 = ax.legend(loc=loc1, **locParams) # vrad > ...
 
         if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
             lines = [ plt.Line2D( (0,1), (0,0), color=colors[j], marker='', lw=lw, linestyle='-') for j in range(len(vcutIndsPlot)) ]
@@ -418,6 +448,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
         if 'markersize' in config: markersize = config['markersize']
         if 'addModelTNG' not in config: config['addModelTNG'] = False
         if 'ylim' not in config: config['ylim'] = None
+        if 'percs' in config: percs = config['percs']
 
         _plotHelper(vcutIndsPlot=config['vcutInds'],radIndsPlot=config['radInds'],saveName=saveName,
                     stat=config['stat'],skipZeroVals=config['skipZeros'],ylimLoc=config['ylim'],addModelTNG=config['addModelTNG'])
@@ -493,7 +524,6 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         xlabel = 'Stellar Mass [ log M$_{\\rm sun}$ ]'
     if 'etaM' in xQuant:
         xlim = [0.0, 2.7] # explore
-
 
     binSize = 0.2 # in M*
     markersize = 0.0 # 4.0, or 0.0 to disable
@@ -672,7 +702,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                         ax.plot(xx[w_zero], yy_zero, 's', alpha=malpha/2, markersize=markersize, color=c)
 
                     # median line and 1sigma band
-                    minNum = 5 if 'mstar' in xQuant else 2 # for xQuants = etaM, SFR, ...
+                    minNum = 2 if 'etaM' in xQuant else 5 # for xQuants = mstar, SFR, Lbol, ...
                     xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
 
                     if xm.size > sKn:
@@ -706,8 +736,14 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                         # plot bottom
                         ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
 
-        # special behavior (including observational data sets)
+        # special plotting behavior (including observational data sets)
+        from util.loadExtern import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18
+
+        color = '#555555'
+        labels = []
+
         if 'etaM_' in xQuant:
+            # usual theory scalings
             xx = np.array([0.4, 1.39])
             yy = 900 * (10.0**xx)**(-1.0) # 'momentum driven', 1000 is arbitrary, this is proportionality only
             if ylog: yy = np.log10(yy)
@@ -720,30 +756,38 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             ax.plot(xx, yy, '--', lw=lw, color='black', alpha=0.6)
             ax.text(0.4, 2.705, '$\eta_{\\rm M} \propto v_{\\rm out}^{-2}$', color='#555555', rotation=-31.0)
 
+            # obs data: v_out vs etaM
+            for i, obs in enumerate([fiore17(), heckman15(), fluetsch18()]):
+                ax.plot( obs['etaM'], obs['vout'], markers[i], color=color)
+                labels.append( obs['label'] )
+
         if 'sfr_' in xQuant:
             # obs data: v_out vs SFR
-            from util.loadExtern import chen10, rubin14, robertsborsani18
-
-            color = '#555555'
-            labels = []
-
             obs = chen10()
             for i, ref in enumerate(obs['labels']):
                 w = np.where(obs['ref'] == ref)
                 ax.plot( obs['sfr'][w], obs['vout'][w], markers[i], color=color)
                 labels.append( ref )
 
-            obs = robertsborsani18()
-            ax.plot( obs['sfr'], obs['vout'], markers[i+1], color=color)
-            labels.append( obs['label'] )
+            for j, obs in enumerate([robertsborsani18(), rubin14(), fiore17(), erb12()]):
+                ax.plot( obs['sfr'], obs['vout'], markers[i+j+1], color=color)
+                labels.append( obs['label'] )
 
-            obs = rubin14()
-            ax.plot( obs['sfr'], obs['vout'], markers[i+2], color=color)
-            labels.append( obs['label'] )
+        if 'BolLum' in xQuant:
+            # obs data: v_out vs Lbol
+            for i, obs in enumerate([fiore17(), fluetsch18()]):
+                ax.plot( obs['Lbol'], obs['vout'], markers[i], color=color)
+                labels.append( obs['label'] )
 
-            # legend
+        # legend: obs data
+        legParams = {'frameon':1, 'framealpha':0.9, 'borderpad':0.2, 'fancybox':False} # to add white background to legends
+
+        loc3 = 'upper left' if (config is None or 'loc3' not in config) else config['loc3']
+        if len(labels):
             handles = [ plt.Line2D( (0,1), (0,0), color=color, marker=markers[i], lw=lw, linestyle='') for i in range(len(labels)) ]
-            legend3 = ax.legend(handles, labels, ncol=2, columnspacing=1.0, fontsize=18.0, loc='upper left')
+            locParams = {} if (config is None or 'leg3white' not in config) else legParams
+            ncol = 1 if (config is None or 'leg3ncol' not in config) else config['leg3ncol']
+            legend3 = ax.legend(handles, labels, ncol=ncol, columnspacing=1.0, fontsize=18.0, loc=loc3, **locParams)
             ax.add_artist(legend3)
 
         # legends and finish plot
@@ -751,7 +795,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         if len(percIndsPlot) == 1 or len(radIndsPlot) == 1:
             line = plt.Line2D( (0,1), (0,0), color='white', marker='', lw=0.0)
             legend2 = ax.legend([line], [labelFixed], loc=loc1)
-            ax.add_artist(legend2)
+            if loc1 is not None: ax.add_artist(legend2)
 
         if len(percIndsPlot) > 1 and len(radIndsPlot) > 1:
             lines = [ plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[j]) for j in range(len(percIndsPlot)) ]
@@ -763,7 +807,10 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             handles += [ plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[j]) for j in range(len(percIndsPlot)) ]
             labels += labels_sec
         loc2 = 'upper right' if (config is None or 'loc2' not in config) else config['loc2']
-        legend1 = ax.legend(handles, labels, loc=loc2)
+        if 'sfr' in xQuant:
+            legend1 = ax.legend(handles, labels, loc=loc2, **legParams)
+        else:
+            legend1 = ax.legend(handles, labels, loc=loc2)
 
         fig.tight_layout()
         if saveName is not None:
@@ -2145,37 +2192,59 @@ def paperPlots(sPs=None):
         pdf.close()
 
     if 0:
-        # fig 15: in progress (observational comparisons, many panels)
+        # fig 15: observational comparisons, many panels of outflow velocity vs. galaxy/BH properties
+        percs    = [5,95] # show breath of vout scatter
+        minMstar = 7.5 # log msun
+        binSize  = 0.25 # dex in x-axis
+        percInds = [0,1,2,4,5] # vN pecentile indices
+        stat     = 'mean'
 
         # vout vs. etaM
-        config = {'percInds':[1,2,4,5], 'radInds':[1], 'ylim':[1.5,3.5], 'stat':'mean', 'skipZeros':False, 
-                  'binSize':0.25, 'loc2':'upper left', 'markersize':0.0, 'percs':[5,95], 'minMstar':7.5,
+        config = {'percInds':percInds, 'radInds':[1], 'ylim':[0.9,3.6], 'stat':stat, 'skipZeros':False, 
+                  'binSize':binSize, 'loc1':None, 'loc2':'upper right', 'loc3':'lower left', 'leg3white':True, 'leg3ncol':1, 
+                  'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
                   'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]', 'xlabel':'Mass Loading $\eta_{\\rm M}$ [ log ]'}
         gasOutflowVelocityVsQuant(TNG50_z1, xQuant='etaM_100myr_10kpc_0kms', ylog=True, config=config)
 
-        # vout vs SFR
-        config = {'percInds':[0,1,2,4,5], 'radInds':[1], 'xlim': [-1.0, 2.6], 'ylim':[1.45,3.55], 'stat':'mean', 'skipZeros':False, 
-                  'binSize':0.25, 'loc1':'upper right', 'loc2':'lower right', 'markersize':0.0, 'percs':[5,95], 'minMstar':7.5,
+        # vout vs. SFR
+        config = {'percInds':percInds, 'radInds':[1], 'xlim': [-1.0, 2.6], 'ylim':[1.45,3.65], 'stat':stat, 'skipZeros':False, 
+                  'binSize':binSize, 'loc1':None, 'loc2':'lower right', 'leg3ncol':2, 'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
                   'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]', 'xlabel':'Star Formation Rate [ log M$_{\\rm sun}$ yr$^{-1}$ ]'}
         gasOutflowVelocityVsQuant(TNG50_z1, xQuant='sfr_30pkpc_100myr', ylog=True, config=config)
 
+        # vout vs. Lbol
+        config = {'percInds':percInds, 'radInds':[1], 'ylim':[1.35,3.65], 'xlim':[40.0,47.5], 'stat':stat, 'skipZeros':False, 
+                  'binSize':binSize, 'loc1':None, 'loc2':'lower right', 'leg3ncol':2, 'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
+                  'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]'}
+        gasOutflowVelocityVsQuant(TNG50_z1, xQuant='BH_BolLum', ylog=True, config=config)
+
+        # fig 15: observational comparisons, many panels of etaM vs. galaxy/BH properties
+        vcutInds = [0,2,4] # vrad>X cut indices
+        stat     = 'median'
+        colorOff = 0 # change color palette vs percInds lines above?
+
+        # etaM vs. SFR
+        config = {'vcutInds':vcutInds, 'radInds':[1], 'stat':stat, 'ylim':[-1.1, 2.6], 'xlim':[-1.0, 2.6], 'skipZeros':False, 
+                  'binSize':binSize, 'loc1':'upper right', 'loc2':None, 'markersize':0.0, 'percs':percs, 'minMstar':minMstar,
+                  'xlabel':'Star Formation Rate [ log M$_{\\rm sun}$ yr$^{-1}$ ]'}
+        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr_30pkpc_100myr', eta=True, colorOff=colorOff, config=config)
+
+        # etaM vs. Lbol
+        config = {'vcutInds':vcutInds, 'radInds':[1], 'stat':stat, 'ylim':[-1.1, 2.6], 'xlim':[40.0,47.5], 'skipZeros':False, 
+                  'binSize':binSize, 'loc1':'upper right', 'leg1white':True, 'loc2':None, 'loc3':'upper left', 
+                  'markersize':0.0, 'percs':percs, 'minMstar':minMstar}
+        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='BH_BolLum', eta=True, colorOff=colorOff, config=config)
+
+        # etaM vs. Sigma_SFR (?)
+        config = {'vcutInds':vcutInds, 'radInds':[1], 'stat':stat, 'xlim':[-3.0, 2.0], 'ylim':[-1.1, 2.6], 'skipZeros':False, 
+                  'binSize':binSize, 'loc1':'upper right', 'leg1white':True, 'loc2':None, 'loc3':'upper left', 
+                  'markersize':0.0, 'percs':percs, 'minMstar':minMstar}
+        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr1_surfdens', eta=True, colorOff=colorOff, config=config)
+
     # --------------------------------------------------------------------------------------------------------------------------------------
 
-    if 1:
-        # TESTING (fig 15)
-        config = {'percInds':[0,1,2,4,5], 'radInds':[1], 'ylim':[1.45,3.55], 'stat':'mean', 'skipZeros':False, 
-                  'binSize':0.25, 'markersize':0.0, 'percs':[5,95], 'minMstar':7.5,
-                  'ylabel':'Outflow Velocity $v_{\\rm out}$ [ log km/s ]', }
-        gasOutflowVelocityVsQuant(TNG50_z1, xQuant='BH_EddRatio', ylog=True, config=config)
-
-    if 1:
-        # TESTING: (fig 15)
-        config = {'vcutInds':[0,1,2], 'radInds':[1], 'stat':'mean', 'ylim':[0.0, 2.0], 'skipZeros':False, 
-                  'binSize':0.25, 'markersize':0.0, 'percs':[5,95], 'minMstar':7.5}
-        gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='BH_BolLum', eta=True, config=config)
-
     if 0:
-        # TEST: outlier check in above
+        # TEST: outlier check (for Fig 15 discussion/text)
         sP = TNG50_z1
         figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
         xQuant = 'etaM_100myr_10kpc_0kms'
