@@ -18,6 +18,79 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def guinevere_mw_sample():
+    from plot.config import figsize, sfclean
+
+    # get subhaloIDs
+    sP_tng = simParams(res=1820,run='tng',redshift=0.0)
+    sP_ill = simParams(res=1820,run='illustris',redshift=0.0)
+    #sP_tng = simParams(res=512,run='tng',redshift=0.0,variant='0000')
+    #sP_ill = simParams(res=512,run='tng',redshift=0.0,variant='0010')
+
+    #data = np.genfromtxt(sP_tng.postPath + 'guinevere_cutouts/new_mw_sample_fgas.txt', delimiter=',', dtype='int32')
+    data = np.genfromtxt(sP_tng.postPath + 'guinevere_cutouts/new_mw_sample_fgas_sat.txt', delimiter=',', dtype='int32')
+    subIDs_tng = data[:,0]
+    subIDs_ill = data[:,1]
+
+    w = np.where( (subIDs_tng != -1) & (subIDs_ill != -1) )
+    print(len(w[0]))
+
+    subIDs_tng = subIDs_tng[w]
+    subIDs_ill = subIDs_ill[w]
+
+    # load subhalo data
+    masstype_tng = sP_tng.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])['subhalos'][subIDs_tng,:]
+    masstype_ill = sP_ill.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])['subhalos'][subIDs_ill,:]
+
+    is_cen_tng = sP_tng.groupCat(fieldsSubhalos=['central_flag'])[subIDs_tng]
+    is_cen_ill = sP_ill.groupCat(fieldsSubhalos=['central_flag'])[subIDs_ill]
+
+    fgas_tng = np.log10( masstype_tng[:,sP_tng.ptNum('gas')] / masstype_tng[:,sP_tng.ptNum('stars')] )
+    fgas_ill = np.log10( masstype_ill[:,sP_ill.ptNum('gas')] / masstype_ill[:,sP_ill.ptNum('stars')] )
+
+    wcen_tng = np.where(is_cen_tng == 1)
+    wcen_ill = np.where(is_cen_ill == 1)
+    wsat_tng = np.where(is_cen_tng == 0)
+    wsat_ill = np.where(is_cen_ill == 0)
+
+    assert wcen_tng[0].size + wsat_tng[0].size == is_cen_tng.size
+    assert wcen_ill[0].size + wsat_ill[0].size == is_cen_ill.size
+
+    msize = 7.0
+
+    pdf = PdfPages('sample_check_25Mpc.pdf')
+
+    for i in [0,1]:
+
+        fig = plt.figure(figsize=[figsize[0]*sfclean*0.9, figsize[1]*sfclean])
+        ax = fig.add_subplot(1,1,1)
+        ax.set_xlabel('log $M_{\\rm gas} / M_\star$ [ Illustris ]')
+        ax.set_ylabel('log $M_{\\rm gas} / M_\star$ [ TNG ]')
+
+        ax.set_xlim([-2.2, 0.3])
+        ax.set_ylim([-2.2, 0.3])
+
+        if i == 0:
+            wcen = wcen_tng
+            wsat = wsat_tng
+            label = 'TNG'
+        if i == 1:
+            wcen = wcen_ill
+            wsat = wsat_ill
+            label = 'ILL'
+
+        ax.plot(fgas_ill[wcen], fgas_tng[wcen], 'o', markersize=msize, color='blue', alpha=0.7, label='Cen in %s' % label)
+        ax.plot(fgas_ill[wsat], fgas_tng[wsat], 'o', markersize=msize, color='red', alpha=0.7, label='Sat in %s' % label)
+
+        ax.legend(loc='upper left')
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+    pdf.close()
+
+    import pdb; pdb.set_trace()
+
 def check_reza_vrel():
     #sub_id = 24462
     #r_in = 0.086578019
@@ -167,6 +240,9 @@ def new_mw_fgas_sample():
     sP_illustris = simParams(res=1820, run='illustris', redshift=0.0)
     sP_tng = simParams(res=1820, run='tng', redshift=0.0)
 
+    #sP_illustris = simParams(res=512, run='tng', redshift=0.0, variant='0010')
+    #sP_tng = simParams(res=512, run='tng', redshift=0.0, variant='0000')
+
     #mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_200']) # [msun]
     mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_subfind']) # [msun]
     mstar = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mstar_30pkpc']) # [msun]
@@ -181,7 +257,7 @@ def new_mw_fgas_sample():
     inds_ill_la  = crossMatchSubhalosBetweenRuns(sP_tng, sP_illustris, inds_tng, method='Lagrange')
 
     header = 'subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)\n'
-    with open('new_mw_sample_fgas3.txt','w') as f:
+    with open('new_mw_sample_fgas.txt','w') as f:
         f.write(header)
         for i in range(inds_tng.size):
             f.write('%d, %d, %d\n' % (inds_tng[i], inds_ill_la[i], inds_ill_pos[i]))
@@ -205,7 +281,7 @@ def new_mw_fgas_sample():
 
             print(i,mhalo1,mhalo2,mstar1,mstar2,ratio_mhalo,ratio_mstar,fgas1,fgas2)
 
-    import pdb; pdb.set_trace()
+    print('Done.')
 
 def bh_details_check():
     """ Check gaps in TNG100-1 blackhole_details.hdf5. """

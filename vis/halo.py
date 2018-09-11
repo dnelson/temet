@@ -371,9 +371,9 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
         renderMultiPanel(panels, plotConfig)
 
 def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=None, selType='linear'):
-    """ Select one or more subhalo indices from an input set of massBins (log Mhalo), a requested 
-    number of halos per bin, and either (i) an index haloNum which should iterate from 0 to the total 
-    number of halos requested across all bins, in which case the return is a single subhalo ID 
+    """ Select one or more subhalo indices from an input set of massBins (log Mhalo) and a requested 
+    number of halos per bin. In addition, either (i) an index haloNum which should iterate from 0 to the 
+    total number of halos requested across all bins, in which case the return is a single subhalo ID 
     as appropriate for a multi-quantity single system comparison figure, or (ii) an index massBinInd 
     which should iterate from 0 to the number of bins, in which case all subhalo IDs in that bin 
     are returned (limited to numPerBin), as appropriate for a multi-system single-quantity figure. """
@@ -384,11 +384,11 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
     haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
 
     # locate # of halos in mass bins (informational only)
-    for massBin in massBins:
-        with np.errstate(invalid='ignore'):
-            w = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
-        print('selectHalosFromMassBin(): In massBin [%.1f %.1f] have %d halos total.' % \
-            (massBin[0],massBin[1],len(w)))
+    #for massBin in massBins:
+    #    with np.errstate(invalid='ignore'):
+    #        w = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
+    #    print('selectHalosFromMassBin(): In massBin [%.1f %.1f] have %d halos total.' % \
+    #        (massBin[0],massBin[1],len(w)))
 
     # choose mass bin
     if haloNum is not None:
@@ -396,12 +396,10 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
     else:
         myMassBinInd = massBinInd
 
-    myMassBin = massBins[ myMassBinInd ]
+    massBin = massBins[ myMassBinInd ]
 
     with np.errstate(invalid='ignore'):
-        wMassBinAll = np.where((haloMasses >= myMassBin[0]) & (haloMasses < myMassBin[1]))[0]
-
-    #print(gc['halos']['GroupFirstSub'][wMassBinAll])
+        wMassBinAll = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
 
     # what algorithm to sub-select within mass bin
     if selType == 'linear':
@@ -409,8 +407,9 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
     if selType == 'even':
         wMassBin = evenlySample(wMassBinAll, numPerBin)
     if selType == 'random':
-        np.random.seed(seed=424242+sP.snap+sP.res+int(myMassBin[0]*100)+int(myMassBin[1]*100))
-        wMassBin = sorted(np.random.choice(wMassBinAll, size=numPerBin, replace=False))
+        np.random.seed(seed=424242+sP.snap+sP.res+int(massBin[0]*100)+int(massBin[1]*100))
+        num = np.clip(numPerBin, 1, wMassBinAll.size)
+        wMassBin = sorted(np.random.choice(wMassBinAll, size=num, replace=False))
 
     if haloNum is not None:
         haloInd = haloNum - myMassBinInd*numPerBin
@@ -422,14 +421,47 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
         # single halo ID return
         shIDs = gc['halos']['GroupFirstSub'][wMassBin[haloInd]]
 
-        print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f] ind [%d of %d]...' % \
-            (haloNum,wMassBin[haloInd],shIDs,myMassBin[0],myMassBin[1],haloInd,len(wMassBin)))
+        #print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f] ind [%d of %d]...' % \
+        #    (haloNum,wMassBin[haloInd],shIDs,massBin[0],massBin[1],haloInd,len(wMassBin)))
     else:
         # return full set in this mass bin
         shIDs = gc['halos']['GroupFirstSub'][wMassBin]
 
-        #for i, shID in enumerate(shIDs):
-        #    print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f]...' % \
-        #        (i,wMassBin[i],shID,myMassBin[0],myMassBin[1]))
-
     return shIDs, myMassBinInd
+
+def selectHalosFromMassBins(sP, massBins, numPerBin, selType='linear'):
+    """ Select one or more FoF-halo indices from an input set of massBins (log Mhalo) and a 
+    requested number of halos per bin. """
+    assert selType in ['linear','even','random']
+    from util.helper import evenlySample
+
+    gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'])
+    haloMasses = sP.units.codeMassToLogMsun(gc['halos'])
+
+    inds = []
+
+    for massBin in massBins:
+        # locate all halos in bin
+        with np.errstate(invalid='ignore'):
+            wMassBinAll = np.where((haloMasses >= massBin[0]) & (haloMasses < massBin[1]))[0]
+
+        print('selectHalosFromMassBin(): In massBin [%.1f %.1f] have %d halos total.' % \
+            (massBin[0],massBin[1],len(wMassBinAll)))
+
+        if wMassBinAll.size == 0:
+            inds.append([])
+            continue
+
+        # what algorithm to sub-select within mass bin
+        if selType == 'linear':
+            wMassBin = wMassBinAll[0:numPerBin]
+        if selType == 'even':
+            wMassBin = evenlySample(wMassBinAll, numPerBin)
+        if selType == 'random':
+            np.random.seed(seed=424242+sP.snap+sP.res+int(massBin[0]*100)+int(massBin[1]*100))
+            num = np.clip(numPerBin, 1, wMassBinAll.size)
+            wMassBin = sorted(np.random.choice(wMassBinAll, size=num, replace=False))
+
+        inds.append( wMassBin )
+
+    return inds
