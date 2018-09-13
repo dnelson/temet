@@ -188,8 +188,6 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=2):
 
     return hsml
 
-
-
 def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM):
     """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
@@ -308,7 +306,7 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projP
 
             grid_master[:,:,i] = grid_stretch
             grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
-            #import pdb; pdb.set_trace()
+
     if 1:
         pxArea = (boxSizeImg[axes[1]] / nPixels[0]) * (boxSizeImg[axes[0]] / nPixels[1])
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
@@ -833,7 +831,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         # convert linear luminosities back to magnitudes
         ww = np.where(grid == 0.0)
         w2 = np.where(grid > 0.0)
-        grid[w2] = -2.5 * np.log10( grid[w2] )
+        grid[w2] = sP.units.lumToAbsMag( grid[w2] )
         grid[ww] = 99.0
 
         bandName = partField.split("stellarBand-")[1]
@@ -2033,7 +2031,6 @@ def renderMultiPanel(panels, conf):
 
             # place image
             plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
-            #import pdb; pdb.set_trace()
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
             if 'valMinMax' in p and cmap is not None:
                 plt.clim( p['valMinMax'] )
