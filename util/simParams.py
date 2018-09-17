@@ -74,6 +74,8 @@ class simParams:
     # control analysis
     haloInd    = None # request analysis of a specific FoF halo?
     subhaloInd = None # request analysis of a specific Subfind subhalo?
+    refPos     = None # reference/relative position 3-vector
+    refVel     = None # reference/relative velocity 3-vector (e.g. for radvel calculation on fullbox)
 
     # plotting/vis parameters
     colors = None # color sequence (one per res level)
@@ -86,7 +88,7 @@ class simParams:
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=FinalTNG Model)
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
-                       haloInd=None, subhaloInd=None):
+                       haloInd=None, subhaloInd=None, refPos=None, refVel=None):
         """ Fill parameters based on inputs. """
         self.basePath = path.expanduser("~") + '/'
 
@@ -115,6 +117,8 @@ class simParams:
         # pick analysis parameters
         self.haloInd    = haloInd
         self.subhaloInd = subhaloInd
+        self.refPos     = refPos
+        self.refVel     = refVel
 
         self.data = {}
 
@@ -999,6 +1003,12 @@ class simParams:
     @property
     def isSubbox(self):
         return self.subbox is not None
+
+    @property
+    def parentBox(self):
+        """ Return a sP corresponding to the parent volume, at the same redshift (fullbox for subbox only for now). """
+        assert self.subbox is not None
+        return simParams(res=self.res, run=self.run, redshift=self.redshift)
 
     @property
     def numMetals(self):

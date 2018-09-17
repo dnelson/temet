@@ -1194,10 +1194,12 @@ def snapshotSubset(sP, partType, fields,
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.UToTemp(u,ne,log=True)
 
-            #print('TEMP REMOVE')
-            #sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
-            #w = np.where(sfr > 0.0)
-            #r[field][w] = 3.0 # set SFRing gas to cold phase temperature, instead of effective temperature
+        # temperature (from u,nelec) [log K] (where star forming gas is set to the cold-phase temperature instead of eEOS temperature)
+        if field.lower() in ["temp_sfcold"]:
+            r[field] = snapshotSubset(sP, partType, 'temp', **kwargs)
+            sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
+            w = np.where(sfr > 0.0)
+            r[field][w] = 3.0 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
 
         # temperature (from u,nelec) [linear K]
         if field.lower() in ["temp_linear"]:
@@ -1638,31 +1640,45 @@ def snapshotSubset(sP, partType, fields,
             if sP.isZoom:
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
-            assert haloID is not None or subhaloID is not None
+            if haloID is None and subhaloID is None:
+                assert sP.refVel is not None
+                print('WARNING: snapshotSubset() using refVel [%.1f %.1f %.1f] as non-zoom run to compute [%s]!' % \
+                    (sP.refVel[0],sP.refVel[1],sP.refVel[2],field))
+                refPos = sP.refPos
+                refVel = sP.refVel
+            else:
+                shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
+                firstSub = groupCatSingle(sP, subhaloID=shID)
+                refPos = firstSub['SubhaloPos']
+                refVel = firstSub['SubhaloVel']
+
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
 
             if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
-            shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
-            firstSub = groupCatSingle(sP, subhaloID=shID)
-
-            r[field] = sP.units.particleRadialVelInKmS(pos, vel, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
+            r[field] = sP.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
 
         # velocity 3-vector, relative to the central subhalo pos/vel, [km/s] for each component
         if field.lower() in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
             if sP.isZoom:
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
-            assert haloID is not None or subhaloID is not None
+            if haloID is None and subhaloID is None:
+                assert sP.refVel is not None
+                print('WARNING: snapshotSubset() using refVel [%.1f %.1f %.1f] as non-zoom run to compute [%s]!' % \
+                    (sP.refVel[0],sP.refVel[1],sP.refVel[2],field))
+                refVel = sP.refVel
+            else:
+                shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
+                firstSub = groupCatSingle(sP, subhaloID=shID)
+                refVel = firstSub['SubhaloVel']
+
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
 
             if isinstance(vel, dict) and vel['count'] == 0: return vel # no particles of type, empty return
 
-            shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
-            firstSub = groupCatSingle(sP, subhaloID=shID)
-
-            r[field] = sP.units.particleRelativeVelInKmS(vel, firstSub['SubhaloVel'])
+            r[field] = sP.units.particleRelativeVelInKmS(vel, refVel)
 
         if field.lower() in ['vrelmag','halo_vrelmag','relvelmag','halo_relvelmag','relative_velmag','relative_vmag']:
             vel = snapshotSubset(sP, partType, 'halo_relvel', **kwargs)

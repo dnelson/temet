@@ -12,12 +12,14 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+from scipy.interpolate import interp1d
 import multiprocessing as mp
 from functools import partial
 
 from util import simParams
 from util.helper import loadColorTable, logZeroNaN, closest, getWhiteBlackColors
+from util.rotation import rotationMatrixFromAngleDirection, momentOfInertiaTensor, \
+  rotationMatricesFromInertiaTensor
 from plot.config import *
 from cosmo.mergertree import mpbPositionComplete
 from vis.common import gridBox, setAxisColors, setColorbarColors
@@ -25,99 +27,24 @@ from vis.halo import renderSingleHalo, selectHalosFromMassBin
 from vis.box import renderBox
 from projects.outflows_analysis import halo_selection, selection_subbox_overlap, haloTimeEvoDataSubbox, haloTimeEvoDataFullbox
 
-def galaxyMosaics(conf=1, rotation='face-on'):
-    """ Mosaic, top N most massive. 
-      todo: multi-redshift
-      todo: pick systems by hand instead of top N
-      todo: more than 1 mass bin?"""
+def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rotation='face-on'):
+    """ Mosaic of galaxy images, top N most massive. 
+     numHalosInd: [0,1,2,3] controls the layout and the number N.
+     panelNum: controls the field to render, gas vs. stars.
+     hIDs: if not None, then plot exactly these FoF-halo IDs instead of the top N. """
     res        = 2160
-    redshift   = 4.0
-    run        = 'tng'
-    rVirFracs  = None
-    method     = 'sphMap' #'histo'
-    nPixels    = [960,960]
-    sizeType   = 'codeUnits'
-    axes       = [0,1]
-    #rotation   = 'face-on'
-    labelHalo  = 'Mstar'
-
-    numGals    = 12
-    massBin    = None # if None, then top N
-    #iterNum    = 0
-
-    # subhaloIDs of twelve z=2 systems, 3 per 'mass bin', to show as a 3x4 mosaic
-    z2_inds = []
-    z1_evo_inds = []
-
-    class plotConfig:
-        plotStyle = 'edged'
-        rasterPx  = 960
-        nRows     = numGals/3 # 4x3 panels
-        colorbars = True
-
-    # combined plot of centrals in mass bins
-    sP = simParams(res=res, run=run, redshift=redshift)
-
-    if massBin is None:
-        cen_flag = sP.groupCat(fieldsSubhalos=['central_flag'])
-        cen_inds = np.where(cen_flag)[0]
-        hIDs = cen_inds[0:0+numGals]
-        #hIDs = [0, 25239, 41129, 55632, 70415, 79612, 87125, 94859, 101009, 106001, 110862, 114772]
-    else:
-        hIDs, _ = selectHalosFromMassBin(sP, [massBin], numPerBin=np.inf, massBinInd=0)
-        import pdb; pdb.set_trace()
-
-    # configure panels
-    panels = []
-
-    for i, hID in enumerate(hIDs):
-        # set semi-adaptive size (code units)
-        loc_size = 80.0
-
-        # either stars or gas, face-on
-        if conf == 1:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-3.0,1.0]} )
-        if conf == 2: 
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[7.0,8.5]} )
-        if conf == 3:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
-        if conf == 4:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los_sfrwt', 'valMinMax':[-300,300]} )
-            if rotation is None or rotation == 'edge-on': panels[-1]['valMinMax'] = [-400,400]
-        if conf == 5:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
-        if conf == 6:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
-        if conf == 7:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
-
-        if i == 0: # upper left
-            panels[-1]['labelScale'] = 'physical'
-        if i == 2: # upper right
-            panels[-1]['labelZ'] = True
-
-    hStr = '_HISTO' if method == 'histo' else ''
-    plotConfig.saveFilename = 'renderHalos_%s-%d_%s_%s%s.pdf' % (sP.simName,sP.snap,panels[0]['partField'],rotation,hStr)
-
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
-
-def galaxyMosaic_topN(numHalosInd,panelNum=1):
-    """ Mosaic, top N most massive. """
-    res        = 2160
-    redshift   = 2.0 # 1.0
     run        = 'tng'
     rVirFracs  = None
     method     = 'sphMap'
     nPixels    = [960,960]
     sizeType   = 'codeUnits'
     axes       = [0,1]
-    rotation   = 'face-on'
 
     class plotConfig:
         plotStyle = 'edged'
-        rasterPx  = 240
+        rasterPx  = 240 if numHalosInd == 3 else 960
         nRows     = 1 # overriden below
-        colorbars = True
+        colorbars = True if hIDsPlot is None else False
 
     # configure panels
     panels = []
@@ -135,15 +62,24 @@ def galaxyMosaic_topN(numHalosInd,panelNum=1):
         hIDs = cen_inds[0:0+8] # eight total
         plotConfig.nRows = 4 # 4x2
     if numHalosInd == 1:
+        hIDs = cen_inds[0:0+12] # twelve total
+        plotConfig.nRows = 4 # 4x3
+        labelHalo  = 'Mstar'
+    if numHalosInd == 2:
         hIDs = cen_inds[8:8+40] # 40 total, skipping the first eight
         plotConfig.nRows = 8 # 8x5
-    if numHalosInd == 2:
+    if numHalosInd == 3:
         hIDs = cen_inds[0:29*26] # 754 total, starting again at the first
         plotConfig.nRows = 29 # 29x26 = aspect ratio about half of 16:9
 
-    for hID in hIDs:
+    if hIDsPlot is not None:
+        hIDs = cen_inds[hIDsPlot]
+        plotConfig.nRows = 1
+
+    # add panels
+    for i, hID in enumerate(hIDs):
         # set semi-adaptive size (code units)
-        loc_size = 80.0
+        loc_size = 80.0 if hIDsPlot is None else 60.0
         if mhalo[hID] <= 12.5:
             loc_size = 60.0
         if mhalo[hID] <= 12.1:
@@ -155,8 +91,32 @@ def galaxyMosaic_topN(numHalosInd,panelNum=1):
         if panelNum == 2: 
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
-    plotConfig.saveFilename = savePathDefault + 'renderHalos_%s-%d_n%d_%s.pdf' % \
-                              (sP.simName,sP.snap,plotConfig.nRows,panels[0]['partType'])
+        # other: gas explorations
+        if panelNum == 3:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-3.0,1.0]} )
+        if panelNum == 4: 
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,8.6]} )
+            if rotation == 'edge-on': panels[-1]['valMinMax'] = [8.0, 9.5]
+        if panelNum == 5:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
+        if panelNum == 6:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los_sfrwt', 'valMinMax':[-300,300]} )
+            if rotation is None or rotation == 'edge-on': panels[-1]['valMinMax'] = [-400,400]
+        if panelNum == 7:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
+        if panelNum == 8:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
+        if panelNum == 9:
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
+
+        if numHalosInd <= 2:
+            if i == 0: # upper left
+                panels[-1]['labelScale'] = 'physical'
+            if i == 2: # upper right
+                panels[-1]['labelZ'] = True
+
+    plotConfig.saveFilename = 'renderHalos_%s-%d_N%d_%s-%s_%s.pdf' % \
+      (sP.simName,sP.snap,len(hIDs),panels[0]['partType'],panels[0]['partField'],rotation)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -688,45 +648,166 @@ def singleHaloDemonstrationImage():
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
-def subboxSingleVelocityFrame():
+def subboxSingleVelocityFrame(conf=0):
     """ Grab one of the velocity frames from SB2. """
     panels = []
 
     run     = 'tng'
-    method  = 'sphMap'
-    nPixels = [3840,2160]
+    method  = 'sphMap' # 'histo'
+    nPixels = [2000,2000] #[3840,2160]
     axes    = [0,1] # x,y
 
     labelScale = 'physical'
     labelZ     = True
-    plotHalos  = False
+    plotHalos  = 25
+    labelHalos = True
 
     res      = 2160
-    redshift = 1.68
+    redshift = 1.66666 # full box snap 37, for group catalogs
     variant = 'subbox2'
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
-    panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
-    #panels.append( {'partType':'gas',   'partField':'temp', 'valMinMax':[4.4,7.6]} )
-    #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
-    #panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
-    #panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
+    if 0: # testing streamlines
+        vecOverlay = 'gas_vel'
+        vecColorPT = 'gas'
+        vecColorPF = 'temp_sfcold'
+        vecMinMax  = None
+        vecMethod  = 'B'
+        vecOverlaySizePx = [100, 100] # [100, 100] # [400,400]
+        vecOverlayWidth = sP.units.codeLengthToKpc(sP.subboxSize[3-axes[0]-axes[1]])
+
+    if conf == 0: panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
+    if conf == 1: panels.append( {'partType':'gas',   'partField':'temp_sfcold', 'valMinMax':[4.4,7.6]} )
+    if conf == 2: panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
+    if conf == 3: panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
+    if conf == 4: panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
+    if conf == 5: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 38.5]} )
 
     class plotConfig:
         saveFilename = 'vis_%s_%d_%s_%s.pdf' % (sP.simName,sP.snap,panels[0]['partType'],panels[0]['partField'])
-        #savePath = '/u/dnelson/data/frames/%s%s/' % (res,variant)
         plotStyle = 'edged'
         rasterPx  = nPixels
         colorbars = True
 
-        # movie config
-        #minZ      = 0.0
-        #maxZ      = 50.0 # tng subboxes start at a=0.02
-        #maxNSnaps = None #2400 #4500 # 2.5 min at 30 fps (1820sb0 render)
-
     renderBox(panels, plotConfig, locals())
-    #renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subboxOutflowTimeEvoPanels(conf=0, depth=10):
+    """ Track a halo through time and produce a series of time evolution panels. """
+    panels = []
+
+    run        = 'tng'
+    method     = 'sphMap'
+    nPixels    = [800, 400] # [x,y] shape of boxSizeImg must match nPixels aspect ratio
+    boxSizeImg = [1000, 500, depth]  # depths: 10, 25, 50, 100, 200, sizes: [1000,500], [200,100]
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelHalos = False # 'mstar'
+
+    res      = 2160
+    variant = 'subbox2'
+
+    # define anchor snapshot/redshift and target halo
+    redshift = 1.66666 # full box snap 37, for group catalogs
+
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+    sP_load = sP.parentBox
+
+    haloID_parent = 7 # snap 37 is the halo entering the subbox from the right edge and starting kinetic FB
+    halo = sP_load.groupCatSingle(haloID=haloID_parent)
+    subh = sP_load.groupCatSingle(subhaloID=halo['GroupFirstSub'])
+    mpb = sP_load.loadMPB(halo['GroupFirstSub'])
+
+    # decide time steps and subbox snapshots
+    dsnap = 30
+    nPanels = 5
+    snaps = [sP.snap - i*dsnap for i in [3,2,1,-1,-3]]
+
+    target_times = []
+    custom_labels = []
+    tage = []
+
+    for cur_snap in snaps:
+        sPother = simParams(res=res, run=run, snap=cur_snap, variant=variant)
+        target_times.append(sPother.scalefac)
+        tage.append(sPother.tage)
+        dt = (sPother.tage - tage[0]) * 1000.0
+        custom_labels.append( ['$\Delta$t=%d Myr' % int(np.round(dt/10)*10)] )
+        print('dt: %.2f Myr' % (dt))
+
+    # determine center positions at each time
+    SubhaloPos  = mpb['SubhaloPos'][::-1,:] # ascending snapshot order
+    SnapNum     = mpb['SnapNum'][::-1] # ascending snapshot order
+
+    mpbTimes = sP_load.snapNumToRedshift(snap=SnapNum, time=True)
+    posTarget = np.zeros( (len(target_times),3), dtype='float32' )
+
+    for j in range(3):
+        # each axis separately, linear extrapolation
+        f = interp1d(mpbTimes, SubhaloPos[:,j], kind='linear', fill_value='extrapolate')
+        posTarget[:,j] = f(target_times)
+
+    # rotation based on galaxy (constant in time)
+    #inertiaTensor = momentOfInertiaTensor(sP_load, subhaloID=halo['GroupFirstSub'])
+    #rotMatrix = rotationMatricesFromInertiaTensor(inertiaTensor)['edge-on-y']
+
+    # physical quantity ranges
+    partType = 'gas'
+    mmVel    = [100, 2500]
+    mmTemp   = [4.6, 7.5]
+    mmDens   = [4.0, 6.5]
+    mmZ      = [-2.0, 0.4]
+    mmDeDt   = [35, 38.5]
+    mmSfr    = [-2.0, 1.0]
+
+    # assign panels, earlier at the top, time increasing downwards
+    for i in range(nPanels):
+        ls = 'physical' if i == 0 else False # upper left
+        lz = True if i == 0 else False # upper right
+        cen = posTarget[i,:]
+        ph  = 1 if i == nPanels-1 else False # plot halo virial radius
+        ext = [cen[0]-boxSizeImg[0]/2, cen[0]+boxSizeImg[0]/2,
+               cen[1]-boxSizeImg[1]/2, cen[1]+boxSizeImg[1]/2]
+
+        # rotation (by hand, constant in time)
+        angle = -30.0
+        if i == nPanels-1: angle = -38.0
+        dirVec = [0,0,1]
+        #rotCenter = halo['GroupPos'] # at anchor snap
+        rotCenterLoc = cen
+        rotMatrixLoc = rotationMatrixFromAngleDirection(angle, dirVec)
+
+        # each column: different fields
+        if conf == 0:
+            panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
+                            'partField':'velmag', 'plawScale':1.4, 'valMinMax':mmVel, 'plotHalos': ph, 
+                            'labelScale':ls, 'labelCustom':custom_labels[i]} )
+            panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
+                            'partField':'temp_sfcold', 'valMinMax':mmTemp, 'plotHalos': ph, 'labelZ':lz} )
+
+        if conf == 1:
+            panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
+                            'partField':'coldens_msunkpc2', 'ctName':'inferno', 'plawScale':1.3, 'valMinMax':mmDens, 'labelScale':ls, 
+                            'labelCustom':custom_labels[i], 'plotHalos': ph} )
+            panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
+                             'partField':'Z_solar', 'valMinMax':mmZ, 'plotHalos': ph, 'labelZ':lz} )
+
+        if conf == 2:
+            panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
+                            'partField':'sfr', 'valMinMax':mmSfr, 'plotHalos': ph, 
+                            'labelScale':ls, 'labelCustom':custom_labels[i]} )
+            panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
+                            'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w', 'plotHalos': ph, 'labelZ':lz} )
+
+    class plotConfig:
+        saveFilename = 'vis_%s_%d_n%d_x%d_depth%d_conf-%d.pdf' % \
+          (sP.simName,sP.snap,nPanels,boxSizeImg[0],boxSizeImg[2],conf)
+        plotStyle = 'edged'
+        rasterPx  = nPixels
+        colorbars = True
+        nRows = nPanels
+
+    renderBox(panels, plotConfig, locals(), skipExisting=False)
 
 def run():
     """ Run. """

@@ -1770,6 +1770,48 @@ def robertsborsani18():
 
     return r
 
+def cicone16():
+    """ Load observational data points from Cicone+ (2016). Fig 15 (upper left), OIII v0.1 outflow velocities vs SFR (SDSS). """
+    sfr  = [-2.5, -2.5, -2.0, -2.0, -1.45, -1.45, -1.45, -1.0, -1.0, -1.0, -1.0, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
+             0.0,  0.0,  0.0,  0.0,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  1.0,  1.0,  1.0,  1.0,  1.0,  1.5,  1.5,  1.5,  
+             1.5,  1.5,  2.0]
+    vout = [106.87, 128.62, 111.18, 125.97, 104.18, 120.71, 152.90, 115.45, 136.33, 166.78, 226.38, 123.24, 158.04,
+            172.83, 190.23, 194.58, 237.65, 371.20, 218.47, 244.57, 273.72, 425.10, 240.18, 319.79, 351.11, 365.47, 
+            406.79, 455.95, 475.05, 509.42, 528.99, 549.00, 570.76, 533.74, 568.98, 603.34, 646.84, 686.43, 822.55]
+
+    r = {'sfr'   : sfr, # log[msun/yr],
+         'vout'  : np.log10(vout), # log[km/s]
+         'label' : 'Cicone+ (2016)'}
+    return r
+
+def davies18():
+    """ Load observational data points from Davies+ (2018). Figs 7 and 8, H-alpha z~2 outflows (SINS/zC-SINF). """
+    sfr_surfdens = [-0.04, 0.21, 0.42, 0.61, 1.03] # log msun/yr/kpc^2
+    vout         = [341,   338,  368,  463,  557]  # km/s
+    etaM         = [0.07,  0.14, 0.22, 0.19, 0.24] # linear
+
+    r = {'sfr_surfdens' : sfr_surfdens, # log[msun/yr/kpc^2]
+         'vout'         : np.log10(vout), # log[km/s]
+         'etaM'         : np.log10(etaM), # log
+         'label'        : 'Davies+ (2018)'}
+    return r
+
+def bordoloi14(surfdens=False):
+    """ Load observational data points from Bordoloi+ (2014) Fig 10,11, Table 1, outflows based on MgII in zCOSMOS (z~1). """
+    sfr   = [0.5, 1.4, 1.9] # log msun/yr
+    vout_sfr  = [150, 250, 300] # km/s
+
+    sfr_surfdens = [-1.3, -0.6, 0.2] # log msun/yr/kpc^2
+    vout_surfdens = [np.nan, 250, 255] # km/s, the first is undetected
+
+    if surfdens:
+        r = {'sfr_surfdens' : sfr_surfdens, 'vout' : np.log10(vout_surfdens)}
+    else:
+        r = {'sfr' : sfr, 'vout' : np.log10(vout_sfr)}
+    r['label'] = 'Bordoloi+ (2014)'
+
+    return r
+
 def erb12():
     """ Load observational data points from Erb+ (2012) Fig 13 (lower left), outflows based on FeII at 1<z<1 (stack points). """
     sfr  = [1.00, 2.11] # log msun/yr
@@ -1833,6 +1875,406 @@ def fiore17():
          'mstar'  : mstar, # log msun
          'mgas'   : mgas, # log msun
          'label'  : 'Fiore+ (2017)'}
+
+    return r
+
+def chisholm15(v90=False):
+    """ Load observational data points from Chisholm+ (2015), SF-driven outflow properties based on SiII (COS). """
+    path = dataBasePath + 'chisholm/chisholm15.txt'
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    z     = np.zeros( nLines, dtype='float32' )
+    mstar = np.zeros( nLines, dtype='float32' ) # log Msun
+    sfr   = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    sfrd  = np.zeros( nLines, dtype='float32' ) # Msun/yr/kpc^2
+    vcen  = np.zeros( nLines, dtype='float32' ) # km/s
+    vel90 = np.zeros( nLines, dtype='float32' ) # km/s
+    Mdot  = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    etaM  = np.zeros( nLines, dtype='float32' ) # [linear]
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split('&')
+        name.append(line[0])
+        z[i]     = float(line[4])
+        mstar[i] = float(line[8])
+        sfr[i]   = float(line[9])
+        sfrd[i]  = float(line[10])
+        vcen[i]  = -1 * float(line[15])
+        vel90[i] = float(line[17])
+        Mdot[i]  = float(line[21])
+        etaM[i]  = float(line[23])
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'mstar'  : mstar, # log msun
+         'sfr'    : np.log10(sfr), # log msun/yr
+         'sfr_surfdens' : np.log10(sfrd), # log msun/yr/kpc^2
+         'vout'   : np.log10(vcen), # log km/s
+         'Mdot'   : np.log10(Mdot), # log msun/yr
+         'etaM'   : np.log10(etaM), # log
+         'label'  : 'Chisholm+ (2015)'}
+
+    if v90:
+        r['vout'] = np.log10(vel90) # otherwise vcen
+
+    return r
+
+def genzel14():
+    """ Load observational data points from Genzel+ (2014), outflow properties from SINS/zC-SINF (z=2-3). """
+    path = dataBasePath + 'genzel/genzel14_table4.txt'
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name  = []
+    z     = np.zeros( nLines, dtype='float32' )
+    mstar = np.zeros( nLines, dtype='float32' ) # log Msun
+    dsfms = np.zeros( nLines, dtype='float32' ) # linear
+    sfr   = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    vout  = np.zeros( nLines, dtype='float32' ) # km/s
+    Mdot  = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    etaM  = np.zeros( nLines, dtype='float32' ) # [linear]
+    dPdt_rad = np.zeros( nLines, dtype='float32' ) # [linear]
+    dEdt_lum = np.zeros( nLines, dtype='float32' ) # [linear]
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split() # one or more whitespaces
+        name.append(line[0])
+        z[i]     = float(line[1])
+        mstar[i] = float(line[2])
+        dsfms[i] = float(line[3])
+        sfr[i]   = float(line[4])
+        vout[i]  = float(line[8])
+        Mdot[i]  = float(line[11])
+        etaM[i]  = float(line[12])
+        dPdt_rad[i] = float(line[13])
+        dEdt_lum[i] = float(line[14])
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'mstar'  : mstar, # log msun
+         'dsfms'  : np.log10(dsfms), # log
+         'sfr'    : np.log10(sfr), # log msun/yr
+         'vout'   : np.log10(vout), # log km/s
+         'Mdot'   : np.log10(Mdot), # log msun/yr
+         'etaM'   : np.log10(etaM), # log
+         'label'  : 'Genzel+ (2014)'}
+
+    return r
+
+def leung17():
+    """ Load observational data points from Leung+ (2017), outflow properties from MOSDEF (z~2). """
+    path = dataBasePath + 'leung/leung17.txt'
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name   = []
+    Mdot   = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    etaM   = np.zeros( nLines, dtype='float32' ) # [linear]
+    dEdt   = np.zeros( nLines, dtype='float64' ) # erg/s
+    dEdt_Lagn = np.zeros( nLines, dtype='float32' ) # [linear percentage]
+    dPdt   = np.zeros( nLines, dtype='float64' ) # dyn
+    dPdt_Lagnc = np.zeros( nLines, dtype='float32' ) # = dPdt / (L_AGN/c) [linear]
+    vmax   = np.zeros( nLines, dtype='float32' ) # km/s
+    sfr    = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    mstar  = np.zeros( nLines, dtype='float32' ) # log Msun
+    L_OIII = np.zeros( nLines, dtype='float64' ) # linear
+    L_AGN  = np.zeros( nLines, dtype='float64' ) # erg/s
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split() # one or more whitespaces
+        name.append(line[0])
+        Mdot[i]      = float(line[1])
+        etaM[i]      = float(line[3])
+        dEdt[i]      = float(line[4])
+        dEdt_Lagn[i] = float(line[5].replace('%','')) / 100.0
+        dPdt[i]      = float(line[6])
+        dPdt_Lagnc   = float(line[7])
+        vmax[i]      = float(line[8])
+        sfr[i]       = float(line[9])
+        mstar[i]     = float(line[10])
+        L_OIII[i]    = float(line[11])
+        L_AGN[i]     = float(line[12])
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'mstar'  : mstar, # log msun
+         'sfr'    : np.log10(sfr), # log msun/yr
+         'vout'   : np.log10(vmax), # log km/s
+         'Mdot'   : np.log10(Mdot), # log msun/yr
+         'etaM'   : np.log10(etaM), # log
+         'Lbol'   : np.log10(L_AGN), # log erg/s
+         'label'  : 'Leung+ (2017)'}
+
+    return r
+
+def rupke05():
+    """ Load observational data points from Rupke+ (2005c), outflow properties of LIRGS (z<0.5). """
+    path = dataBasePath + 'rupke/rupke05c.txt'
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name   = []
+    z      = np.zeros( nLines, dtype='float32' )
+    L_IR   = np.zeros( nLines, dtype='float32' ) # log lsun
+    sfr    = np.zeros( nLines, dtype='float32' ) # Msun/yr
+    dvtau  = np.zeros( nLines, dtype='float32' ) # skip
+    dvmax  = np.zeros( nLines, dtype='float32' ) # km/s
+    mstar  = np.zeros( nLines, dtype='float32' ) # log Msun (this is plausibly wind mass not mstar, doublecheck)
+    Mdot   = np.zeros( nLines, dtype='float32' ) # log Msun/yr
+    pres   = np.zeros( nLines, dtype='float32' ) # log dyn*s
+    dPdt   = np.zeros( nLines, dtype='float64' ) # log dyn
+    engy   = np.zeros( nLines, dtype='float64' ) # log erg
+    dEdt   = np.zeros( nLines, dtype='float64' ) # erg/s
+    etaM   = np.zeros( nLines, dtype='float32' ) # [linear]
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split("&") # one or more whitespaces
+        name.append(line[0])
+        z[i]      = float(line[1])
+        L_IR[i]   = float(line[2])
+        sfr[i]    = float(line[3])
+        dvtau[i]  = float(line[4])
+        dvmax[i]  = -1 * float(line[5])
+        #mstar[i]  = float(line[6].replace('>','')) # set value to upper limit
+        Mdot[i]   = float(line[7].replace('>','')) # set value to upper limit
+        pres[i]   = float(line[8].replace('>','')) # set value to upper limit
+        dPdt[i]   = float(line[9].replace('>','')) # set value to upper limit
+        engy[i]   = float(line[10].replace('>','')) # set value to upper limit
+        dEdt[i]   = float(line[11].replace('>','')) # set value to upper limit
+        etaM[i]   = float(line[12].replace('>','')) # set value to upper limit
+        i += 1
+
+    # filter for Mdot>0 (no data)
+    w = np.where(Mdot > 0.0)
+
+    r = {'name'   : np.array(name)[w],
+         #'mstar'  : mstar[w], # log msun
+         'sfr'    : np.log10(sfr[w]), # log msun/yr
+         'vout'   : np.log10(dvmax[w]), # log km/s
+         'Mdot'   : Mdot[w], # log msun/yr
+         'etaM'   : np.log10(etaM[w]), # log
+         'label'  : 'Rupke+ (2005)'}
+
+    return r
+
+def rupke17():
+    """ Load observational data points from Rupke+ (2017), outflow properties related to BHs (z<0.3). """
+    path = dataBasePath + 'rupke/rupke17.txt'
+    from util.units import units
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name    = []
+    z       = np.zeros( nLines, dtype='float32' )
+    Lbol    = np.zeros( nLines, dtype='float64' ) # log lsun
+    MBH     = np.zeros( nLines, dtype='float32' ) # log msun
+    v50_avg = np.zeros( nLines, dtype='float32' ) # km/s
+    v50_max = np.zeros( nLines, dtype='float32' ) # km/s
+    v98_avg = np.zeros( nLines, dtype='float32' ) # km/s
+    v98_max = np.zeros( nLines, dtype='float32' ) # km/s
+    Mdot    = np.zeros( nLines, dtype='float32' ) # log Msun/yr
+    pres    = np.zeros( nLines, dtype='float32' ) # log dyn*s
+    cdPdt   = np.zeros( nLines, dtype='float64' ) # log lsun
+    engy    = np.zeros( nLines, dtype='float64' ) # log erg
+    dEdt    = np.zeros( nLines, dtype='float64' ) # log erg/s
+    etaM    = np.zeros( nLines, dtype='float32' ) # [log]
+    cdPdt_LAGN = np.zeros( nLines, dtype='float32' ) # [log]
+    dEdt_LAGN  = np.zeros( nLines, dtype='float32' ) # [log]
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split("&")
+        name.append(line[0])
+        z[i]       = float(line[1])
+        Lbol[i]    = float(line[2])
+        MBH[i]     = float(line[5])
+        v50_avg[i] = -1 * float(line[12])
+        v50_max[i] = -1 * float(line[13])
+        v98_avg[i] = -1 * float(line[14])
+        v98_max[i] = -1 * float(line[15])
+        Mdot[i]    = float(line[18])
+        #pres[i]    = float(line[20]) # have +/- inside
+        #cdPdt[i]   = float(line[21]) # have +/- inside
+        #engy[i]    = float(line[22]) # have +/- inside
+        #dEdt[i]    = float(line[23]) # have +/- inside
+        etaM[i]    = float(line[24])
+        cdPdt_LAGN[i] = float(line[25])
+        dEdt_LAGN[i]  = float(line[26])
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'Lbol'   : np.log10(10.0**Lbol * units.L_sun), # log erg/s
+         #'sfr'    : np.log10(10.0**Mdot / 10.0**etaM), # log msun/yr (doublecheck if Mdot and etaM are matched)
+         'vout'   : np.log10(v98_max), # log km/s
+         'Mdot'   : Mdot, # log msun/yr
+         'etaM'   : etaM, # log
+         'label'  : 'Rupke+ (2017)'}
+
+    return r
+
+def spence18(vel05=False):
+    """ Load observational data points from Spence+ (2018), outflow properties (z<0.2). """
+    path = dataBasePath + 'spence/spence18.txt'
+    from util.units import units
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name     = []
+    z        = np.zeros( nLines, dtype='float32' )
+    Lbol_h   = np.zeros( nLines, dtype='float64' ) # erg/s
+    Lbol_a   = np.zeros( nLines, dtype='float64' ) # erg/s
+    v50      = np.zeros( nLines, dtype='float32' ) # km/s
+    v50_fwhm = np.zeros( nLines, dtype='float64' ) # km/s
+    v50_Mdot = np.zeros( nLines, dtype='float64' ) # msun/yr
+    v50_dEdt = np.zeros( nLines, dtype='float64' ) # erg/s
+    v05      = np.zeros( nLines, dtype='float32' ) # km/s
+    v05_fwhm = np.zeros( nLines, dtype='float32' ) # km/s
+    v05_Mdot = np.zeros( nLines, dtype='float32' ) # msun/yr
+    v05_dEdt = np.zeros( nLines, dtype='float64' ) # erg/s
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split()
+        name.append(line[0])
+        Lbol_h[i]   = float(line[1])
+        Lbol_a[i]   = float(line[2])
+        v50[i]      = float(line[3])
+        v50_fwhm[i] = float(line[4])
+        v50_Mdot[i] = float(line[5])
+        v50_dEdt[i] = float(line[6])
+        v05[i]      = float(line[3])
+        v05_fwhm[i] = float(line[4])
+        v05_Mdot[i] = float(line[5])
+        v05_dEdt[i] = float(line[6])
+        i += 1
+
+    r = {'name'   : np.array(name),
+         'Lbol'   : np.log10(Lbol_h), # log erg/s
+         'vout'   : np.log10(v50), # log km/s
+         'Mdot'   : np.log10(v50_Mdot), # log msun/yr
+         'label'  : 'Spence+ (2018)'}
+
+    if vel05:
+        # maximal v05 values instead of the default 'v50' (fluxe-weighted) values
+        r['vout'] = np.log10(v05)
+        v['Mdot'] = np.log10(v05_Mdot)
+
+    return r
+
+def toba17():
+    """ Load observational data points from Toba+ (2017), BH outflow properties. """
+    path = dataBasePath + 'toba/toba17.txt'
+    from util.units import units
+
+    # load table
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    name     = []
+    z        = np.zeros( nLines, dtype='float32' )
+    Lbol     = np.zeros( nLines, dtype='float64' ) # log erg/s
+    v_OIII   = np.zeros( nLines, dtype='float32' ) # km/s
+    sig_OIII = np.zeros( nLines, dtype='float32' ) # km/s
+    mGas     = np.zeros( nLines, dtype='float32' ) # log msun
+    vout     = np.zeros( nLines, dtype='float32' ) # log km/s
+    rout     = np.zeros( nLines, dtype='float32' ) # log pc
+    Mdot     = np.zeros( nLines, dtype='float32' ) # log msun/yr
+    dEdt     = np.zeros( nLines, dtype='float32' ) # log erg/s
+    dPdt     = np.zeros( nLines, dtype='float32' ) # log dyne
+    dPdt_Lc  = np.zeros( nLines, dtype='float32' ) # linear
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line = line.split()
+        name.append(line[1])
+        z[i]        = float(line[7])
+        Lbol[i]     = float(line[11])
+        v_OIII[i]   = float(line[13])
+        sig_OIII[i] = float(line[15])
+        mGas[i]     = float(line[18])
+        vout[i]     = float(line[19])
+        rout[i]     = float(line[20])
+        Mdot[i]     = float(line[21])
+        dEdt[i]     = float(line[22])
+        dPdt[i]     = float(line[23])
+        dPdt_Lc[i]  = float(line[24])
+        i += 1
+
+    # select valid entries
+    w = np.where(vout > 0.0)
+
+    r = {'name'   : np.array(name)[w],
+         'Lbol'   : Lbol[w], # log erg/s
+         'vout'   : vout[w], # log km/s
+         'Mdot'   : Mdot[w], # log msun/yr
+         'label'  : 'Toba+ (2017)'}
 
     return r
 

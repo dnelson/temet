@@ -41,7 +41,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
     if not sP.isZoom:
         if haloID is not None:
             # periodic box, FoF/Halo ID
-            hInd = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+            hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
         else:
             # periodic box, subhalo ID
             hInd = subhaloID
@@ -62,7 +62,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         panels.append( {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 8.8]} )
     if conf == 3:
         # shock mach number
-        panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
+        panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[35, 39.5],
+                        'method':'histo', 'nPixels':[4000,4000], 'smoothFWHM':0.5} )
     if conf == 4:
         # gas column density
         #panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]} )
@@ -74,13 +75,13 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
     if conf == 6:
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
-    if 0:
+    if 1:
         size = 2.5
         sizeType = 'rVirial'
     if 0:
         size = 6000.0
         sizeType = 'pkpc'
-    if 1:
+    if 0:
         size = 40.0
         sizeType = 'rHalfMassStars'
         rVirFracs = [2.0,10.0]
@@ -90,7 +91,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         plotStyle    = 'open'
         rasterPx     = 1200 #nPixels[0]
         colorbars    = True
-        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_subhaloID-%d_%s.pdf' % (conf,run,res,redshift,subhaloID,method)
+        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_ID-%d_%s.pdf' % \
+          (conf,run,res,redshift,subhaloID if subhaloID is not None else haloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 

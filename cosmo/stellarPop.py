@@ -739,7 +739,7 @@ class sps():
         """ Do unit conversions (and wind particle filtering) on inputs, and return mags() results. 
         If retFullSize is True, return same size as inputs with wind set to nan, otherwise filter 
         out wind/nan values and compress return size. """
-        wStars = np.where( gfm_sftime >= 0.0 )
+        wStars = np.where( gfm_sftime > 0.0 )
 
         if len(wStars[0]) == 0:
             return None

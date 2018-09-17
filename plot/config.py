@@ -16,7 +16,7 @@ lw = 2.5 # default line width
 
 linestyles = ['-',':','--','-.',(0, (3, 5, 1, 5, 1, 5))] # five linestyles to alternate through (last is dashdotdot)
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point) (old, delete)
-markers    = ['o','s','D','p','v','*','8','^','P','X']  # ten marker symbols to alternate through
+markers    = ['o','s','D','p','v','*','8','^','P','X','>','<','d']  # marker symbols to alternate through
 
 # the dust model used by default for all colors
 defSimColorModel = 'p07c_cf00dust_res_conv_ns1_rad30pkpc'

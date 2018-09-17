@@ -134,13 +134,18 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
     # fraction of total hydrogen mass which is neutral, as reported by the code, which is already 
     # based on Rahmati+ (2012) if UVB_SELF_SHIELDING is enabled. But, above the star formation 
     # threshold, values are reported according to the eEOS, so apply the Rahmati correction directly.
-    frac_nH0 = gas['NeutralHydrogenAbundance'].astype('float32')
+    if 'NeutralHydrogenAbundance' in gas:
+        frac_nH0 = gas['NeutralHydrogenAbundance'].astype('float32')
+
+        # compare to physical density threshold for star formation [H atoms / cm^3]
+        PhysDensThresh = 0.13
+    else:
+        # not stored for this snapshot, so use Rahmati answer for all gas cells
+        frac_nH0 = np.zeros( gas['Density'].size, dtype='float32' )
+        PhysDensThresh = 0.0
 
     # number density [1/cm^3] of total hydrogen
     nH = sP.units.codeDensToPhys(gas['Density'], cgs=True, numDens=True) * gas['metals_H']
-
-    # compare to physical density threshold for star formation [H atoms / cm^3]
-    PhysDensThresh = 0.13
 
     ww = np.where(nH > PhysDensThresh)
     frac_nH0[ww] = neutral_fraction(nH[ww], sP)
@@ -169,9 +174,13 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
         use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
         density. Return still in code units, e.g. [10^10 Msun/h].
     """
-    reqFields = ['Masses','metals_H','NeutralHydrogenAbundance']
+    reqFields = ['Masses']
     if totalNeutral or atomic or molecular:
         reqFields += ['Density']
+    if sP.snapHasField('gas', 'NeutralHydrogenAbundance'):
+        reqFields += ['NeutralHydrogenAbundance']
+    if sP.snapHasField('gas', 'GFM_Metals'):
+        reqFields += ['metals_H']
 
     # load here?
     if gas is None:
@@ -185,7 +194,10 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
     if 'GFM_Metals' in gas:
         raise Exception('Please load just "metals_H" instead of GFM_Metals to avoid ambiguity.')
 
-    # total hydrogen mass (alternatively, just multiply by sP.units.hydrogen_massfrac=0.76)
+    # total hydrogen mass (take H abundance from snapshot if available, else constant)
+    if 'metals_H' not in gas:
+        gas['metals_H'] = sP.units.hydrogen_massfrac
+
     massH = gas['Masses'] * gas['metals_H']
 
     # which fraction to apply?
