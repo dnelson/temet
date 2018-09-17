@@ -91,6 +91,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     plotHalos   = 20          # plot virial circles for the N most massive halos in the box
+    labelHalos  = False       # label halo virial circles with values like M*, Mhalo, SFR
     projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
@@ -135,10 +136,19 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
         # add simParams info
         v = p['variant'] if 'variant' in p else None
         h = p['hInd'] if 'hInd' in p else None
-        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=p['redshift'], hInd=h, variant=v)
+        s = p['snap'] if 'snap' in p else None
+        z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
+        rp = p['refPos'] if 'refPos' in p else None
+        rv = p['refVel'] if 'refVel' in p else None
 
-        # add imaging config for [square render of] whole box
-        p['boxSizeImg'], p['boxCenter'], p['extent'] = boxImgSpecs(**p)
+        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v, refPos=rp, refVel=rv)
+
+        # add imaging config for render of the whole box, if not directly specified
+        boxSizeImg, boxCenter, extent = boxImgSpecs(**p)
+        if 'boxSizeImg' not in p: p['boxSizeImg'] = boxSizeImg
+        if 'boxCenter' not in p: p['boxCenter'] = boxCenter
+        if 'extent' not in p: p['extent'] = extent
+
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
     # request render and save
@@ -177,6 +187,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     plotHalos   = 0           # plot virial circles for the N most massive halos in the box
+    labelHalos  = False       # label halo virial circles with values like M*, Mhalo, SFR
     projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
     projParams  = {}          # dictionary of parameters associated to this projection type
     rotMatrix   = None        # rotation matrix
@@ -225,9 +236,15 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
 
         if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
 
+        # add simParams info
         v = p['variant'] if 'variant' in p else None
         h = p['hInd'] if 'hInd' in p else None
-        p['sP'] = simParams(res=p['res'], run=p['run'], hInd=h, variant=v)
+        s = p['snap'] if 'snap' in p else None
+        z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
+        rp = p['refPos'] if 'refPos' in p else None
+        rv = p['refVel'] if 'refVel' in p else None
+
+        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v, refPos=rp, refVel=rv)
 
         # add imaging config for [square render of] whole box
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]

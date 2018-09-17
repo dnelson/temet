@@ -399,7 +399,7 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projP
             # rescale log(lum) into [0,65535]
             mVal = np.uint16(65535)
             grid_out = (grid_loc - grid_loc.min()) / (grid_loc.max()-grid_loc.min()) * mVal
-            im[:,:,i] = grid_out
+            im[:,:,i] = grid_out.T
             print(' tiff: ',i,grid_loc.min(),grid_loc.max())
 
         import skimage.io
@@ -527,7 +527,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         quant = snapshotSubset(sP, partType, partFieldLoad, indRange=indRange)
 
     # quantity pre-processing (need to remove log for means)
-    if partField in ['temp','temperature','ent','entr','entropy','P_gas','P_B']:
+    if partField in ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']:
         quant = 10.0**quant
 
     if partField in ['coldens_sq_msunkpc2']:
@@ -612,9 +612,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
         if sP.isPartType(partType,'dm'):       config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
         if sP.isPartType(partType,'dmlowres'): config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):      config['ctName'] = 'gasdens_tng5'
-        #if sP.isPartType(partType,'gas'):     config['ctName'] = 'cubehelix' #'perula' #(methods2)
-        #if sP.isPartType(partType,'gas'):     config['plawScale'] = 1.0 # default
+        if sP.isPartType(partType,'gas'):      config['ctName'] = 'gasdens_tng5' # 'perula' for methods2
         if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray' # copper
 
     if partField in ['coldens_msun_ster']:
@@ -709,7 +707,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'inferno'
 
     # gas: mass-weighted quantities
-    if partField in ['temp','temperature']:
+    if partField in ['temp','temperature','temp_sfcold']:
         grid = logZeroMin( grid )
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'jet'
@@ -740,8 +738,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:
         grid = logZeroMin( sP.units.codeEnergyRateToErgPerSec(grid) )
         config['label']  = 'Shocks Dissipated Energy [log erg/s]'
-        config['ctName'] = 'plasma'
-        config['plawScale'] = 0.7
+        config['ctName'] = 'gist_heat'
+        #config['plawScale'] = 0.7
 
     if partField in ['machnum','shocks_machnum']:
         config['label']  = 'Shock Mach Number' # linear
@@ -887,6 +885,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         optionalStr += '_snapHsmlForStars'
     if alsoSFRgasForStars:
         optionalStr += '_alsoSFRgasForStars'
+    if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
+        optionalStr += str(rotCenter)
 
     m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
@@ -1226,6 +1226,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             f['grid'] = grid_master
         print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
+    # smooth down to some resolution by convolving with a Gaussian? (before log if applicable)
+    if smoothFWHM is not None:
+        # fwhm -> 1 sigma, and physical kpc -> pixels (can differ in x,y)
+        sigma_xy = (smoothFWHM / 2.3548) / (np.array(boxSizeImg)[axes] / nPixels) 
+        print('fwhm: ',smoothFWHM,sigma_xy)
+        grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
+
     # handle units and come up with units label
     grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method)
 
@@ -1313,22 +1320,23 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             #grid_master *= lic_output
             grid_master = logZeroMin(10.0**grid_master * lic_output)
 
-    # smooth down to some resolution by convolving with a Gaussian?
-    if smoothFWHM is not None:
-        # fwhm -> 1 sigma, and physical kpc -> pixels (can differ in x,y)
-        sigma_xy = (smoothFWHM / 2.3548) / (boxSizeImg[axes] / nPixels) 
-        print('fwhm: ',smoothFWHM,sigma_xy)
-        grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
-
     return grid_master, config
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
-    nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
-    fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.0)
+    nLinear = conf.nCols if conf.nCols < conf.nRows else conf.nRows
+    fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.2)
 
-    def _addCirclesHelper(p, ax, pos, radii, numToAdd):
+    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
+        color     = '#ffffff'
+        fontsize  = 16 # for text only
+        alpha     = 0.3
+
+        circOpts = {'color':color, 'alpha':alpha, 'linewidth':1.5, 'fill':False}
+        textOpts = {'color':color, 'alpha':alpha, 'fontsize':16.0, 
+                    'horizontalalignment':'left', 'verticalalignment':'center'}
+
         countAdded = 0
         gcInd = 0
 
@@ -1374,8 +1382,21 @@ def addBoxMarkers(p, conf, ax):
                     rad  = p['sP'].units.codeLengthToMpc(rad)
                 assert p['axesUnits'] not in ['deg','arcmin'] # todo
 
-                c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+                c = plt.Circle((xPos,yPos), rad, **circOpts)
                 ax.add_artist(c)
+
+                # add text annotation?
+                if labelVals is not None:
+                    # construct string, labelVals is a dictionary of (k,v) where k is a 
+                    # format string, and v is a ndarray of values for the string, one per object
+                    text = ''
+                    for key in labelVals.keys():
+                        text += key % labelVals[key][gcInd] + '\n'
+
+                    # draw text string
+                    xPosText = xPos + rad + p['boxSizeImg'][0]/100
+                    yPosText = yPos - rad/4
+                    ax.text( xPosText, yPosText, text, **textOpts)
 
             gcInd += 1
             if gcInd >= radii.size:
@@ -1384,12 +1405,32 @@ def addBoxMarkers(p, conf, ax):
 
     if 'plotHalos' in p and p['plotHalos'] > 0:
         # plotting N most massive halos in visible area
-        h = groupCatHeader(p['sP'])
+        sP_load = p['sP'] if not p['sP'].isSubbox else p['sP'].parentBox
+
+        h = groupCatHeader(sP_load)
 
         if h['Ngroups_Total'] > 0:
-            gc = groupCat(p['sP'], fieldsHalos=['GroupPos','Group_R_Crit200'])['halos']
+            gc = sP_load.groupCat(fieldsHalos=['GroupPos','Group_R_Crit200'])['halos']
 
-            _addCirclesHelper(p, ax, gc['GroupPos'], gc['Group_R_Crit200'], p['plotHalos'])
+            labelVals = None
+            if 'labelHalos' in p and p['labelHalos']:
+                # label N most massive halos with some properties
+                gc_h = sP_load.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])['halos']
+                halo_mass_logmsun = sP_load.units.codeMassToLogMsun( gc_h['Group_M_Crit200'] )
+                halo_id = np.arange(gc_h['GroupFirstSub'].size)
+                gc_s = sP_load.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+                sub_ids = gc_h['GroupFirstSub']
+
+                # construct dictioanry of properties (one or more)
+                labelVals = {}
+                if 'mstar' in p['labelHalos']: # label with M*
+                    labelVals['M$_\star$ = 10$^{%.1f}$ M$_\odot$'] = gc_s[sub_ids]
+                if 'mhalo' in p['labelHalos']: # label with M200
+                    labelVals['M$_{\\rm h}$ = 10$^{%.1f}$ M$_\odot$'] = halo_mass_logmsun
+                if 'id' in p['labelHalos']:
+                    labelVals['[%d]'] = halo_id
+
+            _addCirclesHelper(p, ax, gc['GroupPos'], gc['Group_R_Crit200'], p['plotHalos'], labelVals)
 
     if 'plotSubhalos' in p and p['plotSubhalos'] > 0:
         # plotting N most massive child subhalos in visible area
@@ -1455,8 +1496,8 @@ def addBoxMarkers(p, conf, ax):
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
 
-        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02) # upper right
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)
+        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02)*nLinear # upper right
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)*nLinear
         ax.text( xt, yt, zStr, color='white', alpha=1.0, 
                  size=fontsize, ha='right', va='top') # same size as legend text
 
@@ -1477,8 +1518,8 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen < 0.1 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen *= 4
 
-        # if scale bar is more than 1 Mpc (or 10Mpc), round to nearest 1 Mpc (or 10 Mpc)
-        roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0]
+        # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
+        roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0, 1000.0, 100.0, 10.0]
         for roundScale in roundScales:
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
@@ -1489,6 +1530,12 @@ def addBoxMarkers(p, conf, ax):
         if p['labelScale'] == 'physical':
             # convert size from comoving to physical, which influences only the label below
             scaleBarLen = np.round(scaleBarLen * p['sP'].units.scalefac)
+
+            # want to round this display value
+            for roundScale in roundScales:
+                if scaleBarLen >= roundScale:
+                    scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
+                    scaleBarPlotLen = p['sP'].units.physicalKpcToCodeLength(scaleBarLen)
 
         # label
         cmStr = 'c' if (p['sP'].redshift > 0.0 and p['labelScale'] != 'physical') else ''
@@ -1513,7 +1560,7 @@ def addBoxMarkers(p, conf, ax):
             lw = 4.0
             y_off = 0.05
 
-        yt_frac = y_off * (2 + conf.rasterPx[0]/5e3)
+        yt_frac = y_off * (nLinear + conf.rasterPx[0]/2e3) # needs improvement
 
         x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx[0]) # upper left
         x1 = x0 + scaleBarPlotLen
@@ -1608,9 +1655,9 @@ def addVectorFieldOverlay(p, conf, ax):
 
     field_x = field_name + '_' + ['x','y','z'][p['axes'][0]]
     field_y = field_name + '_' + ['x','y','z'][p['axes'][1]]
-    nPixels = [40,40]
+    nPixels = [40,40] if 'vecOverlaySizePx' not in p else p['vecOverlaySizePx']
     qStride = 3 # total number of ticks per axis is nPixels[i]/qStride
-    vecSliceWidth = 5.0 # pkpc
+    vecSliceWidth = 5.0 if 'vecOverlayWidth' not in p else p['vecOverlayWidth'] # pkpc 
     smoothFWHM = None
 
     # compress vector grids along third direction to more thin slice
@@ -1666,13 +1713,13 @@ def addVectorFieldOverlay(p, conf, ax):
     if p['vecMethod'] == 'A':
         assert norm is None
         q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride], 
-                      color='white', angles='xy', pivot='mid')
+                      color='white', angles='xy', pivot='mid', headwidth=2.0, headlength=3.0)
 
     # (B) plot colored quivers
     if p['vecMethod'] == 'B':
         assert norm is None # don't yet know how to handle
         q = ax.quiver(xx[::qStride], yy[::qStride], grid_x[::qStride,::qStride], grid_y[::qStride,::qStride],
-                      grid_c[::qStride,::qStride], angles='xy', pivot='mid')
+                      grid_c[::qStride,::qStride], angles='xy', pivot='mid', width=0.0005, headwidth=0.0, headlength=0.0)
         # legend for quiver length: (in progress)
         #ax.quiverkey(q, 1.1, 1.05, 10.0, 'label', labelpos='E', labelsep=0.1,  coordinates='figure')
 
@@ -1718,6 +1765,9 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     if not conf.colorbars:
         return
 
+    nLinear = conf.nCols if conf.nCols < conf.nRows else conf.nRows
+    fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.2)
+
     factor  = 0.80 # bar length, fraction of column width, 1.0=whole
     height  = 0.04 # colorbar height, fraction of entire figure
     hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
@@ -1755,10 +1805,8 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     colorbar.outline.set_edgecolor(color2)
 
     # label, centered and below/above
-    textsize = int(conf.rasterPx[0] / 100.0 * conf.nCols * 1.0) # xx-large
-
     cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
-             size=textsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+             size=fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
 
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
@@ -1767,15 +1815,15 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
 
     cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
-        color=colorsB[0], size=textsize, ha='left', va='center', transform=cax.transAxes)
+        color=colorsB[0], size=fontsize, ha='left', va='center', transform=cax.transAxes)
     cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
-        color=colorsB[1], size=textsize, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[1], size=fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
-        color=colorsB[2], size=textsize, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[2], size=fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
-        color=colorsB[3], size=textsize, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[3], size=fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
-        color=colorsB[4], size=textsize, ha='right', va='center', transform=cax.transAxes)
+        color=colorsB[4], size=fontsize, ha='right', va='center', transform=cax.transAxes)
 
 def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
@@ -1981,6 +2029,7 @@ def renderMultiPanel(panels, conf):
 
         if nRows > 2:
             # verify that each column contains the same field and valMinMax
+            barAreaBottom *= 0.7
             pass
 
         if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
@@ -2057,7 +2106,7 @@ def renderMultiPanel(panels, conf):
             
             if nRows == 1 or (nRows > 2 and curRow == nRows-1):
                 # only below, one per column
-                addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                addCustomColorbars(fig, ax, conf, config, heightFac*1.4, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, colWidth, bottomNorm, leftNorm)
 
         # one global colorbar? centered at bottom
@@ -2065,6 +2114,7 @@ def renderMultiPanel(panels, conf):
             heightFac = np.max([1.0/nRows, 0.35])
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2: heightFac *= 1.3 # increase
+            if nRows == 1 and nCols == 1: heightFac *= 0.5 # decrease
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal

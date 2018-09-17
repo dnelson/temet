@@ -180,8 +180,9 @@ def rotationMatricesFromInertiaTensor(I):
     # prepare return with a few other useful versions of this rotation matrix
     r = {}
     r['face-on'] = new_matrix
-    r['edge-on'] = np.matrix( ((1,0,0),(0,0,1),(0,-1,0)) ) * r['face-on']
+    r['edge-on'] = np.matrix( ((1,0,0),(0,0,1),(0,-1,0)) ) * r['face-on'] # disk along x-hat
     r['edge-on-smallest'] = np.matrix( ((0,1,0),(0,0,1),(1,0,0)) ) * r['face-on']
+    r['edge-on-y'] = np.matrix( ((0,0,1),(1,0,0),(0,-1,0)) ) * r['face-on'] # disk along y-hat
     r['edge-on-random'] = random_edgeon_matrix * r['face-on']
     r['phi'] = phi
     r['identity'] = np.matrix( np.identity(3) )
@@ -217,11 +218,12 @@ def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
 
 def rotationMatrixFromAngleDirection(angle, direction):
     """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
-    about the origin. """
-
-    sin_a = np.sin(angle)
-    cos_a = np.cos(angle)
-    direction /= np.lingalg.norm(direction,2)
+    about the origin. Input angle in degrees. """
+    angle_rad = np.radians(angle)
+    
+    sin_a = np.sin(angle_rad)
+    cos_a = np.cos(angle_rad)
+    direction /= np.linalg.norm(direction,2)
 
     # rotation matrix about unit vector
     R = np.diag( [cos_a, cos_a, cos_a] )

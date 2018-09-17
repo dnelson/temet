@@ -851,7 +851,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
     bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
-    #if indivStarMags: bands = ['sdss_r']
+    if indivStarMags or sizes: bands = ['sdss_r']
 
     nBands = len(bands)
 
@@ -1084,9 +1084,12 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     # or, resolved dust: loop over all subhalos first
     if '_res' in dust:
         # prep: resolved dust attenuation uses simulated gas distribution in each subhalo
-        loadFields = ['pos','metal','mass','NeutralHydrogenAbundance']
+        loadFields = ['pos','metal','mass']
+        if sP.snapHasField('gas', 'NeutralHydrogenAbundance'):
+            loadFields.append('NeutralHydrogenAbundance')
         gas = cosmo.load.snapshotSubset(sP, 'gas', fields=loadFields, indRange=indRange['gas'])
-        gas['metals_H'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', indRange=indRange['gas']) # H only
+        if sP.snapHasField('gas', 'GFM_Metals'):
+            gas['metals_H'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', indRange=indRange['gas']) # H only
 
         # prep: override 'Masses' with neutral hydrogen mass (model or snapshot value), free some memory
         if modelH:
@@ -1096,7 +1099,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         else:
             gas['Masses'] = hydrogenMass(gas, sP, totalNeutralSnap=True)
 
-        gas['GFM_Metals'] = None
+        gas['metals_H'] = None
         gas['NeutralHydrogenAbundance'] = None
         gas['Cellsize'] = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize', indRange=indRange['gas'])
 
@@ -2655,10 +2658,14 @@ fieldComputeFunctionMapping = \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside='edgeon_faceon_rnd', sizes=True), 
    'Subhalo_HalfLightRad_p07c_cf00dust_efr' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', sizes=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_z' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_efr_rad30pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),   
    'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),   
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_z' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \

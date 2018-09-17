@@ -938,13 +938,25 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                 cmap._segmentdata['blue'].append( [ind,color[2],color[2]] )
 
         # pull out RGB triplets and scale
+        N = 1024
+
         for k in ['red','green','blue']:
             cdict[k] = []
-            for j in range(len(cmap._segmentdata[k])):
-                xx = cmap._segmentdata[k][j]
+            nElem = len(cmap._segmentdata[k]) if not callable(cmap._segmentdata[k]) else N # detect lambda
+
+            for j in range(nElem):
+                if callable(cmap._segmentdata[k]):
+                    # sample lambda function through [0,1]
+                    pos = float(j)/(N-1)
+                    val = cmap._segmentdata[k](pos)
+                    xx = [pos, val, val]
+                else:
+                    # pull out actual discrete entries
+                    xx = cmap._segmentdata[k][j]
                 cdict[k].append( [xx[0]**plaw_index, xx[1], xx[2]] )
             assert (cdict[k][0] < 0 or cdict[k][-1] > 1) # outside [0,1]
-        return LinearSegmentedColormap(ctName+'_p', cdict, N=1024)
+            
+        return LinearSegmentedColormap(ctName+'_p', cdict, N=N)
 
     if plawScale is not None:
         cmap = _plawScale(cmap, plawScale)
