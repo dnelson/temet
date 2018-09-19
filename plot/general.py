@@ -176,27 +176,33 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
-                     contours=None, xlim=None, ylim=None, clim=None, hideBelow=False, smoothSigma=0.0, nBins=None, sfreq0=False):
+                     xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, nBins=None, sfreq0=False):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
     not None, then show the mean value per pixel of these quantities, instead of weighted histograms.
     If xlim,ylim,clim specified, then use these bounds, otherwise use default/automatic bounds.
     If contours is not None, draw solid contours at these levels on top of the 2D histogram image. 
-    If smoothSigma is not zero, gaussian smooth contours at this level. 
+    if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
     If hideBelow, then pixel values below clim[0] are left pure white. 
+    If smoothSigma is not zero, gaussian smooth contours at this level. 
     If sfreq0 is True, include only non-starforming cells. """
 
     # config
+    nBins2D = None
+
     if nBins is None:
-        nBinsX = 800
-        nBinsY = 400
+        # automatic (2d binning set below based on aspect ratio)
+        nBins = 400
         if sP.isZoom:
-            nBinsX = 250
-            nBinsY = 250
+            nBins = 250
     else:
-        nBinsX = nBins
-        nBinsY = nBins
+        if isinstance(nBins,(list,np.ndarray)):
+            # fully specified
+            nBins2D = nBins
+        else:
+            # one-dim specified (2d binning set below based on aspect ratio)
+            nBins = nBins
 
     sizefac = 0.9
     clim_default = [-6.0,0.0]
@@ -238,7 +244,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         yvals = yvals[w_sfr]
 
     # start figure
-    fig = plt.figure(figsize=[figsize[0]*sizefac*(len(weights)*0.9), figsize[1]*sizefac])
+    fig = plt.figure(figsize=[figsize[0]*sizefac*len(weights), figsize[1]*sizefac])
 
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
@@ -254,10 +260,16 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         if len(weights) == 1: # title
             hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
             wtStr = partType.capitalize() + ' ' + wtProp.capitalize()
-            ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
+            #ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+
+        if nBins2D is None:
+            bbox = ax.get_window_extent()
+            nBins2D = np.array([nBins, int(nBins*(bbox.height/bbox.width))])
 
         # oxygen paper manual fix: remove interpolation wiggles near sharp dropoff
         if xQuant == 'hdens' and yQuant == 'temp' and len(weights) == 3:
@@ -283,7 +295,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloID is not None))
             wtStr = 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
-                                                         bins=[nBinsX, nBinsY], range=[xlim,ylim])
+                                                         bins=nBins2D, range=[xlim,ylim])
             zz = zz.T
             if clog: zz = logZeroNaN(zz)
 
@@ -291,9 +303,17 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                 clim = clim_quant # colorbar limits
         else:
             # plot 2D histogram image, optionally weighted
-            zz, _, _ = np.histogram2d(xvals, yvals, bins=[nBinsX, nBinsY], range=[xlim,ylim], 
-                                        normed=True, weights=weight)
-            zz = logZeroNaN(zz.T)
+            zz, _, _ = np.histogram2d(xvals, yvals, bins=nBins2D, range=[xlim,ylim], 
+                                      normed=True, weights=weight)
+            zz = zz.T
+
+            if normColMax:
+                colMax = np.nanmax(zz, axis=0)
+                w = np.where(colMax == 0)
+                colMax[w] = 1.0 # entire column is zero, will be log->nan anyways then not shown
+                zz /= colMax[np.newaxis,:]
+
+            zz = logZeroNaN(zz)
 
         if clim is None:
             clim = clim_default
@@ -311,10 +331,10 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         if contours is not None:
             if binnedStat:
                 zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, weight, 'mean',
-                                                             bins=[nBinsX/4, nBinsY/4], range=[xlim,ylim])
+                                                    bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
                 if clog: zz = logZeroNaN(zz)
             else:
-                zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBinsX/4, nBinsY/4], range=[xlim,ylim], 
+                zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim], 
                                             normed=True, weights=weight)
                 zz = logZeroNaN(zz)
 
@@ -338,6 +358,21 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             ax.text(xlim[0]+0.3, yMinMax[-1]-0.3, labelText, 
                 va='top', ha='left', color='black', fontsize='40')
 
+        # mark virial radius?
+        if haloID is not None and xQuant in ['rad','rad_kpc','rad_kpc_linear']:
+            textOpts = {'rotation':90.0, 'horizontalalignment':'left', 'verticalalignment':'top', 'fontsize':18, 'color':'#cccccc'}
+            rvir = sP.groupCatSingle(haloID=haloID)['Group_R_Crit200']
+            if '_kpc' in xQuant: rvir = sP.units.codeLengthToKpc(rvir)
+
+            for fac in [1,2,4,10,100]:
+                xx = rvir/fac if '_linear' in xQuant else np.log10(rvir/fac)
+                yy = [ax.get_ylim()[1]*0.80, ax.get_ylim()[1]*0.98]
+                xoff = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.01
+                if xx >= ax.get_xlim()[1]: continue
+
+                ax.plot( [xx,xx], yy, '-', lw=lw, color=textOpts['color'])
+                ax.text( xx + xoff, yy[1], '$r_{\\rm vir}$/%d'%fac if fac != 1 else '$r_{\\rm vir}$', **textOpts)
+
     # colorbar and save
     fig.tight_layout()
     
@@ -357,8 +392,8 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
     else:
-        fig.savefig('phase_%s_z%.1f_%s_x-%s_y-%s_wt-%s_h-%s.pdf' % \
-            (sP.simName,sP.redshift,partType,xQuant,yQuant,"-".join([w.replace(" ","") for w in weights]),haloID))
+        fig.savefig('phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_h-%s.pdf' % \
+            (sP.simName,sP.snap,partType,xQuant,yQuant,"-".join([w.replace(" ","") for w in weights]),haloID))
     plt.close(fig)
 
 def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='Si_H_numratio', 

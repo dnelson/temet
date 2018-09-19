@@ -1711,12 +1711,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     # halo-centric analysis fields, always relative to SubhaloPos/SubhaloVel
     if ptProperty in ['rad','halo_rad','rad_kpc','halo_rad_kpc']:
         unitsStr = 'kpc' if '_kpc' in ptProperty else 'ckpc/h'
-        label = '%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
+        label = 'Distance [ log %s ]' % unitsStr #'%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
         lim = [0.0, 5.0]
         if haloLims: lim = [0.0, 3.0]
         log = True
     if ptProperty in ['rad_kpc_linear']:
-        label = '%s Radial Distance [ kpc ]' % typeStr
+        label = 'Distance [ kpc ]'
         lim = [0.0, 5000]
         if haloLims: lim = [0, 800]
         log = False
