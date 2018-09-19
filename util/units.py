@@ -74,10 +74,11 @@ class units(object):
     winds_vmin     = 350.0       # winds: injection velocity floor, TNG fiducial model (0.0 in Illustris)
 
     # derived constants (code units without h factors)
-    H0          = None    # km/s/kpc (hubble constant at z=0)
-    H0_kmsMpc   = None    # km/s/Mpc
-    G           = None    # kpc (km/s)**2 / 1e10 msun
-    rhoCrit     = None    # 1e10 msun / kpc**3 (critical density, z=0)
+    H0               = None    # km/s/kpc (hubble constant at z=0)
+    H0_kmsMpc        = None    # km/s/Mpc
+    G                = None    # kpc (km/s)**2 / 1e10 msun
+    rhoCrit          = None    # 1e10 msun / kpc**3 (critical density, z=0)
+    rhoCrit_msunMpc3 = None    # msun / mpc^3 (critical density, z=0)
 
     # derived cosmology parameters
     f_b         = None     # baryon fraction
@@ -142,6 +143,7 @@ class units(object):
         self.G  = self.Gravity / self.UnitLength_in_cm**3.0 * self.UnitMass_in_g * self.UnitTime_in_s**2.0
 
         self.rhoCrit = 3.0 * self.H0**2.0 / (8.0*np.pi*self.G) #code, z=0
+        self.rhoCrit_msunMpc3 = self.rhoCrit * 1e10 * 1e9 # 10^10 msun -> msun, kpc^-3 -> Mpc^-3
         self.H0_kmsMpc = self.H0 * 1000.0
 
         # derived constants / cosmology parameters
@@ -1279,6 +1281,20 @@ class units(object):
         return ang_size
 
     # --- other ---
+
+    def particleCountToMass(self, N_part, baryon=True, boxLength=None):
+        """ Convert the cube-root of a total particle count (e.g. 512, 1820) to its average mass given 
+        the cosmology and volume of this box. If boxLength is specified, then should be a box side-length 
+        in cMpc/h units (e.g. 25, 205). Return in [Msun]. """
+        omega = self._sP.omega_b if baryon else self._sP.omega_m
+        if boxLength is None: boxLength = self._sP.boxSize / 1000 # cMph/h
+
+        vol = (boxLength/self._sP.HubbleParam)**3 # cMpc^3
+        rhoAvg = self.rhoCrit_msunMpc3 * omega # msun / cMpc^3
+        totMass = vol * rhoAvg # msun
+        m_gas = totMass / N_part**3 # msun
+
+        return m_gas
 
     def meanmolwt(self, Y, Z):
         """ Mean molecular weight, from Monaco+ (2007) eqn 14, for hot halo gas.

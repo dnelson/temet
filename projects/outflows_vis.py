@@ -699,7 +699,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
     run        = 'tng'
     method     = 'sphMap'
     nPixels    = [800, 400] # [x,y] shape of boxSizeImg must match nPixels aspect ratio
-    boxSizeImg = [1000, 500, depth]  # depths: 10, 25, 50, 100, 200, sizes: [1000,500], [200,100]
+    boxSizeImg = [200, 100, depth]  # depths: 10, 25, 50, 100, 200, sizes: [1000,500], [200,100]
     axes       = [0,1] # x,y
     labelZ     = False
     labelHalos = False # 'mstar'
@@ -758,7 +758,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
     mmDens   = [4.0, 6.5]
     mmZ      = [-2.0, 0.4]
     mmDeDt   = [35, 38.5]
-    mmSfr    = [-2.0, 1.0]
+    mmSfr    = [-4.0, 1.0]
 
     # assign panels, earlier at the top, time increasing downwards
     for i in range(nPanels):
@@ -794,7 +794,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
 
         if conf == 2:
             panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
-                            'partField':'sfr', 'valMinMax':mmSfr, 'plotHalos': ph, 
+                            'partField':'sfr_msunyrkpc2', 'valMinMax':mmSfr, 'plotHalos': ph, 
                             'labelScale':ls, 'labelCustom':custom_labels[i]} )
             panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
                             'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w', 'plotHalos': ph, 'labelZ':lz} )
