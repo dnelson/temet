@@ -69,7 +69,7 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 # ------------------------------------------------------------------------------------------------------
 
 def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
-                 cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, 
+                 cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, qRestrictions=None, 
                  medianLine=True, fig_subplot=[None,None], pStyle='white'):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
@@ -84,6 +84,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     of cQuant such that the colors are not of the physical cQuant itself, but rather represent the fraction of 
     subhalos in each pixel satisfying (fracMin <= cQuant < fracMax), where +/-np.inf is allowed for one-sided, 
     takeLog should be True or False, and label is either a string or None for automatic.
+    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
     If xlim, ylim, or clim are not None, then override the respective axes ranges with these [min,max] bounds. 
     If cNanZeroToMin, then change the color of the NaN-only bins from the usual gray to the colormap minimum. """
     assert cenSatSelect in ['all', 'cen', 'sat']
@@ -127,7 +128,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         cmap = loadColorTable(ctName)
 
         clabel = 'log N$_{\\rm gal}$'
-        cMinMax = [0.0,2.0]
+        cMinMax = [0.0,2.0] if clim is None else clim
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
         sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean, tight=False)
@@ -149,6 +150,19 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     sim_yvals = sim_yvals[wFiniteColor]
     sim_cvals = sim_cvals[wFiniteColor]
     sim_xvals = sim_xvals[wFiniteColor]
+
+    # arbitrary property restriction(s)?
+    if qRestrictions is not None:
+        for rFieldName, rFieldMin, rFieldMax in qRestrictions:
+            # load and restrict
+            vals, _, _, _ = sP.simSubhaloQuantity(rFieldName)
+            vals = vals[wSelect][wFiniteColor]
+
+            wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
+
+            sim_yvals = sim_yvals[wRestrict]
+            sim_xvals = sim_xvals[wRestrict]
+            sim_cvals = sim_cvals[wRestrict]
 
     # _nan cStatistic? separate points into two sets
     nanFlag = False
@@ -432,6 +446,14 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         xx = [0.0,0.7,1.4,1.4]
         yy = [1.4,1.4,2.0,2.45]
         ax.plot(xx, yy, ':', lw=lw, color='red', label='Tomczak+14')
+
+        # Muzzin+2013b separation line (Equations 1-3)
+        if sP.redshift <= 1.0: off = 0.69
+        if sP.redshift > 1.0: off = 0.59
+        xx = [0.0,(1.3-off)/0.88,1.5,1.5]
+        yy = [1.3,1.3,1.5*0.88+off,2.45]
+        ax.plot(xx, yy, ':', lw=lw, color='orange', label='Muzzin+13b')
+
         ax.legend(loc='upper left')
 
     # colorbar
@@ -875,18 +897,16 @@ def plots():
     sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'color_nodust_UV' #'color_C-30kpc-z_UV'
-    xQuant = 'color_nodust_VJ' #'color_C-30kpc-z_VJ'
-    cs     = 'median_nan'
+    yQuant = 'ssfr'
+    xQuant = 'mstar2_log'
+    cs     = 'count' #'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
     pStyle = 'white'
 
-    #quants = quantList(wTr=True, wMasses=True)
-    quants = ['ssfr']
-    clim = [-2.5,0.0] # None
-    cNaNZeroToMin = True # False
-    medianLine = False # True
-    minCount = 10
+    quants = quantList(wTr=True, wMasses=True)
+    clim = None
+    medianLine = True
+    minCount = 0
 
     for sP in sPs:
         for css in cenSatSelects:
@@ -894,7 +914,7 @@ def plots():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,cs,css,minCount))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, clim=clim, cNaNZeroToMin=cNaNZeroToMin, minCount=minCount, 
+                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, clim=clim, minCount=minCount, 
                              medianLine=medianLine, cenSatSelect=css, cQuant=cQuant, cStatistic=cs, pStyle=pStyle)
 
             pdf.close()
@@ -990,3 +1010,47 @@ def plots4():
                              xlim=[0.0, 1.2], ylim=[0.0, 1.2], mark1to1=True)
 
     pdf.close()
+
+def plots_uvj():
+    """ Driver. Explore UVJ color-color diagram. """
+    sPs = []
+    #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
+
+    yQuant = 'color_nodust_UV' #'color_C-30kpc-z_UV' #
+    xQuant = 'color_nodust_VJ' #'color_C-30kpc-z_VJ' #
+    cenSatSelects = ['cen'] #['cen','sat','all']
+    pStyle = 'white'
+
+    cNaNZeroToMin = True # False
+    medianLine = False # True
+
+    if 0:
+        # color-coded by SFR
+        cs       = 'median_nan'
+        quants   = ['ssfr']
+        clim     = [-2.5,0.0] # None
+        minCount = 10
+        qRestrictions = None
+        xlim     = None
+        ylim     = None
+    if 1:
+        cs       = 'count'
+        quants   = [None]
+        clim     = [0.0, 2.0] # log N_gal
+        minCount = 0
+        qRestrictions = [ ['mstar_30pkpc_log',10.0,np.inf] ] # LEGA-C mass cut
+        xlim     = [0.4,2.1]
+        ylim     = [0.6,2.4]
+
+    for sP in sPs:
+        for css in cenSatSelects:
+
+            pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,cs,css,minCount))
+
+            for cQuant in quants:
+                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, cNaNZeroToMin=cNaNZeroToMin, 
+                             minCount=minCount, medianLine=medianLine, cenSatSelect=css, cQuant=cQuant, cStatistic=cs, 
+                             qRestrictions=qRestrictions, pStyle=pStyle)
+
+            pdf.close()
