@@ -68,8 +68,9 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
 # ------------------------------------------------------------------------------------------------------
 
-def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, 
-                 cStatistic=None, minCount=None, cRel=None, cFrac=None, nBins=None, fig_subplot=[None,None], pStyle='white'):
+def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
+                 cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, 
+                 medianLine=True, fig_subplot=[None,None], pStyle='white'):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
@@ -83,7 +84,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     of cQuant such that the colors are not of the physical cQuant itself, but rather represent the fraction of 
     subhalos in each pixel satisfying (fracMin <= cQuant < fracMax), where +/-np.inf is allowed for one-sided, 
     takeLog should be True or False, and label is either a string or None for automatic.
-    If xlim or ylim are not None, then override the respective axes ranges with these [min,max] bounds. """
+    If xlim, ylim, or clim are not None, then override the respective axes ranges with these [min,max] bounds. 
+    If cNanZeroToMin, then change the color of the NaN-only bins from the usual gray to the colormap minimum. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
     assert np.count_nonzero([cRel,cFrac]) <= 1 # at most one
@@ -97,11 +99,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
 
-    medianLine = False
     colorContours = False
-
-    if cenSatSelect == 'cen':
-        medianLine = True
     if cQuant is None:
         colorMed = 'orange'
 
@@ -109,8 +107,9 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     #    colorContours = True
 
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
-    sim_xvals, xlabel, xMinMax, _ = simSubhaloQuantity(sP, xQuant, clean)
+    sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean)
     if xMinMax[0] > xMinMax[1]: xMinMax = xMinMax[::-1] # reverse
+    if xLog is True: sim_xvals = logZeroNaN(sim_xvals)
     if xlim is not None: xMinMax = xlim
 
     # y-axis: load/calculate simulation colors, cached in sP.data
@@ -132,6 +131,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
         sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean, tight=False)
+        if clim is not None: cMinMax = clim
         if yQuant == 'color_C_gr': print('Warning: to reproduce TNG colors paper, set tight=True maybe.')
 
     if sim_cvals is None:
@@ -209,8 +209,6 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     extent = [xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]]
 
     # statistic reduction (e.g. median, sum, count) color by bin
-    if '_log' not in xQuant: sim_xvals = logZeroNaN(sim_xvals) # xMinMax always corresponds to log values
-
     cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, cStatistic, 
                                                  bins=nBins2D, range=[xMinMax,yMinMax])
 
@@ -220,9 +218,6 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     nn, _, _, _ = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, 'count', 
                                       bins=nBins2D, range=[xMinMax,yMinMax])
     nn = nn.T
-
-    if minCount is not None:
-        cc[nn < minCount] = np.nan
 
     # relative coloring as a function of the x-axis?
     if cRel is not None:
@@ -294,8 +289,15 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     cc2d_rgb = cmap(norm(cc2d))
 
     # mask bins with median==0 and map to special color, which right now have been set to log10(0)=NaN
+    color3 = colorConverter.to_rgba(color3)
+    color4 = colorConverter.to_rgba(color4)
+
+    if cNaNZeroToMin:
+        color3 = cmap(0.0)
+        color4 = cmap(0.0)
+
     if cQuant is not None:
-        cc2d_rgb[cc == 0.0,:] = colorConverter.to_rgba(color4)
+        cc2d_rgb[cc == 0.0,:] = color4
 
     if nanFlag:
         # bin NaN point set counts
@@ -304,15 +306,18 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         nn_nan = nn_nan.T        
 
         # flag bins with nn_nan>0 and nn==0 (only NaNs in bin) as second gray color
-        cc2d_rgb[ ((nn_nan > 0) & (nn == 0)), :] = colorConverter.to_rgba(color3)
+        cc2d_rgb[ ((nn_nan > 0) & (nn == 0)), :] = color3
 
         nn += nn_nan # accumulate total counts
     else:
         # mask bins with median==NaN (nonzero number of NaNs in bin) to gray
-        cc2d_rgb[~np.isfinite(cc),:] = colorConverter.to_rgba(color3)
+        cc2d_rgb[~np.isfinite(cc),:] = color3
 
     # mask empty bins to white
     cc2d_rgb[(nn == 0),:] = colorConverter.to_rgba(color1)
+
+    if minCount is not None:
+        cc2d_rgb[nn < minCount] = colorConverter.to_rgba(color1)
 
     # plot
     plt.imshow(cc2d_rgb, extent=extent, origin='lower', interpolation='nearest', aspect='auto', 
@@ -421,6 +426,13 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         color = sampleColorTable('tableau10','purple')
         ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
         ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color=color, size=20)
+
+    if xQuant in ['color_nodust_VJ','color_C-30kpc-z_VJ'] and yQuant in ['color_nodust_UV','color_C-30kpc-z_UV']:
+        # UVJ color-color diagram, add Tomczak+2014 separation of passive and SFing galaxies
+        xx = [0.0,0.7,1.4,1.4]
+        yy = [1.4,1.4,2.0,2.45]
+        ax.plot(xx, yy, ':', lw=lw, color='red', label='Tomczak+14')
+        ax.legend(loc='upper left')
 
     # colorbar
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
@@ -860,26 +872,30 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 def plots():
     """ Driver (exploration 2D histograms). """
     sPs = []
-    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'M_BH_actual' # 'color_C_gr'
-    xQuant = 'mstar_30pkpc_log'
+    yQuant = 'color_nodust_UV' #'color_C-30kpc-z_UV'
+    xQuant = 'color_nodust_VJ' #'color_C-30kpc-z_VJ'
     cs     = 'median_nan'
     cenSatSelects = ['cen'] #['cen','sat','all']
     pStyle = 'white'
 
-    quants = quantList(wTr=True, wMasses=True)
-    quants = ['fgas2']
+    #quants = quantList(wTr=True, wMasses=True)
+    quants = ['ssfr']
+    clim = [-2.5,0.0] # None
+    cNaNZeroToMin = True # False
+    medianLine = False # True
+    minCount = 10
 
     for sP in sPs:
         for css in cenSatSelects:
 
-            pdf = PdfPages('galaxy_2dhistos_%s_%s_%s_%s_%s.pdf' % (sP.simName,yQuant,xQuant,cs,css))
+            pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,cs,css,minCount))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, 
-                             cenSatSelect=css, cQuant=cQuant, cStatistic=cs, pStyle=pStyle)
+                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, clim=clim, cNaNZeroToMin=cNaNZeroToMin, minCount=minCount, 
+                             medianLine=medianLine, cenSatSelect=css, cQuant=cQuant, cStatistic=cs, pStyle=pStyle)
 
             pdf.close()
 

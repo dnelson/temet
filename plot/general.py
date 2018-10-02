@@ -474,7 +474,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     fig.savefig('particleMedian_%s_%s-vs-%s_%s_%s.pdf' % (partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
-def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', weighting=None, halo=None):
+def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', op='mean', weighting=None, halo=None):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
     (parent FoF particle restricted, using non-caching auxCat functionality). 
     subhalo is a list, one entry per sPs entry. For each entry of subhalo:
@@ -491,7 +491,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
     lw = 2.0
     scope = 'fof' # fof, subfind
     ptRestriction = 'sfreq0' # None
-    op = 'mean' # mean, sum, min, max
+    #op = 'mean' # mean, sum, min, max
 
     assert subhalo is not None or halo is not None # pick one
     if subhalo is None: subhalo = halo # use halo ids

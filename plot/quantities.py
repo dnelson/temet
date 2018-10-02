@@ -14,6 +14,9 @@ from cosmo.load import groupCat, groupCatHeader, auxCat
 from cosmo.cloudy import cloudyIon
 from plot.config import *
 
+# abbreviations or alternative band names, mapped to FSPS appropriate names
+bandRenamesToFSPS = {'J': '2mass_j'}
+
 def bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
@@ -22,6 +25,9 @@ def bandMagRange(bands, tight=False):
     if bands[0] == 'r' and bands[1] == 'i': mag_range = [0.0,0.6]
     if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
     if bands[0] == 'r' and bands[1] == 'z': mag_range = [0.0,0.8]
+
+    if bands[0] == 'U' and bands[1] == 'V': mag_range = [0.0,2.5]
+    if bands[0] == 'V' and bands[1] == 'J': mag_range = [-0.4,1.6]
 
     if tight:
         # alternative set
@@ -87,7 +93,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo',
                    'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi']
 
-    quants_color = ['color_C_gr','color_snap_gr','color_C_ur']
+    quants_color = ['color_C_gr','color_snap_gr','color_C_ur','color_nodust_UV','color_nodust_VJ','color_C-30kpc-z_UV','color_C-30kpc-z_VJ']
 
     quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms','etaM_100myr_0kpc_50kms',
                       'etaE_10kpc_0kms','etaE_10kpc_50kms','etaP_10kpc_0kms','etaP_10kpc_50kms',
@@ -474,7 +480,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = '$\Delta$SFMS [ dex ]'
         if not clean: label += ' (M$_{\\rm \star}$, SFR <2r$_{\star,1/2})$'
 
-        minMax = [-0.5, 0.5]
+        minMax = [-0.4, 0.4]
         if tight: minMax = [-1.0, 1.0]
 
     if quant == 'Z_stars':
@@ -556,11 +562,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if tight: minMax = [0.2, 1.8]
 
         if sP.redshift >= 1.0:
-            minMax[0] -= 0.2
-            minMax[1] -= 0.2
-        elif sP.redshift >= 2.0:
             minMax[0] -= 0.6
             minMax[1] -= 0.6
+        elif sP.redshift >= 2.0:
+            minMax[0] -= 1.2
+            minMax[1] -= 1.2
 
     if quant in ['surfdens1_stars','surfdens2_stars']:
         if '1_' in quant:
@@ -930,12 +936,15 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         _, model, bands = quant.split("_")
         simColorsModel = colorModelNames[model]
         bands = [bands[0],bands[1]]
+        minMax = bandMagRange(bands,tight=tight)
+
+        if bands[0] in bandRenamesToFSPS: bands[0] = bandRenamesToFSPS[bands[0]]
+        if bands[1] in bandRenamesToFSPS: bands[1] = bandRenamesToFSPS[bands[1]]
 
         # load
         vals, subhaloIDs = loadSimGalColors(sP, simColorsModel, bands=bands)
 
         takeLog = False
-        minMax = bandMagRange(bands,tight=tight)
         label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
 
         if sP.redshift >= 1.0:
