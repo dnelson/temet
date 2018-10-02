@@ -325,6 +325,7 @@ class simParams:
                 self.targetGasMass = 0.0
             else:
                 # baryonic, TNG fiducial models
+                self.trMCFields  = [0,1,2,-1,-1,-1,-1,-1,-1,3,-1,-1,-1,4]
                 self.winds = 2
                 self.BHs   = 2
 
@@ -507,6 +508,9 @@ class simParams:
             else:
                 assert self.variant == 'None'
 
+            if variant == 'FPorig':
+                self.trMCFields = [0,1,2,3,-1,-1,-1,-1,4,5,-1,-1,-1,-1] # Config_L11_FP_noCgmZoom.sh
+
             bs = str(round(self.boxSize/1000))
             ls = str(self.levelMax)
             ts = 't' if '_tng' in run else ''
@@ -675,7 +679,7 @@ class simParams:
                                cenSatSubhaloIndices
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                auxCat, snapshotSubsetParallel, snapHasField
-        from cosmo.mergertree import loadMPB, loadMPBs
+        from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity
 
         self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
@@ -695,6 +699,7 @@ class simParams:
         self.groupCat        = partial(groupCat, sP=self)
         self.auxCat          = partial(auxCat, self)
         self.loadMPB         = partial(loadMPB, self)
+        self.loadMDB         = partial(loadMDB, self)
         self.loadMPBs        = partial(loadMPBs, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):

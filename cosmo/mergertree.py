@@ -29,6 +29,17 @@ def loadMPB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
 
     raise Exception('Unrecognized treeName.')
 
+def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False):
+    """ Load fields of main-descendant-branch (MDB) of subhalo id from the given tree. """
+    assert sP.snap is not None, "sP.snap required"
+
+    if treeName in ['SubLink','SubLink_gal']:
+        return il.sublink.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True, treeName=treeName)
+    if treeName in ['LHaloTree']:
+        return il.lhalotree.loadTree(sP.simPath, sP.snap, id, fields=fields, onlyMDB=True)
+
+    raise Exception('Unrecognized treeName.')
+
 def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=False):
     """ Load multiple MPBs at once (e.g. all of them), optimized for speed, with a full tree load (high mem).
     Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary). 
