@@ -1015,8 +1015,11 @@ def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
     x = logZeroNaN(x)
     x_range_log = [ np.nanmin(x), np.nanmax(x) ]
     binSize = (x_range_log[1] - x_range_log[0]) / nBins
-    yy_log, xx_log = np.histogram(x, bins=nBins, range=x_range_log, density=norm)
-    xx_log = xx_log[:-1] + 0.5*binSize
+    if np.isfinite(x_range_log[0]):
+        yy_log, xx_log = np.histogram(x, bins=nBins, range=x_range_log, density=norm)
+        xx_log = xx_log[:-1] + 0.5*binSize
+    else:
+        xx_log, yy_log = np.nan, np.nan # skip
 
     # figure
     figsize = np.array([14,10]) * 0.8 * 2

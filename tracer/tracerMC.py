@@ -150,6 +150,8 @@ def match3(ar1, ar2, firstSorted=False):
         ar2=set of TracerIDs to locate) then ar2[i2] = ar2. The approach is one sort of ar1 followed by 
         bisection search for each element of ar2, therefore O(N_ar1*log(N_ar1) + N_ar2*log(N_ar1)) ~= 
         O(N_ar1*log(N_ar1)) complexity so long as N_ar2 << N_ar1. """
+    if not isinstance(ar1,np.ndarray): ar1 = np.array(ar1)
+    if not isinstance(ar2,np.ndarray): ar2 = np.array(ar2)
     assert ar1.ndim == ar2.ndim == 1
     
     if debug:
@@ -792,13 +794,13 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if field in ['subhalo_id']:
                     # determine parent subhalo ID
                     r[field][m,wType] = inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, 
-                                          SubhaloLenType, SnapOffsetsSubhalo, debug=debug)
+                                          SubhaloLenType=SubhaloLenType, SnapOffsetsSubhalo=SnapOffsetsSubhalo)
                     continue
 
                 if field in ['halo_id']:
                     # determine parent subhalo ID
                     r[field][m,wType] = inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
-                                          GroupLenType, SnapOffsetsGroup, debug=debug)
+                                          GroupLenType=GroupLenType, SnapOffsetsGroup=SnapOffsetsGroup)
                     continue
 
                 # general properties

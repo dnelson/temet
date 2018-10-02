@@ -409,7 +409,7 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projP
     config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands)}
     return grid_master_u, config
 
-def loadMassAndQuantity(sP, partType, partField, indRange=None):
+def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
     from cosmo.stellarPop import sps
@@ -495,7 +495,7 @@ def loadMassAndQuantity(sP, partType, partField, indRange=None):
         assert len(bands) == 1
 
         pop = sps(sP)
-        mass = pop.calcStellarLuminosities(sP, bands[0], indRange=indRange)
+        mass = pop.calcStellarLuminosities(sP, bands[0], indRange=indRange, rotMatrix=rotMatrix, rotCenter=rotCenter)
 
     # quantity relies on a non-trivial computation / load of another quantity
     partFieldLoad = partField
@@ -1020,7 +1020,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
 
             # load: mass/weights, quantity, and render specifications required
-            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, indRange=indRange)
+            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=indRange)
+            assert mass.size == hsml.size
 
             if 0:
                 print('WARNING: Selectively setting mass=0 based on some particle criterion!')

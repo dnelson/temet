@@ -228,18 +228,33 @@ def groupCutoutFromSnap(run='tng'):
     from util.simParams import simParams
     import cosmo
 
-    sP = simParams(res=1820,run=run,redshift=0.0)
     ptTypes = ['gas','dm','bhs','stars']
 
-    # subhaloIDs
-    samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/postprocessing/guinevere_cutouts/new_mw_sample_fgas_sat.txt'
-    data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
+    # (A) subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)
+    if 0:
+        sP = simParams(res=1820,run=run,redshift=0.0)
+        samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/postprocessing/guinevere_cutouts/new_mw_sample_fgas_sat.txt'
 
-    # subhalo indices (z=0): TNG100-1, Illustris-1 (Lagrangian match), Illustris-1 (positional match)
-    if run == 'tng':
-        subhaloIDs = data[:,0]
-    if run == 'illustris':
-        subhaloIDs = data[:,1] # Lagrangian match
+        data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
+
+        if run == 'tng':
+            subhaloIDs = data[:,0]
+        if run == 'illustris':
+            subhaloIDs = data[:,1] # Lagrangian match
+
+    # (B) L25n512_0000 (TNG), L25n512_0010 (Illustris), L25n512_3000 (no BH wind), L25n512_0012 (TNG w/ Illustris winds)
+    if 1:
+        sP = simParams(res=512,run='tng',redshift=0.0,variant='1000')
+        samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/postprocessing/guinevere_cutouts/new_mw_sample_L25_variants.txt'
+
+        data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
+
+        if sP.variant == '0000': subhaloIDs = data[:,0]
+        if sP.variant == '0010': subhaloIDs = data[:,1]
+        if sP.variant == '3000': subhaloIDs = data[:,2]
+        if sP.variant == '0012': subhaloIDs = data[:,3]
+        if sP.variant == '1000': subhaloIDs = data[:,4]
+        print(sP.variant,subhaloIDs)
 
     # get list of field names
     fields = {}
@@ -304,16 +319,28 @@ def tracerCutoutFromTracerTracksCat():
     ptTypes = ['gas','stars','bhs']
 
     # get subhaloIDs
-    sP = simParams(res=1820,run='tng',redshift=0.0)
-    data = np.genfromtxt(sP.postPath + 'guinevere_cutouts/new_mw_sample_fgas_sat.txt', delimiter=',', dtype='int32')
-    subhaloIDs = data[:,0]
+    if 0:
+        sP = simParams(res=1820,run='tng',redshift=0.0)
+        data = np.genfromtxt(sP.postPath + 'guinevere_cutouts/new_mw_sample_fgas_sat.txt', delimiter=',', dtype='int32')
+        subhaloIDs = data[:,0]
+
+    if 1:
+        sP = simParams(res=512,run='tng',redshift=0.0,variant='3000')
+        samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/postprocessing/guinevere_cutouts/new_mw_sample_L25_variants.txt'
+
+        data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
+
+        if sP.variant == '0000': subhaloIDs = data[:,0]
+        if sP.variant == '3000': subhaloIDs = data[:,2]
+        if sP.variant == '0012': subhaloIDs = data[:,3]
+        if sP.variant == '1000': subhaloIDs = data[:,4]
 
     # list of tracer quantities we know
     catBasePath = sP.postPath + 'tracer_tracks/*.hdf5'
     cats = {}
 
     for catPath in glob.glob(catBasePath):
-        catName = catPath.split("99_")[-1].split(".hdf5")[0]
+        catName = catPath.split("%d_" % sP.snap)[-1].split(".hdf5")[0]
         cats[catName] = catPath
 
     # load offset/length from meta

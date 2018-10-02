@@ -343,6 +343,9 @@ def periodic_slurm_status(nosave=False):
     if nCores != nCores_alloc + nCores_idle:
         print('WARNING: Cores not all accounted for.')
 
+    for node in nodes_main:
+        if node['cpu_load'] is None: node['cpu_load'] = 0.0
+
     # cluster: statistics
     cluster_load = float(nCores_alloc) / nCores * 100
 
