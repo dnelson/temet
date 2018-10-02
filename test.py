@@ -18,6 +18,190 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_tracer_tmax_vs_curtemp():
+    """ Can a tracer maxtemp ever be below the current parent gas cell temperature? """
+    from tracer.tracerMC import match3
+    #sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FPorig') # snap=52
+    sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FP')
+    #sP = simParams(res=11,run='zooms2_josh',snap=10,hInd=2,variant='FPorig')
+    #sP = simParams(res=13,run='tng_zoom',redshift=2.0,hInd=50,variant='sf3')
+    haloID = 0
+
+    # load
+    tmax   = sP.snapshotSubset('tracer', 'FluidQuantities') #'tracer_maxtemp') # change to 'FluidQuantities' for h2_L11_12_FP (only tmax stored)
+    par_id = sP.snapshotSubset('tracer', 'ParentID')
+    tr_id  = sP.snapshotSubset('tracer', 'TracerID')
+
+    gas_id   = sP.snapshotSubset('gas', 'id', haloID=haloID)
+    gas_sfr  = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
+    gas_temp = sP.snapshotSubset('gas', 'temp', haloID=haloID)
+    star_id  = sP.snapshotSubset('star', 'id', haloID=haloID)
+
+    # cross-match
+    print('match...')
+    gas_inds, tr_inds_gas = match3(gas_id, par_id)
+    star_inds, tr_inds_star = match3(star_id, par_id)
+
+    # fill
+    tr_par_type = np.zeros( par_id.size, dtype='int16' )
+    tr_par_type.fill(-1)
+    tr_par_type[tr_inds_gas] = 0
+    tr_par_type[tr_inds_star] = 4
+
+    tr_par_sfr =  np.zeros( par_id.size, dtype='float32' )
+    tr_par_sfr.fill(-1.0)
+    tr_par_sfr[tr_inds_gas] = gas_sfr[gas_inds]
+
+    tr_par_temp = np.zeros( par_id.size, dtype='float32' )
+    tr_par_temp[tr_inds_gas] = gas_temp[gas_inds]
+
+    # select
+    print('tot tracers: ', par_id.size)
+
+    w = np.where( tr_par_temp > tmax )
+    print('current temp above tmax: ',len(w[0]))
+
+    w = np.where( (tr_par_temp > tmax) & (tr_par_type==0) )
+    print('current temp above tmax (and in gas): ',len(w[0]))
+
+    w = np.where( (tr_par_temp > tmax) & (tr_par_type==0) & (tr_par_sfr==0) )
+    print('current temp above tmax (and in sfr==0 gas): ',len(w[0]))
+
+    diffs = tr_par_temp[w] - tmax[w]
+    #print('minmax delta_T(log): ', np.nanmin(diffs), np.nanmax(diffs))
+
+    # load one snap back
+    sP.setSnap(sP.snap - 1)
+
+    tr_id_prev    = sP.snapshotSubset('tracer', 'TracerID')
+    par_id_prev   = sP.snapshotSubset('tracer', 'ParentID')
+    gas_id_prev   = sP.snapshotSubset('gas','id')
+    gas_sfr_prev  = sP.snapshotSubset('gas', 'sfr')
+    gas_temp_prev = sP.snapshotSubset('gas', 'temp')
+
+    # match tracers between snaps
+    print('match tr...')
+    tr_inds_cur, tr_inds_prev = match3(tr_id, tr_id_prev) 
+    assert tr_inds_cur.size == tr_id.size # must find all
+
+    tmax_prev = tmax[tr_inds_cur]
+    tr_par_sfr2 = tr_par_sfr[tr_inds_cur]
+    par_id2     = par_id[tr_inds_cur]
+
+    par_id_prev = par_id_prev[tr_inds_prev]
+    tr_id_prev = tr_id_prev[tr_inds_prev]
+
+    # match previous snap tracers to their parents (gas only, will only find some)
+    print('match gas...')
+    gas_id_prev_inds, tr_inds_prev_gas = match3(gas_id_prev, par_id_prev)
+
+    tmax_prev = tmax_prev[tr_inds_prev_gas] # same tmax restricted to these gas matches
+    tr_par_sfr2 = tr_par_sfr2[tr_inds_prev_gas]
+    par_id2     = par_id2[tr_inds_prev_gas]
+
+    par_id_prev = par_id_prev[tr_inds_prev_gas]
+    tr_id_prev = tr_id_prev[tr_inds_prev_gas]
+
+    # parent properties at previous snap
+    tr_par_sfr_prev = gas_sfr_prev[gas_id_prev_inds]
+    tr_par_temp_prev = gas_temp_prev[gas_id_prev_inds]
+
+    # select
+    w = np.where( tr_par_temp_prev > tmax_prev )
+    print('current temp above tmax: ',len(w[0]))
+
+    w = np.where( (tr_par_temp_prev > tmax_prev) & (tr_par_sfr_prev==0) )
+    print('current temp above tmax (and in sfr==0 gas at snap-1): ',len(w[0]))
+
+    diffs = tr_par_temp_prev[w] - tmax_prev[w]
+    print('minmax delta_T(log): ', diffs.min(), diffs.max())
+
+    import pdb; pdb.set_trace()
+
+def check_tracer_tmax_vs_curtemp2():
+    """ Followup, single tracer. """
+    tracer_id = 175279761 #269811444 #341052796# 215262662 #239990945 #205515254
+    sP = simParams(res=11,run='zooms2_josh',redshift=2.25,hInd=2,variant='FPorig') # snap=52
+
+    # go back
+    for i in range(3):
+        if i > 0:
+            sP.setSnap(sP.snap-1)
+        print('snap: ',sP.snap)
+
+        # load
+        tr_id = sP.snapshotSubset('tracer','TracerID')
+        ind_snap = np.where(tr_id == tracer_id)[0][0]
+        inds = np.array( [ind_snap] )
+
+        tmax = sP.snapshotSubset('tracer', 'tracer_maxtemp', inds=inds)
+        windc = sP.snapshotSubset('tracer', 'tracer_windcounter', inds=inds)
+        lst = sP.snapshotSubset('tracer', 'tracer_laststartime', inds=inds)
+        par_id = sP.snapshotSubset('tracer', 'ParentID', inds=inds)[0]
+        gas_ids = sP.snapshotSubset('gas', 'id')
+
+        print('tracer tmax: ', tmax, ' windc: ',windc,' lst: ',lst)
+
+        gas_ind = np.where(gas_ids == par_id)[0][0]
+        inds = np.array( [gas_ind] )
+
+        temp = sP.snapshotSubset('gas', 'temp', inds=inds)
+        sfr  = sP.snapshotSubset('gas', 'sfr',  inds=inds)
+
+        print('gas temp: ', temp, ' sfr: ', sfr, ' id:', gas_ids[gas_ind])
+
+    import pdb; pdb.set_trace()
+
+def check_colors_benedikt():
+    """ Test my colors vs snapshot. """
+    from scipy.stats import binned_statistic_2d
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+
+    # load
+    mag_g_snap = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])['subhalos'][:,4] # g-band
+
+    acKey = 'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc'
+    ac = sP.auxCat(acKey)
+    bands = ac[acKey+'_attrs']['bands']
+    mag_g_dust = ac[acKey][:,1] # g-band
+    print(mag_g_dust.shape)
+    mag_g_dust = mag_g_dust[:,0] # pick 1 projection at random
+
+    # count valid
+    w_snap = np.where(mag_g_snap < 0)
+    w_dust = np.where(np.isfinite(mag_g_dust))
+
+    print(len(w_snap[0]), len(w_dust[0]))
+    print('snap: ', mag_g_snap[w_snap].min(), mag_g_snap[w_snap].max())
+    print('dust: ', mag_g_dust[w_dust].min(), mag_g_dust[w_dust].max())
+
+    # plot
+    fig = plt.figure(figsize=[12, 8])
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('g_mag [snap]')
+    ax.set_ylabel('g_mag [dust]')
+
+    minmax = [-25,-5]
+
+    ax.set_xlim(minmax)
+    ax.set_ylim(minmax)
+
+    nn, _, _, _ = binned_statistic_2d(mag_g_snap, mag_g_dust, np.zeros(mag_g_snap.size), 'count', bins=[100,100], range=[minmax,minmax])
+    nn = np.log10(nn.T)
+
+    extent = [minmax[0],minmax[1],minmax[0],minmax[1]]
+    plt.imshow(nn, extent=extent, origin='lower', interpolation='nearest', aspect='auto', cmap='viridis')
+
+    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+    cb = plt.colorbar(cax=cax)
+    cb.ax.set_ylabel('log Num gal')
+
+    fig.tight_layout()
+    fig.savefig('mag_comp.pdf')
+    plt.close(fig)
+
 def guinevere_mw_sample():
     from plot.config import figsize, sfclean
 

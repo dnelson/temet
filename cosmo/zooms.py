@@ -210,10 +210,13 @@ def sizefacComparison():
     #variants = ['sf2','sf3','sf4']
     #run      = 'tng_zoom_dm'
 
-    hInds    = [50]
-    variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
-    run      = 'tng_zoom'
+    #hInds    = [50]
+    #variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
 
+    hInds = [50,3232]
+    variants = ['sf3']
+
+    run      = 'tng_zoom'
     zoomRes  = 13
     redshift = 0.0
 

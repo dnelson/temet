@@ -1271,14 +1271,7 @@ def snapshotSubset(sP, partType, fields,
 
         # cellsize (from volume) [ckpc/h]
         if field.lower() in ["cellsize", "cellrad"]:
-            # Volume eliminated in newer outputs, calculate as necessary from Mass/Density
-            if snapHasField(sP, partType, 'Volume'):
-                vol = snapshotSubset(sP, partType, 'vol', **kwargs)
-            else:
-                mass = snapshotSubset(sP, partType, 'mass', **kwargs)
-                dens = snapshotSubset(sP, partType, 'dens', **kwargs)
-                vol = mass / dens
-                
+            vol = snapshotSubset(sP, partType, 'volume', **kwargs)                
             r[field] = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
 
         # cellsize [physical kpc]
@@ -1841,12 +1834,14 @@ def snapshotSubset(sP, partType, fields,
 
                 fields[i] = multiDimMap['field']
                 mdi[i] = multiDimMap['fN']
+                assert mdi[i] >= 0 # otherwise e.g. not assigned in sP
 
     if sum(m is not None for m in mdi) > 1:
         raise Exception('Not supported for multiple MDI at once.')
 
     # halo or subhalo based subset
     if haloID is not None or subhaloID is not None:
+        assert not sP.isPartType(partType, 'tracer') # not group-ordered
         subset = _haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
 
     # check memory cache (only simplest support at present, for indRange returns of global cache)

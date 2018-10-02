@@ -435,27 +435,37 @@ def gas_components_radial_profiles():
     redshift = 2.25
     binSize = 0.02
 
-    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FP') )
-    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='PO') )
-    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FPorig') )
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FP') ) # L11_12_FP
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='PO') ) # L11_12_PO
+    sPs.append( simParams(res=11, run='zooms2_josh', hInd=2, redshift=redshift, variant='FPorig') ) # L11_FP
 
     # start plot
-    fig = plt.figure(figsize=[10.0, 7.0])
-    ax = fig.add_subplot(1,1,1)
-    ax.set_xlabel('R / R$_{\\rm vir}$')
-    ax.set_ylabel('Density n$_{\\rm H}$ [ cm$^{-3}$ ]')
+    fig = plt.figure(figsize=[15.0, 7.0])
+    ax1 = fig.add_subplot(1,2,1)
+    ax2 = fig.add_subplot(1,2,2)
 
-    ax.set_ylim([-5.0, 0.0])
-    ax.set_xlim([0.0, 1.2])
+    ax1.set_xlabel('R / R$_{\\rm vir}$')
+    ax1.set_ylabel('Gas Density (median cell n$_{\\rm H}$) [ log cm$^{-3}$ ]')
+    ax1.set_ylim([-5.0, 0.0])
+    ax1.set_xlim([0.0, 1.2])
+
+    ax2.set_xlabel('R / R$_{\\rm vir}$')
+    ax2.set_ylabel('Gas Density [ log M$_{\\rm sun}$ kpc$^{-3}$ ]')
+    ax2.set_ylim([0.0, 6.0])
+    ax2.set_xlim([0.0, 1.2])
 
     lines = [plt.Line2D( (0,1), (0,0), color='black', marker='', linestyle=linestyles[i], lw=lw) for i in range(2)]
-    legend2 = ax.legend(lines, ['cool-dense', 'not cool-dense'], loc='lower left')
-    ax.add_artist(legend2)
+    legend2 = ax1.legend(lines, ['cool-dense', 'not cool-dense'], loc='lower left')
+    ax1.add_artist(legend2)
+    legend3 = ax2.legend(lines, ['cool-dense', 'not cool-dense'], loc='lower left')
+    ax2.add_artist(legend3)
 
     for sP in sPs:
         # load
         gas = sP.snapshotSubset('gas', ['pos','Masses','temp','StarFormationRate','nh','rad_rvir'], haloID=0)
+        rvir = sP.groupCatSingle(haloID=0)['Group_R_Crit200']
 
+        # apply satellite exclusion technique
         mask = np.zeros( gas['Masses'].size, dtype='int16' )
 
         gc = sP.groupCat(fieldsHalos=['GroupNsubs'], fieldsSubhalos=['SubhaloPos','SubhaloMassInRadType'])
@@ -479,19 +489,50 @@ def gas_components_radial_profiles():
         w_cooldense = np.where( (gas['nh'][w_cgm] > 1e-3)  & (gas['temp'][w_cgm] < 5.0) )
         w_non = np.where( (gas['nh'][w_cgm] <= 1e-3) | (gas['temp'][w_cgm] >= 5.0) )
 
-        # median
+        # median curves of gas cell density values
         xx = gas['rad_rvir'][w_cgm]
-        yy = np.log10( gas['nh'][w_cgm] )
+        yy = np.log10( gas['nh'][w_cgm] ) # log(1/cm^3)
 
-        xm1, ym1, sm1 = running_median(xx[w_cooldense],yy[w_cooldense],binSize=binSize) # ,skipZeros=True
-        xm2, ym2, sm2 = running_median(xx[w_non],yy[w_non],binSize=binSize) # ,skipZeros=True
+        xm1, ym1, sm1 = running_median(xx[w_cooldense],yy[w_cooldense],binSize=binSize)
+        xm2, ym2, sm2 = running_median(xx[w_non],yy[w_non],binSize=binSize)
 
-        # plot
-        l, = ax.plot(xm1, ym1, ls=linestyles[0], lw=lw, label=sP.simName)
-        ax.plot(xm2, ym2, ls=linestyles[1], lw=lw, color=l.get_color())
+        # plot (left panel)
+        l, = ax1.plot(xm1, ym1, ls=linestyles[0], lw=lw, label=sP.simName)
+        ax1.plot(xm2, ym2, ls=linestyles[1], lw=lw, color=l.get_color())
+
+        # compute density profile instead as mass_shell/volume_shell
+        yy = gas['Masses'][w_cgm]
+
+        rad_bin_edges = np.linspace(0.0, 1.2, 26) # binsize = 0.05
+        rad_bin_centers = ((rad_bin_edges + np.roll(rad_bin_edges,1)) * 0.5)[1:]
+
+        dens_cooldense = np.zeros( rad_bin_centers.size, dtype='float32' )
+        dens_non       = np.zeros( rad_bin_centers.size, dtype='float32' )
+
+        for i in range(rad_bin_edges.size-1):
+            rad_min = rad_bin_edges[i]
+            rad_max = rad_bin_edges[i+1]
+
+            rad_min_kpc = sP.units.codeLengthToKpc(rad_min*rvir)
+            rad_max_kpc = sP.units.codeLengthToKpc(rad_max*rvir)
+            shell_vol = 4.0/3*np.pi * (rad_max_kpc**3 - rad_min_kpc**3) # pkpc^3
+
+            w = np.where( (xx[w_cooldense] >= rad_min) & (xx[w_cooldense] < rad_max) )
+            tot_mass_cooldense = sP.units.codeMassToMsun( np.sum( yy[w_cooldense][w] ) ) # msun
+
+            w = np.where( (xx[w_non] >= rad_min) & (xx[w_non] < rad_max) )
+            tot_mass_non = sP.units.codeMassToMsun( np.sum( yy[w_non][w] ) ) # msun
+
+            dens_cooldense[i] = np.log10(tot_mass_cooldense / shell_vol) # zero mass -> nan (not plotted)
+            dens_non[i] = np.log10(tot_mass_non / shell_vol)
+
+        # plot (right panel)
+        l, = ax2.plot(rad_bin_centers, dens_cooldense, ls=linestyles[0], lw=lw, label=sP.simName)
+        ax2.plot(rad_bin_centers, dens_non, ls=linestyles[1], lw=lw, color=l.get_color())
 
     # finish plot
-    ax.legend(loc='upper right')
+    ax1.legend(loc='upper right')
+    ax2.legend(loc='upper right')
     fig.tight_layout()
     fig.savefig('figure_5.pdf')
     plt.close(fig)

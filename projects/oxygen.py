@@ -401,10 +401,12 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
         axTop.set_xscale(ax.get_xscale())
 
     # loop over each fullbox run
+    txt = []
     colors = []
 
     for i, sP in enumerate(sPs):
         # load halo masses and CSS
+        txt_sP = []
         sP.setRedshift(redshift)
         xx = groupCat(sP, fieldsSubhalos=[massField])
 
@@ -431,7 +433,6 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
         if not toAvgColDens and runToyModel:
             # TEST: toy model for total grav. bound mass
-            from cosmo.cloudy import cloudyIon
             ion = cloudyIon(sP, el=['Oxygen'])
 
             #tempFac = 0.6
@@ -510,6 +511,9 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 sm = savgol_filter(sm,sKn,sKo)
                 pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
+            if ion in ['OVI','OVII','OVIII']:
+                txt_sP.append([xm,ym,pm[0,:],pm[-1,:]])
+
             # determine color
             if i == 0:
                 if ion in ionColors: # preset color
@@ -531,7 +535,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 # show percentile scatter only for 'all galaxies'
                 ax.fill_between(xm, pm[0,:], pm[-1,:], color=c, interpolate=True, alpha=0.2)
 
-            if ion in ['AllGas_Oxygen','OVI','OVII','OVIII']:
+            if runToyModel and ion in ['AllGas_Oxygen','OVI','OVII','OVIII']:
                 # TOY PLOT
                 xm, ym, sm, pm = running_median(xx,yy_toy[ion],binSize=binSize,
                                                 skipZeros=True,percs=[10,25,75,90], minNumPerBin=10)
@@ -539,6 +543,38 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 sm = savgol_filter(sm,sKn,sKo)
                 pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
                 ax.plot(xm, ym, lw=lw, color=c, linestyle=':')
+
+        txt.append(txt_sP) # one list per sim
+
+    # print
+    massAxis = 'mhalo' if vsHaloMass else 'mstar'
+    for i, txt_sP in enumerate(txt): # loop over runs
+        filename = 'fig8_%s_%s_%s.txt' % (sPs[i].simName,'ionmasses' if not toAvgColDens else 'avgcoldens',massAxis)
+        
+        out = '# Nelson+ (2018) http://arxiv.org/abs/1712.00016\n'
+        if toAvgColDens:
+            out += '# Figure 8 Right Panel (Average <N_ion> = M_ion / (pi*rvir^2)) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
+            out += "# columns: %s, <N_OVI>, p10, p90, <N_OVII>, p10, p90, <N_OVIII>, p10, p90\n" % massAxis
+        else:
+            out += '# Figure 8 Left Panel (Total bound OVI, OVII, OVIII masses) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
+            out += "# columns: %s, M_OVI, p10, p90, M_OVII, p10, p90, M_OVIII, p10, p90\n" % massAxis
+        out += "# all masses in [log msun], column densities in [log cm^-2], p10 and p90 denote 10th and 90th percentiles of previous field\n"
+
+        o6_x, o6_y, o6_p10, o6_p90 = txt_sP[0]
+        o7_x, o7_y, o7_p10, o7_p90 = txt_sP[1]
+        o8_x, o8_y, o8_p10, o8_p90 = txt_sP[2]
+
+        assert np.array_equal(o6_x,o7_x) and np.array_equal(o6_x,o8_x) # same mass bins for all ions
+        nMassBins = o6_x.size
+
+        for k in range(nMassBins):
+            out += '%5.2f' % o6_x[k]
+            out += ', %5.2f, %5.2f, %5.2f' % (o6_y[k], o6_p10[k], o6_p90[k])
+            out += ', %5.2f, %5.2f, %5.2f' % (o7_y[k], o7_p10[k], o7_p90[k])
+            out += ', %5.2f, %5.2f, %5.2f\n' % (o8_y[k], o8_p10[k], o8_p90[k])
+
+        with open(filename, 'w') as f:
+            f.write(out)
 
     # legend
     sExtra = []
