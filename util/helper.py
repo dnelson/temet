@@ -76,7 +76,8 @@ def logZeroSafe(x, zeroVal=1.0):
         #print(' logZeroSafe: This was always ill-advised, migrate towards deleting this function.')
     if not isinstance(x, (int,long,float)) and x.ndim: # array
         # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
-        w = np.where(x <= 0.0)
+        with np.errstate(invalid='ignore'):
+            w = np.where(x <= 0.0)
         x[w] = zeroVal
     else: # scalar
         if x <= 0.0:
@@ -86,7 +87,8 @@ def logZeroSafe(x, zeroVal=1.0):
 
 def logZeroMin(x):
     """ Take log10 of input variable, setting zeros to 100 times less than the minimum. """
-    w = np.where(x > 0.0)
+    with np.errstate(invalid='ignore'):
+        w = np.where(x > 0.0)
     minVal = x[w].min() if len(w[0]) > 0 else 1.0
     return logZeroSafe(x, minVal*0.01)
 
