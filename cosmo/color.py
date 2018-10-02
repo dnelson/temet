@@ -20,11 +20,14 @@ from cosmo.load import groupCat, groupCatHeader, auxCat
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
             'g':4, 'r':5, 'i':6, 'z':7}
 
-def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None):
+def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None, rad=''):
     """ Load band-magnitudes either from snapshot photometrics or from auxCat SPS modeling, 
     and convert to a color if bands is passed in, otherwise return loaded data. If loaded 
     data is passed in with bands, do then magnitude computation without re-loading."""
-    acKey = 'Subhalo_StellarPhot_' + simColorsModel
+    acSet = ''
+    if bands[0] in ['U','V','J'] or bands[1] in ['U','V','J']: acSet = 'UVJ_'
+
+    acKey = 'Subhalo_StellarPhot_' + acSet + simColorsModel + rad
 
     if colorData is None:
         # load
@@ -51,8 +54,10 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None)
 
         # band indices
         acBands = list(colorData[acKey+'_attrs']['bands'])
-        i0 = acBands.index('sdss_'+bands[0])
-        i1 = acBands.index('sdss_'+bands[1])
+        bandname0 = 'sdss_' + bands[0] if bands[0] in ['u','g','r','i','z'] else bands[0]
+        bandname1 = 'sdss_' + bands[1] if bands[1] in ['u','g','r','i','z'] else bands[1]
+        i0 = acBands.index(bandname0.lower())
+        i1 = acBands.index(bandname1.lower())
 
         # multiple projections per subhalo?
         if colorData[acKey].ndim == 3:

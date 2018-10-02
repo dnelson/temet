@@ -764,7 +764,7 @@ class sps():
 
         return stellarMags
 
-    def calcStellarLuminosities(self, sP, band, indRange=None):
+    def calcStellarLuminosities(self, sP, band, indRange=None, rotMatrix=None, rotCenter=None):
         """ Compute (linear) luminosities in the given band, using either snapshot-stored values or 
         on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
         returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). 
@@ -781,6 +781,67 @@ class sps():
             stars['GFM_StellarPhotometrics'][wWind] = np.nan
 
             mags = stars['GFM_StellarPhotometrics']
+        elif '_dustC' in band:
+            # view direction dependent dust attenuation calculation on the fly
+            from cosmo.load import _haloOrSubhaloSubset
+            from cosmo.hydrogen import hydrogenMass
+
+            assert rotMatrix is not None and rotCenter is not None
+            assert sP.hInd is not None # use to load gas based on -subhalo- id (e.g. called from within vis)
+
+            subset = _haloOrSubhaloSubset(sP, subhaloID=sP.hInd)
+            offset = subset['offsetType'][sP.ptNum('gas')]
+            length = subset['lenType'][sP.ptNum('gas')]
+            indRange_gas = [offset, offset+length-1] # inclusive
+
+            # load gas
+            fields = ['pos','metal','mass','dens']
+            if sP.snapHasField('gas', 'NeutralHydrogenAbundance'):
+                fields.append('NeutralHydrogenAbundance')
+
+            gas = sP.snapshotSubset('gas', fields=fields, indRange=indRange_gas)
+
+            if sP.snapHasField('gas', 'GFM_Metals'):
+                gas['metals_H'] = sP.snapshotSubset('gas', 'metals_H', indRange=indRange_gas) # H only
+
+            gas['Masses'] = hydrogenMass(gas, sP, totalNeutral=True)
+            gas['Cellsize'] = sP.snapshotSubset('gas', 'cellsize', indRange=indRange_gas)
+
+            # load stars
+            fields = ['initialmass','sftime','metallicity','pos']
+            stars = sP.snapshotSubset(partType='stars', fields=fields, indRange=indRange)
+
+            stars['GFM_StellarFormationTime'] = sP.units.scalefacToAgeLogGyr(stars['GFM_StellarFormationTime'])
+            stars['GFM_InitialMass'] = sP.units.codeMassToMsun(stars['GFM_InitialMass'])
+
+            stars['GFM_Metallicity'] = logZeroMin(stars['GFM_Metallicity'])
+            stars['GFM_Metallicity'][np.where(stars['GFM_Metallicity'] < -20.0)] = -20.0
+
+            w = np.isfinite(stars['GFM_StellarFormationTime'] ) # remove wind
+            pos_stars   = stars['Coordinates'][w,:]
+            ages_logGyr = stars['GFM_StellarFormationTime'][w]
+            metals_log  = stars['GFM_Metallicity'][w]
+            masses_msun = stars['GFM_InitialMass'][w]
+
+            # calculate resolved columns
+            pos     = gas['Coordinates']
+            hsml    = 2.5 * gas['Cellsize']
+            mass_nh = gas['Masses']
+            quant_z = gas['GFM_Metallicity']
+
+            pxSize = 0.1 # physical kpc, should match to image pxScale for vis
+
+            N_H, Z_g = self.resolved_dust_mapping(pos, hsml, mass_nh, quant_z, pos_stars, rotCenter, rotMatrix=rotMatrix, pxSize=pxSize)
+
+            # compute stellar magnitudes, reshape back into full PT4 size
+            bands = [band.replace('_dustC','')]
+
+            magsStars = self.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun,ret_indiv=True)
+            magsStars = magsStars[ bands[0] ]
+
+            mags = np.zeros( stars['GFM_StellarFormationTime'].size, dtype=magsStars.dtype)
+            mags.fill(np.nan)
+            mags[w] = magsStars
         else:
             # load age,Z,mass_ini, use FSPS on the fly
             assert band in self.bands

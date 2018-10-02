@@ -824,7 +824,7 @@ def _findHalfLightRadius(rad,mags,vals=None):
 
     return halfLightRad
 
-def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True, 
+def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True, bands=None,
                        sizes=False, indivStarMags=False, fullSubhaloSpectra=False, redshifted=False):
     """ Compute the total band-magnitudes (or instead half-light radii if sizes==True), per subhalo, 
     under the given assumption of an iso(chrone) model, imf model, dust model, and radial restrction. 
@@ -845,13 +845,14 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     pop = sps(sP, iso, imf, dust, redshifted=redshifted)
 
     # which bands? for now, to change, just recompute from scratch
-    bands = []
-    bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
-    #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
-    bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
-    bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
+    if bands is None:
+        bands = []
+        bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
+        #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
+        bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
+        bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
-    if indivStarMags or sizes: bands = ['sdss_r']
+        if indivStarMags or sizes: bands = ['sdss_r']
 
     nBands = len(bands)
 
@@ -2678,12 +2679,31 @@ fieldComputeFunctionMapping = \
    'Particle_StellarPhot_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', indivStarMags=True, Nside='z-axis'),
 
+   # spectral mocks
    'Subhalo_SDSSFiberSpectra_NoVel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=1, Nside='z-axis'),
    'Subhalo_SDSSFiberSpectra_Vel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='sdss_fiber', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=2, Nside='z-axis'),
+
+   # UVJ: Martina Donnari
+   'Subhalo_StellarPhot_UVJ_p07c_nodust'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none', bands=['u','v','2mass_j']),
+   'Subhalo_StellarPhot_UVJ_p07c_nodust_5pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none', bands=['u','v','2mass_j'], rad=5.0),
+   'Subhalo_StellarPhot_UVJ_p07c_nodust_30pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none', bands=['u','v','2mass_j'], rad=30.0),
+   'Subhalo_StellarPhot_UVJ_p07c_nodust_2rhalf'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='none', bands=['u','v','2mass_j'], rad='2rhalfstars'),
+   'Subhalo_StellarPhot_UVJ_p07c_cf00dust_res_conv_z'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['u','v','2mass_j']),
+   'Subhalo_StellarPhot_UVJ_p07c_cf00dust_res_conv_z_5pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['u','v','2mass_j'], rad=5.0),
+   'Subhalo_StellarPhot_UVJ_p07c_cf00dust_res_conv_z_30pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['u','v','2mass_j'], rad=30.0),
+   'Subhalo_StellarPhot_UVJ_p07c_cf00dust_res_conv_z_2rhalf'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['u','v','2mass_j'], rad='2rhalfstars'),
 
    # light: redshifted/apparent
    'Subhalo_StellarPhot_p07c_nodust_red'   : partial(subhaloStellarPhot,
