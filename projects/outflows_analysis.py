@@ -29,6 +29,338 @@ from util.rotation import momentOfInertiaTensor, rotationMatricesFromInertiaTens
 from tracer.tracerMC import match3
 from util import simParams
 
+def fit_vout():
+    """ For text discussion and fit equations relating to outflow velocities. """
+    from plot.config import figsize, sfclean, lw
+    import matplotlib.pyplot as plt
+    import pickle
+    from scipy.optimize import leastsq
+
+    # load
+    filename = 'vout_75'
+    with open('%s_TNG50-1.pickle' % filename,'rb') as f:
+        data_z = pickle.load(f)
+
+    # gather data of vout(M*,z)
+    nskip = 2 # exclude last N datapoints from each vout(M*) line, due to poor statistics
+    tot_len = np.sum( [dset['xm'].size-nskip for dset in data_z] )
+
+    mstar = np.zeros( tot_len, dtype='float32' )
+    vout  = np.zeros( tot_len, dtype='float32' )
+    redshift = np.zeros( tot_len, dtype='float32' )
+
+    offset = 0
+
+    for dset in data_z:
+        count = dset['xm'].size - nskip
+        mstar[offset:offset+count] = dset['xm'][:-nskip]
+        vout[offset:offset+count] = dset['ym'][:-nskip]
+        redshift[offset:offset+count] = dset['redshift'] # constant
+        offset += count
+
+    if 0:
+        # least-squares fit
+        def _error_function(params, mstar, z, vout):
+            """ Define error function to minimize. """
+            (a,b,c,d,e,f) = params # v = a + (M*/b)^c + (1+z)^d
+            #vout_fit = a * (1+z)**e + (mstar/b)**(c) * (1+z)**d
+            #vout_fit = a * (1+z)**e + (mstar/9)**(c) * (1+z)**d
+            vout_fit = a*(1+f*z**2) + b*(1+z*c) * mstar + (mstar/d)**e
+            #vout_fit = a*np.sqrt(1+z) + b*(1+z) * (mstar/10) + c*(1+z) * (mstar/10)**2
+            #vout_fit = np.log10(vout_fit)
+            return vout_fit - vout
+
+        params_init = [100.0, 8.0, 1.0, 1.0, 1.0, 1.0]
+        #args = (mstar,redshift,np.log10(vout))
+        args = (mstar,redshift,vout)
+
+        params_best, params_cov, info, errmsg, retcode = \
+          leastsq(_error_function, params_init, args=args, full_output=True)
+
+        print('params best:', params_best)
+
+        # (A) vs. redshift plot
+        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+
+        ax.set_xlim([0.8+1, 6.2+1])
+        ax.set_ylim([0,1200])
+        #ax.set_ylim([1,3]) # log
+        ax.set_xlabel('(1+z)')
+        ax.set_ylabel(filename + ' [km/s]')
+
+        for mass_ind in [3,6,10,14,15,16,17]:
+            # make (x,y) datapoints
+            xx = [1+dset['redshift'] for dset in data_z]
+            yy = []
+            for dset in data_z:
+                if mass_ind < dset['ym'].size:
+                    yy.append(dset['ym'][mass_ind])
+                else:
+                    yy.append(np.nan)
+
+            w = np.where(np.isfinite(yy))
+            xx = np.array(xx)[w]
+            yy = np.array(yy)[w]
+
+            # plot
+            x_mstar = data_z[0]['xm'][mass_ind] # log msun
+            label = 'M$_\star$ = %.2f' % x_mstar
+            l, = ax.plot(xx, yy, '-', lw=lw, label=label) # np.log10(yy)
+
+            # plot fit
+            x_redshift = np.linspace( ax.get_xlim()[0], ax.get_xlim()[1], 50 )
+            vout_fit = _error_function(params_best, x_mstar, x_redshift, 0.0)
+            ax.plot(1+x_redshift, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('%s_vs_redshift.pdf' % filename)
+        plt.close(fig)
+
+        # (B) vs M* plot
+        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+        
+        ax.set_xlim([7.0, 12.0])
+        ax.set_ylim([0,1200])
+        ax.set_xlabel('Stellar Mass [ log Msun ]')
+        ax.set_ylabel(filename + ' [km/s]')
+
+        for dset in data_z:
+            # plot
+            x_mstar = dset['xm'] # log msun
+            y_vout  = dset['ym']
+
+            l, = ax.plot(x_mstar, y_vout, '-', lw=lw, label='z = %.1f' % dset['redshift'])
+
+            # plot fit
+            x_mstar = np.linspace( ax.get_xlim()[0], ax.get_xlim()[1], 50 )
+            vout_fit = _error_function(params_best, x_mstar, dset['redshift'], 0.0)
+            ax.plot(x_mstar, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
+
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig('%s_vs_mstar.pdf' % filename)
+        plt.close(fig)
+
+    # -----------------------------------------------------------------------------------------------------
+
+    param_z_degree = 1
+
+    def _error_function_loc(params, mstar, vout):
+        """ Define error function to minimize. Form of vout(M*) at one redshift. """
+        (a,b,c) = params 
+        vout_fit = a + b*(mstar/10)**c
+        return vout_fit - vout
+
+    def _error_function_loc2(params, mstar, z, vout):
+        """ Define error function to minimize. Same but with polynomial dependence of (1+z) on every parameter. """
+        (a_coeffs, b_coeffs, c_coeffs) = params.reshape(3,param_z_degree+1)
+        a = np.poly1d(a_coeffs)(1+z)
+        b = np.poly1d(b_coeffs)(1+z)
+        c = np.poly1d(c_coeffs)(1+z)
+        vout_fit = a + b*(mstar/10)**c
+        return vout_fit - vout
+
+    # plot
+    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([7.0, 12.0])
+    ax.set_ylim([0,1200])
+    ax.set_xlabel('Stellar Mass [ log Msun ]')
+    ax.set_ylabel(filename + ' [km/s]')
+
+    params_z = []
+
+    # let's fit just each redshift alone
+    redshift_targets = np.array( [1.0,2.0,3.0,4.0,6.0] )
+    scalefac = 1/(1+redshift_targets)
+    H_z_H0 = np.zeros( scalefac.size, dtype='float64' ) # if float32, fails mysteriously in fitting
+    for i, z in enumerate(redshift_targets):
+        sP = simParams(res=1820,run='tng',redshift=z)
+        H_z_H0[i] = sP.units.H_z
+    H_z_H0 /= (simParams(res=1820,run='tng',redshift=0.0).units.H_z)
+
+    for redshift_target in redshift_targets:
+        w = np.where(redshift == redshift_target)
+
+        mstar_loc = mstar[w]
+        vout_loc  = vout[w]
+
+        params_init = [100.0, 10.0, 1.0]
+        args = (mstar_loc,vout_loc)
+
+        params_best, _, _, _, _ = leastsq(_error_function_loc, params_init, args=args, full_output=True)
+        params_z.append( params_best )
+
+        print('best fit at [z=%.1f]' % redshift_target, params_best)
+
+        # plot data and fit
+        l, = ax.plot(mstar_loc, vout_loc, '-', lw=lw, label='z = %.1f' % redshift_target)
+
+        x_mstar = np.linspace( ax.get_xlim()[0], ax.get_xlim()[1], 50 )
+        vout_fit = _error_function_loc(params_best, x_mstar, 0.0)
+        ax.plot(x_mstar, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('%s_vs_mstar_z_indiv.pdf' % filename)
+    plt.close(fig)
+
+    if 1:
+        # what is the scaling of vout with (1+z), a, and H(z)?
+        def _error_function_plaw(params, xx, vout):
+            """ Define error function to minimize. """
+            (a,b) = params 
+            vout_fit = a * (xx)**b
+            return vout_fit - vout
+
+        for x_mstar in [8.0,8.5,9.0,9.5,10.0,10.5,11.0]:
+            vout_fit = np.zeros( len(redshift_targets) )
+
+            for i, redshift_target in enumerate(redshift_targets):
+                vout_fit[i] = _error_function_loc(params_z[i], x_mstar, 0.0)
+                
+            for iterNum in [0,2]:
+                fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+                ax = fig.add_subplot(111)
+                
+                ax.set_ylim([100,400])
+                ax.set_ylabel('fit vout')
+
+                if iterNum == 0:
+                    ax.set_xlim([1.5,7.5])
+                    ax.set_xlabel('(1 + Redshift)')
+                    xx = 1 + np.array(redshift_targets)
+                if iterNum == 1:
+                    ax.set_xlim([0.0,0.6])
+                    ax.set_xlabel('Scale factor')
+                    xx = scalefac
+                if iterNum == 2:
+                    ax.set_xlim([0.0,14.0])
+                    ax.set_xlabel('H(z) / H0')
+                    xx = H_z_H0
+
+                yy = vout_fit
+                ax.plot(xx, yy, '-', marker='o', lw=lw)
+
+                # fit line
+                line_fit = np.polyfit(xx, yy, deg=1)
+                ax.plot(xx, np.poly1d(line_fit)(xx), ':', lw=lw, marker='s')
+
+                # fit powerlaw
+                params_init = [100.0, 1.0]
+                args = (xx,yy)
+
+                params_best, _, _, _, _ = leastsq(_error_function_plaw, params_init, args=args, full_output=True)
+                print(x_mstar,iterNum,' exponent = %.2f' % params_best[1])
+                ax.plot(xx, _error_function_plaw(params_best,xx,0.0), ':', lw=lw, marker='d')
+
+                # finish
+                fig.tight_layout()
+                fig.savefig('%s_vs_time_%d.pdf' % (filename,iterNum))
+                plt.close(fig)
+
+    # plot each parameter vs. redshift
+    line_fits = []
+
+    for i in range(len(params_z[0])):
+        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        ax = fig.add_subplot(111)
+        
+        ax.set_xlim([1.5,7.5])
+        #ax.set_ylim([0,1200])
+        ax.set_xlabel('(1 + Redshift)')
+        ax.set_ylabel('parameter [%d]' % i)
+
+        xx = 1 + np.array(redshift_targets)
+        yy = [pset[i] for pset in params_z]
+
+        ax.plot(xx, yy, '-', marker='o', lw=lw)
+
+        line_fit = np.polyfit(xx, yy, deg=param_z_degree)
+        print(' param [%d] line: ' % i, line_fit)
+        ax.plot(xx, np.poly1d(line_fit)(xx), ':', lw=lw, marker='s')
+        line_fits.append( line_fit )
+
+        fig.tight_layout()
+        fig.savefig('%s_param_%d_vs_z.pdf' % (filename,i))
+        plt.close(fig)
+
+    # -----------------------------------------------------------------------------------------------------
+
+    # re-fit with the given (1+z) dependence allowed for every parameter
+    params_init = line_fits
+    args = (mstar,vout,redshift)
+
+    if 0:
+        print('LOADING ACTUAL GALAXIES TEST')
+        mstar_z = []
+        vout_z  = []
+        z_z     = []
+
+        for redshift in [1.0,2.0,4.0,6.0]:
+            sP = simParams(res=2160,run='tng',redshift=redshift)
+            # load mstar and count
+            xvals = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+
+            acField = 'Subhalo_OutflowVelocity_SubfindWithFuzz'
+            ac = sP.auxCat(acField)
+
+            mstar = xvals[ac['subhaloIDs']]
+            radInd = 1 # 10kpc
+            percInd = 3 # 90, percs = [25,50,75,90,95,99]
+            vout = ac[acField][:,radInd,percInd]
+
+            w = np.where(mstar >= 9.0)
+            mstar_z.append( mstar[w] )
+            vout_z.append( vout[w] )
+            z = np.ones(len(w[0])) + redshift
+            z_z.append( z )
+
+        # condense
+        mstar2 = np.hstack( mstar_z )
+        vout2 = np.hstack( vout_z )
+        redshift2 = np.hstack( z_z )
+
+        args = (mstar2,vout2,redshift2)
+
+    params_best, _, _, _, _ = leastsq(_error_function_loc2, params_init, args=args, full_output=True)
+
+    (a_coeffs, b_coeffs, c_coeffs) = params_best.reshape(3,param_z_degree+1)
+    print(filename, 'best z-evo fit: ', params_best)
+    print('%s = [%.1f + %.1f(1+z)] + [%.1f + %.1f(1+z)] * (log Mstar/10)^{%.1f + %.1f(1+z)}' % \
+          (filename,a_coeffs[0],a_coeffs[1],b_coeffs[0],b_coeffs[1],c_coeffs[0],c_coeffs[1]))
+
+    # plot
+    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([7.0, 12.0])
+    ax.set_ylim([0,1200])
+    ax.set_xlabel('Stellar Mass [ log Msun ]')
+    ax.set_ylabel(filename + ' [km/s]')
+
+    for redshift_target in redshift_targets:
+        w = np.where(redshift == redshift_target)
+
+        mstar_loc = mstar[w]
+        vout_loc  = vout[w]
+
+        # plot data and fit
+        l, = ax.plot(mstar_loc, vout_loc, '-', lw=lw, label='z = %.1f' % redshift_target)
+
+        x_mstar = np.linspace( ax.get_xlim()[0], ax.get_xlim()[1], 50 )
+        vout_fit = _error_function_loc2(params_best, x_mstar, redshift_target, 0.0)
+        ax.plot(x_mstar, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('%s_vs_mstar_z_result.pdf' % filename)
+    plt.close(fig)
+
 def halo_selection(sP, minM200=11.5):
     """ Make a quick halo selection above some mass limit and sorted based on energy 
     injection in the low BH state between this snapshot and the previous. """
@@ -591,6 +923,11 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         binConfig2['vrad'] = binConfig1['vrad']
         binConfig2['temp'] = np.linspace(3.0, 9.0, 121) # 0.05 dex spacing
 
+        binConfig2b = OrderedDict()
+        binConfig2b['rad'] = binConfig1['rad']
+        binConfig2b['vrad'] = binConfig1['vrad']
+        binConfig2b['temp_sfcold'] = np.linspace(3.0, 9.0, 121) # 0.05 dex spacing
+
         binConfig3 = OrderedDict()
         binConfig3['rad'] = binConfig1['rad']
         binConfig3['vrad'] = binConfig1['vrad']
@@ -619,6 +956,11 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         binConfig8['temp'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
         binConfig8['vrad'] = np.linspace(-500, 3500, 81) # 50 km/s spacing
 
+        binConfig8b = OrderedDict()
+        binConfig8b['rad'] = binConfig1['rad']
+        binConfig8b['temp_sfcold'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
+        binConfig8b['vrad'] = np.linspace(-500, 3500, 81) # 50 km/s spacing
+
         # binning of angular theta
         binConfig9 = OrderedDict()
         binConfig9['rad'] = binConfig1['rad']
@@ -637,8 +979,8 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         binConfig11['z_solar'] = binConfig1['z_solar']
         binConfig11['theta'] = np.linspace(-np.pi, np.pi, 37) # 10 deg spacing
 
-        binConfigs += [binConfig2,binConfig3,binConfig4,binConfig5,binConfig6]
-        binConfigs += [binConfig7,binConfig8,binConfig9,binConfig10,binConfig11]
+        binConfigs += [binConfig2,binConfig2b,binConfig3,binConfig4,binConfig5,binConfig6]
+        binConfigs += [binConfig7,binConfig8,binConfig8b,binConfig9,binConfig10,binConfig11]
 
     if ptType == 'wind':
         binConfigs += [binConfig7] # fine-binning of vrad
@@ -750,7 +1092,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     if massField != 'Masses': fieldsLoad += [massField]
 
     if ptType == 'gas':
-        fieldsLoad += ['temp','z_solar','numdens'] # TODO: option to set temp for eEOS gas to some non-effective value...
+        fieldsLoad += ['temp','temp_sfcold','z_solar','numdens']
         fieldsLoad += ['StarFormationRate'] # for rotation
 
     particles = sP.snapshotSubset(partType=ptType, fields=fieldsLoad, sq=False, indRange=indRange[ptType])
@@ -959,7 +1301,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     If selNum is not None, then directly use this 'bin_X' from the auxCat, instead of searching for the appropriate one based on the quants. """
     import pickle
 
-    validQuants = ['temp','z_solar','numdens','theta','vrad']
+    validQuants = ['temp','temp_sfcold','z_solar','numdens','theta','vrad']
     assert ptType in ['Gas','Wind']
     assert fluxKE + fluxP in [0,1] # at most one True
 
@@ -985,6 +1327,8 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             dsetName = '%s.%s.%s.%s' % (firstQuant,secondQuant,thirdQuant,fourthQuant)
     if ptType == 'Wind':
         dsetName = '%s.%s' % (firstQuant,secondQuant)
+        if thirdQuant is not None:
+            dsetName = '%s.%s.%s' % (firstQuant,secondQuant,thirdQuant)
 
     selStr = '' if selNum is None else '_sel%d' % selNum
     cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,sP.snap)

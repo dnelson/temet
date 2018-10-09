@@ -14,7 +14,7 @@ pStyle  = 'white' # white or black background
 
 lw = 2.5 # default line width
 
-linestyles = ['-',':','--','-.',(0, (3, 5, 1, 5, 1, 5))] # five linestyles to alternate through (last is dashdotdot)
+linestyles = ['-',':','--','-.',(0, (3, 5, 1, 5, 1, 5)),'--','-.'] # seven linestyles to alternate through (last is dashdotdot)
 colors     = ['blue','purple','black'] # colors for zoom markers only (cannot vary linestyle with 1 point) (old, delete)
 markers    = ['o','s','D','p','v','*','8','^','P','X','>','<','d']  # marker symbols to alternate through
 
