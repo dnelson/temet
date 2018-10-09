@@ -1,0 +1,17 @@
+cmocean==1.2
+corner==2.0.1
+emcee==2.2.1
+fsps==0.3.0
+h5py==2.8.0
+healpy==1.11.0
+llvmlite==0.23.0
+matplotlib==2.2.0
+numba==0.38.0
+numpy==1.14.3
+prospect===e84fed8
+pyslurm==17.2.0
+quadpy==0.12.5
+requests==2.18.4
+requests-oauthlib==0.8.0
+scipy==1.0.0
+six==1.11.0

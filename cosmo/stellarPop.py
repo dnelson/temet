@@ -277,8 +277,14 @@ class sps():
     stellarLib = ['miles','basel','csk'] # unused
     dustModels = ['none','cf00','cf00_res_eff','cf00b_res_conv','cf00_res_conv','cf00_res3_conv']
 
-    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3, redshifted=False):
-        """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. """
+    def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3, 
+                 redshifted=False, emlines=False):
+        """ Load the pre-computed stellar photometrics table, computing if it does not yet exist. 
+        If redshifted, then band-magnitudes are attenuated and wavelength shifted into observer-frame 
+        at sP.redshift when initially computed (note: self.wave, self.wave_ang, self.spec are not, and 
+        are saved as-is, i.e. always rest-frame). 
+        Otherwise, band-magnitudes and spectra are in the rest-frame, regardless of sP.redshift. 
+        If emlines, include nebular emission line model for band-magnitudes and spectra, otherwise no. """
         import fsps
 
         assert iso in self.isoTracks
@@ -293,7 +299,8 @@ class sps():
         self.spec  = {} # spectra
         self.order = order # bicubic interpolation by default (1 = bilinear)
         self.bands = fsps.find_filter('') # do them all (previously 138, now 143 with ps1*)
-        self.redshifted = redshifted # redshift magnitudes and spectra by sP.redshift, otherwise z=0 (absolute)
+        self.redshifted = redshifted
+        self.emlines = emlines
 
         self.dust = dustModel.split("_")[0]
         self.dustModel = dustModel
@@ -304,6 +311,8 @@ class sps():
             print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
             # cosmology in FSPS is hard-coded (sps_vars.f90), and this has been set to TNG values
             assert sP.omega_m == 0.3089 and sP.omega_L == 0.6911 and sP.HubbleParam == 0.6774
+        if emlines:
+            zStr += '_em'
 
         saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d%s.hdf5' % (iso,imf,self.dust,len(self.bands),zStr)
 
@@ -382,7 +391,7 @@ class sps():
         pop = fsps.StellarPopulation(sfh = 0, # SSP
                                      zmet = 1, # integer index of metallicity value (modified later)
                                      add_neb_continuum = True,
-                                     add_neb_emission = False, # must be True to get line lums, but modifies get_mags()
+                                     add_neb_emission = self.emlines, # modifies get_mags()
                                      add_dust_emission = True,
                                      imf_type = self.imfTypes[imf],
                                      dust_type = dust_type,
@@ -453,15 +462,13 @@ class sps():
             assert np.array_equal(w,wave0) # we assume same wavelengths for all metal indices
             assert s.shape[0] == pop.log_age.size # should be same age grid in isochrones
 
-            # put magnitudes into (age,Z) grids split by band
+            # put magnitudes into (age,Z) grids split by band (either absolute or apparent)
             for bandNum, bandName in enumerate(self.bands):
                 mags[bandName][i,:] = x[:,bandNum]
 
-            # save spectral array
+            # save spectral array (always rest-frame/absolute)
             for j in range(pop.log_age.size):
                 spec[i,j,:] = s[j,:]
-                if self.redshifted:
-                    spec[i,j,:] = self.redshiftSpectrum(wave0, s[j,:])
 
         # loop again, this time compute nebular line emission luminosities (modify pop each time)
         for i in range(pop.zlegend.size):
@@ -470,7 +477,7 @@ class sps():
             pop = fsps.StellarPopulation(sfh = 0, # SSP
                                          zmet = i+1,
                                          add_neb_continuum = True,
-                                         add_neb_emission = True, # here True
+                                         add_neb_emission = True, # need True for emline properties
                                          add_dust_emission = True,
                                          imf_type = self.imfTypes[imf],
                                          dust_type = dust_type,
@@ -660,15 +667,18 @@ class sps():
             # pre-divide out Angstroms
             self.trans_normed[band] = trans_val / self.wave_ang
 
-    def convertSpecToSDSSUnitsAndAttenuate(self, spec):
+    def convertSpecToSDSSUnitsAndAttenuate(self, spec, output_wave=None):
         """ Convert a spectrum from FSPS in [Lsun/Hz] to SDSS units [10^-17 erg/cm^2/s/Ang] and, 
-        if self.sP.redshift > 0, attenuate the spectrum by the luminosity distance. Note that 
-        spectrum has already been shifted in wavelength, since FSPS saved spectral tables call 
-        redshiftSpectrum(). If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
-        assumed distance of 10pc (i.e. absolute magnitudes). """
+        if self.sP.redshift > 0, attenuate the spectrum by the luminosity distance. 
+        If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
+        assumed distance of 10pc (i.e. absolute magnitudes). If output_wave is not None, should 
+        be in Angstroms. """
+
+        # shift in wavelength (afterwards, self.wave_ang is now observed-frame instead of rest-frame)
+        spec, wave = self.redshiftSpectrum(spec, output_wave=output_wave)
 
         # convert [Lsun/Hz] -> [Lsun/Ang]
-        freq_Hz = self.sP.units.c_ang_per_sec / self.wave_ang # nu = c/lambda
+        freq_Hz = self.sP.units.c_ang_per_sec / wave # nu = c/lambda
         spec_perAng = freq_Hz**2 * spec / self.sP.units.c_ang_per_sec # flux_nu = (lambda^2/c) * flux_lambda
 
         # if z=0 set dL=10pc (absolute), otherwise use the actual redshift, calculate luminosity distance
@@ -681,30 +691,80 @@ class sps():
 
         # could rebin onto a wavelength grid more like SDSS observations (log wave spaced)
         # https://github.com/moustakas/impy/blob/master/lib/ppxf/ppxf_util.py
-        return flux
+        return flux, wave
 
-    def redshiftSpectrum(self, wave, spec):
-        """ If self.sP.redshift > 0, attenuation the spectrum by the luminosity distance and redshift 
+    def redshiftSpectrum(self, spec, output_wave=None):
+        """ If self.sP.redshift > 0, attenuate the spectrum by the luminosity distance and redshift 
         the wavelength. If self.sP.redshift == 0, the rest-frame spectrum is returned at an 
-        assumed distance of 10pc (i.e. absolute magnitudes)."""
+        assumed distance of 10pc (i.e. absolute magnitudes). Note that the spectrum is sampled 
+        back onto the original output_wave points, which therefore become observer-frame instead of rest-frame. """
         flux = spec.copy()
 
+        if output_wave is None:
+            output_wave = self.wave_ang.copy()
+
+        if not self.redshifted or self.sP.redshift == 0.0:
+            return flux, output_wave
+
         # if z>0, redshift the wavelength axis
-        if self.sP.redshift > 0.0:
-            wave_redshifted = wave * (1.0 + self.sP.redshift)
+        wave_redshifted = self.wave_ang * (1.0 + self.sP.redshift)
 
-            # and interpolate the shifted flux to the old, unshifted wavelength points
-            f = interp1d(wave_redshifted, flux, kind='linear', assume_sorted=True, 
-                         bounds_error=False, fill_value=0.0)
+        # and interpolate the shifted flux to the old, unshifted wavelength points
+        #f = interp1d(wave_redshifted, flux, kind='linear', assume_sorted=True, bounds_error=False, fill_value=0.0)
+        #flux_origwave = f(output_wave) # about 5x slower than below
 
-            flux = f(wave)
+        # todo: probably an error here if flux is a multi-star (2D) array, need to generalize
+        flux_origwave = np.interp(output_wave, wave_redshifted, flux)
 
-            # account for (1+z)^2/(1+z) factors from redshifting of photon energies, arrival rates, 
-            # and bandwidth delta_freq, s.t. flux density per unit bandwidth goes as (1+z)
-            # e.g. Peebles 3.87 or MoVdBWhite 10.85 (spec has units of Lsun/Hz, i.e. is f_nu)
-            flux *= (1.0 + self.sP.redshift)
+        if 0:
+            # DEBUG
+            import matplotlib.pyplot as plt
+            from plot.config import figsize, sfclean, linestyles
 
-        return flux
+            # plot (A)
+            fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+            ax = fig.add_subplot(111)
+            ax.set_xlabel('$\lambda$ [ Ang ]')
+            ax.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
+            ax.set_xlim([800,10000])
+            ax.set_ylim([-15,-13])
+
+            n = 10
+            shift_back = 1.0 # 1.0 to disable, (1+z) to enable
+            ax.plot(self.wave_ang[::n], np.log10(flux[::n]), ls='-', marker='o', label='flux')
+            ax.plot(output_wave[::n]/shift_back, np.log10(flux_origwave[::n]-7e-15), ls='-', marker='o', label='flux shifted')
+
+            ax.legend()
+            fig.tight_layout()
+            fig.savefig('debug_redshiftSpectrum.pdf')
+            plt.close(fig)
+
+            # plot (B)
+            fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+            ax = fig.add_subplot(111)
+            ax.set_xlabel('$\lambda$ [ Ang ]')
+            ax.set_ylabel('$\Delta \lambda$ [ log Ang ]')
+            ax.set_xlim([800,10000])
+
+            dwave = self.wave_ang - np.roll(self.wave_ang,1)
+            dwave[0] = dwave[1]
+            dwave_output = output_wave - np.roll(output_wave,1)
+            dwave_output[0] = dwave_output[1]
+
+            ax.plot(self.wave_ang[::n], np.log10(dwave[::n]), ls='-', marker='o', markersize=1.0, label='MILES')
+            ax.plot(output_wave[::n], np.log10(dwave_output[::n]), ls='-', marker='o', markersize=1.0, label='OUTPUT')
+
+            ax.legend()
+            fig.tight_layout()
+            fig.savefig('debug_redshiftSpectrum_dwave.pdf')
+            plt.close(fig)
+
+        # account for (1+z)^2/(1+z) factors from redshifting of photon energies, arrival rates, 
+        # and bandwidth delta_freq, s.t. flux density per unit bandwidth goes as (1+z)
+        # e.g. Peebles 3.87 or MoVdBWhite 10.85 (spec has units of Lsun/Hz, i.e. is f_nu)
+        flux = flux_origwave * (1.0 + self.sP.redshift)
+
+        return flux, output_wave
 
     def mags(self, band, ages_logGyr, metals_log, masses_logMsun):
         """ Interpolate table to compute magnitudes [AB absolute] in requested band for input stars. """
@@ -717,7 +777,7 @@ class sps():
         assert np.min(ages_logGyr) >= -10.0
         assert np.max(ages_logGyr) < 2.0
         assert np.max(masses_logMsun) < 10.0
-        assert np.min(masses_logMsun) > 1.5 # we have stars as small as 1.5 at least
+        #assert np.min(masses_logMsun) > 1.5 # we have stars as small as 1.5 at least
 
         # convert input interpolant point into fractional 2D (+bandNum) array indices
         # Note: we are clamping at [0,size-1], so no extrapolation (nearest grid edge value is returned)
@@ -863,7 +923,7 @@ class sps():
         return lums
 
     def dust_tau_model_mags(self, bands, N_H, Z_g, ages_logGyr, metals_log, masses_msun, 
-                            ret_indiv=False, ret_full_spectrum=False, rel_vel=None):
+                            ret_indiv=False, ret_full_spectrum=False, output_wave=None, rel_vel=None):
         """ For a set of stars characterized by their (age,Z,M) values as well as (N_H,Z_g) 
         calculated from the resolved gas distribution, do the Model (C) attenuation on the 
         full spectra, sum together, and convolve the resulting total L(lambda) with the  
@@ -871,10 +931,15 @@ class sps():
         each band. If ret_indiv==True, then the individual magnitudes for every member star are
         instead returned separately. If ret_full_spectrum==True, the full aggregate spectrum, 
         summed over all member stars, as a function of wavelength, is instead returned. 
-        Note: Will return either absolute or apparent magnitudes (or spectra) if self.sP.redshift 
-        is zero or nonzero, respectively. """
+        If output_wave is not None, then this output spectrum is interpolated to the requested 
+        wavelength grid (in Angstroms, should be rest or observed frame depending on self.redshifted).
+        If rel_vel is not None, then add LoS peculiar velocity shifts (physical km/s) of each star.
+        Note: Will return either apparent or absolute magnitudes (or spectra) if (self.redshifted 
+        and self.sP.redshift is nonzero) or zero, respectively. """
         assert N_H.size == Z_g.size == ages_logGyr.size == metals_log.size == masses_msun.size
         assert N_H.ndim == Z_g.ndim == ages_logGyr.ndim == metals_log.ndim == masses_msun.ndim == 1
+        if rel_vel is not None: assert ret_full_spectrum
+        if output_wave is not None: assert ret_full_spectrum
 
         bands = iterable(bands)
         for band in bands:
@@ -930,7 +995,7 @@ class sps():
                     obs_lum_1d += f(self.wave)
 
             # unit conversion into SDSS spectra units, and attenuate by distance to sP.redshift
-            spectrum = self.convertSpecToSDSSUnitsAndAttenuate(obs_lum_1d)
+            spectrum, wave = self.convertSpecToSDSSUnitsAndAttenuate(obs_lum_1d, output_wave=output_wave)
 
             # early return before any band convolutions (the corresponding wavelengths are self.wave)
             return spectrum
@@ -944,6 +1009,9 @@ class sps():
                               self.wave,self.A_lambda_sol[band],self.sP.redshift,self.beta,
                               self.sP.units.Z_solar,self.gamma[band],self.N_H0,self.f_scattering[band],
                               self.metals,self.ages,self.wave_ang,self.spec,calzetti_case)
+
+            # redshift if requested, so that band convolutions are observer-frame instead of rest-frame
+            obs_lum, _ = self.redshiftSpectrum(obs_lum)
 
             # convolve with band (trapezoidal rule)
             if not ret_indiv:
@@ -1043,7 +1111,7 @@ class sps():
 
         return N_H, Z_g
 
-def debug_check_redshifting(redshift=1.0):
+def debug_check_redshifting(redshift=0.8):
     """ Verify we understand what is going on with redshifting and apparent vs. absolute magnitudes 
     of the band magnitudes (from FSPS) and the band magnitudes derived from our convolving our 
     spectra with the bandpass filters manually. """
@@ -1052,14 +1120,19 @@ def debug_check_redshifting(redshift=1.0):
     pop = sps(sP, 'padova07', 'chabrier', 'none', redshifted=True)
 
     x_ind = 5
-    y_ind = 12
+    y_ind = 42
 
     metal = np.array( (pop.metals[x_ind],) )
     age   = np.array( (pop.ages[y_ind],) )
 
-    for band in ['sdss_r','sdss_z','jwst_f444w','wfc_acs_f814w']:
+    # load lega-c dr2 wavelength grid
+    with h5py.File(expanduser("~") + '/obs/legac_dr2_spectra_wave.hdf5','r') as f:
+        output_wave = f['wavelength'][()]
+
+    for band in ['wfc_acs_f814w']: #['sdss_r','sdss_z','jwst_f444w','wfc_acs_f814w']:
         # select single spectrum, convolve with band, get band luminosity
         obs_lum = pop.spec[x_ind,y_ind,:].copy()
+        obs_lum, _ = pop.redshiftSpectrum(obs_lum) #, output_wave=output_wave)
         obs_lum_conv = obs_lum * pop.trans_normed[band]
 
         nn = pop.wave.size
@@ -1262,3 +1335,84 @@ def debug_dust_plots():
         fig.tight_layout()    
         fig.savefig('debug_%s_%s.pdf' % (dust,band))
         plt.close(fig)
+
+def debug_plot_spectra():
+    """ Check mock spectra. """
+    import matplotlib.pyplot as plt
+    from util import simParams
+    from plot.config import figsize, sfclean, linestyles
+
+    sP = simParams(res=270,run='tng',redshift=0.8)
+    acFields = ['Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z',
+                'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_p07c_cf00dust_res_conv_z']
+
+    subInds = [10,12,100,110,120]
+
+    # load
+    data = {}
+
+    for acField in acFields:
+        ac = sP.auxCat(acField)
+        data[acField] = ac[acField]
+
+    # plot
+    fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('$\lambda$ [ Angstroms, obs-frame ]')
+    ax.set_ylabel('$f_\lambda$ [ 10$^{-19}$ erg/cm$^2$/s/Ang ]')
+    #ax.set_xlim([8000 / (1+sP.redshift),9000 / (1+sP.redshift)])
+    #ax.set_xlim([8000,9000])
+
+    for subInd in subInds:
+        c = ax._get_lines.prop_cycler.next()['color']
+        for i, acField in enumerate(acFields):
+            label = 'Em' if '_Em_' in acField else 'NoEm'
+            label += ' [%d, %d]' % (subInd,ac['subhaloIDs'][subInd])
+            ax.plot(ac['wavelength'], data[acField][subInd,:], color=c, ls=linestyles[i], marker='o', markersize=1.5, label=label)
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('debug_spec_obs.pdf')
+    plt.close(fig)
+
+def debug_check_rawspec():
+    """ Check spectral tables. """
+    import matplotlib.pyplot as plt
+    from util import simParams
+    from plot.config import figsize, sfclean, linestyles
+
+    zInd = 5
+    ageInd = 40
+    redshift = 0.8
+
+    # load
+    path = '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.8.hdf5'
+    #path = '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143.hdf5'
+
+    with h5py.File(path,'r') as f:
+        spec = f['spec_lsun_hz'][()]
+        wave = f['wave_nm'][()] * 10
+
+    # plot
+    fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('$\lambda$ [ Angstroms, observed-frame ]')
+    ax.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
+    #ax.set_ylim([1.8,2.2]) # obs
+    ax.set_ylim([0.9,1.4]) # rest
+    #ax.set_xlim([8000, 9000]) # obs
+    ax.set_xlim([8000 / (1+redshift),9000 / (1+redshift)]) # rest
+
+    label = 'Z [%d], age [%d]' % (zInd,ageInd)
+    #xx = wave * (1+0.8) # obs
+    xx = wave # rest
+    yy = spec[zInd,ageInd,:] * 1e14
+
+    ax.plot(xx, yy, ls='-', marker='o', markersize=1.5, label=label)
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('debug_rawspec.pdf')
+    plt.close(fig)
+
+    #import pdb; pdb.set_trace()

@@ -6,8 +6,10 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
+import h5py
 import cosmo.load
 from functools import partial
+from os.path import expanduser
 
 from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
   inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs, \
@@ -254,6 +256,7 @@ def _radialRestriction(sP, nSubsTot, rad):
     """ Handle an input 'rad' specification and return the min/max/2d/3d details to apply. """
     radRestrictIn2D = False
     radSqMin = np.zeros( nSubsTot, dtype='float32' ) # leave at zero unless modified below
+    slit_code = None # used to return aperture geometry for weighted inclusions
 
     if isinstance(rad, float):
         # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
@@ -331,7 +334,7 @@ def _radialRestriction(sP, nSubsTot, rad):
         radRestrictIn2D = True
     elif rad == 'legac_slit':
         # slit is 1" x 8" minimum (length is variable and depends on galaxy size? TODO)
-        slit_arcsec = np.array([1.0, 8.0])
+        slit_arcsec = np.array([1.0, 4.0])
         slit_kpc = sP.units.arcsecToAngSizeKpcAtRedshift(slit_arcsec, z=sP.redshift) # arcsec -> pkpc
         slit_code = sP.units.physicalKpcToCodeLength(slit_kpc) # pkpc -> ckpc/h
 
@@ -343,7 +346,7 @@ def _radialRestriction(sP, nSubsTot, rad):
     assert radSqMax.size == nSubsTot or (radSqMax.size == nSubsTot*2 and radSqMax.ndim == 2)
     assert radSqMin.size == nSubsTot or (radSqMIn.size == nSubsTot*2 and radSqMin.ndim == 2)
 
-    return radRestrictIn2D, radSqMin, radSqMax
+    return radRestrictIn2D, radSqMin, radSqMax, slit_code
 
 def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
     """ For a given pSplit = [thisTaskNum,totNumOfTasks], determine an efficient work split and 
@@ -385,15 +388,15 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
             modSplit = subhaloIDsTodo % pSplit[1]
             subhaloIDsTodo = np.where(modSplit == pSplit[0])[0]
 
-        if 0:
+        # already only have a subset of all subhalos? (from minStellarMass)
+        if subhaloIDsTodo.size < nSubsTot:
             # do contiguous subhalo ID division and reduce global haloSubset load 
             # to the particle sets which cover the subhalo subset of this pSplit, but the issue is 
             # that early tasks take all the large halos and all the particles, very imbalanced
             subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
 
             indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
-
-        if 1:
+        else:
             # subdivide the global gas particle set, then map this back into a division of 
             # subhalo IDs which will be better work-load balanced among tasks
             gasSplit = pSplitRange( indRange['gas'], pSplit[1], pSplit[0] )
@@ -481,7 +484,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         gc['subhalos']['SubhaloOffsetType'] = GroupOffsetType[SubhaloGrNr,:]
 
     # determine radial restriction for each subhalo
-    radRestrictIn2D, radSqMin, radSqMax = _radialRestriction(sP, nSubsTot, rad)
+    radRestrictIn2D, radSqMin, radSqMax, _ = _radialRestriction(sP, nSubsTot, rad)
 
     if radRestrictIn2D:
         Nside = 'z-axis'
@@ -812,7 +815,8 @@ def _findHalfLightRadius(rad,mags,vals=None):
     return halfLightRad
 
 def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=None, modelH=True, bands=None,
-                       sizes=False, indivStarMags=False, fullSubhaloSpectra=False, redshifted=False, minStellarMass=None):
+                       sizes=False, indivStarMags=False, fullSubhaloSpectra=False, redshifted=False, emlines=False,
+                       seeing=None, minStellarMass=None):
     """ Compute the total band-magnitudes (or instead half-light radii if sizes==True), per subhalo, 
     under the given assumption of an iso(chrone) model, imf model, dust model, and radial restrction. 
     If using a dust model, include multiple projection directions per subhalo. If indivStarMags==True, 
@@ -820,7 +824,12 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     then save a full spectrum vs wavelength for every subhalo. If redshifted is True, then all the 
     stellar spectra/magnitudes are computed at sP.redshift and the band filters are then applied, 
     resulting in e.g apparent magnitudes, otherwise the stars are assumed to be at z=0, spectra 
-    are e.g. rest-frame and magnitudes are absolute. 
+    are e.g. rest-frame and magnitudes are absolute. If emlines, then include nebular emission lines 
+    in either band-magnitudes or full spectra, otherwise exclude.
+    If seeing is not None, then instead of a binary inclusion/exclusion of each star particle 
+    based on the 'rad' aperture, include all stars weighted by the fraction of their light which 
+    enters the 'rad' aperture, assuming it is spread by atmospheric seeing into a Gaussian with a 
+    sigma of seeing [units of arcseconds at sP.redshift].
     If minStellarMass is not None, then only process subhalos with mstar_30pkpc_log above this value. """
     from cosmo.stellarPop import sps
     from healpy.pixelfunc import nside2npix, pix2vec
@@ -830,7 +839,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     assert sum([sizes,indivStarMags,np.clip(fullSubhaloSpectra,0,1)]) in [0,1]
 
     # initialize a stellar population interpolator
-    pop = sps(sP, iso, imf, dust, redshifted=redshifted)
+    pop = sps(sP, iso, imf, dust, redshifted=redshifted, emlines=emlines)
 
     # which bands? for now, to change, just recompute from scratch
     if bands is None:
@@ -849,15 +858,27 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         if 'sdss' in rad:
             spec_min_ang = 3000.0
             spec_max_ang = 10000.0
-        if 'legac' in rad:
-            # rest-frame if redshifted is False, otherwise observed-frame
-            spec_min_ang = 5000.0
-            spec_max_ang = 9000.0
 
-        ww = np.where( (pop.wave_ang >= spec_min_ang) & (pop.wave_ang <= spec_max_ang) )[0]
-        spec_min_ind = ww.min()
-        spec_max_ind = ww.max() + 1
-        nBands = spec_max_ind - spec_min_ind
+            output_wave = pop.wave_ang # at intrinsic stellar library model resolution / wavelength grid
+
+            # enforced in rest-frame if redshifted is False, otherwise in observed-frame (because if redshifted is True, 
+            # then pop.wave_ang corresponds to observed-frame wavelengths for the spectra returned by pop.dust_tau_model_mags)
+            ww = np.where( (pop.wave_ang >= spec_min_ang) & (pop.wave_ang <= spec_max_ang) )[0]
+            spec_min_ind = ww.min()
+            spec_max_ind = ww.max() + 1
+            nBands = spec_max_ind - spec_min_ind
+
+        if 'legac' in rad:
+            # load lega-c dr2 wavelength grid
+            with h5py.File(expanduser("~") + '/obs/legac_dr2_spectra_wave.hdf5','r') as f:
+                output_wave = f['wavelength'][()]
+
+            spec_min_ang = output_wave.min()
+            spec_max_ang = output_wave.max()
+
+            spec_min_ind = 0
+            spec_max_ind = output_wave.size
+            nBands = output_wave.size
 
         # only for resolved dust models do we currently calculate full spectra of every star particle
         assert '_res' in dust
@@ -907,9 +928,11 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         desc = "Optical spectra by subhalo, [%d] wavelength points between [%.1f Ang] and [%.1f Ang]." % \
             (nBands,spec_min_ang,spec_max_ang)
     if redshifted:
-        desc += " Redshifted, observed-frame bands/frequencies, apparent magnitudes/luminosities."
+        desc += " Redshifted, observed-frame bands/wavelengths, apparent magnitudes/luminosities."
     else:
-        desc += " Unredshifted, rest-frame bands/frequencies, absolute magnitudes/luminosities."
+        desc += " Unredshifted, rest-frame bands/wavelengths, absolute magnitudes/luminosities."
+    if seeing is not None:
+        desc += ' Weighted contributions incorporating atmospheric seeing of [%.1f arcsec].' % seeing
 
     select = "All Subfind subhalos"
     if minStellarMass is not None: select += ' (Only with stellar mass >= %.2f)' % minStellarMass
@@ -919,7 +942,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     print(' %s\n %s' % (desc,select))
 
     # load group information
-    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType','SubhaloPos'])
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType','SubhaloPos'])
     gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
     nSubsTot = gc['header']['Nsubgroups_Total']
 
@@ -957,8 +980,25 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     r.fill(np.nan)
 
     # radial restriction
-    radRestrictIn2D, radSqMin, radSqMax = _radialRestriction(sP, nSubsTot, rad)
+    radRestrictIn2D, radSqMin, radSqMax, radRestrict_sizeCode = _radialRestriction(sP, nSubsTot, rad)
     assert radSqMin.max() == 0.0 # not handled here
+
+    # spread light of stars into gaussians based on atmospheric seeing?
+    if seeing is not None:
+        assert rad is not None # meaningless
+        assert '_res' in dust # otherwise generalize
+        assert radRestrictIn2D # only makes sense in 2d projection
+        if indivStarMags or sizes: raise Exception('What does it mean?')
+
+        nint = 100 # integration accuracy parameter
+        seeing_pkpc =  sP.units.arcsecToAngSizeKpcAtRedshift(seeing, z=sP.redshift) # arcsec -> pkpc
+        seeing_code = sP.units.physicalKpcToCodeLength(seeing_pkpc) # pkpc -> ckpc/h
+
+        seeing_const1 = 1.0/(2*np.pi*seeing_code**2)
+        seeing_const2 = (-1.0/(2*seeing_code**2))
+        def _seeing_func(x, y):
+            """ 2D Gaussian, integrand for determining overlap with collecting aperture. """
+            return seeing_const1 * np.exp((x*x+y*y)*seeing_const2)
 
     # global load of all stars in all groups in snapshot
     starsLoad = ['initialmass','sftime','metallicity']
@@ -966,7 +1006,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     if sizes: starsLoad += ['mass']
     if fullSubhaloSpectra == 2: starsLoad += ['vel','masses'] # masses is the current weight for LOS mean vel
 
-    stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=starsLoad, indRange=indRange['stars'])
+    stars = sP.snapshotSubsetP(partType='stars', fields=starsLoad, indRange=indRange['stars'])
 
     printFac = 100.0 if sP.res > 512 else 10.0
 
@@ -1084,13 +1124,13 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         loadFields = ['pos','metal','mass']
         if sP.snapHasField('gas', 'NeutralHydrogenAbundance'):
             loadFields.append('NeutralHydrogenAbundance')
-        gas = cosmo.load.snapshotSubset(sP, 'gas', fields=loadFields, indRange=indRange['gas'])
+        gas = sP.snapshotSubsetP('gas', fields=loadFields, indRange=indRange['gas'])
         if sP.snapHasField('gas', 'GFM_Metals'):
-            gas['metals_H'] = cosmo.load.snapshotSubset(sP, 'gas', 'metals_H', indRange=indRange['gas']) # H only
+            gas['metals_H'] = sP.snapshotSubsetP('gas', 'metals_H', indRange=indRange['gas']) # H only
 
         # prep: override 'Masses' with neutral hydrogen mass (model or snapshot value), free some memory
         if modelH:
-            gas['Density'] = cosmo.load.snapshotSubset(sP, 'gas', 'dens', indRange=indRange['gas'])
+            gas['Density'] = sP.snapshotSubsetP('gas', 'dens', indRange=indRange['gas'])
             gas['Masses'] = hydrogenMass(gas, sP, totalNeutral=True)
             gas['Density'] = None
         else:
@@ -1098,7 +1138,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
         gas['metals_H'] = None
         gas['NeutralHydrogenAbundance'] = None
-        gas['Cellsize'] = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize', indRange=indRange['gas'])
+        gas['Cellsize'] = sP.snapshotSubsetP('gas', 'cellsize', indRange=indRange['gas'])
 
         # prep: unit conversions on stars (age,mass,metallicity)
         stars['GFM_StellarFormationTime'] = sP.units.scalefacToAgeLogGyr(stars['GFM_StellarFormationTime'])
@@ -1108,7 +1148,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         stars['GFM_Metallicity'][np.where(stars['GFM_Metallicity'] < -20.0)] = -20.0
 
         if sizes:
-            gas['StarFormationRate'] = cosmo.load.snapshotSubset(sP, 'gas', fields=['sfr'], indRange=indRange['gas'])
+            gas['StarFormationRate'] = sP.snapshotSubsetP('gas', fields=['sfr'], indRange=indRange['gas'])
 
         # outer loop over all subhalos
         if not fullSubhaloSpectra: print(' Bands: [%s].' % ', '.join(bands))
@@ -1151,21 +1191,25 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     vecs_2d[:,0] = stars['Coordinates'][i0:i1,p_inds[0]]
                     vecs_2d[:,1] = stars['Coordinates'][i0:i1,p_inds[1]]
 
+                    # if doing individual weights based on seeing-spread overlap with aperture, 
+                    # truncate contributions to stars at distances >= 5 sigma
+                    sigmaPad = 0.0 if seeing is None else 5.0 * seeing_code
+
                     if radSqMax.ndim == 1:
                         # radial / circular aperture
                         rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+                        rr = np.sqrt(rr)
 
-                        validMask &= (rr <= radSqMax[subhaloID])
+                        validMask &= (rr <= (np.sqrt(radSqMax[subhaloID])+sigmaPad))
                     else:
                         # rectangular aperture in projected (x,y), e.g. slit
                         xDist = vecs_2d[:,0] - pt_2d[0]
                         yDist = vecs_2d[:,1] - pt_2d[1]
                         correctPeriodicDistVecs(xDist, sP)
                         correctPeriodicDistVecs(yDist, sP)
-                        xDistSq = xDist * xDist
-                        yDistSq = yDist * yDist
 
-                        validMask &= ( (xDistSq <= radSqMax[subhaloID,0]) & (yDistSq <= radSqMax[subhaloID,1]) )
+                        validMask &= ( (xDist <= (np.sqrt(radSqMax[subhaloID,0])+sigmaPad)) & \
+                                       (yDist <= (np.sqrt(radSqMax[subhaloID,1])+sigmaPad)) )
 
             validMask &= np.isfinite(stars['GFM_StellarFormationTime'][i0:i1] ) # remove wind
 
@@ -1184,6 +1228,31 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             
             assert ages_logGyr.shape == metals_log.shape == masses_msun.shape
             assert pos_stars.shape[0] == ages_logGyr.size and pos_stars.shape[1] == 3
+
+            if seeing is not None:
+                # derive seeing-overlap of aperture based weights
+                assert radSqMax.ndim == 2 # otherwise generalize for circular integrals as well
+                seeing_weights = np.zeros( ages_logGyr.size, dtype='float32' )
+
+                # re-use previous distance computation
+                for j in range(seeing_weights.size):
+                    # collecting aperture is centered at (0,0) i.e. at the subhalo center
+                    # shift gaussian representing each star's seeing-distributed light to the origin
+                    x_min = -xDist[j] - radRestrict_sizeCode[0]*0.5
+                    x_max = -xDist[j] + radRestrict_sizeCode[0]*0.5
+                    y_min = -yDist[j] - radRestrict_sizeCode[1]*0.5
+                    y_max = -yDist[j] + radRestrict_sizeCode[1]*0.5
+
+                    # by hand grid sampling of 2D gaussian within the aperture area
+                    # (much faster than scipy.integrate.dblquad)
+                    seeing_x, seeing_y = np.meshgrid( np.linspace(x_min,x_max,nint+1), np.linspace(y_min,y_max,nint+1) )
+                    wt = np.sum( _seeing_func(seeing_x, seeing_y) ) * (x_max-x_min)/nint * (y_max-y_min)/nint
+                    seeing_weights[j] = wt
+
+                assert seeing_weights.min() >= 0.0 and seeing_weights.max() <= 1.0
+
+                # enforce weights by modulating masses of the populations
+                masses_msun *= seeing_weights
 
             if fullSubhaloSpectra == 2:
                 # derive mean stellar LOS velocity of selected stars, and LOS peculiar velocities of each
@@ -1300,7 +1369,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 elif fullSubhaloSpectra:
                     # request stacked spectrum of all stars, optionally handle doppler velocity shifting
                     spectrum = pop.dust_tau_model_mags(bands,N_H,Z_g,ages_logGyr,metals_log,masses_msun,
-                                                        ret_full_spectrum=True, rel_vel=rel_vel_los)
+                                                        ret_full_spectrum=True, output_wave=output_wave, rel_vel=rel_vel_los)
 
                     # save spectrum within valid wavelength range
                     r[i,:,projNum] = spectrum[spec_min_ind:spec_max_ind]
@@ -1323,7 +1392,9 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     if fullSubhaloSpectra:
         # save wavelength grid and details of redshifting
-        attrs['wavelength'] = pop.wave_ang[spec_min_ind : spec_max_ind]
+        attrs['wavelength'] = output_wave[spec_min_ind : spec_max_ind] # rest-frame
+        #if redshifted:
+        #    attrs['wavelength'] *= (1 + sP.redshift) # save in observed-frame
         attrs['spectraLumDistMpc'] = sP.units.redshiftToLumDist( sP.redshift )
         if 'sdss' in rad:
             attrs['spectraUnits'] = '10^-17 erg/cm^2/s/Ang'.encode('ascii')
@@ -2449,6 +2520,13 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
 
+   'Subhalo_Mass_10pkpc_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=10.0),
+   'Subhalo_Mass_10pkpc_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=10.0),
+   'Subhalo_Mass_10pkpc_DM' : \
+     partial(subhaloRadialReduction,ptType='dm',ptProperty='Masses',op='sum',rad=10.0),
+
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
    'Subhalo_Mass_OVI' : \
@@ -2704,9 +2782,18 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=2, Nside='z-axis'),
 
-   'Subhalo_LEGA-C_SlitSpectra_Vel_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
+   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
-                                         fullSubhaloSpectra=2, Nside='z-axis', redshifted=True, minStellarMass=9.8),
+                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, minStellarMass=9.8),
+   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z_restframe' : partial(subhaloStellarPhot, rad='legac_slit', 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
+                                         fullSubhaloSpectra=1, Nside='z-axis', minStellarMass=9.8),
+   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_Seeing_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
+                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, seeing=0.4, minStellarMass=9.8),
+   'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', 
+                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, minStellarMass=9.8),
 
    # UVJ: Martina Donnari
    'Subhalo_StellarPhot_UVJ_p07c_nodust'   : partial(subhaloStellarPhot, 
