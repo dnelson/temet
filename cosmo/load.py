@@ -126,6 +126,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 new_r[subhaloIndsStamp,...] = temp_r
 
                 for attr in f[datasetName].attrs:
+                    if attr in largeAttrNames:
+                        f.create_dataset(attr, data=r[datasetName].attrs[attr])
+                        continue # typically too large to store as an attribute
                     attrs[attr] = f[datasetName].attrs[attr]
 
                 offset += length
@@ -1227,6 +1230,11 @@ def snapshotSubset(sP, partType, fields,
         if field.lower() in ['mass_msun']:
             mass = snapshotSubset(sP, partType, 'mass', **kwargs)
             r[field] = sP.units.codeMassToMsun(mass)
+
+        # catch DM particle mass request [code units]
+        if field.lower() in ['mass','masses'] and sP.isPartType(partType,'dm'):
+            dummy = snapshotSubset(sP, partType, 'pos_x', **kwargs)
+            r[field] = dummy*0.0 + sP.snapshotHeader()['MassTable'][sP.ptNum('dm')]
 
         # entropy (from u,dens) [log cgs] == [log K cm^2]
         if field.lower() in ["ent", "entr", "entropy"]:
