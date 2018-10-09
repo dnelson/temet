@@ -87,7 +87,8 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
 
         # either stars or gas, face-on
         if panelNum == 1:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+            #panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w_dustC-jwst_f115w_dustC-jwst_f070w_dustC'} )
         if panelNum == 2: 
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
@@ -699,7 +700,8 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
     run        = 'tng'
     method     = 'sphMap'
     nPixels    = [800, 400] # [x,y] shape of boxSizeImg must match nPixels aspect ratio
-    boxSizeImg = [200, 100, depth]  # depths: 10, 25, 50, 100, 200, sizes: [1000,500], [200,100]
+    if conf == 3: nPixels = [1920,960]
+    boxSizeImg = [1000, 500, depth]  # depths: 10, 25, 50, 100, 200, sizes: [1000,500], [200,100]
     axes       = [0,1] # x,y
     labelZ     = False
     labelHalos = False # 'mstar'
@@ -720,7 +722,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
 
     # decide time steps and subbox snapshots
     dsnap = 30
-    nPanels = 5
+    nPanels = 5 if conf != 3 else 1
     snaps = [sP.snap - i*dsnap for i in [3,2,1,-1,-3]]
 
     target_times = []
@@ -778,14 +780,14 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
         rotMatrixLoc = rotationMatrixFromAngleDirection(angle, dirVec)
 
         # each column: different fields
-        if conf == 0:
+        if conf in [0,3]:
             panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
                             'partField':'velmag', 'plawScale':1.4, 'valMinMax':mmVel, 'plotHalos': ph, 
                             'labelScale':ls, 'labelCustom':custom_labels[i]} )
             panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
                             'partField':'temp_sfcold', 'valMinMax':mmTemp, 'plotHalos': ph, 'labelZ':lz} )
 
-        if conf == 1:
+        if conf in [1,3]:
             panels.append( {'snap':snaps[i], 'boxCenter':cen, 'extent':ext, 'rotMatrix':rotMatrixLoc, 'rotCenter':rotCenterLoc, 
                             'partField':'coldens_msunkpc2', 'ctName':'inferno', 'plawScale':1.3, 'valMinMax':mmDens, 'labelScale':ls, 
                             'labelCustom':custom_labels[i], 'plotHalos': ph} )
@@ -805,7 +807,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
         plotStyle = 'edged'
         rasterPx  = nPixels
         colorbars = True
-        nRows = nPanels
+        nRows = nPanels if conf != 3 else 2
 
     renderBox(panels, plotConfig, locals(), skipExisting=False)
 

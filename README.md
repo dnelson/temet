@@ -10,6 +10,7 @@ Code repository for Dylan Nelson.
 * ICs/ - misc idealized initial condition generation
 * obs/ - analysis and data reduction for observations
 * plot/ - plotting
+* projects/ - routines, both analysis and plotting, specific to papers
 * tracer/ - Monte Carlo tracer particles
 * util/ - misc helper utilities
 * vis/ - visualization
