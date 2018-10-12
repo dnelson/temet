@@ -61,7 +61,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
         # load if already made
         with h5py.File(saveFilename,'r') as f:
             hsml = f['hsml'][()]
-        print(' loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
+        # print(' loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     else:
         # dark matter
@@ -188,86 +188,45 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=2):
 
     return hsml
 
-def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
+def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM):
     """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
+    bands = partField.split("-")[1:]
+
     assert len(bands) == 3
     assert projType == 'ortho'
 
-    print('Generating stellar composite with bands: [%s %s %s]' % (bands[0],bands[1],bands[2]))
+    fieldPrefix = 'stellarBandObsFrame-' if 'ObsFrame' in partField else 'stellarBand-'
 
-    band0_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[0], nPixels, axes, projType, projParams, boxCenter, 
-                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
-    band1_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[1], nPixels, axes, projType, projParams, boxCenter, 
-                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
-    band2_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-'+bands[2], nPixels, axes, projType, projParams, boxCenter, 
-                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
-    #band2b_grid_mag, _ = gridBox(sP, method, 'stars', 'stellarBand-sdss_g', nPixels, axes, boxCenter, 
-    #                             boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+    print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
 
+    band0_grid_mag, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[0], nPixels, axes, projType, projParams, boxCenter, 
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+    band1_grid_mag, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[1], nPixels, axes, projType, projParams, boxCenter, 
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+    band2_grid_mag, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[2], nPixels, axes, projType, projParams, boxCenter, 
+                                boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
+
+    # convert magnitudes to linear luminosities
     ww = np.where(band0_grid_mag < 99) # these left at zero
-    band0_grid = band0_grid_mag.astype('float32') * 0.0
+    band0_grid = band0_grid_mag.copy() * 0.0
     band0_grid[ww] = np.power(10.0, -0.4 * band0_grid_mag[ww])
 
     ww = np.where(band1_grid_mag < 99)
-    band1_grid = band1_grid_mag.astype('float32') * 0.0
+    band1_grid = band1_grid_mag.copy() * 0.0
     band1_grid[ww] = np.power(10.0, -0.4 * band1_grid_mag[ww])
 
     ww = np.where(band2_grid_mag < 99)
-    band2_grid = band2_grid_mag.astype('float32') * 0.0
+    band2_grid = band2_grid_mag.copy() * 0.0
     band2_grid[ww] = np.power(10.0, -0.4 * band2_grid_mag[ww])
-
-    #ww = np.where(band2b_grid_mag < 99)
-    #band2b_grid = band2b_grid_mag.astype('float32') * 0.0
-    #band2b_grid[ww] = np.power(10.0, -0.4 * band2b_grid_mag[ww])
 
     grid_master = np.zeros( (nPixels[1], nPixels[0], 3), dtype='float32' )
     grid_master_u = np.zeros( (nPixels[1], nPixels[0], 3), dtype='uint8' )
 
     if 0:
-        #fac0 = 1.1 # i (red channel)
-        #fac1 = 1.0 # r (green channel)
-        #fac2 = 1.3 # g (blue channel)
-        lupton_alpha = 0.5
-        lupton_Q = 0.5
-        scale_min = 1.0 # units of linear luminosity
+        # old trials, KBU is similar to method used in many Auriga papers
+        fac = (1/res)**2 * (pxScale)**2 # check
 
-        # make RGB array using arcsinh scaling following Lupton
-        #band0_grid *= fac0
-        #band1_grid *= fac1
-        #band2_grid *= fac2
-
-        inten = (band0_grid + band1_grid + band2_grid) / 3.0
-        val = np.arcsinh( lupton_alpha * lupton_Q * (inten - scale_min) ) / lupton_Q
-
-        ww = np.where(inten < scale_min)[0]
-        print(' clipping %d of %d' % (len(ww),inten.size))
-
-        inten[inten < scale_min] = 1e100 # since we divide by inten below, this sets the grid here to zero
-
-        grid_master[:,:,0] = band0_grid * val / inten
-        grid_master[:,:,1] = band1_grid * val / inten
-        grid_master[:,:,2] = band2_grid * val / inten
-
-        # rescale and clip
-        #max_rgbval = np.amax(grid_master, axis=2)
-        #min_rgbval = np.amin(grid_master, axis=2)
-
-        ######ww_max = np.where(max_rgbval > 1.0)
-        #####ww_min = np.where((min_rgbval < 0.0) | (inten < 0.0))
-        #ww_max = max_rgbval > 1.0
-        #ww_min = min_rgbval < 0.0
-
-        for i in range(3): # rescale each channel individually to one (must reach white)
-            maxVal = np.max( grid_master[:,:,i] )
-            print('channel [%d] max = %g' % (i,maxVal))
-            grid_master[:,:,i] /= maxVal
-            grid_master_u[:,:,i] = grid_master[:,:,i] * np.uint8(255)
-            #grid_master[ww_max,i] = grid_master[ww_max,i] / max_rgbval[ww_max]
-            #grid_master[ww_min,i] = 0.0
-
-    if 0:
-        #fac = (1/res)**2 * (pxScale)**2 (maybe)
         dranges = {'snap_K' : [400, 80000], # red
                    'snap_B' : [20, 13000], # green
                    'snap_U' : [13, 20000], # blue
@@ -307,7 +266,53 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projP
             grid_master[:,:,i] = grid_stretch
             grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
 
-    if 1:
+    if bands[0] == 'sdss_g' and bands[1] == 'sdss_r' and bands[2] == 'sdss_i':
+        # gri-composite, following the method of Lupton+2004 (as in SDSS/HSC RGB cutouts)
+        fac = {'g':1.0, 'r':1.0, 'i':0.8} # RGB = gri
+        lupton_alpha = 2.0 # 1/stretch
+        lupton_Q = 8.0
+        scale_min = 0.1 #1e5 # units of linear luminosity
+
+        # make RGB array using arcsinh scaling following Lupton (1e7 shift to avoid truncation issues)
+        band0_grid = sP.units.absMagToLuminosity(band0_grid_mag) * fac['g'] * 1e7
+        band1_grid = sP.units.absMagToLuminosity(band1_grid_mag) * fac['r'] * 1e7 
+        band2_grid = sP.units.absMagToLuminosity(band2_grid_mag) * fac['i'] * 1e7
+
+        if 'ObsFrame' in partField: # scaling is sensitive to this value (i.e. mean flux), needs some generalization
+            band0_grid *= 5e16
+            band1_grid *= 5e16
+            band2_grid *= 5e16
+
+        inten = (band0_grid + band1_grid + band2_grid) / 3.0
+        val = np.arcsinh( lupton_alpha * lupton_Q * (inten - scale_min) ) / lupton_Q
+
+        grid_master[:,:,0] = band0_grid * val / inten
+        grid_master[:,:,1] = band1_grid * val / inten
+        grid_master[:,:,2] = band2_grid * val / inten
+
+        if 0:
+            # rescale and clip (not needed)
+            maxval = np.max(grid_master, axis=2) # for every pixel, across the 3 bands
+
+            w = np.where(maxval > 1.0)
+            for i in range(3):
+                grid_master[w[0],w[1],i] /= maxval[w]
+
+            minval = np.min(grid_master, axis=2)
+
+            w = np.where( (maxval < 0.0) | (inten < 0.0) )
+            for i in range(3):
+                grid_master[w[0],w[1],i] = 0.0
+
+        # construct RGB
+        grid_master = np.clip(grid_master, 0.0, 1.0)
+
+        grid_master_u[:,:,0] = grid_master[:,:,2] * np.uint8(255)
+        grid_master_u[:,:,1] = grid_master[:,:,1] * np.uint8(255)
+        grid_master_u[:,:,2] = grid_master[:,:,0] * np.uint8(255)
+
+    else:
+        # typical custom technique for JWST (rest-frame) composites
         pxArea = (boxSizeImg[axes[1]] / nPixels[0]) * (boxSizeImg[axes[0]] / nPixels[1])
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
         resFac = 1.0 #(512.0/sP.res)**2.0
@@ -326,12 +331,6 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projP
             if i == 1: grid_loc = band1_grid
             if i == 2: grid_loc = band2_grid
 
-            if 0:
-                # testing: add extra partial strength sdss_g band into the blue channel
-                if i == 2:
-                    grid_loc += 0.5*band2b_grid
-                    print(' extra blue channel added float')
-
             # handle zero values
             ww = np.where(grid_loc == 0.0)
             grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
@@ -345,19 +344,6 @@ def stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projP
             grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
 
             #print(' grid: ',i,grid_stretch.min(),grid_stretch.max(),grid_master_u[:,:,i].min(),grid_master_u[:,:,i].max())
-
-        # add in extra blue channel
-        if 0:
-            print(' extra blue channel added int')
-            grid_loc = band2b_grid
-            ww = np.where(grid_loc == 0.0)
-            grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
-            grid_log = np.log10( grid_loc )
-            minValLog = grid_log.max()-3
-            grid_log = np.clip( grid_log, minValLog, grid_log.max() )
-            grid_stretch = (grid_log - minValLog) / (grid_log.max()-minValLog)
-            grid_master_u[:,:,2] = np.float32(grid_master_u[:,:,2]) + grid_stretch * 255.0
-            grid_master_u[:,:,2] = np.uint8( np.clip( grid_master_u[:,:,2], 0, 255 ) )
 
         # saturation adjust
         if 0:
@@ -490,11 +476,11 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
             mass[w] = 0.0
 
     # single stellar band, replace mass array with linear luminosity of each star particle
-    if 'stellarBand-' in partField:
+    if 'stellarBand-' in partField or 'stellarBandObsFrame-' in partField:
         bands = partField.split("-")[1:]
         assert len(bands) == 1
 
-        pop = sps(sP)
+        pop = sps(sP, redshifted=('ObsFrame' in partField), dustModel='none')
         mass = pop.calcStellarLuminosities(sP, bands[0], indRange=indRange, rotMatrix=rotMatrix, rotCenter=rotCenter)
 
     # quantity relies on a non-trivial computation / load of another quantity
@@ -515,7 +501,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
 
     if partFieldLoad in volDensityFields+colDensityFields+totSumFields or \
       ' ' in partFieldLoad or 'metals_' in partFieldLoad or 'stellarBand-' in partFieldLoad or \
-      'sb_' in partFieldLoad:
+      'stellarBandObsFrame-' in partFieldLoad or 'sb_' in partFieldLoad:
         # distribute mass and calculate column/volume density grid
         quant = None
 
@@ -833,7 +819,17 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid[ww] = 99.0
 
         bandName = partField.split("stellarBand-")[1]
-        config['label'] = 'Stellar %s Luminosity [mag]' % bandName
+        config['label'] = 'Stellar %s Luminosity [abs AB mag]' % bandName
+        config['ctName'] = 'gray_r'
+
+    if 'stellarBandObsFrame-' in partField:
+        # convert linear luminosities back to magnitudes
+        grid = sP.units.lumToAbsMag( grid )
+        pxSizeCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
+        grid = sP.units.magsToSurfaceBrightness(grid, pxSizeCode)
+
+        bandName = partField.split("stellarBandObsFrame-")[1]
+        config['label'] = 'Stellar %s Luminosity [mag / arcsec$^2$]' % bandName
         config['ctName'] = 'gray_r'
 
     if 'stellarComp-' in partField:
@@ -920,9 +916,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         return emptyReturn()
 
     # generate a 3-band composite stellar image from 3 bands
-    if 'stellarComp-' in partField:
-        bands = partField.split("-")[1:]        
-        return stellar3BandCompositeImage(bands, sP, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
+    if 'stellarComp-' in partField or 'stellarCompObsFrame-' in partField:    
+        return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                           hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
 
     # map
@@ -1454,19 +1449,25 @@ def addBoxMarkers(p, conf, ax):
 
     if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius
-        xPos = p['boxCenter'][0]
-        yPos = p['boxCenter'][1]
+        xyPos = [p['boxCenter'][0], p['boxCenter'][1]]
 
         if p['relCoords']:
-            xPos = 0.0
-            yPos = 0.0
+            xyPos = [0.0, 0.0]
 
-        if p['axesUnits'] == 'kpc':
-            xPos = p['sP'].units.codeLengthToKpc(xPos)
-            yPos = p['sP'].units.codeLengthToKpc(yPos)
-        if p['axesUnits'] == 'mpc':
-            xPos = p['sP'].units.codeLengthToMpc(xPos)
-            yPos = p['sP'].units.codeLengthToMpc(yPos)
+        if p['axesUnits'] == 'code':
+            pass
+        elif p['axesUnits'] == 'kpc':
+            xyPos = p['sP'].units.codeLengthToKpc(xyPos)
+        elif p['axesUnits'] == 'mpc':
+            xyPos = p['sP'].units.codeLengthToMpc(xyPos)
+        elif p['axesUnits'] in ['deg','arcmin','arcsec']:
+            assert p['relCoords'] # makes the rest of this unneeded
+            deg = (p['axesUnits'] == 'deg')
+            amin = (p['axesUnits'] == 'arcmin')
+            asec = (p['axesUnits'] == 'arcsec')
+            xyPos = p['sP'].units.codeLengthToAngularSize(xyPos, deg=deg, arcmin=amin, arcsec=asec)
+        else:
+            raise Exception('Handle.')
 
         for rVirFrac in p['rVirFracs']:
             rad = rVirFrac
@@ -1485,10 +1486,21 @@ def addBoxMarkers(p, conf, ax):
             if p['fracsType'] == 'pkpc':
                 rad = p['sP'].units.physicalKpcToCodeLength(rad)
 
-            if p['axesUnits'] == 'kpc': rad = p['sP'].units.codeLengthToKpc(rad)
-            if p['axesUnits'] == 'mpc': rad = p['sP'].units.codeLengthToMpc(rad)
+            if p['axesUnits'] == 'code':
+                pass
+            elif p['axesUnits'] == 'kpc':
+                rad = p['sP'].units.codeLengthToKpc(rad)
+            elif p['axesUnits'] == 'mpc': 
+                rad = p['sP'].units.codeLengthToMpc(rad)
+            elif p['axesUnits'] in ['deg','arcmin','arcsec']:
+                deg = (p['axesUnits'] == 'deg')
+                amin = (p['axesUnits'] == 'arcmin')
+                asec = (p['axesUnits'] == 'arcsec')
+                rad = p['sP'].units.codeLengthToAngularSize(rad, deg=deg, arcmin=amin, arcsec=asec)
+            else:
+                raise Exception('Handle.')
 
-            c = plt.Circle( (xPos,yPos), rad, color='#ffffff', linewidth=1.5, fill=False)
+            c = plt.Circle( (xyPos[0],xyPos[1]), rad, color='#ffffff', linewidth=1.5, fill=False)
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
@@ -1615,10 +1627,13 @@ def addBoxMarkers(p, conf, ax):
         str1 = "log M$_{\\rm halo}$ = %.1f" % haloMass
         str2 = "log M$_{\\rm star}$ = %.1f" % stellarMass
 
-        if p['labelHalo'] == 'Mstar':
+        if p['labelHalo'] == 'mstar':
             # just Mstar
-            str2 = "log M$^\star$ = %.1f" % stellarMass
+            str2 = "log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
+        elif p['labelHalo'] == 'mhalo':
+            # just Mhalo
+            legend_labels.append( str1 )
         else:
             # both Mhalo and Mstar
             legend_labels.append( str1 )
@@ -1895,8 +1910,8 @@ def renderMultiPanel(panels, conf):
                 if sP.redshift != int(sP.redshift): ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
                 if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))
 
-            axStrs = {'code':'[ ckpc/h ]', 'kpc':'[ pkpc ]', 'mpc':'[ Mpc ]', 'arcmin':'[ arcminutes ]', 'deg':'[ degrees ]', 
-                      'rad_pi':' [ radians / $\pi$ ]'}
+            axStrs = {'code':'[ ckpc/h ]', 'kpc':'[ pkpc ]', 'mpc':'[ Mpc ]', 
+                      'arcsec' : '[ arcsec ]', 'arcmin':'[ arcmin ]', 'deg':'[ degrees ]', 'rad_pi':' [ radians / $\pi$ ]'}
             if p['sP'].mpcUnits: axStrs['code'] = '[ cMpc/h ]'
             axStr = axStrs[ p['axesUnits'] ]
             ax.set_xlabel( ['x','y','z'][p['axes'][0]] + ' ' + axStr)
@@ -1944,6 +1959,8 @@ def renderMultiPanel(panels, conf):
                 pExtent = p['sP'].units.codeLengthToKpc(p['extent'])
             if p['axesUnits'] == 'mpc':
                 pExtent = p['sP'].units.codeLengthToMpc(p['extent'])
+            if p['axesUnits'] == 'arcsec':
+                pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], arcsec=True)
             if p['axesUnits'] == 'arcmin':
                 pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], arcmin=True)
             if p['axesUnits'] == 'deg':
@@ -1977,8 +1994,11 @@ def renderMultiPanel(panels, conf):
                 cb.ax.set_ylabel(config['label'])
 
             # towards font-size invariance with changing rasterPx
-            nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
-            fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.0)
+            if not hasattr(conf,'fontsize'):
+                nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
+                fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.0)
+            else:
+                fontsize = conf.fontsize
 
             padding = conf.rasterPx[0] / 240.0
             ax.tick_params(axis='x', which='major', labelsize=fontsize)

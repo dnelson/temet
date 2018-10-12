@@ -126,9 +126,6 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 new_r[subhaloIndsStamp,...] = temp_r
 
                 for attr in f[datasetName].attrs:
-                    if attr in largeAttrNames:
-                        f.create_dataset(attr, data=r[datasetName].attrs[attr])
-                        continue # typically too large to store as an attribute
                     attrs[attr] = f[datasetName].attrs[attr]
 
                 offset += length
@@ -149,8 +146,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             f.create_dataset(datasetName, data=new_r)
             if catIndFieldName == 'subhaloIDs' and catIndFieldName not in f:
                 f.create_dataset(catIndFieldName, data=subhaloIDs)
-            for attrName, attrValue in attrs.iteritems():
-                f[datasetName].attrs[attrName] = attrValue
+            for attr, attrValue in attrs.iteritems():
+                if attr in largeAttrNames:
+                    f.create_dataset(attr, data=attrValue)
+                    continue # typically too large to store as an attribute
+                f[datasetName].attrs[attr] = attrValue
 
         print(' Concatenated new [%s] and saved.' % auxCatPath.split("/")[-1])
         print(' All chunks concatenated, please manually delete them now.')

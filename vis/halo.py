@@ -18,7 +18,7 @@ from util import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
-    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','pkpc']
+    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','pkpc','arcmin']
 
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
@@ -88,6 +88,9 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         boxSizeImg = size
     if sizeType == 'pkpc':
         boxSizeImg = sP.units.physicalKpcToCodeLength(size)
+    if sizeType == 'arcmin':
+        size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size*60, sP.redshift)
+        boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
 
     boxSizeImg = boxSizeImg * np.array([1.0, 1.0, 1.0]) # same width, height, and depth
     boxSizeImg[1] *= (nPixels[1]/nPixels[0]) # account for aspect ratio
