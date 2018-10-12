@@ -18,6 +18,77 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def try_hsc_gri_composite():
+    """ Try to recreate HSC composite image based on (g,r,i) bands. """
+    from astropy.io import fits
+    import skimage.io
+
+    # load
+    files = ['cutout-HSC-G-8524-s17a_dud-180417-060421.fits',
+             'cutout-HSC-R-8524-s17a_dud-180417-060434.fits',
+             'cutout-HSC-I-8524-s17a_dud-180417-060445.fits']
+    images = []
+
+    for file in files:
+        with fits.open(file) as hdu:
+            images.append( hdu[1].data )
+
+    band0_grid = images[2] # I-band -> b
+    band1_grid = images[1] # R-band -> g
+    band2_grid = images[0] # G-band -> r
+
+    nPixels = band0_grid.shape[::-1]
+
+    # astropy lupton version
+    from astropy.visualization import make_lupton_rgb
+    image_lupton = make_lupton_rgb(images[2], images[1], images[0], Q=10, stretch=0.5)
+    skimage.io.imsave('out_astropy.png', image_lupton)
+
+    # mine    
+    grid_master = np.zeros( (nPixels[1], nPixels[0], 3), dtype='float32' )
+    grid_master_u = np.zeros( (nPixels[1], nPixels[0], 3), dtype='uint8' )
+
+    # lupton scheme
+    fac = {'g':1.0, 'r':1.0, 'i':1.0} # RGB = gri
+    lupton_alpha = 2.0 # 1/stretch
+    lupton_Q = 8.0
+    scale_min = 1e-4 # units of linear luminosity
+
+    # make RGB array using arcsinh scaling following Lupton
+    band0_grid *= fac['i']
+    band1_grid *= fac['r']
+    band2_grid *= fac['g']
+
+    inten = (band0_grid + band1_grid + band2_grid) / 3.0
+    val = np.arcsinh( lupton_alpha * lupton_Q * (inten - scale_min) ) / lupton_Q
+
+    grid_master[:,:,0] = band0_grid * val / inten
+    grid_master[:,:,1] = band1_grid * val / inten
+    grid_master[:,:,2] = band2_grid * val / inten
+
+    # rescale and clip
+    maxval = np.max(grid_master, axis=2) # for every pixel, across the 3 bands
+
+    w = np.where(maxval > 1.0)
+    for i in range(3):
+        grid_master[w[0],w[1],i] /= maxval[w]
+
+    minval = np.min(grid_master, axis=2)
+
+    w = np.where( (maxval < 0.0) | (inten < 0.0) )
+    for i in range(3):
+        grid_master[w[0],w[1],i] = 0.0
+
+    grid_master = np.clip(grid_master, 0.0, np.inf)
+
+    # construct RGB
+    for i in range(3):
+        grid_master_u[:,:,i] = grid_master[:,:,i] * np.uint8(255)
+
+    # save
+    skimage.io.imsave('out.png', grid_master_u)
+
+
 def check_tracer_tmax_vs_curtemp():
     """ Can a tracer maxtemp ever be below the current parent gas cell temperature? """
     from tracer.tracerMC import match3
