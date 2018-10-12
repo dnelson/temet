@@ -897,32 +897,30 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             nProj = nside2npix(Nside)
             projVecs = pix2vec(Nside,range(nProj),nest=True)
             projVecs = np.transpose( np.array(projVecs, dtype='float32') ) # Nproj,3
+            projDesc = '2D projections.'
         else:
             # string Nside -> custom projection vectors
-            if Nside == 'edgeon_faceon_rnd':
-                if '_res' in dust:
-                    # 2D: edge-on, face-on, edge-on-smallest, edge-on-random, random for 2D, and then again for 3D
-                    nProj = 5 * 2 
-                else:
-                    # 2D: edge-on, face-on, edge-on-smallest, edge-on-random, random, and +1 for 3D half-light rad
-                    nProj = 5 + 1
+            if Nside == 'efr2d':
+                projDesc = '2D: edge-on, face-on, edge-on-smallest, edge-on-random, random.'
+                nProj = 5
 
                 Nside = Nside.encode('ascii') # for hdf5 attr save
-                projVecs = np.zeros( (nProj-1,3), dtype='float32' ) # derive per subhalo
+                projVecs = np.zeros( (nProj,3), dtype='float32' ) # derive per subhalo
                 efrDirs = True
                 assert (sizes is True) or ('_res' in dust) # only cases where efr logic exists for now
             elif Nside == 'z-axis':
-                # single projection in the direction of the z-axis of the simulation box
+                projDesc = '2D: single projection along z-axis of simulation box.'
                 nProj = 1
-                projVecs = np.array( [0,0,1], dtype='float32' ).reshape(1,3) # [nProj,3]
+                projVecs = np.array( [0,0,1], dtype='float32' ).reshape(1,3) # [nProj,3]                
             elif Nside == None:
+                projDesc = '3D projection.'
                 pass # no 2D radii
             else:
                 assert 0 # unhandled
 
     # prepare catalog metadata
     desc = "Stellar light emission (total AB magnitudes) by subhalo, multiple bands."
-    if sizes: desc = "Stellar half light radii (code units) by subhalo, multiple bands."
+    if sizes: desc = "Stellar half light radii (code units) by subhalo, multiple bands. " + projDesc
     if indivStarMags: desc = "Star particle individual AB magnitudes, multiple bands."
     if fullSubhaloSpectra:
         desc = "Optical spectra by subhalo, [%d] wavelength points between [%.1f Ang] and [%.1f Ang]." % \
@@ -1094,29 +1092,36 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                         rotMatrices = [rots['edge-on'], rots['face-on'], rots['edge-on-smallest'],
                                        rots['edge-on-random'], rots['identity']]
+                    else:
+                        # construct rotation matrices for each specified projection vector direction
+                        rotMatrices = []
+                        for projNum in range(nProj):
+                            targetVec = projVecs[projNum,:]
+                            rotMatrices.append( rotationMatrixFromVec(projVecs[projNum,:], targetVec) )
 
                     # get interpolated 2D half light radii
-                    for projNum in range(nProj-1):
+                    for projNum in range(nProj):
                         # rotate coordinates
                         pos_stars = np.squeeze(stars['Coordinates'][i0:i1,:][wValid,:])
                         pos_stars_rot, _ = rotateCoordinateArray(sP, pos_stars, rotMatrices[projNum], 
                                                                  projCen, shiftBack=False)
 
-                        # calculate 2D radii as rr2d
-                        x_2d = pos_stars_rot[:,0] # realize axes=[0,1]
-                        y_2d = pos_stars_rot[:,1] # realize axes=[0,1]
-                        rr2d = np.sqrt( x_2d*x_2d + y_2d*y_2d )
+                        if Nside is not None:
+                            # calculate 2D radii as rr2d
+                            x_2d = pos_stars_rot[:,0] # realize axes=[0,1]
+                            y_2d = pos_stars_rot[:,1] # realize axes=[0,1]
+                            rr2d = np.sqrt( x_2d*x_2d + y_2d*y_2d )
 
-                        r[i,bandNum,projNum] = _findHalfLightRadius(rr2d,magsLocal)
+                            r[i,bandNum,projNum] = _findHalfLightRadius(rr2d,magsLocal)
+                        else:
+                            # calculate radial distance of each star particle if not yet already
+                            if rad is None:
+                                rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
+                                                      stars['Coordinates'][i0:i1,:], sP )
+                            rr = np.sqrt(rr[wValid])
 
-                    # calculate radial distance of each star particle if not yet already
-                    if rad is None:
-                        rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                              stars['Coordinates'][i0:i1,:], sP )
-                    rr = np.sqrt(rr[wValid])
-
-                    # get interpolated 3D half light radius
-                    r[i,bandNum,-1] = _findHalfLightRadius(rr,magsLocal)
+                            # get interpolated 3D half light radius
+                            r[i,bandNum,projNum] = _findHalfLightRadius(rr,magsLocal)
 
     # or, resolved dust: loop over all subhalos first
     if '_res' in dust:
@@ -1301,10 +1306,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                                rots['edge-on-random'], rots['identity']]
                 rotMatrices.extend(rotMatrices) # append to itself, now has (5 2d + 5 3d) = 10 elements
             else:
-                # construct rotation matrices for each specified projection vector direction (align with z-axis)
+                # construct rotation matrices for each specified projection vector direction
                 rotMatrices = []
-                targetVec = np.array( [0,0,1], dtype='float32' )
-                for projNum in range(nProj):
+                for projNum in range(projVecs.shape[0]):
+                    targetVec = projVecs[projNum,:]
                     rotMatrices.append( rotationMatrixFromVec(projVecs[projNum,:], targetVec) )
 
             # loop over all different viewing directions
@@ -1332,8 +1337,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                     # loop over each requested band within this projection
                     for bandNum, band in enumerate(bands):
-                        # do 2D radii for first set of efr, then 3D radii for second set of efr
-                        if projNum < nProj/2:
+                        if Nside is not None:
                             # rotate coordinates
                             pos_stars_rot, _ = rotateCoordinateArray(sP, pos_stars, rotMatrices[projNum], 
                                                                      projCen, shiftBack=False)
@@ -1345,7 +1349,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                             # get interpolated 2D half light radii
                             r[i,bandNum,projNum] = _findHalfLightRadius(rr2d,magsLocal[band])
-
                         else:
                             # calculate radial distance of each star particle if not yet already
                             if rad is None:
@@ -2750,22 +2753,22 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_HalfLightRad_p07c_nodust' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside=None, sizes=True),
-   'Subhalo_HalfLightRad_p07c_nodust_efr' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside='edgeon_faceon_rnd', sizes=True), 
-   'Subhalo_HalfLightRad_p07c_cf00dust_efr' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', sizes=True),
+   'Subhalo_HalfLightRad_p07c_nodust_efr2d' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside='efr2d', sizes=True), 
+   'Subhalo_HalfLightRad_p07c_cf00dust_efr2d' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='efr2d', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_z' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', sizes=True),
-   'Subhalo_HalfLightRad_p07c_cf00dust_efr_rad30pkpc' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),   
+   'Subhalo_HalfLightRad_p07c_cf00dust_efr2d_rad30pkpc' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='efr2d', rad=30.0, sizes=True),   
    'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_z' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True),
-   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', sizes=True),
-   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr_rad30pkpc' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='edgeon_faceon_rnd', rad=30.0, sizes=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr2d' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='efr2d', sizes=True),
+   'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr2d_rad30pkpc' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='efr2d', rad=30.0, sizes=True),
 
    'Particle_StellarPhot_p07c_nodust'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='none', indivStarMags=True),
