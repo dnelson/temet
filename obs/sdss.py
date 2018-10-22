@@ -868,7 +868,7 @@ def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
         if objs is not None:
             f.create_dataset(objs['name'], data=objs['ids'])
 
-        for attrName, attrValue in attrs.iteritems():
+        for attrName, attrValue in attrs.items():
             f[field].attrs[attrName] = attrValue
 
         # save metadata and any additional descriptors as attributes

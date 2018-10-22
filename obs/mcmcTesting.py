@@ -71,7 +71,7 @@ def testDoubleGauss():
     niter = 0
     x_data = np.zeros( N_samples, dtype='float32' )
 
-    np.random.seed(42424242L)
+    np.random.seed(42424242)
 
     while count < N_samples:
         niter += 1
@@ -113,7 +113,7 @@ def testDoubleGauss():
             return lnlike
 
         p0_walkers = np.zeros( (nWalkers,nDim), dtype='float32' )
-        np.random.seed(42424242L)
+        np.random.seed(42424242)
         for i in range(nWalkers):
             p0_walkers[i,:] = p0_guess + np.abs(p0_guess) * np.random.normal(loc=0.0, scale=fracNoiseInit)
 
@@ -179,7 +179,7 @@ def testDoubleGauss():
             return lnlike
 
         p0_walkers = np.zeros( (nWalkers,nDim), dtype='float32' )
-        np.random.seed(42424242L)
+        np.random.seed(42424242)
         for i in range(nWalkers):
             #p0_walkers[i,:] = p0_guess + np.abs(p0_guess) * np.random.normal(loc=0.0, scale=fracNoiseInit)
             p0_walkers[i,:] = params_best_binned + \

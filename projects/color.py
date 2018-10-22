@@ -35,7 +35,7 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
     if cenOnly: assert splitCenSat is False
     allOnly = True if (splitCenSat is False and cenOnly is False) else False
-    assert not isinstance(simColorsModels,basestring) # should be iterable
+    assert not isinstance(simColorsModels,str) # should be iterable
     assert len(sPs) == 1 or len(simColorsModels) == 1
     
     # config

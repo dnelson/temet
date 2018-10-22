@@ -325,7 +325,7 @@ def tracerCutoutFromTracerTracksCat():
         subhaloIDs = data[:,0]
 
     if 1:
-        sP = simParams(res=512,run='tng',redshift=0.0,variant='3000')
+        sP = simParams(res=512,run='tng',redshift=0.0,variant='1000')
         samplePath = path.expanduser('~') + '/sims.TNG/L75n1820TNG/postprocessing/guinevere_cutouts/new_mw_sample_L25_variants.txt'
 
         data = np.genfromtxt(samplePath, delimiter=',', dtype='int32')
@@ -362,7 +362,7 @@ def tracerCutoutFromTracerTracksCat():
             continue
 
         # load from each existing cat
-        for catName, catPath in cats.iteritems():
+        for catName, catPath in cats.items():
             if 'meta.hdf5' in catPath: continue
             print(' ',subhaloID,catName)
 
@@ -1797,7 +1797,7 @@ def convertEagleSnapshot(snap=20):
 
         # field renames
         for pt in data.keys():
-            for from_name, to_name in fieldRenames.iteritems():
+            for from_name, to_name in fieldRenames.items():
                 if from_name in data[pt]:
                     data[pt][to_name] = data[pt].pop(from_name)
 

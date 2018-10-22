@@ -124,7 +124,7 @@ def loadFG11UVB(redshifts=None):
     basePath = expanduser("~") + '/python/data/faucher.giguere/UVB_tables/'
 
     # make sure fields is not a single element
-    if isinstance(redshifts, (int,long,float)):
+    if isinstance(redshifts, (int,float)):
         redshifts = [redshifts]
 
     if redshifts is None:
@@ -166,7 +166,7 @@ def loadHM12UVB(redshifts=None, puchwein18=False):
     sP = simParams(res=1820,run='tng') # for units
 
     # make sure fields is not a single element
-    if isinstance(redshifts, (int,long,float)):
+    if isinstance(redshifts, (int,float)):
         redshifts = [redshifts]
 
     # load
@@ -779,7 +779,7 @@ class cloudyIon():
             if str(ionNum) in self.roman.keys():
                 ionNums[i] = self.roman[str(ionNum)]
 
-            if not isinstance(ionNums[i], (int,long)) or ionNums[i] == 0:
+            if not isinstance(ionNums[i], int) or ionNums[i] == 0:
                 raise Exception('Failed to map ionization number to integer, or is 0-based index.')
 
         if len(ionNums) == 1: return ionNums[0]
@@ -805,7 +805,7 @@ class cloudyIon():
 
         # search through space of element names, sorted shortest first, so that we capture e.g. 'Be' over 'B'
         for element in sorted(self.atomicSymbols, key=len, reverse=False):
-            if str.find(element) == 0:
+            if element in str:
                 elName = element
 
         ionNum = str.split(elName)[1]
@@ -865,7 +865,7 @@ class cloudyIon():
             raise Exception('Redshift input for interpolation, but we have selected nearest hyperslice.')
         if redshift is None and self.redshiftInterp == True:
             raise Exception('We are interpolating in redshift space, but no redshift specified.')
-        if not isinstance(element,basestring) or not isinstance(ionNum,(int,long)):
+        if not isinstance(element,str) or not isinstance(ionNum,int):
             raise Exception('Allowed only a single element (string) and ionNum (int).')
         if element not in self.data:
             raise Exception('Requested element [' + element + '] not in grid.')

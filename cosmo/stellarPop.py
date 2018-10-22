@@ -829,7 +829,7 @@ class sps():
         on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
         returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). 
         Current return is arbitrary units. """
-        assert isinstance(band, basestring)
+        assert isinstance(band, str)
 
         if 'snap_' in band:
             # direct load snapshot saved stellar photometrics

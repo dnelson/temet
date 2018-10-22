@@ -315,8 +315,8 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
     nDim = ampsPerMassBin*nBinsMass + 2*5*2 # 20+20 or 40+20
 
     p0 = np.zeros( nDim, dtype='float32' )
-    p0[00:05] = chain_start['sigma_blue']
-    p0[05:10] = chain_start['sigma_red']
+    p0[0:5] = chain_start['sigma_blue']
+    p0[5:10] = chain_start['sigma_red']
     p0[10:15] = chain_start['mu_blue']
     p0[15:20] = chain_start['mu_red']
 
@@ -435,7 +435,7 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
 
     # binned method: setup initial parameter guesses (theta0) for all walkers
     p0_walkers = np.zeros( (nWalkers,nDim), dtype='float32' )
-    np.random.seed(42424242L)
+    np.random.seed(42424242)
     for i in range(nWalkers):
         p0_walkers[i,:] = p0 + np.abs(p0) * np.random.normal(loc=0.0, scale=fracNoiseInit, size=nDim)
 
@@ -733,8 +733,8 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
     def _paramDictFromModelCResult(cm_fit, relAmpStr):
         """ Helper function used below. """
         r = {}
-        r['sigma_blue'] = cm_fit['C%s_fstate'%relAmpStr][00:05]
-        r['sigma_red'] = cm_fit['C%s_fstate'%relAmpStr][05:10]
+        r['sigma_blue'] = cm_fit['C%s_fstate'%relAmpStr][0:5]
+        r['sigma_red'] = cm_fit['C%s_fstate'%relAmpStr][5:10]
         r['mu_blue'] = cm_fit['C%s_fstate'%relAmpStr][10:15]
         r['mu_red'] = cm_fit['C%s_fstate'%relAmpStr][15:20]
 

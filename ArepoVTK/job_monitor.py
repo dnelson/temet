@@ -63,7 +63,7 @@ def checkVisJobs():
     file.write(jobFileText)
     file.close()
 
-    print jobsMissing
+    print(jobsMissing)
     #execRet = os.popen('sbatch '+tempJobFile).read()
     #print("SBATCH [" + str(len(jobsMissing)) + " new jobs]: " + execRet)
     
@@ -84,7 +84,7 @@ def submitExpandedJobs(jobNum):
     jobNums = expandedJobNums(jobNum,totNumJobs,expansionFac)
 
     for curJob in jobNums:
-        print curJob
+        print(curJob)
         # make copy of job script, replace with jobNum
         jobText_local = re.sub(r'NNNN',str(curJob),jobFileText)
         jobText_local = re.sub(r'JJJJ',str(jobNum),jobText_local)

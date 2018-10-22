@@ -2,7 +2,7 @@
 # dnelson
 # jun.2014
 
-from pyramid import *
+from .pyramid import *
 
 def process():
 
@@ -212,8 +212,7 @@ def processShy():
     totImgPx   = totImgSize[0] * totImgSize[1]
     
     if totImgSize[0] != totImgSize[1]:
-        print("Error: Expecting square image.")
-        print totImgSize
+        print("Error: Expecting square image.", totImgSize)
         return
         
     print("Final image size: " + str(totImgSize[0]) + "x" + str(totImgSize[1]) + 
@@ -274,8 +273,8 @@ def expandedJobNums(jobNum, totNumJobs=256, expansionFac=16):
     jobCutout = jobMatrix[ xInd*expPerDim : (xInd+1)*expPerDim, yInd*expPerDim : (yInd+1)*expPerDim ]
     jobCutout = np.reshape( jobCutout, expansionFac )
     
-    print '#SBATCH --array=' + ','.join([str(num) for num in jobCutout])+ ' #j' + str(jobNum)
-    print '-j ' + str(jobNum) + ' -e ${SLURM_ARRAY_TASK_ID}'  
+    print('#SBATCH --array=' + ','.join([str(num) for num in jobCutout])+ ' #j' + str(jobNum))
+    print('-j ' + str(jobNum) + ' -e ${SLURM_ARRAY_TASK_ID}'  )
     
     return jobCutout
     

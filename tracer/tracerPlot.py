@@ -231,7 +231,7 @@ def getEvo2D(sP, field, trIndRange=None, accTime=None, accMode=None):
     x_max = int( data['snaps'].min() )
 
     # create 2d block by mode and store in return dict
-    for modeVal,modeName in modes.iteritems():
+    for modeVal,modeName in modes.items():
         if modeVal is not None:
             ww = np.where( accMode == modeVal )[0]
         else:
@@ -319,7 +319,7 @@ def plotEvo2D(ii):
             pdf = PdfPages(sP.plotPath + 'evo2D_%s_%s%s_%s.pdf' % (field,trIndStr,trSubStr,sP.simName))
 
             # make following plots for each accMode separately
-            for modeVal,modeName in modes.iteritems():
+            for modeVal,modeName in modes.items():
                 # plot bounds
                 extent = evo[modeName]['extent']
 
@@ -406,7 +406,7 @@ def plotEvo1D():
         data = tracerEvo.tracersTimeEvo(sP, fieldName, all=False)
         data2d = np.transpose(data[fieldName].copy())
 
-        for j,(modeVal,modeName) in enumerate( modes.iteritems() ):
+        for j,(modeVal,modeName) in enumerate( modes.items() ):
             print('1. %s %s' % (fieldName, modeName))
 
             # PLOT 1: little 1D plot of a few tracer tracks
@@ -505,7 +505,7 @@ def getValHistos(sP, field, extType, accMode=None):
         data[ww] = np.nan # re-tag as nan
 
     # histogram by mode and store in return dict
-    for modeVal,modeName in modes.iteritems():
+    for modeVal,modeName in modes.items():
         if modeVal is not None:
             ww = np.where( accMode == modeVal )[0]
         else:
@@ -569,7 +569,7 @@ def plotValHistos():
         pdf = PdfPages(sP.plotPath + 'valExtremumHistos_ByAccMode_' + sP.simName + '.pdf')
 
         # loop over fields
-        for field,extTypes in fieldNames.iteritems():
+        for field,extTypes in fieldNames.items():
 
             for extType in extTypes:
 
@@ -588,7 +588,7 @@ def plotValHistos():
                 vh = getValHistos(sP, field, extType, accMode=accMode)
 
                 # histogram by mode
-                for modeVal,modeName in modes.iteritems():
+                for modeVal,modeName in modes.items():
                     c = None
                     if modeName == 'All Modes':
                         c = 'black'
@@ -605,11 +605,11 @@ def plotValHistos():
         pdf.close()
 
     # PLOT 2: split by resolution/sP, one accMode per plot
-    for modeVal,modeName in modes.iteritems():
+    for modeVal,modeName in modes.items():
         pdf = PdfPages(sP.plotPath + 'valExtremumHistos_ByRes_' + modeName + '.pdf')
 
         # loop over fields
-        for field,extTypes in fieldNames.iteritems():
+        for field,extTypes in fieldNames.items():
 
             for extType in extTypes:
 
@@ -647,7 +647,7 @@ def plotValHistos():
     pdf = PdfPages(sPs[0].plotPath + 'valExtremumHistos_ByRes_nSP' + str(len(sPs)) + '.pdf')
 
     # loop over fields
-    for field,extTypes in fieldNames.iteritems():
+    for field,extTypes in fieldNames.items():
 
         for extType in extTypes:
 
@@ -670,7 +670,7 @@ def plotValHistos():
                 vh = getValHistos(sP, field, extType)
 
                 # loop over each accMode and plot
-                for j,(modeVal,modeName) in enumerate( modes.iteritems() ):
+                for j,(modeVal,modeName) in enumerate( modes.items() ):
                     # on first iteration through sPs, set colors per mode and keep them fixed after
                     if i == 0:
                         c = None
