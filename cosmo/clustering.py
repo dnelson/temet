@@ -271,7 +271,7 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
         splitSize = np.ceil( weights.size / numProcs )
 
         # take a contiguous chunk, but randomly permute the piece of the snapshot we handle
-        np.random.seed(424242L)
+        np.random.seed(424242)
         splitInds = np.arange( numProcs )
         np.random.shuffle(splitInds)
         curProc = splitInds[shuffleSelectInd]

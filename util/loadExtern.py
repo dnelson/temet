@@ -1250,7 +1250,7 @@ def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False):
                                         'flag':int(flag)} 
 
     # pull out some flat numpy arrays
-    gals = [g for _, g in galaxies.iteritems() if 'O VI' in g['lines']]
+    gals = [g for _, g in galaxies.items() if 'O VI' in g['lines']]
 
     logM = np.array( [gal['logM'] for gal in gals] )
     z = np.array( [gal['z'] for gal in gals] )
@@ -1367,7 +1367,7 @@ def johnson2015(surveys=['IMACS','SDSS'], coveringFractions=False):
     assert count == nGals
 
     # consistent with werk2013() return
-    gals = [g for _, g in galaxies.iteritems()]
+    gals = [g for _, g in galaxies.items()]
 
     return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
 

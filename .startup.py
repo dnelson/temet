@@ -5,11 +5,12 @@ import sys
 import platform
 from os.path import expanduser
 
-if 'haswell-login' in platform.node():
-    print('on haswell')
-    sys.path.insert(0,expanduser("~")+'/.local_haswell/lib/python2.7/site-packages/')
-else:
-    sys.path.insert(0,expanduser("~")+'/.local/lib/python2.7/site-packages/')
+# depreciated, can be removed: (move to having site-packages inside .local/envs/dylan3 for python3.x)
+#if 'haswell-login' in platform.node():
+#    print('on haswell')
+#    sys.path.insert(0,expanduser("~")+'/.local_haswell/lib/python2.7/site-packages/')
+#else:
+#    sys.path.insert(0,expanduser("~")+'/.local/lib/python2.7/site-packages/')
 
 # libraries
 import numpy as np

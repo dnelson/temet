@@ -50,7 +50,7 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=Fal
     assert treeName in ['SubLink','SubLink_gal'] # otherwise need to generalize tree loading
 
     # make sure fields is not a single element
-    if isinstance(fields, basestring):
+    if isinstance(fields, str):
         fields = [fields]
         
     fieldsLoad = fields + ['MainLeafProgenitorID']    

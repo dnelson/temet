@@ -219,7 +219,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     # finalize panels list (insert defaults as necessary)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
-        for cName,cVal in localVars.iteritems():
+        for cName,cVal in localVars.items():
             if cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             if cName in p:
@@ -227,7 +227,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
                 continue
             p[cName] = cVal
 
-        for cName,cVal in locals().iteritems():
+        for cName,cVal in locals().items():
             if cName in p or cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             p[cName] = cVal
@@ -325,7 +325,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     # load MPB properties for each panel, could be e.g. different runs (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
-        for cName,cVal in localVars.iteritems():
+        for cName,cVal in localVars.items():
             if cName in ['panels','plotConfig','plotConfigDefaults','simParams','sP','p']:
                 continue
             if cName in p:
@@ -333,7 +333,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
                 continue
             p[cName] = cVal
 
-        for cName,cVal in locals().iteritems():
+        for cName,cVal in locals().items():
             if cName in p or cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             p[cName] = cVal

@@ -171,7 +171,6 @@ def loadColorTable(ct):
     b.append(btemp)
  
     nTable = len(r)
-    print ct['file'],nTable
     x = np.array( x, np.float32 )
     r = np.array( r, np.float32 )
     g = np.array( g, np.float32 )

@@ -5,4 +5,4 @@ from . import general
 from . import globalComp
 from . import quantities
 from . import sizes
-from config import *
+from .config import *

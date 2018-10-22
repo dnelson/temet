@@ -1360,8 +1360,8 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     # locate dataset we want and its binning configuration
     if selNum is None:
 
-        for key, value in ac[acField + '_attrs'].iteritems():
-            if isinstance(value,basestring):
+        for key, value in ac[acField + '_attrs'].items():
+            if isinstance(value,str):
                 if value == dsetName:
                     selNum = int( key.split('_')[1] )
 

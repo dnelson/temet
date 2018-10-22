@@ -259,7 +259,7 @@ def periodic_slurm_status(nosave=False):
     jobs_pending = [jobs[jid] for jid in jobs if jobs[jid]['job_state'] == 'PENDING']
 
     for job in jobs_running:
-        for nodeName, numCores in job['cpus_allocated'].iteritems():
+        for nodeName, numCores in job['cpus_allocated'].items():
             if 'cur_job_owner' in nodes[nodeName]:
                 print('WARNING: Node [%s] already has a job from [%s].' % (nodeName,nodes[nodeName]['cur_job_owner']))
 
@@ -288,7 +288,7 @@ def periodic_slurm_status(nosave=False):
     for partName in partNames:
         nodesInPart += _expandNodeList( parts[partName]['nodes'] )
 
-    for _, node in nodes.iteritems():
+    for _, node in nodes.items():
         if node['cpu_load'] == 4294967294: node['cpu_load'] = 0 # fix uint32 overflow
 
     nodes_main = [nodes[name] for name in nodes if name in nodesInPart]

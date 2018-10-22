@@ -146,7 +146,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             f.create_dataset(datasetName, data=new_r)
             if catIndFieldName == 'subhaloIDs' and catIndFieldName not in f:
                 f.create_dataset(catIndFieldName, data=subhaloIDs)
-            for attr, attrValue in attrs.iteritems():
+            for attr, attrValue in attrs.items():
                 if attr in largeAttrNames:
                     f.create_dataset(attr, data=attrValue)
                     continue # typically too large to store as an attribute
@@ -316,7 +316,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             f[fieldAttrSave].attrs['CreatedRev']  = curRepoVersion()
             f[fieldAttrSave].attrs['CreatedBy']   = getpass.getuser()
             
-            for attrName, attrValue in attrs.iteritems():
+            for attrName, attrValue in attrs.items():
                 if attrName in largeAttrNames:
                     f.create_dataset(attrName, data=r[field+'_attrs'][attrName])
                     continue # typically too large to store as an attribute
@@ -547,7 +547,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
             if len(r) == 1:
                 # compress and return single field (by default, unlike for standard fields)
-                key = r.keys()[0]
+                key = list(r.keys())[0]
                 assert len(r.keys()) == 1
                 return r[key]
             elif len(r) > 1:
@@ -603,9 +603,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for field in r['subhalos']: # cache
             sP.data['gc_sub_%s' % field] = r['subhalos'][field]
 
-        if len(r['subhalos'].keys()) == 1 and r['subhalos'].keys()[0] != 'count': # keep old behavior of il.groupcat.loadSubhalos()
-            key = r['subhalos'].keys()[0]
-            r['subhalos'] = r['subhalos'][key]
+        key0 = list(r['subhalos'].keys())[0]
+        if len(r['subhalos'].keys()) == 1 and key0 != 'count': # keep old behavior of il.groupcat.loadSubhalos()
+            r['subhalos'] = r['subhalos'][key0]
 
     if fieldsHalos is not None:
         # check cache
@@ -648,9 +648,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         for field in r['halos']: # cache
             sP.data['gc_halo_%s' % field] = r['halos'][field]
 
-        if len(r['halos'].keys()) == 1 and r['halos'].keys()[0] != 'count': # keep old behavior of il.groupcat.loadHalos()
-            key = r['halos'].keys()[0]
-            r['halos'] = r['halos'][key] 
+        key0 = list(r['halos'].keys())[0]
+        if len(r['halos'].keys()) == 1 and key0 != 'count': # keep old behavior of il.groupcat.loadHalos()
+            r['halos'] = r['halos'][key0]
 
     if sq:
         # remove 'halos'/'subhalos' subdict, and field subdict
@@ -661,7 +661,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
         if isinstance(r,dict):
             assert len(r.keys()) == 1
-            r = r[ r.keys()[0] ]
+            r = r[ list(r.keys())[0] ]
 
     return r
 
@@ -712,7 +712,7 @@ def groupCatHasField(sP, objType, field):
 
 def subboxVals(subbox):
     """ Return sbNum (integer) and sbStr1 and sbStr2 for use in locating subbox files. """
-    sbNum = subbox if isinstance(subbox, (int,long)) else 0
+    sbNum = subbox if isinstance(subbox, int) else 0
 
     if subbox is not None:
         sbStr1 = 'subbox' + str(sbNum) + '_'
@@ -1719,7 +1719,7 @@ def snapshotSubset(sP, partType, fields,
 
             # just one field in total? compress and return single ndarray (by default)
             if len(r) == 1 and sq is True:
-                key = r.keys()[0]
+                key = list(r.keys())[0]
                 return r[key]
 
             return r # return dictionary
@@ -1875,7 +1875,7 @@ def snapshotSubset(sP, partType, fields,
     # inverse map multiDimSliceMaps such that return dict has key names exactly as requested
     # todo: could also do for altNames (just uncomment above, but need to refactor codebase)
     if isinstance(r,dict):
-        for newLabel,origLabel in invNameMappings.iteritems():
+        for newLabel,origLabel in invNameMappings.items():
             r[origLabel] = r.pop(newLabel) # change key label
 
     return r
@@ -1997,7 +1997,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
 
     if len(r) == 1 and sq:
         # single ndarray return
-        return r[r.keys()[0]]
+        return r[list(r.keys())[0]]
 
     r['count'] = numPartTot
     return r

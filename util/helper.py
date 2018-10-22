@@ -74,7 +74,7 @@ def logZeroSafe(x, zeroVal=1.0):
     if np.isfinite(zeroVal):
         pass
         #print(' logZeroSafe: This was always ill-advised, migrate towards deleting this function.')
-    if not isinstance(x, (int,long,float)) and x.ndim: # array
+    if not isinstance(x, (int,float)) and x.ndim: # array
         # another approach: if type(x).__module__ == np.__name__: print('is numpy object')
         with np.errstate(invalid='ignore'):
             w = np.where(x <= 0.0)
@@ -104,7 +104,7 @@ def iterable(x):
         a for loop can iterate over this object correctly. """
     if isinstance(x, np.ndarray) and x.ndim == 0:
         return np.reshape(x, 1) # scalar to 1d array of 1 element
-    elif isinstance(x, collections.Iterable) and not isinstance(x, basestring):
+    elif isinstance(x, collections.Iterable) and not isinstance(x, str):
         return x        
     else:
         return [x]
@@ -956,7 +956,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                     # pull out actual discrete entries
                     xx = cmap._segmentdata[k][j]
                 cdict[k].append( [xx[0]**plaw_index, xx[1], xx[2]] )
-            assert (cdict[k][0] < 0 or cdict[k][-1] > 1) # outside [0,1]
+            #assert (cdict[k][0] < 0 or cdict[k][-1] > 1) # outside [0,1]
             
         return LinearSegmentedColormap(ctName+'_p', cdict, N=N)
 

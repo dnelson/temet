@@ -118,7 +118,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     # finalize panels list (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
-        for cName,cVal in localVars.iteritems():
+        for cName,cVal in localVars.items():
             if cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             if cName in p:
@@ -126,7 +126,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
                 continue
             p[cName] = cVal
 
-        for cName,cVal in locals().iteritems():
+        for cName,cVal in locals().items():
             if cName in p or cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             p[cName] = cVal
@@ -221,7 +221,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     # finalize panels list (do not modify below)
     for p in panels:
         # add all local variables to each (assumed to be common for all panels)
-        for cName,cVal in localVars.iteritems():
+        for cName,cVal in localVars.items():
             if cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             if cName in p:
@@ -229,7 +229,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
                 continue
             p[cName] = cVal
 
-        for cName,cVal in locals().iteritems():
+        for cName,cVal in locals().items():
             if cName in p or cName in ['panels','plotConfig','plotConfigDefaults','simParams','p']:
                 continue
             p[cName] = cVal

@@ -95,15 +95,15 @@ class simParams:
         # general validation
         if not run:
             raise Exception("Must specify run.")
-        if res and not isinstance(res, (int,long)):
+        if res and not isinstance(res, int):
             raise Exception("Res should be numeric.")
-        if hInd is not None and not isinstance(hInd, (int,long,np.int32,np.int64)):
+        if hInd is not None and not isinstance(hInd, (int,np.int32,np.int64)):
             raise Exception("hInd should be numeric.")
         if redshift and snap:
             print("Warning: simParams: both redshift and snap specified.")
         if haloInd is not None and subhaloInd is not None:
             raise Exception("Cannot specify both haloInd and subhaloInd.")
-        if variant is not None and not isinstance(variant, basestring):
+        if variant is not None and not isinstance(variant, str):
             raise Exception("Please specify variant as a string to avoid octal misinterpretation bug.")
 
         # pick run and snapshot

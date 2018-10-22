@@ -511,7 +511,7 @@ def paperPlots():
                      'blue': [[9.0,9.5], [10.0,10.5], [10.5,11.0], [11.0, 11.5]]}
         colorBins = {'blue':[0.0, 0.6], 'red':[0.6, 1.0]}
 
-        for colorName, colorBin in colorBins.iteritems():
+        for colorName, colorBin in colorBins.items():
 
             galaxyTwoPointQuantBounds(sPs, saveBase=saveBase % colorName, cenSatSelect='all', 
               ratioSubPlot=True, colorBins=[colorBin], cType=cTypeDef, mstarBins=mstarBins[colorName], 
@@ -536,7 +536,7 @@ def paperPlots():
         mType = 'mstar_30pkpc_log'
         mstarBins = {'lowmass':[9.0, 11.0], 'highmass':[11.0, 13.0]}
 
-        for mstarName, mstarBin in mstarBins.iteritems():
+        for mstarName, mstarBin in mstarBins.items():
             if mstarName == 'highmass': colorBinsLoc = colorBins[1:]
             if mstarName == 'lowmass': colorBinsLoc = colorBins
 

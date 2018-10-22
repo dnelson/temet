@@ -863,7 +863,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         mode = 'all' # default unless specified
         par  = 'all' # default unless specified
         if 'mode=' in quant and 'par=' in quant:
-            assert quant.find('mode=') <= quant.find('par=') # parType request must be second
+            assert quant.index('mode=') <= quant.index('par=') # parType request must be second
 
         if 'par=' in quant:
             par = quant.split('par=')[1].split('_')[0]

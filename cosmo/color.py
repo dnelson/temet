@@ -25,7 +25,8 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
     and convert to a color if bands is passed in, otherwise return loaded data. If loaded 
     data is passed in with bands, do then magnitude computation without re-loading."""
     acSet = ''
-    if bands[0] in ['U','V','J'] or bands[1] in ['U','V','J']: acSet = 'UVJ_'
+    if bands is not None:
+        if bands[0] in ['U','V','J'] or bands[1] in ['U','V','J']: acSet = 'UVJ_'
 
     acKey = 'Subhalo_StellarPhot_' + acSet + simColorsModel + rad
 
@@ -53,7 +54,7 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
         subhaloIDs = np.arange(colorData[acKey].shape[0])
 
         # band indices
-        acBands = list(colorData[acKey+'_attrs']['bands'])
+        acBands = list( np.squeeze(colorData[acKey+'_attrs']['bands']) )
         bandname0 = 'sdss_' + bands[0] if bands[0] in ['u','g','r','i','z'] else bands[0]
         bandname1 = 'sdss_' + bands[1] if bands[1] in ['u','g','r','i','z'] else bands[1]
         i0 = acBands.index(bandname0.lower())
@@ -76,7 +77,7 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
                 gc_colors = colorData[acKey][all_inds,i0,nums] - colorData[acKey][all_inds,i1,nums]
             else:
                 # otherwise, projs had better be an integer or a tuple
-                assert isinstance(projs, (int,long,list,tuple))
+                assert isinstance(projs, (int,list,tuple))
                 gc_colors = colorData[acKey][:,i0,projs] - colorData[acKey][:,i1,projs]
         else:
             # just one projection per subhalo

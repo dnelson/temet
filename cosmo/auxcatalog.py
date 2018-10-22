@@ -58,7 +58,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
         ptLoadTypes = {ptType:sP.ptNum(ptType)}
 
     desc   = "Mass by type enclosed within a radius of "+rad+" (only FoF particles included). "
-    desc  += "Type indices: " + " ".join([t+'='+str(i) for t,i in ptSaveTypes.iteritems()]) + "."
+    desc  += "Type indices: " + " ".join([t+'='+str(i) for t,i in ptSaveTypes.items()]) + "."
     select = "All FoF halos."
 
     # load group information
@@ -541,7 +541,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         particles[ptProperty] = sP.snapshotSubsetP(partType=ptType, fields=[ptProperty], indRange=indRange)
 
     if 'count' not in particles:
-        particles['count'] = particles[ particles.keys()[0] ].shape[0]
+        key = list(particles.keys())[0]
+        particles['count'] = particles[key].shape[0]
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     dtype = particles[ptProperty].dtype if ptProperty in particles.keys() else 'float32' # for custom
@@ -1011,7 +1012,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     # non-resolved dust: loop over all requested bands first
     if '_res' not in dust:
         if sizes:
-            gas = cosmo.load.snapshotSubset(sP, 'gas', fields=['pos','mass','sfr'], indRange=indRange['gas'])
+            gas = sP.snapshotSubsetP('gas', fields=['pos','mass','sfr'], indRange=indRange['gas'])
 
         for bandNum, band in enumerate(bands):
             print('  %02d/%02d [%s]' % (bandNum+1,len(bands),band))
@@ -1094,20 +1095,22 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                                        rots['edge-on-random'], rots['identity']]
                     else:
                         # construct rotation matrices for each specified projection vector direction
-                        rotMatrices = []
-                        for projNum in range(nProj):
-                            targetVec = projVecs[projNum,:]
-                            rotMatrices.append( rotationMatrixFromVec(projVecs[projNum,:], targetVec) )
+                        if Nside is not None:
+                            rotMatrices = []
+                            for projNum in range(nProj):
+                                targetVec = projVecs[projNum,:]
+                                rotMatrices.append( rotationMatrixFromVec(projVecs[projNum,:], targetVec) )
 
                     # get interpolated 2D half light radii
                     for projNum in range(nProj):
                         # rotate coordinates
                         pos_stars = np.squeeze(stars['Coordinates'][i0:i1,:][wValid,:])
-                        pos_stars_rot, _ = rotateCoordinateArray(sP, pos_stars, rotMatrices[projNum], 
-                                                                 projCen, shiftBack=False)
 
                         if Nside is not None:
                             # calculate 2D radii as rr2d
+                            pos_stars_rot, _ = rotateCoordinateArray(sP, pos_stars, rotMatrices[projNum], 
+                                                                     projCen, shiftBack=False)
+
                             x_2d = pos_stars_rot[:,0] # realize axes=[0,1]
                             y_2d = pos_stars_rot[:,1] # realize axes=[0,1]
                             rr2d = np.sqrt( x_2d*x_2d + y_2d*y_2d )
@@ -1117,7 +1120,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                             # calculate radial distance of each star particle if not yet already
                             if rad is None:
                                 rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                                      stars['Coordinates'][i0:i1,:], sP )
+                                                      pos_stars, sP )
                             rr = np.sqrt(rr[wValid])
 
                             # get interpolated 3D half light radius
@@ -2040,7 +2043,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         if proj2Daxis == 0: p_inds = [1,2,3] # seems wrong (unused), should be e.g. [1,2,0]
         if proj2Daxis == 1: p_inds = [0,2,1]
         if proj2Daxis == 2: p_inds = [0,1,2]
-        if isinstance(proj2Daxis,basestring):
+        if isinstance(proj2Daxis, str):
             p_inds = [0,1,2] # by convention, after rotMatrix is applied, index 2 is the projection direction
 
         proj2D_halfDepth = proj2Ddepth / 2 if proj2Ddepth is not None else None # code units
@@ -2174,7 +2177,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         for restrictionField in ptRestrictions:
             fieldsLoad.append(restrictionField)
 
-    if proj2D is not None and isinstance(proj2Daxis,basestring):
+    if proj2D is not None and isinstance(proj2Daxis, str):
         # needed for moment of intertia tensor for rotations
         assert ptType == 'gas' # otherwise need to make a separate load to fill gasLocal
         fieldsLoad.append('mass')
@@ -2210,7 +2213,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             assert particles[ptProperty].ndim == 1
 
         if 'count' not in particles:
-            particles['count'] = particles[ particles.keys()[0] ].shape[0]
+            key = list(particles.keys())[0]
+            particles['count'] = particles[key].shape[0]
 
         # load weights
         if weighting is not None:
@@ -2315,7 +2319,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # rotation?
             rotMatrix = None
 
-            if proj2D is not None and isinstance(proj2Daxis,basestring) and (i1-i0 > 1): # at least 2 particles
+            if proj2D is not None and isinstance(proj2Daxis, str) and (i1-i0 > 1): # at least 2 particles
                 # construct rotation matrices for each of 'edge-on', 'face-on', and 'random' (z-axis)
                 rHalf = gc['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
                 shPos = gc['SubhaloPos'][subhaloID,:]
@@ -2753,6 +2757,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_HalfLightRad_p07c_nodust' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside=None, sizes=True),
+   'Subhalo_HalfLightRad_p07c_nodust_z' : \
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside='z-axis', sizes=True),
    'Subhalo_HalfLightRad_p07c_nodust_efr2d' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='none', Nside='efr2d', sizes=True), 
    'Subhalo_HalfLightRad_p07c_cf00dust_efr2d' : \

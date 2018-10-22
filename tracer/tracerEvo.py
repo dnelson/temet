@@ -598,7 +598,7 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
     the star-forming eEOS (temp, entr) we exclude times when SFR>0. This is then also consistent 
     with what is done in the code for tracer_max* recorded values. """
     assert extType in allowedExtTypes
-    assert isinstance(fieldName,basestring)
+    assert isinstance(fieldName,str)
 
     # check for existence
     if sP.isZoom:
@@ -674,7 +674,7 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     snapshot, no interpolation of property value. """
     
     # load
-    assert isinstance(valName,basestring)
+    assert isinstance(valName,str)
     data = tracersTimeEvo(sP, valName, snapStep, all=False)
 
     assert data[valName].ndim == 2 # need to verify logic herein for ndim==3 (e.g. pos/vel) case
@@ -707,7 +707,7 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     assert trVals.dtype == 'float32' or trVals.dtype == 'int32'
 
     if 1: # stochastic debug verify of subset
-        np.random.seed(42424242L)
+        np.random.seed(42424242)
         for i in np.random.randint(0,trVals.size,100):
             if np.isnan(trVals[i]):
                 continue
@@ -733,7 +733,7 @@ def mpbValsAtRedshifts(sP, valName, redshifts, snapStep=1):
 
     # load
     assert sP.isZoom # todo for boxes (handle sP.subhaloInd and sP.haloInd as well)
-    assert isinstance(valName,basestring)
+    assert isinstance(valName,str)
 
     # TODO: maybe whole function is divergent for sP.isZoom or not, split
     if sP.isZoom:

@@ -1390,7 +1390,7 @@ def checkTracerLoad():
     snap_old = {}
     snap_new = {}
 
-    for ptName,fieldList in fields.iteritems():
+    for ptName,fieldList in fields.items():
         # skip bhs or stars if none exist
         if h_new['NumPart'][partTypeNum(ptName)] == 0:
             continue
@@ -1412,7 +1412,7 @@ def checkTracerLoad():
     #    assert np.array_equal( gc_old['subhalos'][key], gc_new['subhalos'][key] )
 
     # check all particle type properties are same (including that same tracers have same parents)
-    for ptName,fieldList in fields.iteritems():
+    for ptName,fieldList in fields.items():
         idFieldName = 'ParticleIDs' if ptName != 'trmc' else 'TracerID'
 
         if ptName not in snap_old:
@@ -1450,7 +1450,7 @@ def checkTracerLoad():
     # new content (verify Group and Subhalo counts)
     gcSets = { 'subhalos':'SubhaloLenType' }#, 'halos':'GroupLenType' }
 
-    for name1,name2 in gcSets.iteritems():
+    for name1,name2 in gcSets.items():
 
         gc_new_totTr = gc_new[name1][name2][:,3].sum()
         gc_new_count = 0

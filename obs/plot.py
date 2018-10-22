@@ -286,7 +286,7 @@ def sdssFitsVsMstar():
 
     pdf = PdfPages('sdss_fits_z01_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
 
-    for quantName, p in quants.iteritems():
+    for quantName, p in quants.items():
         quantLabel, quantLim = p
 
         fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
