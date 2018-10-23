@@ -776,7 +776,7 @@ class cloudyIon():
         ionNums = iterable(ionNums)
 
         for i, ionNum in enumerate(ionNums):
-            if str(ionNum) in self.roman.keys():
+            if str(ionNum) in self.roman:
                 ionNums[i] = self.roman[str(ionNum)]
 
             if not isinstance(ionNums[i], int) or ionNums[i] == 0:

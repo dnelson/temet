@@ -438,7 +438,7 @@ def periodic_slurm_status(nosave=False):
                     y0 = j + pad/2
                     y1 = j + 0.5 - pad
 
-                for m in range(coresPerNode/cpusPerNode):
+                for m in range( int(coresPerNode/cpusPerNode) ):
                     ax.fill_between( [xmin+m*dx+padx,xmin+(m+1)*dx-padx], [y0,y0], [y1,y1], 
                         facecolor=color, alpha=0.3)
 
@@ -542,8 +542,10 @@ def periodic_slurm_status(nosave=False):
         ax.annotate(nextJobsStr, [0.73, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='right', verticalalignment='center')
 
     # disk usage text
-    df = subprocess.check_output('df -h /virgo /freya/u /freya/ptmp', shell=True).strip().split('\n')
+    df = str(subprocess.check_output('df -h /virgo /freya/u /freya/ptmp', shell=True)).replace('b\'','').strip().split('\\n')
     for i, line in enumerate(df):
+        if line in ['','\'']:
+            continue
         fsStr = line.split('%')[0] + '%'
         fsStr = fsStr.replace('Size','   Size')
         fsStr = fsStr.replace('gpfsvirgo','/virgo/          ').replace('freya_u','/freya/u/    ').replace('freya_ptmp','/freya/ptmp/')
