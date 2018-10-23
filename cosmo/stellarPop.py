@@ -288,7 +288,7 @@ class sps():
         import fsps
 
         assert iso in self.isoTracks
-        assert imf in self.imfTypes.keys()
+        assert imf in self.imfTypes
         assert dustModel in self.dustModels
 
         if not redshifted and sP.redshift > 0.0:

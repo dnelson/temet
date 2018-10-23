@@ -194,7 +194,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         mkdir(sP.derivPath + 'auxCat')
 
     for field in iterable(fields):
-        if field not in auxcatalog.fieldComputeFunctionMapping.keys() + auxcatalog.manualFieldNames:
+        if field not in list(auxcatalog.fieldComputeFunctionMapping.keys()) + auxcatalog.manualFieldNames:
             raise Exception('Unrecognized field ['+field+'] for auxiliary catalog.')
 
         # check for existence of auxiliary catalog file for this dataset
@@ -1955,7 +1955,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
             shape.append( sample[k].shape[1] ) # i.e. Coordinates, append 3 as second dimension
 
         # allocate global return
-        size = np.prod(shape) * sample[k].dtype.itemsize # bytes
+        size = int(np.prod(shape) * sample[k].dtype.itemsize) # bytes
         ctype = ctypes.c_byte
 
         shared_mem_array = mp.sharedctypes.RawArray(ctype, size)

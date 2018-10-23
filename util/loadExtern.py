@@ -2440,7 +2440,7 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     if isfile(path+'.hdf5'):
         with h5py.File(path+'.hdf5','r') as f:
             if loadFields is None:
-                loadFields = f.keys()
+                loadFields = list(f.keys())
             for key in loadFields:
                 r[key] = f[key][()]
         return r

@@ -1347,8 +1347,8 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             flux = f['mdot'][()]
             mstar = f['mstar'][()]
             subhaloIDs = f['subhaloIDs'][()]
-            binConfig = pickle.loads(f['binConfig'][()])
-            numBins = pickle.loads(f['numBins'][()])
+            binConfig = pickle.loads(f['binConfig'][()], encoding='latin1')
+            numBins = pickle.loads(f['numBins'][()], encoding='latin1')
             vcut_vals = f['vcut_vals'][()]
 
         print('Loading from cached [%s].' % cacheFile)

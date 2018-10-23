@@ -528,7 +528,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
 
     assert subhalo is not None or halo is not None # pick one
     if subhalo is None: subhalo = halo # use halo ids
-    if isinstance(subhalo,(int,long)) and len(sPs) == 1: subhalo = [subhalo] # single number to list (one sP case)
+    if isinstance(subhalo,int) and len(sPs) == 1: subhalo = [subhalo] # single number to list (one sP case)
     assert (len(subhalo) == len(sPs)) # one subhalo ID list per sP
 
     ylabel, ylim, ylog = simParticleQuantity(sPs[0], ptType, ptProperty, clean=clean)
@@ -547,7 +547,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
         subhaloIDs = subhalo[i] # for this run
 
         # subhalo is a single number or dict? make a concatenated list
-        if isinstance(subhaloIDs,(int,long)):
+        if isinstance(subhaloIDs,int):
             subhaloIDs = [subhaloIDs]
         if isinstance(subhaloIDs,dict):
             subhaloIDs = np.hstack( [subhaloIDs[key] for key in subhaloIDs.keys()])
