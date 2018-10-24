@@ -1358,6 +1358,11 @@ def snapshotSubset(sP, partType, fields,
             P_gas = 10.0**snapshotSubset(sP, partType, 'P_gas', **kwargs)
             r[field] = ( P_B + P_gas )
 
+        # escape velocity (based on Potential field) [physical km/s]
+        if field.lower() in ['vesc','escapevel']:
+            pot = snapshotSubset(sP, partType, 'Potential', **kwargs)
+            r[field] = sP.units.codePotentialToEscapeVelKms(pot)
+
         # ------------------------------------------------------------------------------------------------------
 
         # blackhole bolometric luminosity [erg/s] (model-dependent)

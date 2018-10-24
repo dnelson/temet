@@ -1059,16 +1059,15 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def yenting_vis_sample():
-    """ For all TNG300-1 centrals at z=1, Mhalo > 5e13, plot stellar GRI composites and SFR maps, in a few projections. 
-    One plot per halo."""
+def yenting_vis_sample(redshift=1.0):
+    """ For all TNG300-1 centrals at z=1, Mhalo > 5e13, plot stellar RIZ (observed-frame) composites and SFR maps, 
+    in a few projections. One plot per halo."""
     res        = 2500
-    redshift   = 1.0
     run        = 'tng'
     rVirFracs  = [1.0]
     method     = 'sphMap'
     nPixels    = [350,350]
-    size       = 2.0
+    size       = 1.0
     sizeType   = 'arcmin'
     axesUnits  = 'arcsec'
     haloMassLim = 5e13
@@ -1090,19 +1089,19 @@ def yenting_vis_sample():
         hInd = hID
         panels = []
 
-        panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_g-sdss_r-sdss_i'} )
-        panels.append( {'axes':[0,2], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_g-sdss_r-sdss_i'} )
-        panels.append( {'axes':[1,2], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_g-sdss_r-sdss_i'} )
-        panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_g-sdss_r-sdss_i', 'rotation':'face-on', 'labelScale':'physical'} )
+        panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'} )
+        panels.append( {'axes':[0,2], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'} )
+        panels.append( {'axes':[1,2], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'} )
+        panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z', 'rotation':'face-on', 'labelScale':'physical'} )
 
         panels.append( {'axes':[0,1], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'labelHalo':'mhalo'} )
         panels.append( {'axes':[0,2], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'labelHalo':'mstar'} )
         panels.append( {'axes':[1,2], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0]} )
-        panels.append( {'axes':[0,1], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'labelScale':'physical'} )
+        panels.append( {'axes':[0,1], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'rotation':'face-on', 'labelScale':'physical'} )
 
         #panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarComp-sdss_g-sdss_r-sdss_i'} )
         #panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarBand-sdss_i', 'valMinMax':[-20,-13]} )
 
-        plotConfig.saveFilename = savePathDefault + 'yenting_%s_z=%.1f_shID-%d.png' % (sP.simName,sP.redshift,hID)
+        plotConfig.saveFilename = 'yenting_%s_z=%.2f_shID-%d.png' % (sP.simName,sP.redshift,hID)
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

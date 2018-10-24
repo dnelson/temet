@@ -19,7 +19,7 @@ from functools import partial
 from scipy.stats import binned_statistic, binned_statistic_2d
 from scipy.interpolate import interp1d
 
-from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs
+from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, correctPeriodicDistVecs
 from cosmo.load import groupCatOffsetListIntoSnap
 from cosmo.mergertree import loadMPBs, mpbPositionComplete
 from plot.quantities import simSubhaloQuantity
@@ -880,13 +880,22 @@ def haloTimeEvoDataFullbox(sP, haloInds):
     return haloTimeEvoData(sP, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
 
 def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz', massField='Masses', 
-                            fluxKE=False, fluxP=False):
+                            rawMass=False, fluxMass=True, fluxKE=False, fluxP=False, proj2D=False):
     """ For every subhalo, use the instantaneous kinematics of gas to derive radial mass, energy, or 
     momemtum flux rates (outflowing/inflowing), and compute high dimensional histograms of this gas 
     mass/energy/mom flux as a function of (rad,vrad,dens,temp,metallicity), as well as a few particular 
     2D marginalized histograms of interest and 1D marginalized histograms. If massField is something 
     other than 'Masses' (total gas cell mass), then use instead this field and derive fluxes 
-    only for this mass subset (e.g. 'Mg II mass'). """
+    only for this mass subset (e.g. 'Mg II mass'). Choose one from the following four options:
+     rawMass  : histogrammed quantity is mass [msun] (per bin, e.g. mass in a given radial+vrad bin)
+     fluxMass : histogrammed quantity is radial mass flux [msun/yr] (default behavior, used in paper)
+     fluxKE   : histogrammed quantity is radial kinetic energy flux [10^30 erg/s]
+     fluxP    : histogrammed quantity is radial momentum flux [10^30 g*cm/s^2]. 
+    If proj2D is True, then all 'rad' bins become 'rad2d' bins (projected distance, z-axis direction, 
+    i.e. these are -annular- apertures on the sky), and all 'vrad' bins become 'vlos' bins (1D line of 
+    sight velocity). In this case, only rawMass is supported, since we have no shell volume element to 
+    normalize by. Additionally, a 'down the barrel' geometry is assumed, e.g. only material in front 
+    of the galaxy contributes. """
     minStellarMass = 7.4 # log msun (30pkpc values)
     cenSatSelect = 'cen' # cen, sat, all
 
@@ -895,13 +904,17 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     assert ptType in ['gas','wind']
     assert scope in ['subhalo','subhalo_wfuzz','global']
-    assert fluxKE + fluxP in [0,1] # zero or one True
+    assert rawMass + fluxMass + fluxKE + fluxP in [1] # choose one
     if massField != 'Masses': assert ptType == 'gas' # no other masses for accumulation, that can be computed for stars
+    if proj2D: assert rawMass
+
+    # set distance and velocity field names
+    rad, vrad = ('rad', 'vrad') if not proj2D else ('rad2d', 'vlos')
 
     # multi-D histogram config, [bin_edges] for each field
     binConfig1 = OrderedDict()
-    binConfig1['rad']  = [0,5,15,25,35,45,55,75,125,175,225,375,525,1475]
-    binConfig1['vrad'] = [-np.inf,-450,-350,-250,-150,-50,0,50,150,250,350,450,550,1450,2550,np.inf]
+    binConfig1[rad]  = [0,5,15,25,35,45,55,75,125,175,225,375,525,1475]
+    binConfig1[vrad] = [-np.inf,-450,-350,-250,-150,-50,0,50,150,250,350,450,550,1450,2550,np.inf]
 
     if ptType == 'gas':
         binConfig1['temp'] = [0,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,8.5,9.0,np.inf]
@@ -912,70 +925,70 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
     # fine-binning of vrad (for both gas and wind)
     binConfig7 = OrderedDict()
-    binConfig7['rad'] = binConfig1['rad']
-    binConfig7['vrad'] = np.linspace(-500, 3500, 401) # 10 km/s spacing
+    binConfig7[rad] = binConfig1[rad]
+    binConfig7[vrad] = np.linspace(-500, 3500, 401) # 10 km/s spacing
 
     # secondary histogram configs (semi-marginalized, 1D and 2D, always binned by rad,vrad)
     if ptType == 'gas':
         # 1D
         binConfig2 = OrderedDict()
-        binConfig2['rad'] = binConfig1['rad']
-        binConfig2['vrad'] = binConfig1['vrad']
+        binConfig2[rad] = binConfig1[rad]
+        binConfig2[vrad] = binConfig1[vrad]
         binConfig2['temp'] = np.linspace(3.0, 9.0, 121) # 0.05 dex spacing
 
         binConfig2b = OrderedDict()
-        binConfig2b['rad'] = binConfig1['rad']
-        binConfig2b['vrad'] = binConfig1['vrad']
+        binConfig2b[rad] = binConfig1[rad]
+        binConfig2b[vrad] = binConfig1[vrad]
         binConfig2b['temp_sfcold'] = np.linspace(3.0, 9.0, 121) # 0.05 dex spacing
 
         binConfig3 = OrderedDict()
-        binConfig3['rad'] = binConfig1['rad']
-        binConfig3['vrad'] = binConfig1['vrad']
+        binConfig3[rad] = binConfig1[rad]
+        binConfig3[vrad] = binConfig1[vrad]
         binConfig3['z_solar'] = np.linspace(-3.0, 1.5, 91) # 0.05 dex spacing
 
         binConfig4 = OrderedDict()
-        binConfig4['rad'] = binConfig1['rad']
-        binConfig4['vrad'] = binConfig1['vrad']
+        binConfig4[rad] = binConfig1[rad]
+        binConfig4[vrad] = binConfig1[vrad]
         binConfig4['numdens'] = np.linspace(-8.0, 2.0, 201) # 0.05 dex spacing
 
         # 2D
         binConfig5 = OrderedDict()
-        binConfig5['rad'] = binConfig1['rad']
-        binConfig5['vrad'] = binConfig1['vrad']
+        binConfig5[rad] = binConfig1[rad]
+        binConfig5[vrad] = binConfig1[vrad]
         binConfig5['numdens'] = np.linspace(-8.0, 2.0, 41) # 0.25 dex spacing
         binConfig5['temp'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
 
         binConfig6 = OrderedDict()
-        binConfig6['rad'] = binConfig1['rad']
-        binConfig6['vrad'] = binConfig1['vrad']
+        binConfig6[rad] = binConfig1[rad]
+        binConfig6[vrad] = binConfig1[vrad]
         binConfig6['z_solar'] = np.linspace(-3.0, 1.5, 26) # 0.2 dex spacing
         binConfig6['temp'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
 
         binConfig8 = OrderedDict()
-        binConfig8['rad'] = binConfig1['rad']
+        binConfig8[rad] = binConfig1[rad]
         binConfig8['temp'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
-        binConfig8['vrad'] = np.linspace(-500, 3500, 81) # 50 km/s spacing
+        binConfig8[vrad] = np.linspace(-500, 3500, 81) # 50 km/s spacing
 
         binConfig8b = OrderedDict()
-        binConfig8b['rad'] = binConfig1['rad']
+        binConfig8b[rad] = binConfig1[rad]
         binConfig8b['temp_sfcold'] = np.linspace(3.0, 9.0, 31) # 0.2 dex spacing
-        binConfig8b['vrad'] = np.linspace(-500, 3500, 81) # 50 km/s spacing
+        binConfig8b[vrad] = np.linspace(-500, 3500, 81) # 50 km/s spacing
 
         # binning of angular theta
         binConfig9 = OrderedDict()
-        binConfig9['rad'] = binConfig1['rad']
-        binConfig9['vrad'] = binConfig1['vrad']
+        binConfig9[rad] = binConfig1[rad]
+        binConfig9[vrad] = binConfig1[vrad]
         binConfig9['theta'] = np.linspace(-np.pi, np.pi, 73) # 5 deg spacing
 
         binConfig10 = OrderedDict()
-        binConfig10['rad'] = binConfig1['rad']
-        binConfig10['vrad'] = binConfig1['vrad']
+        binConfig10[rad] = binConfig1[rad]
+        binConfig10[vrad] = binConfig1[vrad]
         binConfig10['temp'] = binConfig1['temp']
         binConfig10['theta'] = np.linspace(-np.pi, np.pi, 37) # 10 deg spacing
 
         binConfig11 = OrderedDict()
-        binConfig11['rad'] = binConfig1['rad']
-        binConfig11['vrad'] = binConfig1['vrad']
+        binConfig11[rad] = binConfig1[rad]
+        binConfig11[vrad] = binConfig1[vrad]
         binConfig11['z_solar'] = binConfig1['z_solar']
         binConfig11['theta'] = np.linspace(-np.pi, np.pi, 37) # 10 deg spacing
 
@@ -986,7 +999,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         binConfigs += [binConfig7] # fine-binning of vrad
 
     # derived from binning
-    maxRad = np.max(binConfig1['rad'])
+    maxRad = np.max(binConfig1[rad])
 
     h_bins = [] # histogramdd() input
     for binConfig in binConfigs:
@@ -1197,11 +1210,39 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         p_local['rad']  = sP.units.codeLengthToKpc( sP.periodicDists(haloPos, p_local['Coordinates']) )
         p_local['vrad'] = sP.units.particleRadialVelInKmS( p_local['Coordinates'], p_local['Velocities'], haloPos, haloVel )
 
+        # 2D projected distance and line-of-sight velocity (hard-coded z-axis projection direction)
+        p_inds = [0,1] # x,y (Nside == 'z-axis')
+        p_ind3 = 3 - p_inds[0] - p_inds[1]
+        pt_2d = [ haloPos[p_inds[0]], haloPos[p_inds[1]] ]
+        vecs_2d = np.zeros( (p_local['rad'].size, 2), dtype=p_local['Coordinates'].dtype )
+        vecs_2d[:,0] = p_local['Coordinates'][:,p_inds[0]]
+        vecs_2d[:,1] = p_local['Coordinates'][:,p_inds[1]]
+
+        rad2d = np.sqrt(sP.periodicDistsSq(pt_2d, vecs_2d)) # handles 2D
+        p_local['rad2d'] = sP.units.codeLengthToKpc( rad2d )
+        vel_los = p_local['Velocities'][:,p_ind3]
+        # [physical km/s], relative to systemtic, positive = towards observer (outflow), in contrast to typical
+        # blueshifted absorption observational convention, in order to keep reasonable vrad bins the same
+        p_local['vlos'] = haloVel[p_ind3] - sP.units.particleCodeVelocityToKms(vel_los)
+
+        if proj2D:
+            # down the barrel: consider only material between the observer and the galaxy, i.e. 'in front of' 
+            # the galaxy, whereby outflow moves towards the observer (positive sign in our convention), in contrast 
+            # to outflow on the other side which would be moving away from the observer
+            los_dist_rel = haloPos[p_ind3] - p_local['Coordinates'][:,p_ind3]
+            correctPeriodicDistVecs(los_dist_rel, sP)
+            w = np.where(los_dist_rel < 0.0) # note approximation of infinitely thin, aligned 'galaxy'
+            p_local[massField][w] = 0.0
+
         assert particles['Masses'].shape == particles[massField].shape
 
         # compute weight, i.e. the halo-centric quantity 'radial mass flux'
-        massflux = p_local['vrad'] * p_local[massField] # codemass km/s
+        if rawMass:
+            massflux = p_local[massField] # codemass
+        else:
+            massflux = p_local['vrad'] * p_local[massField] # codemass km/s
 
+        # these multiply massflux from above
         if fluxKE:
             massflux *= p_local['vrad']*p_local['vrad']*0.5 # 1/2 mv^2
         if fluxP:
@@ -1262,19 +1303,25 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         # msun/yr (km/s) -> g*cm/s^2, but work in unit system of [10^30 g*cm/s^2] to avoid overflows
         desc = 'instantaneousMomentumOutflowRates [10^30 g*cm/s^2] (scope=%s)' % scope
         conv_fac = sP.units.Msun_in_g / sP.units.s_in_yr * sP.units.km_in_cm / 1e30
-    else:
+    elif fluxMass:
         desc = 'instantaneousMassOutflowRates [msun/yr] (scope=%s)' % scope
+        conv_fac = 1.0
+    elif rawMass:
+        desc = 'instantaneousMass [msun] (scope=%s)' % scope
         conv_fac = 1.0
 
     for i, binConfig in enumerate(binConfigs):
-        rr[i] = sP.units.codeMassToMsun(rr[i]) * sP.units.kmS_in_kpcYr # codemass km/s -> msun kpc/yr
-        rr[i] *= conv_fac
+        rr[i] = sP.units.codeMassToMsun(rr[i]) # codemass -> msun
+        rr[i] *= conv_fac # handle fluxKE/fluxP unit conversions
 
-        for j in range(len(binConfig['rad'])-1):
-            bin_width = binConfig['rad'][j+1] - binConfig['rad'][j] # pkpc
-            rr[i][:,j,...] /= bin_width # msun kpc/yr -> msun/yr
+        if not rawMass:
+            # for fluxMass, fluxKE, or fluxP:
+            rr[i] *= sP.units.kmS_in_kpcYr # km/s -> kpc/yr
+            for j in range(len(binConfig['rad'])-1):
+                bin_width = binConfig['rad'][j+1] - binConfig['rad'][j] # pkpc
+                rr[i][:,j,...] /= bin_width # msun kpc/yr -> msun/yr
 
-        assert binConfig.keys().index('rad') == 0 # otherwise we normalized along the wrong dimension
+            assert list(binConfig.keys()).index('rad') == 0 # otherwise we normalized along the wrong dimension
 
     # return quantities for save, as expected by cosmo.load.auxCat()
     select = 'subhalos, minStellarMass = %.2f (30pkpc values), [%s] only' % (minStellarMass,cenSatSelect)
@@ -1301,7 +1348,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     If selNum is not None, then directly use this 'bin_X' from the auxCat, instead of searching for the appropriate one based on the quants. """
     import pickle
 
-    validQuants = ['temp','temp_sfcold','z_solar','numdens','theta','vrad']
+    validQuants = ['temp','temp_sfcold','z_solar','numdens','theta','vrad','vlos']
     assert ptType in ['Gas','Wind']
     assert fluxKE + fluxP in [0,1] # at most one True
 
@@ -1311,12 +1358,21 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
         assert thirdQuant is not None
         assert fourthQuant in validQuants
 
-    propStr = 'Mass'
-    if fluxKE: propStr = 'Energy'
-    if fluxP:  propStr = 'Momentum'
+    propStr = 'MassFlux'
+    if fluxKE: propStr = 'EnergyFlux'
+    if fluxP:  propStr = 'MomentumFlux'
+
+    # line-of-sight projected velocities?
+    if thirdQuant == 'vlos':
+        propStr = 'Mass2DProj' #  load the proj2D auxCat()
+        rad = 'rad2d'
+        vel = 'vlos'
+    else:
+        rad = 'rad'
+        vel = 'vrad'
 
     massStr = '_'+massField if massField != 'Masses' else ''
-    acField = 'Subhalo_Radial%sFlux_%s_%s%s' % (propStr,scope,ptType,massStr)
+    acField = 'Subhalo_Radial%s_%s_%s%s' % (propStr,scope,ptType,massStr)
 
     if ptType == 'Gas':
         # will use this 3D histogram and collapse the temperature axis if thirdQuant == None
@@ -1335,10 +1391,10 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
 
     # overrides (after cache filename)
     dsetNameOrig = dsetName
-    if dsetName == 'rad.rad.vrad':
-        dsetName = 'rad.vrad' # fine-grained vrad sampling (need to differentiate from '%s.%s.temp' case above, could be cleaned up)
-    if dsetName == 'rad.vrad.vrad':
-        dsetName = 'rad.vrad' # fine-grained vrad sampling (e.g. 1D plot of outflow rates vs vrad)
+    if dsetName == '%s.%s.%s' % (rad,rad,vel):
+        dsetName = '%s.%s' % (rad,vel) # fine-grained vrad/vlos sampling (need to differentiate from '%s.%s.temp' case above, could be cleaned up)
+    if dsetName == '%s.%s.%s' % (rad,vel,vel):
+        dsetName = '%s.%s' % (rad,vel) # fine-grained vrad/vlos sampling (e.g. 1D plot of outflow rates vs vrad)
         thirdQuant = None
 
     # quick file cache, since these auxCat's are large
@@ -1364,6 +1420,9 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             if isinstance(value,str):
                 if value == dsetName:
                     selNum = int( key.split('_')[1] )
+            if isinstance(value,bytes):
+                if value.decode('ascii') == dsetName:
+                    selNum = int( key.split('_')[1] )
 
     assert selNum is not None, 'Dataset not found.'
 
@@ -1385,12 +1444,13 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     for i, field in enumerate(binConfig):
         assert dset.shape[i+1] == numBins[field] # first dimension is subhalos
 
-    if secondQuant == 'vrad' and dsetNameOrig not in ['rad.vrad.vrad']:
+    if secondQuant == vel and dsetNameOrig not in ['%s.%s.%s' % (rad,vel,vel)]:
+        assert vel == 'vrad' # otherwise generalize this branch and consider what it means
         # standard case, i.e. rad.vrad or rad.vrad.* datasets
 
         # collapse (sum over) temperature bins, since we don't care here (dsetName == 'rad.vrad.temp')
         # note: for 'rad.vrad' this 2D hist only exists for Wind, so skip this accumulate and go straight to vcut processing
-        if ptType == 'Gas' and thirdQuant is None and dsetNameOrig not in ['rad.vrad']:
+        if ptType == 'Gas' and thirdQuant is None and dsetNameOrig not in ['%s.%s' % (rad,vel)]:
             dset = np.sum( dset, axis=(3,) )
 
         # now have a [nSubhalos,nRad,nVRad] shaped array, derive scalar quantities for each subhalo in auxCat
@@ -1429,9 +1489,9 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
         vcut_vals = np.zeros(1)
 
     # add a r=all bin by accumulating over all radial shells
-    if firstQuant == 'rad':
+    if firstQuant == rad:
         shape = np.array(flux.shape)
-        assert shape[1] == numBins['rad']
+        assert shape[1] == numBins[rad]
         shape[1] += 1
         flux_rall = np.zeros( shape, dtype=flux.dtype )
         flux_rall[:,:-1,...] = flux
@@ -1452,8 +1512,8 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
         f['mdot'] = flux # note: should be called 'flux', can be of mass, energy, or momentum
         f['mstar'] = mstar
         f['subhaloIDs'] = ac['subhaloIDs']
-        f['binConfig'] = pickle.dumps(binConfig)
-        f['numBins'] = pickle.dumps(numBins)
+        f['binConfig'] = np.void(pickle.dumps(binConfig))
+        f['numBins'] = np.void(pickle.dumps(numBins))
         f['vcut_vals'] = vcut_vals
 
     print('Saved cached [%s].' % cacheFile)
@@ -1563,17 +1623,28 @@ def massLoadingsBH(sP):
     # instead of outflow_rate/BH_Mdot, maybe outflow_rate/(BH_dE/c^2)
     pass
 
-def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithFuzz', massField='Masses'):
+def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithFuzz', massField='Masses', proj2D=False):
     """ Compute an 'outflow velocity' for every subhalo. 
-    Return has shape [nSubsInAuxCat,nRadBins+1,nPercentiles], where the final radial bin considers gas at all radii (in the scope). """
+    Return has shape [nSubsInAuxCat,nRadBins+1,nPercentiles], where the final radial bin considers gas at all radii (in the scope). 
+    If proj2D is True, then we compute the line-of-sight projected velocities. """
     assert pSplit is None # not supported
 
+    if not proj2D:
+        q1 = 'rad'
+        q2 = 'vrad'
+        q3 = 'vrad'
+    else:
+        q1 = 'rad2d'
+        q2 = 'vlos'
+        q3 = 'vlos'
+
     # load fluxes of gas cells as well as wind-phase gas particles
-    thirdQuant = 'vrad'
-    gas_mdot, _, ac_subhaloIDs, gas_binconf, gas_nbins, _ = loadRadialMassFluxes(sP, scope, 'Gas', thirdQuant=thirdQuant, massField=massField)
+    gas_mdot, _, ac_subhaloIDs, gas_binconf, gas_nbins, _ = loadRadialMassFluxes(sP, scope, 'Gas', 
+        firstQuant=q1, secondQuant=q2, thirdQuant=q3, massField=massField)
 
     if massField == 'Masses':
-        wind_mdot, _, wind_subids, _, _, _ = loadRadialMassFluxes(sP, scope, 'Wind', thirdQuant=thirdQuant, selNum=1, massField=massField)
+        wind_mdot, _, wind_subids, _, _, _ = loadRadialMassFluxes(sP, scope, 'Wind', 
+            firstQuant=q1, secondQuant=q2, thirdQuant=q3, selNum=1, massField=massField)
 
         assert np.array_equal(ac_subhaloIDs, wind_subids)
 
@@ -1584,7 +1655,7 @@ def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithF
         outflow_mass = gas_mdot
 
     # get radial velocity bins, restrict to vrad>0 (outflow)
-    binConfig = gas_binconf[thirdQuant]
+    binConfig = gas_binconf[q3]
     assert binConfig.size == outflow_mass.shape[2] + 1
 
     minPosInd = np.where(binConfig >= 0.0)[0].min()
@@ -1592,7 +1663,7 @@ def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithF
 
     vradBinEdges = binConfig[minPosInd:]
     vradBins  = (vradBinEdges[1:] + vradBinEdges[:-1]) / 2
-    numVradBins   = gas_nbins[thirdQuant] - minPosInd
+    numVradBins   = gas_nbins[q3] - minPosInd
     assert numVradBins == outflow_mass.shape[2]
 
     vradBinsRev = vradBins[::-1]
@@ -1637,8 +1708,9 @@ def outflowVelocities(sP, pSplit, percs=[25,50,75,90,95,99], scope='SubfindWithF
         vout[i,j+1,:] = f(perc_fracs)
 
     # return
-    attrs = {'vradBinEdges':vradBinEdges, 'vradBins':vradBins, 'numVradBins':numVradBins, 'rad':gas_binconf['rad'], 'percs':percs}
+    attrs = {'vradBinEdges':vradBinEdges, 'vradBins':vradBins, 'numVradBins':numVradBins, 'rad':gas_binconf[q1], 'percs':percs}
     desc = "Outflow velocities, computed using instantaneous gas [%s] fluxes." % massField
+    if proj2D: desc += " Line-of-sight 1D projected velocities (rad are 2D annular apertures), down the barrel treatment."
     select = "All Subfind subhalos (the subset which have computed radial mass fluxes)."
 
     attrs = dict(attrs)

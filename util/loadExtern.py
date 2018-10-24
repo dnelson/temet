@@ -1912,7 +1912,7 @@ def chisholm15(v90=False):
         sfr[i]   = float(line[9])
         sfrd[i]  = float(line[10])
         vcen[i]  = -1 * float(line[15])
-        vel90[i] = float(line[17])
+        vel90[i] = -1 * float(line[17])
         Mdot[i]  = float(line[21])
         etaM[i]  = float(line[23])
         i += 1
@@ -1922,12 +1922,10 @@ def chisholm15(v90=False):
          'sfr'    : np.log10(sfr), # log msun/yr
          'sfr_surfdens' : np.log10(sfrd), # log msun/yr/kpc^2
          'vout'   : np.log10(vcen), # log km/s
+         'v90'    : np.log10(vel90), # log km/s
          'Mdot'   : np.log10(Mdot), # log msun/yr
          'etaM'   : np.log10(etaM), # log
          'label'  : 'Chisholm+ (2015)'}
-
-    if v90:
-        r['vout'] = np.log10(vel90) # otherwise vcen
 
     return r
 

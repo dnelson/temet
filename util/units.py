@@ -457,6 +457,13 @@ class units(object):
         divb_phys /= (self.UnitLength_in_cm/self.kpc_in_cm) # account for non-kpc code lengths (could be checked)
         return divb_phys
 
+    def codePotentialToEscapeVelKms(self, pot):
+        """ Convert Potential [(km/s)^2/a] into an escape velocity [km/s]. """
+        pot_phys = pot / self._sP.scalefac
+        with np.errstate(invalid='ignore'): # ignore unbound (positive potential)
+            vesc = np.sqrt(-2.0 * pot_phys)
+        return vesc
+
     def particleAngMomVecInKpcKmS(self, pos, vel, mass, haloPos, haloVel):
         """ Calculate particle angular momentum 3-vector in [Msun*kpc km/s] given input arrays of pos,vel,mass 
         and the halo CM position and velocity to compute relative to. Includes Hubble correction. """
