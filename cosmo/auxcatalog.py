@@ -285,6 +285,11 @@ def _radialRestriction(sP, nSubsTot, rad):
         ww = np.where(twiceStellarRHalf > rad_pkpc)
         twiceStellarRHalf[ww] = rad_pkpc
         radSqMax = twiceStellarRHalf**2.0
+    elif rad == '10pkpc_slice':
+        # slice at 10 +/- 2 pkpc
+        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax += (sP.units.physicalKpcToCodeLength(12.0))**2
+        radSqMin += (sP.units.physicalKpcToCodeLength(8.0))**2
     elif rad == 'r015_1rvir_halo':
         # classic 'halo' definition, 0.15rvir < r < 1.0rvir (meaningless for non-centrals)
         gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
@@ -367,7 +372,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
     # if no task parallelism (pSplit), set default particle load ranges
     indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
 
-    if isinstance(Nside, (int,long)) and Nside > 1:
+    if isinstance(Nside, int) and Nside > 1:
         # special case: just do a few special case subhalos at high Nside for demonstration
         assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99 and pSplit is None
         #gcDemo = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
@@ -893,7 +898,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     efrDirs = False
 
     if '_res' in dust or sizes is True:
-        if isinstance(Nside, (int,long)):
+        if isinstance(Nside, long):
             # numeric Nside -> healpix vertices as projection vectors
             nProj = nside2npix(Nside)
             projVecs = pix2vec(Nside,range(nProj),nest=True)
@@ -2533,6 +2538,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=10.0),
    'Subhalo_Mass_10pkpc_DM' : \
      partial(subhaloRadialReduction,ptType='dm',ptProperty='Masses',op='sum',rad=10.0),
+   'Subhalo_EscapeVel_10pkpc_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='vesc',op='mean',rad='10pkpc_slice'),
 
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
@@ -3016,7 +3023,15 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadialMassFlux_Global_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='global'),
 
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_MgII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Mg II mass'),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_SiII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Si II mass'),
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_NaI' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',massField='Na I mass'),
+
+   'Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
+                                                            rawMass=True,fluxMass=False,proj2D=True),
+   'Subhalo_RadialMass2DProj_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',
+                                                             rawMass=True,fluxMass=False,proj2D=True),
+   'Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas_SiII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
+                                                             rawMass=True,fluxMass=False,proj2D=True,massField='Si II mass'),
 
    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous'),
    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous'),
@@ -3035,6 +3050,11 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_OutflowVelocity_SubfindWithFuzz' : partial(outflowVelocities),
    'Subhalo_OutflowVelocity_MgII_SubfindWithFuzz' : partial(outflowVelocities,massField='MgII'),
+   'Subhalo_OutflowVelocity_SiII_SubfindWithFuzz' : partial(outflowVelocities,massField='SiII'),
+   'Subhalo_OutflowVelocity_NaI_SubfindWithFuzz' : partial(outflowVelocities,massField='NaI'),
+
+   'Subhalo_OutflowVelocity2DProj_SubfindWithFuzz' : partial(outflowVelocities,proj2D=True),
+   'Subhalo_OutflowVelocity2DProj_SiII_SubfindWithFuzz' : partial(outflowVelocities,proj2D=True,massField='SiII'),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 

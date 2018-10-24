@@ -611,87 +611,100 @@ def visHaloTimeEvoFullbox(sP, haloInd, extended=False, pStyle='white'):
 
     visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=extended, pStyle=pStyle)
 
-def singleHaloDemonstrationImage():
-    """ Projections of a big halo showing outflow characteristics. """
-    panels = []
-
+def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
+    """ Projections of a single halo showing outflow characteristics (streamlines or LIC). """
     run        = 'tng'
-    res        = 1080
-    redshift   = 1.6
+    res        = 2160
+    redshift   = 1.0
     rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap'
-    nPixels    = [1920,1080]
+    method     = 'sphMap_global'
+    nPixels    = [1920,1920]
     axes       = [0,1]
     labelZ     = True
-    labelScale = True
-    labelSim   = True
+    labelScale = 'physical'
+    labelSim   = False
     labelHalo  = True
     relCoords  = True
-    rotation   = None
+    rotation   = 'edge-on'
 
-    size = 1000.0
-    sizeType = 'pkpc'
+    # which overlay? e.g. 'lic_stream' for both simultaneously
+    if 'stream' in overlay:
+        # gas (vx,vy) velocity streamlines
+        vecOverlay  = 'gas_vel'
+        vecMinMax   = [0,350] # range for streamlines color scaling and colorbar
+        vecColorbar = True
+        vecMethod   = 'F' # colored streamlines, uniform thickness
+        vecColorPT  = 'gas'
+        vecColorPF  = 'vmag'
+        vecOverlaySizePx = [160,160]
+        vecOverlayWidth   = 10.0 # pkpc
+        vecOverlayDensity = [2.0,2.0]
 
-    haloID = 4
+    if 'lic' in overlay:
+        # LIC
+        licSliceDepth = 10.0 # pkpc
+        licPartType = 'gas'
+        licPartField = 'vel'
+        licPixelFrac = 0.05
+        licMethod = 2 # None, 1, 2
 
+    if overlay == 'lic_stream':
+        # LIC
+        licSliceDepth = 10.0 # pkpc
+        licPartType = 'gas'
+        licPartField = 'vel'
+        licPixelFrac = 0.05
+        licMethod = 2 # None, 1, 2
+
+        # gas (vx,vy) velocity streamlines
+        vecOverlay  = 'gas_vel'
+        vecMinMax   = [0,350] # range for streamlines color scaling and colorbar
+        vecColorbar = True
+        vecMethod   = 'F'
+        vecColorPT  = 'gas'
+        vecColorPF  = 'vmag'
+        vecOverlaySizePx = [160,160]
+        vecOverlayWidth   = 10.0 # pkpc
+        vecOverlayDensity = [2.0,2.0]
+
+    size      = 200.0 # [50,80,120] --> 25,40,60 ckpc/h each direction
+    sizeType  = 'pkpc'
+
+    # which halo?
     sP = simParams(res=res, run=run, redshift=redshift)
+
+    mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
+    with np.errstate(invalid='ignore'):
+        #w = np.where( (mhalo>11.8) )# & (mhalo<11.85) ) # explore
+        w = np.where( (mhalo>11.8)  & (mhalo<11.85) )
+
+    print('Processing [%d] halos...' % len(w[0]))
     
-    hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+    for hInd in [w[0][5]]: # paper
+    #for hInd in w[0]:
+        panels = []
+        haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
 
-    #panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
-    panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[0, 900]} )
+        if conf == 0:
+            panels.append( {'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
-    class plotConfig:
-        plotStyle    = 'edged'
-        rasterPx     = nPixels[0] #1200 #nPixels[0]
-        colorbars    = True
-        saveFilename = './oneHaloSingleField_%s_%d_z%.1f_haloID-%d.pdf' % (run,res,redshift,haloID)
+        if conf == 1:
+            panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5, 8.6]} )
 
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+        if conf == 2:
+            panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[4.0, 7.5], 'ctName':'inferno', 'plawScale':1.3} )
 
-def subboxSingleVelocityFrame(conf=0):
-    """ Grab one of the velocity frames from SB2. """
-    panels = []
+        if conf == 3:
+            #panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
+            panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[0, 400]} )
 
-    run     = 'tng'
-    method  = 'sphMap' # 'histo'
-    nPixels = [2000,2000] #[3840,2160]
-    axes    = [0,1] # x,y
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = nPixels[0] #1200 #nPixels[0]
+            colorbars    = True
+            saveFilename = './oneHaloSingleField_%s_%d_z%.1f_conf%d_haloID-%d.pdf' % (run,res,redshift,conf,haloID)
 
-    labelScale = 'physical'
-    labelZ     = True
-    plotHalos  = 25
-    labelHalos = True
-
-    res      = 2160
-    redshift = 1.66666 # full box snap 37, for group catalogs
-    variant = 'subbox2'
-
-    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
-
-    if 0: # testing streamlines
-        vecOverlay = 'gas_vel'
-        vecColorPT = 'gas'
-        vecColorPF = 'temp_sfcold'
-        vecMinMax  = None
-        vecMethod  = 'B'
-        vecOverlaySizePx = [100, 100] # [100, 100] # [400,400]
-        vecOverlayWidth = sP.units.codeLengthToKpc(sP.subboxSize[3-axes[0]-axes[1]])
-
-    if conf == 0: panels.append( {'partType':'gas',   'partField':'velmag', 'valMinMax':[50,1100]} )
-    if conf == 1: panels.append( {'partType':'gas',   'partField':'temp_sfcold', 'valMinMax':[4.4,7.6]} )
-    if conf == 2: panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4]} )
-    if conf == 3: panels.append( {'partType':'gas', 'partField':'Z_solar', 'valMinMax':[-2.0,0.0]} )
-    if conf == 4: panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.3]} )
-    if conf == 5: panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 38.5]} )
-
-    class plotConfig:
-        saveFilename = 'vis_%s_%d_%s_%s.pdf' % (sP.simName,sP.snap,panels[0]['partType'],panels[0]['partField'])
-        plotStyle = 'edged'
-        rasterPx  = nPixels
-        colorbars = True
-
-    renderBox(panels, plotConfig, locals())
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
 def subboxOutflowTimeEvoPanels(conf=0, depth=10):
     """ Track a halo through time and produce a series of time evolution panels. """

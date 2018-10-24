@@ -76,7 +76,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
 
         # gas
         if sP.isPartType(partType, 'gas'):
-            hsml = snapshotSubset(sP, partType, 'cellrad', indRange=indRange)
+            hsml = sP.snapshotSubsetP(partType, 'cellrad', indRange=indRange)
 
         # stars
         if sP.isPartType(partType, 'stars'):
@@ -266,7 +266,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
             grid_master[:,:,i] = grid_stretch
             grid_master_u[:,:,i] = grid_stretch * np.uint8(255)
 
-    if bands[0] == 'sdss_g' and bands[1] == 'sdss_r' and bands[2] == 'sdss_i':
+    if '-'.join(bands) in ['sdss_g-sdss_r-sdss_i','sdss_r-sdss_i-sdss_z']:
         # gri-composite, following the method of Lupton+2004 (as in SDSS/HSC RGB cutouts)
         fac = {'g':1.0, 'r':1.0, 'i':0.8} # RGB = gri
         lupton_alpha = 2.0 # 1/stretch
@@ -279,9 +279,9 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         band2_grid = sP.units.absMagToLuminosity(band2_grid_mag) * fac['i'] * 1e7
 
         if 'ObsFrame' in partField: # scaling is sensitive to this value (i.e. mean flux), needs some generalization
-            band0_grid *= 5e16
-            band1_grid *= 5e16
-            band2_grid *= 5e16
+            band0_grid *= 2e16
+            band1_grid *= 2e16
+            band2_grid *= 2e16 # these for RIZ, 5e16 for all for GRI
 
         inten = (band0_grid + band1_grid + band2_grid) / 3.0
         val = np.arcsinh( lupton_alpha * lupton_Q * (inten - scale_min) ) / lupton_Q
@@ -403,7 +403,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     if partType in ['dm']:
         mass = sP.dmParticleMass
     else:
-        mass = snapshotSubset(sP, partType, 'mass', indRange=indRange).astype('float32')
+        mass = sP.snapshotSubsetP(partType, 'mass', indRange=indRange).astype('float32')
 
     # neutral hydrogen mass model (do column densities)
     if partField in ['HI','HI_segmented']:
@@ -494,7 +494,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
 
     # weighted quantity, but using some property other than mass for the weighting (replace now)
     if partField in ['vel_los_sfrwt','velsigma_los_sfrwt']:
-        mass = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
+        mass = sP.snapshotSubsetP(partType, 'sfr', indRange=indRange)
 
     # quantity and column density normalization
     normCol = False
@@ -510,7 +510,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
             normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
-        quant = snapshotSubset(sP, partType, partFieldLoad, indRange=indRange)
+        quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
 
     # quantity pre-processing (need to remove log for means)
     if partField in ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']:
@@ -874,7 +874,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     """ Caching gridding/imaging of a simulation box. """
     optionalStr = ''
     if projType != 'ortho':
-        optionalStr += '_%s-%s' % (projType, '_'.join( [str(k)+'='+str(v) for k,v in projParams.iteritems()] ))
+        optionalStr += '_%s-%s' % (projType, '_'.join( [str(k)+'='+str(v) for k,v in projParams.items()] ))
     if remapRatio is not None:
         optionalStr += '_remap-%g-%g-%g' % (remapRatio[0],remapRatio[1],remapRatio[2])
     if snapHsmlForStars:
@@ -884,10 +884,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
         optionalStr += str(rotCenter)
 
-    m = hashlib.sha256('nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s' % \
+    hashstr = 'nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
          boxSizeImg[0], boxSizeImg[1], boxSizeImg[2], axes[0], axes[1], 
-         hsmlFac, str(rotMatrix), optionalStr)).hexdigest()[::4]
+         hsmlFac, str(rotMatrix), optionalStr)
+    m = hashlib.sha256(hashstr.encode('utf-8')).hexdigest()[::4]
 
     _, sbStr, _ = subboxVals(sP.subbox)
 
@@ -982,7 +983,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 print('  [%2d] %11d - %d' % (chunkNum,indRange[0],indRange[1]))
 
             # load: 3D positions
-            pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+            pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
 
             # rotation? shift points to subhalo center, rotate, and shift back
             if rotMatrix is not None:
@@ -1016,7 +1017,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             # load: mass/weights, quantity, and render specifications required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=indRange)
-            assert mass.size == hsml.size
+            assert mass.size == 1 or (mass.size == hsml.size)
 
             if 0:
                 print('WARNING: Selectively setting mass=0 based on some particle criterion!')
@@ -1282,10 +1283,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         field_x = field_name + '_' + ['x','y','z'][axes[0]]
         field_y = field_name + '_' + ['x','y','z'][axes[1]]
 
-        vel_field[:,:,0], _ = gridBox(sP, method.split("_LIC")[0], field_pt, field_x, nPixels, axes, projType, projParams, 
+        vel_field[:,:,1], _ = gridBox(sP, method, field_pt, field_x, nPixels, axes, projType, projParams, 
                                       boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter, remapRatio)
 
-        vel_field[:,:,1], _ = gridBox(sP, method.split("_LIC")[0], field_pt, field_y, nPixels, axes, projType, projParams, 
+        vel_field[:,:,0], _ = gridBox(sP, method, field_pt, field_y, nPixels, axes, projType, projParams, 
                                       boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter, remapRatio)
 
         # smoothing kernel
@@ -1306,15 +1307,15 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         if kwargs['licMethod'] == 2:
             # noise field biased by the data field, or the data field itself somehow...
             noise_template = (np.random.random(nPixels) < pixelFrac)
-            noise_50 = noise_template #* grid_master
+            noise_field = noise_template
 
-            lic_output = line_integral_convolution(noise_50, vel_field, gauss_kernel)
+            lic_output = line_integral_convolution(noise_field, vel_field, gauss_kernel)
             lic_output = np.clip(lic_output, 1e-8, 1.0)
 
-            # multiple the LIC field [0,1] by the logged, or the linear, actual data field
-            print(lic_output.min(), lic_output.max())
-            #grid_master *= lic_output
-            grid_master = logZeroMin(10.0**grid_master * lic_output)
+            # multiply the LIC field [0,1] by the logged, or the linear, actual data field
+            print( np.nanmin(lic_output), np.nanmax(lic_output), np.nanmean(lic_output) )
+            #grid_master *= lic_output # if linear, e.g. velmag
+            grid_master = logZeroMin(10.0**grid_master * lic_output) # if log, e.g. coldens
 
     return grid_master, config
 
@@ -1500,7 +1501,7 @@ def addBoxMarkers(p, conf, ax):
             else:
                 raise Exception('Handle.')
 
-            c = plt.Circle( (xyPos[0],xyPos[1]), rad, color='#ffffff', linewidth=1.5, fill=False)
+            c = plt.Circle( (xyPos[0],xyPos[1]), rad, color='#ffffff', linewidth=1.5, fill=False, alpha=0.6)
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
@@ -1672,8 +1673,11 @@ def addVectorFieldOverlay(p, conf, ax):
     field_x = field_name + '_' + ['x','y','z'][p['axes'][0]]
     field_y = field_name + '_' + ['x','y','z'][p['axes'][1]]
     nPixels = [40,40] if 'vecOverlaySizePx' not in p else p['vecOverlaySizePx']
-    qStride = 3 # total number of ticks per axis is nPixels[i]/qStride
-    vecSliceWidth = 5.0 if 'vecOverlayWidth' not in p else p['vecOverlayWidth'] # pkpc 
+    qStride = 3 # for quiverplot, total number of ticks per axis is nPixels[i]/qStride
+    # for streamlines, density=1 produces a 30x30 grid (linear scaling with density):
+    density = [1.0, 1.0] if 'vecOverlayDensity' not in p else p['vecOverlayDensity'] 
+    vecSliceWidth = 5.0 if 'vecOverlayWidth' not in p else p['vecOverlayWidth'] # pkpc
+    arrowsize = 1.5 # for streamlines
     smoothFWHM = None
 
     # compress vector grids along third direction to more thin slice
@@ -1741,21 +1745,27 @@ def addVectorFieldOverlay(p, conf, ax):
 
     # (C) plot white streamlines, uniform thickness
     if p['vecMethod'] == 'C':
-        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=None, color='white')
+        ax.streamplot(xx, yy, grid_x, grid_y, density=density, linewidth=None, arrowsize=arrowsize, color='white')
 
     # (D) plot white streamlines, thickness scaled by color quantity
     if p['vecMethod'] == 'D':
-        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], linewidth=grid_s, color='white')
+        lw = 1.5 * grid_s
+        c = ax.streamplot(xx, yy, grid_x, grid_y, density=density, linewidth=lw, arrowsize=arrowsize, color='white')
+        c.lines.set_alpha(0.6)
+        c.arrows.set_alpha(0.6)
 
     # (E) plot colored streamlines, uniform thickness
     if p['vecMethod'] == 'E':
-        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], 
-                      linewidth=uniSize, color=grid_c, cmap='afmhot', norm=norm)
+        c = ax.streamplot(xx, yy, grid_x, grid_y, density=density, 
+                      linewidth=uniSize, color=grid_c, arrowsize=arrowsize, cmap='afmhot', norm=norm)
+        c.lines.set_alpha(0.6)
+        c.arrows.set_alpha(0.6)
+
 
     # (F) plot colored streamlines, thickness also proportional to color quantity
     if p['vecMethod'] == 'F':
-        ax.streamplot(xx, yy, grid_x, grid_y, density=[1.0,1.0], 
-                      linewidth=grid_s, color=grid_c, cmap='afmhot', norm=norm)
+        ax.streamplot(xx, yy, grid_x, grid_y, density=density, 
+                      linewidth=grid_s, color=grid_c, arrowsize=arrowsize, cmap='afmhot', norm=norm)
 
 def setAxisColors(ax, color2):
     """ Factor out common axis color commands. """
@@ -1863,6 +1873,7 @@ def renderMultiPanel(panels, conf):
       extent     : (axis0_min,axis0_max,axis1_min,axis1_max) in simulation units
     """
     assert conf.plotStyle in ['open','open_black','edged','edged_black']
+    assert len(panels) > 0
 
     color1 = 'black' if '_black' in conf.plotStyle else 'white'
     color2 = 'white' if '_black' in conf.plotStyle else 'black'
@@ -2053,9 +2064,6 @@ def renderMultiPanel(panels, conf):
             barAreaBottom *= 0.7
             pass
 
-        if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
-            raise Exception('Only support vecColorbar addition with oneGlobalColorbar type configuration.')
-
         # start plot
         fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
 
@@ -2129,6 +2137,9 @@ def renderMultiPanel(panels, conf):
                 # only below, one per column
                 addCustomColorbars(fig, ax, conf, config, heightFac*1.4, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, colWidth, bottomNorm, leftNorm)
+
+            if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
+                raise Exception('Only support vecColorbar addition with oneGlobalColorbar type configuration.')
 
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:

@@ -14,7 +14,7 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from util import simParams
-from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable
+from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable, evenlySample
 from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.util import periodicDists
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
@@ -375,36 +375,47 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         # special behaviors
         if xQuant in ['rad_kpc','rad_kpc_linear'] and yQuant == 'vrad':
-            # escape velocity curve, direct from enclosed mass profile
-            from util.helper import evenlySample
-            ptTypes = ['stars','gas','dm']
-            haloLen = sP.groupCatSingle(haloID=haloID)['GroupLenType']
-            totSize = np.sum( [haloLen[sP.ptNum(ptType)] for ptType in ptTypes] )
+            if 0:
+                # escape velocity curve, direct from enclosed mass profile                
+                ptTypes = ['stars','gas','dm']
+                haloLen = sP.groupCatSingle(haloID=haloID)['GroupLenType']
+                totSize = np.sum( [haloLen[sP.ptNum(ptType)] for ptType in ptTypes] )
 
-            offset = 0
-            mass = np.zeros( totSize, dtype='float32' )
-            rad  = np.zeros( totSize, dtype='float32' )
+                offset = 0
+                mass = np.zeros( totSize, dtype='float32' )
+                rad  = np.zeros( totSize, dtype='float32' )
 
-            for ptType in ptTypes:
-                mass[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, 'mass', haloID=haloID)
-                rad[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, xQuant, haloID=haloID)
-                offset += haloLen[sP.ptNum(ptType)]
+                for ptType in ptTypes:
+                    mass[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, 'mass', haloID=haloID)
+                    rad[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, xQuant, haloID=haloID)
+                    offset += haloLen[sP.ptNum(ptType)]
 
-            sort_inds = np.argsort(rad)
-            mass = mass[sort_inds]
-            rad = rad[sort_inds]
-            cum_mass = np.cumsum(mass)
+                sort_inds = np.argsort(rad)
+                mass = mass[sort_inds]
+                rad = rad[sort_inds]
+                cum_mass = np.cumsum(mass)
 
-            # sample down to N radial points
-            rad_code = evenlySample(rad[1:], 100)
-            tot_mass_enc = evenlySample(cum_mass[1:], 100)
+                # sample down to N radial points
+                rad_code = evenlySample(rad[1:], 100)
+                tot_mass_enc = evenlySample(cum_mass[1:], 100)
 
-            if '_kpc' in xQuant: rad_code = sP.units.physicalKpcToCodeLength(rad_code) # pkpc -> code
-            vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
+                if '_kpc' in xQuant: rad_code = sP.units.physicalKpcToCodeLength(rad_code) # pkpc -> code
+                vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
+            if 1:
+                # escape velocity curve, directly from potential of particles
+                vesc = sP.snapshotSubset('dm', 'vesc', haloID=haloID)
+                rad = sP.snapshotSubset('dm', xQuant, haloID=haloID)
+
+                sort_inds = np.argsort(rad)
+                vesc = vesc[sort_inds]
+                rad = rad[sort_inds]
+
+                rad_code = evenlySample(rad, 100, logSpace=True)
+                vesc = evenlySample(vesc, 100, logSpace=True)
 
             if xlog: rad_code = np.log10(rad_code)
             ax.plot(rad_code[1:], vesc[1:], '-', lw=lw, color='#000000', alpha=0.5)
-            ax.text(rad_code[15], vesc[15]*1.1, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom')
+            ax.text(rad_code[-17], vesc[-17]*1.02, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
 
     # colorbar and save
     fig.tight_layout()

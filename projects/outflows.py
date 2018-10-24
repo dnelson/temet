@@ -23,7 +23,7 @@ from plot.config import *
 from plot.general import plotHistogram1D, plotPhaseSpace2D
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from projects.outflows_analysis import halo_selection, loadRadialMassFluxes
-from projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN
+from projects.outflows_vis import subboxOutflowTimeEvoPanels, galaxyMosaic_topN, singleHaloDemonstrationImage
 from tracer.tracerMC import match3
 
 labels = {'rad'     : 'Radius [ pkpc ]',
@@ -424,7 +424,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                 ax.text(10.69, -0.32, '(at Injection)', color='black', alpha=0.6, rotation=-43.0)
 
         for _ in range(colorOff):
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
         # loop over radii and/or vcut selections
         for i, rad_ind in enumerate(radIndsPlot):
@@ -461,11 +461,11 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                 if len(vcutIndsPlot) > 1 and len(radIndsPlot) > 1:
                     # one color per v_rad, if cycling over both
                     if i == 0:
-                        colors.append( ax._get_lines.prop_cycler.next()['color'] )
+                        colors.append( next(ax._get_lines.prop_cycler)['color'] )
                     c = colors[j]
 
                 if len(vcutIndsPlot) == 1 or len(radIndsPlot) == 1:
-                    c = ax._get_lines.prop_cycler.next()['color']
+                    c = next(ax._get_lines.prop_cycler)['color']
 
                 # symbols for each system
                 if markersize > 0:# or (i==1 and j==1): # hard-coded option
@@ -666,9 +666,13 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
             saveName = '%s%s_%s_C_%s_%d_%s_skipzeros-%s.pdf' % (saveBase,ptStr,xQuant,sP.simName,sP.snap,stat,skipZeros)
             _plotHelper(vcutIndsPlot,radIndsPlot,saveName,ylimLoc=ylimLoc,stat=stat,skipZeroVals=skipZeros)
 
-def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshifts=[None], config=None, massField='Masses'):
+def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshifts=[None], config=None, 
+                              massField='Masses', proj2D=False):
     """ Explore outflow velocity, aggregating into a single vout [km/s] value for each galaxy, and plotting 
-    trends as a function of stellar mass or any other galaxy/halo property. """
+    trends as a function of stellar mass or any other galaxy/halo property. If massField is not 'Masses', then 
+    e.g. the ion mass ('SiII', 'MgII') to use to compute massflux-weighted outflow velocities. If proj2D, then 
+    line-of-sight 1D projected velocities are computed in the down-the-barrel treatment, instead of the usual 
+    3D radial velocities. """
     sP = simParams(res=sP_in.res, run=sP_in.run, redshift=sP_in.redshift, variant=sP_in.variant) # copy
 
     # config
@@ -688,6 +692,10 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         ylabel = '%s Outflow Velocity [ km/s ]' % massField
         saveBase = 'outflowVelocity%s' % massField
         ptStr = '_Gas'
+
+    if proj2D:
+        yLabel = 'Line-of-sight ' + ylabel
+        saveBase += '2DProj'
 
     if ylog:
         ylabel = ylabel.replace('km/s','log km/s')
@@ -817,7 +825,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             for i, rad_ind in enumerate(radIndsPlot):
 
                 if (len(percIndsPlot) > 1 and len(radIndsPlot) > 1) or len(redshifts) > 1:
-                    c = ax._get_lines.prop_cycler.next()['color'] # one color per rad, if cycling over both
+                    c = next(ax._get_lines.prop_cycler)['color'] # one color per rad, if cycling over both
 
                 # local data (outflow rates in this radial bin)
                 if rad_ind < mdot.shape[1]:
@@ -871,7 +879,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                         label = '' # move percs to separate labels
 
                     if (len(percIndsPlot) == 1 or len(radIndsPlot) == 1) and len(redshifts) == 1:
-                        c = ax._get_lines.prop_cycler.next()['color']
+                        c = next(ax._get_lines.prop_cycler)['color']
 
                     # symbols for each system
                     if markersize > 0:
@@ -885,7 +893,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
                     # median line and 1sigma band
                     minNum = 2 if 'etaM' in xQuant else 5 # for xQuants = mstar, SFR, Lbol, ...
-                    if redshift > 7.0: minNum = 2
+                    if redshift is not None and redshift > 7.0: minNum = 2
                     xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
 
                     if xm.size > sKn:
@@ -972,29 +980,46 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                 labels.append( obs['label'] )
 
         if 'mstar' in xQuant and len(redshifts) == 1:# and len(radIndsPlot) == 1:# and radMidPoint == ' 10 kpc':
-            # escape velocity curves, via direct summation of the enclosed mass at r < 10 kpc
-            ptTypes = ['Stars','Gas','DM']
-            acFields = ['Subhalo_Mass_10pkpc_%s' % ptType for ptType in ptTypes]
-            ac = sP.auxCat(acFields)
+            if 0:
+                # escape velocity curves, via direct summation of the enclosed mass at r < 10 kpc
+                ptTypes = ['Stars','Gas','DM']
+                acFields = ['Subhalo_Mass_10pkpc_%s' % ptType for ptType in ptTypes]
+                ac = sP.auxCat(acFields)
 
-            mass_by_type = np.vstack( [ac[acField] for acField in acFields] )
-            tot_mass_enc = np.sum(mass_by_type, axis=0)
+                mass_by_type = np.vstack( [ac[acField] for acField in acFields] )
+                tot_mass_enc = np.sum(mass_by_type, axis=0)
 
-            rad_code = sP.units.physicalKpcToCodeLength(10.0)
-            vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
-            vesc = vesc[sub_ids]
+                rad_code = sP.units.physicalKpcToCodeLength(10.0)
+                vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
 
-            # add median line
-            assert vesc.shape == xx.shape
-            xm, ym, sm, pm = running_median(xx,vesc,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
+            if sP.snapHasField('gas', 'Potential'):
+                # escape velocity curves, via mean Potential in 10kpc slice for gas cells
+                acField = 'Subhalo_EscapeVel_10pkpc_Gas'
+                vesc = sP.auxCat(acField)[acField] # physical km/s
 
-            if xm.size > sKn:
-                ym = savgol_filter(ym,sKn,sKo)
-                pm = savgol_filter(pm,sKn,sKo,axis=1)
+                vesc = vesc[sub_ids]
 
-            l, = ax.plot(xm, ym, ':', lw=lw, alpha=0.3, color='#000000')
-            ax.fill_between(xm[:], pm[0,:], pm[-1,:], color=l.get_color(), interpolate=True, alpha=0.03)
-            ax.text(xm[-8],ym[-8]*1.1,'$v_{\\rm esc,10 kpc}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=17.0)
+                # add median line
+                assert vesc.shape == xx.shape
+                xm, ym, sm, pm = running_median(xx,vesc,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
+
+                if xm.size > sKn:
+                    ym = savgol_filter(ym,sKn+2,sKo)
+                    pm = savgol_filter(pm,sKn+2,sKo,axis=1)
+
+                l, = ax.plot(xm, ym, ':', lw=lw, alpha=0.3, color='#000000')
+                #ax.fill_between(xm[:], pm[0,:], pm[-1,:], color=l.get_color(), interpolate=True, alpha=0.03)
+                ax.text(xm[6],ym[6]*1.02,'$v_{\\rm esc,10 kpc}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=15.0)
+
+        if 'mstar' in xQuant:
+            # obs data: v_out vs M* (testing)
+            for j, obs in enumerate([chisholm15()]):
+                ax.plot( obs['mstar'], 10.0**obs['vout'], markers[i+j+1], color='green')
+                labels.append( obs['label'] )
+            # v90 (testing)
+            for j, obs in enumerate([chisholm15()]):
+                ax.plot( obs['mstar'], 10.0**obs['v90'], markers[i+j+1], color='red')
+                labels.append( obs['label'] )
 
         # legend: obs data
         legParams = {'frameon':1, 'framealpha':0.9, 'borderpad':0.2, 'fancybox':False} # to add white background to legends
@@ -1052,9 +1077,10 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         mdot, mstar_30pkpc_log, sub_ids, binConfig, numBins, _ = loadRadialMassFluxes(sP, scope, 'Gas', massField=massField)
         mdot = mdot[:,:,mdotThreshVcutInd]
 
-        acField = 'Subhalo_OutflowVelocity_%s' % scope
+        projStr = '2DProj' if proj2D else ''
+        acField = 'Subhalo_OutflowVelocity%s_%s' % (projStr,scope)
         if massField != 'Masses':
-            acField = 'Subhalo_OutflowVelocity_%s_%s' % (massField,scope)
+            acField = 'Subhalo_OutflowVelocity%s_%s_%s' % (projStr,massField,scope)
 
         ac = sP.auxCat(acField)
 
@@ -1186,7 +1212,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
             for i, mStarBin in enumerate(mStarBins):
 
                 if j == 0:
-                    c = ax._get_lines.prop_cycler.next()['color'] # one color per bin (fixed across redshift)
+                    c = next(ax._get_lines.prop_cycler)['color'] # one color per bin (fixed across redshift)
                     colors.append(c)
                 else:
                     c = colors[i]
@@ -1462,7 +1488,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
 
                     xticklabels = []
                     for xval in xx:
-                        xticklabels.append( xval if isinstance(xval,basestring) else '%d' % xval )
+                        xticklabels.append( xval if isinstance(xval,str) else '%d' % xval )
 
                     ax.set_xticks(np.arange(mdot_2d.shape[1]) + 0.5)
                     ax.set_xticklabels(xticklabels)
@@ -1473,7 +1499,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
 
                     yticklabels = []
                     for yval in yy:
-                        yticklabels.append( yval if isinstance(yval,basestring) else '%d' % yval )
+                        yticklabels.append( yval if isinstance(yval,str) else '%d' % yval )
 
                     ax.set_yticks(np.arange(mdot_2d.shape[2]) + 0.5)
                     ax.set_yticklabels(yticklabels)
@@ -2147,7 +2173,7 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
             # determine color
             if i == 0:
                 for _ in range(colorOff+1):
-                    c = ax._get_lines.prop_cycler.next()['color']
+                    c = next(ax._get_lines.prop_cycler)['color']
                 colors.append(c)
             else:
                 c = colors[k]
@@ -2252,16 +2278,11 @@ def paperPlots(sPs=None):
     # --------------------------------------------------------------------------------------------------------------------------------------
 
     # (future todo, outside the scope of this paper):
-    #  * add vlos,r2d as quantities calculated in instantaneousMassFluxes(), can then simply bin (for a reasonable 2d aperture)
-    #    vlos instead of vrad, getting quite close to slit/fiber/down the barrel spectra
-    #  *  add r/rvir, v/vir as quantities in instantaneousMassFluxes(), so we can also bin in these
+    #  * add r/rvir, v/vir as quantities in instantaneousMassFluxes(), so we can also bin in these
     #  * play with 'total mass absorption spectra' (or even e.g. MgII, CIV), down the barrel, R_e aperture, need Voigt profile or maybe not
     #  * eta_E (energy), eta_p (momentum), eta_Z (metal), dE/dt and dP/dt versus BH and SF energetics (with observations)
     #  * vout vs. M* and etaM vs. M* (with observations)
-
-    # TODO (now, for the paper):
-    #  [ ] plot with time on the x-axis (SFR, BH_Mdot, v_out different rad, eta_out different rad) (all from a subbox?)
-    #  [.] vis: SN vs BH driven outflows schematic (streamlines?)
+    #  * plot with time on the x-axis (SFR, BH_Mdot, v_out different rad, eta_out different rad) (all from a subbox?)
 
     if 0:
         # fig 1: resolution/volume metadata of TNG50 vs other sims
@@ -2318,36 +2339,36 @@ def paperPlots(sPs=None):
 
     if 0:
         # fig 7: vrad-rad phase diagram (gas mass weighted), single halo
-        sP = simParams(res=2160,run='tng',redshift=0.73)
+        sP = simParams(res=2160,run='tng',redshift=0.7)
         haloID = 22
 
         nBins  = 200
         yQuant = 'vrad'
-        ylim   = [-1000, 3000]
+        ylim   = [-700, 3200]
         clim   = [-3.0, 0.0]
         normColMax = True
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc', xlim=[0.0,2.0], haloID=haloID,
             yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim)
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloID=haloID,
-            yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim)
+        #plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloID=haloID,
+        #    yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim)
 
     if 0:
         # fig 8: distribution of radial velocities
         config = {'radInd':2, 'stat':'mean', 'ylim':[-3.0, 1.0], 'skipZeros':False}
 
         gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBins, config=config)
-        gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBinsSm2, config=config, redshifts=redshifts)
+        #gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBinsSm2, config=config, redshifts=redshifts)
 
     if 0:
-        # fig 8,9: radial velocities of outflows (2D): dependence on radius, and dependence on temperature, for one m* bin
+        # fig 9: radial velocities of outflows (2D): dependence on temperature, for one m* bin
         mStarBins = [ [10.7,11.3] ]
 
         config    = {'stat':'mean', 'skipZeros':False, 'radInd':[3]}
         gasOutflowRates2DStackedInMstar(TNG50, xAxis='temp', yAxis='vrad', mStarBins=mStarBins, clims=[[-3.5,0.0]], config=config)
 
-        config    = {'stat':'mean', 'skipZeros':False}
-        gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vrad', mStarBins=mStarBins, clims=[[-3.0,0.5]], config=config)
+        #config    = {'stat':'mean', 'skipZeros':False}
+        #gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vrad', mStarBins=mStarBins, clims=[[-3.0,0.5]], config=config)
 
     if 0:
         # fig 10: outflow rates vs a single quantity (marginalized over all others), one redshift, stacked in M* bins
@@ -2369,7 +2390,11 @@ def paperPlots(sPs=None):
         gasOutflowRates2DStackedInMstar(TNG50_z1, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, config=config)
 
     if 0:
-        # fig 12: (relative) outflow velocity vs. Delta_SFMS, as a function of M*
+        # fig 12: visualization of bipolar SN-wind driven outflow, gas density LIC-convolved with vel field, overlaid with streamlines
+        singleHaloDemonstrationImage(conf=2)
+
+    if 0:
+        # fig 13: (relative) outflow velocity vs. Delta_SFMS, as a function of M*
         sP = TNG50_z1
 
         figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
@@ -2378,7 +2403,7 @@ def paperPlots(sPs=None):
         yQuant = 'delta_sfms'
         cRel   = [0.7,1.3,False] # [cMin,cMax,cLog] #None
         ylim   = [-0.75, 1.25]
-        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 'ylim':ylim, 'cRel':cRel}
+        params = {'pStyle':'black', 'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 'ylim':ylim, 'cRel':cRel}
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
@@ -2401,7 +2426,7 @@ def paperPlots(sPs=None):
         pdf.close()
 
     if 0:
-        # fig 13: fraction of 'fast outflow' galaxies, in the Delta_SFMS vs M* plane
+        # fig 14: fraction of 'fast outflow' galaxies, in the Delta_SFMS vs M* plane
         sP = TNG50_z1
 
         figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
@@ -2420,7 +2445,7 @@ def paperPlots(sPs=None):
         pdf.close()
 
     if 0:
-        # fig 14: observational comparisons, many panels of outflow velocity vs. galaxy/BH properties
+        # fig 15: observational comparisons, many panels of outflow velocity vs. galaxy/BH properties
         percs    = [5,95] # show breath of vout scatter
         minMstar = 9.0 # log msun
         binSize  = 0.25 # dex in x-axis
@@ -2471,8 +2496,18 @@ def paperPlots(sPs=None):
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar}
         gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr1_surfdens', eta=True, colorOff=colorOff, config=config)
 
+    if 1:
+        # fig 15b: OBS TESTING
+        sP = simParams(res=2160,run='tng',redshift=0.27)
+        ylim = [0,800]
+        massField = 'SiII' #'Masses', SiII'
+        proj2D = True
+
+        config = {'percInds':[1,3], 'radInds':[13], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'loc2':'upper right'}
+        gasOutflowVelocityVsQuant(sP, xQuant='mstar_30pkpc', config=config, massField=massField, proj2D=proj2D)
+
     if 0:
-        # fig 15: stacked radial profiles of SFR surface density
+        # fig 16: stacked radial profiles of SFR surface density
         sP = TNG50_z1
         cenSatSelect = 'cen'
         field   = 'SFR'
