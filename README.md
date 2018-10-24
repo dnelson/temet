@@ -44,7 +44,7 @@ For example, add the following lines to your `.bashrc` file
         conda create --prefix=~/.local/envs/myenv python=3.7
         source activate ~/.local/envs/myenv
 
-and add the following lines to your `.bashrc` file for permanence
+    and add the following lines to your `.bashrc` file for permanence
 
         module load intel/18.0
         module load impi/2018.4
@@ -69,9 +69,9 @@ and add the following lines to your `.bashrc` file for permanence
         ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/output .
         ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/postprocessing .
 
-note that the last two lines create symlinks to the actual output directory where the simulation data files 
-(`groupcat_*` and `snapdir_*`) reside, as well as to the postprocessing directory (containing `trees`, etc).
-Replace as needed with the actual path on your machine.
+    note that the last two lines create symlinks to the actual output directory where the simulation data files 
+    (`groupcat_*` and `snapdir_*`) reside, as well as to the postprocessing directory (containing `trees`, etc).
+    Replace as needed with the actual path on your machine.
 
 
 getting started
