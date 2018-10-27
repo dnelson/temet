@@ -60,7 +60,19 @@ For example, add the following lines to your `.bashrc` file
 
         pip install -r ~/python/requirements.txt
 
-6. Organize simulation directories as follows
+6. Point `matplotlib` to the default settings file
+
+        mkdir -p ~/.config/matplotlib
+        ln -s ~/python/matplotlibrc ~/.config/matplotlib/
+
+    and install the Roboto font used by default
+
+        mkdir -p ~/.fonts/Roboto
+        cd ~/.fonts/Roboto/
+        wget https://github.com/google/fonts/raw/master/apache/roboto/Roboto-Light.ttf
+        wget https://github.com/google/fonts/raw/master/apache/roboto/Roboto-LightItalic.ttf
+
+7. Organize simulation directories as follows
 
         mkdir ~/sims.TNG
         mkdir ~/sims.TNG/L75n1820TNG
@@ -78,7 +90,7 @@ getting started
 ===============
 
 Most analysis is based around a "simulation parameters" object (typically called `sP`), which specifies the 
-simulation and snapshot of interest, amoung other details.
+simulation and snapshot of interest, among other details.
 
 For example, to load some data from the group catalog and snapshot of TNG100-2 at z=2
 

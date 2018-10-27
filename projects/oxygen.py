@@ -108,7 +108,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
             lwMod += 1.0
         else:
             # next color
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             prevName = sP.simName.split("-")[0]
             lwMod = 0.0
 
@@ -245,9 +245,9 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
 
             if j == 0:
                 for _ in range(colorOff+1):
-                    c = ax._get_lines.prop_cycler.next()['color']
+                    c = next(ax._get_lines.prop_cycler)['color']
             else:
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
 
             for i, redshift in enumerate(redshifts):
                 sP.setRedshift(redshift)
@@ -520,7 +520,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                     c = ionColors[ion]
                 else: # cycle
                     for _ in range(colorOff+1):
-                        c = ax._get_lines.prop_cycler.next()['color']
+                        c = next(ax._get_lines.prop_cycler)['color']
                     if colorOff > 0: colorOff = 0 # only once
                 colors.append(c)
             else:
@@ -855,7 +855,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
                         # determine color
                         if i == 0 and radType == 0:
-                            c = ax._get_lines.prop_cycler.next()['color']
+                            c = next(ax._get_lines.prop_cycler)['color']
                             colors.append(c)
                         else:
                             c = colors[k]
@@ -982,9 +982,9 @@ def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0
     for j, ion in enumerate(ions):
         if j == 0:
             for _ in range(colorOff+1):
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
         else:
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
         if ion == 'bhmass':
             partType = 'bh'
@@ -1170,7 +1170,7 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
                alpha=0.5, color=c_obs, orientation='vertical', label=config)
 
     for i, sP in enumerate(sPs):
-        c_sim.append( ax._get_lines.prop_cycler.next()['color'] )
+        c_sim.append( next(ax._get_lines.prop_cycler)['color'] )
         ax_h1.hist(sim_samples[i]['mstar_30pkpc_log'].ravel(), 
                    bins=nBinsHist*4, range=xlim, normed=True, histtype='bar', 
                    alpha=0.5, color=c_sim[-1], orientation='vertical', label=sP.simName)
@@ -1635,7 +1635,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
     if config == 'COS-Halos':
         for j, gs in enumerate( galaxySets ):
-            c = 'black' if j == 0 and len(galaxySets) == 1 else ax._get_lines.prop_cycler.next()['color']
+            c = 'black' if j == 0 and len(galaxySets) == 1 else next(ax._get_lines.prop_cycler)['color']
             colors.append(c)
 
             for i in range(len(werk13['rad'])):
@@ -1658,7 +1658,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
     if config in ['eCGM','eCGMfull']:
         for j, gs in enumerate( galaxySets ):
-            c = 'black' if j == 0 and len(galaxySets) == 1 else ax._get_lines.prop_cycler.next()['color']
+            c = 'black' if j == 0 and len(galaxySets) == 1 else next(ax._get_lines.prop_cycler)['color']
             colors.append(c)
 
             if len(j15[gs]) == 0:
@@ -1683,7 +1683,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
     for j, thresh in enumerate(colDensThresholds):
 
         if len(colDensThresholds) > 1:
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
         # loop over each fullbox run (different linestyles)
         for i, sP in enumerate(sPs):
@@ -1695,7 +1695,7 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
             print('[%s]: %s' % (sP.simName,thresh))
 
             if len(colDensThresholds) == 1 and len(sPs) > 1:
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
 
             # which index for the requested col density threshold?
             assert thresh in cf['colDensThresholds']

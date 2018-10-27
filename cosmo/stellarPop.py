@@ -1364,7 +1364,7 @@ def debug_plot_spectra():
     #ax.set_xlim([8000,9000])
 
     for subInd in subInds:
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
         for i, acField in enumerate(acFields):
             label = 'Em' if '_Em_' in acField else 'NoEm'
             label += ' [%d, %d]' % (subInd,ac['subhaloIDs'][subInd])

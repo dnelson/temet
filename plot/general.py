@@ -503,7 +503,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
         sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
         pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
 
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
         ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
 
         # percentile:
@@ -706,7 +706,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
         # plot lines
         if colorOffs is not None:
             for _ in range(colorOffs[i]):
-                _ = ax._get_lines.prop_cycler.next()['color']
+                _ = next(ax._get_lines.prop_cycler)['color']
 
         label = '%s haloID=%d [%s]' % (sP.simName,haloID,scope) if not clean else sP.simName
         l, = ax.plot(rr, yy_median, '-', lw=lw, label=label)

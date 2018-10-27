@@ -1,6 +1,7 @@
 """
 color.py
   Plots for TNG flagship paper: galaxy colors, color bimodality.
+  https://arxiv.org/abs/1707.03395
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -139,11 +140,11 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
             w_cen, w_all, w_sat = cenSatSubhaloIndices(sP)
 
             # determine unique color
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             # skip second color (pNum=1), reserved for L205n2500, if we do a res (x3), dustModel (x3), 
             # or TNG vs Illlustris (x2) comparison
             if pNum == 1 and (len(sPs) >=3 or len(simColorsModels) >= 3):
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
             pNum += 1
             if (len(sPs) == 2 and sPs[1].simName == 'TNG100-1' and sPs[0].simName == 'Illustris-1'):
                 #if sP.simName == 'Illustris-1': c = '#9467BD' # tableau10 fifth (purple) for Illustris-1
@@ -500,7 +501,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             print('Color 2D PDFs [%s] [%s]: %s' % ('-'.join(bands),simColorsModel,sP.simName))
             sP.setRedshift(simRedshift)
 
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             spColors.append(c)
 
             # load fullbox stellar masses and photometrics
@@ -1730,7 +1731,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
         # plot, looping over all runs and CSSes
         for i, sP in enumerate(sPs):
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             nBinsLoc = nBins if sP.res > 2000 else int(nBins/2)
 
             for j, cenSatSelect in enumerate(plotCSS):
@@ -1895,7 +1896,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         binSize = (fieldMinMax[xAxis][1]-fieldMinMax[xAxis][0])/nBins
 
         for i, sP in enumerate(sPs):
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             for j, cenSatSelect in enumerate(plotCSS):
                 x_vals = data[i][xAxis][cenSatSelect]
                 y_vals = data[i][yAxis][cenSatSelect]
@@ -2163,9 +2164,9 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
 
         # skip some light colors
         if i == 9:
-            for _ in range(2): c = ax._get_lines.prop_cycler.next()['color']
+            for _ in range(2): c = next(ax._get_lines.prop_cycler)['color']
         if i == 10:
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
         l, = ax.plot(xx, yy, 'o-', alpha=tAlpha, label='ID #%d' % shID)
         for j in range(xx.size):

@@ -399,7 +399,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
         # y-axis 1: additional properties
         if conf == 1:
             for key in ['gas','stars']:
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
                 for j, aperture in enumerate(data['apertures']['scalar']):
                     yy = sP.units.codeMassToLogMsun( data[key]['mass'][:,j])
                     yy -= 3.0 # 3 dex offset to get within range of M_BH
@@ -407,7 +407,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
                     l, = ax.plot(redshifts[w], yy[w], linestyles[j], lw=lw, alpha=0.5, label=label, color=c)
                     ax.plot(redshifts[snap], yy[snap], 'o', markersize=14.0, alpha=0.7, color=c)
         if conf == 2:
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             for j, aperture in enumerate(data['apertures']['scalar']):
                 yy = logZeroNaN( data['gas']['StarFormationRate'][:,j] )
                 label = 'Gas_SFR' if j == 0 else ''
@@ -420,7 +420,7 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             ax2 = ax.twinx()
             setAxisColors(ax2, color2)
             ax2.set_ylabel('BH $\Delta$ E$_{\\rm low}$ (dotted), E$_{\\rm high}$ (solid) [ log erg ]')
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             ax2.plot(redshifts[w], dy_high[w], '-', lw=lw, alpha=0.7, color=c)
             ax2.plot(redshifts[w], dy_low[w], ':', lw=lw, alpha=0.7, color=c)
             ax2.plot(redshifts[snap], dy_high[snap], 'o', markersize=14.0, color=c, alpha=0.6)

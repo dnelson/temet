@@ -469,7 +469,7 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
         
         for band in bands:
             # in this band
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
             bandNum1 = list(ac[acPre+acField1+'_attrs']['bands']).index( band )
             bandNum2 = list(ac[acPre+acField2+'_attrs']['bands']).index( band )

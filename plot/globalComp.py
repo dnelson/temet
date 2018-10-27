@@ -108,7 +108,7 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
             xx = sP.units.codeMassToLogMsun( xx_code )
 
             # stellar mass definition(s)
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
             if use30kpc:
                 # load auxcat
@@ -329,7 +329,7 @@ def sfrAvgVsRedshift(sPs, pdf):
         xx = simData['redshifts']
 
         # plot line for each halo mass bin
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
 
         for haloMassBin in plotMassBins:
             # locate this mass bin in saved data
@@ -1312,7 +1312,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
             continue
 
         # load
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
 
         gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMass','SubhaloMassInRadType']+metalFields)
@@ -1525,7 +1525,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
         xx = sP.units.codeMassToLogMsun( xx_code )
 
         # metallicity measured how/within what radius?
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
                 
         for i, metalField in enumerate(metalFields):
             # only subhalos with nonzero metalField (some star-forming gas)
@@ -1648,7 +1648,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
             xx = sP.units.codeMassToLogMsun( xx_code )
 
             # metallicity measured within what radius?
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
                     
             for i, fracType in enumerate(fracTypes):
                 if fracType == 'gas':
@@ -1763,7 +1763,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
         print('CDDF HI: '+sP.simName)
         sP.setRedshift(simRedshift)
 
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
 
         # once including H2 modeling, once without
         for i, species in enumerate(speciesList):
@@ -1841,7 +1841,7 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
             print('DLA Z PDF: '+sP.simName)
             sP.setRedshift(simRedshift)
 
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
             # once including H2 modeling, once without
             for i, species in enumerate(speciesList):
@@ -2026,7 +2026,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         xx = sP.units.codeMassToLogMsun( xx_code[w] )
 
         # loop through ages measured through different techniques
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
                 
         for i, ageType in enumerate(ageTypes):
 
@@ -2185,7 +2185,7 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
         xx = sP.units.codeMassToLogMsun( xx_code[w] )
 
         # loop through x-ray luminosities different techniques
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
                 
         for i, lumType in enumerate(lumTypes):
             # auxCat values are per subhalo or per group?
@@ -2352,11 +2352,11 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris') )
+    #sPs.append( simParams(res=1820, run='illustris') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -2369,7 +2369,7 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
-    sPs.append( simParams(res=1504, run='eagle') )
+    #sPs.append( simParams(res=1504, run='eagle') )
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=128, run='tng', variant='6003') )
@@ -2378,6 +2378,8 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
+    sPs.append( simParams(res=512, run='tng', variant='0000') )
+    sPs.append( simParams(res=512, run='tng', variant='5008') )
 
     if 0:
         # testing
@@ -2405,7 +2407,6 @@ def plots():
     blackholeVsStellarMass(sPs, pdf, twiceR=True, simRedshift=zZero)
     blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, simRedshift=zZero)
     galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=zZero, addHalfLightRad=None)
-    galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=['p07c_cf00dust_efr','sdss_r',False])
     galaxySizes(sPs, pdf, vsHaloMass=True, simRedshift=zZero, addHalfLightRad=None)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=False, simRedshift=zZero, dataRedshift=None, haloMasses=True)
     stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=zZero)

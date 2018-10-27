@@ -152,7 +152,7 @@ def haloMassesVsDMOMatched():
 
     # loop over runs
     for run in runList.keys():
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
 
         for i, res in enumerate(runList[run]):
             sP = simParams(res=res,run=run,redshift=redshift)
@@ -337,7 +337,7 @@ def plotClumpsEvo():
                 # quant (B): mass fractions
                 ax.set_title('z=0 size: %.3f ckpc/h' % mpb['SubhaloHalfmassRad'][0])
                 ax.set_ylabel('log ( Subhalo Mass Fraction )')
-                c = ax._get_lines.prop_cycler.next()['color'] # skip total color
+                c = next(ax._get_lines.prop_cycler)['color'] # skip total color
 
                 for ptName in ['gas','stars','dm']:
                     yy = mpb['SubhaloMassType'][:,sP.ptNum(ptName)] / mpb['SubhaloMass']

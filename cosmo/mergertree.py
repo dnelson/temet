@@ -709,7 +709,7 @@ def stellarMergerContributionPlot():
     colors = []
     
     for j, haloMassBin in enumerate(md[sP.simName]['haloMassBins']):
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
         colors.append(c)
 
         for i, sP in enumerate(sPs):
@@ -754,7 +754,7 @@ def stellarMergerContributionPlot():
     threshInds = [1,2]
 
     for apertureIter in range(nApertures):
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
         colors.append(c)
 
         for i, sP in enumerate(sPs):
