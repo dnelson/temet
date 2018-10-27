@@ -117,6 +117,60 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
+def visualize_compare_vs_normal(conf=1):
+    """ Visualize single final halo of h2_L11_12_FP (boosted, sims.zooms2) vs h2_L11_FP (unboosted) at z=2.25. """
+    panels = []
+
+    run        = 'zooms2_josh' # 'zooms2'
+    res        = 11
+    hInd       = 2
+    redshift   = 2.25
+
+    rVirFracs  = [0.25, 0.5]
+    method     = 'sphMap_global'
+    nPixels    = [960,960] # 960 or 3840
+    axes       = [1,0]
+    #labelZ     = True
+    #labelScale = 'physical'
+    labelSim   = True
+    labelHalo  = False
+    relCoords  = False
+    rotation   = None
+
+    size       = 180.0 #400.0
+    sizeType   = 'pkpc'
+    depthFac   = 1.0
+
+    # zoom in to upper left quadrant
+    sP = simParams(res=res, run=run, redshift=redshift, variant='FP', hInd=hInd)
+    halo = groupCatSingle(sP, haloID=sP.zoomSubhaloID)
+    cenShift = [-halo['Group_R_Crit200']*(0.25+0.05),halo['Group_R_Crit200']*(0.25+0.05),0]
+    size = sP.units.codeLengthToKpc(halo['Group_R_Crit200']*0.4)
+
+    if conf == 1:
+        # gas column density
+        panels.append( {'variant':'FPorig', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 7.6], 'plawScale':1.3} )
+        panels.append( {'variant':'FP', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 7.6], 'plawScale':1.3} )
+    if conf == 2:
+        # gas MgII column
+        panels.append( {'variant':'FPorig', 'partType':'gas', 'partField':'Mg II', 'valMinMax':[10.0, 15.8]} )
+        panels.append( {'variant':'FP', 'partType':'gas', 'partField':'Mg II', 'valMinMax':[10.0, 15.8]} )
+    if conf == 3:
+        # temperature
+        panels.append( {'variant':'FPorig', 'partType':'gas', 'partField':'temp', 'valMinMax':[4.2,5.9]} )
+        panels.append( {'variant':'FP', 'partType':'gas', 'partField':'temp', 'valMinMax':[4.2,5.9]} )
+        
+    panels[0]['labelScale'] = 'physical'
+    panels[1]['labelZ'] = True
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = int(nPixels[0]*1.0)
+        colorbars    = True
+        saveFilename = './vis_compare_L11FP_vs_L11_12FP-%d.pdf' % (conf)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def phase_diagram_ovi():
     # OVI mass phase diagram
     sP = simParams(res=11,run='zooms2_josh',variant='FP',hInd=2,redshift=2.25)

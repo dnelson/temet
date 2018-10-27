@@ -598,7 +598,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
         if sP.isPartType(partType,'dm'):       config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
         if sP.isPartType(partType,'dmlowres'): config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):      config['ctName'] = 'gasdens_tng5' # 'perula' for methods2
+        if sP.isPartType(partType,'gas'):      config['ctName'] = 'inferno' # 'gasdens_tng5' for old movies/TNG papers # 'perula' for methods2
         if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray' # copper
 
     if partField in ['coldens_msun_ster']:
@@ -1455,6 +1455,12 @@ def addBoxMarkers(p, conf, ax):
         if p['relCoords']:
             xyPos = [0.0, 0.0]
 
+        if p['sP'].subhaloInd is not None:
+            # in the case that the box is not centered on the halo (e.g. offset quadrant), can use:
+            assert not p['relCoords']
+            sub = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
+            xyPos = sub['SubhaloPos'][p['axes']]
+
         if p['axesUnits'] == 'code':
             pass
         elif p['axesUnits'] == 'kpc':
@@ -1509,6 +1515,9 @@ def addBoxMarkers(p, conf, ax):
             zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
+
+        if p['axesUnits'] != 'code':
+            print('Warning: Such a manual placement of the redshift label might fail, need modified pExtent here.')
 
         xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02)*nLinear # upper right
         yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)*nLinear
@@ -1792,6 +1801,7 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
         return
 
     nLinear = conf.nCols if conf.nCols < conf.nRows else conf.nRows
+    if conf.nRows == 1 and conf.nCols == 2: nLinear = 1 # should further generalize/cleanup logic
     fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.2)
 
     factor  = 0.80 # bar length, fraction of column width, 1.0=whole
@@ -1850,6 +1860,31 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
         color=colorsB[3], size=fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
         color=colorsB[4], size=fontsize, ha='right', va='center', transform=cax.transAxes)
+
+def _getPlotExtent(extent, axesUnits, projType, sP):
+    """ Helper function, manipulate input extent given requested axesUnits. """
+    if axesUnits == 'code':
+        pExtent = extent 
+    if axesUnits == 'kpc':
+        pExtent = sP.units.codeLengthToKpc(extent)
+    if axesUnits == 'mpc':
+        pExtent = p['sP'].units.codeLengthToMpc(extent)
+    if axesUnits == 'arcsec':
+        pExtent = p['sP'].units.codeLengthToAngularSize(extent, arcsec=True)
+    if axesUnits == 'arcmin':
+        pExtent = p['sP'].units.codeLengthToAngularSize(extent, arcmin=True)
+    if axesUnits == 'deg':
+        if sP.redshift == 0.0: sP.redshift = 0.1 # temporary
+        pExtent = sP.units.codeLengthToAngularSize(extent, deg=True)
+        # shift to arbitrary center at (0,0)
+        if pExtent[0] == 0.0 and pExtent[2] == 0.0:
+            assert pExtent[1] == pExtent[3] # box, not halo, imaging
+            pExtent -= pExtent[1]/2
+    if projType == 'equirectangular':
+        assert axesUnits == 'rad_pi'
+        pExtent = [0, 2, 0, 1] # in units if pi
+
+    return pExtent
 
 def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
@@ -1964,26 +1999,7 @@ def renderMultiPanel(panels, conf):
             grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
-            if p['axesUnits'] == 'code':
-                pExtent = p['extent'] 
-            if p['axesUnits'] == 'kpc':
-                pExtent = p['sP'].units.codeLengthToKpc(p['extent'])
-            if p['axesUnits'] == 'mpc':
-                pExtent = p['sP'].units.codeLengthToMpc(p['extent'])
-            if p['axesUnits'] == 'arcsec':
-                pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], arcsec=True)
-            if p['axesUnits'] == 'arcmin':
-                pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], arcmin=True)
-            if p['axesUnits'] == 'deg':
-                if p['sP'].redshift == 0.0: p['sP'].redshift = 0.1
-                pExtent = p['sP'].units.codeLengthToAngularSize(p['extent'], deg=True)
-                # shift to arbitrary center at (0,0)
-                if pExtent[0] == 0.0 and pExtent[2] == 0.0:
-                    assert pExtent[1] == pExtent[3] # box, not halo, imaging
-                    pExtent -= pExtent[1]/2
-            if p['projType'] == 'equirectangular':
-                assert p['axesUnits'] == 'rad_pi'
-                pExtent = [0, 2, 0, 1] # in units if pi
+            pExtent = _getPlotExtent(p['extent'], p['axesUnits'], p['projType'], p['sP'])
 
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
 
@@ -2031,7 +2047,8 @@ def renderMultiPanel(panels, conf):
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
         barAreaHeight = np.max([0.035 / aspect,0.12 / nRows / aspect]) if conf.colorbars else 0.0
-        if nRows == 1 and nCols == 1 and conf.colorbars: barAreaHeight = 0.05 / aspect
+        if nRows == 1 and nCols in [1] and conf.colorbars: barAreaHeight = 0.05 / aspect
+        if nRows == 1 and nCols in [2,3] and conf.colorbars: barAreaHeight = 0.07 / aspect
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes   = set()
@@ -2108,7 +2125,9 @@ def renderMultiPanel(panels, conf):
             grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
-            plt.imshow(grid, extent=p['extent'], cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
+            pExtent = _getPlotExtent(p['extent'], p['axesUnits'], p['projType'], p['sP'])
+
+            plt.imshow(grid, extent=pExtent, cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
             if 'valMinMax' in p and cmap is not None:
                 plt.clim( p['valMinMax'] )
@@ -2147,6 +2166,7 @@ def renderMultiPanel(panels, conf):
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2: heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1: heightFac *= 0.5 # decrease
+            if nRows == 1 and nCols in [2,3]: heightFac *= 0.7 # decrease
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
