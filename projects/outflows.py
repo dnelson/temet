@@ -2496,16 +2496,6 @@ def paperPlots(sPs=None):
                   'markersize':0.0, 'percs':percs, 'minMstar':minMstar}
         gasOutflowRatesVsQuant(TNG50_z1, ptType='total', xQuant='sfr1_surfdens', eta=True, colorOff=colorOff, config=config)
 
-    if 1:
-        # fig 15b: OBS TESTING
-        sP = simParams(res=2160,run='tng',redshift=0.27)
-        ylim = [0,800]
-        massField = 'SiII' #'Masses', SiII'
-        proj2D = True
-
-        config = {'percInds':[1,3], 'radInds':[13], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'loc2':'upper right'}
-        gasOutflowVelocityVsQuant(sP, xQuant='mstar_30pkpc', config=config, massField=massField, proj2D=proj2D)
-
     if 0:
         # fig 16: stacked radial profiles of SFR surface density
         sP = TNG50_z1
@@ -2520,6 +2510,16 @@ def paperPlots(sPs=None):
         pdf.close()
 
     # --------------------------------------------------------------------------------------------------------------------------------------
+
+    if 0:
+        # fig 15b: test if we can do a much more accurate vout vs. M* scaling plot, matched in percentile/etc to a single obs
+        sP = simParams(res=2160,run='tng',redshift=0.27) # chisholm+15 <redshift>
+        ylim = [0,800]
+        massField = 'SiII' #'Masses', SiII' (chisholm+15, one of the ions used, absorption, highly variable aperture)
+        proj2D = True # line of sight, down the barrel scheme (instead of 3D vrad)
+
+        config = {'percInds':[1,3], 'radInds':[13], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'loc2':'upper right'}
+        gasOutflowVelocityVsQuant(sP, xQuant='mstar_30pkpc', config=config, massField=massField, proj2D=proj2D)
 
     if 0:
         # explore: sample comparison against SINS-AO survey at z=2 (M*, SFR)

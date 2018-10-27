@@ -595,7 +595,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
                     yy /= np.nanmedian(yy)
 
                 # plot points
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
 
                 if xx.size < ptPlotThresh:
                     ax.plot(xx, yy, 'o', color=c, alpha=0.3)
@@ -736,7 +736,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             ax.set_ylabel(ylabel)
 
             # plot points (todo: update for medianQuant)
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
 
             if sim_xvals.size < ptPlotThresh:
                 ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=0.3)
@@ -765,7 +765,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                 if 1 or len(sPs) == 1:
                     # if only one run, use new colors for above and below slices (currently always do this)
-                    c = ax._get_lines.prop_cycler.next()['color']
+                    c = next(ax._get_lines.prop_cycler)['color']
 
                 xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
                                                     sPercs=sLowerPercs)
@@ -776,7 +776,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                 lsOffset = len(sLowerPercs)
                 if 1 or len(sPs) == 1:
-                    c = ax._get_lines.prop_cycler.next()['color']
+                    c = next(ax._get_lines.prop_cycler)['color']
                     lsOffset = 0
 
                 xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,

@@ -171,7 +171,7 @@ def compare_contamination():
 
     # loop over hInd/variant combination
     for hInd in hInds:
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
 
         for j, variant in enumerate(variants):
             # load zoom: group catalog
@@ -213,7 +213,7 @@ def sizefacComparison():
     #hInds    = [50]
     #variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
 
-    hInds = [50,3232]
+    hInds = [50,51,90,553,3232]
     variants = ['sf3']
 
     run      = 'tng_zoom'
@@ -253,7 +253,7 @@ def sizefacComparison():
         colors = OrderedDict()
 
         for variant in variants:
-            c = ax._get_lines.prop_cycler.next()['color']
+            c = next(ax._get_lines.prop_cycler)['color']
             colors[ variant ] = c
 
         handles = [plt.Line2D((0,1), (0,0), color=colors[sf], marker='o', lw=lw) for sf in colors.keys()]
@@ -303,7 +303,7 @@ def sizefacComparison():
     fig.savefig('sizefac_comparison.pdf')
     plt.close(fig)
 
-def parentBoxVisualComparison(haloID, variant='sf2', conf=0):
+def parentBoxVisualComparison(haloID, variant='sf3', conf=0):
     """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations. """
     sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
 

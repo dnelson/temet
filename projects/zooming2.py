@@ -464,7 +464,7 @@ def gas_components_time_evo():
 
     colors = []
     for i in range(5):
-        colors.append( ax._get_lines.prop_cycler.next()['color'])
+        colors.append( next(ax._get_lines.prop_cycler)['color'])
 
     for i, sP in enumerate(sPs):
         z = data[i]['redshifts']
@@ -721,7 +721,7 @@ def mgii_radial_profile():
             yy_mean = savgol_filter(yy_mean,sKn,sKo)
 
         # determine color
-        c = ax._get_lines.prop_cycler.next()['color']
+        c = next(ax._get_lines.prop_cycler)['color']
 
         # plot median line
         label = sP.simName
@@ -812,7 +812,7 @@ def hi_covering_frac():
 
             # plot middle line                
             if j == 0:
-                c = ax._get_lines.prop_cycler.next()['color']
+                c = next(ax._get_lines.prop_cycler)['color']
                 colors.append(c)
             else:
                 c = colors[i]

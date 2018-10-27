@@ -241,7 +241,7 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
 
         # plot: loop over each bin
         for k, cfBoundSet in enumerate(cfs.keys()):
-            c = ax._get_lines.prop_cycler.next()['color'] if cm is None else cm[k]
+            c = next(ax._get_lines.prop_cycler)['color'] if cm is None else cm[k]
 
             # loop over each run/redshift for this bin
             for i, cf in enumerate(cfs[cfBoundSet]):
@@ -403,7 +403,7 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
 
     # loop over each mass bin
     for k, massSet in enumerate(confs.keys()):
-        c = ax._get_lines.prop_cycler.next()['color'] if cm is None else cm[k]
+        c = next(ax._get_lines.prop_cycler)['color'] if cm is None else cm[k]
 
         # loop over each color (or secondary property in general) split for this mass bin
         for i, secSet in enumerate(confs[massSet].keys()):

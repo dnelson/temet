@@ -136,6 +136,8 @@ def tail(fileName, nLines):
     """ Wrap linux tail command line utility. """
     import subprocess
     lines = subprocess.check_output( ['tail', '-n', str(nLines), fileName] )
+    if isinstance(lines,bytes):
+        lines = lines.decode('utf-8')
     return lines
 
 # --- general algorithms ---
