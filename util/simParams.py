@@ -527,11 +527,11 @@ class simParams:
                 snStr = ' (Primordial Only)'
                 if '_josh' in run and variant == 'PO': snStr = '_%d (Primordial Only)'
                 if '_josh' in run and variant == 'MO': snStr = '_%d (Primordial + Metal)'
-                if '_josh' in run and variant == 'FP': snStr = '_%d (Full Physics)'
-                if '_josh' in run and variant == 'FPorig': snStr = ' (Full Physics)'
-                if '_josh' in run and variant == 'FP1': snStr = '_%d (Full Physics high-time-res)'
-                if '_josh' in run and variant == 'FP2': snStr = '_%d (Full Physics high-time-res2)'
-                if '_josh' in run and variant == 'FP3': snStr = '_%d (Full Physics RecouplingDensity10)'
+                if '_josh' in run and variant == 'FP': snStr = '_%d (Galactic Winds)'
+                if '_josh' in run and variant == 'FPorig': snStr = ' (Galactic Winds)'
+                if '_josh' in run and variant == 'FP1': snStr = '_%d (Galactic Winds high-time-res)'
+                if '_josh' in run and variant == 'FP2': snStr = '_%d (Galactic Winds high-time-res2)'
+                if '_josh' in run and variant == 'FP3': snStr = '_%d (Galactic Winds RecouplingDensity10)'
                 if '_josh' in run and variant != 'FPorig': snStr = snStr % (self.res+1)
                 self.simName = 'L%d%s' % (self.res,snStr)
 

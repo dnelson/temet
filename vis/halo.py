@@ -37,6 +37,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial':
             print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
 
+        sP.subhaloInd = shID # attach for use later
         haloVirRad = gr['Group_R_Crit200']
         galHalfMassRad = sh['SubhaloHalfmassRad']
         galHalfMassRadStars = sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]
