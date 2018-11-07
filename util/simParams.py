@@ -735,20 +735,22 @@ class simParams:
 
         # attach various functions pre-specialized to this sP, for convenience
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
-                               cenSatSubhaloIndices
+                               cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                gcPath, groupCatNumChunks, \
                                auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity
 
-        self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift    = partial(snapNumToRedshift, self)
-        self.periodicDists        = partial(periodicDists, sP=self)
-        self.periodicDistsSq      = partial(periodicDistsSq, sP=self)
-        self.validSnapList        = partial(validSnapList, sP=self)
-        self.cenSatSubhaloIndices = partial(cenSatSubhaloIndices, sP=self)
-        self.simSubhaloQuantity   = partial(simSubhaloQuantity, self)
+        self.redshiftToSnapNum       = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift       = partial(snapNumToRedshift, self)
+        self.periodicDists           = partial(periodicDists, sP=self)
+        self.periodicDistsSq         = partial(periodicDistsSq, sP=self)
+        self.validSnapList           = partial(validSnapList, sP=self)
+        self.cenSatSubhaloIndices    = partial(cenSatSubhaloIndices, sP=self)
+        self.correctPeriodicDistVecs = partial(correctPeriodicDistVecs, sP=self)
+        self.correctPeriodicPosVecs  = partial(correctPeriodicPosVecs, sP=self)
+        self.simSubhaloQuantity      = partial(simSubhaloQuantity, self)
 
         self.snapshotSubsetP   = partial(snapshotSubsetParallel, self)
         self.snapshotSubset    = partial(snapshotSubset, self)

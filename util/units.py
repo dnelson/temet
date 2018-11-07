@@ -7,7 +7,6 @@ from builtins import *
 
 import numpy as np
 from util.helper import logZeroSafe, logZeroNaN, logZeroMin
-from cosmo.util import correctPeriodicDistVecs
 
 class units(object):
     """ Contains static methods which perform various unit conversions.
@@ -479,7 +478,7 @@ class units(object):
             else:
                 gas_pos[:,i] -= haloPos[:,i]
 
-        correctPeriodicDistVecs( gas_pos, self._sP )
+        self._sP.correctPeriodicDistVecs( gas_pos )
         xyz = self.codeLengthToKpc( gas_pos )
 
         rad = np.sqrt( xyz[:,0]**2.0 + xyz[:,1]**2.0 + xyz[:,2]**2.0 ) # equals np.linalg.norm(xyz,2,axis=1)
@@ -546,7 +545,7 @@ class units(object):
             else:
                 gas_pos[:,i] -= haloPos[:,i]
 
-        correctPeriodicDistVecs( gas_pos, self._sP )
+        self._sP.correctPeriodicDistVecs( gas_pos )
 
         xyz = self.codeLengthToKpc( gas_pos )
         rad = np.linalg.norm(xyz, 2, axis=1)
