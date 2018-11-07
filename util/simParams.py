@@ -737,7 +737,7 @@ class simParams:
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
                                cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
-                               gcPath, groupCatNumChunks, \
+                               gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, \
                                auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity
@@ -767,6 +767,8 @@ class simParams:
         self.loadMPB           = partial(loadMPB, self)
         self.loadMDB           = partial(loadMDB, self)
         self.loadMPBs          = partial(loadMPBs, self)
+
+        self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
@@ -1155,21 +1157,18 @@ class simParams:
     def dmParticleMass(self):
         """ Return dark matter particle mass (scalar constant) in code units. """
         # load snapshot header for MassTable
-        from cosmo.load import snapshotHeader
-        h = snapshotHeader(self)
+        h = self.snapshotHeader()
         return np.array( h['MassTable'][self.ptNum('dm')], dtype='float32' )
 
     @property
     def numHalos(self):
         """ Return number of FoF halos / groups in the group catalog at this sP.snap. """
-        from cosmo.load import groupCatHeader
-        return groupCatHeader(self)['Ngroups_Total']
+        return self.groupCatHeader()['Ngroups_Total']
 
     @property
     def numSubhalos(self):
         """ Return number of Subfind subhalos in the group catalog at this sP.snap. """
-        from cosmo.load import groupCatHeader
-        return groupCatHeader(self)['Nsubgroups_Total']
+        return self.groupCatHeader()['Nsubgroups_Total']
 
     # operator overloads
     def __eq__(self, other): 
