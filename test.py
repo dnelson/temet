@@ -8,9 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
-import pdb
 from os import path, mkdir
-from datetime import datetime
 import matplotlib.pyplot as plt
 
 import cosmo
@@ -1142,6 +1140,8 @@ def testOffsets():
 
 def domeTestData():
     """ Write out test data files for planetarium vendors. """
+    from datetime import datetime
+
     sP = simParams(res=1820,run='illustris',redshift=0.0)
     shFields = ['SubhaloPos','SubhaloVel','SubhaloMass','SubhaloSFR']
 

@@ -36,11 +36,10 @@ For example, add the following lines to your `.bashrc` file
         export PYTHONPATH+=:$HOME/python/:$HOME/illustris_release/
         export PYTHONSTARTUP=$HOME/python/.startup.py
 
-4. Load or install python (3.7.x currently tested). For example, on the MPCDF machines, using a clean anaconda
+4. Load or install python (3.6.x and 3.7.x currently tested). For example, on the MPCDF machines, using a clean anaconda
 
         module load anaconda/3_5.3.0
-        cd ~
-        mkdir -p .local/envs
+        mkdir -p ~/.local/envs
         conda create --prefix=~/.local/envs/myenv python=3.7
         source activate ~/.local/envs/myenv
 
@@ -54,13 +53,31 @@ For example, add the following lines to your `.bashrc` file
 
         module load anaconda/3_5.3.0
         source activate ~/.local/envs/myenv
-        export PATH=~/.local/envs/myenv/bin/:$PATH
+        export PATH=$HOME/.local/envs/myenv/bin/:$PATH
 
-5. Install all python dependencies as required
+5. The FSPS stellar population synthesis package is required
+
+        cd ~/
+        git clone https://github.com/cconroy20/fsps
+
+    edit the `src/sps_vars.f90` file and switch the defaults spectral and isochrone libraries to
+
+        MILES 1
+        PADOVA 1
+
+    compile FSPS
+
+        make
+
+    add the following line to your `.bashrc` file
+
+        export SPS_HOME=$HOME/fsps/
+
+6. Install all python dependencies as required
 
         pip install -r ~/python/requirements.txt
 
-6. Point `matplotlib` to the default settings file
+7. Point `matplotlib` to the default settings file
 
         mkdir -p ~/.config/matplotlib
         ln -s ~/python/matplotlibrc ~/.config/matplotlib/
@@ -72,7 +89,7 @@ For example, add the following lines to your `.bashrc` file
         wget https://github.com/google/fonts/raw/master/apache/roboto/Roboto-Light.ttf
         wget https://github.com/google/fonts/raw/master/apache/roboto/Roboto-LightItalic.ttf
 
-7. Organize simulation directories as follows
+8. Organize simulation directories as follows
 
         mkdir ~/sims.TNG
         mkdir ~/sims.TNG/L75n1820TNG

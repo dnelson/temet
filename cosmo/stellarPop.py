@@ -324,7 +324,7 @@ class sps():
 
         # load
         with h5py.File(saveFilename,'r') as f:
-            self.bands  = f['bands'][()]
+            self.bands  = [b.decode('ascii') for b in f['bands'][()]]
             self.ages   = f['ages_logGyr'][()]
             self.metals = f['metals_log'][()]
             self.wave   = f['wave_nm'][()]
@@ -401,8 +401,8 @@ class sps():
                                      dust_tesc = dust_tesc,
                                      dust1_index = dust1_index)
 
-        assert pop.spec_library == 'miles'
-        assert pop.isoc_library == 'pdva' # padova07, otherwise generalize this
+        assert pop.spec_library == b'miles'
+        assert pop.isoc_library == b'pdva' # padova07, otherwise generalize this
 
         # different tracks are available at discrete metallicities (linear mass_Z/mass_tot, not in solar!)
         if iso == 'padova07':
@@ -452,9 +452,17 @@ class sps():
         for i in range(pop.zlegend.size):
             print('  [%2d of %2d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
 
-            # update metallicity step, request magnitudes in all bands
+            # update metallicity step
             pop.params['zmet'] = i + 1 # 1-indexed
 
+            # if including nebular emission, update gas-phase metallicity and gas ionization parameter
+            # note: for full self-consistency, should have Z_gas == Z_stars
+            if self.emlines:
+                pop.params['gas_logz'] = np.log10(pop.zlegend[i]/Zsolar) # in units of log (Z_gas/Z_sun)
+                pop.params['gas_logu'] = -2.0 # log ionization parameter, default (how to choose? obs scaling?)
+                print('   warning: Inclusion of emission lines assumes default, constant U = -2.0.')
+
+            # request magnitudes in all bands
             redshift = self.sP.redshift if self.redshifted else None
             x = pop.get_mags(bands=self.bands, redshift=redshift) # by default, redshift zero
 
@@ -478,6 +486,8 @@ class sps():
                                          zmet = i+1,
                                          add_neb_continuum = True,
                                          add_neb_emission = True, # need True for emline properties
+                                         gas_logz = np.log10(pop.zlegend[i]/Zsolar),
+                                         gas_logu = -2.0, # default
                                          add_dust_emission = True,
                                          imf_type = self.imfTypes[imf],
                                          dust_type = dust_type,
@@ -492,7 +502,7 @@ class sps():
 
         # save
         with h5py.File(saveFilename, 'w') as f:
-            f['bands'] = self.bands
+            f['bands'] = [b.encode('ascii') for b in self.bands]
             f['ages_logGyr'] = np.array(pop.log_age - 9.0, dtype='float32') # log(yr) -> log(Gyr)
             f['metals_log']  = np.array(np.log10(pop.zlegend), dtype='float32') # linear -> log
             f['wave_nm']     = np.array(wave0 / 10.0, dtype='float32') # Ang -> nm
@@ -1382,37 +1392,47 @@ def debug_check_rawspec():
     from plot.config import figsize, sfclean, linestyles
 
     zInd = 5
-    ageInd = 40
+    ageInd = 30
     redshift = 0.8
 
+    paths = ['/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5',
+             '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5',]
+
+    # start plot
+    fig = plt.figure(figsize=(figsize[0]*sfclean*1.8,figsize[1]*sfclean))
+    ax1 = fig.add_subplot(121)
+    ax2 = fig.add_subplot(122)
+
+    ax1.set_xlabel('$\lambda$ [ Angstroms ]')
+    ax1.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
+    ax1.set_xlim([8000 / (1+redshift),9000 / (1+redshift)]) # rest
+
+    ax2.set_xlabel('$\lambda$ [ Angstroms ]')
+    ax2.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
+    ax2.set_xlim([2000,10000])
+    ax2.set_yscale('log')
+
     # load
-    path = '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.8.hdf5'
-    #path = '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143.hdf5'
+    for path in paths:
 
-    with h5py.File(path,'r') as f:
-        spec = f['spec_lsun_hz'][()]
-        wave = f['wave_nm'][()] * 10
+        with h5py.File(path,'r') as f:
+            spec = f['spec_lsun_hz'][()]
+            wave = f['wave_nm'][()] * 10
+            ages   = f['ages_logGyr'][()]
+            metals = f['metals_log'][()]
 
-    # plot
-    fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
-    ax = fig.add_subplot(111)
-    ax.set_xlabel('$\lambda$ [ Angstroms, observed-frame ]')
-    ax.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
-    #ax.set_ylim([1.8,2.2]) # obs
-    ax.set_ylim([0.9,1.4]) # rest
-    #ax.set_xlim([8000, 9000]) # obs
-    ax.set_xlim([8000 / (1+redshift),9000 / (1+redshift)]) # rest
+        label = 'Z [%d], age [%d], %s' % (metals[zInd],ages[ageInd],path.split('143_')[1].replace('.hdf5',''))
+        xx = wave # rest
+        yy = spec[zInd,ageInd,:] * 1e14
 
-    label = 'Z [%d], age [%d]' % (zInd,ageInd)
-    #xx = wave * (1+0.8) # obs
-    xx = wave # rest
-    yy = spec[zInd,ageInd,:] * 1e14
+        w = np.where( (xx >= ax1.get_xlim()[0]) & (xx <= ax1.get_xlim()[1]) )
+        ax1.plot(xx[w], yy[w], ls='-', marker='o', markersize=1.5, label=label)
 
-    ax.plot(xx, yy, ls='-', marker='o', markersize=1.5, label=label)
+        w = np.where( (xx >= ax2.get_xlim()[0]) & (xx <= ax2.get_xlim()[1]) )
+        ax2.plot(xx[w], yy[w], ls='-', label=label)
 
-    ax.legend()
+    # finish plot
+    ax1.legend()
     fig.tight_layout()
     fig.savefig('debug_rawspec.pdf')
     plt.close(fig)
-
-    #import pdb; pdb.set_trace()
