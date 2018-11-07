@@ -761,8 +761,7 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
 def snapNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a snapshot, by checking for existence of files inside directory. """
     _, sbStr1, sbStr2 = subboxVals(subbox)
-    path = basePath + sbStr2 + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/snap*.hdf5'
-
+    path = basePath + sbStr2 + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/snap*.*.hdf5'
     nChunks = len(glob.glob(path))
 
     if nChunks == 0:
@@ -775,9 +774,10 @@ def groupCatNumChunks(basePath, snapNum, subbox=None):
     _, sbStr1, sbStr2 = subboxVals(subbox)
     path = basePath + sbStr2 + 'groups_' + sbStr1 + str(snapNum).zfill(3)
 
-    nChunks = len(glob.glob(path+'/fof_*.hdf5'))
+    nChunks = len(glob.glob(path+'/fof_*.*.hdf5'))
     if nChunks == 0:
-        nChunks += len(glob.glob(path+'/groups_*.hdf5'))
+        # only if original 'fof_subhalo_tab' files are not present, then count 'groups' files instead
+        nChunks += len(glob.glob(path+'/groups_*.*.hdf5'))
 
     if nChunks == 0:
         nChunks = 1 # single file per snapshot
@@ -1258,6 +1258,11 @@ def snapshotSubset(sP, partType, fields,
         # Bmag in micro-Gauss [physical uG]
         if field.lower() in ['bmag_ug', 'bfieldmag_ug']:
             r[field] = snapshotSubset(sP, partType, 'bmag', **kwargs) * 1e6
+
+        # scalar B^2 (from vector field) [code units]
+        if field.lower() in ["b2","bsq"]:
+            b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
+            r[field] = ( b[:,0]*b[:,0] + b[:,1]*b[:,1] + b[:,2]*b[:,2] )
 
         # Alfven velocity magnitude (of electron plasma) [physical km/s]
         if field.lower() in ["vmag_alfven", "velmag_alfven"]:
