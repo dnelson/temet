@@ -8,7 +8,6 @@ from builtins import *
 import numpy as np
 import h5py
 import illustris_python as il
-import cosmo.load
 import copy
 from os.path import isfile, isdir
 from os import mkdir
@@ -19,6 +18,7 @@ from util.helper import closest
 def redshiftToSnapNum(redshifts=None, sP=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
     from util.helper import closest
+    from cosmo.load import subboxVals
 
     assert sP is not None, "Must input sP."
 
@@ -29,7 +29,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 
     nSnaps = 400 # maximum
 
-    sbNum, sbStr1, sbStr2 = cosmo.load.subboxVals(sP.subbox)
+    sbNum, sbStr1, sbStr2 = subboxVals(sP.subbox)
     if sP.subbox is not None:
         nSnaps *= 10
         if 'tng' in sP.run:
@@ -160,7 +160,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         w = []
 
         for snap in snaps:
-            fileName = cosmo.load.snapPath(sP.simPath, snap, checkExists=True)
+            fileName = sP.snapPath(snap, checkExists=True)
             if fileName is None: continue
             with h5py.File(fileName,'r') as f:
                 if 'PartType'+str(sP.ptNum('tracer')) in f:
@@ -175,7 +175,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         w = []
 
         for snap in snaps:
-            fileName = cosmo.load.snapPath(sP.simPath, snap, checkExists=True)
+            fileName = sP.snapPath(snap, checkExists=True)
             if fileName is None: continue
             with h5py.File(fileName,'r') as f:
                 if '/PartType0/MagneticField' in f:
@@ -239,11 +239,13 @@ def multiRunMatchedSnapList(runList, method='expand', **kwargs):
 
 def snapNumToRedshift(sP, snap=None, time=False, all=False):
     """ Convert snapshot number(s) to redshift or time (scale factor). """
+    from cosmo.load import subboxVals
+
     if not all and snap is None:
         snap = sP.snap
         assert snap is not None, "Input either snap or sP.snap required."
 
-    _, sbStr1, _ = cosmo.load.subboxVals(sP.subbox)
+    _, sbStr1, _ = subboxVals(sP.subbox)
 
     # load snapshot -> redshift mapping files
     r = {}
@@ -304,11 +306,11 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         subhaloInds_from = subhaloInds_from_search[ind_from]
 
         # load halo masses and positions from both runs
-        mhalo_to = cosmo.load.groupCat(sP_to, fieldsSubhalos=['mhalo_200_log'])
-        mhalo_from = cosmo.load.groupCat(sP_from, fieldsSubhalos=['mhalo_200_log'])
+        mhalo_to = sP_to.groupCat(fieldsSubhalos=['mhalo_200_log'])
+        mhalo_from = sP_from.groupCat(fieldsSubhalos=['mhalo_200_log'])
 
-        pos_from = cosmo.load.groupCat(sP_from, fieldsSubhalos=['SubhaloPos'])['subhalos']
-        pos_to = cosmo.load.groupCat(sP_to, fieldsSubhalos=['SubhaloPos'])['subhalos']
+        pos_from = sP_from.groupCat(fieldsSubhalos=['SubhaloPos'])['subhalos']
+        pos_to = sP_to.groupCat(fieldsSubhalos=['SubhaloPos'])['subhalos']
 
         pos_to_cen = pos_to[cen_inds_to,:]
 
@@ -610,9 +612,9 @@ def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuz
         otherwise they are attributed to the closest (prior) subhalo.
     """
     if SubhaloLenType is None:
-        SubhaloLenType = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
+        SubhaloLenType = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])['subhalos']
     if SnapOffsetsSubhalo is None:
-        SnapOffsetsSubhalo = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+        SnapOffsetsSubhalo = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
     gcLenType = SubhaloLenType[:,sP.ptNum(ptName)]
     gcOffsetsType = SnapOffsetsSubhalo[:,sP.ptNum(ptName)][:-1]
@@ -655,9 +657,9 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
         and SnapOffsetsGroup (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
     """
     if GroupLenType is None:
-        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
+        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])['halos']
     if SnapOffsetsGroup is None:
-        SnapOffsetsGroup = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+        SnapOffsetsGroup = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
     gcLenType = GroupLenType[:,sP.ptNum(ptName)]
     gcOffsetsType = SnapOffsetsGroup[:,sP.ptNum(ptName)][:-1]
@@ -686,7 +688,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
     """ For a list of subhalo IDs, return a dictionary with an entry for each partType, 
     whose value is a 2-tuple of the particle index range bounding the members of the 
     parent groups of this list of subhalo IDs. Indices are inclusive in the sense of 
-    cosmo.load.snapshotSubset(). If groups==True, then the input IDs are assumed to be 
+    sP.snapshotSubset(). If groups==True, then the input IDs are assumed to be 
     actually group (FoF) IDs, and we return bounding ranges for them. If strictSubhalos==True, 
     then do not use parent groups to bound subhalo members, instead return exact bounding 
     index ranges. """
@@ -708,16 +710,16 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
 
     if not groups:
         # get parent groups of extremum subhalos
-        first_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=first_sub)['SubhaloGrNr']
-        last_sub_groupID = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloGrNr']
+        first_sub_groupID = sP.groupCatSingle(subhaloID=first_sub)['SubhaloGrNr']
+        last_sub_groupID = sP.groupCatSingle(subhaloID=last_sub)['SubhaloGrNr']
     else:
         # input 'subhaloIDs' are already group IDs
         first_sub_groupID = first_sub
         last_sub_groupID = last_sub
 
     # load group offsets
-    snapHeader = cosmo.load.snapshotHeader(sP)
-    snapOffsets = cosmo.load.groupCatOffsetListIntoSnap(sP)
+    snapHeader = sP.snapshotHeader()
+    snapOffsets = sP.groupCatOffsetListIntoSnap()
     offsets_pt = snapOffsets['snapOffsetsGroup']
 
     if strictSubhalos:
@@ -729,7 +731,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
         last_sub_groupID = last_sub
 
         # load length of last subhalo
-        last_sub_length = cosmo.load.groupCatSingle(sP, subhaloID=last_sub)['SubhaloLenType']
+        last_sub_length = sP.groupCatSingle(subhaloID=last_sub)['SubhaloLenType']
 
     r = {}
     for ptName in ['gas','dm','stars','bhs']:
@@ -769,16 +771,14 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
         if gc is None:
             # load what we need
             assert sP is not None
-            gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
-
-        nSubhalos = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+            gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
 
         # halos with a primary subhalo
         wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
 
         # indices
         w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
-        w2 = np.arange(nSubhalos) # centrals + satellites
+        w2 = np.arange(sP.numSubhalos) # centrals + satellites
         w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
 
         # cache
@@ -878,8 +878,7 @@ def subboxSubhaloCat(sP, sbNum):
         r['FullBoxSnapNum'][w[-1]] = i
 
     # load all MPBs (SubLink) of subhalos at this ending sP.snap
-    h = cosmo.load.groupCatHeader(sP)
-    ids = np.arange(h['Nsubgroups_Total'])
+    ids = np.arange(sP.numSubhalos)
     fields = ['SubhaloPos','SubhaloIDMostbound','SnapNum']
 
     mpbs = loadMPBs(sP, ids, fields=fields, treeName='SubLink')
@@ -1038,7 +1037,7 @@ def subboxSubhaloCatExtend(sP, sbNum):
                 loadFields.append('BH_Mass')
                 
             # particle data load   
-            x = cosmo.load.snapshotSubset(sP_sub, ptType, loadFields)
+            x = sP_sub.snapshotSubset(ptType, loadFields)
 
             if x['count'] == 0:
                 continue

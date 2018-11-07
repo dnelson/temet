@@ -15,7 +15,6 @@ from os import mkdir, makedirs
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
 from util.helper import iterable, logZeroNaN, curRepoVersion, pSplitRange, numPartToChunkLoadSize
-from cosmo.util import periodicDists
 
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False, expandPartial=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
@@ -503,13 +502,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
             # radial distance to parent halo [code, pkpc, log pkpc, r200frac] (centrals will have 0)
             if quant in ['rdist_code','rdist','rdist_log','rdist_rvir']:
-                from cosmo.util import periodicDists
                 gc = groupCat(sP, fieldsHalos=['GroupPos','Group_R_Crit200'], 
                                   fieldsSubhalos=['SubhaloPos','SubhaloGrNr'])
 
                 parInds = gc['subhalos']['SubhaloGrNr']
-                r[field] = periodicDists( gc['halos']['GroupPos'][parInds,:], 
-                                          gc['subhalos']['SubhaloPos'], sP)
+                r[field] = sP.periodicDists( gc['halos']['GroupPos'][parInds,:], 
+                                             gc['subhalos']['SubhaloPos'])
 
                 if quant in ['rdist','rdist_log']:
                     r[field] = sP.units.codeLengthToKpc( r[field] )
@@ -1640,7 +1638,7 @@ def snapshotSubset(sP, partType, fields,
             halo = groupCatSingle(sP, haloID=haloID)
             haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
 
-            rad = periodicDists(haloPos, pos, sP)
+            rad = sP.periodicDists(haloPos, pos)
             if '_kpc' in field: rad = sP.units.codeLengthToKpc(rad)
             if '_rvir' in field: rad = rad / halo['Group_R_Crit200']
 
