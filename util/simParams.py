@@ -7,7 +7,8 @@ from builtins import *
 
 import platform
 import numpy as np
-from os import path
+import getpass
+from os import path, mkdir
 from functools import partial
 
 from util.units import units
@@ -19,7 +20,8 @@ class simParams:
     simPath     = ''    # root path to simulation snapshots and group catalogs
     arepoPath   = ''    # root path to Arepo and param.txt for e.g. projections/fof
     savPrefix   = ''    # save prefix for simulation (make unique, e.g. 'G')
-    simName     = ''    # label to add to plot legends (e.g. "GADGET", "AREPO", "FEEDBACK")
+    simName     = ''    # label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
+    simNameAlt  = ''    # alternative label for simulation names (e.g. "L75n1820FP", "L205n1250TNG_DM")
     plotPath    = ''    # working path to put plots
     derivPath   = ''    # path to put derivative files ("data.files/")
     postPath    = ''    # path to put postprocessed files ("postprocessing/")
@@ -91,6 +93,10 @@ class simParams:
                        haloInd=None, subhaloInd=None, refPos=None, refVel=None):
         """ Fill parameters based on inputs. """
         self.basePath = path.expanduser("~") + '/'
+
+        if getpass.getuser() != 'dnelson':
+            self.basePath = '/u/dnelson/'
+            print('Warning: for user [%s] setting hard-coded basePath [%s]' % (getpass.getuser(),self.basePath))
 
         # general validation
         if not run:
@@ -283,6 +289,7 @@ class simParams:
 
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
+            self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
             if res in res_L35+res_L75+res_L205:#+res_L680:
@@ -385,6 +392,7 @@ class simParams:
                 self.trMassConst = self.targetGasMass / self.trMCPerCell
 
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'FP/'
+                self.simNameAlt = 'L'+bs+'n'+str(res)+'FP'
                 self.savPrefix  = 'I'
                 self.colors     = ['#e67a22', '#b35f1b', '#804413'] # brown, light to dark
 
@@ -394,9 +402,13 @@ class simParams:
 
             if run == 'illustris_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'DM/'
+                self.simNameAlt = 'L'+bs+'n'+str(res)+'DM'
                 self.savPrefix  = 'IDM'
-                self.simName    = 'ILLUSTRIS_DM'
                 self.colors     = ['#777777', '#444444', '#111111'] # gray, light to dark
+
+                if res == 455:  self.simName = 'Illustris-3-Dark'
+                if res == 910:  self.simName = 'Illustris-2-Dark'
+                if res == 1820: self.simName = 'Illustris-1-Dark'
 
         # EAGLE
         if run in ['eagle','eagle_dm']:
@@ -424,6 +436,7 @@ class simParams:
 
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'FP/'
                 self.savPrefix  = 'E'
+                self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'FP'
 
                 if res == 1504: self.simName = 'Eagle100-1' #'Eagle-L68n1504FP'
 
@@ -431,6 +444,7 @@ class simParams:
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'
                 self.savPrefix  = 'EDM'
                 self.simName    = 'Eagle100-1-Dark' #'Eagle-L68n1504DM'
+                self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'DM'
 
         # ZOOMS-1 (paper.zoomsI, suite of 10 zooms, 8 published, numbering permuted)
         if run in ['zooms','zooms_dm']:
@@ -549,9 +563,9 @@ class simParams:
 
             self.gravSoft    = 5.0
 
-            self.arepoPath  = self.basePath + 'sims.other/Millennium1/'
+            self.arepoPath  = self.basePath + 'sims.other/Millennium-1/'
             self.savPrefix  = 'MIL'
-            self.simName    = 'Millennium-I'
+            self.simName    = 'Millennium-1'
             self.colors     = ['#777777'] # gray
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
@@ -645,12 +659,23 @@ class simParams:
         self.postPath  = self.arepoPath + 'postprocessing/'
         self.plotPath  = self.basePath + 'plots/'
 
+        if self.simNameAlt == '':
+            self.simNameAlt = self.simName
+
         if not path.isdir(self.simPath):
             raise Exception("simParams: it appears [%s] does not exist." % self.arepoPath)
 
         # if data.files/ doesn't exist but postprocessing does (e.g. dev runs), use postprocessing/ for all
         if not path.isdir(self.derivPath):
             self.derivPath = self.postPath
+
+        # if wwwrun user, override derivPath with a local filesystem cache location
+        if getpass.getuser() != 'dnelson':
+            #self.derivPath = '/var/www/cache/backend_freyator/%s/' % self.simName
+            self.derivPath = '/freya/ptmp/mpa/dnelson/cache/%s/' % self.simName
+            if not path.isdir(self.derivPath):
+                mkdir(self.derivPath)
+                print('Made new directory [%s].' % self.derivPath)
 
         # if variant passed in, see if it requests a subbox
         if self.variant is not 'None' and 'subbox' in self.variant:
@@ -678,7 +703,8 @@ class simParams:
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
                                cenSatSubhaloIndices
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
-                               auxCat, snapshotSubsetParallel, snapHasField
+                               gcPath, groupCatNumChunks, \
+                               auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity
 
@@ -690,17 +716,21 @@ class simParams:
         self.cenSatSubhaloIndices = partial(cenSatSubhaloIndices, sP=self)
         self.simSubhaloQuantity   = partial(simSubhaloQuantity, self)
 
-        self.snapshotSubsetP = partial(snapshotSubsetParallel, self)
-        self.snapshotSubset  = partial(snapshotSubset, self)
-        self.snapshotHeader  = partial(snapshotHeader, sP=self)
-        self.snapHasField    = partial(snapHasField, self)
-        self.groupCatSingle  = partial(groupCatSingle, sP=self)
-        self.groupCatHeader  = partial(groupCatHeader, sP=self)
-        self.groupCat        = partial(groupCat, sP=self)
-        self.auxCat          = partial(auxCat, self)
-        self.loadMPB         = partial(loadMPB, self)
-        self.loadMDB         = partial(loadMDB, self)
-        self.loadMPBs        = partial(loadMPBs, self)
+        self.snapshotSubsetP   = partial(snapshotSubsetParallel, self)
+        self.snapshotSubset    = partial(snapshotSubset, self)
+        self.snapshotHeader    = partial(snapshotHeader, sP=self)
+        self.snapHasField      = partial(snapHasField, self)
+        self.snapNumChunks     = partial(snapNumChunks, self.simPath)
+        self.snapPath          = partial(snapPath, self.simPath)
+        self.gcPath            = partial(gcPath, self.simPath)
+        self.groupCatSingle    = partial(groupCatSingle, sP=self)
+        self.groupCatHeader    = partial(groupCatHeader, sP=self)
+        self.groupCatNumChunks = partial(groupCatNumChunks, self.simPath)
+        self.groupCat          = partial(groupCat, sP=self)
+        self.auxCat            = partial(auxCat, self)
+        self.loadMPB           = partial(loadMPB, self)
+        self.loadMDB           = partial(loadMDB, self)
+        self.loadMPBs          = partial(loadMPBs, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
@@ -960,7 +990,14 @@ class simParams:
             assert self.redshift >= 0.0
             if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
-        self.data = {}
+
+        # clear cache
+        old_data = {}
+        for key in self.data:
+            # save mergerTreeQuant values (which are simulation global, not snap specific, for now)
+            if 'mtq_' in key:
+                old_data[key] = self.data[key]
+        self.data = old_data
 
     def matchedSubhaloID(self, hID=None):
         """ Return a subhalo index (into the group catalog) for this simulation given a unique, 
