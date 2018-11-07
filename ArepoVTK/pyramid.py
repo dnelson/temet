@@ -8,7 +8,7 @@ pyramid.py
 
 import h5py
 import numpy as np
-import png
+from .png import Reader as pngReader, Writer as pngWriter
 import os.path
 from os import mkdir
 
@@ -250,11 +250,11 @@ def saveImageToPNG(filename, array_rgb):
     
     # open image and write
     if dims[2] == 3:
-        pngWriter = png.Writer(dims[0],dims[1],alpha=False,bitdepth=8)
+        pngWriter = pngWriter(dims[0],dims[1],alpha=False,bitdepth=8)
         pngWriter.write( img, np.reshape(array_rgb, (-1,dims[0]*dims[2])) )
         
     if dims[2] == 4:
-        pngWriter = png.Writer(dims[0],dims[1],alpha=True,bitdepth=8)
+        pngWriter = pngWriter(dims[0],dims[1],alpha=True,bitdepth=8)
         pngWriter.write( img, np.reshape(array_rgb, (-1,dims[0]*dims[2])) )
     
     img.close()
@@ -624,7 +624,7 @@ def make_pyramid_lower(config):
 
 def shuffle4imgs(fname,fname_out):
     # setup
-    r = png.Reader(filename=fname)
+    r = pngReader(filename=fname)
     columnCount, rowCount, pngData, metaData = r.asDirect() 
     
     dims = rowCount
@@ -652,7 +652,7 @@ def shuffle4imgs(fname,fname_out):
     
     # write
     pngFile = open(fname_out, 'wb')
-    pngWriter = png.Writer(dims,dims,alpha=False,bitdepth=8)
+    pngWriter = pngWriter(dims,dims,alpha=False,bitdepth=8)
     pngWriter.write( pngFile, np.reshape(image_3d_new, (-1,dims*3)) )
     pngFile.close()
     
@@ -671,7 +671,7 @@ def shuffleFixAll():
         
 def combine4to1(fnames_in,fname_out):
     # setup
-    r = png.Reader(filename=fnames_in[0])
+    r = pngReader(filename=fnames_in[0])
     columnCount, rowCount, pngData, metaData = r.asDirect() 
     
     dims = rowCount
@@ -695,7 +695,7 @@ def combine4to1(fnames_in,fname_out):
         image_3d_new[0:dims,0:dims,i] = image_3d[:,:,i]  # [2] -> LL
         
     # read [1]
-    r = png.Reader(filename=fnames_in[1])
+    r = pngReader(filename=fnames_in[1])
     columnCount, rowCount, pngData, metaData = r.asDirect() 
     image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
     
@@ -712,7 +712,7 @@ def combine4to1(fnames_in,fname_out):
         image_3d_new[0:dims,dims:,i]  = image_3d[:,:,i]  # [0] -> UL
         
     # read [2]
-    r = png.Reader(filename=fnames_in[2])
+    r = pngReader(filename=fnames_in[2])
     columnCount, rowCount, pngData, metaData = r.asDirect() 
     image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
     
@@ -729,7 +729,7 @@ def combine4to1(fnames_in,fname_out):
         image_3d_new[dims:,0:dims:,i] = image_3d[:,:,i]   # [3] -> LR
         
     # read [3]
-    r = png.Reader(filename=fnames_in[3])
+    r = pngReader(filename=fnames_in[3])
     columnCount, rowCount, pngData, metaData = r.asDirect() 
     image_2d = np.zeros((dims,3*dims),dtype=np.uint8)
     
@@ -748,7 +748,7 @@ def combine4to1(fnames_in,fname_out):
     # write
     print(" Writing...")
     pngFile = open(fname_out, 'wb')
-    pngWriter = png.Writer(dims*2,dims*2,alpha=False,bitdepth=8)
+    pngWriter = pngWriter(dims*2,dims*2,alpha=False,bitdepth=8)
     pngWriter.write( pngFile, np.reshape(image_3d_new, (-1,dims*2*3)) )
     pngFile.close()
     

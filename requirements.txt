@@ -10,7 +10,6 @@ numba==0.38.0
 numpy==1.14.3
 prospect===e84fed8
 pyslurm==17.2.0
-quadpy==0.12.5
 requests==2.18.4
 requests-oauthlib==0.8.0
 scipy==1.0.0
