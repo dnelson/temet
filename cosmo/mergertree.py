@@ -103,6 +103,9 @@ def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=Fal
 
     with h5py.File(offsetFile,'r') as f:
         # load all merger tree offsets
+        if prefix+'RowNum' not in f:
+            return result # early snapshots, no tree offset
+
         RowNums     = f[prefix+'RowNum'][()]
         SubhaloIDs  = f[prefix+'SubhaloID'][()]
 

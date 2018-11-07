@@ -898,7 +898,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     efrDirs = False
 
     if '_res' in dust or sizes is True:
-        if isinstance(Nside, long):
+        if isinstance(Nside, int):
             # numeric Nside -> healpix vertices as projection vectors
             nProj = nside2npix(Nside)
             projVecs = pix2vec(Nside,range(nProj),nest=True)
@@ -1431,9 +1431,10 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     return r, attrs
 
 def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
-    """ For every subhalo, compute an assembly/related quantity using a merger tree. """
+    """ For every subhalo, compute an assembly/related quantity using a merger tree. 
+    If smoothing is not None, then a tuple request [method,windowSize,windowVal,order]. """
     from scipy.signal import medfilt
-    assert quant in ['zForm']
+    assert quant in ['zForm','isSat_atForm','rad_rvir_atForm','dmFrac_atForm']
     assert pSplit is None # not implemented
 
     def _ma(X, windowSize):
@@ -1451,40 +1452,84 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
         """ Running median. """
         return medfilt(X, windowSize)
 
-    # process smoothing request [method,windowSize,windowVal,order]
-    assert len(smoothing) == 3
-    assert smoothing[2] == 'snap' # todo: e.g. Gyr, scalefac
-
     # prepare catalog metadata
-    desc   = "Merger tree quantity (%s) using smoothing [%s]." % (quant,'_'.join([str(s) for s in smoothing]))
+    desc   = "Merger tree quantity (%s)." % quant
+    if smoothing is not None:
+        desc += " Using smoothing [%s]." % '_'.join([str(s) for s in smoothing])
     select = "All Subfind subhalos."
 
     # load snapshot and subhalo information
     redshifts = snapNumToRedshift(sP, all=True)
 
-    gcH = cosmo.load.groupCatHeader(sP)
-    nSubsTot = gcH['Nsubgroups_Total']
+    nSubsTot = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
 
-    ids = np.arange(nSubsTot, dtype='int32')
+    ids = np.arange(nSubsTot, dtype='int32') # currently, always process all
 
-    # allocate return, NaN indicates not computed (e.g. not in tree at sP.snap)
-    r = np.zeros( nSubsTot, dtype='float32' )
-    r.fill(np.nan)
-
-    # load all trees at once
+    # choose tree fields to load, and validate smoothing request
+    groupFields = None
     fields = ['SnapNum']
 
     if quant == 'zForm':
-        fields.append('SubhaloMass')
+        fields += ['SubhaloMass']
+        mpb_valkey = 'SubhaloMass'
 
+        dtype = 'float32'
+        assert len(smoothing) == 3
+        assert smoothing[2] == 'snap' # todo: e.g. Gyr, scalefac
+    elif quant == 'isSat_atForm':
+        fields += ['SubfindID','SubhaloGrNr']
+        groupFields = ['GroupFirstSub']
+        mpb_valkey = 'SubfindID'
+
+        dtype = 'int16'
+        assert smoothing is None
+    elif quant == 'rad_rvir_atForm':
+        fields += ['SubhaloGrNr','SubhaloPos']
+        groupFields = ['GroupPos','Group_R_Crit200']
+        mpb_valkey = 'SubhaloGrNr'
+
+        dtype = 'float32'
+        assert smoothing is None
+    elif quant == 'dmFrac_atForm':
+        fields += ['SubhaloMass','SubhaloMassType']
+        mpb_valkey = 'SubhaloMassType'
+        dmPtNum = sP.ptNum('dm')
+
+        dtype = 'float32'
+        assert smoothing is None
+
+    if groupFields is not None:
+        # we also need group properties, at all snapshots, so load now
+        cacheKey = 'mtq_%s' % quant
+        if cacheKey in sP.data:
+            print('Loading [%s] from sP.data cache...' % cacheKey)
+            groups = sP.data[cacheKey]
+        else:
+            groups = {}
+            prevSnap = sP.snap
+
+            for snap in sP.validSnapList():
+                sP.setSnap(snap)
+                if snap % 10 == 0: print('%d%%' % (float(snap)/len(sP.validSnapList())*100), end=', ')
+                groups[snap] = sP.groupCat(fieldsHalos=groupFields)['halos']
+
+            sP.setSnap(prevSnap)
+            sP.data[cacheKey] = groups
+            print('Saved [%s] into sP.data cache.' % cacheKey)
+
+    # allocate return, NaN indicates not computed (e.g. not in tree at sP.snap)
+    r = np.zeros( nSubsTot, dtype=dtype )
+    r.fill(np.nan)
+
+    # load all trees at once
     mpbs = cosmo.mergertree.loadMPBs(sP, ids, fields=fields, treeName=treeName)
 
     # loop over subhalos
     printFac = 100.0 if sP.res > 512 else 10.0
 
     for i in range(nSubsTot):
-        if i % int(nSubsTot/printFac) == 0 and i <= nSubsTot:
-            print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
+        #if i % int(nSubsTot/printFac) == 0 and i <= nSubsTot:
+        #    print('   %4.1f%%' % (float(i+1)*100.0/nSubsTot))
 
         if i not in mpbs:
             continue # subhalo ID i not in tree at sP.snap
@@ -1492,62 +1537,105 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
         # todo: could generalize here into generic reduction operations over a given tree field
         # e.g. 'max', 'min', 'mean' of 'SubhaloSFR', 'SubhaloGasMetallicity', ... in addition to 
         # more specialized calculations such as formation time
-        loc_vals = mpbs[i]['SubhaloMass']
+        loc_vals = mpbs[i][mpb_valkey]
         loc_snap = mpbs[i]['SnapNum']
 
-        if loc_snap.size < smoothing[1]+1:
-            continue
-
         # smoothing
-        if smoothing[0] == 'mm': # moving median window of size N snapshots
-            loc_vals2 = _mm(loc_vals, windowSize=smoothing[1])
+        if smoothing is not None:
+            if loc_snap.size < smoothing[1]+1:
+                continue
 
-        if smoothing[0] == 'ma': # moving average window of size N snapshots
-            loc_vals2 = _ma(loc_vals, windowSize=smoothing[1])
+            if smoothing[0] == 'mm': # moving median window of size N snapshots
+                loc_vals = _mm(loc_vals, windowSize=smoothing[1])
 
-        if smoothing[0] == 'poly': # polynomial fit of Nth order
-            coeffs = np.polyfit(loc_snap, loc_vals, smoothing[1])
-            loc_vals2 = np.polyval(coeffs, loc_snap) # resample to original X-pts
+            if smoothing[0] == 'ma': # moving average window of size N snapshots
+                loc_vals = _ma(loc_vals, windowSize=smoothing[1])
 
-        assert loc_vals2.shape == loc_vals.shape
+            if smoothing[0] == 'poly': # polynomial fit of Nth order
+                coeffs = np.polyfit(loc_snap, loc_vals, smoothing[1])
+                loc_vals = np.polyval(coeffs, loc_snap) # resample to original X-pts
 
-        # where does half of max of [smoothed] total mass occur?
-        halfMaxVal = loc_vals2.max() * 0.5
+        # general quantities
+        # (currently none)
 
-        #if smoothing[0] == 'poly': # root find on the polynomial coefficients (not so simple)
-        #coeffs[-1] -= halfMaxVal # shift such that we find the M=halfMaxVal not M=0 roots
-        #roots = np.polynomial.polynomial.polyroots(coeffs[::-1]) # there are many
+        # custom quantities: 'at formation' (at end of MPB)
+        if quant == 'isSat_atForm':
+            #subpar = loc_vals[-1]
+            subid  = loc_vals[-1] #mpbs[i]['SubfindID'][-1]
+            subgrnr = mpbs[i]['SubhaloGrNr'][-1]
+            subgrnr_snap = loc_snap[-1]
+            grfirstsub = groups[subgrnr_snap][subgrnr]
 
-        w = np.where(loc_vals2 >= halfMaxVal)[0]
-        assert len(w) # by definition
+            if grfirstsub == subid:
+                # at the MPB last snapshot, GroupFirstSub[SubhaloGrNr] points to this same subhalo, 
+                # as recorded by SubfindID at this snapshot, so we are a central
+                r[i] = 0
+            else:
+                # GroupFirstSub points elsewhere
+                r[i] = 1
 
-        # linearly interpolate between snapshots
-        snap0 = loc_snap[w].min()
-        ind0 = w.max() # lowest snapshot where mass exceeds halfMaxVal
-        ind1 = ind0 + 1 # lower snapshot (earlier in time)
+        if quant == 'rad_rvir_atForm':
+            sub_pos = mpbs[i]['SubhaloPos'][-1,:]
+            subgrnr = loc_vals[-1]
+            subgrnr_snap = loc_snap[-1]
 
-        assert snap0 == loc_snap[ind0]
+            par_pos = groups[subgrnr_snap]['GroupPos'][subgrnr,:]
+            par_rvir = groups[subgrnr_snap]['Group_R_Crit200'][subgrnr] 
+            dist = sP.periodicDists(sub_pos, par_pos)
 
-        if ind0 == loc_vals.size-1:
-            # only at first tree entry
-            z_form = redshifts[loc_snap[ind0]]
-        else:
-            assert ind0 >= 0 and ind0 < loc_vals.size-1
-            assert ind1 > 0 and ind1 <= loc_vals.size-1
+            if dist == 0.0:
+                # mostly the case for centrals
+                r[i] = 0.0
+            elif par_rvir == 0.0:
+                # can be zero for small groups (why?)
+                r[i] = np.inf
+            else:
+                r[i] = dist / par_rvir
 
-            z0 = redshifts[loc_snap[ind0]]
-            z1 = redshifts[loc_snap[ind1]]
-            m0 = loc_vals2[ind0]
-            m1 = loc_vals2[ind1]
+        if quant == 'dmFrac_atForm':
+            sub_masstype = loc_vals[-1,:]
+            sub_mass = mpbs[i]['SubhaloMass'][-1]
 
-            assert m0 >= halfMaxVal and m1 <= halfMaxVal
+            r[i] = sub_masstype[dmPtNum] / sub_mass
 
-            # linear interpolation, find redshift where mass=halfMaxVal
-            z_form = (halfMaxVal-m0)/(m1-m0) * (z1-z0) + z0
-            assert z_form >= z0 and z_form <= z1
+        # custom quantities
+        if quant == 'zForm':
+            # where does half of max of [smoothed] total mass occur?
+            halfMaxVal = loc_vals.max() * 0.5
 
-        assert z_form >= 0.0
-        r[i] = z_form
+            #if smoothing[0] == 'poly': # root find on the polynomial coefficients (not so simple)
+            #coeffs[-1] -= halfMaxVal # shift such that we find the M=halfMaxVal not M=0 roots
+            #roots = np.polynomial.polynomial.polyroots(coeffs[::-1]) # there are many
+            w = np.where(loc_vals >= halfMaxVal)[0]
+            assert len(w) # by definition
+
+            # linearly interpolate between snapshots
+            snap0 = loc_snap[w].min()
+            ind0 = w.max() # lowest snapshot where mass exceeds halfMaxVal
+            ind1 = ind0 + 1 # lower snapshot (earlier in time)
+
+            assert snap0 == loc_snap[ind0]
+
+            if ind0 == loc_vals.size-1:
+                # only at first tree entry
+                z_form = redshifts[loc_snap[ind0]]
+            else:
+                assert ind0 >= 0 and ind0 < loc_vals.size-1
+                assert ind1 > 0 and ind1 <= loc_vals.size-1
+
+                z0 = redshifts[loc_snap[ind0]]
+                z1 = redshifts[loc_snap[ind1]]
+                m0 = loc_vals[ind0]
+                m1 = loc_vals[ind1]
+
+                assert m0 >= halfMaxVal and m1 <= halfMaxVal
+
+                # linear interpolation, find redshift where mass=halfMaxVal
+                z_form = (halfMaxVal-m0)/(m1-m0) * (z1-z0) + z0
+                assert z_form >= z0 and z_form <= z1
+
+            assert z_form >= 0.0
+            r[i] = z_form
 
     subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
     
@@ -2693,6 +2781,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_Bmag_halo_volWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='bmag',op='mean',rad='r015_1rvir_halo',weighting='volume'),
 
+   'Subhalo_B2_2rhalfstars_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad='2rhalfstars',weighting='volume'),
+   'Subhalo_B2_volWt' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='b2',op='mean',rad=None, weighting='volume'),
+
    'Subhalo_Temp_halo_massWt' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='temp_linear',op='mean',rad='r015_1rvir_halo',weighting='mass'),
    'Subhalo_Temp_halo_volWt' : \
@@ -2810,6 +2903,10 @@ fieldComputeFunctionMapping = \
    'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, minStellarMass=9.8),
+   'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_Seeing_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit',
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv',
+                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, seeing=0.4, minStellarMass=9.8),
+
 
    # UVJ: Martina Donnari
    'Subhalo_StellarPhot_UVJ_p07c_nodust'   : partial(subhaloStellarPhot, 
@@ -2905,6 +3002,10 @@ fieldComputeFunctionMapping = \
                                          smoothing=['ma',5,'snap']),
    'Subhalo_SubLink_zForm_poly7' : partial(mergerTreeQuant,treeName='SubLink',quant='zForm',
                                          smoothing=['poly',7,'snap']),
+
+   'Subhalo_SubLinkGal_isSat_atForm' : partial(mergerTreeQuant,treeName='SubLink_gal',quant='isSat_atForm'),
+   'Subhalo_SubLinkGal_dmFrac_atForm' : partial(mergerTreeQuant,treeName='SubLink_gal',quant='dmFrac_atForm'),
+   'Subhalo_SubLinkGal_rad_rvir_atForm' : partial(mergerTreeQuant,treeName='SubLink_gal',quant='rad_rvir_atForm'),
 
    'Subhalo_Tracers_zAcc_mean'   : partial(tracerTracksQuant,quant='acc_time_1rvir',op='mean',time=None),
    'Subhalo_Tracers_dtHalo_mean' : partial(tracerTracksQuant,quant='dt_halo',op='mean',time=None),

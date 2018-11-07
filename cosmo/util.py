@@ -109,7 +109,7 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 
     return snaps
   
-def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=False):
+def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=False, onlyFull=False):
     """ Return a list of all snapshot numbers which exist. """
     from util.helper import evenlySample, closest, contiguousIntSubsets
 
@@ -164,6 +164,21 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
             if fileName is None: continue
             with h5py.File(fileName,'r') as f:
                 if 'PartType'+str(sP.ptNum('tracer')) in f:
+                    w.append(snap)
+
+        w = np.array(w)
+
+    # only full snapshots? have to check now
+    if onlyFull:
+        assert 'TNG' in sP.simName # otherwise generalize
+        snaps = w
+        w = []
+
+        for snap in snaps:
+            fileName = cosmo.load.snapPath(sP.simPath, snap, checkExists=True)
+            if fileName is None: continue
+            with h5py.File(fileName,'r') as f:
+                if '/PartType0/MagneticField' in f:
                     w.append(snap)
 
         w = np.array(w)
@@ -493,7 +508,11 @@ def periodicDists(pt, vecs, sP, chebyshev=False):
     """
     assert vecs.ndim in [1,2]
     assert pt.ndim in [1,2]
-    assert vecs.shape[1] == 3 # cannot currently handle vecs.shape == [3] e.g. single vec
+
+    if vecs.ndim == 1:
+        # vecs.shape == [3], e.g. single 3-vector
+        assert vecs.size == 3
+        vecs = np.reshape(vecs, (1,3))
 
     # distances from one point (x,y,z) to a vector of other points [N,3]
     if pt.ndim == 1:
@@ -731,7 +750,8 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
 
         assert r[ptName][1] >= 0 or snapHeader['NumPart'][sP.ptNum(ptName)] == 1 # otherwise we read the last/unused element of offsets_pt
 
-    r['wind'] = r['stars']
+    if 'stars' in r:
+        r['wind'] = r['stars']
 
     return r
 
