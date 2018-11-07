@@ -15,6 +15,35 @@ from util.units import units
 from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq
 from illustris_python.util import partTypeNum
 
+run_abbreviations = {'illustris-1':['illustris',1820],
+                     'illustris-2':['illustris',910],
+                     'illustris-3':['illustris',455],
+                     'illustris-1-dark':['illustris_dm',1820],
+                     'illustris-2-dark':['illustris_dm',910],
+                     'illustris-3-dark':['illustris_dm',455],
+                     'tng100-1':['tng',1820],
+                     'tng100-2':['tng',910],
+                     'tng100-3':['tng',455],
+                     'tng100-1-dark':['tng_dm',1820],
+                     'tng100-2-dark':['tng_dm',910],
+                     'tng100-3-dark':['tng_dm',455],
+                     'tng300-1':['tng',2500],
+                     'tng300-2':['tng',1250],
+                     'tng300-3':['tng',625],
+                     'tng300-1-dark':['tng_dm',2500],
+                     'tng300-2-dark':['tng_dm',1250],
+                     'tng300-3-dark':['tng_dm',625],
+                     'tng50-1':['tng',2160],
+                     'tng50-2':['tng',1080],
+                     'tng50-3':['tng',540],
+                     'tng50-4':['tng',270],
+                     'tng50-1-dark':['tng_dm',2160],
+                     'tng50-2-dark':['tng_dm',10880],
+                     'tng50-3-dark':['tng_dm',540],
+                     'tng50-4-dark':['tng_dm',270],
+                     'eagle100-1':['eagle',1504],
+                     'milennium-1':['millennium',2160]}
+
 class simParams:
     # paths and names
     simPath     = ''    # root path to simulation snapshots and group catalogs
@@ -101,6 +130,11 @@ class simParams:
         # general validation
         if not run:
             raise Exception("Must specify run.")
+
+        if run.lower() in run_abbreviations:
+            # is run one of our known abbreviations? then fill in other parameters
+            run, res = run_abbreviations[run.lower()]
+
         if res and not isinstance(res, int):
             raise Exception("Res should be numeric.")
         if hInd is not None and not isinstance(hInd, (int,np.int32,np.int64)):
