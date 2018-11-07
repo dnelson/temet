@@ -20,7 +20,6 @@ from vis.lic import line_integral_convolution
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
 from util.helper import loadColorTable, logZeroMin, logZeroNaN
-from util.rotation import rotateCoordinateArray
 from util.boxRemap import remapPositions
 from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
 from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
@@ -39,12 +38,12 @@ totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
-def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=False, alsoSFRgasForStars=False):
+def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
     _, sbStr, _ = subboxVals(sP.subbox)
     irStr = '' if indRange is None else '.%d-%d' % (indRange[0],indRange[1])
-    shStr = '' if snapHsmlForStars is False else '.sv'
+    shStr = '' if useSnapHsml is False else '.sv'
     ngStr = '' if nNGB == 64 else '.ngb%d' % nNGB
     sfStr = '' if alsoSFRgasForStars is False else '.sfgas'
     saveFilename = sP.derivPath + 'hsml/hsml.%s%d.%s%s%s%s%s.hdf5' % \
@@ -54,14 +53,22 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
         mkdir(sP.derivPath + 'hsml/')
 
     # cache?
-    useCache = (sP.isPartType(partType, 'stars') and (not snapHsmlForStars or sP.isSubbox)) or \
+    useCache = (sP.isPartType(partType, 'stars') and (not useSnapHsml)) or \
                (sP.isPartType(partType, 'dm') and not snapHasField(sP, partType, 'SubfindHsml'))
+
+    if sP.isPartType(partType, 'stars'):
+        if sP.isSubbox: useCache = True # StellarHsml not saved for subboxes
+        if sP.snapHasField(partType, 'StellarHsml'): useCache = False # if present, always use these values for stars
+
+    if useSnapHsml:
+        useCache = False
+        assert sP.isPartType(partType,'stars') # don't have any logic for dm/gas below not to use snapshot values
 
     if useCache and isfile(saveFilename):
         # load if already made
         with h5py.File(saveFilename,'r') as f:
             hsml = f['hsml'][()]
-        # print(' loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
+        #print(' loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     else:
         # dark matter
@@ -81,7 +88,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
         # stars
         if sP.isPartType(partType, 'stars'):
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
-            if snapHsmlForStars:
+            if useSnapHsml:
                 if sP.snapHasField('stars', 'SubfindHsml'):
                     hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
                 else:
@@ -92,6 +99,9 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
                     pos_stars = snapshotSubset(sP, partType, 'pos', indRange=indRange)
                     pos_dm = snapshotSubset(sP, 'dm', 'pos', indRange=indRange_dm)
                     hsml = calcHsml(pos_dm, sP.boxSize, posSearch=pos_stars, nNGB=64, nNGBDev=4, treePrec='double')
+            elif sP.snapHasField('stars', 'StellarHsml'):
+                # use pre-saved nNGB=32 values
+                hsml = snapshotSubset(sP, partType, 'StellarHsml', indRange=indRange)
             elif alsoSFRgasForStars:
                 # compute: using SFR>0 gas as well as stars to define neighbors
                 indRange_gas = None
@@ -105,7 +115,10 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, snapHsmlForStars=Fa
             else:
                 # compute: use only stars to define neighbors
                 pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=1, treePrec='double')
+                if isinstance(pos,dict) and pos['count'] == 0:
+                    hsml = np.array([])
+                else:
+                    hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=1, treePrec='double')
 
         # save
         if useCache:
@@ -279,9 +292,9 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         band2_grid = sP.units.absMagToLuminosity(band2_grid_mag) * fac['i'] * 1e7
 
         if 'ObsFrame' in partField: # scaling is sensitive to this value (i.e. mean flux), needs some generalization
-            band0_grid *= 2e16
-            band1_grid *= 2e16
-            band2_grid *= 2e16 # these for RIZ, 5e16 for all for GRI
+            band0_grid *= 1e15
+            band1_grid *= 1e15
+            band2_grid *= 1e15 # 2e16 for RIZ, 5e16 for all for GRI
 
         inten = (band0_grid + band1_grid + band2_grid) / 3.0
         val = np.arcsinh( lupton_alpha * lupton_Q * (inten - scale_min) ) / lupton_Q
@@ -872,6 +885,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, alsoSFRgasForStars=False, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
+    from util.rotation import rotateCoordinateArray
+    
     optionalStr = ''
     if projType != 'ortho':
         optionalStr += '_%s-%s' % (projType, '_'.join( [str(k)+'='+str(v) for k,v in projParams.items()] ))
@@ -944,8 +959,14 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             # calculate indRange
             pt = sP.ptNum(partType)
-            startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
-            indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
+            if '_subhalo' in method:
+                # subhalo scope
+                startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo'][sP.hInd,pt]
+                indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
+            else:
+                # fof scope
+                startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
+                indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
 
         # quantity is computed with respect to a pre-existing grid? load now
         refGrid = None
@@ -1005,7 +1026,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             # load: sizes (hsml) and manipulate as needed
             if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
                 hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
-                                          snapHsmlForStars=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
+                                          useSnapHsml=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
             else:
                 hsml = getHsmlForPartType(sP, partType, indRange=indRange)
 
@@ -1119,7 +1140,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     quant = quant[wMask]
 
             # render
-            if method in ['sphMap','sphMap_global','sphMap_minIP','sphMap_maxIP','sphMap_LIC']:
+            if method in ['sphMap','sphMap_global','sphMap_subhalo','sphMap_minIP','sphMap_maxIP','sphMap_LIC']:
                 # particle by particle (unordered) splat using standard SPH cubic spline kernel
 
                 # further sub-method specification?
@@ -1455,11 +1476,11 @@ def addBoxMarkers(p, conf, ax):
         if p['relCoords']:
             xyPos = [0.0, 0.0]
 
-        if p['sP'].subhaloInd is not None:
-            # in the case that the box is not centered on the halo (e.g. offset quadrant), can use:
-            assert not p['relCoords']
-            sub = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
-            xyPos = sub['SubhaloPos'][p['axes']]
+        #if p['sP'].subhaloInd is not None:
+        #    # in the case that the box is not centered on the halo (e.g. offset quadrant), can use:
+        #    assert not p['relCoords']
+        #    sub = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
+        #    xyPos = sub['SubhaloPos'][p['axes']]
 
         if p['axesUnits'] == 'code':
             pass
@@ -2185,5 +2206,6 @@ def renderMultiPanel(panels, conf):
                 addCustomColorbars(fig, ax, conf, vConfig, heightFac, barAreaBottom, barAreaTop, color2, 
                                    rowHeight, 0.4, bottomNorm, 0.55)
 
+    # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
     fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
     plt.close(fig)

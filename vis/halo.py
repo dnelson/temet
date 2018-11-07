@@ -14,7 +14,7 @@ from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
 from util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
-from util import simParams
+from util.simParams import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
