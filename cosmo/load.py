@@ -1307,7 +1307,7 @@ def snapshotSubset(sP, partType, fields,
             birthRedshift = 1.0/birthTime - 1.0
             r[field] = curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
 
-        # bolometric x-ray luminosity (simple model) [erg/s]
+        # bolometric x-ray luminosity (simple model) [10^30 erg/s]
         if field.lower() in ['xray_lum','xray']:
             sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
@@ -1315,6 +1315,11 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'u', **kwargs)
             ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
+
+        # h-alpha line luminosity (simple model: linear conversion from SFR) [10^30 erg/s]
+        if field.lower() in ['halpha_lum','halpha','sfr_halpha']:
+            sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
+            r[field] = sP.units.sfrToHalphaLuminosity(sfr)
 
         # pressure_ratio (linear ratio of magnetic to gas pressure)
         if field.lower() in ['pres_ratio','pressure_ratio']:

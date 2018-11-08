@@ -655,7 +655,7 @@ class units(object):
             raise Exception("Invalid combination.")
 
         # convert to 'physical code units' of 10^10 Msun/kpc^2
-        colDensPhys = colDens.astype('float32') * self._sP.HubbleParam / self.scalefac**2.0
+        colDensPhys = colDens.astype('float64') * self._sP.HubbleParam / self.scalefac**2.0
         
         if cgs:
             UnitColumnDensity_in_cgs = self.UnitMass_in_g / self.UnitLength_in_cm**2.0
@@ -670,7 +670,7 @@ class units(object):
             colDensPhys *= self._sP.HubbleParam
             colDensPhys *= (self.kpc_in_cm/self.UnitLength_in_cm)**2.0 # account for non-kpc units
 
-        return colDensPhys
+        return colDensPhys.astype('float32')
 
     def UToTemp(self, u, nelec, log=False):
         """ Convert (U,Ne) pair in code units to temperature in Kelvin. """
@@ -808,6 +808,12 @@ class units(object):
         if log:
             Lx = logZeroSafe(Lx)
         return Lx.astype('float32')
+
+    def sfrToHalphaLuminosity(self, sfr):
+        """ Convert SFR from code units (Msun/yr) into H-alpha line luminosity [linear 10^30 erg/s]. Just the 
+        usual linear conversion from Kennicutt. """
+        halpha_lum = sfr / (7.9e-42 * 1e30)
+        return halpha_lum
 
     def calcEntropyCGS(self, u, dens, log=False):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. Return [K cm^2]. """
