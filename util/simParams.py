@@ -74,6 +74,7 @@ class simParams:
     HubbleParam   = None  # little h (All.HubbleParam), e.g. H0 in 100 km/s/Mpc
     mpcUnits      = False # code unit system lengths in Mpc instead of the usual kpc?
     nTypes        = 6     # number of particle types
+    numSnaps      = 0     # number of total (full box) snapshots
 
     # subboxes
     subbox        = None  # integer >= 0 if the snapshot of this sP instance corresponds to a subbox snap
@@ -173,6 +174,7 @@ class simParams:
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
             self.groupOrdered = True
+            self.numSnaps = 100
 
             # note: grav softenings [ckpc/h] are comoving until z=1,: fixed at z=1 value after
             if res in res_L25:  self.gravSoft = 4.0 / (res/128)
@@ -233,6 +235,7 @@ class simParams:
             self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
             self.winds  = 2
             self.BHs    = 2
+            
 
             # DM-only runs:
             if '_dm' in run:
@@ -354,6 +357,7 @@ class simParams:
             self.gravSoft = 16.0 / (res/1024)
             self.targetGasMass = 0.00182873 * (8 ** np.log2(8192/res))
             self.boxSize = 680000.0 # ckpc/h unit system
+            self.numSnaps = 100
 
             # common: Planck2015 TNG cosmology
             self.omega_m     = 0.3089
@@ -395,6 +399,7 @@ class simParams:
             self.validResLevels = [455,910,1820]
             self.boxSize        = 75000.0
             self.groupOrdered   = True
+            self.numSnaps       = 136
 
             self.omega_m     = 0.2726
             self.omega_L     = 0.7274
@@ -449,6 +454,7 @@ class simParams:
             self.validResLevels = [1504]
             self.boxSize        = 67770.0
             self.groupOrdered   = True
+            self.numSnaps       = 29
 
             self.omega_m     = 0.307
             self.omega_L     = 0.693
@@ -484,6 +490,7 @@ class simParams:
         if run in ['zooms','zooms_dm']:
             self.boxSize      = 20000.0
             self.groupOrdered = True # re-written
+            self.numSnaps     = 59
 
             self.omega_m     = 0.264
             self.omega_L     = 0.736
@@ -589,6 +596,7 @@ class simParams:
             self.boxSize        = 500.0
             self.mpcUnits       = True
             self.groupOrdered   = True # re-written HDF5 files
+            self.numSnaps       = 64
 
             self.omega_m     = 0.25
             self.omega_L     = 0.75
@@ -735,39 +743,41 @@ class simParams:
 
         # attach various functions pre-specialized to this sP, for convenience
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
-                               cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs
+                               cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
+                               correctPeriodicPosBoxWrap
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, \
                                auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity
 
-        self.redshiftToSnapNum       = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift       = partial(snapNumToRedshift, self)
-        self.periodicDists           = partial(periodicDists, sP=self)
-        self.periodicDistsSq         = partial(periodicDistsSq, sP=self)
-        self.validSnapList           = partial(validSnapList, sP=self)
-        self.cenSatSubhaloIndices    = partial(cenSatSubhaloIndices, sP=self)
-        self.correctPeriodicDistVecs = partial(correctPeriodicDistVecs, sP=self)
-        self.correctPeriodicPosVecs  = partial(correctPeriodicPosVecs, sP=self)
-        self.simSubhaloQuantity      = partial(simSubhaloQuantity, self)
+        self.redshiftToSnapNum  = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift  = partial(snapNumToRedshift, self)
+        self.periodicDists      = partial(periodicDists, sP=self)
+        self.periodicDistsSq    = partial(periodicDistsSq, sP=self)
+        self.validSnapList      = partial(validSnapList, sP=self)
+        self.simSubhaloQuantity = partial(simSubhaloQuantity, self)
 
-        self.snapshotSubsetP   = partial(snapshotSubsetParallel, self)
-        self.snapshotSubset    = partial(snapshotSubset, self)
-        self.snapshotHeader    = partial(snapshotHeader, sP=self)
-        self.snapHasField      = partial(snapHasField, self)
-        self.snapNumChunks     = partial(snapNumChunks, self.simPath)
-        self.snapPath          = partial(snapPath, self.simPath)
-        self.gcPath            = partial(gcPath, self.simPath)
-        self.groupCatSingle    = partial(groupCatSingle, sP=self)
-        self.groupCatHeader    = partial(groupCatHeader, sP=self)
-        self.groupCatNumChunks = partial(groupCatNumChunks, self.simPath)
-        self.groupCat          = partial(groupCat, sP=self)
-        self.auxCat            = partial(auxCat, self)
-        self.loadMPB           = partial(loadMPB, self)
-        self.loadMDB           = partial(loadMDB, self)
-        self.loadMPBs          = partial(loadMPBs, self)
+        self.snapshotSubsetP    = partial(snapshotSubsetParallel, self)
+        self.snapshotSubset     = partial(snapshotSubset, self)
+        self.snapshotHeader     = partial(snapshotHeader, sP=self)
+        self.snapHasField       = partial(snapHasField, self)
+        self.snapNumChunks      = partial(snapNumChunks, self.simPath)
+        self.snapPath           = partial(snapPath, self.simPath)
+        self.gcPath             = partial(gcPath, self.simPath)
+        self.groupCatSingle     = partial(groupCatSingle, sP=self)
+        self.groupCatHeader     = partial(groupCatHeader, sP=self)
+        self.groupCatNumChunks  = partial(groupCatNumChunks, self.simPath)
+        self.groupCat           = partial(groupCat, sP=self)
+        self.auxCat             = partial(auxCat, self)
+        self.loadMPB            = partial(loadMPB, self)
+        self.loadMDB            = partial(loadMDB, self)
+        self.loadMPBs           = partial(loadMPBs, self)
 
+        self.cenSatSubhaloIndices       = partial(cenSatSubhaloIndices, sP=self)
+        self.correctPeriodicDistVecs    = partial(correctPeriodicDistVecs, sP=self)
+        self.correctPeriodicPosVecs     = partial(correctPeriodicPosVecs, sP=self)
+        self.correctPeriodicPosBoxWrap  = partial(correctPeriodicPosBoxWrap, sP=self)
         self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):

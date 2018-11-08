@@ -10,10 +10,8 @@ import h5py
 import illustris_python as il
 from os import path
 
-import cosmo
 from scipy.signal import savgol_filter
 from scipy import interpolate
-from cosmo.util import snapNumToRedshift, validSnapList, correctPeriodicPosBoxWrap
 from util.helper import running_sigmawindow, iterable
 
 treeName_default = "SubLink"
@@ -193,8 +191,8 @@ def mpbPositionComplete(sP, id, extraFields=[]):
     mpb = loadMPB(sP, id, fields=fields)
 
     # load all valid snapshots, then make (contiguous) list from [0, sP.snap]
-    snaps = validSnapList(sP)
-    times = snapNumToRedshift(sP, snap=snaps, time=True)
+    snaps = sP.validSnapList()
+    times = sP.snapNumToRedshift(snap=snaps, time=True)
     assert snaps.shape == times.shape
 
     w = np.where(snaps <= sP.snap)
@@ -215,7 +213,7 @@ def mpbPositionComplete(sP, id, extraFields=[]):
     SubhaloPos  = mpb['SubhaloPos'][::-1,:] # ascending snapshot order
     SnapNum     = mpb['SnapNum'][::-1] # ascending snapshot order
 
-    mpbTimes = cosmo.util.snapNumToRedshift(sP, snap=SnapNum, time=True)
+    mpbTimes = sP.snapNumToRedshift(snap=SnapNum, time=True)
 
     if np.array_equal(SnapNum, snaps):
         return SnapNum, mpbTimes, SubhaloPos
@@ -275,7 +273,7 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=[]):
     sKo = 3 # savgol smoothing kernel poly order
 
     # attach redshift, virial temp, savgol parameters
-    mpb['Redshift']    = snapNumToRedshift( sP, mpb['SnapNum'] )
+    mpb['Redshift']    = sP.snapNumToRedshift(mpb['SnapNum'])
     mpb['Group_T_vir'] = sP.units.codeMassToVirTemp(mpb['Group_M_Crit200'], log=True)
     mpb['Group_S_vir'] = sP.units.codeMassToVirEnt(mpb['Group_M_Crit200'], log=True)
     mpb['Group_V_vir'] = sP.units.codeMassToVirVel(mpb['Group_M_Crit200'])
@@ -312,7 +310,7 @@ def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=[]):
         mpb['sm']['vel'][:,i] = savgol_filter( mpb['sm']['vel'][:,i], sKn, sKo )
 
     # smoothing: positions with box-edge shifting
-    posShiftInds = correctPeriodicPosBoxWrap(mpb['SubhaloPos'], sP)
+    posShiftInds = sP.correctPeriodicPosBoxWrap(mpb['SubhaloPos'])
     mpb['sm']['pos'] = mpb['SubhaloPos'].astype('float32')
 
     for i in range(3):
@@ -453,7 +451,6 @@ def debugPlot():
 
 def stellarMergerContribution(sP):
     """ Analysis routine for TNG flagship paper on stellar mass content. """
-    from cosmo.util import periodicDistsSq
 
     # config
     haloMassBins = [[11.4, 11.6], [11.9, 12.1], [12.4,12.6], [12.9,13.1], 
@@ -485,21 +482,21 @@ def stellarMergerContribution(sP):
     MergerMass = sP.units.codeMassToLogMsun( MergerMass )
 
     # load stellar particle data
-    stars = cosmo.load.snapshotSubset(sP, 'stars', ['mass','pos','sftime'])
+    stars = sP.snapshotSubset('stars', ['mass','pos','sftime'])
     assert stars['Masses'].shape == InSitu.shape
 
     # load groupcat
     radSqMax = sP.units.physicalKpcToCodeLength(rad_pkpc)**2
-    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType','SubhaloMass','SubhaloGrNr'])['subhalos']
-    halos = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'])['halos']
-    gc['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType','SubhaloMass','SubhaloGrNr'])['subhalos']
+    halos = sP.groupCat(fieldsHalos=['Group_M_Crit200'])['halos']
+    gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
     gc['SubhaloMass'] = sP.units.codeMassToLogMsun( gc['SubhaloMass'] )
     halo_masses = sP.units.codeMassToLogMsun( halos )
     halo_masses = halo_masses[ gc['SubhaloGrNr'] ] # re-index to subhalos
 
     # process centrals only
-    sat_inds = cosmo.util.cenSatSubhaloIndices(sP, cenSatSelect='sat')
+    sat_inds = sP.cenSatSubhaloIndices(cenSatSelect='sat')
     halo_masses[sat_inds] = np.nan
 
     # allocate returns
@@ -526,8 +523,7 @@ def stellarMergerContribution(sP):
                 continue # zero length of this type
 
             # radial restrict
-            rr = periodicDistsSq( gc['SubhaloPos'][subhaloID,:], 
-                                  stars['Coordinates'][i0:i1,:], sP )
+            rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], stars['Coordinates'][i0:i1,:] )
 
             w_valid = np.where( (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) & \
                                  (rr <= radSqMax) & \
@@ -568,8 +564,7 @@ def stellarMergerContribution(sP):
             continue # zero length of this type
 
         # radial restrict
-        rr = periodicDistsSq( gc['SubhaloPos'][subhaloID,:], 
-                              stars['Coordinates'][i0:i1,:], sP )
+        rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], stars['Coordinates'][i0:i1,:] )
 
         for apertureIter in range(nApertures):
             # aperture selections
@@ -801,3 +796,208 @@ def stellarMergerContributionPlot():
     fig.tight_layout()    
     fig.savefig('merger_progmass_%s_%d.pdf' % ('-'.join([sP.simName for sP in sPs]),sP.snap))
     plt.close(fig)
+
+def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default):
+    """ Testing. """
+    from plot.config import figsize
+    from util.helper import loadColorTable, logZeroNaN
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize, LogNorm
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    from matplotlib.colorbar import ColorbarBase
+    from matplotlib.collections import LineCollection
+
+    alpha  = 0.7
+    #alpha2 = 0.05 # now adaptive
+    #lw     = 0.5
+    color  = '#000000'
+
+    # load tree
+    fields = ['SubhaloID', 'DescendantID', 'FirstProgenitorID', 'SnapNum', 'SubhaloMass', 'SubhaloMassType', 'SubhaloSFR']
+    tree = il.sublink.loadTree(sP.simPath, sP.snap, subhaloID, fields=fields, treeName=treeName)
+
+    nrows = tree['count']
+
+    alpha2 = np.clip( 0.1*200/np.sqrt(nrows), 0.01, 0.4 )
+    lw     = np.clip( 1.0*200/np.sqrt(nrows), 0.4, 1.0 )
+    markerSizeFac = np.clip( 80/nrows**(1.0/4.0), 4.0, 20.0 )
+    #minMarkerSize = np.clip( 8.0*(nrows**(1.0/3.0))/200, 0.1, 4.0 )
+
+    if nrows > 1e5:
+        minMarkerSize = 4.0
+    elif nrows > 1e4:
+        #minMarkerSize = np.clip( 0.4*(nrows**(1.0/6.0)), 0.1, 4.0 )
+        minMarkerSize = 3.0
+    elif nrows > 1e3:
+        minMarkerSize = 2.0
+    else:
+        minMarkerSize = 1.5
+        #minMarkerSize = np.clip( 0.15*(nrows**(1.0/4.0)), 0.5, 4.0 )
+
+    #print(' min to plot: ',minMarkerSize)
+    #print(' markersizefac: ', markerSizeFac)
+    #print(' count: ', nrows)
+    #print(' lw:', lw, ' alpha2: ', alpha2)
+
+    # calculate color quantity
+    mstar = sP.units.codeMassToMsun( tree['SubhaloMassType'][:,sP.ptNum('stars')] )
+    w = np.where(mstar == 0.0)
+    mstar[w] = np.nan
+
+    with np.errstate(invalid='ignore'):
+        tree['colorField'] = logZeroNaN(tree['SubhaloSFR'] / mstar ) # 1/yr
+
+    # allocate for branch 'width'
+    snapnum_min = np.min(tree['SnapNum'])
+    snapnum_max = np.max(tree['SnapNum'])
+
+    max_progenitors = np.zeros(nrows, dtype='float32')
+    
+    # iterate over snapshots
+    for snapnum in range(snapnum_min, snapnum_max):
+        # Iterate over subhalos from current snapshot
+        locs = (tree['SnapNum'] == snapnum)
+
+        for rownum in np.flatnonzero(locs):
+            sub_id  = tree['SubhaloID'][rownum]
+            desc_id = tree['DescendantID'][rownum]
+            first_prog_id = tree['FirstProgenitorID'][rownum]
+
+            if first_prog_id == -1:
+                assert max_progenitors[rownum] == 0
+                max_progenitors[rownum] = 1
+
+            assert desc_id != -1
+
+            rownum_desc = rownum - (sub_id - desc_id)
+            max_progenitors[rownum_desc] += max_progenitors[rownum]
+
+    xref  = np.zeros(nrows, dtype='float32')
+    dx    = np.ones(nrows, dtype='float32')
+    xc    = np.zeros(nrows, dtype='float32') + 0.5
+    yc    = tree['SnapNum'].copy()
+    lines = np.zeros( (nrows,2,2), dtype='float32' )
+
+    # start plot
+    fig = plt.figure(figsize=(figsize[0]*1.0,figsize[1]*1.0)) # 1400x1000 px
+    #fig = plt.figure(figsize=(19.2,10.8)) # 1920x1080 px
+    ax = fig.add_subplot(111)
+    ax.set_xlim([-0.02,1.02])
+
+    marker0pad = int(np.log10(nrows) * sP.numSnaps / 100.0) # pretty hacky
+    ax.set_ylim([0,sP.numSnaps+marker0pad])
+
+    ax.get_xaxis().set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    redshift_ticks = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 10.0]
+    snapnum_ticks  = sP.redshiftToSnapNum(redshift_ticks)
+
+    ax.set_yticks(snapnum_ticks)
+    ax.set_yticklabels(['z = %.1f' % z for z in redshift_ticks])
+
+    ax.set_ylabel('%s (subhaloID = %d at snap %d)' % (sP.simName,subhaloID,sP.snap))
+
+    # plot "root" subhalo
+    markersize0 = markerSizeFac * (tree['SubhaloMass'][rownum])**(1.0/4.0)
+    ax.plot(xc[0], yc[0], 'o', markersize=markersize0, color=color, alpha=1.0)
+
+    # iterate over snapshots and subhalos again, but this time starting from the last snapshot
+    for snapnum in reversed(range(snapnum_min, snapnum_max)):
+        if snapnum % 10 == 0: print(' ', snapnum)
+        locs = (tree['SnapNum'] == snapnum)
+
+        for rownum in np.flatnonzero(locs):
+            sub_id = tree['SubhaloID'][rownum]
+            desc_id = tree['DescendantID'][rownum]
+            rownum_desc = rownum - (sub_id - desc_id)
+
+            dx[rownum]   = dx[rownum_desc] * max_progenitors[rownum] / max_progenitors[rownum_desc]
+            xref[rownum] = xref[rownum_desc]
+            xc[rownum]   = xref[rownum_desc] + 0.5 * dx[rownum]
+
+            xref[rownum_desc] += dx[rownum]
+
+            # store lines
+            lines[rownum,0,0] = xc[rownum] # x0
+            lines[rownum,0,1] = yc[rownum] # y0
+            lines[rownum,1,0] = xc[rownum_desc] # x1
+            lines[rownum,1,1] = yc[rownum_desc] # y1
+
+    # add markers
+    markersize = markerSizeFac * (tree['SubhaloMass'])**(1.0/4.0)
+
+    cmap = loadColorTable('inferno')
+    vmin = np.round(np.nanmin(tree['colorField']) - 0.5)
+    vmax = np.round(np.nanmax(tree['colorField']))
+    norm = Normalize(vmin=vmin, vmax=vmax)
+
+    w_minsize = np.where(markersize >= minMarkerSize)
+
+    with np.errstate(invalid='ignore'):
+        colors = cmap(norm(tree['colorField']))
+
+    ax.scatter(xc[w_minsize], yc[w_minsize], s=markersize[w_minsize]**2, marker='o', color=colors[w_minsize], alpha=alpha)
+
+    # add connecting lines
+    lc = LineCollection(lines, color=color, lw=lw, alpha=alpha2)
+    ax.add_collection(lc)
+
+    # colorbar
+    fig.tight_layout()
+
+    cax = inset_axes(ax, width='4%', height='40%', borderpad=1.0, loc='upper left')
+    cb = ColorbarBase(cax, cmap=cmap, norm=norm, orientation='vertical')
+    cb.ax.set_ylabel('log(sSFR) [yr$^{-1}$]')
+
+    # finish (note: saveFilename could be in-memory buffer)
+    fig.savefig(saveFilename, format='png', dpi=400)
+    plt.close(fig)
+
+def test_plot_tree():
+    from util.simParams import simParams
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+
+    for haloID in [200]: #[20,200,210,600,2000,20000]:
+        print(haloID)
+        subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+        saveFilename = 'mergertree_%s_%d.png' % (sP.simName,haloID)
+
+        plot_tree(sP, subhaloID, saveFilename)
+
+def test_plot_tree_mem():
+    from io import BytesIO
+    from imageio import imread, imwrite
+    from scipy.misc import imresize
+    from util.simParams import simParams
+    sP = simParams(res=1820,run='tng',redshift=0.0)
+
+    haloID = 200
+    subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+
+    # start memory buffer
+    buf = BytesIO()
+
+    plot_tree(sP, subhaloID, buf)
+
+    # 'load'
+    print('plotting done')
+    buf.seek(0)
+    im = imread(buf, format='png')
+
+    # 'resize'
+    print('start resize')
+    im = imresize(im, 0.25, interp='bicubic')
+    print('resize done')
+
+    # 'save'
+    buf = BytesIO()
+    imwrite(buf, im, format='png')
+
+    with open('test.png','wb') as f:
+        f.write(buf.getvalue())
+
+    # save
+    imwrite('test2.png', im)
