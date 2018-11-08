@@ -797,7 +797,7 @@ def stellarMergerContributionPlot():
     fig.savefig('merger_progmass_%s_%d.pdf' % ('-'.join([sP.simName for sP in sPs]),sP.snap))
     plt.close(fig)
 
-def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default):
+def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100):
     """ Testing. """
     from plot.config import figsize
     from util.helper import loadColorTable, logZeroNaN
@@ -906,7 +906,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default):
 
     # iterate over snapshots and subhalos again, but this time starting from the last snapshot
     for snapnum in reversed(range(snapnum_min, snapnum_max)):
-        if snapnum % 10 == 0: print(' ', snapnum)
+        #if snapnum % 10 == 0: print(' ', snapnum)
         locs = (tree['SnapNum'] == snapnum)
 
         for rownum in np.flatnonzero(locs):
@@ -953,7 +953,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default):
     cb.ax.set_ylabel('log(sSFR) [yr$^{-1}$]')
 
     # finish (note: saveFilename could be in-memory buffer)
-    fig.savefig(saveFilename, format='png', dpi=400)
+    fig.savefig(saveFilename, format='png', dpi=dpi)
     plt.close(fig)
 
 def test_plot_tree():
@@ -977,10 +977,12 @@ def test_plot_tree_mem():
     haloID = 200
     subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
+    supersample = 4
+
     # start memory buffer
     buf = BytesIO()
 
-    plot_tree(sP, subhaloID, buf)
+    plot_tree(sP, subhaloID, buf, dpi=100*supersample)
 
     # 'load'
     print('plotting done')
@@ -989,7 +991,7 @@ def test_plot_tree_mem():
 
     # 'resize'
     print('start resize')
-    im = imresize(im, 0.25, interp='bicubic')
+    im = imresize(im, 1.0/supersample, interp='bicubic')
     print('resize done')
 
     # 'save'
