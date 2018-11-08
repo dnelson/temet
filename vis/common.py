@@ -33,7 +33,7 @@ savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 # configure certain behavior types
 volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                    'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2']
+                    'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha']
 totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
@@ -459,6 +459,9 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     if partField in ['sfr_msunyrkpc2']:
         mass = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
 
+    if partField in ['sfr_halpha','halpha']:
+        mass = snapshotSubset(sP, partType, 'sfr_halpha', indRange=indRange)
+
     # flux/surface brightness (replace mass)
     if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
         # zero contribution from SFing gas cells?
@@ -666,8 +669,13 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['ctName'] = 'HI_segmented'
 
     if partField in ['xray','xray_lum']:
-        grid = logZeroMin( sP.units.codeColDensToPhys( grid*1e30, totKpc2=True ) ) # return 1e30 factor
+        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) ) + 30.0 # add 1e30 factor
         config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
+        config['ctName'] = 'inferno'
+
+    if partField in ['sfr_halpha','halpha']:
+        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) ) + 30.0 # add 1e30 factor
+        config['label']  = 'H-alpha Luminosity L$_{\\rm H\alpha}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
     if partField in ['p_sync_ska']:
@@ -1604,12 +1612,10 @@ def addBoxMarkers(p, conf, ax):
             lw = 4.0
             y_off = 0.05
 
-        yt_frac = y_off * (nLinear + conf.rasterPx[0]/2e3) # needs improvement
-
         x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx[0]) # upper left
         x1 = x0 + scaleBarPlotLen
         yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx[0])
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(yt_frac * 960.0/conf.rasterPx[0])
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*2) * 960.0/conf.rasterPx[0])
 
         if p['axesUnits'] in ['deg','arcmin','arcsec']:
             deg = (p['axesUnits'] == 'deg')
@@ -1631,7 +1637,7 @@ def addBoxMarkers(p, conf, ax):
             yt = p['sP'].units.codeLengthToMpc(yt)
 
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
-        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, size=fontsize, ha='center', va='center')
+        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, size=fontsize, ha='center', va='top')
 
     # text in a combined legend?
     legend_labels = []
@@ -1658,14 +1664,16 @@ def addBoxMarkers(p, conf, ax):
         str1 = "log M$_{\\rm halo}$ = %.1f" % haloMass
         str2 = "log M$_{\\rm star}$ = %.1f" % stellarMass
 
-        if p['labelHalo'] == 'mstar':
+        if 'mstar' in p['labelHalo']:
             # just Mstar
             str2 = "log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
-        elif p['labelHalo'] == 'mhalo':
+        if 'mhalo' in p['labelHalo']:
             # just Mhalo
             legend_labels.append( str1 )
-        else:
+        if 'id' in p['labelHalo']:
+            legend_labels.append( '%d' % p['sP'].hInd )
+        if str1 not in legend_labels and str2 not in legend_labels:
             # both Mhalo and Mstar
             legend_labels.append( str1 )
             if np.isfinite(stellarMass): legend_labels.append( str2 )
