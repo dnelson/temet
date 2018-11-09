@@ -734,6 +734,16 @@ def getWhiteBlackColors(pStyle):
 
     return color1, color2, color3, color4
 
+def validColorTableNames():
+    """ Return a list of whitelisted colormap names. """
+    from matplotlib.pyplot import cm
+
+    names1 = list(cm.cmap_d.keys()) # matplotlib
+    names2 = [n.replace('.cmo','') for n in cm.cmap_d] # cmocean
+    names3 = ['dmdens','dmdens_tng','HI_segmented','perula'] # custom
+
+    return names1 + names2 + names3
+
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None, numColors=None):
     """ Load a custom or built-in color table specified by ctName. Note that appending '_r' to most default colormap names 
     requests the colormap in reverse order (e.g. changing light->dark to dark->light).
