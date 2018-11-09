@@ -855,8 +855,10 @@ def _helper_plot_tree(SnapNum,SubhaloID,DescendantID,FirstProgenitorID):
 
     return xc, yc, lines
 
-def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, ctName='inferno'):
-    """ Visualize a full merger tree of a given subhalo. """
+def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, ctName='inferno', output_fmt='png'):
+    """ Visualize a full merger tree of a given subhalo. saveFilename can either be a string, BytesIO buffer, or None. 
+    If a buffer, output_fmt should specify the required format (e.g. 'pdf', 'png', 'jpg'). If None, then the plot 
+    is rendered herein and the final image array (uint8) is returned, for e.g. image manipulation procedures. """
     from plot.config import figsize
     from util.helper import loadColorTable, logZeroNaN
     import matplotlib.pyplot as plt
@@ -901,7 +903,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     # but at different resolutions, trees of the same halo mass (e.g. typical circle sizes) have much fewer
     # nrows and so are excessively boosted - here we scale them back to a canonical mean size
     targetGasMass1820 = 9.4395e-05
-    resFac = (targetGasMass1820/sP.targetGasMass)**(1.0/4.0)
+    resFac = (targetGasMass1820/sP.targetGasMass)**(1.0/5.0)
     markersize *= resFac
 
     #print(' min to plot: ',minMarkerSize)
@@ -930,8 +932,9 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     snapnum_ticks  = sP.redshiftToSnapNum(redshift_ticks)
 
     marker0pad = int(np.log10(nrows) * sP.numSnaps / 100.0) # pretty hacky
+    ymin_snap = np.clip(snapnum_ticks[-1]-4, 0, np.inf) # sets TNG at 0, but sets e.g. Illustris just past z=10 (many snaps away from 0)
     ymax_snap = np.clip(sP.snap+marker0pad, snapnum_ticks[3], np.inf) # scale y-axis, but start at z=2 at earliest
-    ax.set_ylim([0, ymax_snap]) 
+    ax.set_ylim([ymin_snap, ymax_snap]) 
 
     ax.get_xaxis().set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -944,7 +947,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
 
     ax.set_ylabel('%s (subhaloID = %d at snap %d)' % (sP.simName,subhaloID,sP.snap))
 
-    # plot "root" subhalo
+    # plot 'root' subhalo marker
     markersize0 = markerSizeFac * (tree['SubhaloMass'][-1])**(1.0/4.0)
     ax.plot(xc[0], yc[0], 'o', markersize=markersize0, color=color, alpha=1.0)
 
@@ -978,7 +981,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
 
     # finish (note: saveFilename could be in-memory buffer)
     if saveFilename is not None:
-        fig.savefig(saveFilename, format='png', dpi=dpi)
+        fig.savefig(saveFilename, format=output_fmt, dpi=dpi)
         plt.close(fig)
     else:
         # return image array itself, i.e. draw the canvas then extract the (Nx,Ny,3) array
@@ -1008,26 +1011,36 @@ def test_plot_tree_mem(haloID=19):
     from imageio import imread, imwrite
     from scipy.misc import imresize
     from util.simParams import simParams
-    sP = simParams(res=1820,run='tng',redshift=11.0)
+
+    # config
+    sP = simParams(res=1820,run='tng',snap=99)
+
+    supersample = 4
+    output_fmt = 'png'
+
+    # start
+    buf = None # return iamge array by default
+
+    if output_fmt == 'pdf':
+        # fill memory buffer instead
+        buf = BytesIO()
 
     subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
-    supersample = 4
-
-    # start memory buffer
+    # render
     start_time = time.time()
 
-    im = plot_tree(sP, subhaloID, saveFilename=None, dpi=100*supersample)
+    im = plot_tree(sP, subhaloID, saveFilename=buf, dpi=100*supersample, output_fmt=output_fmt)
 
-    # 'load'
     print('plotting done, [%.1f sec]' % (time.time()-start_time))
 
     # 'resize'
-    im = imresize(im, 1.0/supersample, interp='bicubic')
+    if output_fmt in ['png','jpg']:
+        im = imresize(im, 1.0/supersample, interp='bicubic')
 
-    # 'save'
-    buf = BytesIO()
-    imwrite(buf, im, format='png')
+        # 'save'
+        buf = BytesIO()
+        imwrite(buf, im, format=output_fmt)
 
-    with open('mergertree_%s_snap-%d_%d.png' % (sP.simName,sP.snap,haloID),'wb') as f:
+    with open('mergertree_%s_snap-%d_%d.%s' % (sP.simName,sP.snap,haloID,output_fmt),'wb') as f:
         f.write(buf.getvalue())
