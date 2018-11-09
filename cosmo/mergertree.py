@@ -7,6 +7,7 @@ from builtins import *
 
 import numpy as np
 import h5py
+from numba import jit
 import illustris_python as il
 from os import path
 
@@ -797,71 +798,24 @@ def stellarMergerContributionPlot():
     fig.savefig('merger_progmass_%s_%d.pdf' % ('-'.join([sP.simName for sP in sPs]),sP.snap))
     plt.close(fig)
 
-def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100):
-    """ Testing. """
-    from plot.config import figsize
-    from util.helper import loadColorTable, logZeroNaN
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize, LogNorm
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-    from matplotlib.colorbar import ColorbarBase
-    from matplotlib.collections import LineCollection
+@jit(nopython=True, nogil=True, cache=True)
+def _helper_plot_tree(SnapNum,SubhaloID,DescendantID,FirstProgenitorID):
+    """ JITed helper to do the structural loops over the tree, which can be slow for big trees. """
+    nrows = SnapNum.size
+    snapnum_min = np.min(SnapNum)
+    snapnum_max = np.max(SnapNum)
 
-    alpha  = 0.7
-    #alpha2 = 0.05 # now adaptive
-    #lw     = 0.5
-    color  = '#000000'
-
-    # load tree
-    fields = ['SubhaloID', 'DescendantID', 'FirstProgenitorID', 'SnapNum', 'SubhaloMass', 'SubhaloMassType', 'SubhaloSFR']
-    tree = il.sublink.loadTree(sP.simPath, sP.snap, subhaloID, fields=fields, treeName=treeName)
-
-    nrows = tree['count']
-
-    alpha2 = np.clip( 0.1*200/np.sqrt(nrows), 0.01, 0.4 )
-    lw     = np.clip( 1.0*200/np.sqrt(nrows), 0.4, 1.0 )
-    markerSizeFac = np.clip( 80/nrows**(1.0/4.0), 4.0, 20.0 )
-    #minMarkerSize = np.clip( 8.0*(nrows**(1.0/3.0))/200, 0.1, 4.0 )
-
-    if nrows > 1e5:
-        minMarkerSize = 4.0
-    elif nrows > 1e4:
-        #minMarkerSize = np.clip( 0.4*(nrows**(1.0/6.0)), 0.1, 4.0 )
-        minMarkerSize = 3.0
-    elif nrows > 1e3:
-        minMarkerSize = 2.0
-    else:
-        minMarkerSize = 1.5
-        #minMarkerSize = np.clip( 0.15*(nrows**(1.0/4.0)), 0.5, 4.0 )
-
-    #print(' min to plot: ',minMarkerSize)
-    #print(' markersizefac: ', markerSizeFac)
-    #print(' count: ', nrows)
-    #print(' lw:', lw, ' alpha2: ', alpha2)
-
-    # calculate color quantity
-    mstar = sP.units.codeMassToMsun( tree['SubhaloMassType'][:,sP.ptNum('stars')] )
-    w = np.where(mstar == 0.0)
-    mstar[w] = np.nan
-
-    with np.errstate(invalid='ignore'):
-        tree['colorField'] = logZeroNaN(tree['SubhaloSFR'] / mstar ) # 1/yr
-
-    # allocate for branch 'width'
-    snapnum_min = np.min(tree['SnapNum'])
-    snapnum_max = np.max(tree['SnapNum'])
-
-    max_progenitors = np.zeros(nrows, dtype='float32')
+    max_progenitors = np.zeros(nrows, dtype=np.float32)
     
     # iterate over snapshots
     for snapnum in range(snapnum_min, snapnum_max):
-        # Iterate over subhalos from current snapshot
-        locs = (tree['SnapNum'] == snapnum)
+        # iterate over subhalos from current snapshot
+        locs = np.where(SnapNum == snapnum)[0]
 
-        for rownum in np.flatnonzero(locs):
-            sub_id  = tree['SubhaloID'][rownum]
-            desc_id = tree['DescendantID'][rownum]
-            first_prog_id = tree['FirstProgenitorID'][rownum]
+        for rownum in locs:
+            sub_id  = SubhaloID[rownum]
+            desc_id = DescendantID[rownum]
+            first_prog_id = FirstProgenitorID[rownum]
 
             if first_prog_id == -1:
                 assert max_progenitors[rownum] == 0
@@ -872,46 +826,19 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100):
             rownum_desc = rownum - (sub_id - desc_id)
             max_progenitors[rownum_desc] += max_progenitors[rownum]
 
-    xref  = np.zeros(nrows, dtype='float32')
-    dx    = np.ones(nrows, dtype='float32')
-    xc    = np.zeros(nrows, dtype='float32') + 0.5
-    yc    = tree['SnapNum'].copy()
-    lines = np.zeros( (nrows,2,2), dtype='float32' )
-
-    # start plot
-    fig = plt.figure(figsize=(figsize[0]*1.0,figsize[1]*1.0)) # 1400x1000 px
-    #fig = plt.figure(figsize=(19.2,10.8)) # 1920x1080 px
-    ax = fig.add_subplot(111)
-    ax.set_xlim([-0.02,1.02])
-
-    marker0pad = int(np.log10(nrows) * sP.numSnaps / 100.0) # pretty hacky
-    ax.set_ylim([0,sP.numSnaps+marker0pad])
-
-    ax.get_xaxis().set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-
-    redshift_ticks = [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 10.0]
-    snapnum_ticks  = sP.redshiftToSnapNum(redshift_ticks)
-
-    ax.set_yticks(snapnum_ticks)
-    ax.set_yticklabels(['z = %.1f' % z for z in redshift_ticks])
-
-    ax.set_ylabel('%s (subhaloID = %d at snap %d)' % (sP.simName,subhaloID,sP.snap))
-
-    # plot "root" subhalo
-    markersize0 = markerSizeFac * (tree['SubhaloMass'][rownum])**(1.0/4.0)
-    ax.plot(xc[0], yc[0], 'o', markersize=markersize0, color=color, alpha=1.0)
+    xref  = np.zeros(nrows, dtype=np.float32)
+    dx    = np.ones(nrows, dtype=np.float32)
+    xc    = np.zeros(nrows, dtype=np.float32) + 0.5
+    yc    = SnapNum.copy()
+    lines = np.zeros( (nrows,2,2), dtype=np.float32 )
 
     # iterate over snapshots and subhalos again, but this time starting from the last snapshot
-    for snapnum in reversed(range(snapnum_min, snapnum_max)):
-        #if snapnum % 10 == 0: print(' ', snapnum)
-        locs = (tree['SnapNum'] == snapnum)
+    for snapnum in np.arange(snapnum_max-1, snapnum_min-1, -1): # reversed(range(snapnum_min,snapnum_max))
+        locs = np.where(SnapNum == snapnum)[0]
 
-        for rownum in np.flatnonzero(locs):
-            sub_id = tree['SubhaloID'][rownum]
-            desc_id = tree['DescendantID'][rownum]
+        for rownum in locs:
+            sub_id = SubhaloID[rownum]
+            desc_id = DescendantID[rownum]
             rownum_desc = rownum - (sub_id - desc_id)
 
             dx[rownum]   = dx[rownum_desc] * max_progenitors[rownum] / max_progenitors[rownum_desc]
@@ -926,12 +853,109 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100):
             lines[rownum,1,0] = xc[rownum_desc] # x1
             lines[rownum,1,1] = yc[rownum_desc] # y1
 
-    # add markers
+    return xc, yc, lines
+
+def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, ctName='inferno'):
+    """ Visualize a full merger tree of a given subhalo. """
+    from plot.config import figsize
+    from util.helper import loadColorTable, logZeroNaN
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize, LogNorm
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    from matplotlib.colorbar import ColorbarBase
+    from matplotlib.collections import LineCollection
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    alpha = 0.7 # markers
+    color = '#000000' # lines
+
+    # load tree
+    fields = ['SubhaloID', 'DescendantID', 'FirstProgenitorID', 'SnapNum', 'SubhaloMass', 'SubhaloMassType', 'SubhaloSFR']
+    tree = il.sublink.loadTree(sP.simPath, sP.snap, subhaloID, fields=fields, treeName=treeName)
+
+    if tree is None:
+        # subhalo not in tree
+        return None
+
+    nrows = tree['count']
+
+    alpha2 = np.clip( 0.1*200/np.sqrt(nrows), 0.01, 0.4 )
+    lw     = np.clip( 1.0*200/np.sqrt(nrows), 0.4, 1.0 )
+    markerSizeFac = np.clip( 80/nrows**(1.0/4.0), 5.0, 10.0 )
+
+    if nrows > 5e5:
+        minMarkerSize = 4.0
+    elif nrows > 1e5:
+        minMarkerSize = 3.5
+    elif nrows > 1e4:
+        minMarkerSize = 3.0
+    elif nrows > 1e3:
+        minMarkerSize = 2.0
+    else:
+        minMarkerSize = 1.5
+
+    # calculate marker sizes
     markersize = markerSizeFac * (tree['SubhaloMass'])**(1.0/4.0)
 
-    cmap = loadColorTable('inferno')
-    vmin = np.round(np.nanmin(tree['colorField']) - 0.5)
-    vmax = np.round(np.nanmax(tree['colorField']))
+    # the calibration above accounts mainly for trees of different mass halos calibrated at ~TNG100-1 resolution
+    # but at different resolutions, trees of the same halo mass (e.g. typical circle sizes) have much fewer
+    # nrows and so are excessively boosted - here we scale them back to a canonical mean size
+    targetGasMass1820 = 9.4395e-05
+    resFac = (targetGasMass1820/sP.targetGasMass)**(1.0/4.0)
+    markersize *= resFac
+
+    #print(' min to plot: ',minMarkerSize)
+    #print(' markersizefac: ', markerSizeFac, ' mean markersize: ', markersize.mean())
+    #print(' count: ', nrows)
+    #print(' lw:', lw, ' alpha2: ', alpha2)
+
+    # calculate color quantity
+    mstar = sP.units.codeMassToMsun( tree['SubhaloMassType'][:,sP.ptNum('stars')] )
+    w = np.where(mstar == 0.0)
+    mstar[w] = np.nan
+
+    with np.errstate(invalid='ignore'):
+        tree['colorField'] = logZeroNaN(tree['SubhaloSFR'] / mstar ) # 1/yr
+
+    # call JITed helper
+    xc, yc, lines = _helper_plot_tree(tree['SnapNum'],tree['SubhaloID'],tree['DescendantID'],tree['FirstProgenitorID'])
+
+    # start plot
+    fig = plt.figure(figsize=(figsize[0]*1.0,figsize[1]*1.0), dpi=dpi) # 1400x1000 px
+    #fig = plt.figure(figsize=(19.2,10.8)) # 1920x1080 px
+    ax = fig.add_subplot(111)
+    ax.set_xlim([-0.02,1.02])
+
+    redshift_ticks = np.array([0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 10.0])
+    snapnum_ticks  = sP.redshiftToSnapNum(redshift_ticks)
+
+    marker0pad = int(np.log10(nrows) * sP.numSnaps / 100.0) # pretty hacky
+    ymax_snap = np.clip(sP.snap+marker0pad, snapnum_ticks[3], np.inf) # scale y-axis, but start at z=2 at earliest
+    ax.set_ylim([0, ymax_snap]) 
+
+    ax.get_xaxis().set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    w = np.where(snapnum_ticks <= ymax_snap)[0]
+    ax.set_yticks(snapnum_ticks[w])
+    ax.set_yticklabels(['z = %.1f' % z for z in redshift_ticks[w]])
+
+    ax.set_ylabel('%s (subhaloID = %d at snap %d)' % (sP.simName,subhaloID,sP.snap))
+
+    # plot "root" subhalo
+    markersize0 = markerSizeFac * (tree['SubhaloMass'][-1])**(1.0/4.0)
+    ax.plot(xc[0], yc[0], 'o', markersize=markersize0, color=color, alpha=1.0)
+
+    # add markers
+    cmap = loadColorTable(ctName)
+    if np.count_nonzero( np.isfinite(tree['colorField']) ):
+        vmin = np.round(np.nanmin(tree['colorField']) - 0.5)
+        vmax = np.round(np.nanmax(tree['colorField']))
+    else:
+        vmin = -12.0
+        vmax = -8.0
     norm = Normalize(vmin=vmin, vmax=vmax)
 
     w_minsize = np.where(markersize >= minMarkerSize)
@@ -953,8 +977,19 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100):
     cb.ax.set_ylabel('log(sSFR) [yr$^{-1}$]')
 
     # finish (note: saveFilename could be in-memory buffer)
-    fig.savefig(saveFilename, format='png', dpi=dpi)
-    plt.close(fig)
+    if saveFilename is not None:
+        fig.savefig(saveFilename, format='png', dpi=dpi)
+        plt.close(fig)
+    else:
+        # return image array itself, i.e. draw the canvas then extract the (Nx,Ny,3) array
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+
+        width, height = fig.get_size_inches() * fig.get_dpi()
+        image = np.fromstring(canvas.tostring_rgb(), dtype='uint8').reshape(int(height), int(width), 3)
+        plt.close(fig)
+
+        return image
 
 def test_plot_tree():
     from util.simParams import simParams
@@ -967,39 +1002,32 @@ def test_plot_tree():
 
         plot_tree(sP, subhaloID, saveFilename)
 
-def test_plot_tree_mem():
+def test_plot_tree_mem(haloID=19):
     from io import BytesIO
+    import time
     from imageio import imread, imwrite
     from scipy.misc import imresize
     from util.simParams import simParams
-    sP = simParams(res=1820,run='tng',redshift=0.0)
+    sP = simParams(res=1820,run='tng',redshift=11.0)
 
-    haloID = 200
     subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
     supersample = 4
 
     # start memory buffer
-    buf = BytesIO()
+    start_time = time.time()
 
-    plot_tree(sP, subhaloID, buf, dpi=100*supersample)
+    im = plot_tree(sP, subhaloID, saveFilename=None, dpi=100*supersample)
 
     # 'load'
-    print('plotting done')
-    buf.seek(0)
-    im = imread(buf, format='png')
+    print('plotting done, [%.1f sec]' % (time.time()-start_time))
 
     # 'resize'
-    print('start resize')
     im = imresize(im, 1.0/supersample, interp='bicubic')
-    print('resize done')
 
     # 'save'
     buf = BytesIO()
     imwrite(buf, im, format='png')
 
-    with open('test.png','wb') as f:
+    with open('mergertree_%s_snap-%d_%d.png' % (sP.simName,sP.snap,haloID),'wb') as f:
         f.write(buf.getvalue())
-
-    # save
-    imwrite('test2.png', im)

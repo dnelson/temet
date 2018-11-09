@@ -126,7 +126,7 @@ class simParams:
 
         if getpass.getuser() != 'dnelson':
             self.basePath = '/u/dnelson/'
-            print('Warning: for user [%s] setting hard-coded basePath [%s]' % (getpass.getuser(),self.basePath))
+            #print('Warning: for user [%s] setting hard-coded basePath [%s]' % (getpass.getuser(),self.basePath))
 
         # general validation
         if not run:
