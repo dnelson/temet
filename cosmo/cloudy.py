@@ -640,6 +640,15 @@ class cloudyIon():
                          274.0, 310.8, 419.7, 454.0, 490.0, 542.0, 579.0, 619.0, 698.8, 738.0, 1856.0]} \
          ]
 
+    # currently contents of on-disk table (here as a cache)
+    saved_names   = ['Aluminium', 'Argon', 'Beryllium', 'Boron', 'Calcium', 'Carbon', 'Chlorine', 'Chromium', 
+                     'Cobalt', 'Copper', 'Flourine', 'Helium', 'Hydrogen', 'Iron', 'Lithium', 'Magnesium', 'Manganese', 
+                     'Neon', 'Nickel', 'Nitrogen', 'Oxygen', 'Phosphorus', 'Potassium', 'Scandium', 'Silicon', 'Sodium', 
+                     'Sulfur', 'Titanium', 'Vanadium', 'Zinc']
+    saved_syms    = ['Al', 'Ar', 'Be', 'B', 'Ca', 'C', 'Cl', 'Cr', 'Co', 'Cu', 'F', 'He', 'H', 'Fe', 'Li', 'Mg', 'Mn', 
+                     'Ne', 'Ni', 'N', 'O', 'P', 'K', 'Sc', 'Si', 'Na', 'S', 'Ti', 'V', 'Zn']
+    saved_numIons = [10,10,5,6,10,7,10,10,10,10,10,3,3,10,4,10,10,10,10,8,9,10,10,10,10,10,10,10,10,10]
+
     # solar mass fractions (Grevesse+ 2010 Sec 3)
     solar_X = 0.7380 # M_H / M_tot
     solar_Y = 0.2485 # M_He / M_tot
@@ -656,6 +665,7 @@ class cloudyIon():
 
     # simple roman numeral mapping
     roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
+    romanInv = {1:'I', 2:'II', 3:'III', 4:'IV', 5:'V', 6:'VI', 7:'VII', 8:'VIII', 9:'IX', 10:'X', 11:'XI'}
 
     def __init__(self, sP, el=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """

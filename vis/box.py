@@ -85,11 +85,12 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
     boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
-    axesUnits   = 'code'      # code [ckpc/h], pkpc, mpc, deg, arcmin, arcsec
+    axesUnits   = 'code'      # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
+    ctName      = None        # if not None (automatic based on field), specify colormap name
     plotHalos   = 20          # plot virial circles for the N most massive halos in the box
     labelHalos  = False       # label halo virial circles with values like M*, Mhalo, SFR
     projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'
@@ -181,11 +182,12 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
     boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
-    axesUnits   = 'code'      # code [ckpc/h], pkpc, mpc, deg, arcmin, arcsec
+    axesUnits   = 'code'      # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
+    ctName      = None        # if not None (automatic based on field), specify colormap name
     plotHalos   = 0           # plot virial circles for the N most massive halos in the box
     labelHalos  = False       # label halo virial circles with values like M*, Mhalo, SFR
     projType    = 'ortho'     # projection type, 'ortho', 'equirectangular'

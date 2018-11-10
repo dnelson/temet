@@ -37,33 +37,71 @@ colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_
                     'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha']
 totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
-velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
+velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y']
 
-# list of all field names we can handle
-validPartFields = ['dens','density','mass','O VI mass',# (generalize),
- 'masspart','particle_mass','sfr','sfr_msunyrkpc2','O VI fracmass',# (generalize),
- 'coldens','coldens_msunkpc2','coldens_msun_ster','O VI',# (generalize,coldens),
- 'OVI_OVII_ionmassratio',# (generalize),
- 'HI','HI_segmented','xray','xray_lum','sfr_halpha','halpha','p_sync_ska','metals_O',# (generalize),
- 'sb_O--8-16.0067A',# (generalize),
- 'temp','temperature','temp_sfcold',
- 'ent','entr','entropy',
- 'bmag','bmag_uG','bfield_x','bfield_y','bfield_z',
- 'dedt','energydiss','shocks_dedt','shocks_energydiss',
- 'machnum','shocks_machnum',
- 'P_gas','P_B','pressure_ratio',
- 'metal','Z','metal_solar','Z_solar',
- 'SN_IaII_ratio_Fe','SNIaII_ratio_meatls','SN_Ia_AGB_ratio_metals',
- 'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z','velocity_x','velocity_y',
- 'velsigma_los','velsigma_los_sfrwt',
- 'vrad','halo_vrad','radvel','halo_radvel',
- 'vrad_vvir',
- 'specangmom_mag','specj_mag'
- 'star_age','stellar_age',
- 'stellarBand-sdss_r',# (generalize),
- 'stellarBandObsFrame-sdss_r',# (generalize),
- 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w',
- 'potential','id','TimeStep','TimebinHydro']
+def validPartFields(ions=True, emlines=True, sps=True):
+    """ Helper, return a list of all field names we can handle. """
+    from cosmo.cloudy import getEmissionLines, cloudyEmission, cloudyIon
+    from cosmo.stellarPop import sps
+
+    # base fields
+    fields = ['dens','density','mass',
+              'masspart','particle_mass','sfr','sfr_msunyrkpc2',
+              'coldens','coldens_msunkpc2','coldens_msun_ster',
+              'OVI_OVII_ionmassratio',# (generalize),
+              'HI','HI_segmented','xray','xray_lum','sfr_halpha','halpha','p_sync_ska',
+              'temp','temperature','temp_sfcold',
+              'ent','entr','entropy',
+              'bmag','bmag_uG','bfield_x','bfield_y','bfield_z',
+              'dedt','energydiss','shocks_dedt','shocks_energydiss',
+              'machnum','shocks_machnum',
+              'P_gas','P_B','pressure_ratio',
+              'metal','Z','metal_solar','Z_solar',
+              'SN_IaII_ratio_Fe','SNIaII_ratio_meatls','SN_Ia_AGB_ratio_metals',
+              'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z','velocity_x','velocity_y',
+              'velsigma_los','velsigma_los_sfrwt',
+              'vrad','halo_vrad','radvel','halo_radvel',
+              'vrad_vvir',
+              'specangmom_mag','specj_mag'
+              'star_age','stellar_age',
+              'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w',
+              'potential','id','TimeStep','TimebinHydro']
+
+    # for all metals
+    metals = ['H','He','C','N','O','Ne','Mg','Si','Fe']
+    metal_fields = ['metals_%s' % metal for metal in metals]
+
+    fields += metal_fields
+
+    # for all CLOUDY ions
+    if ions:
+        cloudy_ions = []
+
+        for i, sym in enumerate(cloudyIon.saved_syms):
+            ionNums = [cloudyIon.romanInv[num+1] for num in range(cloudyIon.saved_numIons[i])]
+            el_ions = ['%s %s' % (sym,num) for num in ionNums]
+
+            cloudy_ions += el_ions
+
+        fields += ['%s mass' % ion for ion in cloudy_ions] # ionic mass
+        fields += ['%s fracmass' % ion for ion in cloudy_ions] # ionic mass fraction
+        fields += ['%s' % ion for ion in cloudy_ions] # ionic column density
+
+    # for all CLOUDY emission lines
+    if emlines:
+        em_lines, _ = getEmissionLines()
+        em_lines = [line_name.replace(' ','-') for line_name in em_lines]
+        em_lines += cloudyEmission.lineAbbreviations.keys()
+        em_fields = ['sb_%s' % line_name for line_name in em_lines]
+
+        fields += em_fields
+
+    # for all FSPS bands
+    if sps:
+        fields += ['stellarBand-%s' % band for band in sps.bands]
+        fields += ['stellarBandObsFrame-%s' % band for band in sps.bands]
+
+    return fields
 
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
@@ -586,57 +624,60 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if sP.isPartType(partType,'gas'):      ptStr = 'Gas'
     if sP.isPartType(partType,'stars'):    ptStr = 'Stellar'
 
+    logMin = True # take logZeroMin() on grid before return, unless set to False
+    gridOffset = 0.0 # add to final grid
+
     # volume densities
     if partField in volDensityFields:
         grid /= boxSizeImg[2] # mass/area -> mass/volume (normalizing by projection ray length)
 
     if partField in ['dens','density']:
-        grid  = logZeroMin( sP.units.codeDensToPhys( grid, cgs=True, numDens=True ) )
+        grid  = sP.units.codeDensToPhys( grid, cgs=True, numDens=True )
         config['label']  = 'Mean %s Volume Density [log cm$^{-3}$]' % ptStr
         config['ctName'] = 'jet'
 
     # total sum fields (also of sub-components e.g. "O VI mass")
     if partField == 'mass' or ' mass' in partField:
-        grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
+        grid  = sP.units.codeMassToMsun(grid)
         subStr = ' '+' '.join(partField.split()[:-1]) if ' mass' in partField else ''
         config['label']  = 'Total %s%s Mass [log M$_{\\rm sun}$]' % (ptStr,subStr)
         config['ctName'] = 'perula'
 
     if partField in ['masspart','particle_mass']:
-        grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
+        grid  = sP.units.codeMassToMsun(grid)
         config['label']  = '%s Particle Mass [log M$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'perula'
 
     if partField == 'sfr':
-        grid = logZeroMin( grid )
+        grid = grid
         config['label'] = 'Star Formation Rate [log M$_{\\rm sun}$/yr]'
         config['ctName'] = 'inferno'
 
     if partField == 'sfr_msunyrkpc2':
-        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) )
+        grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         config['label'] = 'Star Formation Surface Density [log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
     # fractional total sum of sub-component relative to total (note: for now, grid is pure mass)
     if ' fracmass' in partField:
-        grid  = logZeroMin( sP.units.codeMassToMsun(grid) )
+        grid  = sP.units.codeMassToMsun(grid)
         compStr = ' '.join(partField.split()[:-1])
         config['label']  = '%s Mass / Total %s Mass [log]' % (compStr,ptStr)
         config['ctName'] = 'perula'
 
     # column densities
     if partField == 'coldens':
-        grid  = logZeroMin( sP.units.codeColDensToPhys( grid, cgs=True, numDens=True ) )
+        grid  = sP.units.codeColDensToPhys( grid, cgs=True, numDens=True )
         config['label']  = '%s Column Density [log cm$^{-2}$]' % ptStr
         config['ctName'] = 'cubehelix'
 
     if partField in ['coldens_msunkpc2','coldens_sq_msunkpc2']:
         if partField == 'coldens_msunkpc2':
-            grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
+            grid  = sP.units.codeColDensToPhys( grid, msunKpc2=True )
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
         if partField == 'coldens_sq_msunkpc2':
             # note: units are fake for now
-            grid  = logZeroMin( sP.units.codeColDensToPhys( grid, msunKpc2=True ) )
+            grid  = sP.units.codeColDensToPhys( grid, msunKpc2=True )
             config['label'] = 'DM Annihilation Radiation [log GeV$^{-1}$ cm$^{-2}$ s$^{-1}$ kpc$^{-2}$]'
 
         if sP.isPartType(partType,'dm'):       config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
@@ -657,7 +698,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         for i in range(nPixels[1]): # normalize separately for each latitude
             grid[i,:] /= pxAreasByLat[i]
 
-        grid = logZeroMin( sP.units.codeMassToMsun(grid) ) # log(msun/ster)
+        grid = sP.units.codeMassToMsun(grid) # log(msun/ster)
         config['label'] = '%s Column Density [log M$_{\\rm sun}$ ster$^{-2}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
@@ -670,7 +711,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         ion = cloudyIon(sP=None)
         grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
-        grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
+        grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
         if partField == 'O VII': config['ctName'] = 'magma'
@@ -680,13 +721,13 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         ion = cloudyIon(sP=None)
         ion1, ion2, _ = partField.split('_')
 
-        grid  = logZeroMin( grid )
+        grid  = grid
         config['label']  = '%s / %s Mass Ratio [log]' % (ion.formatWithSpace(ion1),ion.formatWithSpace(ion2))
         config['ctName'] = 'Spectral'
         config['plawScale'] = 0.6
 
     if partField in ['HI','HI_segmented']:
-        grid = logZeroMin( sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) )
+        grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
 
         if partField == 'HI':
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
@@ -696,23 +737,25 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['ctName'] = 'HI_segmented'
 
     if partField in ['xray','xray_lum']:
-        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) ) + 30.0 # add 1e30 factor
+        grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
+        gridOffset = 30.0 # add 1e30 factor
         config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
     if partField in ['sfr_halpha','halpha']:
-        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) ) + 30.0 # add 1e30 factor
+        grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
+        gridOffset = 30.0 # add 1e30 factor
         config['label']  = 'H-alpha Luminosity L$_{\\rm H\alpha}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
     if partField in ['p_sync_ska']:
-        grid = logZeroMin( sP.units.codeColDensToPhys( grid, totKpc2=True ) )
+        grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         config['label']  = 'Gas Synchrotron Emission, SKA [log W Hz$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'perula'
 
     if 'metals_' in partField:
         # all of GFM_Metals as well as GFM_MetalsTagged (projected as column densities)
-        grid = logZeroMin( sP.units.codeColDensToPhys(grid, msunKpc2=True) )
+        grid = sP.units.codeColDensToPhys(grid, msunKpc2=True)
         metalName = partField.split("_")[1]
 
         mStr = '-Metals' if metalName in ['SNIa','SNII','AGB','NSNS'] else ''
@@ -731,7 +774,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         ster = True if '_ster' in partField else False
         arcsec2 = not ster
 
-        grid = logZeroMin( sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster) )
+        grid = sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster)
         uLabel = 'arcsec$^{-2}$'
         if ster: uLabel = 'ster$^{-1}$'
 
@@ -742,22 +785,22 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature','temp_sfcold']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'jet'
 
     if partField in ['ent','entr','entropy']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'Entropy [log K cm$^2$]'
         config['ctName'] = 'jet'
 
     if partField in ['bmag']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'Magnetic Field Magnitude [log G]'
         config['ctName'] = 'Spectral_r'
 
     if partField in ['bmag_uG']:
-        grid = logZeroMin( grid * 1e6 )
+        grid = lgrid * 1e6
         config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
         config['plawScale'] = 0.4
@@ -767,10 +810,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         dirStr = partField.split("_")[1].lower()
         config['label']  = 'B$_{\\rm %s}$ [$\mu$G]' % dirStr
         config['ctName'] = 'PuOr' # is brewer-purpleorange
+        logMin = False
 
     # gas: shock finder
     if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:
-        grid = logZeroMin( sP.units.codeEnergyRateToErgPerSec(grid) )
+        grid = sP.units.codeEnergyRateToErgPerSec(grid)
         config['label']  = 'Shocks Dissipated Energy [log erg/s]'
         config['ctName'] = 'gist_heat'
         #config['plawScale'] = 0.7
@@ -779,85 +823,99 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label']  = 'Shock Mach Number' # linear
         config['ctName'] = 'hot'
         config['plawScale'] = 1.0 #0.7
+        logMin = False
 
     # gas: pressures
     if partField in ['P_gas']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'Gas Pressure [log K cm$^{-3}$]'
         config['ctName'] = 'viridis'
 
     if partField in ['P_B']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'Magnetic Pressure [log K cm$^{-3}$]'
         config['ctName'] = 'viridis'
 
     if partField in ['pressure_ratio']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'Pressure Ratio [log P$_{\\rm B}$ / P$_{\\rm gas}$]'
         config['ctName'] = 'Spectral_r' # RdYlBu, Spectral
 
     # metallicities
     if partField in ['metal','Z']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = '%s Metallicity [log M$_{\\rm Z}$ / M$_{\\rm tot}$]' % ptStr
         config['ctName'] = 'gist_earth'
 
     if partField in ['metal_solar','Z_solar']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = '%s Metallicity [log Z$_{\\rm sun}$]' % ptStr
         config['ctName'] = 'viridis'
         config['plawScale'] = 1.0
 
     if partField in ['SN_IaII_ratio_Fe']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = '%s Mass Ratio Fe$_{\\rm SNIa}$ / Fe$_{\\rm SNII}$ [log]' % ptStr
         config['ctName'] = 'Spectral'
     if partField in ['SN_IaII_ratio_metals']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = '%s Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm SNII}$ [log]' % ptStr
         config['ctName'] = 'Spectral'
         config['cmapCenVal'] = 0.0
     if partField in ['SN_Ia_AGB_ratio_metals']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = '%s Mass Ratio Z$_{\\rm SNIa}$ / Z$_{\\rm AGB}$ [log]' % ptStr
         config['ctName'] = 'Spectral'
 
     # velocities (mass-weighted)
     if partField in ['vmag','velmag']:
+        grid = grid
         config['label']  = '%s Velocity Magnitude [km/s]' % ptStr
         config['ctName'] = 'afmhot' # same as pm/f-34-35-36 (illustris)
+        logMin = False
 
     if partField in ['vel_los','vel_los_sfrwt']:
+        grid = grid
         config['label']  = '%s Line of Sight Velocity [km/s]' % ptStr
         config['ctName'] = 'RdBu_r' # bwr, coolwarm, RdBu_r
+        logMin = False
 
-    if partField in ['vel_x','vel_y','velocity_x','velocity_y']:
+    if partField in ['vel_x','vel_y','vel_z','velocity_x','velocity_y']:
+        grid = grid
         velDirection = partField.split("_")[1]
         config['label'] = '%s %s-Velocity [km/s]' % (ptStr,velDirection)
         config['ctName'] = 'RdBu_r'
+        logMin = False
 
     if partField in ['velsigma_los','velsigma_los_sfrwt']:
         grid = np.sqrt(grid) # variance -> sigma
         config['label']  = '%s Line of Sight Velocity Dispersion [km/s]' % ptStr
         config['ctName'] = 'PuBuGn_r' # hot, magma
+        logMin = False
 
     if partField in ['vrad','halo_vrad','radvel','halo_radvel']:
+        grid = grid
         config['label']  = '%s Radial Velocity [km/s]' % ptStr
         config['ctName'] = 'PRGn' # brewer purple-green diverging
+        logMin = False
 
     if partField == 'vrad_vvir':
+        grid = grid
         config['label']  = '%s Radial Velocity / Halo v$_{200}$' % ptStr
         config['ctName'] = 'PRGn' # brewer purple-green diverging
+        logMin = False
 
     if partField in ['specangmom_mag','specj_mag']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label'] = '%s Specific Angular Momentum Magnitude [log kpc km/s]' % ptStr
         config['ctName'] = 'cubehelix'
 
     # stars
     if partField in ['star_age','stellar_age']:
+        grid = grid
         config['label']  = 'Stellar Age [Gyr]'
         config['ctName'] = 'blgrrd_black0'
+        logMin = False
 
     if 'stellarBand-' in partField:
         # convert linear luminosities back to magnitudes
@@ -869,6 +927,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         bandName = partField.split("stellarBand-")[1]
         config['label'] = 'Stellar %s Luminosity [abs AB mag]' % bandName
         config['ctName'] = 'gray_r'
+        logMin = False
 
     if 'stellarBandObsFrame-' in partField:
         # convert linear luminosities back to magnitudes
@@ -879,10 +938,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         bandName = partField.split("stellarBandObsFrame-")[1]
         config['label'] = 'Stellar %s Luminosity [mag / arcsec$^2$]' % bandName
         config['ctName'] = 'gray_r'
+        logMin = False
 
     if 'stellarComp-' in partField:
-        print('todo')
-        import pdb; pdb.set_trace()
+        raise Exception('Should never make it here.')
+        logMin = False
 
     # all particle types
     if partField in ['potential']:
@@ -894,25 +954,39 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         w_pos = np.where(grid > 0.0)
         grid[w_pos] = logZeroMin( grid[w_pos] )
         grid[w_neg] = -logZeroMin( -grid[w_neg] )
+        logMin = False
 
     if partField in ['id']:
+        grid = grid
         config['label']  = '%s Particle ID [log]' % ptStr
         config['ctName'] = 'afmhot'
-        grid = logZeroMin( grid )
 
     # debugging
     if partField in ['TimeStep']:
-        grid = logZeroMin( grid )
+        grid = grid
         config['label']  = 'log (%s TimeStep)' % ptStr
         config['ctName'] = 'viridis_r'
 
     if partField in ['TimebinHydro']:
+        grid = grid
         config['label']  = 'TimebinHydro'
         config['ctName'] = 'viridis'
+        logMin = False
 
     # failed to find?
     if 'label' not in config:
         raise Exception('Unrecognized field ['+partField+'].')
+
+    # compute a guess for an adaptively clipped heuristic [min,max] bound
+    if logMin:
+        config['vMM_guess'] = np.nanpercentile(logZeroNaN(grid), [15,99.5])
+    else:
+        config['vMM_guess'] = np.nanpercentile(grid, [5,99.5])
+
+    # handle requested log
+    if logMin:
+        grid = logZeroMin(grid)
+    grid += gridOffset
 
     return grid, config
 
@@ -1548,7 +1622,7 @@ def addBoxMarkers(p, conf, ax):
                     rad = rVirFrac * p['galHalfMass']
             if p['fracsType'] == 'codeUnits':
                 rad *= 1.0
-            if p['fracsType'] == 'pkpc':
+            if p['fracsType'] == 'kpc':
                 rad = p['sP'].units.physicalKpcToCodeLength(rad)
 
             if p['axesUnits'] == 'code':
@@ -2043,17 +2117,13 @@ def renderMultiPanel(panels, conf):
                 ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_2[0], new_2[1], new_2[2], axStr))
 
             # color mapping (handle defaults and overrides)
-            vMM = p['valMinMax']
+            vMM = p['valMinMax'] if p['valMinMax'] is not None else config['vMM_guess']
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
             if 'plawScale' in p: plaw = p['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
-            ctName = p['ctName'] if 'ctName' in p else config['ctName']
-
-            if vMM is None:
-                w = np.where(grid >= grid.min() + 2.0) # remove typical logZeroMin() pixels
-                vMM = np.nanpercentile(grid[w], [15,99.5]) # adaptively clipped default heuristic
+            ctName = p['ctName'] if p['ctName'] is not None else config['ctName']
 
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
            
@@ -2173,17 +2243,13 @@ def renderMultiPanel(panels, conf):
             setAxisColors(ax, color2)
 
             # color mapping (handle defaults and overrides)
-            vMM = p['valMinMax']
+            vMM = p['valMinMax'] if p['valMinMax'] is not None else config['vMM_guess']
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
             if 'plawScale' in p: plaw = p['plawScale']
             cenVal = p['cmapCenVal'] if 'cmapCenVal' in p else None
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
-            ctName = p['ctName'] if 'ctName' in p else config['ctName']
-
-            if vMM is None:
-                w = np.where(grid >= grid.min() + 2.0) # remove typical logZeroMin() pixels
-                vMM = np.nanpercentile(grid[w], [15,99.5]) # adaptively clipped default heuristic
+            ctName = p['ctName'] if p['ctName'] is not None else config['ctName']
 
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
 

@@ -80,7 +80,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         sizeType = 'rVirial'
     if 0:
         size = 6000.0
-        sizeType = 'pkpc'
+        sizeType = 'kpc'
     if 0:
         size = 40.0
         sizeType = 'rHalfMassStars'
@@ -844,7 +844,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
     relCoords     = True
     mpb           = None
     rotation      = 'face-on'
-    sizeType      = 'pkpc'
+    sizeType      = 'kpc'
 
     # init
     evo_redshifts = [0.0, 0.2, 0.4, 0.7, 1.0] # [0.0, 0.2, 0.5, 1.0, 2.0]
@@ -1018,7 +1018,7 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
     labelScale  = False
     rotation    = 'face-on'
     size        = 60.0 # 30 kpc in each direction from center
-    sizeType    = 'pkpc'
+    sizeType    = 'kpc'
     partType    = 'stars'
     partField   = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
     nRowsFig    = 7 # 6 columns, 7 rows
@@ -1172,7 +1172,7 @@ def annalisa_tng50_presentation(conf, binNum, stars=True, edgeon=False):
     labelScale = 'physical'
     labelHalo  = 'mstar,id'
     rotation   = 'edge-on' if edgeon else 'face-on'
-    sizeType   = 'pkpc'
+    sizeType   = 'kpc'
     size       = 60.0 if binNum == 1 else 30.0
 
     class plotConfig:

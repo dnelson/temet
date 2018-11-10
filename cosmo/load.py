@@ -1021,18 +1021,19 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 (cache_key,indRangeOrig[0],indRangeOrig[1]))
             return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
 
-    # full snapshot-level caching, for normal usage but not web
-    useCache = True if getuser() == 'dnelson' else False
+    # full snapshot-level caching, create during normal usage but not web (always use if exists)
+    useCache = True
+    createCache = True if getuser() == 'dnelson' else False
+
+    cachePath = sP.derivPath + 'cache/'
+    cacheFile = cachePath + 'cached_%s_%s_%d.hdf5' % (partType,field.replace(" ","-"),sP.snap)
+    indRangeAll = [0, snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] ]
 
     if useCache:
-        cachePath = sP.derivPath + 'cache/'
-        cacheFile = cachePath + 'cached_%s_%s_%d.hdf5' % (partType,field.replace(" ","-"),sP.snap)
-        indRangeAll = [0, snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] ]
-
-        if not isdir(cachePath):
-            mkdir(cachePath)
-
-        if not isfile(cacheFile):
+        # does not exist yet, and should create?
+        if createCache and not isfile(cacheFile):
+            if not isdir(cachePath):
+                mkdir(cachePath)
             # compute for indRange == None (whole snapshot) with a reasonable pSplit
             nChunks = numPartToChunkLoadSize(indRangeAll[1])
             print('Creating [%s] for [%d] particles in [%d] chunks.' % \
@@ -1078,18 +1079,20 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             print('Saved: [%s].' % cacheFile.split(sP.derivPath)[1])
             kwargs['indRange'] = indRangeOrig # restore
 
-        # load from existing cache
-        print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
+        # load from existing cache if it exists
+        if isfile(cacheFile):
+            if getuser() == 'dnelson':
+                print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
 
-        with h5py.File(cacheFile, 'r') as f:
-            assert f['field'].size == indRangeAll[1]
-            if indRangeOrig is None:
-                values = f['field'][()]
-            else:
-                values = f['field'][indRangeOrig[0] : indRangeOrig[1]+1]
-
-    else:
-        # old, don't create or use cache
+            with h5py.File(cacheFile, 'r') as f:
+                assert f['field'].size == indRangeAll[1]
+                if indRangeOrig is None:
+                    values = f['field'][()]
+                else:
+                    values = f['field'][indRangeOrig[0] : indRangeOrig[1]+1]
+    
+    if not useCache or not isfile(cacheFile):
+        # don't use cache, or tried to use and it doesn't exist yet, so run computation now
         from cosmo.cloudy import cloudyIon, cloudyEmission
         if prop in ['mass','frac']:
             ion = cloudyIon(sP, el=element, redshiftInterp=True)

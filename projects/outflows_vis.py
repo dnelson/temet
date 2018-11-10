@@ -668,7 +668,7 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
         vecOverlayDensity = [2.0,2.0]
 
     size      = 200.0 # [50,80,120] --> 25,40,60 ckpc/h each direction
-    sizeType  = 'pkpc'
+    sizeType  = 'kpc'
 
     # which halo?
     sP = simParams(res=res, run=run, redshift=redshift)
