@@ -270,12 +270,30 @@ def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_
 
 class sps():
     """ Use pre-computed FSPS stellar photometrics tables to derive magnitudes for simulation stars. """
-    basePath = expanduser("~") + '/code/fsps.run/'
+    basePath = '/u/dnelson/code/fsps.run/'
 
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
     isoTracks  = ['mist','padova07','parsec','basti','geneva']
     stellarLib = ['miles','basel','csk'] # unused
     dustModels = ['none','cf00','cf00_res_eff','cf00b_res_conv','cf00_res_conv','cf00_res3_conv']
+
+    # current bands (here as a cache)
+    bands = ['wfpc2_f439w', 'isaac_ks', 'iras_12', 'jwst_f356w', 'scuba_450wb', 'wfc3_uvis_f218w', 'pacs_100', 'buser_b', 
+             'i2300', 'wfc3_ir_f140w', 'wfc_acs_f814w', 'wfc3_uvis_f814w', 'nicmos_f160w', 'wfcam_k', 'steidel_un', 'cousins_r', 
+             'iras_25', 'wfcam_z', 'wfcam_y', 'wfc_acs_f625w', 'wfc3_ir_f098m', 'cousins_i', 'newfirm_j1', 'newfirm_j3', 'i1500', 
+             'newfirm_j2', 'wise_w1', 'ps1_i', 'wise_w3', 'wise_w2', 'wise_w4', 'bessell_l', 'bessell_m', 'ps1_r', 'ps1_y', 'ps1_z', 
+             'jwst_f277w', 'sdss_u', 'des_r', 'des_y', 'des_z', 'bessell_lp', 'wfc3_uvis_f438w', '2mass_ks', 'steidel_rs', 
+             'des_g', 'des_i', 'uvot_m2', 'wfc3_ir_f110w', 'stromgren_u', 'stromgren_v', 'wfc_acs_f850lp', 'wfc3_uvis_f390w', 
+             'stromgren_y', 'stromgren_b', 'wfpc2_f850lp', 'wfc3_uvis_f336w', 'spire_500', 'wfpc2_f555w', 'fors_v', 'uvot_w2', 
+             'fors_r', 'wfc3_uvis_f606w', 'iras_100', 'newfirm_h2', 'newfirm_h1', 'wfc_acs_f475w', 'wfpc2_f814w', 'jwst_f070w', 
+             'mips_24', 'wfc3_uvis_f775w', 'suprimecam_r', 'suprimecam_v', 'suprimecam_i', 'wfc_acs_f435w', 'suprimecam_b', 'mips_70', 
+             '2mass_h', '2mass_j', 'sdss_g', 'wfpc2_f300w', 'sdss_i', 'wfc3_uvis_f475w', 'sdss_r', 'wfc3_uvis_f850lp', 'newfirm_k', 
+             'sdss_z', 'wfc3_ir_f160w', 'wfc_acs_f555w', 'wfc3_ir_f125w', 'i2800', 'vista_y', 'megacam_u', 'megacam_r', 'suprimecam_z', 
+             'wfpc2_f450w', 'wfc3_uvis_f225w', 'wfc_acs_f606w', 'galex_nuv', 'vista_h', 'vista_k', 'vista_j', 'wfpc2_f336w', 
+             'megacam_i', 'b', 'wfc3_ir_f105w', 'galex_fuv', 'mips_160', 'v', 'uvot_w1', 'jwst_f444w', 'wfc3_uvis_f555w', 'wfc3_uvis_f275w', 
+             'wfcam_j', 'spire_350', 'wfcam_h', 'jwst_f200w', 'pacs_160', 'jwst_f150w', 'wfpc2_f255w', 'wfc_acs_f775w', 'jwst_f115w', 
+             'spire_250', 'scuba_850wb', 'wfpc2_f606w', 'ps1_g', 'iras_60', 'nicmos_f110w', 'pacs_70', 'megacam_z', 'irac_4', 'irac_2', 
+             'irac_3', 'irac_1', 'megacam_g', 'cfht_i', 'suprimecam_g', 'cfht_b', 'u', 'steidel_i', 'steidel_g', 'jwst_f090w', 'cfht_r']
 
     def __init__(self, sP, iso='padova07', imf='chabrier', dustModel='cf00_res_conv', order=3, 
                  redshifted=False, emlines=False):

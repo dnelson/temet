@@ -18,7 +18,7 @@ from util.simParams import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
-    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','pkpc','arcmin']
+    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','kpc','arcmin']
 
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
@@ -87,7 +87,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
             boxSizeImg = size * galHalfMassRad / 5
     if sizeType == 'codeUnits':
         boxSizeImg = size
-    if sizeType == 'pkpc':
+    if sizeType == 'kpc':
         boxSizeImg = sP.units.physicalKpcToCodeLength(size)
     if sizeType == 'arcmin':
         size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size*60, sP.redshift)
@@ -171,10 +171,10 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
+    sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc]
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
-    axesUnits   = 'code'        # code [ckpc/h], pkpc, mpc, deg, arcmin, arcsec
+    axesUnits   = 'code'        # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None          # stretch vector field visualizaton between these bounds (None=automatic)
@@ -187,6 +187,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     labelSim    = False         # label simulation name (lower right corner) of panel
     labelHalo   = False         # label halo total mass and stellar mass
     labelCustom = False         # custom label string to include
+    ctName      = None          # if not None (automatic based on field), specify colormap name
     plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
     projType    = 'ortho'       # projection type, 'ortho', 'equirectangular'
@@ -278,7 +279,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
+    sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc]
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
     axesUnits   = 'code'          # code [ckpc/h], mpc, deg, arcmin, arcsec
@@ -294,6 +295,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     labelSim    = False           # label simulation name (lower right corner) of panel
     labelHalo   = False           # label halo total mass and stellar mass
     labelCustom = False           # custom label string to include
+    ctName      = None            # if not None (automatic based on field), specify colormap name
     plotSubhalos = False          # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True            # if plotting x,y,z coordinate labels, make them relative to box/halo center
     projType    = 'ortho'         # projection type, 'ortho', 'equirectangular'
