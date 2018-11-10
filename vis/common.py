@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import hashlib
 import h5py
+from getpass import getuser
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 
@@ -975,7 +976,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # load if already made
         with h5py.File(saveFilename,'r') as f:
             grid_master = f['grid'][...]
-        print('Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
+        if getuser() == 'dnelson':
+            print('Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
     else:
         # will we use a complete load or a subset particle load?
         indRange = None
@@ -1276,7 +1278,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # save
         with h5py.File(saveFilename,'w') as f:
             f['grid'] = grid_master
-        print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+        if getuser() == 'dnelson':
+            print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     # smooth down to some resolution by convolving with a Gaussian? (before log if applicable)
     if smoothFWHM is not None:
@@ -1641,7 +1644,7 @@ def addBoxMarkers(p, conf, ax):
         x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx[0]) # upper left
         x1 = x0 + scaleBarPlotLen
         yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx[0])
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*2) * 960.0/conf.rasterPx[0])
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*1.5) * 960.0/conf.rasterPx[0])
 
         if p['axesUnits'] in ['deg','arcmin','arcsec']:
             deg = (p['axesUnits'] == 'deg')
@@ -1690,14 +1693,14 @@ def addBoxMarkers(p, conf, ax):
         str1 = "log M$_{\\rm halo}$ = %.1f" % haloMass
         str2 = "log M$_{\\rm star}$ = %.1f" % stellarMass
 
-        if 'mstar' in p['labelHalo']:
+        if 'mstar' in str(p['labelHalo']):
             # just Mstar
             str2 = "log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
-        if 'mhalo' in p['labelHalo']:
+        if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
             legend_labels.append( str1 )
-        if 'id' in p['labelHalo']:
+        if 'id' in str(p['labelHalo']):
             legend_labels.append( '%d' % p['sP'].hInd )
         if str1 not in legend_labels and str2 not in legend_labels:
             # both Mhalo and Mstar
@@ -2048,6 +2051,10 @@ def renderMultiPanel(panels, conf):
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             ctName = p['ctName'] if 'ctName' in p else config['ctName']
 
+            if vMM is None:
+                w = np.where(grid >= grid.min() + 2.0) # remove typical logZeroMin() pixels
+                vMM = np.nanpercentile(grid[w], [15,99.5]) # adaptively clipped default heuristic
+
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
            
             cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
@@ -2059,8 +2066,8 @@ def renderMultiPanel(panels, conf):
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
 
             ax.autoscale(False)
-            if p['valMinMax'] is not None and cmap is not None:
-                plt.clim( p['valMinMax'] )
+            if cmap is not None:
+                plt.clim( vMM )
 
             addBoxMarkers(p, conf, ax)
 
@@ -2174,6 +2181,10 @@ def renderMultiPanel(panels, conf):
             if 'cmapCenVal' in config: cenVal = config['cmapCenVal']
             ctName = p['ctName'] if 'ctName' in p else config['ctName']
 
+            if vMM is None:
+                w = np.where(grid >= grid.min() + 2.0) # remove typical logZeroMin() pixels
+                vMM = np.nanpercentile(grid[w], [15,99.5]) # adaptively clipped default heuristic
+
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
 
             cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
@@ -2184,8 +2195,8 @@ def renderMultiPanel(panels, conf):
 
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
-            if p['valMinMax'] is not None and cmap is not None:
-                plt.clim( p['valMinMax'] )
+            if cmap is not None:
+                plt.clim( vMM )
 
             addBoxMarkers(p, conf, ax)
 

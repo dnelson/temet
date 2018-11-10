@@ -243,6 +243,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
         p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
 
         # add imaging config for single halo view
+        if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
+        
         p['boxSizeImg'], p['boxCenter'], p['extent'], \
         p['haloVirRad'], p['galHalfMass'], p['galHalfMassStars'], \
         p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
@@ -349,6 +351,8 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
 
         p['shID'] = sP.zoomSubhaloID if sP.isZoom else sP.hInd # direct input of subhalo ID for periodic box
         p['mpb'] = mpbSmoothedProperties(sP, p['shID'])
+
+        if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
     # determine frame sequence (as the last sP in panels is used somewhat at random, we are here 
     # currently assuming that all runs in panels have the same snapshot configuration)
