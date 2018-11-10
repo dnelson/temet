@@ -163,10 +163,10 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     redshift    = 0.0           # run redshift
     partType    = 'gas'         # which particle type to project
     partField   = 'temp'        # which quantity/field to project for that particle type
-    #valMinMax  = [min,max]     # stretch colortable between minimum and maximum field values
+    valMinMax   = None          # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
     rVirFracs   = [1.0]         # draw circles at these fractions of a virial radius
     fracsType   = 'rVirial'     # if not rVirial, draw circles at fractions of another quant, same as sizeType
-    method      = 'sphMap'      # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
+    method      = 'sphMap'      # sphMap, sphMap_subhalo, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = [1920,1920]   # [1400,1400] number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
@@ -174,7 +174,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
     sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
-    axesUnits   = 'code'        # code [ckpc/h], pkpc, Mpc, deg, arcmin
+    axesUnits   = 'code'        # code [ckpc/h], pkpc, mpc, deg, arcmin, arcsec
     vecOverlay  = False         # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'           # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None          # stretch vector field visualizaton between these bounds (None=automatic)
@@ -262,16 +262,16 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
 
     # defaults (all panel fields that can be specified)
 
-    hInd        = 2               # zoom halo index
+    hInd        = 2               # zoom halo index, or subhalo (subfind) index in periodic box
     run         = 'zooms2'        # run name
     res         = 9               # run resolution
     redshift    = 2.0             # run redshift
     partType    = 'gas'           # which particle type to project
     partField   = 'temp'          # which quantity/field to project for that particle type
-    #valMinMax  = [min,max]       # stretch colortable between minimum and maximum field values
+    valMinMax   = None            # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
     rVirFracs   = [0.15,0.5,1.0]  # draw circles at these fractions of a virial radius
     fracsType   = 'rVirial'       # if not rVirial, draw circles at fractions of another quant, same as sizeType
-    method      = 'sphMap'        # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
+    method      = 'sphMap'        # sphMap, sphMap_subhalo, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
@@ -279,7 +279,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,pkpc]
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
-    axesUnits   = 'code'          # code [ckpc/h], Mpc, deg, arcmin
+    axesUnits   = 'code'          # code [ckpc/h], mpc, deg, arcmin, arcsec
     vecOverlay  = False           # add vector field quiver/streamlines on top? then name of field [bfield,vel]
     vecMethod   = 'E'             # method to use for vector vis: A, B, C, D, E, F (see common.py)
     vecMinMax   = None            # stretch vector field visualizaton between these bounds (None=automatic)

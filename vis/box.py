@@ -75,7 +75,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     redshift    = 0.0         # run redshift
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
-    #valMinMax  = [min,max]   # stretch colortable between minimum and maximum field values
+    valMinMax   = None        # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
     method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = 1400        # number of pixels per dimension of images when projecting (960 1400)
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
@@ -85,7 +85,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
     boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
-    axesUnits   = 'code'      # code [ckpc/h], mpc, deg, arcmin
+    axesUnits   = 'code'      # code [ckpc/h], pkpc, mpc, deg, arcmin, arcsec
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
     labelSim    = False       # label simulation name (lower right corner) of panel
@@ -171,7 +171,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     res         = 1820        # run resolution
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
-    #valMinMax  = [min,max]   # stretch colortable between minimum and maximum field values
+    valMinMax   = None        # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
     method      = 'sphMap'    # sphMap, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = 960         # number of pixels per dimension of images when projecting
     zoomFac     = 1.0         # [0,1], only in axes, not along projection direction
@@ -181,7 +181,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
     sliceFac    = 1.0         # [0,1], only along projection direction, relative depth wrt boxsize
     axes        = [0,1]       # e.g. [0,1] is x,y
     boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
-    axesUnits   = 'code'      # code [ckpc/h], Mpc, deg, arcmin
+    axesUnits   = 'code'      # code [ckpc/h], pkpc, mpc, deg, arcmin, arcsec
     labelZ      = False       # label redshift inside (upper right corner) of panel
     labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
     labelSim    = False       # label simulation name (lower right corner) of panel
@@ -275,7 +275,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
             p['boxSizeImg'], p['boxCenter'], p['extent'] = boxImgSpecs(**p)
 
             # e.g. update the upper bound of 'stellar_age' valMinMax, if set, to the current tAge [in Gyr]
-            #if p['partField'] == 'stellar_age' and 'valMinMax' in p:
+            #if p['partField'] == 'stellar_age' and p['valMinMax'] is not None:
             #    p['valMinMax'][1] = np.max( [p['sP'].units.redshiftToAgeFlat(p['sP'].redshift), 3.0] )
             
         # request render and save
