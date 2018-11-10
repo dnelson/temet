@@ -983,6 +983,8 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     if saveFilename is not None:
         fig.savefig(saveFilename, format=output_fmt, dpi=dpi)
         plt.close(fig)
+
+        return True
     else:
         # return image array itself, i.e. draw the canvas then extract the (Nx,Ny,3) array
         canvas = FigureCanvasAgg(fig)
@@ -1019,7 +1021,7 @@ def test_plot_tree_mem(haloID=19):
     output_fmt = 'png'
 
     # start
-    buf = None # return iamge array by default
+    buf = None # return image array by default
 
     if output_fmt == 'pdf':
         # fill memory buffer instead

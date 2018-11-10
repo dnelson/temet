@@ -38,6 +38,32 @@ totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','velocity_x','velocity_y']
 
+# list of all field names we can handle
+validPartFields = ['dens','density','mass','O VI mass',# (generalize),
+ 'masspart','particle_mass','sfr','sfr_msunyrkpc2','O VI fracmass',# (generalize),
+ 'coldens','coldens_msunkpc2','coldens_msun_ster','O VI',# (generalize,coldens),
+ 'OVI_OVII_ionmassratio',# (generalize),
+ 'HI','HI_segmented','xray','xray_lum','sfr_halpha','halpha','p_sync_ska','metals_O',# (generalize),
+ 'sb_O--8-16.0067A',# (generalize),
+ 'temp','temperature','temp_sfcold',
+ 'ent','entr','entropy',
+ 'bmag','bmag_uG','bfield_x','bfield_y','bfield_z',
+ 'dedt','energydiss','shocks_dedt','shocks_energydiss',
+ 'machnum','shocks_machnum',
+ 'P_gas','P_B','pressure_ratio',
+ 'metal','Z','metal_solar','Z_solar',
+ 'SN_IaII_ratio_Fe','SNIaII_ratio_meatls','SN_Ia_AGB_ratio_metals',
+ 'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z','velocity_x','velocity_y',
+ 'velsigma_los','velsigma_los_sfrwt',
+ 'vrad','halo_vrad','radvel','halo_radvel',
+ 'vrad_vvir',
+ 'specangmom_mag','specj_mag'
+ 'star_age','stellar_age',
+ 'stellarBand-sdss_r',# (generalize),
+ 'stellarBandObsFrame-sdss_r',# (generalize),
+ 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w',
+ 'potential','id','TimeStep','TimebinHydro']
+
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
@@ -1148,7 +1174,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     quant = quant[wMask]
 
             # render
-            if method in ['sphMap','sphMap_global','sphMap_subhalo','sphMap_minIP','sphMap_maxIP','sphMap_LIC']:
+            if method in ['sphMap','sphMap_global','sphMap_subhalo','sphMap_minIP','sphMap_maxIP']:
                 # particle by particle (unordered) splat using standard SPH cubic spline kernel
 
                 # further sub-method specification?
@@ -2014,7 +2040,7 @@ def renderMultiPanel(panels, conf):
                 ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_2[0], new_2[1], new_2[2], axStr))
 
             # color mapping (handle defaults and overrides)
-            vMM = p['valMinMax'] if 'valMinMax' in p else None
+            vMM = p['valMinMax']
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
             if 'plawScale' in p: plaw = p['plawScale']
@@ -2033,7 +2059,7 @@ def renderMultiPanel(panels, conf):
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
 
             ax.autoscale(False)
-            if 'valMinMax' in p and cmap is not None:
+            if p['valMinMax'] is not None and cmap is not None:
                 plt.clim( p['valMinMax'] )
 
             addBoxMarkers(p, conf, ax)
@@ -2087,7 +2113,7 @@ def renderMultiPanel(panels, conf):
         for p in panels:
             pPartTypes.add(p['partType'])
             pPartFields.add(p['partField'])
-            if 'valMinMax' in p: pValMinMaxes.add(str(p['valMinMax']))
+            if p['valMinMax'] is not None: pValMinMaxes.add(str(p['valMinMax']))
 
         # if all panels in the entire figure are the same, we will do 1 single colorbar
         oneGlobalColorbar = False
@@ -2140,7 +2166,7 @@ def renderMultiPanel(panels, conf):
             setAxisColors(ax, color2)
 
             # color mapping (handle defaults and overrides)
-            vMM = p['valMinMax'] if 'valMinMax' in p else None
+            vMM = p['valMinMax']
             plaw = p['plawScale'] if 'plawScale' in p else None
             if 'plawScale' in config: plaw = config['plawScale']
             if 'plawScale' in p: plaw = p['plawScale']
@@ -2158,7 +2184,7 @@ def renderMultiPanel(panels, conf):
 
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
-            if 'valMinMax' in p and cmap is not None:
+            if p['valMinMax'] is not None and cmap is not None:
                 plt.clim( p['valMinMax'] )
 
             addBoxMarkers(p, conf, ax)
