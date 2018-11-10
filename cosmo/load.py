@@ -1021,8 +1021,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 (cache_key,indRangeOrig[0],indRangeOrig[1]))
             return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
 
-    # caching
-    useCache = True
+    # full snapshot-level caching, for normal usage but not web
+    useCache = True if getuser() == 'dnelson' else False
 
     if useCache:
         cachePath = sP.derivPath + 'cache/'
