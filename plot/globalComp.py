@@ -565,7 +565,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
     plt.close(fig)
 
 def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kpc=False, use30H=False, 
-                        useP10=False, haloMasses=False, simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
+                        useP10=False, haloMasses=False, s850fluxes=False, simRedshift=0.0, dataRedshift=0.0, fig_subplot=[None,None]):
     """ Stellar mass function (number density of galaxies) at redshift zero, or above. """
     # config
     mts = ['SubhaloMassInRadType','SubhaloMassInHalfRadType','SubhaloMassType']
@@ -612,10 +612,17 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
     if useP10:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < puchwein2010 r$_{\\rm cut}$ ]')
 
+    # alternative x-axes
     if haloMasses:
         ax.set_xlim([9.0,14.5])
         ax.set_ylabel('Mass Functioon $\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ]')
         ax.set_xlabel('Halo Mass [ log M$_{\\rm sun}$ ] [ 200crit ]')
+
+    if s850fluxes:
+        ax.set_xlim([-1.5, 1.0])
+        ax.set_ylim([5e-8,1e-2])
+        ax.set_ylabel('S850$\mu$m Functioon $\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ]')
+        ax.set_xlabel('Submilliter Flux S850$\mu$m [ log mJy ]')
 
     # observational points
     data = []
@@ -743,26 +750,42 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                     xx = sP.units.codeMassToLogMsun(xx)
 
                 if haloMasses:
-                    # HALO mass instead, testing
+                    # halo mass instead: no w index, always all
                     xx = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
                     print('using halo masses instead')
+                if s850fluxes:
+                    # S850 fluxes instead
+                    acKey = 'Subhalo_S850um'#_25pkpc'
+                    xx = logZeroNaN( sP.auxCat(acKey)[acKey][w] )
+                    print('using s850 fluxes instead')
 
                 normFac = sP.boxSizeCubicComovingMpc * binSize
-                xm, ym_i = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
+                xm, ym = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
                 ym = savgol_filter(ym_i,sKn,sKo)
 
                 label = sP.simName+' z=%.1f'%sP.redshift if count == 0 else ''
                 color = l.get_color() if count > 0 else None
-                l, = ax.plot(xm[3:], ym[3:], linestyles[count], color=color, lw=3.0, label=label)
+                l, = ax.plot(xm[3:], ym[3:], linestyles[count], color=color, lw=lw, label=label)
+
+                if s850fluxes:
+                    # update previous label
+                    l.set_label('%s [cen+sat]' % sP.simName)
+                    # add centrals only
+                    wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
+                    w = gc['halos']['GroupFirstSub'][wHalo]
+
+                    xm, ym = running_histogram(xx[w], binSize=binSize, normFac=normFac, skipZeros=True)
+                    ym = savgol_filter(ym_i,sKn,sKo)
+                    l, = ax.plot(xm[3:], ym[3:], linestyles[count], lw=lw, label='%s [cen]' % sP.simName)
 
                 count += 1
 
     # second legend
     handles, labels = ax.get_legend_handles_labels()
     if highMassEnd:
-        sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[2]),
-                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[0]),
-                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=3.0, linestyle=linestyles[1])]
+        sExtra = [plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[2]),
+                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[0]),
+                  plt.Line2D( (0,1), (0,0), color='black', marker='', lw=lw, linestyle=linestyles[1])]
         lExtra = [r'$M_\star^{\rm tot}$',
                   r'$M_\star^{< 2r_{\star,1/2}}$', 
                   r'$M_\star^{< r_{\star,1/2}}$']
@@ -2352,7 +2375,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -2360,7 +2383,7 @@ def plots():
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2378,13 +2401,14 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
-    sPs.append( simParams(res=512, run='tng', variant='0000') )
-    sPs.append( simParams(res=512, run='tng', variant='5008') )
+    #sPs.append( simParams(res=512, run='tng', variant='0000') )
+    #sPs.append( simParams(res=512, run='tng', variant='5008') )
 
     if 0:
         # testing
-        pdf = PdfPages('globalComps_test2_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, simRedshift=0.0)
+        pdf = PdfPages('s850_test_z2_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        stellarMassFunction(sPs, pdf, centralsOnly=False, simRedshift=2.0, dataRedshift=-1, s850fluxes=True)
+        #stellarMassFunction(sPs, pdf, centralsOnly=True, simRedshift=2.0, dataRedshift=-1, s850fluxes=True)
         pdf.close()
         return
 

@@ -349,7 +349,8 @@ def running_histogram(X, nBins=100, binSize=None, normFac=None, skipZeros=False)
 
     for i, bin in enumerate(bins):
         binMax = bin + delta
-        w = np.where((X >= bin) & (X < binMax))
+        with np.errstate(invalid='ignore'):
+            w = np.where((X >= bin) & (X < binMax))
 
         if len(w[0]):
             running_h.append( len(w[0]) )

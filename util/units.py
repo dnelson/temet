@@ -815,6 +815,20 @@ class units(object):
         halpha_lum = sfr / (7.9e-42 * 1e30)
         return halpha_lum
 
+    def gasSfrMetalMassToS850Flux(self, sfr, metalmass, temp, dens, ismCut=True):
+        """ Convert SFR [code units, Msun/yr] and metal mass [Msun] into 850 micron submm flux [linear mJy].
+        Simple model of Hayward+ (2013b) assuming a constant dust-to-metal ratio. 
+        Also enforce Torrey+12 'ISM' constraint using temp [log K] and dens [code units, comoving]. """
+        dust_to_metal = 0.4
+        s850 = 0.81 * (sfr/100)**0.43 * (dust_to_metal * metalmass / 1e8) ** 0.54
+
+        if ismCut:
+            # doesn't actually do anything (all SFR==0 above this cut)
+            w = np.where(temp > 6.0 + 0.25*np.log10(dens)) # unclear if dens is supposed to be comoving
+            s850[w] = 0.0
+
+        return s850
+
     def calcEntropyCGS(self, u, dens, log=False):
         """ Calculate entropy as P/rho^gamma, converting rho from comoving to physical. Return [K cm^2]. """
         assert self._sP.redshift is not None

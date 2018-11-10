@@ -1519,6 +1519,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
+    if ptProperty == 'density':
+        label = '$\\rho_{\\rm gas}$ [ log 10$^{10}$ M$_{\\rm sun}$ h$^2$ ckpc$^{-3}$ ]'
+        lim = [-12.0, 0.0]
+        if haloLims: lim = [-4.0, 2.0]
+        log = True
+
     if ptProperty == 'mass_msun':
         label = '%s Mass [ log M$_{\\rm sun}$ ]' % typeStr
         lim = [5.0, 7.0]
