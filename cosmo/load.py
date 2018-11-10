@@ -1307,20 +1307,6 @@ def snapshotSubset(sP, partType, fields,
             birthRedshift = 1.0/birthTime - 1.0
             r[field] = curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
 
-        # bolometric x-ray luminosity (simple model) [10^30 erg/s]
-        if field.lower() in ['xray_lum','xray']:
-            sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
-            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
-            mass = snapshotSubset(sP, partType, 'Masses', **kwargs)
-            u    = snapshotSubset(sP, partType, 'u', **kwargs)
-            ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
-            r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
-
-        # h-alpha line luminosity (simple model: linear conversion from SFR) [10^30 erg/s]
-        if field.lower() in ['halpha_lum','halpha','sfr_halpha']:
-            sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
-            r[field] = sP.units.sfrToHalphaLuminosity(sfr)
-
         # pressure_ratio (linear ratio of magnetic to gas pressure)
         if field.lower() in ['pres_ratio','pressure_ratio']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
@@ -1435,7 +1421,7 @@ def snapshotSubset(sP, partType, fields,
 
         # ------------------------------------------------------------------------------------------------------
 
-        # synchrotron power model [W/Hz]
+        # synchrotron power (simple model) [W/Hz]
         if field.lower() in ['p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla']:
             b = snapshotSubset(sP, partType, 'MagneticField', **kwargs)
             vol = snapshotSubset(sP, partType, 'Volume', **kwargs)
@@ -1446,6 +1432,35 @@ def snapshotSubset(sP, partType, fields,
             if '_eta43' in field: modelArgs['eta'] = (4.0/3.0)
             if '_alpha15' in field: modelArgs['alpha'] = 1.5
             r[field] = sP.units.synchrotronPowerPerFreq(b, vol, watts_per_hz=True, log=False, **modelArgs)
+
+        # bolometric x-ray luminosity (simple model) [10^30 erg/s]
+        if field.lower() in ['xray_lum','xray']:
+            sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            mass = snapshotSubset(sP, partType, 'Masses', **kwargs)
+            u    = snapshotSubset(sP, partType, 'u', **kwargs)
+            ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
+            r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
+
+        # h-alpha line luminosity (simple model: linear conversion from SFR) [10^30 erg/s]
+        if field.lower() in ['halpha_lum','halpha','sfr_halpha']:
+            sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
+            r[field] = sP.units.sfrToHalphaLuminosity(sfr)
+
+        # 850 micron submilliter flux (simple model) [linear mJy]
+        if field.lower() in ['s850um_flux', 'submm_flux', 's850um_flux_ismcut', 'submm_flux_ismcut']:
+            sfr = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
+            metalmass = snapshotSubset(sP, partType, 'metalmass_msun', **kwargs)
+            if '_ismcut' in field.lower():
+                temp = snapshotSubset(sP, partType, 'temp', **kwargs)
+                dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+                ismCut = True
+            else:
+                temp = None
+                dens = None
+                ismCut = False
+
+            r[field] = sP.units.gasSfrMetalMassToS850Flux(sfr, metalmass, temp, dens, ismCut=ismCut)
 
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
@@ -1508,7 +1523,7 @@ def snapshotSubset(sP, partType, fields,
             masses = snapshotSubset(sP, partType, 'Masses', **kwargs)
             masses *= snapshotSubset(sP, partType, fracFieldName, **kwargs)
             if solarUnits:
-                masses = sP.units.codeMassToMsun(sP, masses)
+                masses = sP.units.codeMassToMsun(masses)
 
             r[field] = masses
 

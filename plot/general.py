@@ -417,6 +417,12 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             ax.plot(rad_code[1:], vesc[1:], '-', lw=lw, color='#000000', alpha=0.5)
             ax.text(rad_code[-17], vesc[-17]*1.02, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
 
+        if xQuant == 'density' and yQuant == 'temp':
+            # add Torrey+12 'ISM cut' line
+            xx = np.array(ax.get_xlim())
+            yy = 6.0 + 0.25*xx
+            ax.plot(xx, yy, '-', lw=lw, color='#000000', alpha=0.7, label='Torrey+12 ISM cut')
+
     # colorbar and save
     fig.tight_layout()
     
