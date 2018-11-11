@@ -12,7 +12,6 @@ from os import path, mkdir
 from functools import partial
 
 from util.units import units
-from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq
 from illustris_python.util import partTypeNum
 
 run_abbreviations = {'illustris-1':['illustris',1820],
@@ -737,10 +736,6 @@ class simParams:
             self.simName += '_sb' + str(sbNum)
             self.groupOrdered = False
 
-        # if redshift passed in, convert to snapshot number and save, and attach units(z)
-        self.setRedshift(self.redshift)
-        self.setSnap(self.snap)
-
         # attach various functions pre-specialized to this sP, for convenience
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
                                cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
@@ -780,6 +775,10 @@ class simParams:
         self.correctPeriodicPosVecs     = partial(correctPeriodicPosVecs, sP=self)
         self.correctPeriodicPosBoxWrap  = partial(correctPeriodicPosBoxWrap, sP=self)
         self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
+
+        # if redshift passed in, convert to snapshot number and save, and attach units(z)
+        self.setRedshift(self.redshift)
+        self.setSnap(self.snap)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual zooms. """
@@ -1021,7 +1020,7 @@ class simParams:
         if self.redshift is not None: assert self.redshift >= 0.0
 
         if self.redshift is not None:
-            self.snap = redshiftToSnapNum(sP=self)
+            self.snap = self.redshiftToSnapNum()
             if self.redshift < 1e-10: self.redshift = 0.0
         self.units = units(sP=self)
         self.data = {}
@@ -1034,7 +1033,7 @@ class simParams:
                 self.redshift = 127.0
                 assert self.run in ['tng','tng_dm','tng_zoom','tng_zoom_dm'] # otherwise generalize
             else:
-                self.redshift = snapNumToRedshift(sP=self)
+                self.redshift = self.snapNumToRedshift()
 
             assert self.redshift >= 0.0
             if self.redshift < 1e-10: self.redshift = 0.0

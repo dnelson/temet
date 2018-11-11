@@ -304,7 +304,7 @@ def _radialRestriction(sP, nSubsTot, rad):
     elif rad == '2rhalfstars':
         # classic Illustris galaxy definition, r < 2*r_{1/2,mass,stars}
         subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 2.0 * subHalfmassRadType:,sP.ptNum('stars')]
+        twiceStellarRHalf = 2.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
         radSqMax = twiceStellarRHalf**2
     elif rad == '1rhalfstars':

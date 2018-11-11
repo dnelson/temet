@@ -7,8 +7,6 @@ from builtins import *
 
 import numpy as np
 
-from cosmo.util import periodicDists, correctPeriodicDistVecs, correctPeriodicPosVecs
-
 def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     """ Calculate the 3-vector (x,y,z) of the mean angular momentum of either the star-forming gas 
     or the inner stellar component, for rotation and projection into disk face/edge-on views. """
@@ -25,7 +23,7 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     wGas = []
 
     if gas['count']:
-        rad = periodicDists(shPos, gas['Coordinates'], sP)
+        rad = sP.periodicDists(shPos, gas['Coordinates'])
         wGas = np.where( (rad <= 1.0*sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]) & \
                          (gas['StarFormationRate'] > 0.0) )[0]
 
@@ -37,7 +35,7 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     stars = sP.snapshotSubset('stars', fields, subhaloID=subhaloID)
 
     if stars['count']:
-        rad = periodicDists(shPos, stars['Coordinates'], sP)
+        rad = sP.periodicDists(shPos, stars['Coordinates'])
 
         wStars = np.where( (rad <= 1.0*sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]) & \
                            (stars['GFM_StellarFormationTime'] >= 0.0) )[0]
@@ -81,7 +79,7 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         return np.identity(3)
 
     if gas['count'] and len(gas['Masses']) > 1:
-        rad_gas = periodicDists(shPos, gas['Coordinates'], sP)
+        rad_gas = sP.periodicDists(shPos, gas['Coordinates'])
         wGas = np.where( (rad_gas <= 0.5*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
 
         if len(wGas) >= 50:
@@ -98,7 +96,7 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         stars['Coordinates'] = np.squeeze(stars['Coordinates'][wValid,:])
 
         # use all stars within 1*rHalf
-        rad_stars = periodicDists(shPos, stars['Coordinates'], sP)
+        rad_stars = sP.periodicDists(shPos, stars['Coordinates'])
         wStars = np.where( (rad_stars <= 1.0*rHalf) )
 
         if len(wStars[0]) <= 1:
@@ -126,7 +124,7 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
         xyz[:,i] -= shPos[i]
 
     # if coordinates wrapped box boundary before shift:
-    correctPeriodicDistVecs(xyz, sP)
+    sP.correctPeriodicDistVecs(xyz)
 
     # construct moment of inertia
     I = np.zeros( (3,3), dtype='float32' )
@@ -245,7 +243,7 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
         pos_in[:,i] -= rotCenter[i]
 
     # if coordinates wrapped box boundary before shift:
-    correctPeriodicDistVecs(pos_in, sP)
+    sP.correctPeriodicDistVecs(pos_in)
 
     # rotate
     pos_in = np.transpose( np.dot(rotMatrix, pos_in.transpose()) )
@@ -264,7 +262,7 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 
     # place all coordinates back inside [0,sP.boxSize] if necessary:
     if shiftBack:
-        correctPeriodicPosVecs(pos_in, sP)
+        sP.correctPeriodicPosVecs(pos_in)
 
     pos_in = np.asarray(pos_in) # matrix to ndarray
 
