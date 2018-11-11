@@ -106,6 +106,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
                                  # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True         # include colorbars
         title     = True         # include title (only for open* styles)
+        outputFmt = None         # if not None (automatic), then a format string for the matplotlib backend
 
         saveFilename = savePathDefault + 'renderBox_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
@@ -203,6 +204,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
                                # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True       # include colorbars
         title     = True       # include title (only for open* styles)
+        outputFmt = None       # if not None (automatic), then a format string for the matplotlib backend
         
         savePath     = savePathDefault
         saveFileBase = 'renderBoxFrame' # filename base upon which frame numbers are appended

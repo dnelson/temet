@@ -8,8 +8,9 @@ from builtins import *
 import numpy as np
 from datetime import datetime
 from os.path import isfile
+from getpass import getuser
 
-from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac
+from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
@@ -34,7 +35,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         sh = groupCatSingle(sP, subhaloID=shID)
         gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
 
-        if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial':
+        if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial' and getuser() == 'dnelson':
             print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
 
         sP.subhaloInd = shID # attach for use later
@@ -83,7 +84,6 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
     if sizeType == 'rHalfMassStars':
         boxSizeImg = size * galHalfMassRadStars
         if boxSizeImg == 0.0:
-            print(' WARNING! Subhalo HalfmassRadStars==0, switching to HalfmassRad/5.')
             boxSizeImg = size * galHalfMassRad / 5
     if sizeType == 'codeUnits':
         boxSizeImg = size
@@ -151,7 +151,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
     return boxSizeImg, boxCenter, extent, haloVirRad, \
            galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter
 
-def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
+def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnData=False):
     """ Render view(s) of a single halo in one plot, with a variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
 
@@ -203,6 +203,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
                                   # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars  = True         # include colorbars
         title      = True         # include title (only for open* styles)
+        outputFmt  = None         # if not None (automatic), then a format string for the matplotlib backend
 
         saveFilename = savePathDefault + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
@@ -255,6 +256,12 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True):
         for key in localVars['dataCache']:
             for p in panels:
                 p['sP'].data[key] = localVars['dataCache'][key]
+
+    # request raw data grid and return?
+    if returnData:
+        assert len(p) == 1 # otherwise could return a list of grids
+        _, config, data_grid = gridBox(**p)
+        return data_grid, config
 
     # request render and save
     renderMultiPanel(panels, plotConfig)
@@ -310,6 +317,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
                                   # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True          # include colorbars
         title     = True          # include title (only for open* styles)
+        outputFmt = None          # if not None (automatic), then a format string for the matplotlib backend
 
         savePath = savePathDefault
         saveFileBase = 'renderHaloFrame' # filename base upon which frame numbers are appended

@@ -278,11 +278,11 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
     print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
 
-    band0_grid_mag, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[0], nPixels, axes, projType, projParams, boxCenter, 
+    band0_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[0], nPixels, axes, projType, projParams, boxCenter, 
                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
-    band1_grid_mag, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[1], nPixels, axes, projType, projParams, boxCenter, 
+    band1_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[1], nPixels, axes, projType, projParams, boxCenter, 
                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
-    band2_grid_mag, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[2], nPixels, axes, projType, projParams, boxCenter, 
+    band2_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[2], nPixels, axes, projType, projParams, boxCenter, 
                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
 
     # convert magnitudes to linear luminosities
@@ -979,16 +979,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     # compute a guess for an adaptively clipped heuristic [min,max] bound
     if logMin:
-        config['vMM_guess'] = np.nanpercentile(logZeroNaN(grid), [15,99.5])
+        data_grid = logZeroNaN(grid)
+        config['vMM_guess'] = np.nanpercentile(data_grid, [15,99.5])
     else:
-        config['vMM_guess'] = np.nanpercentile(grid, [5,99.5])
+        data_grid = grid.copy()
+        config['vMM_guess'] = np.nanpercentile(data_grid, [5,99.5])
 
     # handle requested log
     if logMin:
         grid = logZeroMin(grid)
     grid += gridOffset
 
-    return grid, config
+    return grid, config, data_grid
 
 def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams, 
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
@@ -1034,8 +1036,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     def emptyReturn():
         print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
         grid = np.zeros( nPixels, dtype='float32' )
-        grid, config = gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projType, method)
-        return grid, config
+        grid, config, data_grid = gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projType, method)
+        return grid, config, data_grid
 
     if h['NumPart'][sP.ptNum(partType)] <= 2:
         return emptyReturn()
@@ -1084,8 +1086,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             partFieldRef = partField.replace('sigma','') # e.g. 'velsigma_los_sfrwt' -> 'vel_los_sfrwt'
             projParamsLoc = dict(projParams)
             projParamsLoc['noclip'] = True
-            refGrid, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc, 
-                                 boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
+            refGrid, _, _ = gridBox(sP, method, partType, partFieldRef, nPixels, axes, projType, projParamsLoc, 
+                                    boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
 
         # if indRange is still None (full snapshot load), we will proceed chunked, unless we need
         # a full tree construction to calculate hsml values
@@ -1363,13 +1365,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
 
     # handle units and come up with units label
-    grid_master, config = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method)
+    grid_master, config, data_grid = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method)
 
     # temporary: something a bit peculiar here, request an entirely different grid and 
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
     if 0 and partField in velLOSFieldNames:
         print('Clipping LOS velocity, visible at log(n_HI) > 19.0 only.')
-        grid_nHI, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, projType, projParams, 
+        grid_nHI, _, _ = gridBox(sP, method, 'gas', 'HI_segmented', nPixels, axes, projType, projParams, 
                               boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
 
         grid_master[grid_nHI < 19.0] = np.nan
@@ -1377,7 +1379,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     if 1 and partField in velLOSFieldNames:
         if 'noclip' not in projParams:
             print('Clipping LOS velocity, visible at SFR surface density > 0.01 msun/yr/kpc^2 only.')
-            grid_sfrsd, _ = gridBox(sP, method, 'gas', 'sfr_msunyrkpc2', nPixels, axes, projType, projParams, 
+            grid_sfrsd, _, _ = gridBox(sP, method, 'gas', 'sfr_msunyrkpc2', nPixels, axes, projType, projParams, 
                                   boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
 
             grid_master[grid_sfrsd < -3.0] = np.nan
@@ -1385,7 +1387,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     # temporary: similar, truncate stellar_age projection at a stellar column density of 
     # ~log(3.2) [msun/kpc^2] equal to the bottom of the color scale for the illustris/tng sb0 box renders
     if partField == 'stellar_age':
-        grid_stellarColDens, _ = gridBox(sP, method, 'stars', 'coldens_msunkpc2', nPixels, axes, projType, projParams, 
+        grid_stellarColDens, _, _ = gridBox(sP, method, 'stars', 'coldens_msunkpc2', nPixels, axes, projType, projParams, 
                                          boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio)
 
         w = np.where(grid_stellarColDens < 3.0)
@@ -1394,9 +1396,12 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     # temporary: similar, fractional total mass sum of a sub-component relative to the full, request 
     # the 'full' mass grid of this particle type now and normalize
     if ' fracmass' in partField:
-        grid_totmass, _ = gridBox(sP, method, partType, 'mass', nPixels, axes, projType, projParams, 
-                                  boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, smoothFWHM=smoothFWHM)
+        grid_totmass, _, data_grid_totmass = gridBox(sP, method, partType, 'mass', nPixels, axes, projType, projParams, 
+                                                     boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
+                                                     smoothFWHM=smoothFWHM)
+
         grid_master = logZeroMin( 10.0**grid_master / 10.0**grid_totmass )
+        data_grid = logZeroMin( 10.0**data_grid / 10.0**data_grid_totmass )
 
     # temporary: line integral convolution test
     if 'licMethod' in kwargs and kwargs['licMethod'] is not None:
@@ -1415,10 +1420,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         field_x = field_name + '_' + ['x','y','z'][axes[0]]
         field_y = field_name + '_' + ['x','y','z'][axes[1]]
 
-        vel_field[:,:,1], _ = gridBox(sP, method, field_pt, field_x, nPixels, axes, projType, projParams, 
+        vel_field[:,:,1], _, _ = gridBox(sP, method, field_pt, field_x, nPixels, axes, projType, projParams, 
                                       boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter, remapRatio)
 
-        vel_field[:,:,0], _ = gridBox(sP, method, field_pt, field_y, nPixels, axes, projType, projParams, 
+        vel_field[:,:,0], _, _ = gridBox(sP, method, field_pt, field_y, nPixels, axes, projType, projParams, 
                                       boxCenter, boxSizeImgLoc, hsmlFac, rotMatrix, rotCenter, remapRatio)
 
         # smoothing kernel
@@ -1449,7 +1454,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             #grid_master *= lic_output # if linear, e.g. velmag
             grid_master = logZeroMin(10.0**grid_master * lic_output) # if log, e.g. coldens
 
-    return grid_master, config
+    return grid_master, config, data_grid
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
@@ -1826,16 +1831,16 @@ def addVectorFieldOverlay(p, conf, ax):
     boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(vecSliceWidth)
 
     # load two grids of vector length in plot-x and plot-y directions
-    grid_x, _ = gridBox(p['sP'], p['method'], field_pt, field_x, nPixels, p['axes'], p['projType'], p['projParams'], 
+    grid_x, _, _ = gridBox(p['sP'], p['method'], field_pt, field_x, nPixels, p['axes'], p['projType'], p['projParams'], 
                         p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'], p['remapRatio'], 
                         smoothFWHM=smoothFWHM)
 
-    grid_y, _ = gridBox(p['sP'], p['method'], field_pt, field_y, nPixels, p['axes'], p['projType'], p['projParams'], 
+    grid_y, _, _ = gridBox(p['sP'], p['method'], field_pt, field_y, nPixels, p['axes'], p['projType'], p['projParams'], 
                         p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'], p['remapRatio'], 
                         smoothFWHM=smoothFWHM)
 
     # load a grid of any quantity to use to color map the strokes
-    grid_c, conf_c = gridBox(p['sP'], p['method'], p['vecColorPT'], p['vecColorPF'], nPixels, p['axes'], p['projType'], p['projParams'], 
+    grid_c, conf_c, _ = gridBox(p['sP'], p['method'], p['vecColorPT'], p['vecColorPF'], nPixels, p['axes'], p['projType'], p['projParams'], 
                              p['boxCenter'], boxSizeImg, p['hsmlFac'], p['rotMatrix'], p['rotCenter'], p['remapRatio'], 
                              smoothFWHM=smoothFWHM)
 
@@ -2075,7 +2080,7 @@ def renderMultiPanel(panels, conf):
         for i, p in enumerate(panels):
             if p['boxSizeImg'] is None: continue # blank panel
             # grid projection for image
-            grid, config = gridBox(**p)
+            grid, config, _ = gridBox(**p)
 
             # create this panel, and label axes and title
             ax = fig.add_subplot(nRows,nCols,i+1)
@@ -2225,7 +2230,7 @@ def renderMultiPanel(panels, conf):
         for i, p in enumerate(panels):
             if p['boxSizeImg'] is None: continue # blank panel
             # grid projection for image
-            grid, config = gridBox(**p)
+            grid, config, _ = gridBox(**p)
 
             # set axes coordinates and add
             curRow = np.floor(i / nCols)
@@ -2318,5 +2323,5 @@ def renderMultiPanel(panels, conf):
                                    rowHeight, 0.4, bottomNorm, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
-    fig.savefig(conf.saveFilename, facecolor=fig.get_facecolor())
+    fig.savefig(conf.saveFilename, format=conf.outputFormat, facecolor=fig.get_facecolor())
     plt.close(fig)
