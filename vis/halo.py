@@ -39,6 +39,9 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
             print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
 
         sP.subhaloInd = shID # attach for use later
+        sP.refPos = sh['SubhaloPos']
+        sP.refVel = sh['SubhaloVel']
+
         haloVirRad = gr['Group_R_Crit200']
         galHalfMassRad = sh['SubhaloHalfmassRad']
         galHalfMassRadStars = sh['SubhaloHalfmassRadType'][sP.ptNum('stars')]
@@ -259,8 +262,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
 
     # request raw data grid and return?
     if returnData:
-        assert len(p) == 1 # otherwise could return a list of grids
-        _, config, data_grid = gridBox(**p)
+        assert len(panels) == 1 # otherwise could return a list of grids
+        _, config, data_grid = gridBox(**panels[0])
         return data_grid, config
 
     # request render and save

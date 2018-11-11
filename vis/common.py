@@ -276,7 +276,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
     fieldPrefix = 'stellarBandObsFrame-' if 'ObsFrame' in partField else 'stellarBand-'
 
-    print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
+    #print('Generating stellar composite with %s [%s %s %s]' % (fieldPrefix,bands[0],bands[1],bands[2]))
 
     band0_grid_mag, _, _ = gridBox(sP, method, 'stars', fieldPrefix+bands[0], nPixels, axes, projType, projParams, boxCenter, 
                                 boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
@@ -470,8 +470,8 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         skimage.io.imsave('out_%s.tif' % '-'.join(bands), im, plugin='tifffile')
     # END DEBUG
 
-    config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands)}
-    return grid_master_u, config
+    config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands), 'vMM_guess':None}
+    return grid_master_u, config, grid_master
 
 def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
@@ -2323,5 +2323,5 @@ def renderMultiPanel(panels, conf):
                                    rowHeight, 0.4, bottomNorm, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
-    fig.savefig(conf.saveFilename, format=conf.outputFormat, facecolor=fig.get_facecolor())
+    fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor())
     plt.close(fig)

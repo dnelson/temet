@@ -1091,8 +1091,6 @@ class units(object):
         theta2 = self.codeLengthToAngularSize(pxDimsCode[1], arcsec=True)
         solid_angle = theta1 * theta2 # arcsec^2
 
-        print('Pixel size: %f arcsec' % theta1)
-
         if ster:
             # convert [arcsec^2] -> [steradian]
             arcsec2_to_ster = (1/self.arcsec_in_rad)**2.0
