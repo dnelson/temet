@@ -11,6 +11,7 @@ import glob
 from functools import partial
 from os.path import isfile, isdir
 from os import mkdir, makedirs
+from getpass import getuser
 
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
@@ -175,7 +176,6 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
     from cosmo import auxcatalog
     import datetime
-    import getpass
 
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
@@ -313,7 +313,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             # save metadata and any additional descriptors as attributes
             f[fieldAttrSave].attrs['CreatedOn']   = datetime.date.today().strftime('%d %b %Y')
             f[fieldAttrSave].attrs['CreatedRev']  = curRepoVersion()
-            f[fieldAttrSave].attrs['CreatedBy']   = getpass.getuser()
+            f[fieldAttrSave].attrs['CreatedBy']   = getuser()
             
             for attrName, attrValue in attrs.items():
                 if attrName in largeAttrNames:

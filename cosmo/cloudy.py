@@ -18,7 +18,7 @@ from cosmo import hydrogen
 from util.helper import closest, iterable, logZeroNaN
 from cosmo.load import snapshotSubset, snapHasField
 
-basePath = expanduser("~") + '/code/cloudy.run/'
+basePath = '/u/dnelson/code/cloudy.run/'
 
 # proposed emission lines to record:
 lineList = """
