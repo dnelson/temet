@@ -12,7 +12,6 @@ from os import mkdir
 
 from util.loadExtern import werk2013, johnson2015
 from cosmo.util import redshiftToSnapNum
-from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from vis.common import getHsmlForPartType
 from util.sphMap import sphMap
 from util.helper import logZeroNaN, closest, iterable
@@ -130,7 +129,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
         # pure theory analysis: all central halos with 10^11.5 < Mhalo/Msun < 10^12.5, one realization each
         numRealizations = 1
 
-        gc = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+        gc = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
 
         with np.errstate(invalid='ignore'):
             w_gal = np.where( (gc >= 11.5) & (gc < 12.5) )
@@ -155,8 +154,8 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
         for propName in ['mstar_30pkpc_log','ssfr_30pkpc_log','impact_parameter']:
             props[propName] = np.zeros( shape, dtype='float32' )
-        props['mstar_30pkpc_log'][:,0] = groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log'])[w_gal]
-        props['ssfr_30pkpc_log'][:,0] = groupCat(sP, fieldsSubhalos=['ssfr_30pkpc_log'])[w_gal]
+        props['mstar_30pkpc_log'][:,0] = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])[w_gal]
+        props['ssfr_30pkpc_log'][:,0] = sP.groupCat(fieldsSubhalos=['ssfr_30pkpc_log'])[w_gal]
         props['impact_parameter'][:,0] = np.random.choice(R, size=shape[0], replace=True)
 
     # save file exists?
@@ -197,7 +196,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
         # load catalog properties at this redshift
         sP.setSnap(snap)
-        sim_props = groupCat(sP, fieldsSubhalos=propList, sq=False)
+        sim_props = sP.groupCat(fieldsSubhalos=propList, sq=False)
         if isinstance(sim_props, np.ndarray): sim_props = {propList[0]:sim_props} # force into dict
 
         # loop over observed galaxies
@@ -348,9 +347,9 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
 
         # process: global load all particle data needed (calculate OVI on the fly, no cache)
         print(' loading mass...')
-        mass = snapshotSubset(sP, partType, '%s mass' % ionName).astype('float32')
+        mass = sP.snapshotSubsetP(partType, '%s mass' % ionName).astype('float32')
         print(' loading pos...')
-        pos = snapshotSubset(sP, partType, 'pos')
+        pos = sP.snapshotSubsetP(partType, 'pos')
         print(' loading hsml...')
         hsml = getHsmlForPartType(sP, partType)
 
@@ -366,7 +365,7 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
 
             # configure grid for this galaxy
             boxSizeImg = sP.units.physicalKpcToCodeLength( np.array([gridSize, gridSize, projDepth]) )
-            boxCenter  = groupCatSingle(sP, subhaloID=ind)['SubhaloPos']
+            boxCenter  = sP.groupCatSingle(subhaloID=ind)['SubhaloPos']
 
             boxSizeImg = boxSizeImg[ [axes[0], axes[1], 3-axes[0]-axes[1]] ]
             boxCenter  = boxCenter[ [axes[0], axes[1], 3-axes[0]-axes[1]] ]
@@ -568,7 +567,7 @@ def ionCoveringFractions(sP, sim_sample, config='COS-Halos'):
             if iter == 1 and config in ['COS-Halos','SimHalos_115-125']:
                 # load virial radii of all halos now (we take the mean per galaxy across all 
                 # its realizations and use this uniformly for each realization)
-                halo_Rh = groupCat(sP, fieldsSubhalos=['rhalo_200'])
+                halo_Rh = sP.groupCat(fieldsSubhalos=['rhalo_200'])
 
             # all grids now exist, process them to extract single column values per galaxy
             for gal_num in w_loc[0]:

@@ -20,7 +20,6 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 from scipy.interpolate import interp1d
 
 from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, correctPeriodicDistVecs
-from cosmo.load import groupCatOffsetListIntoSnap
 from cosmo.mergertree import loadMPBs, mpbPositionComplete
 from plot.quantities import simSubhaloQuantity
 from util.helper import pSplitRange, logZeroNaN, iterable
@@ -428,7 +427,7 @@ def halo_selection(sP, minM200=11.5):
     r['bh_dedt_low'] = bh_dedt_low
 
     # get fof halo IDs
-    haloInds = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+    haloInds = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])
     r['haloInds'] = haloInds[r['subInds']]
 
     # save cache
@@ -1013,21 +1012,21 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     fieldsSubhalos = ['SubhaloPos','SubhaloVel','SubhaloLenType','SubhaloHalfmassRadType']
 
     gc = sP.groupCat(fieldsSubhalos=fieldsSubhalos)
-    gc['subhalos']['SubhaloOffsetType'] = groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
-    nSubsTot = gc['header']['Nsubgroups_Total']
+    gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
+    nSubsTot = sP.numSubhalos
 
     subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
 
     if scope == 'subhalo_wfuzz':
         # add new 'ParentGroup_LenType' and 'ParentGroup_OffsetType' (FoF group values) (for both cen/sat)
-        Groups = sP.groupCat(fieldsHalos=['GroupLenType','GroupFirstSub','GroupNsubs'])['halos']
-        GroupOffsetType = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
-        SubhaloGrNr = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+        Groups = sP.groupCat(fieldsHalos=['GroupLenType','GroupFirstSub','GroupNsubs'])
+        GroupOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
+        SubhaloGrNr = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])
 
-        gc['subhalos']['ParentGroup_LenType'] = Groups['GroupLenType'][SubhaloGrNr,ptNum]
-        gc['subhalos']['ParentGroup_GroupFirstSub'] = Groups['GroupFirstSub'][SubhaloGrNr]
-        gc['subhalos']['ParentGroup_GroupNsubs'] = Groups['GroupNsubs'][SubhaloGrNr]
-        gc['subhalos']['ParentGroup_OffsetType'] = GroupOffsetType[SubhaloGrNr,ptNum]
+        gc['ParentGroup_LenType'] = Groups['GroupLenType'][SubhaloGrNr,ptNum]
+        gc['ParentGroup_GroupFirstSub'] = Groups['GroupFirstSub'][SubhaloGrNr]
+        gc['ParentGroup_GroupNsubs'] = Groups['GroupNsubs'][SubhaloGrNr]
+        gc['ParentGroup_OffsetType'] = GroupOffsetType[SubhaloGrNr,ptNum]
 
         if cenSatSelect != 'cen':
             print('WARNING: Is this really the measurement to make? Satellite bound gas is excluded from themselves.')
@@ -1152,11 +1151,11 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
         # slice starting/ending indices for gas local to this halo
         if scope == 'subhalo':
-            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID, ptNum] - indRange[ptType][0]
-            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID, ptNum]
+            i0 = gc['SubhaloOffsetType'][subhaloID, ptNum] - indRange[ptType][0]
+            i1 = i0 + gc['SubhaloLenType'][subhaloID, ptNum]
         if scope == 'subhalo_wfuzz':
-            i0 = gc['subhalos']['ParentGroup_OffsetType'][subhaloID] - indRange[ptType][0]
-            i1 = i0 + gc['subhalos']['ParentGroup_LenType'][subhaloID]
+            i0 = gc['ParentGroup_OffsetType'][subhaloID] - indRange[ptType][0]
+            i1 = i0 + gc['ParentGroup_LenType'][subhaloID]
         if scope == 'global':
             pass # use constant i0, i1
 
@@ -1166,8 +1165,8 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
             continue # zero length of this type
 
         # halo properties
-        haloPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
-        haloVel = gc['subhalos']['SubhaloVel'][subhaloID,:]
+        haloPos = gc['SubhaloPos'][subhaloID,:]
+        haloVel = gc['SubhaloVel'][subhaloID,:]
 
         # extract local particle subset
         p_local = {}
@@ -1195,14 +1194,14 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
         # restriction: eliminate satellites by zeroing mass of their member particles
         if scope == 'subhalo_wfuzz':
-            GroupFirstSub = gc['subhalos']['ParentGroup_GroupFirstSub'][subhaloID]
-            GroupNsubs    = gc['subhalos']['ParentGroup_GroupNsubs'][subhaloID]
+            GroupFirstSub = gc['ParentGroup_GroupFirstSub'][subhaloID]
+            GroupNsubs    = gc['ParentGroup_GroupNsubs'][subhaloID]
 
             if GroupNsubs > 1:
-                firstSat_ind0 = gc['subhalos']['SubhaloOffsetType'][GroupFirstSub+1, ptNum] - i0
-                firstSat_ind1 = firstSat_ind0 + gc['subhalos']['SubhaloLenType'][GroupFirstSub+1, ptNum]
-                lastSat_ind0 = gc['subhalos']['SubhaloOffsetType'][GroupFirstSub+GroupNsubs-1, ptNum] - i0
-                lastSat_ind1 = lastSat_ind0 + gc['subhalos']['SubhaloLenType'][GroupFirstSub+GroupNsubs-1, ptNum]
+                firstSat_ind0 = gc['SubhaloOffsetType'][GroupFirstSub+1, ptNum] - i0
+                firstSat_ind1 = firstSat_ind0 + gc['SubhaloLenType'][GroupFirstSub+1, ptNum]
+                lastSat_ind0 = gc['SubhaloOffsetType'][GroupFirstSub+GroupNsubs-1, ptNum] - i0
+                lastSat_ind1 = lastSat_ind0 + gc['SubhaloLenType'][GroupFirstSub+GroupNsubs-1, ptNum]
 
                 p_local[massField][firstSat_ind0:lastSat_ind1] = 0.0
 
@@ -1249,16 +1248,16 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
             massflux *= p_local['vrad'] # mv
 
         # compute rotation matrix for edge-on projection
-        i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptNum_gas] - indRange['gas'][0]
-        i0s = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptNum_stars] - indRange['stars'][0]
-        i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,ptNum_gas]
-        i1s = i0s + gc['subhalos']['SubhaloLenType'][subhaloID,ptNum_stars]
+        i0g = gc['SubhaloOffsetType'][subhaloID,ptNum_gas] - indRange['gas'][0]
+        i0s = gc['SubhaloOffsetType'][subhaloID,ptNum_stars] - indRange['stars'][0]
+        i1g = i0g + gc['SubhaloLenType'][subhaloID,ptNum_gas]
+        i1s = i0s + gc['SubhaloLenType'][subhaloID,ptNum_stars]
 
         assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
         assert i0s >= 0 and i1s <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
-        rHalf = gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
-        shPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
+        rHalf = gc['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
+        shPos = gc['SubhaloPos'][subhaloID,:]
 
         gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
                      'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
@@ -1273,7 +1272,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         rotMatrix = rotationMatricesFromInertiaTensor(I)['edge-on'] # is edge-on-'largest'
 
         # do rotation and calculate theta angle
-        projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
+        projCen = gc['SubhaloPos'][subhaloID,:]
         p_pos = p_local['Coordinates']
         p_pos_rot, _ = rotateCoordinateArray(sP, p_pos, rotMatrix, projCen, shiftBack=False)
 

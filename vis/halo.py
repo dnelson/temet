@@ -11,8 +11,6 @@ from os.path import isfile
 from getpass import getuser
 
 from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
-from cosmo.load import groupCat, groupCatSingle, snapshotSubset
-from cosmo.util import validSnapList
 from cosmo.mergertree import mpbSmoothedProperties
 from util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
 from util.simParams import simParams
@@ -32,8 +30,8 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         if shID == -1 or shID is None: # e.g. a blank panel
             return None, None, None, None, None, None
 
-        sh = groupCatSingle(sP, subhaloID=shID)
-        gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
+        sh = sP.groupCatSingle(subhaloID=shID)
+        gr = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
 
         if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial' and getuser() == 'dnelson':
             print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
@@ -369,7 +367,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
 
     # determine frame sequence (as the last sP in panels is used somewhat at random, we are here 
     # currently assuming that all runs in panels have the same snapshot configuration)
-    snapNums = validSnapList(sP, maxNum=plotConfig.maxNumSnaps, 
+    snapNums = sP.validSnapList(maxNum=plotConfig.maxNumSnaps, 
                                  minRedshift=plotConfig.minRedshift, maxRedshift=plotConfig.maxRedshift)
     frameNum = 0
 
@@ -405,7 +403,7 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
     assert selType in ['linear','even','random']
     from util.helper import evenlySample
 
-    gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupFirstSub'])
+    gc = sP.groupCat(fieldsHalos=['Group_M_Crit200','GroupFirstSub'])
     haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
 
     # locate # of halos in mass bins (informational only)
@@ -444,13 +442,13 @@ def selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=None, massBinInd=Non
             return None, None
 
         # single halo ID return
-        shIDs = gc['halos']['GroupFirstSub'][wMassBin[haloInd]]
+        shIDs = gc['GroupFirstSub'][wMassBin[haloInd]]
 
         #print('[%d] Render halo [%d] subhalo [%d] from massBin [%.1f %.1f] ind [%d of %d]...' % \
         #    (haloNum,wMassBin[haloInd],shIDs,massBin[0],massBin[1],haloInd,len(wMassBin)))
     else:
         # return full set in this mass bin
-        shIDs = gc['halos']['GroupFirstSub'][wMassBin]
+        shIDs = gc['GroupFirstSub'][wMassBin]
 
     return shIDs, myMassBinInd
 
@@ -460,8 +458,8 @@ def selectHalosFromMassBins(sP, massBins, numPerBin, selType='linear'):
     assert selType in ['linear','even','random']
     from util.helper import evenlySample
 
-    gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'])
-    haloMasses = sP.units.codeMassToLogMsun(gc['halos'])
+    gc = sP.groupCat(fieldsHalos=['Group_M_Crit200'])
+    haloMasses = sP.units.codeMassToLogMsun(gc)
 
     inds = []
 

@@ -7,13 +7,11 @@ from builtins import *
 
 import numpy as np
 import h5py
-import cosmo.load
 from functools import partial
 from os.path import expanduser
 
-from cosmo.util import periodicDistsSq, snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
-  inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs, \
-  cenSatSubhaloIndices
+from cosmo.util import snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
+  inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe, weighted_std_binned
 from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
@@ -62,12 +60,12 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     select = "All FoF halos."
 
     # load group information
-    gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupPos','GroupLen','GroupLenType',rad])
-    gc['halos']['GroupOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+    gc = sP.groupCat(fieldsHalos=['GroupPos','GroupLen','GroupLenType',rad])
+    gc['GroupOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
-    h = cosmo.load.snapshotHeader(sP)
+    h = sP.snapshotHeader()
 
-    nGroupsTot = gc['header']['Ngroups_Total']
+    nGroupsTot = sP.numHalos
     haloIDsTodo = np.arange(nGroupsTot, dtype='int32')
 
     # if no task parallelism (pSplit), set default particle load ranges
@@ -101,7 +99,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     r.fill(np.nan)
 
     # square radii, and use sq distance function
-    gc['halos'][rad] = gc['halos'][rad] * gc['halos'][rad]
+    gc[rad] = gc[rad] * gc[rad]
 
     if method == 'A':
         # loop over all halos
@@ -116,34 +114,34 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
 
             # DM
             if 'dm' in ptLoadTypes:
-                dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], haloID=haloID, sq=False)
+                dm = sP.snapshotSubsetP(partType='dm', fields=['pos'], haloID=haloID, sq=False)
 
                 if dm['count']:
-                    rDM = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], dm['Coordinates'], sP )
-                    wDM = np.where( rDM <= gc['halos'][rad][haloID] )
+                    rDM = sP.periodicDistsSq( gc['GroupPos'][haloID,:], dm['Coordinates'] )
+                    wDM = np.where( rDM <= gc[rad][haloID] )
 
                     r[i, ptSaveTypes['dm']] = len(wDM[0]) * h['MassTable'][ptLoadTypes['dm']]
 
             # GAS
             if 'gas' in ptLoadTypes:
-                gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos',ptProperty], haloID=haloID)
+                gas = sP.snapshotSubsetP(partType='gas', fields=['pos',ptProperty], haloID=haloID)
                 assert gas[ptProperty].ndim == 1
 
                 if gas['count']:
-                    rGas = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], gas['Coordinates'], sP )
-                    wGas = np.where( rGas <= gc['halos'][rad][haloID] )
+                    rGas = sP.periodicDistsSq( gc['GroupPos'][haloID,:], gas['Coordinates'] )
+                    wGas = np.where( rGas <= gc[rad][haloID] )
 
                     r[i, ptSaveTypes['gas']] = np.sum( gas[ptProperty][wGas] )
 
             # STARS
             if 'stars' in ptLoadTypes:
-                stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','sftime',ptProperty], haloID=haloID)
+                stars = sP.snapshotSubsetP(partType='stars', fields=['pos','sftime',ptProperty], haloID=haloID)
                 assert stars[ptProperty].ndim == 1
 
                 if stars['count']:
-                    rStars = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], stars['Coordinates'], sP )
-                    wWind  = np.where( (rStars <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'] < 0.0) )
-                    wStars = np.where( (rStars <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'] >= 0.0) )
+                    rStars = sP.periodicDistsSq( gc['GroupPos'][haloID,:], stars['Coordinates'] )
+                    wWind  = np.where( (rStars <= gc[rad][haloID]) & (stars['GFM_StellarFormationTime'] < 0.0) )
+                    wStars = np.where( (rStars <= gc[rad][haloID]) & (stars['GFM_StellarFormationTime'] >= 0.0) )
 
                     r[i, ptSaveTypes['gas']] += np.sum( stars[ptProperty][wWind] )
                     r[i, ptSaveTypes['stars']] = np.sum( stars[ptProperty][wStars] )
@@ -152,12 +150,12 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
         # (A): DARK MATTER
         if 'dm' in ptLoadTypes:
             print(' [DM]')
-            dm = cosmo.load.snapshotSubset(sP, partType='dm', fields=['pos'], sq=False, indRange=indRange['dm'])
+            dm = sP.snapshotSubsetP(partType='dm', fields=['pos'], sq=False, indRange=indRange['dm'])
 
             if ptProperty == 'Masses':
                 dm[ptProperty] = np.zeros( dm['count'], dtype='float32' ) + h['MassTable'][ptLoadTypes['dm']]
             else:
-                dm[ptProperty] = cosmo.load.snapshotSubset(sP, partType='dm', fields=ptProperty, haloSubset=True)
+                dm[ptProperty] = sP.snapshotSubsetP(partType='dm', fields=ptProperty, haloSubset=True)
 
             # loop over halos
             for i, haloID in enumerate(haloIDsTodo):
@@ -165,16 +163,16 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
                     print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
                 # slice starting/ending indices for dm local to this FoF
-                i0 = gc['halos']['GroupOffsetType'][haloID,ptLoadTypes['dm']] - indRange['dm'][0]
-                i1 = i0 + gc['halos']['GroupLenType'][haloID,ptLoadTypes['dm']]
+                i0 = gc['GroupOffsetType'][haloID,ptLoadTypes['dm']] - indRange['dm'][0]
+                i1 = i0 + gc['GroupLenType'][haloID,ptLoadTypes['dm']]
 
                 assert i0 >= 0 and i1 <= (indRange['dm'][1]-indRange['dm'][0]+1)
 
                 if i1 == i0:
                     continue # zero length of this type
 
-                rr = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], dm['Coordinates'][i0:i1,:], sP )
-                ww = np.where( rr <= gc['halos'][rad][haloID] )
+                rr = sP.periodicDistsSq( gc['GroupPos'][haloID,:], dm['Coordinates'][i0:i1,:] )
+                ww = np.where( rr <= gc[rad][haloID] )
 
                 r[i, ptSaveTypes['dm']] = np.sum( dm[ptProperty][i0:i1][ww] )
             del dm
@@ -182,8 +180,8 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
         # (B): GAS
         if 'gas' in ptLoadTypes:
             print(' [GAS]')
-            gas = cosmo.load.snapshotSubset(sP, partType='gas', fields=['pos'], sq=False, indRange=indRange['gas'])
-            gas[ptProperty] = cosmo.load.snapshotSubset(sP, partType='gas', fields=ptProperty, indRange=indRange['gas'])
+            gas = sP.snapshotSubsetP(partType='gas', fields=['pos'], sq=False, indRange=indRange['gas'])
+            gas[ptProperty] = sP.snapshotSubsetP(partType='gas', fields=ptProperty, indRange=indRange['gas'])
             assert gas[ptProperty].ndim == 1
 
             # loop over halos
@@ -192,16 +190,16 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
                     print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
                 # slice starting/ending indices for gas local to this FoF
-                i0 = gc['halos']['GroupOffsetType'][haloID,ptLoadTypes['gas']] - indRange['gas'][0]
-                i1 = i0 + gc['halos']['GroupLenType'][haloID,ptLoadTypes['gas']]
+                i0 = gc['GroupOffsetType'][haloID,ptLoadTypes['gas']] - indRange['gas'][0]
+                i1 = i0 + gc['GroupLenType'][haloID,ptLoadTypes['gas']]
 
                 assert i0 >= 0 and i1 <= (indRange['gas'][1]-indRange['gas'][0]+1)
 
                 if i1 == i0:
                     continue # zero length of this type
 
-                rr = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], gas['Coordinates'][i0:i1,:], sP )
-                ww = np.where( rr <= gc['halos'][rad][haloID] )
+                rr = sP.periodicDistsSq( gc['GroupPos'][haloID,:], gas['Coordinates'][i0:i1,:] )
+                ww = np.where( rr <= gc[rad][haloID] )
 
                 r[i, ptSaveTypes['gas']] = np.sum( gas[ptProperty][i0:i1][ww] )
             del gas
@@ -209,8 +207,8 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
         # (C): STARS
         if 'stars' in ptLoadTypes:
             print(' [STARS]')
-            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=['pos','sftime'], sq=False, indRange=indRange['stars'])
-            stars[ptProperty] = cosmo.load.snapshotSubset(sP, partType='stars', fields=ptProperty, indRange=indRange['stars'])
+            stars = sP.snapshotSubsetP( partType='stars', fields=['pos','sftime'], sq=False, indRange=indRange['stars'])
+            stars[ptProperty] = sP.snapshotSubsetP( partType='stars', fields=ptProperty, indRange=indRange['stars'])
             assert stars[ptProperty].ndim == 1
 
             # loop over halos
@@ -219,17 +217,17 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
                     print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
                 # slice starting/ending indices for stars local to this FoF
-                i0 = gc['halos']['GroupOffsetType'][haloID,ptLoadTypes['stars']] - indRange['stars'][0]
-                i1 = i0 + gc['halos']['GroupLenType'][haloID,ptLoadTypes['stars']]
+                i0 = gc['GroupOffsetType'][haloID,ptLoadTypes['stars']] - indRange['stars'][0]
+                i1 = i0 + gc['GroupLenType'][haloID,ptLoadTypes['stars']]
 
                 assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
                 if i1 == i0:
                     continue # zero length of this type
 
-                rr = periodicDistsSq( gc['halos']['GroupPos'][haloID,:], stars['Coordinates'][i0:i1,:], sP )
-                wWind  = np.where( (rr <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
-                wStars = np.where( (rr <= gc['halos'][rad][haloID]) & (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
+                rr = sP.periodicDistsSq( gc['GroupPos'][haloID,:], stars['Coordinates'][i0:i1,:] )
+                wWind  = np.where( (rr <= gc[rad][haloID]) & (stars['GFM_StellarFormationTime'][i0:i1] < 0.0) )
+                wStars = np.where( (rr <= gc[rad][haloID]) & (stars['GFM_StellarFormationTime'][i0:i1] >= 0.0) )
 
                 r[i, ptSaveTypes['gas']] += np.sum( stars[ptProperty][i0:i1][wWind] )
                 r[i, ptSaveTypes['stars']] = np.sum( stars[ptProperty][i0:i1][wStars] )
@@ -269,7 +267,7 @@ def _radialRestriction(sP, nSubsTot, rad):
         radSqMax += sP.boxSize**2.0
     elif rad == 'p10':
         # load group m200_crit values
-        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        gcLoad = sP.groupCat(fieldsHalos=['Group_M_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
         parentM200 = gcLoad['halos'][gcLoad['subhalos']]
 
         # r_cut = 27.3 kpc/h * (M200crit / (10^15 Msun/h))^0.29 from Puchwein+ (2010) Eqn 1
@@ -279,8 +277,8 @@ def _radialRestriction(sP, nSubsTot, rad):
         # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
         rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
 
-        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+        subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 2.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
         ww = np.where(twiceStellarRHalf > rad_pkpc)
         twiceStellarRHalf[ww] = rad_pkpc
@@ -292,27 +290,27 @@ def _radialRestriction(sP, nSubsTot, rad):
         radSqMin += (sP.units.physicalKpcToCodeLength(8.0))**2
     elif rad == 'r015_1rvir_halo':
         # classic 'halo' definition, 0.15rvir < r < 1.0rvir (meaningless for non-centrals)
-        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        gcLoad = sP.groupCat(fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
         parentR200 = gcLoad['halos'][gcLoad['subhalos']]
 
         radSqMax = (1.00 * parentR200)**2
         radSqMin = (0.15 * parentR200)**2
     elif rad == 'r200crit':
         # within the virial radius (r200,crit definition) (centrals only)
-        gcLoad = cosmo.load.groupCat(sP, fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        gcLoad = sP.groupCat(fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
         parentR200 = gcLoad['halos'][gcLoad['subhalos']]
 
         radSqMax = (1.00 * parentR200)**2
     elif rad == '2rhalfstars':
         # classic Illustris galaxy definition, r < 2*r_{1/2,mass,stars}
-        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 2.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+        subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 2.0 * subHalfmassRadType:,sP.ptNum('stars')]
 
         radSqMax = twiceStellarRHalf**2
     elif rad == '1rhalfstars':
         # inner galaxy definition, r < 1*r_{1/2,mass,stars}
-        gcLoad = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        twiceStellarRHalf = 1.0 * gcLoad['subhalos'][:,sP.ptNum('stars')]
+        subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
+        twiceStellarRHalf = 1.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
         radSqMax = twiceStellarRHalf**2
     elif rad == 'sdss_fiber':
@@ -357,7 +355,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
     """ For a given pSplit = [thisTaskNum,totNumOfTasks], determine an efficient work split and 
     return the required processing for this task, in the form of the list of subhaloIDs to 
     process and the global snapshot index range required in load to cover these subhalos. """
-    nSubsTot = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+    nSubsTot = sP.numSubhalos
     subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
 
     # stellar mass select
@@ -375,7 +373,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
     if isinstance(Nside, int) and Nside > 1:
         # special case: just do a few special case subhalos at high Nside for demonstration
         assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99 and pSplit is None
-        #gcDemo = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
+        #gcDemo = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
         #massesDemo = sP.units.codeMassToLogMsun( gcDemo['halos']['Group_M_Crit200'] )
         #ww = np.where( (massesDemo >= 11.9) & (massesDemo < 12.1) ) # ww[0]= [597, 620, 621...]
         #ww = np.where( (massesDemo >= 13.4) & (massesDemo < 13.5) ) # ww[0]= [34, 52, ...]
@@ -430,7 +428,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
 
             indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo_extended, strictSubhalos=True)
 
-            lastPrevSub = cosmo.load.groupCatSingle(sP, subhaloID=invSubs[0]-1)
+            lastPrevSub = sP.groupCatSingle(subhaloID=invSubs[0]-1)
             indRange['stars'][0] += lastPrevSub['SubhaloLenType'][ sP.ptNum('stars') ]
         else:
             indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo, strictSubhalos=True)
@@ -476,17 +474,17 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     # load group information
     gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
-    gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
-    nSubsTot = gc['header']['Nsubgroups_Total']
+    gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
+    nSubsTot = sP.numSubhalos
 
     if scope == 'fof':
         # replace 'SubhaloLenType' and 'SubhaloOffsetType' by parent FoF group values (for both cen/sat)
-        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])['halos']
-        GroupOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
-        SubhaloGrNr = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
+        GroupOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
+        SubhaloGrNr = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])
 
-        gc['subhalos']['SubhaloLenType'] = GroupLenType[SubhaloGrNr,:]
-        gc['subhalos']['SubhaloOffsetType'] = GroupOffsetType[SubhaloGrNr,:]
+        gc['SubhaloLenType'] = GroupLenType[SubhaloGrNr,:]
+        gc['SubhaloOffsetType'] = GroupOffsetType[SubhaloGrNr,:]
 
     # determine radial restriction for each subhalo
     radRestrictIn2D, radSqMin, radSqMax, _ = _radialRestriction(sP, nSubsTot, rad)
@@ -531,7 +529,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     if ptProperty == 'radvel':
         fieldsLoad.append('pos')
         fieldsLoad.append('vel')
-        gc['subhalos']['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'], sq=True)
+        gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
         allocSize = (nSubsDo,)
 
     fieldsLoad = list(set(fieldsLoad)) # make unique
@@ -604,8 +602,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
         # slice starting/ending indices for stars local to this FoF
         if scope != 'global':
-            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
-            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,ptLoadType]
+            i0 = gc['SubhaloOffsetType'][subhaloID,ptLoadType] - indRange[0]
+            i1 = i0 + gc['SubhaloLenType'][subhaloID,ptLoadType]
 
         assert i0 >= 0 and i1 <= (indRange[1]-indRange[0]+1)
 
@@ -619,8 +617,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
             if not radRestrictIn2D:
                 # apply in 3D
-                rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                      particles['Coordinates'][i0:i1,:], sP )
+                rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], particles['Coordinates'][i0:i1,:] )
             else:
                 # apply in 2D projection, limited support for now, just Nside='z-axis'
                 # otherwise, for any more complex projection, need to apply it here, and anyways 
@@ -628,13 +625,13 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 # need to move it inside the range(nProj) loop, which is definitely doable
                 assert Nside == 'z-axis'
                 p_inds = [0,1] # x,y
-                pt_2d = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                pt_2d = gc['SubhaloPos'][subhaloID,:]
                 pt_2d = [ pt_2d[p_inds[0]], pt_2d[p_inds[1]] ]
                 vecs_2d = np.zeros( (i1-i0, 2), dtype=particles['Coordinates'].dtype )
                 vecs_2d[:,0] = particles['Coordinates'][i0:i1,p_inds[0]]
                 vecs_2d[:,1] = particles['Coordinates'][i0:i1,p_inds[1]]
 
-                rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+                rr = sP.periodicDistsSq( pt_2d, vecs_2d ) # handles 2D
 
             if rad is not None:
                 validMask &= (rr <= radSqMax[subhaloID])
@@ -720,8 +717,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 gas_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
                 gas_weights = np.squeeze( particles['weights'][i0:i1][wValid] )
 
-                haloPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
-                haloVel = gc['subhalos']['SubhaloVel'][subhaloID,:]
+                haloPos = gc['SubhaloPos'][subhaloID,:]
+                haloVel = gc['SubhaloVel'][subhaloID,:]
 
                 vrad = sP.units.particleRadialVelInKmS(gas_pos, gas_vel, haloPos, haloVel)
 
@@ -947,8 +944,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     # load group information
     gc = sP.groupCat(fieldsSubhalos=['SubhaloLenType','SubhaloHalfmassRadType','SubhaloPos'])
-    gc['subhalos']['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
-    nSubsTot = gc['header']['Nsubgroups_Total']
+    gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
+    nSubsTot = sP.numSubhalos
 
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
     subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass)
@@ -962,7 +959,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     # allocate
     if indivStarMags:
         # compute number of PT4 particles we will do (cover full PT4 size)
-        nPt4Tot = cosmo.load.snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
+        nPt4Tot = sP.snapshotHeader()['NumPart'][sP.ptNum('stars')]
         nPt4Do = indRange['stars'][1] - indRange['stars'][0] + 1
 
         if pSplit is None: nPt4Do = nPt4Tot
@@ -1033,8 +1030,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
                 # slice starting/ending indices for stars local to this subhalo
-                i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]
-                i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
+                i0 = gc['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]
+                i1 = i0 + gc['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
 
                 assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
@@ -1045,8 +1042,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 validMask = np.ones( i1-i0, dtype=np.bool )
                 if rad is not None:
                     assert radSqMax.ndim == 1 # otherwise generalize like below for '_res'
-                    rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                          stars['Coordinates'][i0:i1,:], sP )
+                    rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], stars['Coordinates'][i0:i1,:] )
                     validMask &= (rr <= radSqMax[subhaloID])
                 wValid = np.where(validMask)
                 if len(wValid[0]) == 0:
@@ -1071,18 +1067,18 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         continue
 
                     # slice starting/ending indices for -gas- local to this subhalo
-                    i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
-                    i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
+                    i0g = gc['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
+                    i1g = i0g + gc['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
 
                     assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
 
                     # calculate projection directions for this subhalo
-                    projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                    projCen = gc['SubhaloPos'][subhaloID,:]
 
                     if efrDirs:
                         # construct rotation matrices for each of 'edge-on', 'face-on', and 'random' (z-axis)
-                        rHalf = gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
-                        shPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                        rHalf = gc['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
+                        shPos = gc['SubhaloPos'][subhaloID,:]
 
                         gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
                                      'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
@@ -1124,8 +1120,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         else:
                             # calculate radial distance of each star particle if not yet already
                             if rad is None:
-                                rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                                      pos_stars, sP )
+                                rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], pos_stars )
                             rr = np.sqrt(rr[wValid])
 
                             # get interpolated 3D half light radius
@@ -1172,8 +1167,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
             # slice starting/ending indices for stars local to this subhalo
-            i0 = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]
-            i1 = i0 + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
+            i0 = gc['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]
+            i1 = i0 + gc['SubhaloLenType'][subhaloID,sP.ptNum('stars')]
 
             assert i0 >= 0 and i1 <= (indRange['stars'][1]-indRange['stars'][0]+1)
 
@@ -1188,8 +1183,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     # apply in 3D
                     assert radSqMax.ndim == 1
 
-                    rr = periodicDistsSq( gc['subhalos']['SubhaloPos'][subhaloID,:], 
-                                          stars['Coordinates'][i0:i1,:], sP )
+                    rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], stars['Coordinates'][i0:i1,:] )
                     validMask &= (rr <= radSqMax[subhaloID])
                 else:
                     # apply in 2D projection, limited support for now, just Nside='z-axis'
@@ -1198,7 +1192,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                     # need to move it inside the range(nProj) loop, which is definitely doable
                     assert Nside == 'z-axis' and nProj == 1 and np.array_equal(projVecs,[[0,0,1]])
                     p_inds = [0,1] # x,y
-                    pt_2d = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                    pt_2d = gc['SubhaloPos'][subhaloID,:]
                     pt_2d = [ pt_2d[p_inds[0]], pt_2d[p_inds[1]] ]
                     vecs_2d = np.zeros( (i1-i0, 2), dtype=stars['Coordinates'].dtype )
                     vecs_2d[:,0] = stars['Coordinates'][i0:i1,p_inds[0]]
@@ -1210,7 +1204,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
                     if radSqMax.ndim == 1:
                         # radial / circular aperture
-                        rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+                        rr = sP.periodicDistsSq( pt_2d, vecs_2d ) # handles 2D
                         rr = np.sqrt(rr)
 
                         validMask &= (rr <= (np.sqrt(radSqMax[subhaloID])+sigmaPad))
@@ -1287,18 +1281,18 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                 rel_vel_los = vel_stars[:,p_ind] - mean_vel_los
 
             # slice starting/ending indices for -gas- local to this subhalo
-            i0g = gc['subhalos']['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
-            i1g = i0g + gc['subhalos']['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
+            i0g = gc['SubhaloOffsetType'][subhaloID,sP.ptNum('gas')] - indRange['gas'][0]
+            i1g = i0g + gc['SubhaloLenType'][subhaloID,sP.ptNum('gas')]
 
             assert i0g >= 0 and i1g <= (indRange['gas'][1]-indRange['gas'][0]+1)
  
             # calculate projection directions for this subhalo
-            projCen = gc['subhalos']['SubhaloPos'][subhaloID,:]
+            projCen = gc['SubhaloPos'][subhaloID,:]
 
             if efrDirs:
                 # construct rotation matrices for each of 'edge-on', 'face-on', and 'random' (z-axis)
-                rHalf = gc['subhalos']['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
-                shPos = gc['subhalos']['SubhaloPos'][subhaloID,:]
+                rHalf = gc['SubhaloHalfmassRadType'][subhaloID,sP.ptNum('stars')]
+                shPos = gc['SubhaloPos'][subhaloID,:]
 
                 gasLocal = { 'Masses' : gas['Masses'][i0g:i1g], 
                              'Coordinates' : np.squeeze(gas['Coordinates'][i0g:i1g,:]),
@@ -1360,7 +1354,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         else:
                             # calculate radial distance of each star particle if not yet already
                             if rad is None:
-                                rr = periodicDistsSq( projCen, stars['Coordinates'][i0:i1,:], sP )
+                                rr = sP.periodicDistsSq( projCen, stars['Coordinates'][i0:i1,:] )
                             rrLocal = np.sqrt(rr[wValid])
 
                             # get interpolated 3D half light radius
@@ -1461,8 +1455,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
     # load snapshot and subhalo information
     redshifts = snapNumToRedshift(sP, all=True)
 
-    nSubsTot = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
-
+    nSubsTot = sP.numSubhalos
     ids = np.arange(nSubsTot, dtype='int32') # currently, always process all
 
     # choose tree fields to load, and validate smoothing request
@@ -1511,7 +1504,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
             for snap in sP.validSnapList():
                 sP.setSnap(snap)
                 if snap % 10 == 0: print('%d%%' % (float(snap)/len(sP.validSnapList())*100), end=', ')
-                groups[snap] = sP.groupCat(fieldsHalos=groupFields)['halos']
+                groups[snap] = sP.groupCat(fieldsHalos=groupFields, sq=False)['halos']
 
             sP.setSnap(prevSnap)
             sP.data[cacheKey] = groups
@@ -1673,8 +1666,7 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
     select = "All Subfind subhalos."
 
     # load snapshot and subhalo information
-    nSubsTot = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
-    subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
+    subhaloIDsTodo = np.arange(sP.numSubhalos, dtype='int32')
 
     nSubsDo = len(subhaloIDsTodo)
 
@@ -1843,7 +1835,6 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     assert pSplit is None # not implemented
 
     from cosmo import hydrogen
-    from cosmo.load import snapshotHeader
     from util.sphMap import sphMapWholeBox
     from cosmo.cloudy import cloudyIon
 
@@ -1870,7 +1861,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     axes    = [0,1] # x,y projection
     
     # info
-    h = cosmo.load.snapshotHeader(sP)
+    h = sP.snapshotHeader()
 
     if species in zDensSpecies:
         boxGridSize = boxGridSizeMetals
@@ -1928,7 +1919,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         print('  [%2d] %9d - %d' % (i,indRange[0],indRange[1]))
 
         # load
-        gas = cosmo.load.snapshotSubset(sP, 'gas', fields, indRange=indRange)
+        gas = sP.snapshotSubsetP('gas', fields, indRange=indRange)
 
         # calculate smoothing size (V = 4/3*pi*h^3)
         vol = gas['Masses'] / gas['Density']
@@ -1967,7 +1958,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
                                                                     assumeSolarAbunds=True,assumeSolarMetallicity=True)
             else:
                 # default (use cached ion masses)
-                mMetal = cosmo.load.snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
+                mMetal = sP.snapshotSubset('gas', '%s %s mass' % (element,ionNum), indRange=indRange)
             
             # determine projection depth fraction
             boxWidthFrac = projDepthCode / sP.boxSize
@@ -2018,7 +2009,6 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
         given a full box colDens grid. If omega == True, then instead compute the single number 
         Omega_species = rho_species / rho_crit,0. """
     assert pSplit is None # not implemented
-    from cosmo.load import auxCat
     from cosmo.hydrogen import calculateCDDF
 
     if omega:
@@ -2040,7 +2030,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
 
     # load
     acField = 'Box_Grid_n'+species
-    ac = auxCat(sP, fields=[acField])
+    ac = sP.auxCat(fields=[acField])
 
     # depth
     projDepthCode = sP.boxSize
@@ -2151,27 +2141,27 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         select = "Subhalos [%d] specifically input." % len(subhaloIDsTodo)
 
     # load group information and make selection
-    gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos','SubhaloLenType'])['subhalos']
-    gc['header'] = cosmo.load.groupCatHeader(sP)
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
+    gc['header'] = sP.groupCatHeader()
 
     nChunks = 1 # chunk load disabled by default
 
     # need for scope=='subfind' and scope=='global' (for self/other halo terms)
-    gc['SubhaloOffsetType'] = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+    gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
     if scope in ['fof','global_fof']:
         # replace 'SubhaloLenType' and 'SubhaloOffsetType' by parent FoF group values (for both cen/sat)
         # for scope=='global_fof' take all FoF particles for the respective halo terms
-        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
-        GroupOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
-        SubhaloGrNr = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloGrNr'])['subhalos']
+        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
+        GroupOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
+        SubhaloGrNr = sP.groupCat(fieldsSubhalos=['SubhaloGrNr'])
 
         gc['SubhaloLenType'] = GroupLenType[SubhaloGrNr,:]
         gc['SubhaloOffsetType'] = GroupOffsetType[SubhaloGrNr,:]
 
     if scope in ['global','global_fof']:
         # enable chunk loading
-        h = cosmo.load.snapshotHeader(sP)
+        h = sP.snapshotHeader()
         nChunks = numPartToChunkLoadSize( h['NumPart'][sP.ptNum(ptType)] )
         chunkSize = int(h['NumPart'][sP.ptNum(ptType)] / nChunks)
 
@@ -2183,12 +2173,12 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
         # css select
         if cenSatSelect is not None:
-            cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+            cssInds = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
             subhaloIDsTodo = subhaloIDsTodo[cssInds]
 
         # halo mass select
         if minHaloMass is not None:
-            halo_masses = cosmo.load.groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+            halo_masses = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
             halo_masses = halo_masses[cssInds]
             wSelect = np.where( halo_masses >= minHaloMass )
 
@@ -2275,12 +2265,12 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         assert ptType == 'gas' # otherwise need to make a separate load to fill gasLocal
         fieldsLoad.append('mass')
         fieldsLoad.append('sfr')
-        gc['SubhaloHalfmassRadType'] = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'], sq=True)
+        gc['SubhaloHalfmassRadType'] = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
 
     if ptProperty == 'radvel':
         fieldsLoad.append('pos')
         fieldsLoad.append('vel')
-        gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'], sq=True)
+        gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
 
     if ptProperty in ['losvel','losvel_abs']:
         assert proj2D is not None # some 2D projection direction must be defined
@@ -2289,11 +2279,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # load component along one of the cartesian axes (line of sight direction)
             vel_key = 'vel_%s' % ['x','y','z'][proj2Daxis]
             fieldsLoad.append(vel_key)
-            gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'], sq=True)[:,proj2Daxis]
+            gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'])[:,proj2Daxis]
         else:
             # load full velocity 3-vector for later, per-subhalo rotation
             fieldsLoad.append('vel')
-            gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'], sq=True)
+            gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
 
     fieldsLoad = list(set(fieldsLoad))
 
@@ -2444,7 +2434,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             if proj2D is None:
                 # apply in 3D
-                rr = periodicDistsSq( gc['SubhaloPos'][subhaloID,:], particles_pos, sP )
+                rr = sP.periodicDistsSq( gc['SubhaloPos'][subhaloID,:], particles_pos )
             else:
                 # apply in 2D projection, along the specified axis
                 pt_2d = gc['SubhaloPos'][subhaloID,:]
@@ -2453,7 +2443,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 vecs_2d[:,0] = particles_pos[:,p_inds[0]]
                 vecs_2d[:,1] = particles_pos[:,p_inds[1]]
 
-                rr = periodicDistsSq( pt_2d, vecs_2d, sP ) # handles 2D
+                rr = sP.periodicDistsSq( pt_2d, vecs_2d ) # handles 2D
 
                 # enforce depth restriction
                 if proj2Ddepth is not None:

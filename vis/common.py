@@ -22,10 +22,10 @@ from util.sphMap import sphMap
 from util.treeSearch import calcHsml
 from util.helper import loadColorTable, logZeroMin, logZeroNaN
 from util.boxRemap import remapPositions
-from cosmo.load import snapshotSubset, snapshotHeader, snapHasField, subboxVals
-from cosmo.load import groupCat, groupCatSingle, groupCatHeader, groupCatOffsetListIntoSnap
-from cosmo.util import periodicDists, correctPeriodicDistVecs, correctPeriodicPosVecs
+from cosmo.load import subboxVals
+from cosmo.util import correctPeriodicDistVecs, correctPeriodicPosVecs
 from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
+from cosmo.stellarPop import sps
 from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
@@ -41,9 +41,7 @@ velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y']
 
 def validPartFields(ions=True, emlines=True, sps=True):
     """ Helper, return a list of all field names we can handle. """
-    from cosmo.cloudy import getEmissionLines, cloudyEmission, cloudyIon
-    from cosmo.stellarPop import sps
-
+    
     # base fields
     fields = ['dens','density','mass',
               'masspart','particle_mass','sfr','sfr_msunyrkpc2',
@@ -119,7 +117,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
 
     # cache?
     useCache = (sP.isPartType(partType, 'stars') and (not useSnapHsml)) or \
-               (sP.isPartType(partType, 'dm') and not snapHasField(sP, partType, 'SubfindHsml'))
+               (sP.isPartType(partType, 'dm') and not sP.snapHasField(partType, 'SubfindHsml'))
 
     if sP.isPartType(partType, 'stars'):
         if sP.isSubbox: useCache = True # StellarHsml not saved for subboxes
@@ -138,13 +136,13 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
     else:
         # dark matter
         if sP.isPartType(partType, 'dm') or sP.isPartType(partType, 'dmlowres'):
-            if not snapHasField(sP, partType, 'SubfindHsml'):
-                pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+            if not sP.snapHasField(partType, 'SubfindHsml'):
+                pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'
                 nNGBDev = int( np.sqrt(nNGB)/2 )
                 hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
             else:
-                hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+                hsml = sP.snapshotSubsetP(partType, 'SubfindHsml', indRange=indRange)
 
         # gas
         if sP.isPartType(partType, 'gas'):
@@ -155,31 +153,31 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
             # SubfindHsml is a density estimator of the local DM, don't generally use for stars
             if useSnapHsml:
                 if sP.snapHasField('stars', 'SubfindHsml'):
-                    hsml = snapshotSubset(sP, partType, 'SubfindHsml', indRange=indRange)
+                    hsml = sP.snapshotSubsetP(partType, 'SubfindHsml', indRange=indRange)
                 else:
                     # we will generate SubfindHsml
                     indRange_dm = None
                     assert indRange is None # otherwise generalize, derive indRange_dm to e.g. load only FoF-scope DM
 
-                    pos_stars = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-                    pos_dm = snapshotSubset(sP, 'dm', 'pos', indRange=indRange_dm)
+                    pos_stars = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
+                    pos_dm = sP.snapshotSubsetP('dm', 'pos', indRange=indRange_dm)
                     hsml = calcHsml(pos_dm, sP.boxSize, posSearch=pos_stars, nNGB=64, nNGBDev=4, treePrec='double')
             elif sP.snapHasField('stars', 'StellarHsml'):
                 # use pre-saved nNGB=32 values
-                hsml = snapshotSubset(sP, partType, 'StellarHsml', indRange=indRange)
+                hsml = sP.snapshotSubsetP(partType, 'StellarHsml', indRange=indRange)
             elif alsoSFRgasForStars:
                 # compute: using SFR>0 gas as well as stars to define neighbors
                 indRange_gas = None
                 assert indRange is None  # otherwise generalize, derive indRange_gas to e.g. load only FoF-scope gas
 
-                pos_stars = snapshotSubset(sP, partType, 'pos', indRange=indRange)
-                pos_sfgas = snapshotSubset(sP, 'gas_sf', 'pos', indRange=indRange_gas)
+                pos_stars = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
+                pos_sfgas = sP.snapshotSubsetP('gas_sf', 'pos', indRange=indRange_gas)
                 pos = np.vstack( (pos_stars,pos_sfgas) )
                 
                 hsml = calcHsml(pos, sP.boxSize, posSearch=pos_stars, nNGB=nNGB, nNGBDev=1, treePrec='double')
             else:
                 # compute: use only stars to define neighbors
-                pos = snapshotSubset(sP, partType, 'pos', indRange=indRange)
+                pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
                 if isinstance(pos,dict) and pos['count'] == 0:
                     hsml = np.array([])
                 else:
@@ -252,7 +250,7 @@ def clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=2):
         max_mod = 2.0
 
         # load stellar ages
-        ages = snapshotSubset(sP, 'stars', 'stellar_age', indRange=indRange)
+        ages = sP.snapshotSubset('stars', 'stellar_age', indRange=indRange)
         
         # ramp such that hsml*=1.0 at <=1Gyr, linear to hsml*=2.0 at >=4 Gyr
         rampFac = np.ones( ages.size, dtype='float32' )
@@ -476,8 +474,6 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
-    from cosmo.stellarPop import sps
-
     if partType in ['dm']:
         mass = sP.dmParticleMass
     else:
@@ -485,7 +481,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
 
     # neutral hydrogen mass model (do column densities)
     if partField in ['HI','HI_segmented']:
-        nh0_frac = snapshotSubset(sP, partType, 'NeutralHydrogenAbundance', indRange=indRange)
+        nh0_frac = sP.snapshotSubsetP(partType, 'NeutralHydrogenAbundance', indRange=indRange)
 
         # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
         #mHI = hydrogen.hydrogenMass(gas, sP, atomic=(species=='HI' or species=='HI2'), totalNeutral=(species=='HI_noH2'))
@@ -497,7 +493,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
 
     # elemental mass fraction (do column densities)
     if 'metals_' in partField:
-        elem_mass_frac = snapshotSubset(sP, partType, partField, indRange=indRange)
+        elem_mass_frac = sP.snapshotSubsetP(partType, partField, indRange=indRange)
         mass *= elem_mass_frac
 
     # metal ion mass (do column densities) [e.g. "O VI", "O VI mass", "O VI frac", "O VI fracmass"]
@@ -505,13 +501,8 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
         element = partField.split()[0]
         ionNum  = partField.split()[1]
 
-        if 1:
-            # use cache
-            mass = snapshotSubset(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
-        else:
-            # previous (always calculate on the fly)
-            ion = cloudyIon(sP, el=element, redshiftInterp=True)
-            mass *= ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange)
+        # use cache or calculate on the fly, as needed
+        mass = sP.snapshotSubsetP(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
@@ -519,13 +510,13 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     if partField in ['xray','xray_lum']:
         # xray: replace 'mass' with x-ray luminosity [10^-30 erg/s], which is then accumulated into a 
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
-        mass = snapshotSubset(sP, partType, 'xray', indRange=indRange)
+        mass = sP.snapshotSubsetP(partType, 'xray', indRange=indRange)
 
     if partField in ['sfr_msunyrkpc2']:
-        mass = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
+        mass = sP.snapshotSubsetP(partType, 'sfr', indRange=indRange)
 
     if partField in ['sfr_halpha','halpha']:
-        mass = snapshotSubset(sP, partType, 'sfr_halpha', indRange=indRange)
+        mass = sP.snapshotSubsetP(partType, 'sfr_halpha', indRange=indRange)
 
     # flux/surface brightness (replace mass)
     if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
@@ -542,7 +533,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
         if 1:
             # use cache
             assert not zeroSfr # not implemented in cache
-            mass = snapshotSubset(sP, 'gas', '%s flux' % lineName, indRange=indRange)
+            mass = sP.snapshotSubsetP('gas', '%s flux' % lineName, indRange=indRange)
         else:
             e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
             lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
@@ -552,7 +543,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
             assert np.count_nonzero( np.isnan(mass) ) == 0
 
         if zeroSfr:
-            sfr = snapshotSubset(sP, partType, 'sfr', indRange=indRange)
+            sfr = sP.snapshotSubsetP( partType, 'sfr', indRange=indRange)
             w = np.where(sfr > 0.0)
             mass[w] = 0.0
 
@@ -600,7 +591,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     if partField in ['coldens_sq_msunkpc2']:
         # DM annihilation radiation (see Schaller 2015, Eqn 2 for real units)
         # load density estimate, square, convert back to effective mass (still col dens like)
-        dm_vol = snapshotSubset(sP, partType, 'subfind_volume', indRange=indRange)
+        dm_vol = sP.snapshotSubsetP(partType, 'subfind_volume', indRange=indRange)
         mass = (mass / dm_vol)**2.0 * dm_vol
 
     if partField in velLOSFieldNames + velCompFieldNames:
@@ -1031,7 +1022,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         mkdir(sP.derivPath + 'grids/%s' % sbStr.replace("_","/"))
 
     # no particles of type exist? blank grid return (otherwise die in getHsml and wind removal)
-    h = snapshotHeader(sP)
+    h = sP.snapshotHeader()
 
     def emptyReturn():
         print('Warning: No particles, returning empty for [%s]!' % saveFilename.split(sP.derivPath)[1])
@@ -1063,8 +1054,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
         if not sP.isZoom and sP.hInd is not None and '_global' not in method:
-            sh = groupCatSingle(sP, subhaloID=sP.hInd)
-            gr = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
+            sh = sP.groupCatSingle(subhaloID=sP.hInd)
+            gr = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
 
             if not sP.groupOrdered:
                 raise Exception('Want to do a group-ordered load but cannot.')
@@ -1073,11 +1064,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             pt = sP.ptNum(partType)
             if '_subhalo' in method:
                 # subhalo scope
-                startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo'][sP.hInd,pt]
+                startInd = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo'][sP.hInd,pt]
                 indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
             else:
                 # fof scope
-                startInd = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
+                startInd = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
                 indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
 
         # quantity is computed with respect to a pre-existing grid? load now
@@ -1099,7 +1090,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # accumulate per chunk by using a minimum reduction between the master grid and each chunk grid
         if '_minIP' in method: grid_quant.fill(np.inf)
 
-        disableChunkLoad = (sP.isPartType(partType,'dm') and not snapHasField(sP, partType, 'SubfindHsml')) or \
+        disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml')) or \
                            sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
 
         if indRange is None and sP.subbox is None and not disableChunkLoad:
@@ -1122,7 +1113,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             if rotMatrix is not None:
                 if rotCenter is None:
                     # use subhalo center at this snapshot
-                    sh = groupCatSingle(sP, subhaloID=sP.hInd)
+                    sh = sP.groupCatSingle(subhaloID=sP.hInd)
                     rotCenter = sh['SubhaloPos']
 
                     if not sP.isZoom and sP.hInd is None:
@@ -1154,8 +1145,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             if 0:
                 print('WARNING: Selectively setting mass=0 based on some particle criterion!')
-                dens = snapshotSubset(sP, partType, 'numdens', indRange=indRange)
-                temp = snapshotSubset(sP, partType, 'temp', indRange=indRange)
+                dens = sP.snapshotSubset(partType, 'numdens', indRange=indRange)
+                temp = sP.snapshotSubset(partType, 'temp', indRange=indRange)
                 w = np.where( (temp>5.5) & (dens>1e-3) )
                 mask = np.zeros( dens.size, dtype='int16' )
                 mask[w] = 1
@@ -1210,7 +1201,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             if partField in velLOSFieldNames + velCompFieldNames:
                 # first compensate for subhalo CM motion (if this is a halo plot)
                 if sP.isZoom or sP.hInd is not None:
-                    sh = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.hInd)
+                    sh = sP.groupCatSingle(subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.hInd)
                     for i in range(3):
                         # SubhaloVel already peculiar, quant converted already in loadMassAndQuantity()
                         quant[:,i] -= sh['SubhaloVel'][i] 
@@ -1240,7 +1231,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             wMask = None
 
             if partType == 'stars' and sP.winds:
-                sftime = snapshotSubset(sP, partType, 'sftime', indRange=indRange)
+                sftime = sP.snapshotSubsetP(partType, 'sftime', indRange=indRange)
                 wMask = np.where(sftime > 0.0)[0]
                 if len(wMask) <= 2 and nChunks == 1:
                     return emptyReturn()
@@ -1541,15 +1532,15 @@ def addBoxMarkers(p, conf, ax):
         # plotting N most massive halos in visible area
         sP_load = p['sP'] if not p['sP'].isSubbox else p['sP'].parentBox
 
-        h = groupCatHeader(sP_load)
+        h = sP_load.groupCatHeader()
 
         if h['Ngroups_Total'] > 0:
-            gc = sP_load.groupCat(fieldsHalos=['GroupPos','Group_R_Crit200'])['halos']
+            gc = sP_load.groupCat(fieldsHalos=['GroupPos','Group_R_Crit200'])
 
             labelVals = None
             if 'labelHalos' in p and p['labelHalos']:
                 # label N most massive halos with some properties
-                gc_h = sP_load.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])['halos']
+                gc_h = sP_load.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
                 halo_mass_logmsun = sP_load.units.codeMassToLogMsun( gc_h['Group_M_Crit200'] )
                 halo_id = np.arange(gc_h['GroupFirstSub'].size)
                 gc_s = sP_load.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
@@ -1568,18 +1559,18 @@ def addBoxMarkers(p, conf, ax):
 
     if 'plotSubhalos' in p and p['plotSubhalos'] > 0:
         # plotting N most massive child subhalos in visible area
-        h = groupCatHeader(p['sP'])
+        h = p['sP'].groupCatHeader()
 
         if h['Ngroups_Total'] > 0:
-            haloInd = groupCatSingle(p['sP'], subhaloID=p['hInd'])['SubhaloGrNr']
-            halo = groupCatSingle(p['sP'], haloID=haloInd)
+            haloInd = p['sP'].groupCatSingle(subhaloID=p['hInd'])['SubhaloGrNr']
+            halo = p['sP'].groupCatSingle(haloID=haloInd)
 
             if halo['GroupFirstSub'] != p['hInd']:
                 print('Warning: Rendering subhalo circles around a non-central subhalo!')
         
             subInds = np.arange( halo['GroupFirstSub']+1, halo['GroupFirstSub']+halo['GroupNsubs'] )
 
-            gc = groupCat(p['sP'], fieldsSubhalos=['SubhaloPos','SubhaloHalfmassRad'])['subhalos']
+            gc = p['sP'].groupCat(fieldsSubhalos=['SubhaloPos','SubhaloHalfmassRad'])
             gc['SubhaloPos'] = gc['SubhaloPos'][subInds,:]
             gc['SubhaloHalfmassRad'] = gc['SubhaloHalfmassRad'][subInds]
 
@@ -1763,8 +1754,8 @@ def addBoxMarkers(p, conf, ax):
             # zoom run: write properties of zoomTargetHalo
             subhaloID = p['sP'].zoomSubhaloID
 
-        subhalo = groupCatSingle(p['sP'], subhaloID=subhaloID)
-        halo = groupCatSingle(p['sP'], haloID=subhalo['SubhaloGrNr'])
+        subhalo = p['sP'].groupCatSingle(subhaloID=subhaloID)
+        halo = p['sP'].groupCatSingle(haloID=subhalo['SubhaloGrNr'])
 
         haloMass = p['sP'].units.codeMassToLogMsun(halo['Group_M_Crit200'])
         stellarMass = p['sP'].units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][p['sP'].ptNum('stars')])

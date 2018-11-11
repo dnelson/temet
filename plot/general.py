@@ -15,8 +15,6 @@ from scipy.stats import binned_statistic, binned_statistic_2d
 
 from util import simParams
 from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable, evenlySample
-from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
-from cosmo.util import periodicDists
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
@@ -95,26 +93,26 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             load_haloID = objID if haloIDs is not None else None
             load_subID = objID if subhaloIDs is not None else None
 
-            vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
+            vals = sP.snapshotSubset(ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
             if xlog: vals = np.log10(vals)
 
             # weights
             if ptWeight is None:
                 weights = np.zeros( vals.size, dtype='float32' ) + 1.0
             else:
-                weights = snapshotSubset(sP, ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
+                weights = sP.snapshotSubset(ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
 
             if sfreq0:
                 # restrict to non eEOS cells
-                sfr = snapshotSubset(sP, ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
+                sfr = sP.snapshotSubset(ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
                 w_sfr = np.where(sfr == 0.0)
                 vals = vals[w_sfr]
                 weights = weights[w_sfr]
 
             if coldDenseCGM:
                 print(' Restricting to cold-dense phase of the CGM!')
-                temp = snapshotSubset(sP, ptType, 'temp', haloID=load_haloID, subhaloID=load_subID)
-                hdens = snapshotSubset(sP, ptType, 'hdens', haloID=load_haloID, subhaloID=load_subID)
+                temp = sP.snapshotSubset(ptType, 'temp', haloID=load_haloID, subhaloID=load_subID)
+                hdens = sP.snapshotSubset(ptType, 'hdens', haloID=load_haloID, subhaloID=load_subID)
                 if sfreq0:
                     temp = temp[w_sfr]
                     hdens = hdens[w_sfr]
@@ -124,7 +122,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
 
             if radWithin10pkpc:
                 print(' Restricting to rad > 10 pkpc!')
-                rad = snapshotSubset(sP, ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
+                rad = sP.snapshotSubset(ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
                 if sfreq0: rad = rad[w_sfr]
                 if coldDenseCGM: rad = rad[w0]
 
@@ -467,11 +465,11 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     for i, sP in enumerate(sPs):
         # load
         xlabel, xlim, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
-        sim_xvals = snapshotSubset(sP, partType, xQuant, haloID=haloID)
+        sim_xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
         if xlog: sim_xvals = logZeroNaN(sim_xvals)
 
         ylabel, ylim, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
-        sim_yvals = snapshotSubset(sP, partType, yQuant, haloID=haloID)
+        sim_yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
         if ylog: sim_yvals = logZeroNaN(sim_yvals)
 
         ax.set_xlabel(xlabel)
@@ -483,7 +481,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
         # radial restriction
         if radMaxKpc is not None or radMinKpc is not None:
             assert haloID is not None
-            rad = snapshotSubset(sP, partType, 'rad_kpc', haloID=haloID)
+            rad = sP.snapshotSubset(partType, 'rad_kpc', haloID=haloID)
             
             if radMinKpc is None:
                 w = np.where( (rad <= radMaxKpc) )
@@ -571,7 +569,7 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
 
         if halo is not None:
             # transform fof ids to subhalo ids
-            firstsub = groupCat(sP, fieldsHalos=['GroupFirstSub'], sq=True)
+            firstsub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
             subhaloIDs = firstsub[subhaloIDs]
 
         # load
@@ -660,22 +658,22 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
         # get halo and subhalo IDs
         if subhaloIDs is not None:
             subhaloID = subhaloIDs[i]
-            haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']
+            haloID = sP.groupCatSingle(subhaloID=subhaloID)['SubhaloGrNr']
         else:
             haloID = haloIDs[i]
-            subhaloID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+            subhaloID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
         # load
         load_haloID = haloID if scope == 'fof' else None
         load_subID = subhaloID if scope == 'subfind' else None
         if load_haloID is None and load_subID is None: assert scope == 'global'
 
-        rad  = snapshotSubset(sP, ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
-        vals = snapshotSubset(sP, ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
+        rad  = sP.snapshotSubset(ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
+        vals = sP.snapshotSubset(ptType, ptProperty, haloID=load_haloID, subhaloID=load_subID)
 
         if sfreq0:
             # restrict to non eEOS cells
-            sfr = snapshotSubset(sP, ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
+            sfr = sP.snapshotSubset(ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
             w = np.where(sfr == 0.0)
             rad = rad[w]
             vals = vals[w]
@@ -814,7 +812,7 @@ def compareRuns_RadProfiles():
     for variant in variants:
         sPs.append( simParams(res=512,run='tng',redshift=0.0,variant=variant) )
 
-        mhalo = groupCat(sPs[-1], fieldsSubhalos=['mhalo_200_log'])
+        mhalo = sPs[-1].groupCat(fieldsSubhalos=['mhalo_200_log'])
         with np.errstate(invalid='ignore'):
             w = np.where( (mhalo > 11.5) & (mhalo < 12.5) )
 
@@ -829,7 +827,7 @@ def compareHaloSets_RadProfiles():
     sPs = []
     sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
 
-    mhalo = groupCat(sPs[0], fieldsSubhalos=['mhalo_200_log'])
+    mhalo = sPs[0].groupCat(fieldsSubhalos=['mhalo_200_log'])
     gr,_,_,_ = simSubhaloQuantity(sPs[0], 'color_B_gr')
 
     with np.errstate(invalid='ignore'):
@@ -849,7 +847,7 @@ def compareHaloSets_1DHists():
     sPs = []
 
     sPs.append( simParams(res=910,run='tng',redshift=0.0) )
-    mhalo = groupCat(sPs[-1], fieldsSubhalos=['mhalo_200_log'])
+    mhalo = sPs[-1].groupCat(fieldsSubhalos=['mhalo_200_log'])
     with np.errstate(invalid='ignore'):
         w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2)  )
     subhaloIDs = [w1[0][0:5]]
@@ -857,7 +855,7 @@ def compareHaloSets_1DHists():
     if 0:
         # add a second run
         sPs.append( simParams(res=455,run='tng',redshift=0.0) )
-        mhalo = groupCat(sPs[-1], fieldsSubhalos=['mhalo_200_log'])
+        mhalo = sPs[-1].groupCat(fieldsSubhalos=['mhalo_200_log'])
         with np.errstate(invalid='ignore'):
             w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2)  )
         subhaloIDs.append( w2[0][0:5] )
@@ -874,8 +872,8 @@ def singleHaloProperties():
     yQuant = 'coolrate_ratio'
 
     # pick a MW
-    #gc = groupCat(sP, fieldsHalos=['Group_M_Crit200','GroupPos'])
-    #haloMasses = sP.units.codeMassToLogMsun(gc['halos']['Group_M_Crit200'])
+    #gc = sP.groupCat(fieldsHalos=['Group_M_Crit200','GroupPos'])
+    #haloMasses = sP.units.codeMassToLogMsun(gc['Group_M_Crit200'])
 
     #haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
     #haloID = haloIDs[6] # random: 3, 4, 5, 6

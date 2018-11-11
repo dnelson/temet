@@ -158,7 +158,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
     def _expand_partial():
         """ Helper, expand a subhalo-partial aC into a subhalo-complete array. """
-        nSubsTot = groupCatHeader(sP)['Nsubgroups_Total']
+        nSubsTot = sP.numSubhalos
 
         assert 'subhaloIDs' in r # else check why we are here
 
@@ -374,7 +374,7 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
         print(' '+fileName)
     raise Exception("No group catalog found.")
 
-def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None, sq=False):
+def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None, sq=True):
     """ Load HDF5 fof+subfind group catalog for a given snapshot.
                          
        readIDs=1 : by default, skip IDs since we operate under the group ordered snapshot assumption, but
@@ -423,7 +423,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             # subhalo mass [msun or log msun]
             if quant in ['mhalo_subfind','mhalo_subfind_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
-                r[field] = sP.units.codeMassToMsun( gc['subhalos'] )
+                r[field] = sP.units.codeMassToMsun( gc )
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
@@ -440,8 +440,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
 
                 # satellites given zero
-                r[field] = np.zeros( gc['header']['Nsubgroups_Total'], dtype='int16' )
-                r[field][ gc['halos'] ] = 1
+                r[field] = np.zeros( sP.numSubhalos, dtype='int16' )
+                r[field][ gc ] = 1
 
             # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
             if 'isolated3d,' in quant:
@@ -459,7 +459,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             if quant in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr',
                          'ssfr_log','ssfr_gyr_log','ssfr_30pkpc_log','ssfr_30pkpc_gyr_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
-                mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+                mstar = sP.units.codeMassToMsun( gc['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
 
                 # replace stellar masses with auxcat values within constant aperture, if requested
                 if '_30pkpc' in quant:
@@ -469,9 +469,9 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 w = np.where(mstar == 0.0)[0]
                 if len(w):
                     mstar[w] = 1.0
-                    gc['subhalos']['SubhaloSFRinRad'][w] = np.nan
+                    gc['SubhaloSFRinRad'][w] = np.nan
 
-                r[field] = gc['subhalos']['SubhaloSFRinRad'] / mstar
+                r[field] = gc['SubhaloSFRinRad'] / mstar
 
                 if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
@@ -495,7 +495,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             # stellar half mass radii [code, pkpc, log pkpc]
             if quant in ['size_stars_code','size_stars','size_stars_log','rhalf_stars_code','rhalf_stars','rhalf_stars_log']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-                r[field] = gc['subhalos'][:,sP.ptNum('stars')]
+                r[field] = gc[:,sP.ptNum('stars')]
 
                 if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
@@ -543,14 +543,14 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 gc['subhalos'].update(r)
                 r = gc
 
-            if len(r) == 1:
+            if sq and len(r) == 1:
                 # compress and return single field (by default, unlike for standard fields)
                 key = list(r.keys())[0]
                 assert len(r.keys()) == 1
                 return r[key]
-            elif len(r) > 1:
+            else:
                 # return dictionary (no 'subhalos' wrapping)
-                assert sq is False
+                #assert sq is False
                 return r
 
     # override path function
@@ -651,14 +651,11 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             r['halos'] = r['halos'][key0]
 
     if sq:
-        # remove 'halos'/'subhalos' subdict, and field subdict
-        assert fieldsSubhalos is None or fieldsHalos is None
+        # if possible: remove 'halos'/'subhalos' subdict, and field subdict
+        if fieldsSubhalos is None: r = r['halos']
+        if fieldsHalos is None: r = r['subhalos']
 
-        if fieldsSubhalos is not None: r = r['subhalos']
-        if fieldsHalos is not None: r = r['halos']
-
-        if isinstance(r,dict):
-            assert len(r.keys()) == 1
+        if isinstance(r,dict) and len(r.keys()) == 1:
             r = r[ list(r.keys())[0] ]
 
     return r

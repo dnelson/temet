@@ -13,7 +13,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy.signal import savgol_filter
 from collections import OrderedDict
 
-from cosmo.load import groupCat, auxCat
 from util import simParams
 from util.helper import running_median, logZeroNaN
 from plot.config import *
@@ -92,7 +91,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         print('Sizes: '+sP.simName)
         sP.setRedshift(simRedshift)
 
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+        gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
 
         # centrals only
@@ -116,7 +115,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         if addHalfLightRad is not None:
             # load auxCat half light radii
             acField = 'Subhalo_HalfLightRad_' + addHalfLightRad[0]
-            ac = auxCat(sP, fields=[acField])
+            ac = sP.auxCat(fields=[acField])
             assert addHalfLightRad[1] in ac[acField+'_attrs']['bands']
             bandNum = list(ac[acField+'_attrs']['bands']).index( addHalfLightRad[1] )
 
@@ -326,11 +325,11 @@ def sizeModelsRatios():
                      'edge-on 3d','face-on 3d','edge-on-smallest 3d','edge-on-random 3d','z-axis 3d']
 
     # load auxCat
-    ac = auxCat(sP, fields=[acPre+acField1,acPre+acField2])
+    ac = sP.auxCat(fields=[acPre+acField1,acPre+acField2])
     bands = list(ac[acPre+acField1+'_attrs']['bands'])
 
     # load groupCat
-    gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+    gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
         fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
 
     # centrals only, x-axis mass definition, calculate sizes
@@ -440,12 +439,12 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
         sP = simParams(res=res,run=run,redshift=redshift)
 
         # load auxCat
-        ac = auxCat(sP, fields=[acPre+acField1,acPre+acField2])
+        ac = sP.auxCat(fields=[acPre+acField1,acPre+acField2])
         bands = list(ac[acPre+acField1+'_attrs']['bands'])
         nProj = ac[acPre+acField2].shape[2] if ac[acPre+acField2].ndim == 3 else 1
 
         # load groupCat
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+        gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
 
         # centrals only, x-axis mass definition, calculate sizes
@@ -532,7 +531,7 @@ def clumpSizes(sP):
     ax.set_ylim([0.1,10])
 
     # load
-    gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+    gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
         fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType','SubhaloGrNr'])
 
     # centrals only?
@@ -623,7 +622,7 @@ def characteristicSizes(sP, vsHaloMass=False):
 
     # sim: load, select centrals only
     gc = sP.groupCat(fieldsSubhalos=['central_flag','SubhaloHalfmassRadType'])
-    w = np.where(gc['subhalos']['central_flag'])
+    w = np.where(gc['central_flag'])
 
     # x-axis: mass definition
     if vsHaloMass:
@@ -634,15 +633,15 @@ def characteristicSizes(sP, vsHaloMass=False):
     yy = OrderedDict()
 
     # gas half mass radii
-    yy['gas'] = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('gas')]
+    yy['gas'] = gc['SubhaloHalfmassRadType'][:,sP.ptNum('gas')]
     yy['gas'] = sP.units.codeLengthToKpc( yy['gas'][w] )
 
     # dark matter
-    #yy['dm'] = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('dm')]
+    #yy['dm'] = gc['SubhaloHalfmassRadType'][:,sP.ptNum('dm')]
     #yy['dm'] = sP.units.codeLengthToKpc( yy['dm'][w] )
 
     # stellar half mass radii
-    yy['stars'] = gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')]
+    yy['stars'] = gc['SubhaloHalfmassRadType'][:,sP.ptNum('stars')]
     yy['stars'] = sP.units.codeLengthToKpc( yy['stars'][w] )
 
     # halo virial radii

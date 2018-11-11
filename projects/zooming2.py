@@ -15,7 +15,6 @@ from scipy.interpolate import interp1d
 
 from util.simParams import simParams
 from util.helper import running_median, logZeroNaN
-from cosmo.load import groupCatSingle
 from plot.general import plotPhaseSpace2D, plotHistogram1D, plotSingleRadialProfile
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
@@ -76,7 +75,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
 
     if quadrant:
         # zoom in to upper right quadrant
-        halo = groupCatSingle(sP, haloID=sP.zoomSubhaloID)
+        halo = sP.groupCatSingle(haloID=sP.zoomSubhaloID)
         cenShift = [halo['Group_R_Crit200']*(0.25+0.05),halo['Group_R_Crit200']*(0.25+0.05),0]
         size = sP.units.codeLengthToKpc(halo['Group_R_Crit200']*0.4)
         labelHalo = False
@@ -143,7 +142,7 @@ def visualize_compare_vs_normal(conf=1):
 
     # zoom in to upper left quadrant
     sP = simParams(res=res, run=run, redshift=redshift, variant='FP', hInd=hInd)
-    halo = groupCatSingle(sP, haloID=sP.zoomSubhaloID)
+    halo = sP.groupCatSingle(haloID=sP.zoomSubhaloID)
     cenShift = [-halo['Group_R_Crit200']*(0.25+0.05),halo['Group_R_Crit200']*(0.25+0.05),0]
     size = sP.units.codeLengthToKpc(halo['Group_R_Crit200']*0.4)
 

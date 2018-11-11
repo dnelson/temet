@@ -229,7 +229,7 @@ def check_colors_benedikt():
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
     # load
-    mag_g_snap = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])['subhalos'][:,4] # g-band
+    mag_g_snap = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])[:,4] # g-band
 
     acKey = 'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc'
     ac = sP.auxCat(acKey)
@@ -292,8 +292,8 @@ def guinevere_mw_sample():
     subIDs_ill = subIDs_ill[w]
 
     # load subhalo data
-    masstype_tng = sP_tng.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])['subhalos'][subIDs_tng,:]
-    masstype_ill = sP_ill.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])['subhalos'][subIDs_ill,:]
+    masstype_tng = sP_tng.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])[subIDs_tng,:]
+    masstype_ill = sP_ill.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])[subIDs_ill,:]
 
     is_cen_tng = sP_tng.groupCat(fieldsSubhalos=['central_flag'])[subIDs_tng]
     is_cen_ill = sP_ill.groupCat(fieldsSubhalos=['central_flag'])[subIDs_ill]
@@ -354,7 +354,7 @@ def check_reza_vrel():
     r_out = 0.022275893
 
     sP = simParams(res=2160,run='millennium',snap=58)
-    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloVel'])['subhalos']
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloVel'])
 
     #sub_pos = gc['SubhaloPos'][sub_id,:]
     sub_pos = np.array([  7.49061203,  12.36560631,   6.19869804])
@@ -487,7 +487,6 @@ def vis_cholla_snapshot():
 
 def new_mw_fgas_sample():
     """ Sample of Guinevere. """
-    from plot.quantities import simSubhaloQuantity
     from cosmo.util import crossMatchSubhalosBetweenRuns
 
     sP_illustris = simParams(res=1820, run='illustris', redshift=0.0)
@@ -496,12 +495,12 @@ def new_mw_fgas_sample():
     #sP_illustris = simParams(res=512, run='tng', redshift=0.0, variant='0010')
     #sP_tng = simParams(res=512, run='tng', redshift=0.0, variant='0000')
 
-    #mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_200']) # [msun]
-    mhalo = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mhalo_subfind']) # [msun]
-    mstar = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['mstar_30pkpc']) # [msun]
-    #fgas  = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['fgas_2rhalf']) # m_gas/m_b within 2rhalfstars
-    fgas,_,_,_ = simSubhaloQuantity(sP_tng, 'fgas2')
-    is_central = cosmo.load.groupCat(sP_tng, fieldsSubhalos=['central_flag'])
+    #mhalo = sP_tng.groupCat(fieldsSubhalos=['mhalo_200']) # [msun]
+    mhalo = sP_tng.groupCat(fieldsSubhalos=['mhalo_subfind']) # [msun]
+    mstar = sP_tng.groupCat(fieldsSubhalos=['mstar_30pkpc']) # [msun]
+    #fgas  = sP_tng.groupCat(fieldsSubhalos=['fgas_2rhalf']) # m_gas/m_b within 2rhalfstars
+    fgas,_,_,_ = sP_tng.simSubhaloQuantity('fgas2')
+    is_central = sP_tng.groupCat(fieldsSubhalos=['central_flag'])
 
     #inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) & (is_central == 1))[0]
     inds_tng = np.where( (mhalo >= 6e11) & (mhalo < 2e12) & (mstar >= 5e10) & (mstar < 1e11) & (fgas >= 0.01) )[0]
@@ -515,9 +514,9 @@ def new_mw_fgas_sample():
         for i in range(inds_tng.size):
             f.write('%d, %d, %d\n' % (inds_tng[i], inds_ill_la[i], inds_ill_pos[i]))
 
-    mhalo_ill = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['mhalo_200'])
-    mstar_ill = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['mstar_30pkpc'])
-    fgas_ill,_,_,_ = simSubhaloQuantity(sP_illustris, 'fgas2')
+    mhalo_ill = sP_illustris.groupCat(fieldsSubhalos=['mhalo_200'])
+    mstar_ill = sP_illustris.groupCat(fieldsSubhalos=['mstar_30pkpc'])
+    fgas_ill,_,_,_ = sP_illustris.simSubhaloQuantity('fgas2')
 
     for i in range(inds_tng.size):
         if inds_tng[i] == -1 or inds_ill_la[i] == -1:
@@ -593,10 +592,10 @@ def bh_mdot_subbox_test():
     """ Check that BH accretion rate equals mass increase. """
     sP = simParams(res=455,run='tng',redshift=0.0,variant='subbox0')
 
-    h = cosmo.load.snapshotHeader(sP)
+    h = sP.snapshotHeader()
     print('num BHs: ', h['NumPart'][sP.ptNum('bh')])
 
-    ids = cosmo.load.snapshotSubset(sP, 'bh', 'ids')
+    ids = sP.snapshotSubset('bh', 'ids')
     print(ids.shape)
 
     id = ids[0] # take first one
@@ -608,7 +607,7 @@ def bh_mdot_subbox_test():
 
     for snap in range(sP.snap-numSnapsBack, sP.snap):
         sP.setSnap(snap)
-        ids = cosmo.load.snapshotSubset(sP, 'bh', 'ids')
+        ids = sP.snapshotSubset('bh', 'ids')
         w = np.where(ids == id)[0]
         assert len(w)
 
@@ -616,10 +615,10 @@ def bh_mdot_subbox_test():
         if tage_prev is None: tage_prev = sP.tage
         dt_yr = dt * 1e9
 
-        mdot = cosmo.load.snapshotSubset(sP, 'bh', 'BH_Mdot') * 10.22 # msun/yr
-        medd = cosmo.load.snapshotSubset(sP, 'bh', 'BH_MdotEddington') * 10.22 # msun/yr
-        mass = cosmo.load.snapshotSubset(sP, 'bh', 'BH_Mass')
-        mass2 = cosmo.load.snapshotSubset(sP, 'bh', 'Masses')
+        mdot = sP.snapshotSubset('bh', 'BH_Mdot') * 10.22 # msun/yr
+        medd = sP.snapshotSubset('bh', 'BH_MdotEddington') * 10.22 # msun/yr
+        mass = sP.snapshotSubset('bh', 'BH_Mass')
+        mass2 = sP.snapshotSubset('bh', 'Masses')
         mass = sP.units.codeMassToMsun(mass)
         mass2 = sP.units.codeMassToMsun(mass2)
 
@@ -904,11 +903,11 @@ def checkInfallTime():
     kiyun_answer_gyr = 6.35 # lookback Gyr
 
     # load
-    sh = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
-    parent_halo = cosmo.load.groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
+    sh = sP.groupCatSingle(subhaloID=subhaloID)
+    parent_halo = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
 
-    sub_mpb = cosmo.mergertree.loadMPB(sP, subhaloID, treeName=treeName)
-    parent_mpb = cosmo.mergertree.loadMPB(sP, parent_halo['GroupFirstSub'], treeName=treeName)
+    sub_mpb = sP.loadMPB(subhaloID, treeName=treeName)
+    parent_mpb = sP.loadMPB(parent_halo['GroupFirstSub'], treeName=treeName)
 
     ind_par, ind_sub = match3( parent_mpb['SnapNum'], sub_mpb['SnapNum'] )
 
@@ -917,11 +916,11 @@ def checkInfallTime():
     parent_pos = parent_mpb['SubhaloPos'][ind_par,:]
     sub_pos = sub_mpb['SubhaloPos'][ind_sub,:]
 
-    dist = cosmo.util.periodicDists(parent_pos, sub_pos, sP)
+    dist = sP.periodicDists(parent_pos, sub_pos)
 
     # snap <-> time
     snapnum = parent_mpb['SnapNum'][ind_par]
-    redshift = cosmo.util.snapNumToRedshift(sP, snap=snapnum)
+    redshift = sP.snapNumToRedshift(snap=snapnum)
     tlookback = sP.units.redshiftToLookbackTime(redshift)
 
     _, kiyun_answer_ind = closest(tlookback, kiyun_answer_gyr)
@@ -987,17 +986,17 @@ def lagrangeMatching():
         scores = f['Score'][()]
 
     # get indices of TNG centrals
-    cen_inds_tng = cosmo.util.cenSatSubhaloIndices(sP=sP, cenSatSelect='cen')
+    cen_inds_tng = sP.cenSatSubhaloIndices(cenSatSelect='cen')
 
     # load stellar masses and positions
-    mstar_illustris = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['SubhaloMassInRadType'])
-    mstar_illustris = sP_illustris.units.codeMassToLogMsun( mstar_illustris['subhalos'][:,4] )
+    mstar_illustris = sP_illustris.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+    mstar_illustris = sP_illustris.units.codeMassToLogMsun( mstar_illustris[:,4] )
 
-    mstar_tng = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-    mstar_tng = sP.units.codeMassToLogMsun( mstar_tng['subhalos'][:,4] )
+    mstar_tng = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+    mstar_tng = sP.units.codeMassToLogMsun( mstar_tng[:,4] )
 
-    pos_illustris = cosmo.load.groupCat(sP_illustris, fieldsSubhalos=['SubhaloPos'])['subhalos']
-    pos_tng = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+    pos_illustris = sP_illustris.groupCat(fieldsSubhalos=['SubhaloPos'])
+    pos_tng = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
 
     # print matches for TNG centrals 0-10, 100-110, 1000-1010
     doInds = list(range(0,10)) + list(range(100,110)) + list(range(1000,1010))
@@ -1025,8 +1024,8 @@ def miscGasStats():
     sP = simParams(res=1820, run='tng', redshift=0.0)
     print(sP.simName)
 
-    gas_dens = cosmo.load.snapshotSubset(sP, 'gas', 'dens')
-    gas_sfr  = cosmo.load.snapshotSubset(sP, 'gas', 'sfr')
+    gas_dens = sP.snapshotSubsetP('gas', 'dens')
+    gas_sfr  = sP.snapshotSubsetP('gas', 'sfr')
 
     gas_dens = sP.units.codeDensToPhys(gas_dens, cgs=True, numDens=True)
     w_sf = np.where(gas_sfr > 0.0)
@@ -1036,7 +1035,7 @@ def miscGasStats():
 
     gas_dens = None
 
-    gas_rcell = cosmo.load.snapshotSubset(sP, 'gas', 'cellsize')
+    gas_rcell = sP.snapshotSubsetP( 'gas', 'cellsize')
     gas_rcell = sP.units.codeLengthToKpc(gas_rcell)
 
     print('median gas cell radius [pkpc]: ', np.median(gas_rcell))
@@ -1047,7 +1046,7 @@ def checkSublinkIntermediateFiles():
     """ Check _first* and _second* descendant links. """
     sP = simParams(res=2500,run='tng')
     subLinkPath = '/home/extdylan/data/sims.TNG/L205n2500TNG_temp/postprocessing/trees/SubLink/'
-    snaps = cosmo.util.snapNumToRedshift(sP, all=True)
+    snaps = sP.snapNumToRedshift(all=True)
     print('num snaps: %d' % snaps.size)
 
     nSubgroups = np.zeros( snaps.size, dtype='int64' )
@@ -1055,7 +1054,7 @@ def checkSublinkIntermediateFiles():
     print('get subgroup dimensions from actual run')
     for i in range(51): #range(snaps.size):
         sP.setSnap(i)
-        nSubgroups[i] = cosmo.load.groupCatHeader(sP)['Nsubgroups_Total']
+        nSubgroups[i] = sP.groupCatHeader()['Nsubgroups_Total']
         print(' [%2d] %d' % (i,nSubgroups[i]))
 
     print('verify sublink')
@@ -1093,7 +1092,6 @@ def testOffsets():
     sP = simParams(res=455,run='tng',redshift=0.0)
 
     import illustris_python as il
-    from cosmo.util import periodicDists
 
     massBin = [0.8e12,1.2e12]
     shFields = ['SubhaloMass','SubhaloPos','SubhaloLenType','SubhaloGrNr']
@@ -1113,11 +1111,11 @@ def testOffsets():
             dm = il.snapshot.loadSubhalo(basePath,snapNum,id,'dm',['Coordinates'])
             stars = il.snapshot.loadSubhalo(basePath,snapNum,id,'stars',['Coordinates'])
 
-            dists = periodicDists(subhalos['SubhaloPos'][id,:], dm, sP)
+            dists = sP.periodicDists(subhalos['SubhaloPos'][id,:], dm)
             print('[%d] dm mindist: %g maxdist: %g' % (id,dists.min(), dists.max()))            
             assert dists.min() <= 2.0
 
-            dists = periodicDists(subhalos['SubhaloPos'][id,:], stars, sP)
+            dists = sP.periodicDists(subhalos['SubhaloPos'][id,:], stars)
             print('[%d] st mindist: %g maxdist: %g' % (id,dists.min(), dists.max()))            
             assert dists.min() <= 2.0
 
@@ -1128,7 +1126,7 @@ def testOffsets():
             dm = il.snapshot.loadHalo(basePath,snapNum,haloID,'dm',['Coordinates'])
             #stars = il.snapshot.loadHalo(basePath,snapNum,haloID,'stars',['Coordinates'])
 
-            dists = periodicDists(halos['GroupPos'][haloID,:], dm, sP)
+            dists = sP.periodicDists(halos['GroupPos'][haloID,:], dm)
             print('mindist: %g maxdist: %g' % (dists.min(), dists.max()))
             assert dists.min() <= 1.0
 
@@ -1145,7 +1143,7 @@ def domeTestData():
     sP = simParams(res=1820,run='illustris',redshift=0.0)
     shFields = ['SubhaloPos','SubhaloVel','SubhaloMass','SubhaloSFR']
 
-    gc = cosmo.load.groupCat(sP, fieldsSubhalos=shFields)
+    gc = sP.groupCat(fieldsSubhalos=shFields)
 
     def _writeAttrs(f):
         # header
@@ -1186,10 +1184,10 @@ def domeTestData():
         f = h5py.File(fileName,'w')
 
         for key in shFields:
-            f[key] = gc['subhalos'][key]
-            f[key].attrs['Min'] = gc['subhalos'][key].min()
-            f[key].attrs['Max'] = gc['subhalos'][key].max()
-            f[key].attrs['Mean'] = gc['subhalos'][key].mean()
+            f[key] = gc[key]
+            f[key].attrs['Min'] = gc[key].min()
+            f[key].attrs['Max'] = gc[key].max()
+            f[key].attrs['Mean'] = gc[key].mean()
 
         _writeAttrs(f)
         f.close()
@@ -1201,17 +1199,17 @@ def domeTestData():
 
     # "1 million points" (10^9 halo mass cut)
     gcNew = {}
-    gcNew['subhalos'] = {}
+    gcNew = {}
 
-    w = np.where(sP.units.codeMassToLogMsun(gc['subhalos']['SubhaloMass']) >= 9.0)
+    w = np.where(sP.units.codeMassToLogMsun(gc['SubhaloMass']) >= 9.0)
     for key in shFields:
-        if gc['subhalos'][key].ndim == 1:
-            gcNew['subhalos'][key] = gc['subhalos'][key][w]
+        if gc[key].ndim == 1:
+            gcNew[key] = gc[key][w]
         else:
-            gcNew['subhalos'][key] = np.zeros( (len(w[0]),gc['subhalos'][key].shape[1]), 
-                                            dtype=gc['subhalos'][key].dtype )
-            for i in range(gc['subhalos'][key].shape[1]):
-                gcNew['subhalos'][key][:,i] = gc['subhalos'][key][w,i]
+            gcNew[key] = np.zeros( (len(w[0]),gc[key].shape[1]), 
+                                            dtype=gc[key].dtype )
+            for i in range(gc[key].shape[1]):
+                gcNew[key][:,i] = gc[key][w,i]
 
     if 1:
         fileName = "domeTestData_1million_%s_z%d.hdf5" % (sP.simName,sP.redshift)
@@ -1298,10 +1296,10 @@ def checkIllustrisMetalRatioVsSolar():
     indRange = [0,500000]
 
     ion = cloudyIon(sP, redshiftInterp=True)
-    metal = cosmo.load.snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
+    metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
 
     metal_mass_fraction_1 = (metal/ion.solar_Z) * ion._solarMetalAbundanceMassRatio(element)
-    metal_mass_fraction_2 = 1.0*cosmo.load.snapshotSubset(sP, 'gas', 'metals_'+element, indRange=indRange)
+    metal_mass_fraction_2 = 1.0*sP.snapshotSubset('gas', 'metals_'+element, indRange=indRange)
     metal_mass_fraction_3 = ion._solarMetalAbundanceMassRatio(element)
 
     metal_1b = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRange, assumeSolarAbunds=True)
@@ -1379,12 +1377,12 @@ def checkTracerLoad():
     sP_new.snap = 99 #5 # new version of snap4 moved to fake snap5
 
     # load group catalogs
-    gc_old = cosmo.load.groupCat(sP_old, fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
-    gc_new = cosmo.load.groupCat(sP_new, fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
+    gc_old = sP_old.groupCat(fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
+    gc_new = sP_new.groupCat(fieldsSubhalos=fieldsSubs, fieldsHalos=fieldsGroups)
 
     # load snapshots
-    h_new = cosmo.load.snapshotHeader(sP_new)
-    h_old = cosmo.load.snapshotHeader(sP_old)
+    h_new = sP_new.snapshotHeader()
+    h_old = sP_old.snapshotHeader()
     assert (h_new['NumPart'] != h_old['NumPart']).sum() == 0
 
     snap_old = {}
@@ -1399,8 +1397,8 @@ def checkTracerLoad():
         snap_new[ptName] = {}
 
         for key in fieldList:
-            snap_old[ptName][key] = cosmo.load.snapshotSubset(sP_old, ptName, key)
-            snap_new[ptName][key] = cosmo.load.snapshotSubset(sP_new, ptName, key)
+            snap_old[ptName][key] = sP_old.snapshotSubset(ptName, key)
+            snap_new[ptName][key] = sP_new.snapshotSubset(ptName, key)
 
     # compare
     #assert gc_old['halos']['count'] == gc_new['halos']['count']
@@ -1501,7 +1499,7 @@ def checkLastStarTimeIllustris():
     """ Plot histogram of LST. """
     sP = simParams(res=1820, run='illustris', redshift=0.0)
 
-    x = cosmo.load.snapshotSubset(sP, 'tracer', 'tracer_laststartime')
+    x = sP.snapshotSubsetP('tracer', 'tracer_laststartime')
 
     fig = plt.figure(figsize=(14,7))
     ax = fig.add_subplot(111)
@@ -1520,7 +1518,6 @@ def checkLastStarTimeIllustris():
 
 def enrichChecks():
     """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
-    from cosmo.load import snapshotSubset
     from util import simParams
 
     # config
@@ -1537,8 +1534,8 @@ def enrichChecks():
 
     # (1) - enrichment counter
     if 0:
-        ec1 = snapshotSubset(sP1,'stars','GFM_EnrichCount')
-        ec2 = snapshotSubset(sP2,'stars','GFM_EnrichCount')
+        ec1 = sP1.snapshotSubset('stars','GFM_EnrichCount')
+        ec2 = sP2.snapshotSubset('stars','GFM_EnrichCount')
 
         fig = plt.figure(figsize=(14,7))
 
@@ -1559,8 +1556,8 @@ def enrichChecks():
 
     # (2) final stellar masses
     if 0:
-        mstar1 = snapshotSubset(sP1,'stars','mass')
-        mstar2 = snapshotSubset(sP2,'stars','mass')
+        mstar1 = sP1.snapshotSubset('stars','mass')
+        mstar2 = sP2.snapshotSubset('stars','mass')
         mstar1 = sP1.units.codeMassToLogMsun(mstar1)
         mstar2 = sP2.units.codeMassToLogMsun(mstar2)
 
@@ -1586,8 +1583,8 @@ def enrichChecks():
 
     # (2b) initial stellar masses
     if 1:
-        mstar1 = snapshotSubset(sP1,'stars','mass_ini')
-        mstar2 = snapshotSubset(sP2,'stars','mass_ini')
+        mstar1 = sP1.snapshotSubset('stars','mass_ini')
+        mstar2 = sP2.snapshotSubset('stars','mass_ini')
         mstar1 = np.log10( mstar1 / sP1.targetGasMass )
         mstar2 = np.log10( mstar2 / sP2.targetGasMass )
 
@@ -1611,8 +1608,8 @@ def enrichChecks():
 
     # (3) final gas metallicities
     if 0:
-        zgas1 = snapshotSubset(sP1,'gas','GFM_Metallicity')
-        zgas2 = snapshotSubset(sP2,'gas','GFM_Metallicity')
+        zgas1 = sP1.snapshotSubset('gas','GFM_Metallicity')
+        zgas2 = sP2.snapshotSubset('gas','GFM_Metallicity')
         zgas1 = np.log10(zgas1)
         zgas2 = np.log10(zgas2)
 
@@ -1636,10 +1633,10 @@ def enrichChecks():
 
     # (4) final/initial stellar masses
     if 0:
-        mstar1_final = snapshotSubset(sP1,'stars','mass')
-        mstar2_final = snapshotSubset(sP2,'stars','mass')
-        mstar1_ini = snapshotSubset(sP1,'stars','mass_ini')
-        mstar2_ini = snapshotSubset(sP2,'stars','mass_ini')
+        mstar1_final = sP1.snapshotSubset('stars','mass')
+        mstar2_final = sP2.snapshotSubset('stars','mass')
+        mstar1_ini = sP1.snapshotSubset('stars','mass_ini')
+        mstar2_ini = sP2.snapshotSubset('stars','mass_ini')
 
         ratio1 = mstar1_final / mstar1_ini
         ratio2 = mstar2_final / mstar2_ini
@@ -1672,7 +1669,7 @@ def ipIOTest():
 
     for partType in ['gas','dm','tracerMC','stars','bhs']:
         # get field names
-        with h5py.File(cosmo.load.snapPath(sP.simPath,sP.snap)) as f:
+        with h5py.File(sP.snapPath(sP.snap)) as f:
             gName = 'PartType'+str(partTypeNum(partType))
 
             fields = []
@@ -1681,7 +1678,7 @@ def ipIOTest():
 
         for field in fields:
             # load
-            x = cosmo.load.snapshotSubset(sP, partType, field)
+            x = sP.snapshotSubset(partType, field)
 
             print('%s : %s (%g %g)' % (partType,field,x.min(),x.max()))
 
@@ -1729,15 +1726,15 @@ def checkWindPartType():
         sP1 = simParams(run='winds_save_on',res=128,snap=i)
         sP2 = simParams(run='winds_save_off',res=128,snap=i)
 
-        h1 = cosmo.load.snapshotHeader(sP1)
-        h2 = cosmo.load.snapshotHeader(sP2)   
+        h1 = sP1.snapshotHeader()
+        h2 = sP2.snapshotHeader()   
 
         if h1['NumPart'][2]+h1['NumPart'][4] != h2['NumPart'][4]:
             raise Exception("count mismatch")
 
         # load group and subhalo LenTypes and compare
-        gc1 = cosmo.load.groupCat(sP1, fieldsHalos=['GroupLenType'], fieldsSubhalos=['SubhaloLenType'])
-        gc2 = cosmo.load.groupCat(sP2, fieldsHalos=['GroupLenType'], fieldsSubhalos=['SubhaloLenType'])
+        gc1 = sP1.groupCat(fieldsHalos=['GroupLenType'], fieldsSubhalos=['SubhaloLenType'])
+        gc2 = sP2.groupCat(fieldsHalos=['GroupLenType'], fieldsSubhalos=['SubhaloLenType'])
 
         gc1_halos_len24 = gc1['halos'][:,2] + gc1['halos'][:,4]
 
@@ -1747,9 +1744,9 @@ def checkWindPartType():
             print(" Global counts ok.")
 
         # global id match
-        ids1_wind_g = cosmo.load.snapshotSubset(sP1, 2, fields='ids')
-        ids2_pt4_g  = cosmo.load.snapshotSubset(sP2, 4, fields='ids')
-        sft2_pt4_g  = cosmo.load.snapshotSubset(sP2, 4, fields='sftime')
+        ids1_wind_g = sP1.snapshotSubset(2, fields='ids')
+        ids2_pt4_g  = sP2.snapshotSubset(4, fields='ids')
+        sft2_pt4_g  = sP2.snapshotSubset(4, fields='sftime')
 
         w = np.where(sft2_pt4_g <= 0.0)
 
@@ -1761,25 +1758,25 @@ def checkWindPartType():
         continue
 
         # halo by halo, load wind and star IDs and compare
-        gch1 = cosmo.load.groupCatHeader(sP1)
-        gch2 = cosmo.load.groupCatHeader(sP2)
+        gch1 = sP1.groupCatHeader()
+        gch2 = sP2.groupCatHeader()
         print(' Total groups/subhalos: ' + str(gch1['Ngroups_Total']) + ' ' + str(gch1['Nsubgroups_Total']))
 
         for j in [4]: #gch1['Ngroups_Total']):
             if j % 100 == 0:
                 print(j)
 
-            ids1_wind = cosmo.load.snapshotSubset(sP1, 2, fields='ids', haloID=j)
-            #ids1_star = cosmo.load.snapshotSubset(sP1, 4, fields='ids', haloID=j)
-            ids2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='ids', haloID=j)
-            sft2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='sftime', haloID=j)
+            ids1_wind = sP1.snapshotSubset(2, fields='ids', haloID=j)
+            #ids1_star = sP1.snapshotSubset(4, fields='ids', haloID=j)
+            ids2_pt4  = sP2.snapshotSubset(4, fields='ids', haloID=j)
+            sft2_pt4  = sP2.snapshotSubset(4, fields='sftime', haloID=j)
 
             w = np.where(sft2_pt4 <= 0.0)
             if not np.array_equal(ids1_wind,ids2_pt4[w]):
                 print(len(ids1_wind))
                 print(len(w[0]))
-                g1 = cosmo.load.groupCatSingle(sP1, haloID=j)
-                g2 = cosmo.load.groupCatSingle(sP2, haloID=j)
+                g1 = sP1.groupCatSingle(haloID=j)
+                g2 = sP2.groupCatSingle(haloID=j)
                 print(gc1['halos'][j,:])
                 print(gc2['halos'][j,:])
                 raise Exception("fail")
@@ -1790,10 +1787,10 @@ def checkWindPartType():
         #    if j % 100 == 0:
         #        print j
 
-        #    ids1_wind = cosmo.load.snapshotSubset(sP1, 2, fields='ids', subhaloID=j)
-        #    #ids1_star = cosmo.load.snapshotSubset(sP1, 4, fields='ids', subhaloID=j)
-        #    ids2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='ids', subhaloID=j)
-        #    sft2_pt4  = cosmo.load.snapshotSubset(sP2, 4, fields='sftime', subhaloID=j)
+        #    ids1_wind = sP1.snapshotSubset(2, fields='ids', subhaloID=j)
+        #    #ids1_star = sP1.snapshotSubset(4, fields='ids', subhaloID=j)
+        #    ids2_pt4  = sP2.snapshotSubset(4, fields='ids', subhaloID=j)
+        #    sft2_pt4  = sP2.snapshotSubset(4, fields='sftime', subhaloID=j)
 
         #    w = np.where(sft2_pt4 <= 0.0)
         #    if not np.array_equal(ids1_wind,ids2_pt4[w]):

@@ -12,10 +12,9 @@ import time
 from os.path import isfile, isdir
 from os import mkdir
 
-import cosmo.load
 from util.helper import iterable, nUnique
 from cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
-from cosmo.util import periodicDists, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
+from cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
 debug = False # enable expensive debug consistency checks and verbose output
 
@@ -386,7 +385,7 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
         # consider each parent type
         for parPartType in parPartTypes:
             # load IDs of this type in the requested object
-            parIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', haloID=haloID, subhaloID=subhaloID)
+            parIDsType = sP.snapshotSubset(parPartType, 'id', haloID=haloID, subhaloID=subhaloID)
 
             # no particles of this type in the snapshot
             if isinstance(parIDsType,dict) and parIDsType['count'] == 0:
@@ -406,9 +405,8 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
                 # (A) (we use this as a check, but could instead use it as a given and then avoid this PT 
                 # loop, as well as the outer loop over subhalos, with a concat->locate->split approach, since 
                 # we would then know ahead of time the number of tracers in each type/subhalo)
-                if cosmo.load.snapHasField(sP, 'tracer', 'NumTracers'):
-                    numTr = cosmo.load.snapshotSubset(sP, parPartType, 'numtr', 
-                                                      haloID=haloID, subhaloID=subhaloID)
+                if sP.snapHasField('tracer', 'NumTracers'):
+                    numTr = sP.snapshotSubset(parPartType, 'numtr', haloID=haloID, subhaloID=subhaloID)
                     if numTr.sum() != trIDs.size:
                         raise Exception('Tracer number count mismatch.')
 
@@ -423,13 +421,13 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
                         raise Exception('Inconsistency in tracer counts.')
 
                 # (C): verify self consistency of par -> tr -> par
-                debugTracerIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'TracerID')
+                debugTracerIDs = sP.snapshotSubsetP('tracer', 'TracerID')
                 debugTracerInds = match(debugTracerIDs, trIDs, uniq=True)
-                debugTracerParIDs = cosmo.load.snapshotSubset(sP, 'tracer', 'ParentID', inds=debugTracerInds)
+                debugTracerParIDs = sP.snapshotSubset('tracer', 'ParentID', inds=debugTracerInds)
                 debugTracerPars = mapParentIDsToIndsByType(sP, debugTracerParIDs)
                 debugwType = np.where( debugTracerPars['parentTypes'] == sP.ptNum(parPartType) )[0]
                 debugIndsType = debugTracerPars['parentInds'][debugwType]
-                debugTracerParIDsType = cosmo.load.snapshotSubset(sP, parPartType, 'id', inds=debugIndsType)
+                debugTracerParIDsType = sP.snapshotSubset(parPartType, 'id', inds=debugIndsType)
 
                 # in this direction, we have acquired duplicate parents and lost parents with no tracers
                 debugTracerParIDsType_uniq = np.unique(debugTracerParIDsType)
@@ -478,6 +476,9 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         ParentID = ParentID[ParentIDSortInds]
 
     # consider each parent type
+    nGroups = sP.numHalos
+    nSubhalos = sP.numSubhalos
+
     for parPartType in parPartTypes:
         # determine index range of particles of this type
         ptNum = sP.ptNum(parPartType)
@@ -487,20 +488,20 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
 
         if halos:
             # in FoFs (contiguous at the start of each snap)
-            gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])
-            haloOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+            gc = sP.groupCat(fieldsHalos=['GroupLenType'])
+            haloOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
-            nPartTotInHalosThisType = np.sum(gc['halos'][:,ptNum])
+            nPartTotInHalosThisType = np.sum(gc[:,ptNum])
             indRange = [0,int(nPartTotInHalosThisType-1)]
 
             if debug:
                 offset = 0
                 indsDebug = np.zeros( nPartTotInHalosThisType, dtype='int64' ) - 1
 
-                for i in range(gc['header']['Ngroups_Total']):
+                for i in range(nGroups):
                     # slice starting/ending indices for stars local to this FoF
                     i0 = haloOffsetType[i,ptNum]
-                    i1 = i0 + gc['halos'][i,ptNum]
+                    i1 = i0 + gc[i,ptNum]
 
                     if i1 == i0:
                         continue # zero length of this type
@@ -515,17 +516,17 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
 
         if subhalos:
             # in subhalos (make non-contiguous index list)
-            gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])
-            subhaloOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+            gc = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
+            subhaloOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
-            nPartTotInSubhalosThisType = np.sum(gc['subhalos'][:,ptNum])
+            nPartTotInSubhalosThisType = np.sum(gc[:,ptNum])
             inds = np.zeros( nPartTotInSubhalosThisType, dtype='int64' )
             offset = 0
 
-            for i in range(gc['header']['Nsubgroups_Total']):
+            for i in range(nSubhalos):
                 # slice starting/ending indices for stars local to this FoF
                 i0 = subhaloOffsetType[i,ptNum]
-                i1 = i0 + gc['subhalos'][i,ptNum]
+                i1 = i0 + gc[i,ptNum]
 
                 if i1 == i0:
                     continue # zero length of this type
@@ -720,7 +721,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     if not indsType.size:
                         continue
 
-                    debugTypeIDs = cosmo.load.snapshotSubset(sP, ptName, 'id', inds=indsType)
+                    debugTypeIDs = sP.snapshotSubset(ptName, 'id', inds=indsType)
                     debugTracerParIDs[offset:offset+debugTypeIDs.size] = debugTypeIDs
                     offset += debugTypeIDs.size
 
@@ -744,12 +745,12 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     r[field][m,:] = np.zeros( tracerSearchIDs.size, dtype='int32' ) - 1
                     continue
 
-                SubhaloLenType = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
-                SnapOffsetsSubhalo = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+                SubhaloLenType = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
+                SnapOffsetsSubhalo = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
             if field == 'halo_id':
-                GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
-                SnapOffsetsGroup = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup'] 
+                GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
+                SnapOffsetsGroup = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup'] 
 
             if field in halo_rel_fields and not sP.isZoom:
                 # for global catalogs (tracers spanning many/all halos) we have pre-computed the 
@@ -759,9 +760,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 fieldsSH = ['SubhaloPos','SubhaloVel','SubhaloGrNr']
                 fieldsH = ['Group_R_Crit200','Group_M_Crit200']
 
-                gcHalo = cosmo.load.groupCat(sP, fieldsSubhalos=fieldsSH, fieldsHalos=fieldsH)
+                gcHalo = sP.groupCat(fieldsSubhalos=fieldsSH, fieldsHalos=fieldsH)
 
-                ac = cosmo.load.auxCat(sP, 'Subhalo_StellarMeanVel')
+                ac = sP.auxCat('Subhalo_StellarMeanVel')
                 Subhalo_StellarMeanVel = sP.units.particleCodeVelocityToKms(ac['Subhalo_StellarMeanVel'])
 
             # load parent cells/particles by type
@@ -865,7 +866,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 # compute (the 4 halo properties can be scalar or arrays of the same size of indsType)
                 if field in ['rad','rad_rvir']:
                     # radial distance from halo center, optionally normalized by rvir (r200crit)
-                    val = periodicDists(haloCenter, data['pos'], sP) # code units (e.g. ckpc/h)
+                    val = sP.periodicDists(haloCenter, data['pos']) # code units (e.g. ckpc/h)
                     
                     if field == 'rad_rvir':
                         val /= haloVirRad # normalized, unitless
@@ -929,7 +930,7 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
 
     for i, subhaloID in enumerate(subhaloIDs):
         if debug:
-            shDetails = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+            shDetails = sP.groupCatSingle(subhaloID=subhaloID)
             print('['+str(i).zfill(3)+'] subhaloID = '+str(subhaloID) + \
                   '  LenType: '+' '.join([str(l) for l in shDetails['SubhaloLenType']]))
 
@@ -1009,9 +1010,7 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
 
     if fullHaloTracers:
         # get child tracers of all particle types in entire parent halo
-        gc = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
-        haloID = gc['SubhaloGrNr']
-
+        haloID = sP.groupCatSingle(subhaloID=subhaloID)['SubhaloGrNr']
         trIDs = subhaloTracerChildren(sP, haloID=haloID)
     else:
         # get child tracers of all particle types in subhalo only
@@ -1078,7 +1077,7 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         ParentID = ParentID[ParentIDSortInds]
 
     # allocate counts
-    h = cosmo.load.groupCatHeader(sP)
+    h = sP.groupCatHeader()
     if halos: nObjs = h['Ngroups_Total']
     if subhalos: nObjs = h['Nsubgroups_Total']
 
@@ -1091,13 +1090,13 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
 
     # load offsets
     if halos:
-        gc = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
-        objOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+        gc = sP.groupCat(fieldsHalos=['GroupLenType'])
+        objOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
     if subhalos:
-        gc = cosmo.load.groupCat(sP, fieldsSubhalos=['SubhaloLenType'])['subhalos']
-        groupNsubs = cosmo.load.groupCat(sP, fieldsHalos=['GroupNsubs'])['halos']
-        objOffsetType = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsSubhalo']
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
+        groupNsubs = sP.groupCat(fieldsHalos=['GroupNsubs'])
+        objOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
     # consider each parent type
     for parPartType in defParPartTypes:
@@ -1203,8 +1202,8 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
 
         par_indtype = par_indtype['parent_indextype']
 
-        GroupLenType = cosmo.load.groupCat(sP, fieldsHalos=['GroupLenType'])['halos']
-        SnapOffsetsGroup = cosmo.load.groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
+        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
+        SnapOffsetsGroup = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
         trVals = {}
         trVals['halo_id'] = np.zeros( trIDs.size, dtype='int32' )
@@ -1223,7 +1222,7 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
         assert np.count_nonzero( np.isnan(trVals['halo_id']) ) == 0
 
     # map the FoF IDs at z=0 into subhalo_ids with GroupFirstSub
-    GroupFirstSub = cosmo.load.groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
+    GroupFirstSub = sP.groupCat(sP, fieldsHalos=['GroupFirstSub'])
     trVals['subhalo_id'] = GroupFirstSub[trVals['halo_id']]
 
     # debug: how many FoF's have GroupFirstSub==-1 already at z=0 (these by definition will be 
@@ -1394,7 +1393,7 @@ def checkTracerMeta(sP):
 
     # load
     meta = globalAllTracersTimeEvo(sP, 'meta', halos=True)
-    h = cosmo.load.groupCatHeader(sP)
+    h = sP.groupCatHeader()
     
     # load and sort the parent IDs of all tracers in this snapshot
     ParentIDorig = sP.snapshotSubsetP('tracer', 'ParentID')
@@ -1438,7 +1437,7 @@ def checkTracerMeta(sP):
             assert np.array_equal(np.sort(trIDs_subhalo_pt),np.sort(trIDs_subhalo_check[pt]))
 
             # check first five individual parents ordered children
-            subhalo_pt_ids = cosmo.load.snapshotSubset(sP, pt, 'id', subhaloID=subhaloID)
+            subhalo_pt_ids = sP.snapshotSubset(pt, 'id', subhaloID=subhaloID)
             if isinstance(subhalo_pt_ids,dict) and subhalo_pt_ids['count'] == 0:
                 continue
 

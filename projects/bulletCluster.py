@@ -13,16 +13,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import leastsq
 from os.path import isfile
 
-from cosmo.load import groupCat, groupCatSingle, snapshotSubset
-from cosmo.util import periodicDists
-
 def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
     """ Calculate relative velocity between Nth most massive satellite and central halo, in units 
     of V200 of the halo. (sub_N=1 means the 1st, most massive, satellite). """
     groupFields   = ['Group_M_Crit200','Group_R_Crit200','GroupFirstSub','GroupNsubs']
     subhaloFields = ['SubhaloVel','SubhaloPos','SubhaloMass']
 
-    gc = groupCat(sP, fieldsSubhalos=subhaloFields, fieldsHalos=groupFields)
+    gc = sP.groupCat(fieldsSubhalos=subhaloFields, fieldsHalos=groupFields)
 
     haloMasses = sP.units.codeMassToMsun(gc['halos']['Group_M_Crit200'])
 
@@ -157,20 +154,20 @@ def clusterEntropyCores():
         # loop over halo selection
         for i, haloID in enumerate(haloIDs):
             # load
-            halo = groupCatSingle(sP, haloID=haloID)
-            pos = snapshotSubset(sP, 'gas', 'pos', haloID=haloID)
+            halo = sP.groupCatSingle(haloID=haloID)
+            pos = sP.snapshotSubset('gas', 'pos', haloID=haloID)
 
-            rr = periodicDists(halo['GroupPos'], pos, sP)
+            rr = sP.periodicDists(halo['GroupPos'], pos)
             rr = sP.units.codeLengthToKpc(rr)
             rr = np.log10(rr)
 
             # load entropy, note: xray version: K(r) = k * T_x(r) * n_e(r)^{-2/3}
-            yvals = snapshotSubset(sP, 'gas', 'entr', haloID=haloID)
+            yvals = sP.snapshotSubset('gas', 'entr', haloID=haloID)
             yvals = 10.0**yvals / sP.units.boltzmann_keV # [K cm^2] -> [keV cm^2]
 
             # exclude sfr>0 and log(T)<5.8 gas
-            sfr = snapshotSubset(sP, 'gas', 'sfr', haloID=haloID)
-            temp = snapshotSubset(sP, 'gas', 'temp', haloID=haloID)
+            sfr = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
+            temp = sP.snapshotSubset('gas', 'temp', haloID=haloID)
 
             w = np.where( (sfr == 0.0) & (temp >= 5.8) )
             rr = rr[w]
@@ -405,7 +402,7 @@ def clusterEntropyCores():
     # (D) individual rad profiles
     if 1:
         for i, haloID in enumerate(haloIDs):
-            #halo = groupCatSingle(sP, haloID=haloID)
+            #halo = sP.groupCatSingle(haloID=haloID)
             fig = plt.figure(figsize=(14,10))
             ax = fig.add_subplot(111)
 
@@ -440,7 +437,7 @@ def barnes_check1():
 
     # z=0 TNG300-1
     sP = simParams(res=2500, run='tng', redshift=0.0)
-    m500 = cosmo.load.groupCat(sP, fieldsSubhalos=['mhalo_500_log'])
+    m500 = sP.groupCat(fieldsSubhalos=['mhalo_500_log'])
     w500 = np.where(10.0**m500 >= 2e14)
 
     # redshifts
@@ -451,7 +448,7 @@ def barnes_check1():
     for i, z in enumerate(zz):
         print(z)
         sPloc = simParams(res=2500, run='tng', redshift=z)
-        m500loc = cosmo.load.groupCat(sPloc, fieldsSubhalos=['mhalo_500'])
+        m500loc = sPloc.groupCat(fieldsSubhalos=['mhalo_500'])
         w = np.where(m500loc >= 2e14)
         med_sim[i] = np.log10( np.median( m500loc[w] ) )
         w = np.where( np.abs(data['z'] - z) <= 0.05 )

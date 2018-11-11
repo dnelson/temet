@@ -12,8 +12,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from util.loadExtern import *
 from util.helper import running_median, running_histogram, logZeroNaN, iterable
-from cosmo.load import groupCat, groupCatSingle, auxCat, groupCatHasField, snapHasField, snapshotHeader
-from cosmo.util import validSnapList, periodicDists
 from plot.sizes import galaxySizes, galaxyHISizeMass
 from plot.cosmoGeneral import addRedshiftAgeAxes
 from plot.general import plotPhaseSpace2D
@@ -74,8 +72,8 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
         print('SMHM (z=%d): %s (z=%d)' % (dataRedshift,sP.simName,sP.redshift))
 
         if sP.isZoom:
-            gc = groupCatSingle(sP, subhaloID=sP.zoomSubhaloID)
-            gh = groupCatSingle(sP, haloID=gc['SubhaloGrNr'])
+            gc = sP.groupCatSingle(subhaloID=sP.zoomSubhaloID)
+            gh = sP.groupCatSingle(haloID=gc['SubhaloGrNr'])
 
             # halo mass definition
             xx_code = gh['Group_M_Crit200'] #gc['SubhaloMass'] 
@@ -93,8 +91,8 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
 
         else:
             # fullbox:
-            gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
-              fieldsSubhalos=['SubhaloMass','SubhaloMassType',
+            gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'], 
+                             fieldsSubhalos=['SubhaloMass','SubhaloMassType',
                               'SubhaloMassInRadType','SubhaloMassInHalfRadType'])
 
             label = sP.simName + ' z=%d' % sP.redshift
@@ -113,7 +111,7 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
             if use30kpc:
                 # load auxcat
                 field = 'Subhalo_Mass_30pkpc_Stars'
-                ac = auxCat(sP, fields=[field])
+                ac = sP.auxCat(fields=[field])
 
                 yy = ac[field][w] / xx_code / (sP.omega_b/sP.omega_m)
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
@@ -221,7 +219,7 @@ def sfrAvgVsRedshift(sPs, pdf):
     # calculate and cache from simulations function
     def _loadSfrAvg(sP, haloMassBins, haloBinSize, maxNumSnaps=60):
         """ Helper function to calculate average SFR in halo mass bins across snapshots. """
-        snaps = validSnapList(sP, maxNum=maxNumSnaps)
+        snaps = sP.validSnapList(maxNum=maxNumSnaps)
 
         saveFilename = sP.derivPath + 'sfr_avgs_%d-%d_%d.hdf5' % (snaps.min(),snaps.max(),len(snaps))
 
@@ -261,7 +259,7 @@ def sfrAvgVsRedshift(sPs, pdf):
             print(' snap %d [%d of %d]' % (snap,j,len(snaps)))
             sP.setSnap(snap)
 
-            gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=sfrFields)
+            gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=sfrFields)
 
             if not gc['halos']['count']:
                 continue # high redshift
@@ -417,7 +415,7 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
                     print(snap)
                     sP.setSnap(snap)
                     gc = sP.groupCat(fieldsSubhalos=['SubhaloSFRinRad'])
-                    sfrd[snap] = gc['subhalos'].sum() / sP.boxSizeCubicComovingMpc # msun/yr/mpc^3
+                    sfrd[snap] = gc.sum() / sP.boxSizeCubicComovingMpc # msun/yr/mpc^3
                     z[snap] = sP.redshift
 
                 # save
@@ -489,8 +487,8 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
 
         sP.setRedshift(simRedshift)
 
-        numBHs = snapshotHeader(sP)['NumPart'][sP.ptNum('bhs')]
-        if not groupCatHasField(sP, 'Subhalo', 'SubhaloBHMass') or numBHs == 0:
+        numBHs = sP.snapshotHeader()['NumPart'][sP.ptNum('bhs')]
+        if not sP.groupCatHasField('Subhalo', 'SubhaloBHMass') or numBHs == 0:
             print('BHMass: %s [SKIP: sim has no BHs]' % sP.simName)
             continue
 
@@ -500,7 +498,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
         if vsBulgeMass: fieldsSubhalos.append('SubhaloMassInHalfRadType')
         if twiceR: fieldsSubhalos.append('SubhaloMassInRadType')
 
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=fieldsSubhalos)
+        gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=fieldsSubhalos)
 
         # centrals only
         wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
@@ -518,7 +516,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
             acField = 'Subhalo_StellarRotation_1rhalfstars'
             acIndex = 2
 
-            ac = auxCat(sP, fields=[acField])
+            ac = sP.auxCat(fields=[acField])
             ac = np.squeeze( ac[acField][w,acIndex] ) # counter-rotating mass fraction relative to total
             ac[np.where(np.isnan(ac))] = 0.0 # set NaN to zero (consistent with groupcat)
 
@@ -540,7 +538,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
         if actualLargestBHMasses:
             # load auxCat (fix this problem by using the most massive BH in each subhalo)
             acField = 'Subhalo_BH_Mass_largest'
-            ac = auxCat(sP, fields=[acField])[acField]
+            ac = sP.auxCat(fields=[acField])[acField]
             ac[np.where(np.isnan(ac))] = 0.0 # set NaN to zero (consistent with groupcat)
             yy = ac[w]
 
@@ -680,7 +678,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
             print('SMF: '+sP.simName+' (z=%.1f)' % redshift)
             sP.setRedshift(redshift)
 
-            gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=mts)
+            gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=mts)
 
             # centrals only
             if centralsOnly:
@@ -692,7 +690,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                 if cutClumps:
                     extraFieldsHalo = ['GroupPos','Group_R_Crit200']
                     extraFields = ['SubhaloMass', 'SubhaloPos', 'SubhaloGrNr', 'SubhaloLenType']
-                    gc2 = groupCat(sP, fieldsHalos=extraFieldsHalo, fieldsSubhalos=extraFields)
+                    gc2 = sP.groupCat(fieldsHalos=extraFieldsHalo, fieldsSubhalos=extraFields)
 
                     massFracStars = gc['subhalos']['SubhaloMassType'][:,sP.ptNum('stars')] / \
                                     gc2['subhalos']['SubhaloMass']
@@ -711,7 +709,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                     ww = np.where(parentR200 == 0.0)
                     parentR200[ww] = 1e-10 # make finite and small s.t. normalized dist is outside cut
 
-                    radialDist = periodicDists( gc2['subhalos']['SubhaloPos'], parentPos, sP)
+                    radialDist = sP.periodicDists( gc2['subhalos']['SubhaloPos'], parentPos)
                     radialDistNormedByParentR200 = radialDist / parentR200
 
                     wExclude = np.where( (numDM < 10) & \
@@ -735,15 +733,15 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                 # temporary Mstar selection
                 if use30kpc:
                     field = 'Subhalo_Mass_30pkpc_Stars'
-                    ac = auxCat(sP, fields=[field])
+                    ac = sP.auxCat(fields=[field])
                     xx = sP.units.codeMassToLogMsun(ac[field][w])
                 if use30H:
                     field = 'Subhalo_Mass_min_30pkpc_2rhalf_Stars'
-                    ac = auxCat(sP, fields=[field])
+                    ac = sP.auxCat(fields=[field])
                     xx = sP.units.codeMassToLogMsun(ac[field][w])
                 if useP10:
                     field = 'Subhalo_Mass_puchwein10_Stars'
-                    ac = auxCat(sP, fields=[field])
+                    ac = sP.auxCat(fields=[field])
                     xx = sP.units.codeMassToLogMsun(ac[field][w])
                 if not use30kpc and not useP10 and not use30H:
                     xx = gc['subhalos'][mt][w,sP.ptNum('stars')]
@@ -919,7 +917,7 @@ def uvLuminosityFunction(sPs, pdf, centralsOnly=False, use30kpc=False, absoluteM
             # for each of the magnitude definitions/dust models/apertures, calculate UVLF and plot
             for i, field in enumerate(acs):
                 # load
-                ac = auxCat(sP, fields=[field]) # AB apparent mag
+                ac = sP.auxCat(fields=[field]) # AB apparent mag
                 band_ind = list(ac[field+'_attrs']['bands']).index(band)
                 print(field,ac[field].shape)
                 mags_apparent = np.squeeze( ac[field][w,band_ind] )
@@ -1008,7 +1006,7 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         print('HI MF: '+sP.simName+' (z=%.1f)' % simRedshift)
         sP.setRedshift(simRedshift)
 
-        gc = groupCat(sP, fieldsSubhalos=['central_flag'])
+        gc = sP.groupCat(fieldsSubhalos=['central_flag'])
 
         # centrals only?
         w = np.arange(gc.size)
@@ -1018,7 +1016,7 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         # for each of the three stellar mass definitions, calculate HIMF and plot
         for i, acField in enumerate(acFields):
             # load HI masses under this definition
-            ac = auxCat(sP, fields=[acField])[acField]
+            ac = sP.auxCat(fields=[acField])[acField]
             xx = sP.units.codeMassToLogMsun(ac[w])
 
             # calculate mass function
@@ -1091,7 +1089,7 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         print('HI FRAC: '+sP.simName+' (z=%.1f)' % simRedshift)
         sP.setRedshift(simRedshift)
 
-        gc = groupCat(sP, fieldsSubhalos=['central_flag'])
+        gc = sP.groupCat(fieldsSubhalos=['central_flag'])
 
         # centrals only?
         w = np.arange(gc.size)
@@ -1100,7 +1098,7 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
 
         # load galaxy stellar masses, using the given definition
         massField = 'Subhalo_Mass_30pkpc_Stars'
-        ac = auxCat(sP, fields=[massField])[massField]
+        ac = sP.auxCat(fields=[massField])[massField]
         xx = sP.units.codeMassToLogMsun(ac[w])
 
         # add obs. scatter
@@ -1113,7 +1111,7 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         # for each of the HI mass definitions, calculate HI mass fractions and plot
         for i, acField in enumerate(acFields):
             # load HI masses under this definition
-            ac = auxCat(sP, fields=[acField])[acField]
+            ac = sP.auxCat(fields=[acField])[acField]
             m_HI = sP.units.codeMassToLogMsun(ac[w])
 
             # calculate ratio, apply detection threshold treatment of upper limits of xGASS
@@ -1210,14 +1208,14 @@ def HIvsHaloMass(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None
         sP.setRedshift(simRedshift)
 
         # load halo masses, restrict to centrals only
-        gc = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+        gc = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
         w = np.where(np.isfinite(gc))
         xx = gc[w]
 
         # for each of the HI mass definitions, calculate HI masses and plot
         for i, acField in enumerate(acFields):
             # load HI masses under this definition
-            ac = auxCat(sP, fields=[acField])[acField]
+            ac = sP.auxCat(fields=[acField])[acField]
             yy = sP.units.codeMassToLogMsun(ac[w])
 
             # calculate median            
@@ -1337,9 +1335,9 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
         # load
         c = next(ax._get_lines.prop_cycler)['color']
 
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+        gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMass','SubhaloMassInRadType']+metalFields)
-        ac = auxCat(sP, fields=acMetalFields)
+        ac = sP.auxCat(fields=acMetalFields)
 
         # include: centrals + satellites (no noticeable difference vs. centrals only)
         # stellar mass definition, enforce resolution limit
@@ -1536,7 +1534,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
         print('MMGas (z=%3.1f): %s' % (simRedshift,sP.simName))
         sP.setRedshift(simRedshift)
 
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
+        gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
             fieldsSubhalos=['SubhaloMassInRadType']+metalFields)
 
         # include: centrals + satellites (no noticeable difference vs. centrals only)
@@ -1634,7 +1632,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
         sP.setRedshift(simRedshift)
 
         if sP.isZoom:
-            ac = auxCat(sP, fields=[field])
+            ac = sP.auxCat(fields=[field])
             ac[field] = ac[field][sP.zoomSubhaloID,:]
 
             # halo mass definition (xx_code == gc['halos']['Group_M_Crit500'] by construction)
@@ -1652,7 +1650,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
                 yy = val / xx_code # fraction with respect to total
                 ax.plot(xx,yy,markers[i],color=colors[0])
         else:
-            ac = auxCat(sP, fields=[acField]) #, searchExists=True)
+            ac = sP.auxCat(fields=[acField]) #, searchExists=True)
             #if ac[acField] is None:
             #    print(' SKIP missing')
             #    continue
@@ -1791,7 +1789,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
         # once including H2 modeling, once without
         for i, species in enumerate(speciesList):
             # load pre-computed CDDF
-            ac = auxCat(sP, fields=['Box_CDDF_'+species])
+            ac = sP.auxCat(fields=['Box_CDDF_'+species])
 
             n_HI  = ac['Box_CDDF_'+species][0,:]
             fN_HI = ac['Box_CDDF_'+species][1,:]
@@ -1869,10 +1867,10 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
             # once including H2 modeling, once without
             for i, species in enumerate(speciesList):
                 # load pre-computed Z PDF
-                ac = auxCat(sP, fields=['Box_Grid_'+species,'Box_Grid_Z'])
+                ac = sP.auxCat(fields=['Box_Grid_'+species,'Box_Grid_Z'])
                 ww = np.where(ac['Box_Grid_'+species] > log_nHI_limitDLA)
 
-                #ac = auxCat(sP, fields=['Box_CDDF_'+species])
+                #ac = sP.auxCat(fields=['Box_CDDF_'+species])
                 #n_HI  = ac['Box_CDDF_'+species][0,:]
                 #fN_HI = ac['Box_CDDF_'+species][1,:]
 
@@ -1931,7 +1929,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
         if sP.isZoom:
             continue
 
-        gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloVmax'])
+        gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloVmax'])
 
         # centrals only?
         if centralsOnly:
@@ -2029,19 +2027,19 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
             continue
 
         # load
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-        ac = auxCat(sP, fields=ageTypes)
+        gc = sP.groupCat( fieldsSubhalos=['SubhaloMassInRadType'])
+        ac = sP.auxCat(fields=ageTypes)
 
         # include: centrals + satellites, or centrals only
         if centralsOnly:
-            gcLoad = groupCat(sP, fieldsHalos=['GroupFirstSub'])
-            wHalo = np.where((gcLoad['halos'] >= 0))
-            w = gcLoad['halos'][wHalo]
+            GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
+            wHalo = np.where((GroupFirstSub >= 0))
+            w = GroupFirstSub[wHalo]
         else:
-            w = np.arange(gc['subhalos'].shape[0])
+            w = np.arange(gc.shape[0])
 
         # stellar mass definition, and enforce resolution limit
-        xx_code = gc['subhalos'][:,sP.ptNum('stars')]
+        xx_code = gc[:,sP.ptNum('stars')]
 
         wResLimit = np.where( xx_code >= minNumStars * sP.targetGasMass )[0]
         w = np.intersect1d(w,wResLimit)
@@ -2186,19 +2184,19 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
             continue
 
         # load
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-        ac = auxCat(sP, fields=lumTypes)
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+        ac = sP.auxCat(fields=lumTypes)
 
         # include: centrals + satellites, or centrals only
         if centralsOnly:
-            gcLoad = groupCat(sP, fieldsHalos=['GroupFirstSub'])
-            wHalo = np.where((gcLoad['halos'] >= 0))
-            w = gcLoad['halos'][wHalo]
+            GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
+            wHalo = np.where((GroupFirstSub >= 0))
+            w = GroupFirstSub[wHalo]
         else:
-            w = np.arange(gc['subhalos'].shape[0])
+            w = np.arange(gc.shape[0])
 
         # stellar mass definition, and enforce resolution limit
-        xx_code = gc['subhalos'][:,sP.ptNum('stars')]
+        xx_code = gc[:,sP.ptNum('stars')]
 
         if use30kpc:
             # load auxcat
@@ -2313,8 +2311,8 @@ def haloSynchrotronPower(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
             continue # non-MHD runs
 
         # load
-        gc = groupCat(sP, fieldsSubhalos=['mhalo_500_log'])
-        ac = auxCat(sP, fields=acField)
+        gc = sP.groupCat(fieldsSubhalos=['mhalo_500_log'])
+        ac = sP.auxCat(fields=acField)
 
         # x-axis mass definition
         w = np.where( np.isfinite(gc) ) # centrals only

@@ -110,14 +110,14 @@ def sample_comparison_z2_sins_ao(sP):
 
     gc = sP.groupCat(fieldsSubhalos=fieldsSubhalos)
 
-    xx_code = gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')]
+    xx_code = gc['SubhaloMassInRadType'][:,sP.ptNum('stars')]
     xx = sP.units.codeMassToLogMsun( xx_code )
 
-    yy = gc['subhalos'][sfrField]
+    yy = gc[sfrField]
 
     # centrals only above some mass limit
     with np.errstate(invalid='ignore'):
-        ww = np.where( (xx > xlim[0]+0.2) & gc['subhalos']['central_flag'] )
+        ww = np.where( (xx > xlim[0]+0.2) & gc['central_flag'] )
 
     w_nonzero = np.where(yy[ww] > 0.0)
     w_zero = np.where(yy[ww] == 0.0)

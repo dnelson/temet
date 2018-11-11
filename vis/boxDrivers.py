@@ -13,8 +13,6 @@ from vis.box import renderBox, renderBoxFrames
 from vis.halo import renderSingleHalo
 from util.helper import pSplit
 from util import simParams
-from cosmo.load import groupCatSingle, groupCat
-from cosmo.util import periodicDists
 
 def realizations(conf=1):
     """ Render a whole box image at one redshift, of one field, comparing multiple runs. """
@@ -206,7 +204,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
         sliceStr = '_fof-%d_%dof%d' % (centerHaloID,curSlice,nSlicesTot)
 
         #for curSlice in range(nSlicesTot):
-        absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+        absCenPos = sP.groupCatSingle(haloID=centerHaloID)['GroupPos']
         absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
     if thinSlice:
@@ -398,7 +396,7 @@ def TNG_colorFlagshipBoxImage(part=0):
     relCenPos = None
     
     sliceStr = '_fof-%d_%dof%d' % (centerHaloID,curSlice,nSlicesTot)
-    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+    absCenPos = sP.groupCatSingle(haloID=centerHaloID)['GroupPos']
     absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
     class plotConfig:
@@ -439,7 +437,7 @@ def TNG_oxygenPaperImages(part=0):
         relCenPos = None
         
         saveStr = '_fof-%d_%dof%d' % (centerHaloID,curSlice,nSlicesTot)
-        absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+        absCenPos = sP.groupCatSingle(haloID=centerHaloID)['GroupPos']
         absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
         plotHalos = 100
@@ -451,7 +449,7 @@ def TNG_oxygenPaperImages(part=0):
     if part == 1:
         # part 1: cluster halo scale OVIII (halo #22)
         haloID = 22
-        shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub']
+        shID = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
         rVirFracs    = [1.0]
         size         = 3.5
@@ -469,7 +467,7 @@ def TNG_oxygenPaperImages(part=0):
     if part == 2:
         # part 2: galaxy halo scale OVI
         haloID = 22
-        halo = groupCatSingle(sP, haloID=haloID)
+        halo = sP.groupCatSingle(haloID=haloID)
         
         nPixels   = [int(nPixels/2),int(nPixels/2)]
         relCoords = True
@@ -478,8 +476,8 @@ def TNG_oxygenPaperImages(part=0):
 
         # (A) pick a satellite of this cluster
         haloSubInds = np.arange( halo['GroupFirstSub'], halo['GroupFirstSub']+halo['GroupNsubs'] )
-        ##subMstar = groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log'])[haloSubInds]
-        ##subRadRvir = groupCat(sP, fieldsSubhalos=['rdist_rvir'])[haloSubInds]
+        ##subMstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])[haloSubInds]
+        ##subRadRvir = sP.groupCat(fieldsSubhalos=['rdist_rvir'])[haloSubInds]
         #subMstar:   [ 11.852, 10.90, 10.69, 10.31, 10.41, 10.74, 10.65, 10.41, 9.75, 10.34]
         #subRadRvir: [ 0.0,    1.53,  2.16,  1.91,  0.73,  0.17,  0.67,  1.23,  1.67,  0.79]
         #shID = haloSubInds[1]
@@ -490,15 +488,15 @@ def TNG_oxygenPaperImages(part=0):
         #sizeType  = 'rHalfMass'
 
         # (B) pick a central (optionally nearby to this cluster?)
-        #subPos = groupCat(sP, fieldsSubhalos=['SubhaloPos'], sq=True)
-        #subHaloMass = groupCat(sP, fieldsSubhalos=['mhalo_200_log'], sq=True)
-        #dist = periodicDists( subPos[halo['GroupFirstSub'],:], subPos, sP )
+        #subPos = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
+        #subHaloMass = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
+        #dist = sP.periodicDists( subPos[halo['GroupFirstSub'],:], subPos )
         #w = np.where( (subHaloMass > 11.9) & (subHaloMass < 12.6) & (dist < (size+1.0)*halo['Group_R_Crit200']) )
         #w = np.where( (subHaloMass > 12.4) & (subHaloMass < 12.5) )
         shID = [376544,378745,380751,383723,389704,389917,393336,394241,395882,396851,397568,400694][9]
 
-        sh = groupCatSingle(sP, subhaloID=shID)
-        halo = groupCatSingle(sP, haloID=sh['SubhaloGrNr'])
+        sh = sP.groupCatSingle(subhaloID=shID)
+        halo = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
         mstar = sP.units.codeMassToLogMsun(sh['SubhaloMassType'][4])
         mhalo = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])
         print(mstar,mhalo)
@@ -552,7 +550,7 @@ def TNG_explorerImageSegments(conf=0, taskNum=0, retInfo=False):
     relCenPos = None
     sliceFac  = (1.0/nSlicesTot)
 
-    absCenPos = groupCatSingle(sP, haloID=centerHaloID)['GroupPos']
+    absCenPos = sP.groupCatSingle(haloID=centerHaloID)['GroupPos']
     absCenPos[3-axes[0]-axes[1]] += curSlice * sliceFac * sP.boxSize
 
     # panel positioning

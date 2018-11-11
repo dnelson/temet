@@ -8,8 +8,6 @@ from builtins import *
 import numpy as np
 import h5py
 import struct
-from cosmo.util import cenSatSubhaloIndices
-from cosmo.load import groupCat, auxCat
 
 def exportSubhalos():
     """ Export a very minimal group catalog to a flat binary format. """
@@ -22,12 +20,12 @@ def exportSubhalos():
     nValsPerHalo = 7 # x, y, z, r200, log_Tvir, log_M200, log_Lx
 
     # load
-    pos = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
-    r200 = groupCat(sP, fieldsSubhalos=['rhalo_200'])
-    tvir = groupCat(sP, fieldsSubhalos=['tvir_log'])
-    m200 = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+    pos = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
+    r200 = sP.groupCat(fieldsSubhalos=['rhalo_200'])
+    tvir = sP.groupCat(fieldsSubhalos=['tvir_log'])
+    m200 = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
 
-    Lx = auxCat(sP, ['Subhalo_XrayBolLum'])['Subhalo_XrayBolLum']
+    Lx = sP.auxCat(['Subhalo_XrayBolLum'])['Subhalo_XrayBolLum']
     Lx = np.log10(Lx.astype('float64') * 1e30).astype('float32') # log erg/s
     w = np.where(~np.isfinite(Lx))
     Lx[w] = 0.0
@@ -39,7 +37,7 @@ def exportSubhalos():
     Lx = np.round(Lx*10.0)/10.0
 
     # restrict to css
-    inds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    inds = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
 
     if writeN is not None:
         inds = inds[0:writeN]
