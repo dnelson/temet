@@ -64,7 +64,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
-                   'mstar_30pkpc','mstar_30pkpc_log','mhi_30pkpc','mhi_30pkpc_log','mhi2','mhi2_log'
+                   'mstar_30pkpc','mstar_30pkpc_log','mhi_30pkpc','mhi_30pkpc_log','mhi2','mhi2_log',
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
                    'mhalo_subfind','mhalo_subfind_log']
 
@@ -132,7 +132,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5
     quantList += quants_misc + quants_color + quants_outflow + quants_wind
     if wTr: quantList += trQuants
-    if wMasses: quants1 += quants_mass
+    if wMasses: quantList += quants_mass
     if onlyTr: quantList = trQuants
     if onlyBH: quantList = quants_bh
     if onlyMHD: quantList = quants2_mhd

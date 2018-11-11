@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import Normalize, LogNorm, colorConverter
 from matplotlib.backends.backend_pdf import PdfPages
-from os.path import isfile, expanduser
+from os.path import isfile
+from getpass import getuser
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
@@ -70,7 +71,8 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
 def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
                  cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, qRestrictions=None, 
-                 medianLine=True, fig_subplot=[None,None], pStyle='white'):
+                 filterFlag=False, medianLine=True, 
+                 fig_subplot=[None,None], pStyle='white', ctName=None, saveFilename=None, output_fmt=None):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
     points a bin must contain to show it as non-white. If '_nan' is not in cStatistic, then by default, 
@@ -85,6 +87,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     subhalos in each pixel satisfying (fracMin <= cQuant < fracMax), where +/-np.inf is allowed for one-sided, 
     takeLog should be True or False, and label is either a string or None for automatic.
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
+    If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects.
     If xlim, ylim, or clim are not None, then override the respective axes ranges with these [min,max] bounds. 
     If cNanZeroToMin, then change the color of the NaN-only bins from the usual gray to the colormap minimum. """
     assert cenSatSelect in ['all', 'cen', 'sat']
@@ -94,7 +97,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     # hard-coded config
     if nBins is None: 
         nBins = 80
-    cmap     = loadColorTable('viridis') # plasma
+
+    cmap     = loadColorTable(ctName if ctName is not None else 'viridis')
     colorMed = 'black'
     lwMed    = 2.0
 
@@ -103,9 +107,6 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     colorContours = False
     if cQuant is None:
         colorMed = 'orange'
-
-    #if cenSatSelect == 'cen' and 'color_' in yQuant: # tng_colors paper, not tng_oxygen paper
-    #    colorContours = True
 
     # x-axis: load fullbox galaxy properties and set plot options, cached in sP.data
     sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean)
@@ -124,13 +125,15 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
         # overrides for density distribution
         cStatistic = 'count'
-        ctName = 'gray_r' if pStyle == 'white' else 'gray'
+        if ctName is None:
+            ctName = 'gray_r' if pStyle == 'white' else 'gray'
         cmap = loadColorTable(ctName)
 
         clabel = 'log N$_{\\rm gal}$'
         cMinMax = [0.0,2.0] if clim is None else clim
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
+        if cStatistic is None: cStatistic = 'median_nan' # default if not specified with cQuant
         sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, cQuant, clean, tight=False)
         if clim is not None: cMinMax = clim
         if yQuant == 'color_C_gr': print('Warning: to reproduce TNG colors paper, set tight=True maybe.')
@@ -138,25 +141,36 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     if sim_cvals is None:
         return # property is not calculated for this run (e.g. expensive auxCat)
 
+    # flagging?
+    sim_flag = np.ones(sim_xvals.shape).astype('bool')
+    if filterFlag:
+        # load SubhaloFlag and override sim_flag (0=bad, 1=good)
+        sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
+
     # central/satellite selection?
     wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
 
     sim_xvals = sim_xvals[wSelect]
     sim_cvals = sim_cvals[wSelect]
     sim_yvals = sim_yvals[wSelect]
+    sim_flag  = sim_flag[wSelect]
 
     # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
-    wFiniteColor = np.isfinite(sim_yvals) #& np.isfinite(sim_xvals)
-    sim_yvals = sim_yvals[wFiniteColor]
-    sim_cvals = sim_cvals[wFiniteColor]
-    sim_xvals = sim_xvals[wFiniteColor]
+    wFinite = np.isfinite(sim_yvals) #& np.isfinite(sim_xvals)
+
+    # reduce to the good-flagged subset
+    wFinite &= (sim_flag)
+
+    sim_yvals = sim_yvals[wFinite]
+    sim_cvals = sim_cvals[wFinite]
+    sim_xvals = sim_xvals[wFinite]
 
     # arbitrary property restriction(s)?
     if qRestrictions is not None:
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             # load and restrict
             vals, _, _, _ = sP.simSubhaloQuantity(rFieldName)
-            vals = vals[wSelect][wFiniteColor]
+            vals = vals[wSelect][wFinite]
 
             wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
 
@@ -249,7 +263,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     if cFrac is not None:
         # override min,max of color and whether or not to log
         fracMin, fracMax, cLog, fracLabel = cFrac
-        cMinMax = [0.0, 1.0] if not cLog else [-1.5,0.0]
+        if clim is None:
+            cMinMax = [0.0, 1.0] if not cLog else [-1.5,0.0]
 
         # select sim values which satisfy criterion, and re-count
         w = np.where( (sim_cvals >= fracMin) & (sim_cvals < fracMax) )
@@ -270,8 +285,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         cmap = loadColorTable('matter_r') # haline, thermal, solar, deep_r, dense_r, speed_r, amp_r, matter_r
 
         qStr = clabel.split('[')[0] # everything to the left of the units
-        if '$' in clabel:
-            qStr = '$%s$' % clabel.split('$')[1] # just the label symbol, if one is present
+        #if '$' in clabel:
+        #    qStr = '$%s$' % clabel.split('$')[1] # just the label symbol, if one is present
         qUnitStr = ''
         if '[' in clabel:
             qUnitStr = ' ' + clabel.split('[')[1].split(']')[0].strip()
@@ -389,7 +404,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     if yQuant == 'size_gas':
         # add virial radius median line
         aux_yvals, _, _, _ = simSubhaloQuantity(sP, 'rhalo_200_log', clean)
-        aux_yvals = aux_yvals[wSelect][wFiniteColor]
+        aux_yvals = aux_yvals[wSelect][wFinite]
         if nanFlag: aux_yvals = aux_yvals[wFiniteCval]
 
         xm, ym, _, _ = running_median(sim_xvals,aux_yvals,binSize=binSizeMed,percs=[5,10,25,75,90,95])
@@ -397,13 +412,13 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
             ym = savgol_filter(ym,sKn,sKo)
 
         color = sampleColorTable('tableau10','purple')
-        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
-        ax.text(9.2, 2.06, 'Halo $R_{\\rm 200,crit}$', color=color, size=15)
+        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed, label='Halo $R_{\\rm 200,crit}$')
+        ax.legend(loc='upper left')
 
     if yQuant in ['temp_halo','temp_halo_volwt']:
         # add virial temperature median line
         aux_yvals = groupCat(sP, fieldsSubhalos=['tvir_log'])
-        aux_yvals = aux_yvals[wSelect][wFiniteColor]
+        aux_yvals = aux_yvals[wSelect][wFinite]
         if nanFlag: aux_yvals = aux_yvals[wFiniteCval]
 
         xm, ym, _, _ = running_median(sim_xvals,aux_yvals,binSize=binSizeMed,percs=[5,10,25,75,90,95])
@@ -411,8 +426,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
             ym = savgol_filter(ym,sKn,sKo)
 
         color = sampleColorTable('tableau10','purple')
-        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
-        ax.text(9.35, 5.55, 'Halo $T_{\\rm vir}$', color=color, size=15)
+        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed, label='Halo $T_{\\rm vir}$')
+        ax.legend(loc='upper left')
 
     if yQuant == 'fgas_r200':
         # add constant f_b line
@@ -420,7 +435,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
         color = sampleColorTable('tableau10','purple')
         ax.plot(xMinMax, [f_b,f_b], '--', color=color, lw=lwMed)
-        ax.text(11.4, f_b+0.05, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', color=color, size=17)
+        ax.text(np.mean(ax.get_xlim()), f_b+0.05, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', color=color, size=17)
 
     if yQuant in ['BH_CumEgy_low','BH_CumEgy_high']:
         # add approximate halo binding energy line = (3/5)*GM^2/R
@@ -430,7 +445,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         e_b = (3.0/5.0) * G * m_halo**2 * sP.units.f_b / r_halo # (km/s)**2 * msun
         e_b = np.array(e_b, dtype='float64') * 1e10 * sP.units.Msun_in_g # cm^2/s^2 * g
         e_b = logZeroNaN(e_b).astype('float32') # log(cm^2/s^2 * g)
-        e_b = e_b[wSelect][wFiniteColor]
+        e_b = e_b[wSelect][wFinite]
         if nanFlag: e_b = e_b[wFiniteCval]
 
         xm, ym, _, _ = running_median(sim_xvals,e_b,binSize=binSizeMed,percs=[5,10,25,75,90,95])
@@ -438,8 +453,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
             ym = savgol_filter(ym,sKn,sKo)
 
         color = sampleColorTable('tableau10','purple')
-        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed)
-        ax.text(9.2, 57.5, 'Halo $E_{\\rm B}$', color=color, size=20)
+        ax.plot(xm[:-1], ym[:-1], '--', color=color, lw=lwMed, label='Halo $E_{\\rm B}$')
+        ax.legend(loc='upper left')
 
     if xQuant in ['color_nodust_VJ','color_C-30kpc-z_VJ'] and yQuant in ['color_nodust_UV','color_C-30kpc-z_UV']:
         # UVJ color-color diagram, add Tomczak+2014 separation of passive and SFing galaxies
@@ -453,7 +468,6 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         xx = [0.0,(1.3-off)/0.88,1.5,1.5]
         yy = [1.3,1.3,1.5*0.88+off,2.45]
         ax.plot(xx, yy, ':', lw=lw, color='orange', label='Muzzin+13b')
-
         ax.legend(loc='upper left')
 
     # colorbar
@@ -476,13 +490,16 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if pdf is not None:
             pdf.savefig(facecolor=fig.get_facecolor())
         else:
-            fig.savefig('histo2d_%s_%s_%s_%s_%s_%s.pdf' % \
-                (ylabel,xQuant,cQuant,cStatistic,cenSatSelect,minCount), 
-                facecolor=fig.get_facecolor())
+            # note: saveFilename could be an in-memory buffer
+            if saveFilename is None:
+                saveFilename = 'histo2d_%s_%s_%s_%s_%s_%s.pdf' % (ylabel,xQuant,cQuant,cStatistic,cenSatSelect,minCount)
+            fig.savefig(saveFilename, format=output_fmt, facecolor=fig.get_facecolor())
         plt.close(fig)
 
+    return True
+
 def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', yRel=None, xlim=None, ylim=None, 
-                 sizefac=None, fig_subplot=[None,None]):
+                 filterFlag=False, sizefac=None, fig_subplot=[None,None]):
     """ Make a 1D slice through the 2D histogram by restricting to some range sRange of some quantity
     sQuant which is typically Mstar (e.g. 10.4<log_Mstar<10.6 to slice in the middle of the bimodality).
     For all subhalos in this slice, optically restricted by cenSatSelect, load a set of quantities 
@@ -491,7 +508,8 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
     If xlim or ylim are not None, then override the respective axes ranges with these [min,max] bounds. 
     If sRange is a list of lists, then overplot multiple different slice ranges. If yRel is not None, then should be a 
     3-tuple of [relMin,relMax,takeLog] or 4-tuple of [relMin,relMax,takeLog,yLabel] in which case the y-axis is not 
-    of the physical yQuants themselves, but rather the value of the quantity relative to the median in the slice (e.g. mass)."""
+    of the physical yQuants themselves, but rather the value of the quantity relative to the median in the slice (e.g. mass).
+    If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects. """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     if len(yQuants) == 0: return
@@ -564,11 +582,16 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
                 if len(yRel) == 4:
                     yMinMax[0], yMinMax[1], yLog, ylabel = yRel
                 
-
             ax.set_xlim(xMinMax)
             ax.set_ylim(yMinMax)
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
+
+            # flagging?
+            sim_flag = np.ones(sim_xvals.shape).astype('bool')
+            if filterFlag:
+                # load SubhaloFlag and override sim_flag (0=bad, 1=good)
+                sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -576,9 +599,14 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             sim_xvals = sim_xvals[wSelect]
             sim_yvals = sim_yvals[wSelect]
             sim_svals = sim_svals[wSelect]
+            sim_flag  = sim_flag[wSelect]
 
             # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
             wFinite = np.isfinite(sim_xvals) & np.isfinite(sim_yvals)
+
+            # reduce to the good-flagged subset
+            wFinite &= (sim_flag)
+    
             sim_xvals = sim_xvals[wFinite]
             sim_yvals = sim_yvals[wFinite]
             sim_svals = sim_svals[wFinite]
@@ -650,7 +678,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, 
                              scatterPoints=False, markSubhaloIDs=None, mark1to1=False,
-                             xlim=None, ylim=None, fig_subplot=[None,None]):
+                             xlim=None, ylim=None, filterFlag=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -660,7 +688,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     each split plotting the sub-sample yQuant again versus xQuant.
     If scatterPoints, include all raw points with a scatterplot. 
     If markSubhaloIDs, highlight these subhalos especially on the plot. 
-    If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). """
+    If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
+    If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects. """
     assert cenSatSelect in ['all', 'cen', 'sat']
 
     nRows = np.floor(np.sqrt(len(yQuants)))
@@ -716,6 +745,12 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     continue
                 if sLog: sim_svals = logZeroNaN(sim_svals)
 
+            # flagging?
+            sim_flag = np.ones(sim_xvals.shape).astype('bool')
+            if filterFlag:
+                # load SubhaloFlag and override sim_flag (0=bad, 1=good)
+                sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
+
             # central/satellite selection?
             wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
 
@@ -724,9 +759,14 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             sim_yvals = sim_yvals[wSelect]
             sim_xvals = sim_xvals[wSelect]
+            sim_flag  = sim_flag[wSelect]
 
             # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
             wFinite = np.isfinite(sim_xvals) & np.isfinite(sim_yvals)
+
+            # reduce to the good-flagged subset
+            wFinite &= (sim_flag)
+
             sim_yvals  = sim_yvals[wFinite]
             sim_xvals  = sim_xvals[wFinite]
 
@@ -953,19 +993,19 @@ def plots2():
 def plots3():
     """ Driver (exploration median trends). """
     sPs = []
-    #sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
-    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    xQuant = 'mhalo_200' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    cenSatSelects = ['cen']
+    xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    cenSatSelects = ['all']
 
     sQuant = 'color_C_gr' #'mstar_out_100kpc_frac_r200'
     sLowerPercs = [10,50]
     sUpperPercs = [90,50]
 
     yQuants = quantList(wCounts=False, wTr=True, wMasses=True)
-    yQuants = ['mstar_30pkpc']
+    yQuants = ['size_stars']
 
     # make plots
     for css in cenSatSelects:
@@ -990,13 +1030,17 @@ def plots3():
 
 def plots4():
     """ Driver (single median trend). """
-    sP = simParams(res=2160, run='tng', redshift=0.73)
+    sP = simParams(res=1820, run='tng', redshift=0.0)
 
-    xQuant = 'size_stars' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 're_stars_100pkpc_jwst_f115w'
-    cenSatSelect = 'cen'
+    xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    yQuant = 'size_stars'
+    cenSatSelect = 'all'
+    filterFlag = True
 
-    sQuant = None #'color_C_gr','mstar_out_100kpc_frac_r200'
+    xlim = [7.5,11.5]
+    ylim = [-1.0,1.2]
+
+    sQuant = None #'color_C_gr'
     sLowerPercs = None #[10,50]
     sUpperPercs = None #[90,50]
 
@@ -1006,8 +1050,7 @@ def plots4():
     # one quantity
     quantMedianVsSecondQuant([sP], pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
-                             scatterPoints=True, markSubhaloIDs=[252245], 
-                             xlim=[0.0, 1.2], ylim=[0.0, 1.2], mark1to1=True)
+                             xlim=xlim, ylim=ylim, scatterPoints=True, markSubhaloIDs=None, filterFlag=filterFlag)
 
     pdf.close()
 
