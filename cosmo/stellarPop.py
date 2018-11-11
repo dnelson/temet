@@ -13,6 +13,7 @@ from numba import jit
 from os.path import isfile, expanduser
 from scipy.ndimage import map_coordinates
 from scipy.interpolate import interp1d
+from getpass import getuser
 
 from util.helper import logZeroMin, trapsum, iterable
 from util.sphMap import sphMap
@@ -309,7 +310,7 @@ class sps():
         assert imf in self.imfTypes
         assert dustModel in self.dustModels
 
-        if not redshifted and sP.redshift > 0.0:
+        if not redshifted and sP.redshift > 0.0 and getuser() == 'dnelson':
             print(' WARNING: sP redshift = %.2f, but not redshifting SPS calculations!' % sP.redshift)
 
         self.sP    = sP
@@ -326,7 +327,7 @@ class sps():
         zStr = ''
         if redshifted:
             zStr = '_z=%.1f' % sP.redshift
-            print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
+            #print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
             # cosmology in FSPS is hard-coded (sps_vars.f90), and this has been set to TNG values
             assert sP.omega_m == 0.3089 and sP.omega_L == 0.6911 and sP.HubbleParam == 0.6774
         if emlines:
@@ -468,7 +469,7 @@ class sps():
 
         # loop over metallicites, compute band magnitudes (and full spectra) over an age grid for each
         for i in range(pop.zlegend.size):
-            print('  [%2d of %2d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
+            if getuser() == 'dnelson': print('  [%2d of %2d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
 
             # update metallicity step
             pop.params['zmet'] = i + 1 # 1-indexed
@@ -498,7 +499,7 @@ class sps():
 
         # loop again, this time compute nebular line emission luminosities (modify pop each time)
         for i in range(pop.zlegend.size):
-            print('  [%2d of %2d] Z = %g (nebular)' % (i,pop.zlegend.size,pop.zlegend[i]))
+            if getuser() == 'dnelson': print('  [%2d of %2d] Z = %g (nebular)' % (i,pop.zlegend.size,pop.zlegend[i]))
 
             pop = fsps.StellarPopulation(sfh = 0, # SSP
                                          zmet = i+1,

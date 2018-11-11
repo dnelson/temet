@@ -905,7 +905,7 @@ class cloudyIon():
         # do 3D or 4D interpolation on this ion sub-table at the requested order
         abunds = map_coordinates( locData, iND, order=self.order, mode='nearest')
 
-        print('Abundance fraction interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
+        #print('Abundance fraction interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
 
         return abunds
 
@@ -966,9 +966,9 @@ class cloudyIon():
 
 class cloudyEmission():
     """ Use pre-computed Cloudy table to derive line emissivities for simulation gas cells. """
-    lineAbbreviations = {'Lyman alpha' : 'H  1 1215.67A',
-                         'H alpha'     : 'H  1 6562.81A',
-                         'H beta'      : 'H  1 1025.72A',
+    lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
+                         'H-alpha'     : 'H  1 6562.81A',
+                         'H-beta'      : 'H  1 1025.72A',
                          'OVIII'       : 'O  8 18.9709A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
@@ -1025,6 +1025,9 @@ class cloudyEmission():
                 continue
             if line in self.lineAbbreviations:
                 validLines.append(self.lineAbbreviations[line])
+                continue
+            if line.replace(' ','-') in self.lineAbbreviations:
+                validLines.append(self.lineAbbreviations[line.replace(' ','-')])
                 continue
             raise Exception("Failed to recognize line [%s]!" % line)
 
@@ -1111,7 +1114,7 @@ class cloudyEmission():
 
         emis = map_coordinates( locData, iND, order=self.order, mode='nearest')
 
-        print('Emissivity interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
+        #print('Emissivity interp took [%.2f] sec (%s points)' % ((time.time()-start_time),dens.size) )
 
         return emis
 
