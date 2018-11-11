@@ -22,7 +22,6 @@ from util import simParams
 from util.loadExtern import werk2013, johnson2015
 from plot.config import *
 from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, getWhiteBlackColors, closest, reducedChiSq
-from cosmo.load import groupCat, groupCatSingle, auxCat, snapshotSubset
 from cosmo.cloudy import cloudyIon
 from plot.general import plotPhaseSpace2D
 from plot.quantities import simSubhaloQuantity, bandMagRange, quantList
@@ -113,7 +112,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
             lwMod = 0.0
 
         # pre-computed CDDF: first species for sizes
-        ac = auxCat(sP, fields=['Box_CDDF_'+speciesList[0]])
+        ac = sP.auxCat(fields=['Box_CDDF_'+speciesList[0]])
         n_OVI  = ac['Box_CDDF_'+speciesList[0]][0,:]
         fN_OVI = ac['Box_CDDF_'+speciesList[0]][1,:]
 
@@ -128,7 +127,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
             if sP.simName in ['Illustris-1','TNG300-1'] and i > 0:
                 continue # skip expensive variations we won't use for the oxygen paper
 
-            ac = auxCat(sP, fields=[acField], searchExists=True)
+            ac = sP.auxCat(fields=[acField], searchExists=True)
             if ac[acField] is None:
                 print(' skip: %s %s' % (sP.simName,species))
                 continue
@@ -255,13 +254,13 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                 # Omega_ion value: compute
                 if len(sPs) > 8:
                     fieldName = 'Box_Omega_' + ion
-                    boxOmega = auxCat(sP, fields=[fieldName])[fieldName]
+                    boxOmega = sP.auxCat(fields=[fieldName])[fieldName]
 
                 # pre-computed CDDF: load at this redshift
                 fieldName = 'Box_CDDF_n'+ion
                 if boxDepth10: fieldName += '_depth10'
 
-                ac = auxCat(sP, fields=[fieldName])
+                ac = sP.auxCat(fields=[fieldName])
                 N_ion  = ac[fieldName][0,:]
                 fN_ion = ac[fieldName][1,:]
 
@@ -408,14 +407,14 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
         # load halo masses and CSS
         txt_sP = []
         sP.setRedshift(redshift)
-        xx = groupCat(sP, fieldsSubhalos=[massField])
+        xx = sP.groupCat(fieldsSubhalos=[massField])
 
         cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
         xx = xx[cssInds]
 
         if secondTopAxis and i == 0:
             # load mass values for top x-axis, construct median relation interpolant, assign values
-            xx_top = groupCat(sP, fieldsSubhalos=[topMassField])
+            xx_top = sP.groupCat(fieldsSubhalos=[topMassField])
             xx_top = xx_top[cssInds]
             xm, ym, _ = running_median(xx_top,xx,binSize=binSize,skipZeros=True,minNumPerBin=10)
             f = interp1d(xm, ym, kind='linear', bounds_error=False, fill_value='extrapolate')
@@ -427,7 +426,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
         if toAvgColDens:
             # load virial radii
-            rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
+            rad = sP.groupCat(fieldsSubhalos=['rhalo_200_code'])
             rad = rad[cssInds]
             ionData = cloudyIon(None)
 
@@ -442,10 +441,10 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
             # load total grav. bound gas mass
             field = 'Subhalo_Mass_AllGas'
-            tot_gas_mass = auxCat(sP, fields=[field])[field][cssInds]
+            tot_gas_mass = sP.auxCat(fields=[field])[field][cssInds]
 
             field2 = 'Subhalo_Mass_AllGas_Metal' #_Metal, _Oxygen
-            tot_metal_mass = auxCat(sP, fields=[field2])[field2][cssInds]
+            tot_metal_mass = sP.auxCat(fields=[field2])[field2][cssInds]
 
             # calculate mean metallicity
             ww = np.where(xx >= 11.0) # min halo mass to consider for mean metal frac
@@ -482,7 +481,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
             # load and apply CSS
             fieldName = 'Subhalo_Mass_%s' % ion
 
-            ac = auxCat(sP, fields=[fieldName])
+            ac = sP.auxCat(fields=[fieldName])
             if ac[fieldName] is None: continue
             ac[fieldName] = ac[fieldName][cssInds]
 
@@ -741,13 +740,13 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     for i, sP in enumerate(sPs):
         # load halo/stellar masses and CSS
         sP.setRedshift(redshift)
-        masses = groupCat(sP, fieldsSubhalos=[massField])
+        masses = sP.groupCat(fieldsSubhalos=[massField])
 
-        cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+        cssInds = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
         masses = masses[cssInds]
 
         # load virial radii
-        rad = groupCat(sP, fieldsSubhalos=['rhalo_200_code'])
+        rad = sP.groupCat(fieldsSubhalos=['rhalo_200_code'])
         rad = rad[cssInds]
 
         for j, ion in enumerate(ions):
@@ -756,7 +755,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
             # load and apply CSS
             for fieldName in fieldNames:
                 fieldName = fieldName % (projDim,ion)
-                ac = auxCat(sP, fields=[fieldName])
+                ac = sP.auxCat(fields=[fieldName])
                 if ac[fieldName] is None: continue
 
                 # crossmatch 'subhaloIDs' to cssInds
@@ -1117,7 +1116,7 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
     if 0:
         # referee report test
         inds = sim_samples[0]['selected_inds'].ravel()
-        mhalo = groupCat(sPs[0], fieldsSubhalos=['mhalo_200_log'])
+        mhalo = sPs[0].groupCat(fieldsSubhalos=['mhalo_200_log'])
         sel_mhalo = mhalo[inds]
 
         w_above = np.where(sim_yvals >= -11.0)
@@ -1785,9 +1784,9 @@ def milkyWaySampleNumbers():
     sP = simParams(res=1820,run='tng',redshift=0.0)
 
     acFieldName = 'Subhalo_StellarRotation_2rhalfstars'
-    mhalo = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
-    ssfr  = groupCat(sP, fieldsSubhalos=['ssfr_gyr_log'])
-    kappa = auxCat(sP, fields=[acFieldName])[acFieldName][:,1]
+    mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
+    ssfr  = sP.groupCat(fieldsSubhalos=['ssfr_gyr_log'])
+    kappa = sP.auxCat(fields=[acFieldName])[acFieldName][:,1]
 
     # sample selection
     w = np.where( (mhalo >= 11.85) & (mhalo < 12.28) &\
@@ -1800,7 +1799,7 @@ def milkyWaySampleNumbers():
     fields = ['Subhalo_Mass_250pkpc_Gas','Subhalo_Mass_250pkpc_Stars',
               'Subhalo_Mass_50pkpc_Gas','Subhalo_Mass_50pkpc_Stars',
               'Subhalo_Mass_250pkpc_Gas_Global','Subhalo_Mass_250pkpc_Stars_Global']
-    ac = auxCat(sP, fields=fields)
+    ac = sP.auxCat(fields=fields)
 
     for field in fields + ['baryon_50','baryon_250','baryon_global_250']:
 

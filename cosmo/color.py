@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 
 from util.loadExtern import loadSDSSData
 from cosmo.kCorr import kCorrections, coeff
-from cosmo.load import groupCat, groupCatHeader, auxCat
 
 # currently same for all sims, otherwise move into sP:
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
@@ -33,9 +32,9 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
     if colorData is None:
         # load
         if simColorsModel == 'snap':
-            colorData = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
+            colorData = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])
         else:
-            colorData = auxCat(sP, fields=[acKey])
+            colorData = sP.auxCat(fields=[acKey])
 
     # early exit with full data?
     if bands is None:
@@ -45,11 +44,11 @@ def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None,
 
     # compute colors
     if simColorsModel == 'snap':
-        gc_colors = stellarPhotToSDSSColor( colorData['subhalos'], bands )
+        gc_colors = stellarPhotToSDSSColor( colorData, bands )
     else:
         # which subhaloIDs do these colors correspond to? NOTE: 'subhaloIDs' in colorData is almost 
         # always corrupt, prior to commit fedf6b (16 Apr 2017), so don't use
-        gcH = groupCatHeader(sP)
+        gcH = sP.groupCatHeader()
         assert gcH['Nsubgroups_Total'] == colorData[acKey].shape[0] # otherwise need auxCat stored subIDs
         subhaloIDs = np.arange(colorData[acKey].shape[0])
 
@@ -211,12 +210,12 @@ def compareOldNewMags():
     bands = ['i','z']
 
     # snapshot magnitudes/colors
-    gcColorLoad = groupCat(sP, fieldsSubhalos=['SubhaloStellarPhotometrics'])
-    snap_colors = stellarPhotToSDSSColor( gcColorLoad['subhalos'], bands )
+    gcColorLoad = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])
+    snap_colors = stellarPhotToSDSSColor( gcColorLoad, bands )
 
     # auxcat magnitudes/colors
     acKey = 'Subhalo_StellarPhot_p07c_nodust'
-    acColorLoad = auxCat(sP, fields=[acKey])
+    acColorLoad = sP.auxCat(fields=[acKey])
 
     acBands = acColorLoad[acKey+'_attrs']['bands']
     i0 = np.where(acBands == 'sdss_'+bands[0])[0][0]
@@ -240,14 +239,14 @@ def compareOldNewMags():
 
     # magnitudes
     if bands[0] == 'u':
-        snap_mags = gcColorLoad['subhalos'][:,4] + (-1.0/0.2906) * \
-                    (gcColorLoad['subhalos'][:,2] - gcColorLoad['subhalos'][:,4] - 0.0885)
+        snap_mags = gcColorLoad[:,4] + (-1.0/0.2906) * \
+                    (gcColorLoad[:,2] - gcColorLoad[:,4] - 0.0885)
     elif bands[0] == 'g':
-        snap_mags = gcColorLoad['subhalos'][:,4]
+        snap_mags = gcColorLoad[:,4]
     elif bands[0] == 'i':
-        snap_mags = gcColorLoad['subhalos'][:,6]
+        snap_mags = gcColorLoad[:,6]
     elif bands[0] == 'r':
-        snap_mags = gcColorLoad['subhalos'][:,5]
+        snap_mags = gcColorLoad[:,5]
 
     auxcat_mags = acColorLoad[acKey][:,i0]
 

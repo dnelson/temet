@@ -13,9 +13,6 @@ from os.path import isfile, expanduser
 from glob import glob
 
 from util.helper import leastsq_fit, least_squares_fit
-from cosmo.load import groupCat, groupCatHeader, auxCat
-from cosmo.util import correctPeriodicDistVecs, cenSatSubhaloIndices, snapNumToRedshift
-from cosmo.mergertree import loadMPB, loadMPBs
 from plot.config import defSimColorModel
 from plot.quantities import bandMagRange
 
@@ -50,7 +47,7 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
 
     # load z=0 colors and identify subset of SubhaloIDs we will track
     colors0, subhaloIDs = loadSimGalColors(sP, simColorsModel, bands=bands, projs='all')
-    gcH = groupCatHeader(sP)
+    gcH = sP.groupCatHeader()
 
     if colors0.ndim > 1:
         with warnings.catch_warnings():
@@ -77,7 +74,7 @@ def calcColorEvoTracks(sP, bands=['g','r'], simColorsModel=defSimColorModel):
     shIDEvo.fill(-1)
 
     # load MPBs of the subhalo selection
-    mpbs = loadMPBs(sP, subhaloIDs, fields=['SnapNum','SubfindID'])
+    mpbs = sP.loadMPBs(subhaloIDs, fields=['SnapNum','SubfindID'])
 
     # walk backwards through snapshots where we have computed StellarPhot data
     origSnap = sP.snap
@@ -709,11 +706,11 @@ def characterizeColorMassPlane(sP, bands=['g','r'], cenSatSelect='all', simColor
             #gc_colors = np.reshape( gc_colors, gc_colors.shape[0]*gc_colors.shape[1] )
 
             # load stellar masses (<2rhalf definition)
-            gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-            mstar2_log = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+            gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+            mstar2_log = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
 
             # cen/sat selection
-            wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+            wSelect = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
             gc_colors = gc_colors[wSelect] #[wSelect,:]
             mstar2_log = mstar2_log[wSelect]
 
@@ -959,7 +956,7 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
         sP.data['sim_colors_evo'], sP.data['shID_evo'], sP.data['subhalo_ids'], sP.data['evo_snaps'] = \
           sim_colors_evo, shID_evo, subhalo_ids, evo_snaps
 
-    redshifts = snapNumToRedshift(sP, evo_snaps)
+    redshifts = sP.snapNumToRedshift(evo_snaps)
     ages = sP.units.redshiftToAgeFlat(redshifts)
 
     w = np.where(redshifts <= maxRedshift)
@@ -1123,8 +1120,8 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
         # load the corresponding mstar values at this snapshot
         sP.setSnap(snap)
 
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-        mstar_log = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+        mstar_log = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
 
         # subhaloIDs in the color evo tracks (index subhalos in groupcat at this snap)
         colorSHIDs_thisSnap = np.squeeze(shID_evo[:,snapInd])

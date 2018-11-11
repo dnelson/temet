@@ -488,8 +488,8 @@ def stellarMergerContribution(sP):
 
     # load groupcat
     radSqMax = sP.units.physicalKpcToCodeLength(rad_pkpc)**2
-    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType','SubhaloMass','SubhaloGrNr'])['subhalos']
-    halos = sP.groupCat(fieldsHalos=['Group_M_Crit200'])['halos']
+    gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType','SubhaloMass','SubhaloGrNr'])
+    halos = sP.groupCat(fieldsHalos=['Group_M_Crit200'])
     gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
     gc['SubhaloMass'] = sP.units.codeMassToLogMsun( gc['SubhaloMass'] )

@@ -297,7 +297,7 @@ def groupCutoutFromSnap(run='tng'):
         continue # skip
 
         data = {}
-        subh = cosmo.load.groupCatSingle(sP, subhaloID=subhaloID)
+        subh = sP.groupCatSingle(subhaloID=subhaloID)
         haloID = subh['SubhaloGrNr']
 
         for partType in ptTypes:
@@ -836,15 +836,14 @@ def export_ovi_phase():
 def makeCohnVsuiteCatalog(redshift=0.0):
     """ Write a .txt file for input into Joanne Cohn's validation-suite. """
     from util.simParams import simParams
-    from cosmo.load import groupCat
     sP = simParams(res=1820,run='illustris',redshift=redshift)
 
     # load
-    mstar = groupCat(sP, fieldsSubhalos=['mstar_30pkpc_log']) # log msun
-    sfr   = groupCat(sP, fieldsSubhalos=['SubhaloSFRinRad'])['subhalos'] # msun/yr
-    cen   = groupCat(sP, fieldsSubhalos=['central_flag'])
-    mhalo = groupCat(sP, fieldsSubhalos=['mhalo_subfind_log']) # log msun
-    m200  = groupCat(sP, fieldsSubhalos=['mhalo_200_log'])
+    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log']) # log msun
+    sfr   = sP.groupCat(fieldsSubhalos=['SubhaloSFRinRad']) # msun/yr
+    cen   = sP.groupCat(fieldsSubhalos=['central_flag'])
+    mhalo = sP.groupCat(fieldsSubhalos=['mhalo_subfind_log']) # log msun
+    m200  = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
 
     sat = (~cen.astype('bool')).astype('int16')
 

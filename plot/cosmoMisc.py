@@ -14,8 +14,6 @@ from scipy.signal import savgol_filter
 
 from util import simParams
 from util.helper import running_median, logZeroNaN
-from cosmo.util import cenSatSubhaloIndices
-from cosmo.load import groupCat, snapshotSubset
 from plot.config import *
 
 def plotRedshiftSpacings():
@@ -104,10 +102,10 @@ def plotMassFunctions():
             print(j,sP.simName)
 
             if j == 0:
-                gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'])
-                masses = sP.units.codeMassToLogMsun(gc['halos'])
+                gc = sP.groupCat(fieldsHalos=['Group_M_Crit200'])
+                masses = sP.units.codeMassToLogMsun(gc)
             if j == 1:
-                gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMassInRadType'])
+                gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMassInRadType'])
                 masses = gc['subhalos'][ gc['halos'] ][:,sP.ptNum('stars')] # Mstar (<2*r_{1/2,stars})
                 masses = sP.units.codeMassToLogMsun(masses)
 
@@ -160,11 +158,11 @@ def haloMassesVsDMOMatched():
             print(sP.simName)
 
             # load masses from group catalogs for TNG and DMO runs
-            gc_b = groupCat(sP, fieldsSubhalos=['SubhaloMass'])['subhalos']
-            gc_dm = groupCat(sPdm, fieldsSubhalos=['SubhaloMass'])['subhalos']
+            gc_b = sP.groupCat(fieldsSubhalos=['SubhaloMass'])
+            gc_dm = sPdm.groupCat(fieldsSubhalos=['SubhaloMass'])
 
             # restrict to central subhalos of DMO, and valid (!= -1) matches
-            wSelect_b = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+            wSelect_b = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
             mask_b = np.zeros( gc_b.size, dtype='bool' )
             mask_b[wSelect_b] = 1
 
@@ -230,7 +228,7 @@ def plotClumpsEvo():
     reverseSort = False # if True, then descending
 
     # load and select
-    gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMass', selectQuant])
+    gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], fieldsSubhalos=['SubhaloMass', selectQuant])
     sort_inds = np.argsort( gc['subhalos'][selectQuant] )
     if reverseSort: sort_inds = sort_inds[::-1]
 
@@ -291,7 +289,7 @@ def plotClumpsEvo():
         sfh.fill(np.nan)
 
         if mpb['SubhaloMassType'][0,sP.ptNum('stars')] > 0:
-            stars = cosmo.load.snapshotSubset(sP, 'stars', ['masses','sftime'], subhaloID=sort_inds[i])
+            stars = sP.snapshotSubset('stars', ['masses','sftime'], subhaloID=sort_inds[i])
 
             snapScalefacs = 1.0 / (1+snapRedshifts)
             for j in range(snapRedshifts.size-1):
@@ -444,19 +442,19 @@ def compareEOSFiles(doTempNotPres=False):
     for sP in sPs:
         print(sP.simName)
         
-        sim_dens = snapshotSubset(sP, 'gas', 'dens')
+        sim_dens = sP.snapshotSubsetP('gas', 'dens')
         sim_dens = sP.units.codeDensToPhys(sim_dens, cgs=True, numDens=True) * sP.units.hydrogen_massfrac
         sim_dens = np.log10(sim_dens)
 
         if doTempNotPres:
-            sim_temp = snapshotSubset(sP, 'gas', 'temp')
+            sim_temp = sP.snapshotSubsetP('gas', 'temp')
             xm1, ym1, sm1 = running_median(sim_dens,sim_temp,binSize=binSize)
 
             ax.plot(xm1[:-1], ym1[:-1], '-', alpha=0.9, label=sP.simName+' median T$_{\\rm gas}$')
         else:
             # pressures
-            sim_pres_gas = snapshotSubset(sP, 'gas', 'P_gas')
-            sim_pres_B   = snapshotSubset(sP, 'gas', 'P_B')
+            sim_pres_gas = sP.snapshotSubset('gas', 'P_gas')
+            sim_pres_B   = sP.snapshotSubset('gas', 'P_B')
 
             xm1, ym1, sm1 = running_median(sim_dens,sim_pres_gas,binSize=binSize)
             xm2, ym2, sm2 = running_median(sim_dens,sim_pres_B,binSize=binSize)
@@ -506,7 +504,7 @@ def bFieldStrengthComparison():
 
     for sP in sPs:
         # load
-        b_mag = snapshotSubset(sP, 'gas', 'bmag', haloID=haloID)
+        b_mag = sP.snapshotSubset('gas', 'bmag', haloID=haloID)
         b_mag *= 1e6 # Gauss to micro-Gauss
         b_mag = np.log10(b_mag) # log uG
 
@@ -532,9 +530,9 @@ def depletionVsDynamicalTimescale():
     figsize = (14,9)
     sP = simParams(res=1820,run='illustris',redshift=0.0)
 
-    gc = groupCat(sP, fieldsHalos=['GroupFirstSub'], 
+    gc = sP.groupCat(fieldsHalos=['GroupFirstSub'], 
                       fieldsSubhalos=['SubhaloHalfmassRadType','SubhaloVmax','SubhaloSFR'])
-    ac = auxCat(sP, fields=['Subhalo_Mass_SFingGas','Subhalo_Mass_30pkpc_Stars'])
+    ac = sP.auxCat(fields=['Subhalo_Mass_SFingGas','Subhalo_Mass_30pkpc_Stars'])
 
     # t_dep [Gyr]
     M_cold = sP.units.codeMassToMsun(ac['Subhalo_Mass_SFingGas'])

@@ -20,9 +20,6 @@ from util.helper import running_median, contourf, logZeroNaN, closest, loadColor
 from tracer.tracerMC import match3
 from cosmo.color import loadSimGalColors, stellarPhotToSDSSColor, calcSDSSColors, calcMstarColor2dKDE
 from projects.color_analysis import calcColorEvoTracks, characterizeColorMassPlane, colorTransitionTimes
-from cosmo.mergertree import loadMPB
-from cosmo.util import cenSatSubhaloIndices, snapNumToRedshift, redshiftToSnapNum
-from cosmo.load import groupCat, groupCatSingle, groupCatHeader
 from plot.quantities import simSubhaloQuantity, bandMagRange
 from plot.cosmoGeneral import quantHisto2D, quantSlice1D, quantMedianVsSecondQuant
 from vis.common import setAxisColors
@@ -133,11 +130,11 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
             sP.setRedshift(simRedshift)
 
             # load fullbox stellar masses
-            gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-            gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+            gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+            gc_masses = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
             
             # galaxy selection
-            w_cen, w_all, w_sat = cenSatSubhaloIndices(sP)
+            w_cen, w_all, w_sat = sP.cenSatSubhaloIndices()
 
             # determine unique color
             c = next(ax._get_lines.prop_cycler)['color']
@@ -184,13 +181,13 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
             assert w_all.size == gc_masses.size
 
             if minDMFrac is not None:
-                subMass = groupCat(sP, fieldsSubhalos=['SubhaloMass','SubhaloMassType'])['subhalos']
+                subMass = sP.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloMassType'])
                 subDMMassRatio = subMass['SubhaloMassType'][:,sP.ptNum('dm')] / subMass['SubhaloMass']
 
                 #w = np.where(subDMMassRatio < minDMFrac)
                 #print('overall %d of %d fail DM cut' % (w[0].size,subDMMassRatio.size))
-                #gc2 = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-                #gc_masses2 = sP.units.codeMassToLogMsun( gc2['subhalos'][:,sP.ptNum('stars')] )
+                #gc2 = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+                #gc_masses2 = sP.units.codeMassToLogMsun( gc2[:,sP.ptNum('stars')] )
                 #w = np.where(gc_masses2 >= 9.0)
                 #subDMMassRatio2 = subDMMassRatio[w]
                 #w = np.where(subDMMassRatio2 < minDMFrac)
@@ -505,14 +502,14 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             spColors.append(c)
 
             # load fullbox stellar masses and photometrics
-            gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-            gc_masses = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+            gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+            gc_masses = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
             
             # load simulation colors
             colorData = loadSimGalColors(sP, simColorsModel)
 
             # galaxy selection
-            w_cen, w_all, w_sat = cenSatSubhaloIndices(sP)
+            w_cen, w_all, w_sat = sP.cenSatSubhaloIndices()
 
             # selection:
             normFacs = np.zeros( len(bandCombos) )
@@ -666,7 +663,7 @@ def viewingAngleVariation():
             xx = xx[:-1] + 0.5 * binSize
 
             label = ''
-            subhalo = groupCatSingle(sP, subhaloID=sub_id)
+            subhalo = sP.groupCatSingle(subhaloID=sub_id)
             mstar = sP.units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][sP.ptNum('star')])
             sSFR = np.log10(subhalo['SubhaloSFR'] / 10.0**mstar)
             label = 'M$_\star$=10$^{%.1f}$ sSFR=%.1f' % (mstar,sSFR)
@@ -750,7 +747,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     if not clean: ylabel += ' %s' % simColorsModel
 
     # pick initial and final color corresponding to timewindow
-    savedRedshifts = snapNumToRedshift(sP, snap=snaps)
+    savedRedshifts = sP.snapNumToRedshift(snap=snaps)
     _, zIndTo = closest(savedRedshifts, toRedshift)
     _, zIndFrom = closest(savedRedshifts, sP.redshift)
 
@@ -775,7 +772,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     sim_xvals_from = sim_xvals[subhalo_ids]
 
     # central/satellite selection?
-    wSelect_orig = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    wSelect_orig = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
     wSelect, _ = match3(subhalo_ids, wSelect_orig)
 
     frac_global = float(wSelect_orig.size) / sim_xvals.size * 100
@@ -1552,7 +1549,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         subhalo_id_map[evo['subhalo_ids']] = np.arange(N) # such that subhalo_id_map[subhaloID] = evo index
 
         css_inds = {}
-        css_inds['cen'], css_inds['all'], css_inds['sat'] = cenSatSubhaloIndices(sP)
+        css_inds['cen'], css_inds['all'], css_inds['sat'] = sP.cenSatSubhaloIndices()
         assert cenSatSelects[0] == 'all' # otherwise logic below fails for PDF norms
 
         # calculate: allocate
@@ -1599,8 +1596,8 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         # sP.redshift stellar massses and other simulation quantities
         sim_quants = {'mstar':{}, 'kappa_stars':{}, 'bh_cumegy_ratio':{}}
 
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])
-        gc_mstar = sP.units.codeMassToLogMsun( gc['subhalos'][:,sP.ptNum('stars')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
+        gc_mstar = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
 
         ac_kappa, fieldLabels['kappa_stars'], fieldMinMax['kappa_stars'], takeLog = \
           simSubhaloQuantity(sP, 'Krot_oriented_stars2')
@@ -2046,10 +2043,10 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
         print(' pageNum = %d' % pageNum)
 
         if 'cen_inds' not in sP.data:
-            cen_inds = cenSatSubhaloIndices(sP, cenSatSelect='cen')
+            cen_inds = sP.cenSatSubhaloIndices(cenSatSelect='cen')
             sP.data['cen_inds'] = cen_inds
 
-            gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType'])['subhalos']
+            gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType'])
             mstar = sP.units.codeMassToLogMsun( gc[:,sP.ptNum('stars')] )
         else:
             cen_inds = sP.data['cen_inds']
@@ -2097,7 +2094,7 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
                 gal_colors[dustModel][:,i] = colors_evo[evoInd,projInd_C,:]
 
             # load MPB
-            mpb = loadMPB(sP, shID)
+            mpb = sP.loadMPB(shID)
             mpb_mstar = sP.units.codeMassToLogMsun( mpb['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
 
             # pull out masses
@@ -2110,7 +2107,7 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
 
                 gal_masses[dustModel][j,i] = mpb_mstar[mpbInd]
 
-        gal_redshifts[dustModel] = snapNumToRedshift(sP, snap=gal_snaps)
+        gal_redshifts[dustModel] = sP.snapNumToRedshift(snap=gal_snaps)
         gal_redshifts[dustModel] = np.around( gal_redshifts[dustModel], decimals=1 )
 
     # start plot
@@ -2136,7 +2133,7 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
 
     # contours
     for i, redshift in enumerate(cRedshifts):
-        sP.snap = redshiftToSnapNum(redshifts=redshift, sP=sP)
+        sP.snap = sP.redshiftToSnapNum(redshifts=redshift)
 
         extent = [xMinMax[0],xMinMax[1],mag_range[0],mag_range[1]]
 

@@ -10,7 +10,6 @@ import h5py
 from os.path import isfile
 
 from util.helper import logZeroNaN, running_median_clipped
-from cosmo.load import groupCat, groupCatHeader, auxCat
 from cosmo.cloudy import cloudyIon
 from plot.config import *
 
@@ -43,12 +42,10 @@ def groupOrderedValsToSubhaloOrdered(vals_group, sP):
     """ For an input array of size equal to the number of FoF groups, re-index these 
     placing each value into the subhalo index of the group's central. Non-centrals 
     are left at NaN value. """
-    groupFirstSubs = groupCat(sP, fieldsHalos=['GroupFirstSub'])['halos']
-    nSubs = groupCatHeader(sP)['Nsubgroups_Total']
-
+    groupFirstSubs = sP.groupCat(fieldsHalos=['GroupFirstSub'])
     assert groupFirstSubs.shape == vals_group.shape
 
-    vals_sub = np.zeros( nSubs, dtype='float64' )
+    vals_sub = np.zeros( sP.numSubhalos, dtype='float64' )
     vals_sub.fill(np.nan)
     vals_sub[groupFirstSubs] = vals_group
 
@@ -178,8 +175,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if sP.boxSize < 50000: minMax = np.array(minMax) - 1.0
 
         # stellar/gas mass (within 1 or 2 r1/2stars), optionally already returned in log
-        gc = groupCat(sP, fieldsSubhalos=[fieldName])
-        vals = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum(partName)] )
+        gc = sP.groupCat(fieldsSubhalos=[fieldName])
+        vals = sP.units.codeMassToMsun( gc[:,sP.ptNum(partName)] )
 
         if '_log' in quant:
             takeLog = False
@@ -191,7 +188,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
         # stellar mass (auxcat based calculations)
         acField = 'Subhalo_Mass_30pkpc_Stars'
-        ac = auxCat(sP, fields=[acField])
+        ac = sP.auxCat(fields=[acField])
 
         vals = sP.units.codeMassToMsun(ac[acField])
 
@@ -218,7 +215,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         acField = 'Subhalo_Mass%s_HI' % radStr1
 
-        ac = auxCat(sP, fields=[acField])
+        ac = sP.auxCat(fields=[acField])
         vals = sP.units.codeMassToMsun(ac[acField])
 
         if '_log' in quant:
@@ -236,7 +233,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             # M200crit or M500crit values, satellites given naN
             od = 200 if '_200' in quant else 500
 
-            gc = groupCat(sP, fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+            gc = sP.groupCat(fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
             vals = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit%d'%od][gc['subhalos']] )
 
             mask = np.zeros( gc['subhalos'].size, dtype='int16' )
@@ -247,8 +244,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             mTypeStr = '%d,crit' % od
 
         if '_subfind' in quant:
-            gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
-            vals = sP.units.codeMassToMsun( gc['subhalos'] )
+            gc = sP.groupCat(fieldsSubhalos=['SubhaloMass'])
+            vals = sP.units.codeMassToMsun( gc )
             mTypeStr = 'Subfind'
 
         if '_log' in quant:
@@ -264,7 +261,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # R200crit or R500crit
         od = 200 if '_200' in quant else 500
 
-        gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+        gc = sP.groupCat(fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
         vals = sP.units.codeLengthToKpc( gc['halos']['Group_R_Crit%d'%od][gc['subhalos']] )
 
         mask = np.zeros( gc['subhalos'].size, dtype='int16' )
@@ -284,8 +281,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quant in ['vmag','velmag','vmag_log','velmag_log']:
         # SubhaloVel [physical km/s]
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloVel'])
-        vals = sP.units.subhaloCodeVelocityToKms(gc['subhalos'])
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
+        vals = sP.units.subhaloCodeVelocityToKms(gc)
         vals = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
 
         if '_log' in quant:
@@ -305,7 +302,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if speciesStr == 'Gasall': speciesStr = 'AllGas'
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         if ac[fieldName] is None: return [None]*4
         vals = sP.units.codeMassToMsun(ac[fieldName])
 
@@ -339,20 +336,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             fieldName = 'Subhalo_GasSFR_%dpkpc' % aperture
             timeStr = 'instantaneous'
             
-            vals = auxCat(sP, fieldName)[fieldName] # msun/yr
+            vals = sP.auxCat(fieldName)[fieldName] # msun/yr
         else:
             timescale = int(quant.split('_')[-1].split('myr')[0])
             dt_yr = 1e6 * timescale
             timeStr = '%d myr' % timescale
             fieldName = 'Subhalo_StellarMassFormed_%dmyr_%dpkpc' % (timescale,aperture)
 
-            ac = auxCat(sP, fieldName)
+            ac = sP.auxCat(fieldName)
             vals = sP.units.codeMassToMsun(ac[fieldName]) / dt_yr # msun/yr
 
         if 'ssfr_' in quant:
             # specific
             fieldName = 'Subhalo_Mass_30pkpc_Stars'
-            mass = sP.units.codeMassToMsun( auxCat(sP, fieldName)[fieldName] )
+            mass = sP.units.codeMassToMsun( sP.auxCat(fieldName)[fieldName] )
             w = np.where(mass > 0.0)
             vals[w] /= mass[w]
             w = np.where(mass == 0.0)
@@ -385,7 +382,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         band = quant.split('re_stars_')[1]
 
         fieldName = 'Subhalo_HalfLightRad_p07c_cf00dust_z' + restrictStr
-        ac = auxCat(sP, fieldName)
+        ac = sP.auxCat(fieldName)
 
         bands = list(ac[fieldName + '_attrs']['bands'])
         assert band in bands
@@ -399,16 +396,16 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
-        mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
+        mstar = sP.units.codeMassToMsun( gc['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
 
         # fix mstar=0 values such that vals_raw is zero, which is then specially colored
         w = np.where(mstar == 0.0)[0]
         if len(w):
             mstar[w] = 1.0
-            gc['subhalos']['SubhaloSFRinRad'][w] = 0.0
+            gc['SubhaloSFRinRad'][w] = 0.0
 
-        vals = gc['subhalos']['SubhaloSFRinRad'] / mstar * 1e9 # 1/yr to 1/Gyr
+        vals = gc['SubhaloSFRinRad'] / mstar * 1e9 # 1/yr to 1/Gyr
         #vals[vals == 0.0] = vals[vals > 0.0].min() * 1.0 # set SFR=0 values
 
         label = 'log sSFR [ Gyr$^{-1}$ ]'
@@ -431,7 +428,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fields = ['SubhaloSFRin%sRad' % hStr]
         if 'surfdens' in quant: fields.append('SubhaloHalfmassRadType')
-        gc = groupCat(sP, fieldsSubhalos=fields)['subhalos']
+        gc = sP.groupCat(fieldsSubhalos=fields)
 
         if 'surfdens' in quant:
             aperture = sP.units.codeLengthToKpc( gc['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] * hFac )
@@ -443,7 +440,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if tight: minMax = [-4.0, 2.0]
 
         else:
-            vals = gc['SubhaloSFRin%sRad' % hStr]
+            vals = gc
 
             label = 'Star Formation Rate (<%d$r_{\\rm 1/2,\star}, instant)' % hFac
             minMax = [-2.5, 1.0]
@@ -451,11 +448,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quant == 'delta_sfms':
         # offset from the star-formation main sequence (SFMS), taken as the clipped sim median (Genel+18), in dex
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
-        mstar = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
+        mstar = sP.units.codeMassToMsun( gc['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
 
         with np.errstate(invalid='ignore'): # mstar==0 values generate ssfr==nan
-            log_ssfr = logZeroNaN(gc['subhalos']['SubhaloSFRinRad'] / mstar * 1e9) # 1/yr to 1/Gyr
+            log_ssfr = logZeroNaN(gc['SubhaloSFRinRad'] / mstar * 1e9) # 1/yr to 1/Gyr
 
         # construct SFMS (in sSFR) values as a function of stellar mass (skip zeros, clip 10% tails)
         # fix minVal and maxVal for consistent bins
@@ -485,8 +482,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quant == 'Z_stars':
         # mass-weighted mean stellar metallicity (within 2r1/2stars)
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloStarMetallicity'])
-        vals = sP.units.metallicityInSolar(gc['subhalos'])
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloStarMetallicity'])
+        vals = sP.units.metallicityInSolar(gc)
 
         label = 'log ( Z$_{\\rm stars}$ / Z$_{\\rm sun}$ )'
         if not clean: label += ' (<2r$_{\star,1/2}$)'
@@ -497,12 +494,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ptName = 'gas'
 
         if quant == 'Z_gas':
-            metallicity_mass_ratio = groupCat(sP, fieldsSubhalos=['SubhaloGasMetallicity'])['subhalos']
+            metallicity_mass_ratio = sP.groupCat(fieldsSubhalos=['SubhaloGasMetallicity'])
         if quant == 'Z_gas_all':
             fieldName1 = 'Subhalo_Mass_All%s' % ptName.capitalize()
             fieldName2 = 'Subhalo_Mass_All%s_Metal' % ptName.capitalize()
-            ac1 = auxCat(sP, fields=[fieldName1])[fieldName1] # code mass units
-            ac2 = auxCat(sP, fields=[fieldName2])[fieldName2] # code mass units
+            ac1 = sP.auxCat(fields=[fieldName1])[fieldName1] # code mass units
+            ac2 = sP.auxCat(fields=[fieldName2])[fieldName2] # code mass units
             metallicity_mass_ratio = np.zeros( ac1.size, dtype='float32' )
             w = np.where(ac1 > 0.0)
             metallicity_mass_ratio[w] = ac2[w] / ac1[w]
@@ -518,8 +515,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quant == 'fgas_r200':
         # gas fraction = (M_gas / M_tot) within virial radius (r200crit), fof scope approximation
         fieldName = 'Subhalo_Mass_r200_Gas'
-        M_gas = auxCat(sP, fields=[fieldName], expandPartial=True)[fieldName]
-        M_tot = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
+        M_gas = sP.auxCat(fields=[fieldName], expandPartial=True)[fieldName]
+        M_tot = sP.groupCat(fieldsSubhalos=['mhalo_200_code'])
 
         # correct for non-global r200 calculation
         if not '_Global' in fieldName:
@@ -537,14 +534,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quant == 'tcool_halo_ovi':
         # mean cooling time of halo gas, weighted by ovi mass [Gyr]
         fieldName = 'Subhalo_CoolingTime_OVI_HaloGas'
-        vals = auxCat(sP, fields=[fieldName])[fieldName]
+        vals = sP.auxCat(fields=[fieldName])[fieldName]
 
         label = 't$_{\\rm cool,halo,OVI}$ [ log Gyr ]'
         minMax = [-0.5, 1.5]
 
     if quant == 'size_gas':
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        vals = sP.units.codeLengthToKpc( gc['subhalos'][:,sP.ptNum('gas')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
+        vals = sP.units.codeLengthToKpc( gc[:,sP.ptNum('gas')] )
 
         label = 'r$_{\\rm gas,1/2}$ [ log kpc ]'
         minMax = [1.0, 2.8]
@@ -554,8 +551,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax[1] -= sP.redshift/4
 
     if quant == 'size_stars':
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
-        vals = sP.units.codeLengthToKpc( gc['subhalos'][:,sP.ptNum('stars')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
+        vals = sP.units.codeLengthToKpc( gc[:,sP.ptNum('stars')] )
 
         label = 'r$_{\\rm \star,1/2}$ [ log kpc ]'
         minMax = [0.1, 1.6]
@@ -577,10 +574,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             detailsStr = ', <2r_{\star,1/2}'
 
         fields = ['SubhaloMassIn%sType' % selStr,'SubhaloHalfmassRadType']
-        gc = groupCat(sP, fieldsSubhalos=fields)
+        gc = sP.groupCat(fieldsSubhalos=fields)
 
-        mass = sP.units.codeMassToMsun( gc['subhalos']['SubhaloMassIn%sType'%selStr][:,sP.ptNum('stars')] )
-        size = sP.units.codeLengthToKpc( gc['subhalos']['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] )
+        mass = sP.units.codeMassToMsun( gc['SubhaloMassIn%sType'%selStr][:,sP.ptNum('stars')] )
+        size = sP.units.codeLengthToKpc( gc['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] )
         if '2_' in quant: size *= 2.0
 
         with np.errstate(invalid='ignore'):
@@ -595,9 +592,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if quant == 'fgas1': fieldName = 'SubhaloMassInHalfRadType'
         if quant == 'fgas2': fieldName = 'SubhaloMassInRadType'
 
-        gc = groupCat(sP, fieldsSubhalos=[fieldName])
-        mstar = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum('stars')] )
-        mgas = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum('gas')] )
+        gc = sP.groupCat(fieldsSubhalos=[fieldName])
+        mstar = sP.units.codeMassToMsun( gc[:,sP.ptNum('stars')] )
+        mgas = sP.units.codeMassToMsun( gc[:,sP.ptNum('gas')] )
 
         # fix mstar=0 values such that vals_raw is zero, which is then specially colored
         w = np.where(mstar == 0.0)[0]
@@ -623,7 +620,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ageType = '4pkpc_rBandLumWt'
         fieldName = 'Subhalo_StellarAge_' + ageType
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
 
         vals = ac[fieldName]
         
@@ -635,7 +632,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quant in ['zform_mm5','zform_ma5','zform_poly7']:
         zFormType = quant.split("_")[1]
         fieldName = 'Subhalo_SubLink_zForm_' + zFormType
-        ac = auxCat(sP, fields=[fieldName], searchExists=True)
+        ac = sP.auxCat(fields=[fieldName], searchExists=True)
         if ac[fieldName] is None: return [None]*4
 
         vals = ac[fieldName]
@@ -672,7 +669,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals[done == 0] = np.nan
 
         # verify dimensions
-        assert groupCatHeader(sP)['Nsubgroups_Total'] == vals.size == vals.shape[0]
+        assert sP.numSubhalos == vals.size == vals.shape[0]
 
         if not clean: label += ' [%s, shy]' % selStr
         minMax = [0.0,0.6]
@@ -760,7 +757,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals[wNonzeroMstar] /= mass_norm[wNonzeroMstar]
         vals[wZeroMstar] = np.nan
 
-        assert vals.size == vals.shape[0] == groupCatHeader(sP)['Nsubgroups_Total'] # verify dims
+        assert vals.size == vals.shape[0] == sP.numSubhalos # verify dims
 
         minMax = [-2.2,0.0]
         if tight: minMax = [-3.0,0.0]
@@ -791,7 +788,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Bmag_%s_%s' % (selStr,wtStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         vals = ac[fieldName] * 1e6 # Gauss -> microGauss
 
         label = 'log |B|$_{\\rm %s}$  [$\mu$G]' % selDesc
@@ -819,7 +816,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_%s_%s_%s' % (rtStr,selStr,wtStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         vals = ac[fieldName]
 
         if 'pratio_' in quant: label = 'log P$_{\\rm B}$/P$_{\\rm gas}$ (%s)' % selDesc
@@ -843,7 +840,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Ptot_%s_halo' % (selStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         vals = ac[fieldName]
 
         if not clean:
@@ -895,7 +892,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # normalization by something else?
         if norm is not None and norm == 'zForm':
             acField = 'Subhalo_SubLink_zForm_mm5'
-            vals /= auxCat(sP, fields=[acField])[acField]
+            vals /= sP.auxCat(fields=[acField])[acField]
 
         # plot properties
         if quant == 'zAcc_mean':
@@ -957,7 +954,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         _, sfr_timescale, rad, vcut = quant.split('_')
 
         fieldName = 'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-%s' % sfr_timescale
-        ac = auxCat(sP, fields=[fieldName], expandPartial=True)
+        ac = sP.auxCat(fields=[fieldName], expandPartial=True)
         
         # figure out which (radius,vcut) selection
         radBins = ac[fieldName + '_attrs']['rad']
@@ -987,7 +984,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if 'etaP_' in quant: acStr = 'Momentum'
 
         fieldName = 'Subhalo_%sLoadingSN_SubfindWithFuzz' % acStr
-        ac = auxCat(sP, fields=[fieldName], expandPartial=True)
+        ac = sP.auxCat(fields=[fieldName], expandPartial=True)
         
         # figure out which (radius,vcut) selection
         radBins = ac[fieldName + '_attrs']['rad']
@@ -1008,7 +1005,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         _, perc, rad = quant.replace('_log','').split('_')
 
         fieldName = 'Subhalo_OutflowVelocity_SubfindWithFuzz'
-        ac = auxCat(sP, fields=[fieldName], expandPartial=True)
+        ac = sP.auxCat(fields=[fieldName], expandPartial=True)
 
         # figure out which (radius,perc) selection
         radBins = ac[fieldName + '_attrs']['rad']
@@ -1047,12 +1044,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # 'total' black hole mass in this subhalo
         # note: some subhalos (particularly the ~50=~1e-5 most massive) have N>1 BHs, then we here 
         # are effectively taking the sum of all their BH masses (better than mean, but max probably best)
-        gc = groupCat(sP, fieldsSubhalos=[fieldName])
+        gc = sP.groupCat(fieldsSubhalos=[fieldName])
 
         if quant == 'M_BH':
-            vals = sP.units.codeMassToMsun( gc['subhalos'][:,sP.ptNum('bhs')] )
+            vals = sP.units.codeMassToMsun( gc[:,sP.ptNum('bhs')] )
         if quant == 'M_BH_actual':
-            vals = sP.units.codeMassToMsun( gc['subhalos'] )
+            vals = sP.units.codeMassToMsun( gc )
 
         label = 'M$_{\\rm BH}$ [ log M$_{\\rm sun}$ ]'
         if not clean:
@@ -1070,7 +1067,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = '$\dot{M}_{\\rm BH} / \dot{M}_{\\rm Edd}$'
         minMax = [-5.0, -0.5]
 
-        ac = auxCat(sP, fields=fields)
+        ac = sP.auxCat(fields=fields)
 
         vals = ac['Subhalo_BH_Mdot_largest'] / ac['Subhalo_BH_MdotEdd_largest']
 
@@ -1093,7 +1090,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if tight: minMax = [41.0, 45.0]
 
         acName = 'Subhalo_%s_largest' % quant
-        ac = auxCat(sP, fields=[acName])
+        ac = sP.auxCat(fields=[acName])
         vals = ac[acName]
 
     if quant in ['wind_vel','wind_etaM','wind_dEdt','wind_dPdt']:
@@ -1121,7 +1118,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if tight: minMax = [38.0, 43.0]
 
         acName = 'Subhalo_Gas_Wind_%s' % quant.split('_')[1]
-        ac = auxCat(sP, fields=[acName])
+        ac = sP.auxCat(fields=[acName])
         vals = ac[acName]
 
         if quant in ['wind_dEdt','wind_dPdt']: # unit conversion: remove 10^51 factor (both e,p)
@@ -1167,7 +1164,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if tight: minMax = [6.0,10.0]
 
         fields = ['Subhalo_BH_' + f for f in fields]
-        ac = auxCat(sP, fields=fields)
+        ac = sP.auxCat(fields=fields)
 
         if '_ratio' in quant:
             # fix ac[fields[1]]=0 values such that vals is zero, which is then specially colored
@@ -1226,7 +1223,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         acField = 'Subhalo_%sRotation%s' % (ptName,radStr)
 
         # load and slice
-        ac = auxCat(sP, fields=[acField])
+        ac = sP.auxCat(fields=[acField])
 
         vals = np.squeeze(ac[acField][:,acIndex])
 
@@ -1237,12 +1234,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         acIndex = 2
 
         # load auxCat and groupCat masses
-        ac = auxCat(sP, fields=[acField])
+        ac = sP.auxCat(fields=[acField])
         ac = np.squeeze( ac[acField][:,acIndex] ) # counter-rotating mass fraction relative to total
         assert np.nanmin(ac) >= 0.0 and np.nanmax(ac) <= 1.0
 
-        gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInHalfRadType'])
-        masses = np.squeeze( gc['subhalos'][:,sP.ptNum('stars')] )
+        gc = sP.groupCat(fieldsSubhalos=['SubhaloMassInHalfRadType'])
+        masses = np.squeeze( gc[:,sP.ptNum('stars')] )
 
         # multiply 2 x (massfrac) x (stellar mass) and convert to solar masses
         vals = sP.units.codeMassToMsun(2.0 * ac * masses)
@@ -1264,7 +1261,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if not clean: label += ' [ subhalo ]'
 
         # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
-        ac = auxCat(sP, fields=[acField])[acField]
+        ac = sP.auxCat(fields=[acField])[acField]
         vals = ac.astype('float64') * 1e30
 
         # if group-based, expand into array for subhalos, leave non-centrals nan
@@ -1313,15 +1310,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [1.0,2.5]
 
         acField = 'Subhalo_SDSSFiberSpectraFits_Vel-Realism_p07c_cf00dust_res_conv_z'
-        ac = auxCat(sP, fields=[acField])
+        ac = sP.auxCat(fields=[acField])
 
         # verify index
         field_names = json.loads( ac[acField+'_attrs']['theta_labels'] )
         assert field_names[acInd] == quant.split('fiber_')[1]
 
         # non-dense in subhaloIDs, crossmatch and leave missing at nan
-        nSubsSnap = groupCatHeader(sP)['Nsubgroups_Total']
-        subhaloIDs_snap = np.arange( nSubsSnap )
+        subhaloIDs_snap = np.arange( sP.numSubhalos )
 
         gc_inds, _ = match3(subhaloIDs_snap, ac['subhaloIDs'])
         assert gc_inds.size == ac['subhaloIDs'].size
@@ -1347,7 +1343,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             specDesc = ', \\alpha = 1.5'
 
         acField = 'Subhalo_SynchrotronPower_%s%s' % (instrumentName, specStr)
-        ac = auxCat(sP, fields=[acField])
+        ac = sP.auxCat(fields=[acField])
 
         vals = ac[acField]
 
@@ -1386,7 +1382,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_nH_%s_%s' % (selStr,wtStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         vals = ac[fieldName] # 1/cm^3
 
         label = 'log n$_{\\rm H,%s}$  [cm$^{-3}$]' % selDesc
@@ -1409,7 +1405,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         fieldName = 'Subhalo_Gas_RadialVel_%s_massWt' % (selStr)
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         vals = ac[fieldName] # physical km/s (negative = inwards)
         takeLog = False
 
@@ -1428,7 +1424,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         wtStr = 'massWt' if not '_volwt' in quant else 'volWt'
         fieldName = 'Subhalo_Temp_halo_%s' % wtStr
 
-        ac = auxCat(sP, fields=[fieldName])
+        ac = sP.auxCat(fields=[fieldName])
         vals = ac[fieldName] # Kelvin
 
         label = 'Gas T$_{\\rm halo}$  [log K]'
@@ -1443,8 +1439,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         ptName = quant.split('_')[1].capitalize()
         fieldName1 = 'Subhalo_Mass_Halo%s' % ptName
         fieldName2 = 'Subhalo_Mass_Halo%s_Metal' % ptName
-        ac1 = auxCat(sP, fields=[fieldName1])[fieldName1] # code mass units
-        ac2 = auxCat(sP, fields=[fieldName2])[fieldName2] # code mass units
+        ac1 = sP.auxCat(fields=[fieldName1])[fieldName1] # code mass units
+        ac2 = sP.auxCat(fields=[fieldName2])[fieldName2] # code mass units
 
         metallicity_mass_ratio = ac2 / ac1
         vals = sP.units.metallicityInSolar(metallicity_mass_ratio)

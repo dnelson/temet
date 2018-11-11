@@ -746,7 +746,7 @@ class simParams:
                                cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
                                correctPeriodicPosBoxWrap
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
-                               gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, \
+                               gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
                                auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity
@@ -768,6 +768,7 @@ class simParams:
         self.groupCatSingle     = partial(groupCatSingle, sP=self)
         self.groupCatHeader     = partial(groupCatHeader, sP=self)
         self.groupCatNumChunks  = partial(groupCatNumChunks, self.simPath)
+        self.groupCatHasField   = partial(groupCatHasField, self)
         self.groupCat           = partial(groupCat, sP=self)
         self.auxCat             = partial(auxCat, self)
         self.loadMPB            = partial(loadMPB, self)

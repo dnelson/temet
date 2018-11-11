@@ -19,8 +19,6 @@ from scipy.stats import binned_statistic_2d
 
 from util import simParams
 from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors, sampleColorTable
-from cosmo.util import cenSatSubhaloIndices
-from cosmo.load import groupCat, groupCatSingle, snapshotSubset
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors, setColorbarColors
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
@@ -148,7 +146,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 
     # central/satellite selection?
-    wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    wSelect = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
 
     sim_xvals = sim_xvals[wSelect]
     sim_cvals = sim_cvals[wSelect]
@@ -417,7 +415,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     if yQuant in ['temp_halo','temp_halo_volwt']:
         # add virial temperature median line
-        aux_yvals = groupCat(sP, fieldsSubhalos=['tvir_log'])
+        aux_yvals = sP.groupCat(fieldsSubhalos=['tvir_log'])
         aux_yvals = aux_yvals[wSelect][wFinite]
         if nanFlag: aux_yvals = aux_yvals[wFiniteCval]
 
@@ -594,7 +592,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
                 sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 
             # central/satellite selection?
-            wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+            wSelect = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
 
             sim_xvals = sim_xvals[wSelect]
             sim_yvals = sim_yvals[wSelect]
@@ -606,7 +604,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
             # reduce to the good-flagged subset
             wFinite &= (sim_flag)
-    
+
             sim_xvals = sim_xvals[wFinite]
             sim_yvals = sim_yvals[wFinite]
             sim_svals = sim_svals[wFinite]
@@ -752,7 +750,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 
             # central/satellite selection?
-            wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+            wSelect = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
 
             sim_yvals_orig = np.array(sim_yvals)
             sim_xvals_orig = np.array(sim_xvals)
@@ -872,7 +870,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
 
                 # same filters as above
-                wSelect = cenSatSubhaloIndices(sP_loc, cenSatSelect=cenSatSelect)
+                wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
                 sim_x_loc = sim_x_loc[wSelect]
 
                 for bhPropNum, bhPropName in enumerate(['M_BH_actual','Mdot_BH_edd']):

@@ -14,9 +14,6 @@ from os import mkdir
 from scipy.interpolate import interp1d
 from collections import OrderedDict
 
-from cosmo.load import groupCat, groupCatHeader, auxCat, snapshotSubset
-from plot.general import simSubhaloQuantity
-from cosmo.util import cenSatSubhaloIndices, periodicDistsSq
 from cosmo.color import loadSimGalColors
 from util.tpcf import tpcf, quantReductionInRad
 from util.helper import pSplitRange
@@ -81,9 +78,9 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
     print('Calculating new: [%s]...' % saveFilename.split(sP.basePath)[1])
 
     # get cenSatSelect indices, load and restrict if requested
-    wSelect = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    wSelect = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
 
-    pos = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+    pos = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
     pos = np.squeeze(pos[wSelect,:])
 
     if colorBin is not None:
@@ -99,7 +96,7 @@ def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, num
 
     if mstarBin is not None:
         # load stellar masses
-        gc_masses, _, _, _ = simSubhaloQuantity(sP, mType)
+        gc_masses, _, _, _ = sP.simSubhaloQuantity(mType)
         gc_masses = gc_masses[wSelect]
 
         if colorBin is not None:
@@ -256,8 +253,8 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
     rad = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
 
     # load
-    pos = snapshotSubset(sP, partType, 'pos')
-    weights = snapshotSubset(sP, partType, partField)
+    pos = sP.snapshotSubsetP(partType, 'pos')
+    weights = sP.snapshotSubsetP(partType, partField)
 
     w = np.where(weights < 0.0)
     weights[w] = 0.0 # non-negative
@@ -329,11 +326,11 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     print('Calculating new: [%s]...' % saveFilename.split(sP.basePath)[1])
 
     # load and unit conversions
-    gc = groupCat(sP, fieldsHalos=['Group_M_Crit200'], 
+    gc = sP.groupCat(fieldsHalos=['Group_M_Crit200'], 
                       fieldsSubhalos=['SubhaloPos','SubhaloMassInRadType','SubhaloMass','SubhaloGrNr'])
-    ac = auxCat(sP, fields=['Subhalo_Mass_30pkpc_Stars'])
+    ac = sP.auxCat(fields=['Subhalo_Mass_30pkpc_Stars'])
 
-    nSubhalos = gc['header']['Nsubgroups_Total']
+    nSubhalos = sP.numSubhalos
 
     masses = OrderedDict()
 
@@ -343,7 +340,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
     masses['mstar30kpc'] = sP.units.codeMassToLogMsun( ac['Subhalo_Mass_30pkpc_Stars'] )
 
     # handle cenSatSelect, reduce masses and stack into 2d ndarray, create new pos
-    inds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
+    inds = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
     quants = np.zeros( (inds.size, len(masses.keys())), dtype='float32' )
 
     for i, key in enumerate(masses):
@@ -387,7 +384,7 @@ def isolationCriterion3D(sP, rad_pkpc, cenSatSelect='all', mstar30kpc_min=9.0):
 
     for verifyInd in verifyInds:
         cen_pos = np.squeeze(pos_search[verifyInd,:])
-        dists = periodicDistsSq(cen_pos, pos_target, sP=sP)
+        dists = sP.periodicDistsSq(cen_pos, pos_target)
         w = np.where( (dists <= rad_bin_code[-1]**2) & (dists > 0.0) )
 
         for i, key in enumerate(masses):
@@ -485,7 +482,7 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
     print('Calculating new: [%s]...' % saveFilename.split(sP.basePath)[1])
 
     # load
-    pos_all = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+    pos_all = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
     gc_colors, gc_ids = loadSimGalColors(sP, simColorsModel, bands=bands)
     assert np.array_equal(gc_ids, np.arange(sP.numSubhalos))
 
@@ -506,7 +503,7 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
 
     if mstarBin is not None:
         # stellar masses bin
-        gc_masses, _, _, _ = simSubhaloQuantity(sP, mType)
+        gc_masses, _, _, _ = sP.simSubhaloQuantity(mType)
         gc_masses = gc_masses[wIsolated]
 
         if colorBin is not None:
@@ -518,7 +515,7 @@ def conformityRedFrac(sP, radRange=[0.0,20.0], numRadBins=40, isolationRadPKpc=5
         pos_pri = np.squeeze(pos_pri[wMass,:])
 
     # SECONDARIES:
-    wSelectSec = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelectSec)
+    wSelectSec = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelectSec)
     pos_sec = np.squeeze(pos_all[wSelectSec,:])
 
     gc_colors_sec = gc_colors[wSelectSec]

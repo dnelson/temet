@@ -13,8 +13,6 @@ from collections import OrderedDict
 from scipy.spatial import ConvexHull
 from scipy.stats import binned_statistic
 
-from cosmo.load import groupCatSingle, groupCat, snapshotHeader, snapshotSubset
-from cosmo.util import periodicDists
 from cosmo.perf import loadCpuTxt
 from util.simParams import simParams
 from util.helper import logZeroNaN
@@ -40,20 +38,20 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 
     as the minimum distance to any low-res DM particle, and a radial profile of 
     contaminating particles. """
-    halo = groupCatSingle(sPzoom, haloID=0)
+    halo = sPzoom.groupCatSingle(haloID=0)
     r200 = halo['Group_R_Crit200']
 
     # load
-    h = snapshotHeader(sPzoom)
+    h = sPzoom.snapshotHeader()
 
-    pos_hr  = snapshotSubset(sPzoom, 'dm', 'pos')
-    pos_lr  = snapshotSubset(sPzoom, 2, 'pos')
+    pos_hr  = sPzoom.snapshotSubset('dm', 'pos')
+    pos_lr  = sPzoom.snapshotSubset(2, 'pos')
 
-    mass_lr = snapshotSubset(sPzoom, 2, 'mass')
+    mass_lr = sPzoom.snapshotSubset(2, 'mass')
     mass_hr = h['MassTable'][sPzoom.ptNum('dm')]
 
-    dists_lr = periodicDists( halo['GroupPos'], pos_lr, sP=sPzoom )
-    dists_hr = periodicDists( halo['GroupPos'], pos_hr, sP=sPzoom )
+    dists_lr = sPzoom.periodicDists( halo['GroupPos'], pos_lr )
+    dists_hr = sPzoom.periodicDists( halo['GroupPos'], pos_hr )
 
     min_dist_lr = dists_lr.min() # code units
     min_dist_lr = sPzoom.units.codeLengthToMpc(min_dist_lr)
@@ -107,14 +105,14 @@ def check_contamination():
 
     # load parent box: halo
     sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-    halo = groupCatSingle(sP, haloID=hInd)
+    halo = sP.groupCatSingle(haloID=hInd)
 
     # load zoom: group catalog
     sPz = simParams(res=zoomRes, run='tng_zoom_dm', hInd=hInd, redshift=0.0, variant=variant)
 
-    halo_zoom = groupCatSingle(sPz, haloID=0)
-    halos_zoom = groupCat(sPz, fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
-    subs_zoom = groupCat(sPz, fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
+    halo_zoom = sPz.groupCatSingle(haloID=0)
+    halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
+    subs_zoom = sPz.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
 
     print('parent halo pos: ', halo['GroupPos'])
     print('zoom halo cenrelpos: ', halo_zoom['GroupPos'] - sP.boxSize/2)
@@ -178,9 +176,9 @@ def compare_contamination():
             print(hInd,variant)
             sPz = simParams(res=zoomRes, run='tng_zoom_dm', hInd=hInd, redshift=0.0, variant=variant)
 
-            halo_zoom = groupCatSingle(sPz, haloID=0)
-            halos_zoom = groupCat(sPz, fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
-            subs_zoom = groupCat(sPz, fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
+            halo_zoom = sPz.groupCatSingle(haloID=0)
+            halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
+            subs_zoom = sPz.groupCat(fieldsSubhalos=['SubhaloMass','SubhaloPos','SubhaloMassType'])
 
             # load contamination statistics and plot
             min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
@@ -232,7 +230,7 @@ def sizefacComparison():
 
             min_dist_lr, rVirFacs, counts, fracs, massfracs, _, _, _ = calculate_contamination(sP)
 
-            halo = groupCatSingle(sP, haloID=0)
+            halo = sP.groupCatSingle(haloID=0)
             haloMass = sP.units.codeMassToLogMsun( halo['Group_M_Crit200'] )
             haloRvir = halo['Group_R_Crit200']
 
@@ -331,7 +329,7 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0):
     panel_zoom = p.copy()
     panel_parent = p.copy()
 
-    parSubID = groupCatSingle(sPz.sP_parent, haloID=haloID)['GroupFirstSub']
+    parSubID = sPz.sP_parent.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
     panel_zoom.update( {'run':sPz.run, 'res':sPz.res, 'redshift':sPz.redshift, 'variant':sPz.variant, 'hInd':haloID})
     panel_parent.update( {'run':sPz.sP_parent.run, 'res':sPz.sP_parent.res, 'redshift':sPz.sP_parent.redshift, 'hInd':parSubID})

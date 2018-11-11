@@ -11,7 +11,6 @@ import h5py
 from vis.common import savePathDefault
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
 from util.helper import pSplit, logZeroNaN, evenlySample
-from cosmo.mergertree import loadMPB
 from cosmo.util import crossMatchSubhalosBetweenRuns
 from util import simParams
 
@@ -907,7 +906,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
 
             for shID_z0 in shIDs_z0:
                 # load main progenitor branch
-                mpbLocal = loadMPB(sP, id=shID_z0)
+                mpbLocal = sP.loadMPB(id=shID_z0)
 
                 # append to shIDs and redshifts the 5 evolution steps for this subhalo
                 for evo_snapshot, evo_redshift in zip(evo_snapshots, evo_redshifts):
@@ -1135,7 +1134,7 @@ def benedetta_vis_sample():
                7332, 7334, 7337, 7340, 7343, 7354, 7363, 7365, 7390, 7424, 14595, 14603, 14605, 14607, 14608, 14612, 14618]
 
     sP = simParams(res=res, run=run, redshift=redshift)
-    GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])['halos']
+    GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
     subInds = GroupFirstSub[haloIDs]
 
     for i, hInd in enumerate(subInds[0:1]):

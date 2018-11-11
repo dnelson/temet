@@ -309,8 +309,8 @@ def crossMatchSubhalosBetweenRuns(sP_from, sP_to, subhaloInds_from_search, metho
         mhalo_to = sP_to.groupCat(fieldsSubhalos=['mhalo_200_log'])
         mhalo_from = sP_from.groupCat(fieldsSubhalos=['mhalo_200_log'])
 
-        pos_from = sP_from.groupCat(fieldsSubhalos=['SubhaloPos'])['subhalos']
-        pos_to = sP_to.groupCat(fieldsSubhalos=['SubhaloPos'])['subhalos']
+        pos_from = sP_from.groupCat(fieldsSubhalos=['SubhaloPos'])
+        pos_to = sP_to.groupCat(fieldsSubhalos=['SubhaloPos'])
 
         pos_to_cen = pos_to[cen_inds_to,:]
 
@@ -612,7 +612,7 @@ def inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, debug=False, flagFuz
         otherwise they are attributed to the closest (prior) subhalo.
     """
     if SubhaloLenType is None:
-        SubhaloLenType = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])['subhalos']
+        SubhaloLenType = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
     if SnapOffsetsSubhalo is None:
         SnapOffsetsSubhalo = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
@@ -657,7 +657,7 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
         and SnapOffsetsGroup (from groupCatOffsetListIntoSnap()), otherwise loaded on demand.
     """
     if GroupLenType is None:
-        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])['halos']
+        GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
     if SnapOffsetsGroup is None:
         SnapOffsetsGroup = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
@@ -774,10 +774,10 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
             gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
 
         # halos with a primary subhalo
-        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0) & (gc['halos']['Group_M_Crit200'] > 0))
+        wHalo = np.where((gc['GroupFirstSub'] >= 0) & (gc['Group_M_Crit200'] > 0))
 
         # indices
-        w1 = gc['halos']['GroupFirstSub'][wHalo] # centrals only
+        w1 = gc['GroupFirstSub'][wHalo] # centrals only
         w2 = np.arange(sP.numSubhalos) # centrals + satellites
         w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
 

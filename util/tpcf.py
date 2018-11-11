@@ -419,7 +419,6 @@ def benchmark():
     """ Benchmark performance of tpcf(). 
     Single thread: 600sec for 100k points, perfect O(N^2) scaling, so 16.7 hours for 1M points. """
     np.random.seed(424242)
-    from cosmo.load import groupCat
     from util.simParams import simParams
     import matplotlib.pyplot as plt
     import time
@@ -446,7 +445,7 @@ def benchmark():
             else:
                 # load some galaxies in a box
                 sP = simParams(res=256, run='tng', redshift=0.0, variant='0000')
-                pos = groupCat(sP, fieldsSubhalos=['SubhaloPos'])['subhalos']
+                pos = sP.groupCat(fieldsSubhalos=['SubhaloPos'])
                 nPts = pos.shape[0]
                 weights = None
 
