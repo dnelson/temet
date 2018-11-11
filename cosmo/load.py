@@ -336,14 +336,14 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     """ Find and return absolute path to a group catalog HDF5 file.
         Can be used to redefine illustris_python version (il.groupcat.gcPath = cosmo.load.gcPath). """
 
-    # local scratch test: call ourself with a basePath corresponding to local stratch (on dev node)
+    # local scratch test: call ourself with a basePath corresponding to local stratch (on freyator)
     if not noLocal:
         bpSplit = basePath.split("/")
-        localBP = "/scratch/" + bpSplit[-3] + "/" + bpSplit[-2] + "/"
+        localBP = "/mnt/nvme/cache/%s/%s/" % (bpSplit[-3], bpSplit[-2])
         localFT = gcPath(localBP, snapNum, noLocal=True, checkExists=True)
 
         if localFT:
-            print("Note: Reading group catalog from local scratch!")
+            #print("Note: Reading group catalog from local scratch!")
             return localFT
 
     # format snapshot number
