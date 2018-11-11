@@ -340,7 +340,7 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     if not noLocal:
         bpSplit = basePath.split("/")
         localBP = "/mnt/nvme/cache/%s/%s/" % (bpSplit[-3], bpSplit[-2])
-        localFT = gcPath(localBP, snapNum, noLocal=True, checkExists=True)
+        localFT = gcPath(localBP, snapNum, chunkNum=chunkNum, noLocal=True, checkExists=True)
 
         if localFT:
             #print("Note: Reading group catalog from local scratch!")
