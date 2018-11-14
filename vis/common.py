@@ -1698,7 +1698,7 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 
-        lw = 2.5 #* conf.rasterPx[1] / 1000
+        lw = 2.5 * np.sqrt(conf.rasterPx[1] / 1000)
         y_off = np.clip(0.04 - 0.01 * 1000 / conf.rasterPx[1], 0.01, 0.06)
         yt_fac = np.clip(1.5 + 0.1 * 1000 / conf.rasterPx[1], 1.0, 2.0)
 
@@ -2039,8 +2039,9 @@ def renderMultiPanel(panels, conf):
 
     # approximate font-size invariance with changing rasterPx    
     conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
+    min_fontsize = 6 if 'edged' in conf.plotStyle else 12
     if not hasattr(conf,'fontsize'):
-        conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), 7, 60)
+        conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), min_fontsize, 60)
 
     if conf.plotStyle in ['open','open_black']:
         # start plot
@@ -2163,7 +2164,10 @@ def renderMultiPanel(panels, conf):
         barAreaHeight = (0.12 / nRows / aspect) if conf.colorbars else 0.0
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
         if nRows == 1 and nCols in [1] and conf.colorbars:
-            barAreaHeight = np.clip(0.05 / aspect * (1200/conf.rasterPx[0]), 0.05, np.inf)
+            barAreaHeight = 0.055
+            #if conf.fontsize == min_fontsize:
+            #    barAreaHeight = 0.06 / aspect * (400/conf.rasterPx[0])
+            #    #barAreaHeight = np.clip(0.06 / aspect * (1200/conf.rasterPx[0]), 0.06, 0.08)
         if nRows == 1 and nCols in [2,3] and conf.colorbars: barAreaHeight = 0.07 / aspect
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
