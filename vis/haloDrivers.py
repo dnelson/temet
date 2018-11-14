@@ -88,9 +88,9 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
 
     class plotConfig:
         plotStyle    = 'open'
-        rasterPx     = 1200 #nPixels[0]
+        rasterPx     = 1200
         colorbars    = True
-        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_ID-%d_%s.pdf' % \
+        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_ID-%d_%s.png' % \
           (conf,run,res,redshift,subhaloID if subhaloID is not None else haloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

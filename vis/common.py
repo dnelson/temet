@@ -39,7 +39,7 @@ totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y']
 
-def validPartFields(ions=True, emlines=True, sps=True):
+def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
     
     # base fields
@@ -95,7 +95,7 @@ def validPartFields(ions=True, emlines=True, sps=True):
         fields += em_fields
 
     # for all FSPS bands
-    if sps:
+    if bands:
         fields += ['stellarBand-%s' % band for band in sps.bands]
         fields += ['stellarBandObsFrame-%s' % band for band in sps.bands]
 
@@ -1449,8 +1449,6 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
 def addBoxMarkers(p, conf, ax):
     """ Factor out common annotation/markers to overlay. """
-    nLinear = conf.nCols if conf.nCols < conf.nRows else conf.nRows
-    fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.2)
 
     def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
@@ -1459,7 +1457,7 @@ def addBoxMarkers(p, conf, ax):
         alpha     = 0.3
 
         circOpts = {'color':color, 'alpha':alpha, 'linewidth':1.5, 'fill':False}
-        textOpts = {'color':color, 'alpha':alpha, 'fontsize':16.0, 
+        textOpts = {'color':color, 'alpha':alpha, 'fontsize':fontsize, 
                     'horizontalalignment':'left', 'verticalalignment':'center'}
 
         countAdded = 0
@@ -1647,10 +1645,10 @@ def addBoxMarkers(p, conf, ax):
         if p['axesUnits'] != 'code':
             print('Warning: Such a manual placement of the redshift label might fail, need modified pExtent here.')
 
-        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02)*nLinear # upper right
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)*nLinear
+        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02)*conf.nLinear # upper right
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)*conf.nLinear
         ax.text( xt, yt, zStr, color='white', alpha=1.0, 
-                 size=fontsize, ha='right', va='top') # same size as legend text
+                 size=conf.fontsize, ha='right', va='top') # same size as legend text
 
     if 'labelScale' in p and p['labelScale']:
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
@@ -1700,21 +1698,14 @@ def addBoxMarkers(p, conf, ax):
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
 
-        lw = 2.0 * (conf.nCols/2)
-        y_off = 0.03
-
-        if conf.rasterPx[0] >= 1000:
-            lw = 3.0
-            y_off = 0.04
-
-        if conf.rasterPx[0] > 2000:
-            lw = 4.0
-            y_off = 0.05
+        lw = 2.5 #* conf.rasterPx[1] / 1000
+        y_off = np.clip(0.04 - 0.01 * 1000 / conf.rasterPx[1], 0.01, 0.06)
+        yt_fac = np.clip(1.5 + 0.1 * 1000 / conf.rasterPx[1], 1.0, 2.0)
 
         x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx[0]) # upper left
         x1 = x0 + scaleBarPlotLen
         yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx[0])
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*1.5) * 960.0/conf.rasterPx[0])
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*yt_fac) * 960.0/conf.rasterPx[0])
 
         if p['axesUnits'] in ['deg','arcmin','arcsec']:
             deg = (p['axesUnits'] == 'deg')
@@ -1736,7 +1727,7 @@ def addBoxMarkers(p, conf, ax):
             yt = p['sP'].units.codeLengthToMpc(yt)
 
         ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
-        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, size=fontsize, ha='center', va='top')
+        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, size=conf.fontsize, ha='center', va='top')
 
     # text in a combined legend?
     legend_labels = []
@@ -1784,7 +1775,7 @@ def addBoxMarkers(p, conf, ax):
     # draw legend
     if len(legend_labels):
         legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
-        legend = ax.legend(legend_lines, legend_labels, fontsize=fontsize, loc='lower left', 
+        legend = ax.legend(legend_lines, legend_labels, fontsize=conf.fontsize, loc='lower left', 
                            handlelength=0, handletextpad=0)
 
         for text in legend.get_texts(): text.set_color('white')
@@ -1928,10 +1919,6 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     if not conf.colorbars:
         return
 
-    nLinear = conf.nCols if conf.nCols < conf.nRows else conf.nRows
-    if conf.nRows == 1 and conf.nCols == 2: nLinear = 1 # should further generalize/cleanup logic
-    fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.2)
-
     factor  = 0.80 # bar length, fraction of column width, 1.0=whole
     height  = 0.04 # colorbar height, fraction of entire figure
     hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
@@ -1970,7 +1957,7 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
 
     # label, centered and below/above
     cax.text(0.5, textTopY, config['label'], color=color2, transform=cax.transAxes, 
-             size=fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
+             size=conf.fontsize, ha='center', va='top' if barAreaTop == 0.0 else 'bottom')
 
     # tick labels, 5 evenly spaced inside bar
     colorsA = [(1,1,1),(0.9,0.9,0.9),(0.8,0.8,0.8),(0.2,0.2,0.2),(0,0,0)]
@@ -1979,15 +1966,15 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     formatStr = "%.1f" if np.max(np.abs(valLimits)) < 100.0 else "%d"
 
     cax.text(0.0+lOffset, textMidY, formatStr % (1.0*valLimits[0]+0.0*valLimits[1]), 
-        color=colorsB[0], size=fontsize, ha='left', va='center', transform=cax.transAxes)
+        color=colorsB[0], size=conf.fontsize, ha='left', va='center', transform=cax.transAxes)
     cax.text(0.25, textMidY, formatStr % (0.75*valLimits[0]+0.25*valLimits[1]), 
-        color=colorsB[1], size=fontsize, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[1], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.5, textMidY, formatStr % (0.5*valLimits[0]+0.5*valLimits[1]), 
-        color=colorsB[2], size=fontsize, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[2], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(0.75, textMidY, formatStr % (0.25*valLimits[0]+0.75*valLimits[1]), 
-        color=colorsB[3], size=fontsize, ha='center', va='center', transform=cax.transAxes)
+        color=colorsB[3], size=conf.fontsize, ha='center', va='center', transform=cax.transAxes)
     cax.text(1.0-lOffset, textMidY, formatStr % (0.0*valLimits[0]+1.0*valLimits[1]), 
-        color=colorsB[4], size=fontsize, ha='right', va='center', transform=cax.transAxes)
+        color=colorsB[4], size=conf.fontsize, ha='right', va='center', transform=cax.transAxes)
 
 def _getPlotExtent(extent, axesUnits, projType, sP):
     """ Helper function, manipulate input extent given requested axesUnits. """
@@ -2049,6 +2036,11 @@ def renderMultiPanel(panels, conf):
 
     conf.nCols = nCols
     conf.nRows = nRows
+
+    # approximate font-size invariance with changing rasterPx    
+    conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
+    if not hasattr(conf,'fontsize'):
+        conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), 8, 60)
 
     if conf.plotStyle in ['open','open_black']:
         # start plot
@@ -2141,31 +2133,25 @@ def renderMultiPanel(panels, conf):
 
             # colobar
             if conf.colorbars:
-                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+                pad = np.clip(conf.rasterPx[0] / 6000.0, 0.05, 0.4) # 0.2 for 1200px
+                cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=pad)
                 setAxisColors(cax, color2)
 
                 cb = plt.colorbar(cax=cax)
                 cb.outline.set_edgecolor(color2)
                 cb.ax.set_ylabel(config['label'])
 
-            # towards font-size invariance with changing rasterPx
-            if not hasattr(conf,'fontsize'):
-                nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
-                fontsize = int(conf.rasterPx[0] / 100.0 * nLinear * 1.0)
-            else:
-                fontsize = conf.fontsize
-
             padding = conf.rasterPx[0] / 240.0
-            ax.tick_params(axis='x', which='major', labelsize=fontsize)
-            ax.tick_params(axis='y', which='major', labelsize=fontsize)
-            ax.xaxis.label.set_size(fontsize)
-            ax.yaxis.label.set_size(fontsize)
-            ax.title.set_fontsize(fontsize)
+            ax.tick_params(axis='x', which='major', labelsize=conf.fontsize)
+            ax.tick_params(axis='y', which='major', labelsize=conf.fontsize)
+            ax.xaxis.label.set_size(conf.fontsize)
+            ax.yaxis.label.set_size(conf.fontsize)
+            ax.title.set_fontsize(conf.fontsize)
             ax.tick_params(axis='both', which='major', pad=padding)
 
             if conf.colorbars:
-                cb.ax.tick_params(axis='y', which='major', labelsize=fontsize)
-                cb.ax.yaxis.label.set_size(fontsize)
+                cb.ax.tick_params(axis='y', which='major', labelsize=conf.fontsize)
+                cb.ax.yaxis.label.set_size(conf.fontsize)
                 cb.ax.tick_params(axis='both', which='major', pad=padding)
 
         fig.tight_layout()
@@ -2174,8 +2160,10 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
-        barAreaHeight = np.max([0.035 / aspect,0.12 / nRows / aspect]) if conf.colorbars else 0.0
-        if nRows == 1 and nCols in [1] and conf.colorbars: barAreaHeight = 0.05 / aspect
+        barAreaHeight = (0.12 / nRows / aspect) if conf.colorbars else 0.0
+        barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect , np.inf)
+        if nRows == 1 and nCols in [1] and conf.colorbars:
+            barAreaHeight = np.clip(0.05 / aspect * (1200/conf.rasterPx[0]), 0.05, np.inf)
         if nRows == 1 and nCols in [2,3] and conf.colorbars: barAreaHeight = 0.07 / aspect
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
