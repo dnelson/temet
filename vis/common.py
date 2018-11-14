@@ -2040,7 +2040,7 @@ def renderMultiPanel(panels, conf):
     # approximate font-size invariance with changing rasterPx    
     conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
     if not hasattr(conf,'fontsize'):
-        conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), 8, 60)
+        conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), 7, 60)
 
     if conf.plotStyle in ['open','open_black']:
         # start plot
@@ -2161,7 +2161,7 @@ def renderMultiPanel(panels, conf):
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
         barAreaHeight = (0.12 / nRows / aspect) if conf.colorbars else 0.0
-        barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect , np.inf)
+        barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
         if nRows == 1 and nCols in [1] and conf.colorbars:
             barAreaHeight = np.clip(0.05 / aspect * (1200/conf.rasterPx[0]), 0.05, np.inf)
         if nRows == 1 and nCols in [2,3] and conf.colorbars: barAreaHeight = 0.07 / aspect
@@ -2174,14 +2174,13 @@ def renderMultiPanel(panels, conf):
         for p in panels:
             pPartTypes.add(p['partType'])
             pPartFields.add(p['partField'])
-            if p['valMinMax'] is not None: pValMinMaxes.add(str(p['valMinMax']))
+            pValMinMaxes.add(str(p['valMinMax']))
 
         # if all panels in the entire figure are the same, we will do 1 single colorbar
         oneGlobalColorbar = False
 
-        if len(pPartTypes) == 1 and len(pPartFields) == 1 and len(pValMinMaxes):
-            if None not in pValMinMaxes:
-                oneGlobalColorbar = True
+        if len(pPartTypes) == 1 and len(pPartFields) == 1 and len(pValMinMaxes) == 1:
+            oneGlobalColorbar = True
 
         if nRows == 2 and not oneGlobalColorbar:
             # two rows, special case, colors on top and bottom, every panel can be different
