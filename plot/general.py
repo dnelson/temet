@@ -1,6 +1,6 @@
 """
 general.py
-  General exploratory/diagnostic plots of single halos or entire boxes.
+  General exploratory/diagnostic plots of particle-level data of single halos or entire boxes.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -787,17 +787,21 @@ def oneRun_PhaseDiagram():
 
     # config
     yQuant = 'temp'
-    xQuant = 'numdens'
+    xQuant = 'nh'
     xlim   = [-9.0, 2.0]
     ylim   = [2.0, 8.5]
     clim   = [-6.0,-0.2]
 
-    sP = simParams(res=1820,run='illustris',redshift=0.0)
+    sP = simParams(res=455,run='tng')
+    snaps = sP.validSnapList()[::2] # [99]
 
-    # start PDF, add one page per run
-    pdf = PdfPages('phaseDiagram_%s_%d.pdf' % (sP.simName,sP.snap))
+    # start PDF, add one page per snapshot
+    pdf = PdfPages('phaseDiagram_%s.pdf' % (sP.simName))
 
-    plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+    for snap in snaps:
+        sP.setSnap(snap)
+        print(snap)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
 
     pdf.close()
 

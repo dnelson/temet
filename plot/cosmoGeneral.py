@@ -1,6 +1,6 @@
 """
 cosmoGeneral.py
-  Fully generalized plots and general plot helpers related to cosmological boxes.
+  Fully generalized plots and general plot helpers related to group catalog objects of cosmological boxes.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -220,7 +220,9 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect,cStatistic,minCount)
+    if getuser() == 'dnelson':
+        print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect,cStatistic,minCount)
+
     if not clean:
         pass
         #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
