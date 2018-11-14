@@ -2530,13 +2530,15 @@ def vdsTest():
     # Create source files (1.h5 to 3.h5)
     for n in range(1, num_files+1):
         with h5py.File('{}.h5'.format(n), 'w') as f:
-            data = np.arange(size_sparse) + 10**n
+            data = np.random.uniform(size=size_sparse) #np.arange(size_sparse) + 10**n
             f['data'] = data
 
             inds = np.arange(size_full)
             np.random.shuffle(inds) # create dummy indices which cover the full dset size
             inds = np.sort(inds[0:size_sparse]) # must be ascending
             f['inds'] = inds
+
+    import pdb; pdb.set_trace()
 
     # Assemble virtual dataset
     layout = h5py.VirtualLayout(shape=(num_files, size_full), dtype=data.dtype)
@@ -2550,6 +2552,6 @@ def vdsTest():
 
     # Add virtual dataset to output file
     with h5py.File("VDS.h5", 'w', libver='latest') as f:
-        f.create_virtual_dataset('data', layout, fillvalue=0)
+        f.create_virtual_dataset('data', layout, fillvalue=np.nan)
         print("Virtual dataset:")
         print(f['data'][:,:])

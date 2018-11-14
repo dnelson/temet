@@ -87,13 +87,13 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         fracsType = 'rHalfMassStars'
 
     class plotConfig:
-        plotStyle    = 'open'
+        plotStyle    = 'edged'
         rasterPx     = 1200
         colorbars    = True
         saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_ID-%d_%s.png' % \
           (conf,run,res,redshift,subhaloID if subhaloID is not None else haloID,method)
 
-    renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def oneHaloGaussProposal():
     """ Render single halo with B field streamlines for Gauss proposal (MHD figure). """
