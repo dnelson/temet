@@ -55,7 +55,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'machnum','shocks_machnum',
               'P_gas','P_B','pressure_ratio',
               'metal','Z','metal_solar','Z_solar',
-              'SN_IaII_ratio_Fe','SNIaII_ratio_meatls','SN_Ia_AGB_ratio_metals',
+              'SN_IaII_ratio_Fe','SNIaII_ratio_metals','SN_Ia_AGB_ratio_metals',
               'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z','velocity_x','velocity_y',
               'velsigma_los','velsigma_los_sfrwt',
               'vrad','halo_vrad','radvel','halo_radvel',
@@ -63,7 +63,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'specangmom_mag','specj_mag'
               'star_age','stellar_age',
               'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w',
-              'potential','id','TimeStep','TimebinHydro']
+              'potential','id'] #,'TimeStep','TimebinHydro']
 
     # for all metals
     metals = ['H','He','C','N','O','Ne','Mg','Si','Fe']
@@ -81,9 +81,12 @@ def validPartFields(ions=True, emlines=True, bands=True):
 
             cloudy_ions += el_ions
 
-        fields += ['%s mass' % ion for ion in cloudy_ions] # ionic mass
-        fields += ['%s fracmass' % ion for ion in cloudy_ions] # ionic mass fraction
-        fields += ['%s' % ion for ion in cloudy_ions] # ionic column density
+        if ions == 'only':
+            return cloudy_ions
+        else:
+            fields += ['%s mass' % ion for ion in cloudy_ions] # ionic mass
+            fields += ['%s fracmass' % ion for ion in cloudy_ions] # ionic mass fraction
+            fields += ['%s' % ion for ion in cloudy_ions] # ionic column density
 
     # for all CLOUDY emission lines
     if emlines:
@@ -92,12 +95,18 @@ def validPartFields(ions=True, emlines=True, bands=True):
         em_lines += cloudyEmission.lineAbbreviations.keys()
         em_fields = ['sb_%s' % line_name for line_name in em_lines]
 
-        fields += em_fields
+        if emlines == 'only':
+            return em_lines
+        else:
+            fields += em_fields
 
     # for all FSPS bands
     if bands:
-        fields += ['stellarBand-%s' % band for band in sps.bands]
-        fields += ['stellarBandObsFrame-%s' % band for band in sps.bands]
+        if bands == 'only':
+            return sps.bands
+        else:
+            fields += ['stellarBand-%s' % band for band in sps.bands]
+            fields += ['stellarBandObsFrame-%s' % band for band in sps.bands]
 
     return fields
 
@@ -502,7 +511,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
         ionNum  = partField.split()[1]
 
         # use cache or calculate on the fly, as needed
-        mass = sP.snapshotSubsetP(sP, 'gas', '%s %s mass' % (element,ionNum), indRange=indRange)
+        mass = sP.snapshotSubsetP('gas', '%s %s mass' % (element,ionNum), indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
@@ -736,7 +745,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['sfr_halpha','halpha']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
-        config['label']  = 'H-alpha Luminosity L$_{\\rm H\alpha}$ [log erg s$^{-1}$ kpc$^{-2}$]'
+        config['label']  = 'H-alpha Luminosity L$_{\\rm H\\alpha}$ [log erg s$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
     if partField in ['p_sync_ska']:
@@ -791,7 +800,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'Spectral_r'
 
     if partField in ['bmag_uG']:
-        grid = lgrid * 1e6
+        grid = grid * 1e6
         config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
         config['plawScale'] = 0.4
@@ -970,10 +979,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     # compute a guess for an adaptively clipped heuristic [min,max] bound
     if logMin:
-        data_grid = logZeroNaN(grid)
+        data_grid = logZeroNaN(grid) + gridOffset
         config['vMM_guess'] = np.nanpercentile(data_grid, [15,99.5])
     else:
-        data_grid = grid.copy()
+        data_grid = grid.copy() + gridOffset
         config['vMM_guess'] = np.nanpercentile(data_grid, [5,99.5])
 
     # handle requested log
@@ -1070,6 +1079,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # fof scope
                 startInd = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
                 indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
+
+        if indRange is not None and indRange[1] - indRange[0] < 1:
+            return emptyReturn()
 
         # quantity is computed with respect to a pre-existing grid? load now
         refGrid = None
@@ -1925,6 +1937,10 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     tOffset = 0.20 # padding between top of bar and top of text label (fraction of bar height)
     lOffset = 0.02 # padding between colorbar edges and end label (frac of bar width)
 
+    #factor = 0.65 # tng data release paper: tng_fields override
+    #conf.fontsize = 13 # tng data release paper: tng_fields override
+    #height = 0.047 # tng data release paper: tng_fields override
+
     height *= heightFac
 
     if barAreaTop == 0.0:
@@ -2161,14 +2177,16 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
-        barAreaHeight = (0.12 / nRows / aspect) if conf.colorbars else 0.0
+        barAreaHeight = (0.12 / nRows / aspect)
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
-        if nRows == 1 and nCols in [1] and conf.colorbars:
+        if nRows == 1 and nCols in [1]:
             barAreaHeight = 0.055
             #if conf.fontsize == min_fontsize:
             #    barAreaHeight = 0.06 / aspect * (400/conf.rasterPx[0])
             #    #barAreaHeight = np.clip(0.06 / aspect * (1200/conf.rasterPx[0]), 0.06, 0.08)
-        if nRows == 1 and nCols in [2,3] and conf.colorbars: barAreaHeight = 0.07 / aspect
+        if nRows == 1 and nCols in [2,3]: barAreaHeight = 0.07 / aspect
+        if not conf.colorbars:
+            barAreaHeight = 0.0
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes   = set()

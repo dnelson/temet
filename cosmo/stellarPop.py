@@ -6,7 +6,6 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
-import cosmo.load
 import h5py
 import time
 from numba import jit
@@ -864,7 +863,7 @@ class sps():
             # direct load snapshot saved stellar photometrics
             fields = ['sftime','phot_'+band.split("snap_")[1]]
 
-            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=fields, indRange=indRange)
+            stars = sP.snapshotSubset(partType='stars', fields=fields, indRange=indRange)
 
             wWind = np.where( stars['GFM_StellarFormationTime'] < 0.0 )
             stars['GFM_StellarPhotometrics'][wWind] = np.nan
@@ -936,7 +935,7 @@ class sps():
             assert band in self.bands
             fields = ['initialmass','sftime','metallicity']
 
-            stars = cosmo.load.snapshotSubset(sP, partType='stars', fields=fields, indRange=indRange)
+            stars = sP.snapshotSubset(partType='stars', fields=fields, indRange=indRange)
 
             mags = self.mags_code_units(sP, band, stars['GFM_StellarFormationTime'], 
                                         stars['GFM_Metallicity'], stars['GFM_InitialMass'], 

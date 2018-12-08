@@ -51,11 +51,11 @@ def groupOrderedValsToSubhaloOrdered(vals_group, sP):
 
     return vals_sub
 
-def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False, onlyMHD=False):
+def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False, onlyMHD=False, alwaysAvail=False):
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
     # generally available (groupcat)
-    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2',
+    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2', 'fgas', 
                'surfdens1_stars', 'surfdens2_stars', 'delta_sfms',
                'sfr1', 'sfr2', 'sfr1_surfdens', 'sfr2_surfdens']
 
@@ -63,7 +63,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
                    'mstar_30pkpc','mstar_30pkpc_log','mhi_30pkpc','mhi_30pkpc_log','mhi2','mhi2_log',
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
-                   'mhalo_subfind','mhalo_subfind_log']
+                   'mhalo_subfind','mhalo_subfind_log','mstar2_mhalo200_ratio']
 
     quants_rad = ['rhalo_200','rhalo_500','velmag']
 
@@ -127,12 +127,16 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     if wCounts: quants1 = [None] + quants1
 
     quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5
-    quantList += quants_misc + quants_color + quants_outflow + quants_wind
+    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad
     if wTr: quantList += trQuants
     if wMasses: quantList += quants_mass
     if onlyTr: quantList = trQuants
     if onlyBH: quantList = quants_bh
     if onlyMHD: quantList = quants2_mhd
+
+    # always available (base group catalog, or extremely fast auxCat calculations) for web
+    if alwaysAvail:
+        quantList = quants1 + quants_mass + quants_rad + quants_bh
 
     return quantList
 
@@ -184,6 +188,18 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ log M$_{\\rm sun}$ ]'
+
+    if quant in ['mstar2_mhalo200_ratio']:
+        # stellar mass / halo mass ratio
+        fieldNames = ['SubhaloMassInRadType','mhalo_200_code']
+        gc = sP.groupCat(fieldsSubhalos=fieldNames)
+
+        with np.errstate(invalid='ignore'):
+            vals = gc['SubhaloMassInRadType'][:,sP.ptNum('stars')] / gc['mhalo_200_code']
+        minMax = [-3.0, -1.0]
+
+        label = 'M$_{\star}(<2r_{\star,1/2})$ / $M_{\\rm halo,200crit}$ [ log ]'
+        if clean: label = 'M$_{\star}(<2r_{\star,1/2})$ / $M_{\\rm halo}$ [ log ]'
 
     if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
         # stellar mass (auxcat based calculations)
@@ -275,7 +291,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             takeLog = False
             vals = logZeroNaN(vals)
 
-        minMax = [1.0, 2.5]
+        minMax = [1.0, 3.0]
         label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ log kpc ]'
         if clean: label = 'R$_{\\rm halo}$ [ log kpc ]'
 
@@ -587,8 +603,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [6.5, 9.0]
         if tight: minMax = [6.5, 9.5]
 
-    if quant in ['fgas1','fgas2']:
+    if quant in ['fgas1','fgas2','fgas']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
+        if quant == 'fgas':  fieldName = 'SubhaloMassType'
         if quant == 'fgas1': fieldName = 'SubhaloMassInHalfRadType'
         if quant == 'fgas2': fieldName = 'SubhaloMassInRadType'
 
@@ -604,8 +621,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = mgas / (mgas+mstar)
 
-        label = 'log f$_{\\rm gas}$'
+        label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / (M$_{\\rm gas}$ + M$_{\star}$)'
         if not clean:
+            if quant == 'fgas':  label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, subhalo)$'
             if quant == 'fgas1': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <1r$_{\star,1/2})$'
             if quant == 'fgas2': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <2r$_{\star,1/2})$'
         minMax = [-3.5,0.0]
