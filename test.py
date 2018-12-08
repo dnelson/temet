@@ -1021,7 +1021,7 @@ def lagrangeMatching():
 
 def miscGasStats():
     """ Print out some misc gas stats used in the appendix table of the TNG color flagship paper. """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
+    sP = simParams(res=2160, run='tng', redshift=0.0)
     print(sP.simName)
 
     gas_dens = sP.snapshotSubsetP('gas', 'dens')
@@ -1030,8 +1030,8 @@ def miscGasStats():
     gas_dens = sP.units.codeDensToPhys(gas_dens, cgs=True, numDens=True)
     w_sf = np.where(gas_sfr > 0.0)
 
-    print('mean sfring gas dens [1/cm^3]: ', gas_dens[w_sf].mean())
-    print('max gas dens [1/cm^3]: ', gas_dens.max())
+    print('mean sfring gas H dens [1/cm^3]: ', gas_dens[w_sf].mean()*0.7)
+    print('max gas H dens [1/cm^3]: ', gas_dens.max()*0.7)
 
     gas_dens = None
 
