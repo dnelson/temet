@@ -1490,8 +1490,8 @@ def convertMillenniumSnapshot(snap=63):
 
 def convertGadgetICsToHDF5():
     """ Convert a Gadget-1 binary format ICs (dm-only, 8 byte IDs, 4 byte pos/vel) into HDF5 format (keep original ordering). """
-    loadPath = '/u/dnelson/sims.TNG/InitialConditions/L680n2048/output/ICs.%s' 
-    savePath = '/u/dnelson/sims.TNG/L680n2048TNG_DM/output/snap_ics.hdf5'
+    loadPath = '/u/dnelson/sims.illustris/InitialConditions/L75n455FP/output/ICs.%s' 
+    savePath = '/u/dnelson/sims.illustris/L75n455FP/output/snap_ics.hdf5'
 
     ptNum = 1
     longids = True # 64 bit, else 32 bit

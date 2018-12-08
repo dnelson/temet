@@ -821,6 +821,11 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         fCut1 = (valCut1-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
         fCut2 = (valCut2-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
 
+        if fCut1 <= 0 or fCut1 >= 1 or fCut2 <= 0 or fCut2 >= 1:
+            # if valMinMax does not span these values, we create a corrupt cmap which cannot be rendered
+            fCut1 = 0.33
+            fCut2 = 0.66
+
         color1 = np.array([114,158,206]) / 255.0 # tableau10_medium[0] (blue)
         color2 = np.array([103,191,92]) / 255.0 # tableau10_medium[2] (green)
         color3 = np.array([255,158,74]) / 255.0 # tabluea10_medium[1] (orange) or e.g. white

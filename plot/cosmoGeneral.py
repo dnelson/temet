@@ -69,7 +69,7 @@ def addRedshiftAgeAxes(ax, sP, xrange=[-1e-4,8.0], xlog=True):
 
 def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuant=None, xlim=None, ylim=None, clim=None, 
                  cStatistic=None, cNaNZeroToMin=False, minCount=None, cRel=None, cFrac=None, nBins=None, qRestrictions=None, 
-                 filterFlag=False, medianLine=True, 
+                 filterFlag=False, medianLine=True, sizeFac=1.0, 
                  fig_subplot=[None,None], pStyle='white', ctName=None, saveFilename=None, output_fmt=None):
     """ Make a 2D histogram of subhalos with one quantity on the y-axis, another property on the x-axis, 
     and optionally a third property as the colormap per bin. minCount specifies the minimum number of 
@@ -206,7 +206,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     # start plot
     if fig_subplot[0] is None:
-        fig = plt.figure(figsize=figsize,facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0]*sizeFac,figsize[1]*sizeFac),facecolor=color1)
         ax = fig.add_subplot(111, facecolor=color1)
     else:
         # add requested subplot to existing figure
@@ -227,9 +227,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         pass
         #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
     else:
-        if cQuant is None:
-            cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
-            ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
+        cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
+        ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
 
     # 2d histogram
     bbox = ax.get_window_extent()
@@ -1057,12 +1056,12 @@ def plots4():
 def plots_uvj():
     """ Driver. Explore UVJ color-color diagram. """
     sPs = []
-    #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
-    sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=2.0) )
 
-    yQuant = 'color_nodust_UV' #'color_C-30kpc-z_UV' #
-    xQuant = 'color_nodust_VJ' #'color_C-30kpc-z_VJ' #
-    cenSatSelects = ['cen'] #['cen','sat','all']
+    yQuant = 'color_C-30kpc-z_UV' #'color_nodust_UV' #
+    xQuant = 'color_C-30kpc-z_VJ' #'color_nodust_VJ' #
+    cenSatSelects = ['all'] #['cen','sat','all']
     pStyle = 'white'
 
     cNaNZeroToMin = True # False
@@ -1080,11 +1079,11 @@ def plots_uvj():
     if 1:
         cs       = 'count'
         quants   = [None]
-        clim     = [0.0, 2.0] # log N_gal
+        clim     = [0.0, 2.5] # log N_gal
         minCount = 0
         qRestrictions = [ ['mstar_30pkpc_log',10.0,np.inf] ] # LEGA-C mass cut
-        xlim     = [0.4,2.1]
-        ylim     = [0.6,2.4]
+        xlim     = [0.0,1.7]
+        ylim     = [0.4,2.6]
 
     for sP in sPs:
         for css in cenSatSelects:

@@ -549,9 +549,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 assert len(r.keys()) == 1
                 return r[key]
             else:
-                # return dictionary (no 'subhalos' wrapping)
-                #assert sq is False
-                return r
+                # return dictionary of fields (no 'subhalos' wrapping)
+                return r['subhalos']
 
     # override path function
     il.groupcat.gcPathOrig = il.groupcat.gcPath
