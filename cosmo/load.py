@@ -285,7 +285,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             pSplitStr = ' (split %d of %d)' % (pSplit[0],pSplit[1])
             savePath = auxCatPathSplit
 
-        print('Compute and save: [%s]%s' % (field,pSplitStr))
+        print('Compute and save: [%s] [%s]%s' % (sP.simName,field,pSplitStr))
 
         r[field], attrs = auxcatalog.fieldComputeFunctionMapping[field] (sP, pSplit)
         r[field+'_attrs'] = attrs
@@ -1191,6 +1191,12 @@ def snapshotSubset(sP, partType, fields,
         # temperature (from u,nelec) [log K]
         if field.lower() in ["temp", "temperature"]:
             u  = snapshotSubset(sP, partType, 'u', **kwargs)
+            ne = snapshotSubset(sP, partType, 'ne', **kwargs)
+            r[field] = sP.units.UToTemp(u,ne,log=True)
+
+        # temperature (uncorrected values for TNG runs) [log K]
+        if field.lower() in ["temp_old"]:
+            u  = snapshotSubset(sP, partType, 'InternalEnergyOld', **kwargs)
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.UToTemp(u,ne,log=True)
 

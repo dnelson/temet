@@ -1075,10 +1075,14 @@ def curRepoVersion():
     import subprocess
     from os import getcwd, chdir
     from os.path import expanduser
+    from getpass import getuser
 
     oldCwd = getcwd()
-    chdir(expanduser("~") + '/python/')
-    repoRevStr = subprocess.check_output(["hg", "id"]).strip()
+    if getuser == 'dnelson':
+        chdir(expanduser("~") + '/python/')
+    else:
+        chdir('/var/www/python/')
+    repoRevStr = subprocess.check_output(["hg", "id"], stderr=subprocess.DEVNULL).strip()
     chdir(oldCwd)
 
     return repoRevStr

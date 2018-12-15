@@ -141,7 +141,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     # flagging?
     sim_flag = np.ones(sim_xvals.shape).astype('bool')
-    if filterFlag:
+    if filterFlag and sP.groupCatHasField('Subhalo','SubhaloFlag'):
         # load SubhaloFlag and override sim_flag (0=bad, 1=good)
         sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 
@@ -588,7 +588,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
             # flagging?
             sim_flag = np.ones(sim_xvals.shape).astype('bool')
-            if filterFlag:
+            if filterFlag and sP.groupCatHasField('Subhalo','SubhaloFlag'):
                 # load SubhaloFlag and override sim_flag (0=bad, 1=good)
                 sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 
@@ -746,7 +746,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             # flagging?
             sim_flag = np.ones(sim_xvals.shape).astype('bool')
-            if filterFlag:
+            if filterFlag and sP.groupCatHasField('Subhalo','SubhaloFlag'):
                 # load SubhaloFlag and override sim_flag (0=bad, 1=good)
                 sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
 

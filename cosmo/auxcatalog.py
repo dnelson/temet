@@ -9,6 +9,7 @@ import numpy as np
 import h5py
 from functools import partial
 from os.path import expanduser
+from getpass import getuser
 
 from cosmo.util import snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
   inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs
@@ -507,8 +508,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         i1 = indRange[1] # never changes
 
     # info
-    print(' ' + desc)
-    print(' Total # Subhalos: %d, processing [%d] subhalos...' % (nSubsTot,nSubsDo))
+    username = getuser()
+    if username == 'dnelson':
+        print(' ' + desc)
+        print(' Total # Subhalos: %d, processing [%d] subhalos...' % (nSubsTot,nSubsDo))
 
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = []
@@ -597,7 +600,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     printFac = 100.0 if (sP.res > 512 or scope == 'global') else 10.0
 
     for i, subhaloID in enumerate(subhaloIDsTodo):
-        if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
+        if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo and username == 'dnelson':
             print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
 
         # slice starting/ending indices for stars local to this FoF

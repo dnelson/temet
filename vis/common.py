@@ -800,7 +800,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'Spectral_r'
 
     if partField in ['bmag_uG']:
-        grid = grid * 1e6
+        grid = grid
         config['label']  = 'Magnetic Field Magnitude [log $\mu$G]'
         config['ctName'] = 'Spectral_r'
         config['plawScale'] = 0.4
