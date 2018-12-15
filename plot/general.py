@@ -174,7 +174,8 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
-                     xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, nBins=None, sfreq0=False):
+                     xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, nBins=None, 
+                     sfreq0=False, powellCorrection=False):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
@@ -223,14 +224,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
-    xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
+    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
 
     if xlog: xvals = np.log10(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
+    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
 
     if ylog: yvals = np.log10(yvals)
 
@@ -247,7 +248,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        weight = sP.snapshotSubset(partType, wtProp, haloID=haloID)
+        weight = sP.snapshotSubsetP(partType, wtProp, haloID=haloID)
 
         if sfreq0:
             weight = weight[w_sfr]
@@ -355,6 +356,13 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             labelText = wtProp.replace(" mass","").replace(" ","")
             ax.text(xlim[0]+0.3, yMinMax[-1]-0.3, labelText, 
                 va='top', ha='left', color='black', fontsize='40')
+
+        if 0:
+            # debugging EOS correction
+            xx = np.linspace(-6.0, -4.0, 10)
+            yy = (0.45*(xx+5.0)+3.45)
+            ax.plot(xx,yy,'o-',color='black')
+            ax.plot([-4,-1],[3.9,3.9],'-',color='#444444')
 
         # mark virial radius?
         if haloID is not None and xQuant in ['rad','rad_kpc','rad_kpc_linear']:
@@ -781,27 +789,37 @@ def compareRuns_PhaseDiagram():
 
     pdf.close()
 
-def oneRun_PhaseDiagram():
+def oneRun_PhaseDiagram(snaps=None):
     """ Driver. """
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
+    sP = simParams(res=1820,run='tng')
     yQuant = 'temp'
     xQuant = 'nh'
-    xlim   = [-9.0, 2.0]
-    ylim   = [2.0, 8.5]
-    clim   = [-6.0,-0.2]
 
-    sP = simParams(res=455,run='tng')
-    snaps = sP.validSnapList()[::2] # [99]
+    zoom = False
+
+    if zoom:
+        xlim = [-6.0, -0.5]
+        ylim = [2.0, 4.5]
+    else:
+        xlim = [-9.0, 2.0]
+        ylim = [2.0, 8.5]
+    clim   = [-6.0,-0.2]
+    
+    if snaps is None:
+        #snaps = sP.validSnapList()[::2] # [99]
+        snaps = [0,10,17,18,19,20,30,40,50,60,70,80,90,99]
 
     # start PDF, add one page per snapshot
-    pdf = PdfPages('phaseDiagram_%s.pdf' % (sP.simName))
+    pdf = PdfPages('phaseDiagram_%s_%s%s.pdf' % (yQuant,sP.simName,'_zoom' if zoom else ''))
 
     for snap in snaps:
         sP.setSnap(snap)
         print(snap)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, #meancolors=[cQuant], weights=weights, 
+            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
 
     pdf.close()
 

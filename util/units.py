@@ -690,21 +690,21 @@ class units(object):
             temp = logZeroSafe(temp)
         return temp
 
-    def TempToU(self, temp, log=False):
+    def TempToU(self, temp, nelec, log=False):
         """ Convert temperature in Kelvin to InternalEnergy (u) in code units. """
         if np.max(temp) <= 10.0:
             raise Exception("Error: input temp probably in log, check.")
 
-        meanmolwt = 0.6 * self.mass_proton # ionized, T > 10^4 K
+        # calculate mean molecular weight
+        meanmolwt = 4.0/(1.0 + 3.0 * self.hydrogen_massfrac + 4.0* self.hydrogen_massfrac * nelec) 
+        meanmolwt *= self.mass_proton
 
         # temp = (gamma-1.0) * u / units.boltzmann * units.UnitEnergy_in_cgs / units.UnitMass_in_g * meanmolwt
-        u = temp.astype('float32')
-        u *= self.boltzmann * self.UnitMass_in_g / \
-            (self.UnitEnergy_in_cgs * meanmolwt * (self.gamma-1.0))
+        u = temp * self.boltzmann * self.UnitMass_in_g / (self.UnitEnergy_in_cgs * meanmolwt * (self.gamma-1.0))
 
         if log:
             u = logZeroSafe(u)
-        return u
+        return u.astype('float32')
 
     def coolingRateToCGS_unused(self, coolrate):
         """ Convert code units (du/dt) to erg/s/g (cgs, specific). Unused. """
@@ -943,7 +943,8 @@ class units(object):
     def codeMassToVirEnt(self, mass, log=False):
         """ Given a total halo mass, return a S200 (e.g. Pvir/rho_200crit^gamma). """
         virTemp = self.codeMassToVirTemp(mass, log=False)
-        virU = self.TempToU(virTemp)
+        virNe = np.array([1.0]) # todo, want mu=0.6 for fully ionized
+        virU = self.TempToU(virTemp, ne)
         r200crit = self.critRatioToCodeDens(np.array(200.0), baryon=True)
 
         s200 = self.calcEntropyCGS(virU, r200crit, log=log)

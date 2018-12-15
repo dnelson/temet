@@ -1500,6 +1500,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [3.5, 8.0]
         log = False
 
+    if ptProperty == 'temp_old':
+        label = 'Gas Temperature (Uncorrected) [ log K ]'
+        lim = [2.0, 8.0]
+        if haloLims: lim = [3.5, 8.0]
+        log = False
+
     if ptProperty == 'temp_linear':
         assert ptType == 'gas'
         label = 'Gas Temperature [ log K ]'

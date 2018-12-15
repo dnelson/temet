@@ -472,7 +472,7 @@ def periodic_slurm_status(nosave=False):
     ylim = [50,100]
     fontsize = 11
 
-    ax = fig.add_axes([0.754, 0.38, 0.234, 0.18]) # left,bottom,width,height
+    ax = fig.add_axes([0.754, 0.50, 0.234, 0.18]) # left,bottom,width,height
     #ax.set_ylabel('CPU / Cluster Load [%]')
     ax.set_ylim(ylim)
 
@@ -493,11 +493,11 @@ def periodic_slurm_status(nosave=False):
     for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
         item.set_fontsize(fontsize)
 
-    # time seris plot (6 months)
+    # time series plot (6 months)
     if 0:
         numMonths = 2
 
-        ax = fig.add_axes([0.754, 0.59, 0.234, 0.18]) # left,bottom,width,height
+        ax = fig.add_axes([0.754, 0.61, 0.234, 0.18]) # left,bottom,width,height
         ax.set_ylim(ylim)
 
         minTs = stats['req_time'] - 24*60*60*30*numMonths
@@ -549,7 +549,7 @@ def periodic_slurm_status(nosave=False):
         fsStr = line.split('%')[0] + '%'
         fsStr = fsStr.replace('Size','   Size')
         fsStr = fsStr.replace('gpfsvirgo','/virgo/          ').replace('freya_u','/freya/u/    ').replace('freya_ptmp','/freya/ptmp/')
-        ax.annotate(fsStr, [0.754, 0.70-i*0.036], xycoords='figure fraction', fontsize=19.0, horizontalalignment='left', verticalalignment='center')
+        ax.annotate(fsStr, [0.754, 0.82-i*0.036], xycoords='figure fraction', fontsize=19.0, horizontalalignment='left', verticalalignment='center')
 
     # save
     fig.savefig('freya_stat_1.png', dpi=100) # 1890x920 pixels
