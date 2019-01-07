@@ -1153,32 +1153,54 @@ def benedetta_vis_sample():
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def annalisa_tng50_presentation(conf, binNum, stars=True, edgeon=False):
-    """ For two stellar mass bins, plot face-on and edge-on visualizations of 20 random galaxies in each, 
-    once for a stellar light composite, and once for a H-alpha. """
-    massBins  = [[5e9,1e10],[5e10,1e11]]
-    numPerBin = 20
-
+def annalisa_tng50_presentation(setNum=0, stars=False):
+    """ TNG50 presentation paper: face-on + edge-on combination, 5x5 systems. """
     panels = []
 
+    # V-band: half-light height <= 0.1 half-light radius, changing 1- to 0-indexed
+    shIDs_z2 = np.array([1,3,4,8069,8070,8073,21556,29444,31834,34605,39746,42407,50682,53050,55107,55108,
+        57099,57100,59079,60751,62459,66744,68179,69832,75669,79351,82446,83579,90627,90628,94052,99964,102286,
+        103000,103794,106288,110544,111197,113350,115248,115583,117547,118609,121253,123608,124588,125842,
+        125844,127581,128110,129662,130666,130667,132291,132792,134388,136382,139178,141751,142608,143906,
+        145493,146307,150453,150766,152212,153726,154636,155423,156280,158465,160187,165800,166214,167146,
+        169206,171250,172012,174040,176757,180691,181897,184340,184901,185468,187834,188038,189522,193523,
+        194076,194502,197278,201315,202435,204189,205429,208429,211255,213909,216100,221701,228212,229128,
+        232259,232895,233249,234374,236920,239921,241048,241387,242245,242473,242664,242837,243973,244058,
+        244372,245190,246344,249290,249750,253072,253346,256641,263034,264392,267310,272731,279217,279294,
+        280655,288386,289422,294036,294128,306443,312047,319791,328084,349390,353735,364166])-1
+
+    shIDs_z2_final25 = [29443,79350,60750,8069,57099, # 39745
+                        68178,110543,90627,55107,102285,
+                        113349,121252,125841,115247,115582,
+                        127580,132290,130665,129661,139177,
+                        145492,146306,154635,189521,246343]
+
     res        = 2160
-    redshift   = 1.0
+    redshift   = 2.0
     run        = 'tng'
     rVirFracs  = None
     method     = 'sphMap'
-    nPixels    = [800,800]
     axes       = [0,1]
-    labelScale = 'physical'
-    labelHalo  = 'mstar,id'
-    rotation   = 'edge-on' if edgeon else 'face-on'
     sizeType   = 'kpc'
-    size       = 60.0 if binNum == 1 else 30.0
+    size       = 40.0
 
-    class plotConfig:
-        plotStyle = 'edged'
-        rasterPx  = nPixels[0]
-        colorbars = False
-        nRows     = 5 if conf == 'halos_combined' else 1
+    faceOnOptions = {'rotation'   : 'face-on',
+                     'labelScale' : 'physical',
+                     'labelHalo'  : 'mstar,redshift',
+                     'nPixels'    : [400,400]}
+
+    edgeOnOptions = {'rotation'   : 'edge-on',
+                     'labelScale' : False,
+                     'labelHalo'  : False,
+                     'nPixels'    : [400,100]}
+
+    if stars:
+        partType  = 'stars'
+        partField = 'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'
+    else:
+        partType  = 'gas'
+        partField = 'sfr_halpha'
+        valMinMax = [38.0, 41.0] # 40.7
 
     # set font
     import matplotlib as mpl
@@ -1186,39 +1208,27 @@ def annalisa_tng50_presentation(conf, binNum, stars=True, edgeon=False):
     mpl.rcParams['font.serif'] = ['Times New Roman']
 
     # select halos
-    sP = simParams(res=res, run=run, redshift=redshift)
-    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc'])
-    cen_flag = sP.groupCat(fieldsSubhalos=['cen_flag'])
+    if str(setNum) == 'final':
+        shIDs = shIDs_z2_final25
+        nCols = 5
+    else:
+        numPer = 35
+        nCols = 7
+        shIDs = shIDs_z2[numPer*setNum:numPer*(setNum+1)]
 
-    shIDs = np.where( (mstar >= massBins[binNum][0]) & (mstar < massBins[binNum][1]) & cen_flag )[0]
-    shIDs = evenlySample(shIDs, numPerBin)
+    class plotConfig:
+        plotStyle = 'edged'
+        rasterPx  = faceOnOptions['nPixels'][0] * 4
+        colorbars = True
+        nRows     = 5*2
 
-    # configure panels
-    ha_mm = [37.8, 40.5]
+    # configure panels: face-on and edge-on in alternating rows
+    for i in range(int(plotConfig.nRows/2)):
+        for j in range(nCols):
+            panels.append( {'hInd':shIDs[i*nCols+j], **faceOnOptions} )
+        for j in range(nCols):
+            panels.append( {'hInd':shIDs[i*nCols+j], **edgeOnOptions} )
 
-    if conf == 'single_halos':
-        # loop over galaxies, one figure each
-        for shID in shIDs:
-            haloInd = sP.groupCatSingle(subhaloID=shID)['SubhaloGrNr']
+    plotConfig.saveFilename = savePathDefault + 'renderHalo_test_set-%s_%s.pdf' % (setNum,partType)
 
-            if stars:
-                panels.append( {'hInd':shID, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-            else:
-                panels.append( {'hInd':shID, 'partType':'gas', 'partField':'sfr_halpha', 'valMinMax':ha_mm} )
-
-            plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_%s_bin%d_halo%d_hID-%d_shID-%d_%s.pdf' % \
-                                      (sP.simName,sP.snap,panels[0]['partType'],binNum,haloInd,shID,rotation)
-            renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-    if conf == 'halos_combined':
-        # combined plot of all 20 galaxies at once
-        for shID in shIDs:
-            if stars:
-                panels.append( {'hInd':shID, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-            else:
-                panels.append( {'hInd':shID, 'partType':'gas', 'partField':'sfr_halpha', 'valMinMax':ha_mm} )
-
-        plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_%s_bin%d_%s.pdf' % \
-                                  (sP.simName,sP.snap,panels[0]['partType'],binNum,rotation)
-
-        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
