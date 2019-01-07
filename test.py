@@ -1021,7 +1021,7 @@ def lagrangeMatching():
 
 def miscGasStats():
     """ Print out some misc gas stats used in the appendix table of the TNG color flagship paper. """
-    sP = simParams(res=2160, run='tng', redshift=0.0)
+    sP = simParams(res=2160, run='tng', redshift=6.0)
     print(sP.simName)
 
     gas_dens = sP.snapshotSubsetP('gas', 'dens')
@@ -1035,11 +1035,11 @@ def miscGasStats():
 
     gas_dens = None
 
-    gas_rcell = sP.snapshotSubsetP( 'gas', 'cellsize')
-    gas_rcell = sP.units.codeLengthToKpc(gas_rcell)
+    gas_rcell = sP.snapshotSubsetP('gas', 'cellsize_kpc')
 
     print('median gas cell radius [pkpc]: ', np.median(gas_rcell))
     print('mean sfring gas cell radius [pc]: ', gas_rcell[w_sf].mean()*1000)
+    print('median sfring gas cell radius [pc]: ', np.median(gas_rcell[w_sf])*1000)
     print('minimum gas cell radius [pc]: ', gas_rcell.min()*1000)
 
 def checkSublinkIntermediateFiles():

@@ -1678,6 +1678,7 @@ def addBoxMarkers(p, conf, ax):
         # if scale bar is less than 10% of width, increase by 4x
         if scaleBarLen < 0.1 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen *= 4
+            print('new scaleBarLen: ', scaleBarLen)
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0, 1000.0, 100.0, 10.0]
@@ -1774,7 +1775,9 @@ def addBoxMarkers(p, conf, ax):
             # just Mhalo
             legend_labels.append( str1 )
         if 'id' in str(p['labelHalo']):
-            legend_labels.append( '%d' % p['sP'].hInd )
+            legend_labels.append( 'ID %d' % p['sP'].hInd )
+        if 'redshift' in str(p['labelHalo']):
+            legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['sP'].hInd))
         if str1 not in legend_labels and str2 not in legend_labels:
             # both Mhalo and Mstar
             legend_labels.append( str1 )
@@ -2214,15 +2217,42 @@ def renderMultiPanel(panels, conf):
             barAreaBottom = barAreaHeight
 
         if nRows > 2:
-            # verify that each column contains the same field and valMinMax
+            # should verify that each column contains the same field and valMinMax
             barAreaBottom *= 0.7
             pass
+
+        # variable-height rows? e.g. face-on and edge-on views together
+        varRowHeights = False
+        nShortPanels = 0
+
+        for p in panels:
+            if p['nPixels'][1] <= 0.5*p['nPixels'][0] and p['rotation'] == 'edge-on':
+                varRowHeights = True
+                rowHeightRatio = p['nPixels'][1] / p['nPixels'][0] # e.g. 0.25 for 4x longer than tall
+                nShortPanels += 1
+
+        assert nShortPanels/nCols == np.round(nShortPanels/nCols) # exact number of panels to make full rows
+        nShortRows = nShortPanels / nCols
 
         # start plot
         fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
 
         width_in  = sizeFac[0] * np.ceil(nCols)
-        height_in = sizeFac[1] * np.ceil(nRows) * (1/(1.0-barAreaTop-barAreaBottom))
+        height_in = sizeFac[1] * np.ceil(nRows)
+
+        rowHeight  = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
+
+        if varRowHeights:
+            barAreaBottom /= np.sqrt(rowHeightRatio)
+            assert nShortRows == nRows/2 # otherwise unexpected configuration
+
+            nTallRows = nRows - nShortRows # == nRows/2
+            rowHeightTall  = (1.0 - barAreaTop - barAreaBottom) * (1.0/(1+rowHeightRatio)) / nTallRows
+            rowHeightShort = (1.0 - barAreaTop - barAreaBottom) * (rowHeightRatio/(1+rowHeightRatio)) / nShortRows
+
+            height_in = sizeFac[1] * nTallRows + sizeFac[1] * nShortRows * rowHeightRatio
+            
+        height_in *= (1/(1.0-barAreaTop-barAreaBottom)) # account for colorbar areas
 
         fig.set_size_inches(width_in, height_in)
 
@@ -2236,10 +2266,22 @@ def renderMultiPanel(panels, conf):
             curRow = np.floor(i / nCols)
             curCol = i % nCols
 
-            rowHeight = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
             colWidth   = 1.0 / np.ceil(nCols)
-            bottomNorm  = (1.0 - barAreaTop) - rowHeight * (curRow+1)
-            leftNorm = colWidth * curCol
+            leftNorm   = colWidth * curCol
+            bottomNorm = (1.0 - barAreaTop) - rowHeight * (curRow+1)
+
+            if varRowHeights:
+                curRowTall = np.floor(curRow/2.0) # note: hard-coded 'alternating' logic here
+                curRowShort = np.floor( (curRow+1)/2.0 )
+
+                if p['nPixels'][1] <= 0.5*p['nPixels'][0]:
+                    # short/edge-on row
+                    rowHeight = rowHeightShort
+                else:
+                    # tall/face-on row
+                    rowHeight  = rowHeightTall
+
+                bottomNorm = (1.0 - barAreaTop) - rowHeightTall * (curRowTall+1) - rowHeightShort * (curRowShort)
 
             pos = [leftNorm, bottomNorm, colWidth, rowHeight]
 

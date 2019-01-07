@@ -1274,6 +1274,18 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                     w = np.where( np.isfinite(yy) )
                     ax.fill_between(xx[w], yy[w]-sm[w], yy[w]+sm[w], color=l.get_color(), interpolate=True, alpha=0.05)
 
+                if 0:
+                    # plot some vertical line markers (Fig 8)
+                    yy_sum = np.nansum(10.0**yy)
+                    yy_cumsum = np.nancumsum(10.0**yy / yy_sum)
+                    facs = [0.5, 0.95, 0.99]
+                    for k, fac in enumerate(facs):
+                        w = np.min(np.where(yy_cumsum >= fac)[0])
+                        print(fac, xx[w])
+                        ls = ['-','--',':'][k]
+                        ymax = -2.8 if k == 0 else -2.85
+                        ax.plot( [xx[w],xx[w]], [-3.0,ymax], color=l.get_color(), lw=lw-0.5, linestyle=ls, alpha=0.5)
+
         # legends and finish plot
         if len(redshifts) > 1:
             sExtra = []
