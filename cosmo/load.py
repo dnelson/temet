@@ -1650,6 +1650,33 @@ def snapshotSubset(sP, partType, fields,
         # position. note: decision for satellite subhalos, properties are relative to themselves or to their central.
         # ------------------------------------------------------------------------------------------------------
 
+        # 3D xyz position, relative to halo/subhalo center, [code] or [physical kpc] of [dimensionless fraction of rvir=r200crit]
+        if field.lower() in ['pos_rel','pos_rel_kpc','pos_rel_rvir']:
+            assert not sP.isZoom # otherwise as below for 'rad'
+            assert haloID is not None or subhaloID is not None
+            pos = snapshotSubset(sP, partType, 'pos', **kwargs)
+            if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
+
+            # get haloID and load halo regardless, even for non-centrals
+            # take center position as subhalo center (same as group center for centrals)
+            if subhaloID is None:
+                halo = sP.groupCatSingle(sP, haloID=haloID)
+                haloPos = halo['GroupPos']
+            if subhaloID is not None:
+                sub = groupCatSingle(sP, subhaloID=subhaloID)
+                halo = groupCatSingle(sP, haloID=sub['SubhaloGrNr'])
+                haloID = sub['SubhaloGrNr']
+                haloPos = sub['SubhaloPos']
+
+            for j in range(3):
+                pos[:,j] -= haloPos[j]
+
+            sP.correctPeriodicDistVecs(pos)
+            if '_kpc' in field: pos = sP.units.codeLengthToKpc(pos)
+            if '_rvir' in field: pos /= halo['Group_R_Crit200']
+
+            r[field] = pos
+
         # 3D radial distance from halo center, [code] or [physical kpc] or [dimensionless fraction of rvir=r200crit]
         if field.lower() in ['rad','rad_kpc','rad_kpc_linear','halo_rad','halo_rad_kpc','rad_rvir','halo_rad_rvir']:
             if sP.isZoom:
