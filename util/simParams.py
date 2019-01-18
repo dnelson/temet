@@ -137,7 +137,7 @@ class simParams:
 
         if res and not isinstance(res, int):
             raise Exception("Res should be numeric.")
-        if hInd is not None and not isinstance(hInd, (int,np.int32,np.int64)):
+        if hInd is not None and not isinstance(hInd, (int,np.uint32,np.int32,np.int64)):
             raise Exception("hInd should be numeric.")
         if redshift and snap:
             print("Warning: simParams: both redshift and snap specified.")

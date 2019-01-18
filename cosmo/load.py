@@ -550,7 +550,8 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 return r[key]
             else:
                 # return dictionary of fields (no 'subhalos' wrapping)
-                return r['subhalos']
+                if 'subhalos' in r: return r['subhalos']
+                return r
 
     # override path function
     il.groupcat.gcPathOrig = il.groupcat.gcPath
