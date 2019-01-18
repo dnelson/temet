@@ -402,7 +402,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
         resFac = 1.0 #(512.0/sP.res)**2.0
 
-        minValLog = np.array([2.8,2.8,2.8]) # previous: 3.3
+        minValLog = np.array([2.2,2.2,2.2]) # previous: 2.8, and before that 3.3 (nice control of low-SB features)
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
@@ -1715,10 +1715,10 @@ def addBoxMarkers(p, conf, ax):
         y_off = np.clip(0.04 - 0.01 * 1000 / conf.rasterPx[1], 0.01, 0.06)
         yt_fac = np.clip(1.5 + 0.1 * 1000 / conf.rasterPx[1], 1.0, 2.0)
 
-        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 960.0/conf.rasterPx[0]) # upper left
+        x0 = p['extent'][0] + (p['extent'][1]-p['extent'][0])*(y_off * 720.0/conf.rasterPx[0]) # upper left
         x1 = x0 + scaleBarPlotLen
-        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 960.0/conf.rasterPx[0])
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*yt_fac) * 960.0/conf.rasterPx[0])
+        yy = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(y_off * 720.0/conf.rasterPx[1])
+        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*((y_off*yt_fac) * 720.0/conf.rasterPx[1])
 
         if p['axesUnits'] in ['deg','arcmin','arcsec']:
             deg = (p['axesUnits'] == 'deg')
@@ -1790,7 +1790,8 @@ def addBoxMarkers(p, conf, ax):
     # draw legend
     if len(legend_labels):
         legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
-        legend = ax.legend(legend_lines, legend_labels, fontsize=conf.fontsize, loc='lower left', 
+        loc = p['legendLoc'] if 'legendLoc' in p else 'lower left'
+        legend = ax.legend(legend_lines, legend_labels, fontsize=conf.fontsize, loc=loc, 
                            handlelength=0, handletextpad=0)
 
         for text in legend.get_texts(): text.set_color('white')
@@ -2226,7 +2227,7 @@ def renderMultiPanel(panels, conf):
         nShortPanels = 0
 
         for p in panels:
-            if p['nPixels'][1] <= 0.5*p['nPixels'][0] and p['rotation'] == 'edge-on':
+            if p['nPixels'][1] <= 0.5*p['nPixels'][0] and 'rotation' in p and p['rotation'] == 'edge-on':
                 varRowHeights = True
                 rowHeightRatio = p['nPixels'][1] / p['nPixels'][0] # e.g. 0.25 for 4x longer than tall
                 nShortPanels += 1
