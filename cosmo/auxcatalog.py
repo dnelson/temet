@@ -15,7 +15,8 @@ from cosmo.util import snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
   inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe, weighted_std_binned
 from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
-from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, \
+  rotationMatricesFromInertiaTensor, ellipsoidfit
 
 # generative functions
 from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
@@ -31,7 +32,7 @@ boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
 # eliminate the entire specialized ufunc logic herein
-userCustomFields = ['Krot','radvel','losvel','losvel_abs']
+userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid']
 
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -535,6 +536,13 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
         allocSize = (nSubsDo,)
 
+    if ptProperty == 'shape_ellipsoid':
+        gc['SubhaloRhalfStars'] = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])[:,sP.ptNum('stars')]
+        ellipsoid_rin  = 1.8 # rhalfstars
+        ellipsoid_rout = 2.2 # rhalfstars
+        fieldsLoad.append('pos')
+        allocSize = (nSubsDo,2) # q,s
+
     fieldsLoad = list(set(fieldsLoad)) # make unique
 
     particles = {}
@@ -601,7 +609,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     for i, subhaloID in enumerate(subhaloIDsTodo):
         if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo and username == 'dnelson':
-            print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+            print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo)) 
 
         # slice starting/ending indices for stars local to this FoF
         if scope != 'global':
@@ -733,6 +741,27 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 loc_rad = np.sqrt( rr[wValid] )
                 r[i] = _findHalfLightRadius(loc_rad, mags=None, vals=loc_val)
 
+            # shape measurement via iterative ellipsoid fitting
+            if ptProperty == 'shape_ellipsoid':
+                scale_rad = gc['SubhaloRhalfStars'][subhaloID]
+                if scale_rad == 0.0:
+                    continue
+
+                loc_val = particles['Coordinates'][i0:i1, :][wValid]
+                loc_wt  = particles['weights'][i0:i1][wValid] # mass
+
+                # positions relative to subhalo center, and normalized by stellar half mass radius
+                for j in range(3):
+                    loc_val[:,j] -= gc['SubhaloPos'][subhaloID,j]
+
+                sP.correctPeriodicDistVecs(loc_val)
+                loc_val /= scale_rad
+
+                # fit, and save ratios of second and third axes lengths to major axis
+                q, s, _, _ = ellipsoidfit(loc_val, loc_wt, scale_rad, ellipsoid_rin, ellipsoid_rout)
+                r[i,0] = q
+                r[i,1] = s
+
             # ufunc processed and value stored, skip to next subhalo
             continue
 
@@ -855,7 +884,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
         bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
-        if indivStarMags or sizes: bands = ['sdss_r']
+        if indivStarMags or sizes: bands = ['sdss_r','jwst_f150w']
 
     nBands = len(bands)
 
@@ -2744,6 +2773,11 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Krot',op='ufunc',rad=None),
    'Subhalo_GasRotation_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Krot',op='ufunc',rad='2rhalfstars'),
+
+   'Subhalo_EllipsoidShape_Stars_2rhalfstars_shell' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='shape_ellipsoid',op='ufunc',weighting='mass',rad=None),
+   'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='shape_ellipsoid',op='ufunc',weighting='mass',ptRestrictions=sfrgt0,rad=None),
 
    'Subhalo_StellarAge_NoRadCut_MassWt'       : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
