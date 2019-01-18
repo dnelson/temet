@@ -1078,7 +1078,7 @@ def curRepoVersion():
     from getpass import getuser
 
     oldCwd = getcwd()
-    if getuser == 'dnelson':
+    if getuser() == 'dnelson':
         chdir(expanduser("~") + '/python/')
     else:
         chdir('/var/www/python/')
