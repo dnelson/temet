@@ -271,13 +271,14 @@ def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
 def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
     """ Iterative algorithm to derive the shape (axes ratios) of a set of particles/cells given by pos_in and mass, 
     within a radial shell defined by rin, rout. Positions should be unitless, normalized by scalerad (a scaling factor, 
-    could be the virial radius or e.g. a half mass radius). """
+    could be the virial radius or e.g. a half mass radius). Originally from Eddie Chua.  """
     pos = pos_in.copy()
     assert pos.shape[0] == mass.size
 
     convcrit = 1e-2 # convergence criterion
     minNumParticles = 20 # quit if we drop below this
     minEigenval = 1e-4 # quit if we drop below this
+    maxNumIters = 100 # stop if no convergence after N iterations
 
     q = 1.0
     s = 1.0
@@ -285,6 +286,7 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
     conv = 10
     count = 0
 
+    mass_loc = []
     axes = np.eye(3) # holds final rotation
 
     # iterate until convergence or until an early exit
@@ -297,11 +299,6 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
 
         if len(w[0]) < minNumParticles:
             #print('early exit, particle num dropped to [%d]' % len(w[0]))
-            break
-
-        if len(w[0]) == 0:
-            print('no particles in bin!')
-            assert 0 # check
             break
 
         pos_loc = pos[w[0],:]
@@ -339,9 +336,8 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
         # check rotation matrix using similarity transformation
         # the convention is M' = V.T M V, which should correspond to the eigenvalues on the diagonal
         if not np.allclose( np.dot(eigvecs.T, np.dot(M,eigvecs)), np.diag(eigvals), atol=1e-4):
-            print('Issue: ', np.dot(eigvecs.T, np.dot(M,eigvecs)), ' vs ', eigvals)
-            assert 0 # check
-            break
+            #print('Issue: ', np.dot(eigvecs.T, np.dot(M,eigvecs)), ' vs ', eigvals)
+            return np.nan, np.nan, 0, axes # complete failure
 
         # are any of the eigenvalues very small? the next iteration will then return imaginary values
         if (eigvals < minEigenval).any():
@@ -349,16 +345,12 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
             break
 
         if (eigvals < 1e-6).any():
-            print('Eigenvalues too small, stopping.')
-            assert 0 # check
-            break
+            #print('Eigenvalues too small, stopping.')
+            return np.nan, np.nan, 0, axes # complete failure
 
         # obtain q and s from the eigenvalues
         q_new = np.sqrt(eigvals[1]/eigvals[0])
         s_new = np.sqrt(eigvals[2]/eigvals[0])
-
-        # constraint: q_new+s_new=1.0 (or something reasonable)
-        #q_new *= 1.0/(q_new + s_new)
 
         # rotate positions
         pos = np.dot(pos, rot_matrix.T)
@@ -371,18 +363,18 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
 
         q, s = q_new, s_new
 
-        if count > 100:
-            #print(' reached 100 iters.')
+        if count > maxNumIters:
             break
 
-        if q > 1.0 or s > 1.0:
-            print('Either q or s is larger than one, not allowed.')
-            assert 0 # check
-
+        assert q <= 1.0 and s <= 1.0
         #print(' [%2d] q = %.3f s = %.3f ratio=%.2f n = %5d conv = %.3f' % (count,q,s,s/q,mass_loc.size,conv))
 
         # iterations done
         assert np.allclose( np.dot(pos_in, axes), pos )
+
+    if q == 1.0 and s == 1.0:
+        # never completed one iteration, lack of particles
+        return np.nan, np.nan, 0, axes
 
     return q, s, mass_loc.size, axes
     
@@ -393,12 +385,12 @@ def ellipsoidfit_run():
     sP = simParams(res=2160, run='tng', redshift=2.0)
 
     # field config
-    ptType = 'gas' # 'stars'
+    ptType = 'gas' # 'gas'
     massField = 'mass' # 'sfr'
 
     # bin config
     solid  = False # otherwise shell
-    binwidth = 0.1
+    binwidth = 0.3
 
     if 0:
         # generate a number of bins from the halo center to scalerad
@@ -413,16 +405,14 @@ def ellipsoidfit_run():
 
     if 1:
         # or: use exact 'input' bin midpoints
-        rbins = np.array([1.9,2.1]) # np.array([0.5,1.0,2.0,4.0])
+        rbins = np.array([2.0]) #np.array([1.9,2.1]) # np.array([0.5,1.0,2.0,4.0])
         logr  = np.log10( rbins )
         nbins = len(rbins)
 
         rin  = rbins - binwidth/2.0
         rout = rbins + binwidth/2.0
 
-    # object choice
-    subhaloID = 8069
-
+    # select objects
     shIDs_z2_final25 = [29443,79350,60750,8069,57099,
                         68178,110543,90627,55107,102285,
                         113349,121252,125841,115247,115582,
@@ -466,7 +456,8 @@ def ellipsoidfit_run():
 
             q[i], s[i], n[i], axes[i] = ret
 
-            print('[%6d %s] [r = %.2f] q = %.3f s = %.3f ratio = %.2f' % (subhaloID,ptType,10.0**logr[i],q[i],s[i],s[i]/q[i]))
+            #print('[%6d %s] [r = %.2f] q = %.3f s = %.3f ratio = %.2f' % (subhaloID,ptType,10.0**logr[i],q[i],s[i],s[i]/q[i]))
+            print(subhaloID,q[i],s[i])
 
 
 def ellipsoidfit_test(N=1000, h=0.1, R=10.0, q=1.0, s=1.0, phi=0.0, theta=0.0, noise_frac=0.0):
