@@ -68,9 +68,10 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_rad = ['rhalo_200','rhalo_500','velmag']
 
     # generally available (auxcat)
-    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 'mass_gasall',
+    quants2 = ['stellarage', 'mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 
                'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr','sfr_surfdens_30pkpc_100myr',
-               're_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w']
+               're_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w',
+               'shape_s_sfrgas','shape_s_stars','shape_ratio_sfrgas','shape_ratio_stars']
 
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
                    'bmag_halo_masswt',   'bmag_halo_volwt', 
@@ -107,6 +108,11 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                'mstar_out_10kpc_frac_r200', 'mstar_out_30kpc_frac_r200',
                'mstar_out_100kpc_frac_r200', 'mstar_out_2rhalf_frac_r200']
 
+    # supplementary catalogs of other people (temporary, TNG50):
+    quants5b = ['slit_vrot_halpha','slit_vsigma_halpha','slit_vrot_starlight','slit_vsigma_starlight',
+                'slit_voversigma_halpha','slit_voversigma_starlight',
+                'size2d_halpha','size2d_starlight','diskheightnorm2d_halpha','diskheightnorm2d_starlight']
+
     # unused: 'massfrac_insitu', 'massfrac_insitu_inrad'
     #         'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o'
 
@@ -126,7 +132,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # assembly sub-subset of quantities as requested
     if wCounts: quants1 = [None] + quants1
 
-    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5
+    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5 + quants5b
     quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad
     if wTr: quantList += trQuants
     if wMasses: quantList += quants_mass
@@ -149,14 +155,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     takeLog = True # default
 
     # cached? immediate return
-    k = 'sim_' + quant + '_'
+    cacheKey = 'sim_%s_%s_%s' % (quant,clean,tight)
 
-    if k+'vals' in sP.data:
+    if cacheKey in sP.data:
         # data already exists in sP cache? return copies rather than views in case data or metadata are modified
-        vals, label, minMax, takeLog = \
-          sP.data[k+'vals'].copy(), sP.data[k+'label'], list(sP.data[k+'minMax']), sP.data[k+'takeLog']
+        vals, label, minMax, takeLog = sP.data[cacheKey]
+        #  sP.data[k+'vals'].copy(), sP.data[k+'label'], list(sP.data[k+'minMax']), sP.data[k+'takeLog']
 
-        return vals, label, minMax, takeLog
+        return vals.copy(), label, list(minMax), takeLog
 
     # fields:
     if quant in ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2']:
@@ -308,14 +314,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [1.5,3.5]
         label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
 
-    if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_gasall']:
+    if quant in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo
         speciesStr = quant.split("_")[1].upper()
         label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
 
         if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
         if speciesStr == 'O': speciesStr = 'AllGas_Oxygen'
-        if speciesStr == 'Gasall': speciesStr = 'AllGas'
         fieldName = 'Subhalo_Mass_%s' % speciesStr
 
         ac = sP.auxCat(fields=[fieldName])
@@ -330,16 +335,16 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if tight: minMax = [5.6, 8.6]
         if speciesStr == 'OVIII':
             minMax = [6.0, 7.4]
-            if tight: minMax = [5.6, 8.6]
+            if tight: minMax = [5.4, 8.6]
         if speciesStr == 'AllGas_Oxygen':
             minMax = [6.5, 9.0]
-            if tight: minMax = [6.0, 10.5]
+            if tight: minMax = [6.5, 10.5]
         if speciesStr == 'AllGas_Metal':
             minMax = [7.0, 9.5]
             if tight: minMax = [6.5, 11.0]
 
         minMax[0] -= sP.redshift/2
-        minMax[1] -= sP.redshift/2
+        minMax[1] -= sP.redshift/4
 
     if quant in ['sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
                  'ssfr_30pkpc_instant','ssfr_30pkpc_10myr','ssfr_30pkpc_50myr','ssfr_30pkpc_100myr',
@@ -400,15 +405,53 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         fieldName = 'Subhalo_HalfLightRad_p07c_cf00dust_z' + restrictStr
         ac = sP.auxCat(fieldName)
 
-        bands = list(ac[fieldName + '_attrs']['bands'])
-        assert band in bands
-        bandInd = bands.index(band)
+        bands = ac[fieldName + '_attrs']['bands']
+        if isinstance(bands[0], (list,np.ndarray)): bands = bands[0] # remove nested
+        bands = list(bands)
+        assert band.encode('utf-8') in bands
+
+        bandInd = bands.index(band.encode('utf-8'))
 
         vals = sP.units.codeLengthToKpc(ac[fieldName][:,bandInd])
 
         label = 'Stellar R$_{\\rm e}$ [ log kpc ]'
         minMax = [0.1, 1.6]
         if tight: minMax = [0.2, 1.8]
+
+    if quant in ['shape_q_sfrgas','shape_q_stars','shape_s_sfrgas','shape_s_stars','shape_ratio_sfrgas','shape_ratio_stars']:
+        # iterative ellipsoid shape measurements: sphericity (s)
+        if '_sfrgas' in quant:
+            fieldName = 'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell'
+            typeStr = 'SFR>0 Gas'
+        if '_stars' in quant:
+            fieldName = 'Subhalo_EllipsoidShape_Stars_2rhalfstars_shell'
+            typeStr = 'Stars'
+
+        vals = sP.auxCat(fieldName)[fieldName]
+
+        if '_q_' in quant:
+            vals = vals[:,0]
+
+            shapeName = 'q'
+            minMax = [0.05, 0.95]
+            if tight: [0.1, 0.9]
+
+        if '_s_' in quant:
+            vals = vals[:,1]
+
+            shapeName = 's (Sphericity)'
+            minMax = [0.0, 0.4]
+            if tight: [0.1, 0.5]
+
+        if '_ratio_' in quant:
+            vals = vals[:,1] / vals[:,0]
+
+            shapeName = 'Ratio s/q'
+            minMax = [0.0, 0.6]
+            if tight: [0.1, 0.5]
+
+        label = 'Galaxy Shape: %s (%s, $2r_{\\rm 1/2,\star}$)' % (shapeName,typeStr)
+        takeLog = False
 
     if quant == 'ssfr':
         # specific star formation rate (SFR and Mstar both within 2r1/2stars)
@@ -458,7 +501,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         else:
             vals = gc
 
-            label = 'Star Formation Rate (<%d$r_{\\rm 1/2,\star}, instant)' % hFac
+            label = 'Star Formation Rate (<%d$r_{\\rm 1/2,\star}$, instant)' % hFac
             minMax = [-2.5, 1.0]
             if tight: minMax = [-3.0, 2.0]
 
@@ -574,12 +617,12 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [0.1, 1.6]
         if tight: minMax = [0.2, 1.8]
 
-        if sP.redshift >= 1.0:
-            minMax[0] -= 0.6
+        if sP.redshift >= 0.99:
+            minMax[0] -= 0.4
             minMax[1] -= 0.6
-        elif sP.redshift >= 2.0:
-            minMax[0] -= 1.2
-            minMax[1] -= 1.2
+        if sP.redshift >= 2.0:
+            minMax[0] -= 0.4
+            minMax[1] -= 0.4
 
     if quant in ['surfdens1_stars','surfdens2_stars']:
         if '1_' in quant:
@@ -601,13 +644,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = '$\Sigma_{\star%s}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]' % detailsStr
 
         minMax = [6.5, 9.0]
-        if tight: minMax = [6.5, 9.5]
+        if tight: minMax = [6.5, 10.0]
 
-    if quant in ['fgas1','fgas2','fgas']:
+    if quant in ['fgas1','fgas2','fgas','fgas1_alt','fgas2_alt','fgas_alt']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
-        if quant == 'fgas':  fieldName = 'SubhaloMassType'
-        if quant == 'fgas1': fieldName = 'SubhaloMassInHalfRadType'
-        if quant == 'fgas2': fieldName = 'SubhaloMassInRadType'
+        if quant in ['fgas','fgas_alt']:   fieldName = 'SubhaloMassType'
+        if quant in ['fgas1','fgas1_alt']: fieldName = 'SubhaloMassInHalfRadType'
+        if quant in ['fgas2','fgas2_alt']: fieldName = 'SubhaloMassInRadType'
 
         gc = sP.groupCat(fieldsSubhalos=[fieldName])
         mstar = sP.units.codeMassToMsun( gc[:,sP.ptNum('stars')] )
@@ -619,20 +662,34 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             mstar[w] = 1.0
             mgas[w] = 0.0
 
-        vals = mgas / (mgas+mstar)
-
-        label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / (M$_{\\rm gas}$ + M$_{\star}$)'
+        # two different definitions of gas fraction
+        label_extra = ''
         if not clean:
-            if quant == 'fgas':  label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, subhalo)$'
-            if quant == 'fgas1': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <1r$_{\star,1/2})$'
-            if quant == 'fgas2': label += ' (M$_{\\rm gas}$ / M$_{\\rm b}$, <2r$_{\star,1/2})$'
+            if quant in ['fgas','fgas_alt']:   label_extra = ' (subhalo)'
+            if quant in ['fgas1','fgas1_alt']: label_extra = ' (<1r$_{\star,1/2}$)'
+            if quant in ['fgas2','fgas2_alt']: label_extra = ' (<2r$_{\star,1/2}$)'
+
+        if '_alt' in quant:
+            vals = mgas / mstar
+
+            label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / M$_{\star}$%s' % label_extra
+        else:
+            vals = mgas / (mgas+mstar)
+            
+            label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / (M$_{\\rm gas}$ + M$_{\star}$)%s' % label_extra
+
         minMax = [-3.5,0.0]
         if tight: minMax = [-4.0, 0.0]
 
-        if sP.redshift >= 1.0:
+        if quant in ['fgas','fgas_alt']:
+            minMax[0] += 2.5
+
+        if sP.redshift >= 0.99:
             minMax[0] += 1.0
-        elif sP.redshift >= 2.0:
-            minMax[0] += 2.0
+        if sP.redshift >= 2.0:
+            minMax[0] += 1.0
+
+        if minMax[0] > -0.4: minMax[0] = -0.4
 
     if quant in ['stellarage']:
         ageType = '4pkpc_rBandLumWt'
@@ -646,6 +703,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += ' [%s]' % ageType
         minMax = [0.0,1.0]
         if tight: minMax = [0.0, 1.2]
+
+        if sP.redshift >= 0.5:
+            minMax[0] -= 0.4
+            minMax[1] -= 0.4
 
     if quant in ['zform_mm5','zform_ma5','zform_poly7']:
         zFormType = quant.split("_")[1]
@@ -693,6 +754,139 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [0.0,0.6]
         if tight: minMax = [0.0, 0.8]
         takeLog = False
+
+    if quant in ['slit_vrot_halpha','slit_vsigma_halpha','slit_vrot_starlight','slit_vsigma_starlight',
+                 'slit_voversigma_halpha','slit_voversigma_starlight']:
+        # load data from ./appostprocessing/galslitkinematics/
+        basePath = sP.postPath + '/galslitkinematics/Subhalo_'
+        if '_halpha' in quant:
+            typeName = 'Halpha'
+            typeStr = 'H\\alpha'
+        if '_starlight' in quant:
+            typeName = 'BuserVLum'
+            typeStr = 'V-band'
+
+        if '_vrot' in quant:
+            label = '$V_{\\rm rot,%s}$ [km/s]' % typeStr
+            dName = '%s_in_InRad_V_max_kms' % typeName
+        if '_vsigma' in quant:
+            label = '$\sigma_{\\rm vel,los,%s}$ [km/s]' % typeStr
+            dName = '%s_in_InRad_sigmaV_HalfRad2Rad_kms' % typeName
+
+        if '_voversigma' in quant:
+            # load via self-call now
+            label = '$V_{\\rm rot}$ / $\sigma_{\\rm vel,los}$ [$%s$]' % typeStr
+            
+            vrot,_,_,_  = sP.simSubhaloQuantity(quant.replace('_voversigma','_vrot'))
+            sigma,_,_,_ = sP.simSubhaloQuantity(quant.replace('_voversigma','_vsigma'))
+
+            with np.errstate(invalid='ignore'):
+                vals = vrot
+                w = np.where(sigma > 0.0)
+                vals[w] /= sigma[w]
+                w = np.where(sigma == 0.0)
+                vals[w] = np.nan
+
+            if '_halpha' in quant:
+                minMax = [0, 12]
+                if tight: minMax = [0, 16]
+            if '_starlight' in quant:
+                minMax = [0, 4]
+                if tight: minMax = [0, 8]
+
+        else:
+            # load either vrot or sigma
+            filePath = basePath + typeName + '_slitKinematics_%03d.hdf5' % sP.snap
+
+            assert isfile(filePath)
+
+            with h5py.File(filePath,'r') as f:
+                done = np.squeeze( f['/Subhalo/Done'][()] )
+                vals = np.squeeze( f['/Subhalo/' + dName][()] )
+
+            # for unprocessed subgroups, replace values with NaN
+            w = np.where( (done != 1) | (vals == -999) )
+            #print(' [%s] removing %d of %d (done!=1 or val==-999)' % (quant,len(w[0]),vals.size))
+            vals[w] = np.nan
+
+            assert sP.numSubhalos == vals.size == vals.shape[0]
+
+        if '_vrot' in quant:
+            minMax = [50,300]
+            if tight: minMax = [0,400]
+        if '_vsigma' in quant:
+            minMax = [0,100]
+            if tight: minMax = [0,150]
+
+        takeLog = False
+
+    if quant in ['size2d_halpha','size2d_starlight','diskheight2d_halpha','diskheight2d_starlight',
+                 'diskheightnorm2d_halpha','diskheightnorm2d_starlight']:
+        # load data from ./appostprocessing/galsizes/ (halpha and V-band luminosity half radii)
+        if '_halpha' in quant:
+            typeName = 'Halpha'
+            typeStr = 'H\\alpha'
+        if '_starlight' in quant:
+            typeName = 'BuserVLum'
+            typeStr = 'V-band'
+
+        if 'size2d_' in quant:
+            basePath = sP.postPath + '/galsizes/Subhalo_'
+            filePath = basePath + typeName + '_Sizes_GalProjs_%03d.hdf5' % sP.snap
+            dName = '%s_HalfLightRadii_pkpc_2D_GalProjs_in_all_12' % typeName
+
+        if 'diskheight2d_' in quant:
+            basePath = sP.postPath + '/galdiskheights/Subhalo_'
+            filePath = basePath + typeName + '_DiskHeights_%03d.hdf5' % sP.snap
+            dName = '%s_HalfLightDiskHeights_pkpc_2D_GalProjs_in_InRad_13' % typeName
+
+        if 'diskheightnorm2d_' in quant:
+            # load via self-call now
+            height,_,_,_  = sP.simSubhaloQuantity(quant.replace('diskheightnorm2d_','diskheight2d_'))
+            size,_,_,_ = sP.simSubhaloQuantity(quant.replace('diskheightnorm2d_','size2d_'))
+
+            with np.errstate(invalid='ignore'):
+                vals = height
+                w = np.where(size > 0.0)
+                vals[w] /= size[w]
+                w = np.where(size == 0.0)
+                vals[w] = np.nan
+        else:
+            # load directly
+            assert isfile(filePath)
+
+            with h5py.File(filePath,'r') as f:
+                    done = np.squeeze( f['/Subhalo/Done'][()] )
+                    vals = np.squeeze( f['/Subhalo/' + dName][()] )
+
+            # for unprocessed subgroups, replace values with NaN
+            w = np.where( (done != 1) | (vals == -999) )
+            vals[w] = np.nan
+
+            assert sP.numSubhalos == vals.size == vals.shape[0]
+
+        # plot config
+        if 'size2d_' in quant:
+            label = 'Projected 2D Size r$_{\\rm %s,1/2}$ [ log kpc ]' % typeStr
+
+            minMax = [0.0, 1.2]
+            if tight: minMax = [0.0, 1.4]
+
+            minMax[0] -= sP.redshift/4
+            minMax[1] -= sP.redshift/4
+
+        if 'diskheight2d_' in quant:
+            label = 'Projected 2D Disk Height h$_{\\rm %s,1/2}$ [ log kpc ]' % typeStr
+
+            minMax = [-1.0, 0.2]
+            if tight: minMax = [-1.0, 0.2]
+
+        if 'diskheightnorm2d_' in quant:
+            label = 'Normalized Disk Height (h$_{\\rm %s,1/2}$ / r$_{\\rm %s,1/2}$)' % (typeStr,typeStr)
+
+            minMax = [0.0, 0.5]
+            if tight: minMax = [0.1, 0.9]
+            takeLog = False
 
     if quant in ['mstar_out_10kpc', 'mstar_out_30kpc', 'mstar_out_100kpc', 'mstar_out_2rhalf',
                  'mstar_out_10kpc_frac_r200', 'mstar_out_30kpc_frac_r200',
@@ -991,7 +1185,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = ac[fieldName][:,radInd,vcutInd]
 
-        minMax = [0.0, 3.0]
+        minMax = [0.0, 1.5]
         if tight: minMax = [0.0, 2.0]
         label = 'Mass Loading $\eta_{\\rm M,r=%s,v>%s}$ [ log ]' % (rad,vcut)
 
@@ -1471,9 +1665,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if label is None:
         raise Exception('Unrecognized particle field [%s].' % quant)
 
-    k = 'sim_' + quant + '_'
-    sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog'] = \
-        vals.copy(), label, list(minMax), takeLog # copy instead of view in case data or metadata is modified
+    sP.data[cacheKey] = vals.copy(), label, list(minMax), takeLog # copy instead of view in case data or metadata is modified
+    #k = 'sim_' + quant + '_' tight + '_'
+    #sP.data[k+'vals'], sP.data[k+'label'], sP.data[k+'minMax'], sP.data[k+'takeLog'] = \   
 
     # return
     return vals, label, minMax, takeLog
