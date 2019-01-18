@@ -127,7 +127,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
             ctName = 'gray_r' if pStyle == 'white' else 'gray'
         cmap = loadColorTable(ctName)
 
-        clabel = 'log N$_{\\rm gal}$'
+        clabel = 'log N$_{\\rm gal}$+1'
         cMinMax = [0.0,2.0] if clim is None else clim
         if sP.boxSize > 100000: cMinMax = [0.0,2.5]
     else:
@@ -221,7 +221,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     ax.set_ylabel(ylabel)
 
     if getuser() == 'dnelson':
-        print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect,cStatistic,minCount)
+        print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect)
 
     if not clean:
         pass
@@ -251,9 +251,14 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         # override min,max of color and whether or not to log
         cMinMax[0], cMinMax[1], cLog = cRel
 
-        # normalize each column by median
-        medVals = np.nanmedian(cc, axis=0)
-        cc /= medVals[np.newaxis, :]
+        # normalize each column by median, ignore empty pixels
+        if cStatistic == 'count':
+            w = np.where(cc == 0.0)
+            cc[w] = np.nan
+
+        with np.errstate(invalid='ignore'):
+            medVals = np.nanmedian(cc, axis=0)
+            cc /= medVals[np.newaxis, :]
 
         cmap   = loadColorTable('coolwarm') # diverging
         clabel = 'Relative ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
@@ -309,6 +314,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     # for now: log on density and all color quantities
     cc2d = cc
+    if cQuant is None: cc2d += 1.0 # add 1 to count
     if cQuant is None or cLog is True:
         cc2d = logZeroNaN(cc)
 
@@ -374,7 +380,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         ax.plot(xm[:-1], pm[1,:-1], ':', color=colorMed, lw=lwMed, label='P[10,90]')
         ax.plot(xm[:-1], pm[-2,:-1], ':', color=colorMed, lw=lwMed)
 
-        if not clean:
+        if 0: #not clean:
             l = ax.legend(loc='lower right')
             for text in l.get_texts(): text.set_color(color2)
 
@@ -931,18 +937,16 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 # ------------------------------------------------------------------------------------------------------
 
 def plots():
-    """ Driver (exploration 2D histograms). """
+    """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=2160, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     yQuant = 'ssfr'
-    xQuant = 'mstar2_log'
-    cs     = 'count' #'median_nan'
+    xQuant = 'mstar_30pkpc_log'
     cenSatSelects = ['cen'] #['cen','sat','all']
-    pStyle = 'white'
 
-    quants = quantList(wTr=True, wMasses=True)
+    quants = [None,'sfr2','ssfr','delta_sfms'] #quantList(wTr=True, wMasses=True)
     clim = None
     medianLine = True
     minCount = 0
@@ -950,13 +954,34 @@ def plots():
     for sP in sPs:
         for css in cenSatSelects:
 
-            pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,cs,css,minCount))
+            pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,css,minCount))
 
             for cQuant in quants:
                 quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, clim=clim, minCount=minCount, 
-                             medianLine=medianLine, cenSatSelect=css, cQuant=cQuant, cStatistic=cs, pStyle=pStyle)
+                             medianLine=medianLine, cenSatSelect=css, cQuant=cQuant)
 
             pdf.close()
+
+def plots_explore(sP):
+    """ Driver (exploration 2D histograms, vary over all known quantities as y-axis). """
+    cQuants = ['slit_vsigma_halpha','slit_vrot_halpha','slit_voversigma_halpha',
+               'slit_vsigma_starlight','slit_vrot_starlight','slit_voversigma_starlight']
+
+    css = 'cen' #['cen','sat','all']
+
+    yQuants = quantList(wCounts=False, wTr=False, wMasses=True)
+    #yQuants = yQuants[0:22] # temporary
+
+    xQuant = 'mstar_30pkpc_log'
+    xlim   = [8.7, 11.2]
+
+    for cQuant in cQuants:
+        pdf = PdfPages('2dhistos_%s_%d_x=%s_y=all_c=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,cQuant,css))
+
+        for yQuant in yQuants:
+            quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, cenSatSelect=css, cQuant=cQuant)
+
+        pdf.close()
 
 def plots2():
     """ Driver (exploration 1D slices). """
@@ -1096,3 +1121,40 @@ def plots_uvj():
                              qRestrictions=qRestrictions, pStyle=pStyle)
 
             pdf.close()
+
+def plots_tng50_structural(rel=False, sP=None):
+    """ Driver (exploration 2D histograms). """
+    if sP is None:
+        sP = simParams(res=2160, run='tng', redshift=1.0)
+
+    xQuant  = 'mstar_30pkpc_log'
+    xlim    = [8.7,11.2]
+    yQuants = ['slit_vsigma_halpha','slit_vrot_halpha','slit_voversigma_halpha',
+               'slit_vsigma_starlight','slit_vrot_starlight','slit_voversigma_starlight']
+
+    quants_gas = [None,'sfr2','ssfr','delta_sfms','fgas2_alt','etaM_100myr_20kpc_0kms','vout_90_20kpc',
+                  'size2d_halpha','diskheight2d_halpha','diskheightnorm2d_halpha','shape_s_sfrgas','shape_ratio_sfrgas']
+    quants_stars = ['size2d_starlight','diskheight2d_starlight','diskheightnorm2d_starlight','shape_s_stars','shape_ratio_stars']
+
+    css   = 'cen'
+    clim  = None
+    nBins = 60
+
+    if rel:
+        cRel = [0.5,1.5,False] # [cMin,cMax,cLog] #None
+    else:
+        cRel = None
+
+    for yQuant in yQuants:
+
+        pdf = PdfPages('2dhisto_%s_%d_x=%s_y=%s_rel=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,yQuant,rel,css))
+
+        for cQuant in quants_gas + quants_stars + yQuants:
+            if cQuant == yQuant: continue
+
+            quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim, 
+                         cenSatSelect=css, cQuant=cQuant, nBins=nBins, cRel=cRel)
+        pdf.close()
+
+    # return with all cached data, can be passed back in for rapid re-plotting
+    return sP

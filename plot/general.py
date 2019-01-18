@@ -813,15 +813,16 @@ def oneRun_PhaseDiagram(snaps=None):
         snaps = [0,10,17,18,19,20,30,40,50,60,70,80,90,99]
 
     # start PDF, add one page per snapshot
-    pdf = PdfPages('phaseDiagram_%s_%s%s.pdf' % (yQuant,sP.simName,'_zoom' if zoom else ''))
-
     for snap in snaps:
         sP.setSnap(snap)
         print(snap)
+
+        pdf = PdfPages('phaseDiagram_%s_%s%s_%d.pdf' % (yQuant,sP.simName,'_zoom' if zoom else '',snap))
+
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, #meancolors=[cQuant], weights=weights, 
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
 
-    pdf.close()
+        pdf.close()
 
 def compareRuns_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two runs. """
