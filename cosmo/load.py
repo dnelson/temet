@@ -1477,6 +1477,7 @@ def snapshotSubset(sP, partType, fields,
                 r[field] = hydrogenMass(None, sP, atomic=True, indRange=indRange)
 
             elif field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
+                # todo: we are inside the (" " in field) block, will never catch
                 assert haloID is None and subhaloID is None # otherwise handle, construct indRange
                 from cosmo.hydrogen import hydrogenMass
                 if 'h2mass_' in field.lower():
@@ -1490,6 +1491,19 @@ def snapshotSubset(sP, partType, fields,
             else:
                 # cloudy-based calculation
                 r[field] = _ionLoadHelper(sP, partType, field, kwargs)
+
+        # pre-computed H2/other particle-level data
+        if '_popping' in field.lower():
+            # use Popping+2019 pre-computed results in 'hydrogen' postprocessing catalog
+            # e.g. 'MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping'
+            path = sP.postPath + 'hydrogen/gas_%03d.hdf5' % sP.snap
+            key = molecularModel.split('_popping')[0]
+
+            with h5py.File(path,'r') as f:
+                if indRange is None:
+                    r[field] = f[key][()]
+                else:
+                    r[field] = f[key][indRange[0]:indRange[1]+1]
 
         if '_ionmassratio' in field:
             # per-cell ratio between two ionic masses, e.g. "O6_O8_ionmassratio"

@@ -1881,10 +1881,11 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         species = species.split("_depth125")[0]  
 
     # check
-    hDensSpecies = ['HI','HI_noH2']
-    zDensSpecies = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VII 10 solarz']
+    hDensSpecies   = ['HI','HI_noH2']
+    preCompSpecies = ['MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping']
+    zDensSpecies   = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VII 10 solarz']
 
-    if species not in hDensSpecies + zDensSpecies + ['Z']:
+    if species not in hDensSpecies + zDensSpecies + preCompSpecies + ['Z']:
         raise Exception('Not implemented.')
 
     # config
@@ -1909,7 +1910,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
     boxGridDim = round(sP.boxSize / boxGridSize)
     chunkSize = int(h['NumPart'][sP.ptNum('gas')] / nChunks)
 
-    if species in hDensSpecies + zDensSpecies:
+    if species in hDensSpecies + zDensSpecies + preCompSpecies:
         desc = "Square grid of integrated column densities of ["+species+"] in units of [cm^-2]. "
     if species == 'Z':
         desc = "Square grid of mean gas metallicity in units of [log solar]."
@@ -1934,6 +1935,11 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
     if species in zDensSpecies:
         fields = ['Coordinates','Masses','Density']
+
+        r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
+
+    if species in preCompSpecies:
+        fields = ['Coordinates', species]
 
         r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
 
@@ -1998,6 +2004,13 @@ def wholeBoxColDensGrid(sP, pSplit, species):
             # project
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=boxWidthFrac)
+
+            r += ri
+
+        if species in preCompSpecies:
+            # anything directly loaded from the snapshots
+            ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=gas[species], quant=None, 
+                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=1.0)
 
             r += ri
 
@@ -2070,6 +2083,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
         projDepthCode = 10000.0
     if '_depth125' in species: 
         projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac)
+    assert not ('_depth' in species and projDepth == sP.boxSize) # handle
 
     # calculate
     depthFrac = projDepthCode/sP.boxSize
@@ -2990,6 +3004,10 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nOVII'          : partial(wholeBoxColDensGrid,species='O VII'),
    'Box_Grid_nOVIII'         : partial(wholeBoxColDensGrid,species='O VIII'),
 
+   'Box_Grid_nH2_popping_BR_depth10'  : partial(wholeBoxColDensGrid,species='MH2BR_popping_depth10'),
+   'Box_Grid_nH2_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10'),
+   'Box_Grid_nH2_popping_KMT_depth10' : partial(wholeBoxColDensGrid,species='MH2KMT_popping_depth10'),
+
    'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
    'Box_CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
    'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
@@ -2997,6 +3015,10 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVI_25'        : partial(wholeBoxCDDF,species='OVI_25'),
    'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
    'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
+
+   'Box_CDDF_nH2_popping_BR_depth10' : partial(wholeBoxCDDF,species='MH2BR_popping_depth10'),
+   'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='MH2GK_popping_depth10'),
+   'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='MH2KMT_popping_depth10'),
 
    'Box_Grid_nOVI_depth10'           : partial(wholeBoxColDensGrid,species='O VI_depth10'),
    'Box_Grid_nOVI_10_depth10'        : partial(wholeBoxColDensGrid,species='O VI 10_depth10'),
