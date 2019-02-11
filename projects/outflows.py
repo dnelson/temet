@@ -809,7 +809,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                 #if len(redshifts) > 1: label = 'TNG model (z=%.1f)' % redshift
                 if len(redshifts) > 1: # special case labeling
                     ax.text(9.66, 720.0, '$z$ = 6', color='#888888', rotation=70.0)
-                    ax.text(9.88, 730.0, '1 < $z$ < 4', color='#888888', rotation=65.0)
+                    ax.text(9.94, 730.0, '$z$ < 4', color='#888888', rotation=65.0)
 
                 alpha = 0.6 if len(redshifts) == 1 else 0.5
                 ax.plot(xm2, ym2, '-', lw=lw, linestyle=linestyles[k], color='black', alpha=alpha, label=label)
@@ -894,18 +894,24 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                     # median line and 1sigma band
                     minNum = 2 if 'etaM' in xQuant else 5 # for xQuants = mstar, SFR, Lbol, ...
                     if redshift is not None and redshift > 7.0: minNum = 2
+                    binSize = 0.28
+                    print('binSize changed, remove')
                     xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
 
                     if xm.size > sKn:
-                        ym = savgol_filter(ym,sKn,sKo) # sKn+2
-                        sm = savgol_filter(sm,sKn,sKo) 
-                        pm = savgol_filter(pm,sKn,sKo,axis=1)
+                        print('extra smoothing, remove')
+                        extra = 2 if xm.size > sKn+4 else 0
+                        ym = savgol_filter(ym,sKn+2+extra,sKo+2)
+                        sm = savgol_filter(sm,sKn+2+extra,sKo+2) 
+                        pm = savgol_filter(pm,sKn+2+extra,sKo+2,axis=1)
 
                     lsInd = j if len(percIndsPlot) < 4 else i
                     if markersize > 0: lsInd = 0
 
                     #xm2 = np.linspace(xm.min(), xm.max(), 100)
                     #ym2 = interp1d(xm, ym, kind='cubic', fill_value='extrapolate')(xm2)
+
+                    if xm[0] > xlim[0]: xm[0] = xlim[0] # visual
 
                     l, = ax.plot(xm, ym, linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
 
@@ -1012,14 +1018,15 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                 ax.text(xm[6],ym[6]*1.02,'$v_{\\rm esc,10 kpc}$', color='#000000', alpha=0.3, fontsize=18.0, va='bottom', rotation=15.0)
 
         if 'mstar' in xQuant:
+            pass
             # obs data: v_out vs M* (testing)
-            for j, obs in enumerate([chisholm15()]):
-                ax.plot( obs['mstar'], 10.0**obs['vout'], markers[i+j+1], color='green')
-                labels.append( obs['label'] )
+            #for j, obs in enumerate([chisholm15()]):
+            #    ax.plot( obs['mstar'], 10.0**obs['vout'], markers[i+j+1], color='green')
+            #    labels.append( obs['label'] )
             # v90 (testing)
-            for j, obs in enumerate([chisholm15()]):
-                ax.plot( obs['mstar'], 10.0**obs['v90'], markers[i+j+1], color='red')
-                labels.append( obs['label'] )
+            #for j, obs in enumerate([chisholm15()]):
+            #    ax.plot( obs['mstar'], 10.0**obs['v90'], markers[i+j+1], color='red')
+            #    labels.append( obs['label'] )
 
         # legend: obs data
         legParams = {'frameon':1, 'framealpha':0.9, 'borderpad':0.2, 'fancybox':False} # to add white background to legends
@@ -1655,6 +1662,39 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                     xx = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.25
                     ax.text(xx, np.pi/2, 'minor axis', **textOpts)
                     ax.text(xx, -np.pi/2, 'minor axis', **textOpts)
+
+                if xAxis == 'rad' and yAxis == 'theta':
+                    binsize_theta = (limits['theta'][1] - limits['theta'][0]) / numBins['theta']
+                    theta_vals = binConfig['theta'][1:] + binsize_theta/2
+
+                    for iternum in [0,1]: # theta>0, theta<0
+                        y_lower = np.zeros( numBins['rad'], dtype='float32' )
+                        y_upper = np.zeros( numBins['rad'], dtype='float32' )
+
+                        for radbinnum in range(numBins['rad']):
+                            theta_dist_loc = 10.0**h2d_pos[radbinnum,:] # linear msun/yr
+                            
+                            # select either theta>0 or theta<0
+                            if iternum == 0:
+                                dist = theta_dist_loc[int(theta_dist_loc.size/2):]
+                                thetavals = theta_vals[int(theta_dist_loc.size/2):]
+                            if iternum == 1:
+                                dist = theta_dist_loc[:int(theta_dist_loc.size/2)]
+                                thetavals = theta_vals[:int(theta_dist_loc.size/2)]
+
+                            # locate 25-75 percentiles, i.e. derive opening angle of 'half mass flux'
+                            csum = np.cumsum(dist) / np.sum(dist)
+
+                            y_lower[radbinnum], y_upper[radbinnum] = np.interp([0.25,0.75], csum, thetavals)
+
+                        lastIndPlot = 8 if i == 0 else 9 # stop before noise dominates
+                        rad_vals = np.arange(binConfig['rad'].size-1) + 0.5
+                        opening_angle = np.rad2deg(y_upper - y_lower)
+                        print(mStarBin,iternum,rad_vals[:lastIndPlot],opening_angle[:lastIndPlot])
+
+                        ax.plot(rad_vals[:lastIndPlot], y_lower[:lastIndPlot], '-', color='white', alpha=0.3, lw=lw)
+                        ax.plot(rad_vals[:lastIndPlot], y_upper[:lastIndPlot], '-', color='white', alpha=0.3, lw=lw)
+
 
                 # for massBins done
             # for redshifts done
@@ -2341,12 +2381,12 @@ def paperPlots(sPs=None):
         gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', config=config)
 
         # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
-        config = {'percInds':[1,2,4], 'radInds':[1,2,13], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'loc2':'upper left', 'addModelTNG':True}
+        config = {'percInds':[1,2,4], 'radInds':[1,2], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'loc2':'upper left', 'addModelTNG':True}
         gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', config=config)
 
-        # outflow velocity: redshift evo
+        # outflow velocity: redshift evo (IN PROGRESS: COMPUTING z=0.1)
         config = {'percInds':[3], 'radInds':[1], 'ylim':[100,900], 'stat':'mean', 'skipZeros':False, 'addModelTNG':True, 'loc2':'upper left'}
-        redshifts_loc = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0]
+        redshifts_loc = [0.2, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0]
         gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', redshifts=redshifts_loc, config=config)
 
     if 0:
@@ -2411,11 +2451,11 @@ def paperPlots(sPs=None):
 
         figsize_loc = [figsize[0]*0.7, figsize[1]*0.7]
         xQuant = 'mstar_30pkpc_log'
-        cQuant = 'vout_50_all'
+        cQuant = 'vout_50_2.5kpc'
         yQuant = 'delta_sfms'
-        cRel   = [0.7,1.3,False] # [cMin,cMax,cLog] #None
+        cRel   = [0.65,1.35,False] # [cMin,cMax,cLog] #None
         ylim   = [-0.75, 1.25]
-        params = {'pStyle':'black', 'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 'ylim':ylim, 'cRel':cRel}
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 'ylim':ylim, 'cRel':cRel}
 
         pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
         fig = plt.figure(figsize=figsize_loc)
@@ -2430,7 +2470,7 @@ def paperPlots(sPs=None):
         yRel    = [0.65,1.25,False,'$v_{\\rm out}$ / $v_{\\rm out,median}$'] # [cMin,cMax,cLog] #None
         sizefac = 0.4
         css     = 'cen'
-        yQuant  = 'vout_50_all'
+        yQuant  = cQuant #'vout_50_20kpc'
 
         pdf = PdfPages('slice_%s_%d_x=%s_y=%s_s=%s_%s.pdf' % (sP.simName,sP.snap,xQuant,yQuant,sQuant,css))
         quantSlice1D([sP], pdf, xQuant=xQuant, yQuants=[yQuant], sQuant=sQuant, 
@@ -2446,8 +2486,8 @@ def paperPlots(sPs=None):
         nBins  = 50
         yQuant = 'delta_sfms'
 
-        cQuant = 'vout_75_all'
-        cFrac  = [200, np.inf, False, 'Fraction w/ Fast Outflows ($v_{\\rm out}$ > 200 km/s)']
+        cQuant = 'vout_90_10kpc'
+        cFrac  = [300, np.inf, False, 'Fraction w/ Fast Outflows ($v_{\\rm out}$ > 300 km/s)']
 
         params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'cFrac':cFrac, 'nBins':nBins}
 
