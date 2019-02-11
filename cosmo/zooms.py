@@ -211,7 +211,7 @@ def sizefacComparison():
     #hInds    = [50]
     #variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
 
-    hInds = [50,51,90,553,3232]
+    hInds = [8,9,12,19,21,23,29,31,34,35,50,51,52,65,85,90,109,245,553,3232] # h54: no txt files
     variants = ['sf3']
 
     run      = 'tng_zoom'

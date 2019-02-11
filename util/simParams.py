@@ -302,9 +302,9 @@ class simParams:
                     #    raise Exception('No TNG variants except a few currently accessible from freya.')
                         
                 # draco/freya: no subbox data copied yet
-                if 'freya' in platform.node() or 'draco' in platform.node():
-                    if 'subbox' in self.variant and self.res not in [455,1820,2160]:
-                        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455, L75n1820, L35n2160.')
+                #if 'freya' in platform.node() or 'draco' in platform.node():
+                #    if 'subbox' in self.variant and self.res not in [455,1820,2160]:
+                #        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455, L75n1820, L35n2160.')
                 # end draco/freya
 
             # make paths and names
