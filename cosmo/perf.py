@@ -46,7 +46,7 @@ def getCpuTxtLastTimestep(filePath):
 
     return maxTime, maxSize, numCPUs
 
-def loadCpuTxt(basePath, keys=None, hatbMin=0):
+def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
     """ Load and parse Arepo cpu.txt, save into hdf5 format. If hatbMin>0, then save only timesteps 
     with active time bin above this value. """
     saveFilename = basePath + 'data.files/cpu.hdf5'
@@ -57,6 +57,10 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
     filePath = basePath + 'output/cpu.txt'
     if not isfile(filePath):
         filePath = basePath + 'output/txt-files/cpu.txt'
+    if not isfile(filePath):
+        filePath = basePath + 'cpu.txt'
+    if not isfile(filePath):
+        raise Exception('Failed to find cpu.txt')
 
     r = {}
 
@@ -187,6 +191,9 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0):
                 r[key] = r[key][w,:]
 
         # write into hdf5
+        if skipWrite:
+            return r
+
         with h5py.File(saveFilename,'w') as f:
             for key in r.keys():
                 f[key] = r[key]
@@ -407,13 +414,13 @@ def plotCpuTimes():
     # config
     sPs = []
     #sPs.append( simParams(res=1820, run='illustris') )
-    sPs.append( simParams(res=1820, run='tng') )
+    #sPs.append( simParams(res=1820, run='tng') )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='illustris') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )
 
@@ -421,7 +428,7 @@ def plotCpuTimes():
     #sPs.append( simParams(res=540, run='tng') )
     #sPs.append( simParams(res=1080, run='tng') )
     sPs.append( simParams(res=2160, run='tng') )
-    sPs.append( simParams(res=2160, run='tng_dm') )
+    #sPs.append( simParams(res=2160, run='tng_dm') )
     #sPs.append( simParams(res=2160, run='tng', variant='halted') )
 
     #sPs.append( simParams(res=1024, run='tng', variant=0000) )
@@ -926,17 +933,17 @@ def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
         fig.tight_layout()
         plt.close(fig)
 
-def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
+def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
     """ Construct strong (fixed problem size) and weak (Npart scales w/ Ncores) scaling plots 
-         based on the Hazel Hen tests. """
+         based on the Hazel Hen tests. Previous seriesName: scaling_Aug2016_SlabFFT. """
 
     # config
-    basePath = expanduser('~') + '/sims.TNG_method/%s/' % seriesName
+    basePath = '/virgo/simulations/IllustrisTNG/InitialConditions/tests_%s/' % seriesName
     plotKeys = ['total','domain','voronoi','treegrav','pm_grav','hydro']
     dtInd    = 0 # index for column which is the differential time per step
     timestep = 2 # start at the second timestep (first shows strange startup numbers)
     tsMean   = 10 # number of timesteps to average over
-    figsize  = (9.6,6.8) # (16,9)
+    figsize  = (11.2,8.0)
 
     pdf = PdfPages(seriesName + '.pdf')
 
@@ -975,7 +982,7 @@ def scalingPlots(seriesName='scaling_Aug2016_SlabFFT'):
         # loop over each run
         for i, runPath in enumerate(runs):
             # load
-            cpu = loadCpuTxt(runPath+'/')
+            cpu = loadCpuTxt(runPath+'/', skipWrite=True)
             nSteps = cpu['step'].size
             print(runPath,nSteps)
 

@@ -89,6 +89,7 @@ def logZeroMin(x):
     """ Take log10 of input variable, setting zeros to 100 times less than the minimum. """
     with np.errstate(invalid='ignore'):
         w = np.where(x > 0.0)
+
     minVal = x[w].min() if len(w[0]) > 0 else 1.0
     return logZeroSafe(x, minVal*0.01)
 
@@ -1063,6 +1064,35 @@ def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
 
         ax.plot(x_plot,y_plot, '-', lw=2.5)
         ax.step(x_plot,y_plot, lw=2.5, where='mid',color='black',alpha=0.5)
+
+    fig.tight_layout()
+    fig.savefig(filename)
+    plt.close(fig)
+
+def plotxy(x, y, filename='plot.pdf'):
+    """ Plot a quick 1D line plot of x vs. y and save it to a PDF. """
+    xx_log = logZeroNaN(x)
+    yy_log = logZeroNaN(y)
+
+    # figure
+    figsize = np.array([14,10]) * 0.8 * 2
+    fig = plt.figure(figsize=figsize)
+
+    for i in range(4):
+        ax = fig.add_subplot(2,2,i+1)
+        ax.set_xlabel(['x','log(x)','x','log(x)'][i])
+        ax.set_ylabel(['y','y','log(y)','log(y)'][i])
+
+        if i == 0:
+            ax.plot(x, y, 'o-', lw=2.5)
+        if i == 1:
+            ax.plot(xx_log, y, 'o-', lw=2.5)
+        if i == 2:
+            ax.plot(x, yy_log, 'o-', lw=2.5)
+        if i == 3:
+            ax.plot(xx_log, yy_log, 'o-', lw=2.5)
+
+        #if i in [2,3]: ax.set_yscale('log')        
 
     fig.tight_layout()
     fig.savefig(filename)

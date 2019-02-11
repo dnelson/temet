@@ -132,7 +132,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # assembly sub-subset of quantities as requested
     if wCounts: quants1 = [None] + quants1
 
-    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5 + quants5b
+    quantList = quants1 + quants2 + quants2_mhd + quants_bh + quants4 + quants5b #+ quants5
     quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad
     if wTr: quantList += trQuants
     if wMasses: quantList += quants_mass
