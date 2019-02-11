@@ -370,7 +370,7 @@ def ellipsoidfit(pos_in, mass, scalerad, rin, rout, weighted=False):
         #print(' [%2d] q = %.3f s = %.3f ratio=%.2f n = %5d conv = %.3f' % (count,q,s,s/q,mass_loc.size,conv))
 
         # iterations done
-        assert np.allclose( np.dot(pos_in, axes), pos )
+        assert np.allclose( np.dot(pos_in, axes), pos, rtol=1e-2, atol=1e-3 )
 
     if q == 1.0 and s == 1.0:
         # never completed one iteration, lack of particles

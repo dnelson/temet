@@ -1718,71 +1718,99 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     pdf.savefig()
     plt.close(fig)
 
-def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
+def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     """ CDDF (column density distribution function) of neutral (atomic) hydrogen in the whole box.
-        (Vog 14a Fig 4) """
+        (Vog 14a Fig 4). If simRedshift is None, then use sP.redshift. """
     from util import simParams
 
     # config
-    speciesList = ['nHI_noH2','nHI'] #,'nHI2','nHI3']
+    if molecular:
+        # H2
+        speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
+        sStr = 'H_2'
+        ylim0 = [-30,-17]
+        ylim1 = [-5, 0]
+        xlim = [18, 24]
+    else:
+        # HI, show with and without H2 corrections
+        speciesList = ['nHI_noH2','nHI'] #,'nHI2','nHI3']
+        sStr = 'HI'
+        ylim0 = [-27, -18]
+        ylim1 = [-4, 0]
+        xlim = [17,23]
 
     # plot setup
     sizefac = 1.0 if not clean else sfclean
     fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
     ax = fig.add_subplot(111)
     
-    ax.set_xlim([17.0, 23.0])
-    ax.set_xlabel('log N$_{\\rm HI}$ [ cm$^{-2}$ ]')
+    ax.set_xlim(xlim)
+    ax.set_xlabel('log N$_{\\rm %s}$ [ cm$^{-2}$ ]' % sStr)
 
     if moment == 0:
-        ax.set_ylim([-27, -18])
-        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm HI}$)  [ cm$^{2}$ ]')
+        ax.set_ylim(ylim0)
+        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm %s}$)  [ cm$^{2}$ ]' % sStr)
     if moment == 1:
-        ax.set_ylim([-4, 0])
-        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm HI}$ f(N$_{\\rm HI}$)')
+        ax.set_ylim(ylim1)
+        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm %s}$ f(N$_{\\rm %s}$)' % (sStr,sStr))
 
     # observational points
-    z13 = zafar2013()
-    n12 = noterdaeme2012()
-    n09 = noterdaeme2009()
-    k13 = kim2013cddf()
-    p10 = prochaska10cddf()
+    if sStr == 'HI':
+        z13 = zafar2013()
+        n12 = noterdaeme2012()
+        n09 = noterdaeme2009()
+        k13 = kim2013cddf()
+        p10 = prochaska10cddf()
 
-    if moment == 1:
-        z13['log_fHI'] = np.log10( 10.0**z13['log_fHI'] * 10.0**z13['log_NHI'] )
-        n12['log_fHI'] = np.log10( 10.0**n12['log_fHI'] * 10.0**n12['log_NHI'] )
-        n09['log_fHI'] = np.log10( 10.0**n09['log_fHI'] * 10.0**n09['log_NHI'] )
-        k13['log_fHI'] = np.log10( 10.0**k13['log_fHI'] * 10.0**k13['log_NHI'] )
-        p10['log_fHI_lower'] = np.log10( 10.0**p10['log_fHI_lower'] * 10.0**p10['log_NHI'] )
-        p10['log_fHI_upper'] = np.log10( 10.0**p10['log_fHI_upper'] * 10.0**p10['log_NHI'] )
+        if moment == 1:
+            z13['log_fHI'] = np.log10( 10.0**z13['log_fHI'] * 10.0**z13['log_NHI'] )
+            n12['log_fHI'] = np.log10( 10.0**n12['log_fHI'] * 10.0**n12['log_NHI'] )
+            n09['log_fHI'] = np.log10( 10.0**n09['log_fHI'] * 10.0**n09['log_NHI'] )
+            k13['log_fHI'] = np.log10( 10.0**k13['log_fHI'] * 10.0**k13['log_NHI'] )
+            p10['log_fHI_lower'] = np.log10( 10.0**p10['log_fHI_lower'] * 10.0**p10['log_NHI'] )
+            p10['log_fHI_upper'] = np.log10( 10.0**p10['log_fHI_upper'] * 10.0**p10['log_NHI'] )
 
-    l1,_,_ = ax.errorbar(z13['log_NHI'], z13['log_fHI'], yerr=[z13['log_fHI_errDown'],z13['log_fHI_errUp']],
-               xerr=z13['log_NHI_xerr'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
-    l2,_,_ = ax.errorbar(n12['log_NHI'], n12['log_fHI'], yerr=n12['log_fHI_err'], xerr=n12['log_NHI_xerr'], 
-                         color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='s')
-    l3,_,_ = ax.errorbar(n09['log_NHI'], n09['log_fHI'], yerr=n09['log_fHI_err'], xerr=n12['log_NHI_xerr'], 
-                         color='#cccccc', ecolor='#cccccc', alpha=0.9, capsize=0.0, fmt='o')
-    l4,_,_ = ax.errorbar(k13['log_NHI'], k13['log_fHI'], yerr=[k13['log_fHI_errDown'],k13['log_fHI_errUp']],
-                         color='#444444', ecolor='#444444', alpha=0.9, capsize=0.0, fmt='D')
+        l1,_,_ = ax.errorbar(z13['log_NHI'], z13['log_fHI'], yerr=[z13['log_fHI_errDown'],z13['log_fHI_errUp']],
+                   xerr=z13['log_NHI_xerr'], color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
+        l2,_,_ = ax.errorbar(n12['log_NHI'], n12['log_fHI'], yerr=n12['log_fHI_err'], xerr=n12['log_NHI_xerr'], 
+                             color='#666666', ecolor='#666666', alpha=0.9, capsize=0.0, fmt='s')
+        l3,_,_ = ax.errorbar(n09['log_NHI'], n09['log_fHI'], yerr=n09['log_fHI_err'], xerr=n12['log_NHI_xerr'], 
+                             color='#cccccc', ecolor='#cccccc', alpha=0.9, capsize=0.0, fmt='o')
+        l4,_,_ = ax.errorbar(k13['log_NHI'], k13['log_fHI'], yerr=[k13['log_fHI_errDown'],k13['log_fHI_errUp']],
+                             color='#444444', ecolor='#444444', alpha=0.9, capsize=0.0, fmt='D')
 
-    l5 = ax.fill_between(p10['log_NHI'], p10['log_fHI_lower'], p10['log_fHI_upper'], 
-                    color='#dddddd', interpolate=True, alpha=0.3)
+        l5 = ax.fill_between(p10['log_NHI'], p10['log_fHI_lower'], p10['log_fHI_upper'], 
+                        color='#dddddd', interpolate=True, alpha=0.3)
 
-    labels = [z13['label'],n12['label'],n09['label'],k13['label'],p10['label']]
-    legend1 = ax.legend([l1,l2,l3,l4,l5], labels, loc='lower left')
-    ax.add_artist(legend1)
+        labels = [z13['label'],n12['label'],n09['label'],k13['label'],p10['label']]
+        legend1 = ax.legend([l1,l2,l3,l4,l5], labels, loc='lower left')
+        ax.add_artist(legend1)
 
-    # colDens definitions, plot vertical dotted lines [cm^-2] at dividing points
-    limitDLA = 20.3
-    ax.plot( [limitDLA,limitDLA], ax.get_ylim(), '--', color='#dddddd', alpha=0.5 )
+        # colDens definitions, plot vertical dotted lines [cm^-2] at dividing points
+        limitDLA = 20.3
+        ax.plot( [limitDLA,limitDLA], ax.get_ylim(), '--', color='#dddddd', alpha=0.5 )
+    if sStr == 'H_2':
+        # Zwaan, Prochaska+ 2006, NOTE: definition mismatch of x-axis, they use [H atoms/cm^2] not [H2 molecules/cm^2] !
+        xx = np.linspace(21.0, 24.0, 100)
+        f_star = 1.1e-25
+        sigma = 0.65
+        mu = 20.6
+        yy = f_star * np.exp( -((xx-mu)/sigma)**2/2 )
+        yy = np.log10(yy)
+
+        l1, = ax.plot(xx, yy, '-', color='#555555', lw=lw)
+        labels = ['Zwaan & Prochaska (2006) z=0']
+        legend1 = ax.legend([l1], labels, loc='lower left')
+        ax.add_artist(legend1)
 
     # loop over each fullbox run
     for sP in sPs:
         if sP.isZoom:
             continue
 
-        print('CDDF HI: '+sP.simName)
-        sP.setRedshift(simRedshift)
+        print('CDDF %s: %s' % (sStr,sP.simName))
+        if simRedshift is not None:
+            sP.setRedshift(simRedshift)
 
         c = next(ax._get_lines.prop_cycler)['color']
 
@@ -1791,18 +1819,18 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
             # load pre-computed CDDF
             ac = sP.auxCat(fields=['Box_CDDF_'+species])
 
-            n_HI  = ac['Box_CDDF_'+species][0,:]
-            fN_HI = ac['Box_CDDF_'+species][1,:]
+            n_species  = ac['Box_CDDF_'+species][0,:]
+            fN_species = ac['Box_CDDF_'+species][1,:]
 
             # plot
-            xx = np.log10(n_HI)
+            xx = np.log10(n_species)
 
             if moment == 0:
-                yy = logZeroNaN(fN_HI)
+                yy = logZeroNaN(fN_species)
             if moment == 1:
-                yy = logZeroNaN(fN_HI*n_HI)
+                yy = logZeroNaN(fN_species*n_species)
 
-            label = sP.simName if i == 0 else ''
+            label = '%s z=%.1f' % (sP.simName,sP.redshift) if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
     # variations legend
@@ -1810,11 +1838,11 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0):
     #ax.add_artist(legend3)
 
     # sim legend
-    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,alpha=0.0,marker='')]
-    lExtra = ['[ sims z=%3.1f ]' % simRedshift]
+    #sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=0.0,alpha=0.0,marker='')]
+    #lExtra = ['[ sims z=%3.1f ]' % simRedshift]
 
-    sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    lExtra += [str(s) for s in speciesList]
+    sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
+    lExtra = [str(s.replace('_depth10','').replace('nH2_','')) for s in speciesList]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -2373,7 +2401,9 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng') )
+    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -2381,7 +2411,7 @@ def plots():
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    sPs.append( simParams(res=2500, run='tng') )
+    #sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2402,11 +2432,11 @@ def plots():
     #sPs.append( simParams(res=512, run='tng', variant='0000') )
     #sPs.append( simParams(res=512, run='tng', variant='5008') )
 
-    if 0:
+    if 1:
         # testing
-        pdf = PdfPages('s850_test_z2_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        stellarMassFunction(sPs, pdf, centralsOnly=False, simRedshift=2.0, dataRedshift=-1, s850fluxes=True)
-        #stellarMassFunction(sPs, pdf, centralsOnly=True, simRedshift=2.0, dataRedshift=-1, s850fluxes=True)
+        pdf = PdfPages('cddfh2_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        nHIcddf(sPs, pdf, simRedshift=None, molecular=True)
+        nHIcddf(sPs, pdf, simRedshift=None, molecular=True, moment=1)
         pdf.close()
         return
 
