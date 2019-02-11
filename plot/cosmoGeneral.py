@@ -228,7 +228,8 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
     else:
         cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
-        ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
+        if getuser() != 'dnelson':
+            ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
 
     # 2d histogram
     bbox = ax.get_window_extent()
