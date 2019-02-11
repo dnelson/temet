@@ -830,6 +830,8 @@ class sps():
         wStars = np.where( gfm_sftime > 0.0 )
 
         if len(wStars[0]) == 0:
+            if retFullSize:
+                return np.array([np.nan] * gfm_sftime.size)
             return None
 
         # unit conversions: ages, masses, metallicities

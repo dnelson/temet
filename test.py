@@ -8,13 +8,67 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
-from os import path, mkdir
+from os import path, mkdir, rename
 import matplotlib.pyplot as plt
 
 import cosmo
 from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
+
+def convert_annalisa_infinite_images():
+    """ Convert PDF -> JPG, combine, and resize. """
+    import subprocess
+    files = glob.glob('left/*.pdf')
+
+    for file in files:
+        name = file.split('/')[1]
+        name_out = name.replace('pdf','jpg')
+        final_out = name_out.replace('TNG50','TNG50-1').replace('_','.')
+
+        assert path.isfile('left/%s' % name)
+        assert path.isfile('right/%s' % name)
+
+        # convert to jpeg
+        cmd = "convert -density 150 -antialias left/%s -quality 95 left/%s" % (name,name_out)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+        
+        cmd = "convert -density 150 -antialias right/%s -quality 95 right/%s" % (name,name_out)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+
+        # montage
+        cmd = "convert left/%s right/%s +append %s" % (name_out,name_out,name_out)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+
+        # resize crop and rename
+        cmd = "mogrify -resize 1800x %s" % name_out
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+
+        cmd = "mogrify -crop 1800x320+0+18 %s" % name.out
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+
+        rename(name_out, final_out)
+        print(final_out)
+
+    print('Done.')
+
+def move_sunrise_fits_into_subfolders():
+    """ Move all *_{id}.fits files into subfolders which are named based on the last digit of {id}. """
+    files = glob.glob('*.fits')
+
+    for i in range(10):
+        mkdir(str(i))
+
+    for i, file in enumerate(files):
+        if i % 1000 == 0:
+            print(i)
+
+        num = file.split('.fits')[0].split('_')[-1]
+        last_digit = num[-1]
+
+        dest = '%s/%s' % (last_digit,file)
+        #print(file,dest)
+        rename(file,dest)
 
 def try_hsc_gri_composite():
     """ Try to recreate HSC composite image based on (g,r,i) bands. """
@@ -1021,7 +1075,7 @@ def lagrangeMatching():
 
 def miscGasStats():
     """ Print out some misc gas stats used in the appendix table of the TNG color flagship paper. """
-    sP = simParams(res=2160, run='tng', redshift=6.0)
+    sP = simParams(res=2160, run='tng', snap=90)
     print(sP.simName)
 
     gas_dens = sP.snapshotSubsetP('gas', 'dens')

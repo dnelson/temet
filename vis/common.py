@@ -406,7 +406,9 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
-        maxValLog = np.array([5.60, 5.68, 5.36])*1.0 # little less clipping, more yellow/red color
+        maxValLog = np.array([5.60, 5.68, 5.36])*1.0 # little less clipping, more yellow/red color (fiducial)
+        maxValLog = np.array([6.10, 6.18, 5.86]) # TNG50 sb2sh0 render only
+        print('stellarComp maxValLog changed, undo!')
 
         maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
         #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
@@ -418,7 +420,13 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
             # handle zero values
             ww = np.where(grid_loc == 0.0)
-            grid_loc[ww] = grid_loc[np.where(grid_loc > 0.0)].min() * 0.1 # 10x less than min
+
+            ww_nonzero = np.where(grid_loc > 0.0)
+            if len(ww_nonzero[0]):
+                grid_loc[ww] = grid_loc[ww_nonzero].min() * 0.1 # 10x less than min
+            else:
+                grid_loc[ww] = 1e-10 # full empty/zero image (leave as all black)
+
             grid_log = np.log10( grid_loc )
 
             # clip and stretch within [minValLog,maxValLog]
@@ -941,7 +949,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         logMin = False
 
     if 'stellarComp-' in partField:
-        raise Exception('Should never make it here.')
+        print('Warning! gridOutputProcess() on stellarComp-*, should only occur for empty frames.')
+        config['label'] = 'dummy'
+        config['ctName'] = 'gray'
         logMin = False
 
     # all particle types
@@ -1043,7 +1053,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         return emptyReturn()
 
     # generate a 3-band composite stellar image from 3 bands
-    if 'stellarComp-' in partField or 'stellarCompObsFrame-' in partField:    
+    if 'stellarComp-' in partField or 'stellarCompObsFrame-' in partField:
         return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                           hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
 
@@ -1216,7 +1226,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     sh = sP.groupCatSingle(subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.hInd)
                     for i in range(3):
                         # SubhaloVel already peculiar, quant converted already in loadMassAndQuantity()
-                        quant[:,i] -= sh['SubhaloVel'][i] 
+                        quant[:,i] -= sh['SubhaloVel'][i]
+                else:
+                    assert sP.refVel is not None
+                    for i in range(3):
+                        quant[:,i] -= sP.refVel[i]
 
                 if partField in velLOSFieldNames:
                     # slice corresponding to (optionally rotated) LOS component
@@ -2358,7 +2372,7 @@ def renderMultiPanel(panels, conf):
                                    rowHeight, 0.4, bottomNorm, 0.05)
 
                 # colorbar for the vector field visualization, offset to the right
-                _, vConfig = gridOutputProcess(p['sP'], np.zeros(2), p['vecColorPT'], p['vecColorPF'], [1,1], 'ortho', 1.0)
+                _, vConfig, _ = gridOutputProcess(p['sP'], np.zeros(2), p['vecColorPT'], p['vecColorPF'], [1,1], 'ortho', 1.0)
                 vConfig['vecMinMax'] = p['vecMinMax']
                 vConfig['ctName'] = p['vecColormap']
 

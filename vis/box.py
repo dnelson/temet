@@ -153,6 +153,12 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 
+    # attach any cached data to sP (testing)
+    if 'dataCache' in localVars:
+        for key in localVars['dataCache']:
+            for p in panels:
+                p['sP'].data[key] = localVars['dataCache'][key]
+
     # request render and save
     if retInfo: return panels
    
