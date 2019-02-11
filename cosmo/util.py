@@ -126,7 +126,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         dloga = log_scalefacs - np.roll(log_scalefacs, 1)
         dloga[0] = dloga[1] # corrupted by roll
 
-        dloga_target = np.median( dloga[ int(dloga.size*(2.0/4)):int(dloga.size*(3.0/4)) ])
+        dloga_target = np.median(dloga) #np.median( dloga[ int(dloga.size*(2.0/4)):int(dloga.size*(3.0/4)) ])
         print(' validSnapList(): subbox auto detect dloga_target = %f' % dloga_target)
 
         ww = np.where(dloga < 0.8 * dloga_target)[0]
@@ -983,9 +983,9 @@ def subboxSubhaloCat(sP, sbNum):
 
     return r
     
-def subboxSubhaloCatExtend(sP, sbNum):
+def subboxSubhaloCatExtend(sP, sbNum, redo=False):
     """ Extend the SubboxSubhaloList catalog with particle-level interpolated properties (i.e. M* < 30pkpc) of 
-    the relevant subhalos at each subbox snapshot. Separated into second step since this is a heavy calculation. """
+    the relevant subhalos at each subbox snapshot. Separated into second step since this is a heavy calculation, restartable. """
     from cosmo.mergertree import loadMPBs
     from util.simParams import simParams
     from util.treeSearch import calcQuantReduction, buildFullTree
@@ -1003,19 +1003,22 @@ def subboxSubhaloCatExtend(sP, sbNum):
 
     # allocate for additional quantities
     nApertures = 3
-    nSubSnaps = r['SubboxScaleFac'].size
+    nSubSnaps  = r['SubboxScaleFac'].size
+    nSubs      = r['SubhaloIDs'].size
 
-    r['SubhaloStars_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
-    r['SubhaloGas_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
-    r['SubhaloBH_Mass'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
+    dataFieldKeys = ['SubhaloStars_Mass','SubhaloGas_Mass','SubhaloBH_Mass','SubhaloBH_Mass2','SubhaloGas_SFR',
+                     'SubhaloBH_CumEgyInjection_QM','SubhaloBH_CumEgyInjection_RM','SubhaloBH_Num']
 
-    r['SubhaloGas_SFR'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
-    r['SubhaloBH_CumEgyInjection_QM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
-    r['SubhaloBH_CumEgyInjection_RM'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='float32' )
-    r['SubhaloBH_Num'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='int16' )
-    r['SubhaloBH_Mass2'] = np.zeros( (r['SubhaloIDs'].size, nApertures, nSubSnaps), dtype='int16' )
+    for key in dataFieldKeys:
+        # if we are resuming, so these fields were loaded (and partially done) from the file, then do not recreate
+        if key not in r:
+            r[key] = np.zeros( (nSubs, nApertures, nSubSnaps), dtype='float32' )
 
     sP_sub = simParams(res=sP.res, run=sP.run, variant='subbox%d' % sbNum)
+
+    # add done flag
+    if 'done' not in r or redo:
+        r['done'] = np.zeros(nSubSnaps, dtype='int16')
 
     print('Loading subbox and deriving additional quantities...')
 
@@ -1025,6 +1028,10 @@ def subboxSubhaloCatExtend(sP, sbNum):
 
         apertures_sq = [sP_sub.units.physicalKpcToCodeLength(30.0)**2, 30.0**2, 50.0**2] # 30 pkpc, 30 ckpc/h, 50 ckpc/h
         print(' [%4d] z = %.2f (30pkpc rad_code = %.2f)' % (sbSnapNum,1/r['SubboxScaleFac'][sbSnapNum]-1,np.sqrt(apertures_sq[0])))
+
+        if r['done'][sbSnapNum]:
+            print(' skip, already done.')
+            continue
 
         # loop over particle types
         for ptType in ['gas','stars','bh']:
@@ -1071,10 +1078,14 @@ def subboxSubhaloCatExtend(sP, sbNum):
                     r['SubhaloBH_Mass2'][:,i,sbSnapNum] = result3
                     r['SubhaloBH_Num'][:,i,sbSnapNum] = result4
 
-    # save and return
-    with h5py.File(filePath) as f:
-        for key in r:
-            if key not in f:
-                f[key] = r[key]
+        # save each subbox snap as we go (every field full, could optimize)
+        r['done'][sbSnapNum] = 1
 
-    print('Saved: [%s]' % filePath)
+        with h5py.File(filePath,'r+') as f:
+            for key in r:
+                if key in f:
+                    f[key][:] = r[key]
+                else:
+                    f[key] = r[key]
+
+    print('Done: [%s]' % filePath)

@@ -1175,6 +1175,8 @@ def annalisa_tng50_presentation(setNum=0, stars=False):
                         127580,132290,130665,129661,139177,
                         145492,146306,154635,189521,246343]
 
+    shIDs_snap67_superthin = [77281,353207,402894,421627,432764,433484,448408,448785,479317,495393,497214,497214]
+
     res        = 2160
     redshift   = 2.0
     run        = 'tng'
@@ -1207,20 +1209,26 @@ def annalisa_tng50_presentation(setNum=0, stars=False):
     mpl.rcParams['font.family'] = 'serif'
     mpl.rcParams['font.serif'] = ['Times New Roman']
 
-    # select halos
-    if str(setNum) == 'final':
-        shIDs = shIDs_z2_final25
-        nCols = 5
-    else:
-        numPer = 35
-        nCols = 7
-        shIDs = shIDs_z2[numPer*setNum:numPer*(setNum+1)]
-
     class plotConfig:
         plotStyle = 'edged'
         rasterPx  = faceOnOptions['nPixels'][0] * 4
         colorbars = True
-        nRows     = 5*2
+
+    # select halos
+    if str(setNum) == 'final':
+        shIDs = shIDs_z2_final25
+        plotConfig.nCols = 5
+        nRows = 5*2
+    elif str(setNum) == 'superthin':
+        shIDs = shIDs_snap67_superthin
+        nCols = 4
+        plotConfig.nRows = 3*2
+        redshift = 0.5
+    else:
+        numPer = 35
+        nCols = 7
+        plotConfig.nRows = 5*2
+        shIDs = shIDs_z2[numPer*setNum:numPer*(setNum+1)]
 
     # configure panels: face-on and edge-on in alternating rows
     for i in range(int(plotConfig.nRows/2)):

@@ -617,7 +617,7 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
     res        = 2160
     redshift   = 1.0
     rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap_global'
+    method     = 'sphMap' # sphMap_global for paper figure
     nPixels    = [1920,1920]
     axes       = [0,1]
     labelZ     = True
@@ -675,13 +675,13 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
 
     mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
     with np.errstate(invalid='ignore'):
-        #w = np.where( (mhalo>11.8) )# & (mhalo<11.85) ) # explore
-        w = np.where( (mhalo>11.8)  & (mhalo<11.85) )
+        #w = np.where( (mhalo>11.8)  & (mhalo<11.85) ) # for paper Figure
+        w = np.where( (mhalo>11.6))
 
     print('Processing [%d] halos...' % len(w[0]))
     
-    for hInd in [w[0][5]]: # paper
-    #for hInd in w[0]:
+    #for hInd in [w[0][5]]: # paper
+    for hInd in w[0]:
         panels = []
         haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
 
@@ -701,8 +701,9 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
         class plotConfig:
             plotStyle    = 'edged'
             rasterPx     = nPixels[0] #1200 #nPixels[0]
-            colorbars    = True
-            saveFilename = './oneHaloSingleField_%s_%d_z%.1f_conf%d_haloID-%d.pdf' % (run,res,redshift,conf,haloID)
+            colorbars    = False #True for paper figure
+            #saveFilename = './oneHaloSingleField_%s_%d_z%.1f_conf%d_haloID-%d.pdf' % (run,res,redshift,conf,haloID)
+            saveFilename = './%s.%d.%d.jpg' % (sP.simName,sP.snap,hInd) # infinite gallery test
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -728,7 +729,7 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
     sP_load = sP.parentBox
 
-    haloID_parent = 7 # snap 37 is the halo entering the subbox from the right edge and starting kinetic FB
+    haloID_parent = 7 # at snap 37, it is the halo entering subbox2 from the right edge and starting kinetic FB
     halo = sP_load.groupCatSingle(haloID=haloID_parent)
     subh = sP_load.groupCatSingle(subhaloID=halo['GroupFirstSub'])
     mpb = sP_load.loadMPB(halo['GroupFirstSub'])
