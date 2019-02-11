@@ -32,7 +32,7 @@ boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
 # eliminate the entire specialized ufunc logic herein
-userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid']
+userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','shape_ellipsoid_1r']
 
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -536,10 +536,14 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         gc['SubhaloVel'] = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
         allocSize = (nSubsDo,)
 
-    if ptProperty == 'shape_ellipsoid':
+    if ptProperty in ['shape_ellipsoid','shape_ellipsoid_1r']:
         gc['SubhaloRhalfStars'] = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])[:,sP.ptNum('stars')]
-        ellipsoid_rin  = 1.8 # rhalfstars
-        ellipsoid_rout = 2.2 # rhalfstars
+        if ptProperty == 'shape_ellipsoid':
+            ellipsoid_rin  = 1.8 # rhalfstars
+            ellipsoid_rout = 2.2 # rhalfstars
+        if ptProperty == 'shape_ellipsoid_1r':
+            ellipsoid_rin  = 0.8 # rhalfstars
+            ellipsoid_rout = 1.2 # rhalfstars
         fieldsLoad.append('pos')
         allocSize = (nSubsDo,2) # q,s
 
@@ -742,7 +746,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 r[i] = _findHalfLightRadius(loc_rad, mags=None, vals=loc_val)
 
             # shape measurement via iterative ellipsoid fitting
-            if ptProperty == 'shape_ellipsoid':
+            if ptProperty in ['shape_ellipsoid','shape_ellipsoid_1r']:
                 scale_rad = gc['SubhaloRhalfStars'][subhaloID]
                 if scale_rad == 0.0:
                     continue
@@ -1435,7 +1439,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         attrs['spectraLumDistMpc'] = sP.units.redshiftToLumDist( sP.redshift )
         if 'sdss' in rad:
             attrs['spectraUnits'] = '10^-17 erg/cm^2/s/Ang'.encode('ascii')
-            attrs['spectraFiberDiameterCode'] = fiber_diameter
+            #attrs['spectraFiberDiameterCode'] = fiber_diameter
         if 'legac' in rad:
             r *= 1e2 # 1e-17 to 1e-19 unit prefix (just convention)
             attrs['spectraUnits'] = '10^-19 erg/cm^2/s/Ang'.encode('ascii')
@@ -1547,7 +1551,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
     r.fill(np.nan)
 
     # load all trees at once
-    mpbs = cosmo.mergertree.loadMPBs(sP, ids, fields=fields, treeName=treeName)
+    mpbs = sP.loadMPBs(ids, fields=fields, treeName=treeName)
 
     # loop over subhalos
     printFac = 100.0 if sP.res > 512 else 10.0
@@ -1889,7 +1893,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         raise Exception('Not implemented.')
 
     # config
-    h = snapshotHeader(sP)
+    h = sP.snapshotHeader()
     nChunks = numPartToChunkLoadSize( h['NumPart'][sP.ptNum('gas')] )
     axes    = [0,1] # x,y projection
     
@@ -1960,8 +1964,13 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         gas = sP.snapshotSubsetP('gas', fields, indRange=indRange)
 
         # calculate smoothing size (V = 4/3*pi*h^3)
-        vol = gas['Masses'] / gas['Density']
-        hsml = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+        if 'Masses' in gas:
+            vol = gas['Masses'] / gas['Density']
+            hsml = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+        else:
+            # equivalent calculation
+            hsml = sP.snapshotSubsetP('gas', 'cellsize', indRange=indRange)
+
         hsml = hsml.astype('float32')
 
         if species in hDensSpecies:
@@ -2008,7 +2017,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
             r += ri
 
         if species in preCompSpecies:
-            # anything directly loaded from the snapshots
+            # anything directly loaded from the snapshots, return in units of [10^10 Msun * h / ckpc^2]
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=gas[species], quant=None, 
                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=1.0)
 
@@ -2029,13 +2038,16 @@ def wholeBoxColDensGrid(sP, pSplit, species):
             rZ += rZi
 
     # finalize
-    if species in hDensSpecies+zDensSpecies:
+    if species in hDensSpecies+zDensSpecies+preCompSpecies:
         # column density: convert units from [code column density, above] to [H atoms/cm^2] and take log
         rr = sP.units.codeColDensToPhys(r, cgs=True, numDens=True)
 
         if species in zDensSpecies:
             ion = cosmo.cloudy.cloudyIon(None)
             rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
+
+        if 'MH2' in species:
+            rr /= 2.0 # [H atoms/cm^2] to [H2 molecules/cm^2]
 
         rr = np.log10(rr)
 
@@ -2083,7 +2095,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
         projDepthCode = 10000.0
     if '_depth125' in species: 
         projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac)
-    assert not ('_depth' in species and projDepth == sP.boxSize) # handle
+    assert not ('_depth' in species and projDepthCode == sP.boxSize) # handle
 
     # calculate
     depthFrac = projDepthCode/sP.boxSize
@@ -2788,6 +2800,10 @@ fieldComputeFunctionMapping = \
    'Subhalo_GasRotation_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Krot',op='ufunc',rad='2rhalfstars'),
 
+   'Subhalo_EllipsoidShape_Stars_1rhalfstars_shell' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='shape_ellipsoid_1r',op='ufunc',weighting='mass',rad=None),
+   'Subhalo_EllipsoidShape_Gas_SFRgt0_1rhalfstars_shell' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='shape_ellipsoid_1r',op='ufunc',weighting='mass',ptRestrictions=sfrgt0,rad=None),
    'Subhalo_EllipsoidShape_Stars_2rhalfstars_shell' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='shape_ellipsoid',op='ufunc',weighting='mass',rad=None),
    'Subhalo_EllipsoidShape_Gas_SFRgt0_2rhalfstars_shell' : \
@@ -3016,9 +3032,9 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
    'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
 
-   'Box_CDDF_nH2_popping_BR_depth10' : partial(wholeBoxCDDF,species='MH2BR_popping_depth10'),
-   'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='MH2GK_popping_depth10'),
-   'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='MH2KMT_popping_depth10'),
+   'Box_CDDF_nH2_popping_BR_depth10' : partial(wholeBoxCDDF,species='H2_popping_BR_depth10'),
+   'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
+   'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='H2_popping_KMT_depth10'),
 
    'Box_Grid_nOVI_depth10'           : partial(wholeBoxColDensGrid,species='O VI_depth10'),
    'Box_Grid_nOVI_10_depth10'        : partial(wholeBoxColDensGrid,species='O VI 10_depth10'),

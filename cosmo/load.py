@@ -1496,8 +1496,10 @@ def snapshotSubset(sP, partType, fields,
         if '_popping' in field.lower():
             # use Popping+2019 pre-computed results in 'hydrogen' postprocessing catalog
             # e.g. 'MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping'
+            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
+            
             path = sP.postPath + 'hydrogen/gas_%03d.hdf5' % sP.snap
-            key = molecularModel.split('_popping')[0]
+            key = field.split('_popping')[0]
 
             with h5py.File(path,'r') as f:
                 if indRange is None:
