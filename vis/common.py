@@ -407,8 +407,9 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
         maxValLog = np.array([5.60, 5.68, 5.36])*1.0 # little less clipping, more yellow/red color (fiducial)
-        maxValLog = np.array([6.10, 6.18, 5.86]) # TNG50 sb2sh0 render only
-        print('stellarComp maxValLog changed, undo!')
+        #maxValLog = np.array([5.40, 5.48, 5.16]) # TNG50 sb0sh481167 movie: galaxy three only
+        #maxValLog = np.array([6.70, 6.78, 6.46]) # TNG50 sb2sh0 movie: galaxy two only
+        #print('stellarComp maxValLog changed, undo!')
 
         maxValLog = np.log10( (10.0**maxValLog) * (pxArea/pxArea0*resFac) )
         #print('pxArea*res mod: ',(pxArea/pxArea0*resFac))
