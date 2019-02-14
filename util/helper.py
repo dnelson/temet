@@ -795,6 +795,40 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                  'blue'  : ((0, 0, 0), (0.01, 1, 1), (0.5, 0.1, 0.1), (1, 0.1, 0.1))}
         cmap = LinearSegmentedColormap(ctName, cdict)
 
+    if ctName == 'BdRd_r_black':
+        # brewer blue->red diverging, with central white replaced with black (psychodelic)
+        data = ((0.40392156862745099,  0.0                ,  0.12156862745098039),
+                (0.69803921568627447,  0.09411764705882353,  0.16862745098039217),
+                (0.83921568627450982,  0.37647058823529411,  0.30196078431372547),
+                (0.95686274509803926,  0.6470588235294118 ,  0.50980392156862742),
+                (0.99215686274509807,  0.85882352941176465,  0.7803921568627451 ),
+                (0.96862745098039216,  0.96862745098039216,  0.96862745098039216),
+                (0.81960784313725488,  0.89803921568627454,  0.94117647058823528),
+                (0.5725490196078431 ,  0.77254901960784317,  0.87058823529411766),
+                (0.2627450980392157 ,  0.57647058823529407,  0.76470588235294112),
+                (0.12941176470588237,  0.4                ,  0.67450980392156867),
+                (0.0196078431372549 ,  0.18823529411764706,  0.38039215686274508)
+                )
+
+        cdict = {'red':[], 'green':[], 'blue':[]}
+        for i, rgb in enumerate(data):
+            new_r = 1.0 - rgb[0]
+            new_g = 1.0 - rgb[1]
+            new_b = 1.0 - rgb[2]
+            frac = float(i) / (len(data)-1)
+            cdict['red'].append( (frac,new_r,new_r) )
+            cdict['green'].append( (frac,new_g,new_g) )
+            cdict['blue'].append( (frac,new_b,new_b) )
+        cmap = LinearSegmentedColormap(ctName, cdict)
+
+    if ctName == 'BdRd_r_black2':
+        # brewer blue->red diverging, with central white replaced with black (try #2)
+        cdict = {'red'   : ((0.0, 0.043, 0.043), (0.5, 0.0, 0.0), (1, 0.8, 0.8)),
+                 'green' : ((0, 0.396, 0.396), (0.5, 0.0, 0.0), (1, 0, 0)),
+                 'blue'  : ((0.0, 0.8, 0.8), (0.5, 0.0, 0.0), (1, 0.2353, 0.2352))}
+        cmap = LinearSegmentedColormap(ctName, cdict)
+
+
     if ctName == 'dmdens':
         # illustris dark matter density (originally from Mark)
         cdict = {'red'   : ((0.0, 0.0, 0.0), (0.3,0.0,0.0), (0.6, 0.8, 0.8), (1.0, 1.0, 1.0)),

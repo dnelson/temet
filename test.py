@@ -44,11 +44,29 @@ def convert_annalisa_infinite_images():
         cmd = "mogrify -resize 1800x %s" % name_out
         result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
 
-        cmd = "mogrify -crop 1800x320+0+18 %s" % name.out
+        cmd = "mogrify -crop 1800x320+0+18 %s" % name_out
         result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
 
         rename(name_out, final_out)
         print(final_out)
+
+    print('Done.')
+
+def convert_annalisa_infinite_images2():
+    """ Combine gas and stars vertically. """
+    import subprocess
+    files = glob.glob('pillepich19stars/*.jpg') # stars is a subset of gas
+
+    for file in files:
+        name = file.split('/')[1]
+
+        assert path.isfile('pillepich19gas/%s' % name)
+        assert path.isfile('pillepich19stars/%s' % name)
+
+        # vertical stack
+        cmd = "convert pillepich19gas/%s pillepich19stars/%s -append %s" % (name,name,name)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+        print(name)
 
     print('Done.')
 

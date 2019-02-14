@@ -258,7 +258,7 @@ def _add_temp_props(sP, sbNum, subhalo_pos):
 
     return mstar, sfr
 
-def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', frameNum=None, rotSeqFrameNum=None):
+def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', frameNum=None, rotSeqFrameNum=None, rotSeqFrameNum2=None):
     """ Use the subbox tracking catalog to create a movie highlighting the evolution of a single galaxy.
     If frameNum is not None, then use this for save filename instead of sbSnapNum. 
     If rotSeqFrameNum is not None, then proceed to render rotation squence (at fixed time iff sbSnapNum is kept fixed). """
@@ -282,30 +282,44 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         sbNum = 0
         #subhaloID = 389836 # halo 296, snap 58
         subhaloID = 440389 # re-located at snap 90 (halo 227)
+        refVel = np.array([-45.357, 2.279, 82.549]) # SubhaloVel at main snap=40 (z=1.5)
 
+    if gal in ['one','three']:
         mm1 = [5.2, 8.2]
         mm2 = [6.8, 8.6]
         mm4 = [5.0, 8.4]
         mm5 = [4.5, 7.2]
         mm6 = [-2.0,0.2]
+        mm7 = [0, 400]
+        mm8 = [-200,200]
+        mm9 = [-170,170]
+        mm10 = [37.0, 40.7]
 
     if gal == 'two':
         # second movie (sbSnaps 0 - 3400+)
         sP = simParams(res=2160,run='tng',snap=58)
         sbNum = 2
         subhaloID = 0 # halo 0, snap 58, also snap 68, but after this run into fof0/MDB issues
+        refVel = np.array([-195.3,-52.9,-157.0]) # avg of stars within 30 pkpc of subhalo_pos at sbSnapNum=1762
 
         mm1 = [5.7, 8.8]
         mm2 = [6.8, 9.2]
         mm4 = [5.6, 9.2]
         mm5 = [5.4, 8.4]
-        mm6 = [-1.5,0.5]
+        mm6 = [-1.5,0.2]
+        mm7 = [0, 1000]
+        mm8 = [-400,400]
+        mm9 = [-500,500]
+        mm10 = [37.5, 41.0]
 
     if gal == 'three':
         # third movie (sbSnaps 0 - ...)
         sP = simParams(res=2160,run='tng',snap=90)
         sbNum = 0
         subhaloID = 481167 # halo 359, snap 90
+        refVel = np.array([-10.29, -13.75, 74.17]) # snap 40, z=1.5
+
+        mm7 = [50,300]
 
     # load subbox catalog, get time-evolving positions
     cat = subboxSubhaloCat(sP, sbNum)
@@ -330,6 +344,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     rotStr = ''
 
     if rotSeqFrameNum is not None:
+        # (first) intermediate-z rotation
         sbSnapNum = 1762 # z=1.5
         frameNum = 1569
         numFramesPerRot = 360 # 12 sec rotation, 1 deg per frame
@@ -348,7 +363,19 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
                 dataCache[cache_key] = sPsb.snapshotSubset(partType, field)
             print('All caching done.')
 
-        # calculate rotation
+    if rotSeqFrameNum2 is not None:
+        # (second) low-z rotation
+        sbSnapNum = 2667 # z=0.74
+        frameNum = 2235
+        numFramesPerRot = 360 # 12 sec rotation, 1 deg per frame
+        rotStr = '_rot2_%d' % rotSeqFrameNum2
+        rotSeqFrameNum = rotSeqFrameNum2
+
+        if conf in ['eight','nine']:
+            raise Exception('Add refVel at this time, for each galaxy.')
+
+    if rotSeqFrameNum is not None or rotSeqFrameNum2 is not None:
+        # calculate rotation matrix
         print('rot frame: ', rotSeqFrameNum, ' (overriding sbSnapNum)')
 
         rotAngleDeg = 360.0 * (rotSeqFrameNum/numFramesPerRot)
@@ -385,7 +412,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     boxCenter = subhalo_pos[sbSnapNum,:]
 
     # panel config    
-    if conf in ['one','six','seven','eight','nine']:
+    if conf in ['one','six','seven','eight','nine','ten','eleven']:
         # main panel: gas density on intermediate scales
         boxSizeImg = [int(boxSizeLg * aspect), boxSizeLg, boxSizeLg]
         loc = [0.003, 0.26]
@@ -395,18 +422,23 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         if conf == 'six':
             panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':mm6, 'legendLoc':loc} )
         if conf == 'seven':
-            panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[0,400], 'legendLoc':loc} )
+            panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':mm7, 'legendLoc':loc} )
         if conf == 'eight':
-            refPos = subhalo_pos[sbSnapNum,:]
-            refVel = np.array([-45.357, 2.279, 82.549]) # SubhaloVel at main snap=40 (z=1.5)
-            panels.append( {'partType':'gas', 'partField':'radvel', 'valMinMax':[-200,200], 'legendLoc':loc, 'refPos':refPos, 'refVel':refVel} )
+            refPos = subhalo_pos[sbSnapNum,:]            
+            panels.append( {'partType':'gas', 'partField':'radvel', 'valMinMax':mm8, 'legendLoc':loc, 
+                            'refPos':refPos, 'refVel':refVel, 'ctName':'BdRd_r_black'} )
         if conf == 'nine':
-            refVel = np.array([-45.357, 2.279, 82.549]) # SubhaloVel at main snap=40 (z=1.5)
             projParams = {'noclip':True}
-            panels.append( {'partType':'gas', 'partField':'vel_los', 'valMinMax':[-170,170], 'legendLoc':loc, 'refVel':refVel, 'projParams':projParams} )
+            panels.append( {'partType':'gas', 'partField':'vel_los', 'valMinMax':mm9, 'legendLoc':loc, 
+                            'refVel':refVel, 'projParams':projParams, 'ctName':'BdRd_r_black2'} )
 
+        if conf == 'ten':
+            panels.append( {'partType':'gas', 'partField':'sfr_halpha', 'valMinMax':mm10, 'legendLoc':loc} )
+        if conf == 'eleven':
+            panels.append( {'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-1.0,1.6], 'legendLoc':loc} )
+            
         # add custom label of subbox time resolution galaxy properties if extended info is available
-        if 'SubhaloStars_Mass' in cat:
+        if conf == 'one' and 'SubhaloStars_Mass' in cat:
             aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
             stellarMass = np.squeeze(cat['SubhaloStars_Mass'][w[0],aperture_num,sbSnapNum])
             SFR = np.squeeze(cat['SubhaloGas_SFR'][w[0],aperture_num,sbSnapNum])
@@ -486,8 +518,6 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
-        if i < 2700 or i > 2799:
-            continue
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
 
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
