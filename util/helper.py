@@ -149,6 +149,9 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
     if skipZeros:
         minVal = np.nanmin( X[X != 0.0] )
 
+    if np.isnan(minVal):
+        print('Bad inputs, going to fail in linspace.')
+
     if binSize is not None:
         nBins = round( (np.nanmax(X)-minVal) / binSize )
 
