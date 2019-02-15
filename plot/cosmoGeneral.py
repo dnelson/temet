@@ -367,6 +367,11 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     #          mincnt=minCount, cmap=cmap, marginals=False, reduce_C_function=reduceFunc)
 
     # median line?
+    if np.count_nonzero(np.isnan(sim_xvals)) == sim_xvals.size:
+        warnStr = 'Warning! All x-axis values are NaN, so nothing to plot (for example, mhalo_200 is NaN for satellites).'
+        ax.text( np.mean(ax.get_xlim()), np.mean(ax.get_ylim()), warnStr, ha='center', va='center', color='black')
+        medianLine = False # all x-axis values are nan (i.e. mhalo_200 for cenSatSelect=='sat')
+
     if medianLine:
         binSizeMed = (xMinMax[1]-xMinMax[0]) / nBins * 2
 
