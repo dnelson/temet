@@ -1529,6 +1529,14 @@ def snapshotSubset(sP, partType, fields,
 
             r[field] = ion._massRatioToRelSolarNumDensRatio(el_ratio, el1, el2)
 
+        if '_massratio' in field:
+            # metal mass ratio e.g. "Si_H_massratio", absolute linear (not relative to solar)
+            el1, el2, _ = field.split('_')
+
+            el1_massratio = snapshotSubset(sP, partType, 'metals_'+el1, **kwargs)
+            el2_massratio = snapshotSubset(sP, partType, 'metals_'+el2, **kwargs)
+            r[field] = (el1_massratio / el2_massratio)
+
         # metal mass (total or by species): convert fractions to masses [code units] or [msun]
         if "metalmass" in field.lower():
             assert sP.isPartType(partType, 'gas') or sP.isPartType(partType, 'stars')

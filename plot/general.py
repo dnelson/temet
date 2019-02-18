@@ -789,6 +789,35 @@ def compareRuns_PhaseDiagram():
 
     pdf.close()
 
+def compareVariants_NO_OH_stellar():
+    """ Driver. Igor. """
+    import glob
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    # config
+    partType = 'stars'
+    yQuant = 'N_O_massratio'
+    ylim   = [-3.5,0.0]
+    xQuant = 'O_H_massratio'
+    xlim   = [-5.5,-0.5]
+    redshift = 0.0
+
+    # variants
+    sP = simParams(res=512,run='tng',redshift=redshift,variant='0000')
+    dirs = glob.glob(sP.arepoPath + '../L25n512_*')
+    variants = sorted([d.rsplit("_",1)[1] for d in dirs])
+
+    # start PDF, add one page per run
+    pdf = PdfPages('compareRuns_x=%s_y=%s_%s.pdf' % (xQuant,yQuant,partType))
+
+    for variant in variants:
+        sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
+        if sP.simName == 'DM only': continue
+        print(variant,sP.simName)
+        plotPhaseSpace2D(sP, partType=partType, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, haloID=None, pdf=pdf)
+
+    pdf.close()
+
 def oneRun_PhaseDiagram(snaps=None):
     """ Driver. """
     from matplotlib.backends.backend_pdf import PdfPages
