@@ -1856,6 +1856,14 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: [-3.0, 1.0] # more depends on which species, todo
         log = False
 
+    if '_massratio' in ptProperty: # e.g. 'Si_H_numratio', species number density ratio
+        el1, el2, _ = ptProperty.split('_')
+
+        label = 'log ( %s/%s )$_{\\rm %s}$' % (el1,el2,typeStr)
+        lim = [-5.0, 0.0]
+        if haloLims: [-3.0, 1.0] # more depends on which species, todo
+        log = True
+
     if 'metalmass' in ptProperty: # e.g. 'metalmass_msun', 'metalmass_He_msun'
         assert '_msun' in ptProperty
         field = ptProperty.split('_msun')[0]
