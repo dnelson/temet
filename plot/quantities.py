@@ -1852,7 +1852,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
 
         label = '[%s/%s]$_{\\rm %s}$' % (el1,el2,typeStr) # = log(n_1/n_2)_gas - log(n_1/n_2)_solar
         if not clean: label += ' = log(n$_{%s}$/n$_{%s}$)$_{\\rm %s} - log(n$_{%s}$/n$_{%s}$)$_{\\rm solar}' % (el1,el2,typeStr,el1,el2)
-        lim = [-4.0, 2.0]
+        lim = [-4.0, 4.0]
         if haloLims: [-3.0, 1.0] # more depends on which species, todo
         log = False
 

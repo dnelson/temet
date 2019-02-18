@@ -2,6 +2,7 @@ from . import bulletCluster
 from . import clustering
 from . import color_analysis
 from . import color
+from . import lrg
 from . import outflows_vis
 from . import outflows_analysis
 from . import outflows

@@ -744,14 +744,15 @@ class simParams:
                                gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
                                auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
-        from plot.quantities import simSubhaloQuantity
+        from plot.quantities import simSubhaloQuantity, simParticleQuantity
 
-        self.redshiftToSnapNum  = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift  = partial(snapNumToRedshift, self)
-        self.periodicDists      = partial(periodicDists, sP=self)
-        self.periodicDistsSq    = partial(periodicDistsSq, sP=self)
-        self.validSnapList      = partial(validSnapList, sP=self)
-        self.simSubhaloQuantity = partial(simSubhaloQuantity, self)
+        self.redshiftToSnapNum   = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift   = partial(snapNumToRedshift, self)
+        self.periodicDists       = partial(periodicDists, sP=self)
+        self.periodicDistsSq     = partial(periodicDistsSq, sP=self)
+        self.validSnapList       = partial(validSnapList, sP=self)
+        self.simSubhaloQuantity  = partial(simSubhaloQuantity, self)
+        self.simParticleQuantity = partial(simParticleQuantity, self)
 
         self.snapshotSubsetP    = partial(snapshotSubsetParallel, self)
         self.snapshotSubset     = partial(snapshotSubset, self)

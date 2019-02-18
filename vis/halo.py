@@ -194,6 +194,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
     projType    = 'ortho'       # projection type, 'ortho', 'equirectangular'
     projParams  = {}            # dictionary of parameters associated to this projection type
     rotation    = None          # 'face-on', 'edge-on', or None
+    rotMatrix   = None          # rotation matrix, i.e. manually specify if rotation is None
+    rotCenter   = None          # rotation center, i.e. manually specify if rotation is None
     mpb         = None          # use None for non-movie/single frame
     remapRatio  = None          # [x,y,z] periodic->cuboid remapping ratios, always None for single halos
 
@@ -203,6 +205,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
         rasterPx   = [1400,1400]  # each panel will have this number of pixels if making a raster (png) output
                                   # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars  = True         # include colorbars
+        colorbarOverlay = False   # overlay on top of image
         title      = True         # include title (only for open* styles)
         outputFmt  = None         # if not None (automatic), then a format string for the matplotlib backend
 
@@ -250,7 +253,10 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
         
         p['boxSizeImg'], p['boxCenter'], p['extent'], \
         p['haloVirRad'], p['galHalfMass'], p['galHalfMassStars'], \
-        p['rotMatrix'], p['rotCenter'] = haloImgSpecs(**p)
+        haloRotMatrix, haloRotCenter = haloImgSpecs(**p)
+
+        if 'rotMatrix' not in p:
+            p['rotMatrix'], p['rotCenter'] = haloRotMatrix, haloRotCenter
 
     # attach any cached data to sP (testing)
     if 'dataCache' in localVars:
@@ -317,6 +323,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
         rasterPx   = [1200,1200]  # each panel will have this number of pixels if making a raster (png) output
                                   # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True          # include colorbars
+        colorbarOverlay = False   # overlay on top of image
         title     = True          # include title (only for open* styles)
         outputFmt = None          # if not None (automatic), then a format string for the matplotlib backend
 

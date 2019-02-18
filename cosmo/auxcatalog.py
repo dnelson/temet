@@ -2124,7 +2124,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     """
     from scipy.stats import binned_statistic
 
-    assert op in ['sum','mean','median','count',np.std]
+    assert op in ['sum','mean','median','min','max','count',np.std] # todo: or is a lambda
     assert scope in ['global','global_fof','subfind','fof','subfind_global']
 
     def _binned_statistic_weighted(x, values, statistic, bins, weights=None, weights_w=None):
@@ -2958,9 +2958,14 @@ fieldComputeFunctionMapping = \
    'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z_restframe' : partial(subhaloStellarPhot, rad='legac_slit', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=1, Nside='z-axis', minStellarMass=9.8),
+
    'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_Seeing_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, seeing=0.4, minStellarMass=9.8),
+   'Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_Seeing_p07s_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
+                                         iso='padova07', imf='salpeter', dust='cf00_res_conv', 
+                                         fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, seeing=0.4, minStellarMass=9.8),
+
    'Subhalo_LEGA-C_SlitSpectra_NoVel_Em_p07c_cf00dust_res_conv_z' : partial(subhaloStellarPhot, rad='legac_slit', 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', 
                                          fullSubhaloSpectra=1, Nside='z-axis', redshifted=True, emlines=True, minStellarMass=9.8),
@@ -3185,6 +3190,19 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,weighting='sfr',scope='fof',proj2D=['edge-on',None]),
    'Subhalo_RadProfile2Dfaceon_FoF_Gas_LOSVelSigma_sfrWt' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='losvel',op=np.std,weighting='sfr',scope='fof',proj2D=['face-on',None]),
+
+   'Subhalo_RadProfile3D_FoF_Gas_SFR0_CellSizeKpc_Mean' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op='mean',scope='fof',ptRestrictions=sfreq0),
+   'Subhalo_RadProfile3D_FoF_Gas_SFR0_CellSizeKpc_Median' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op='median',scope='fof',ptRestrictions=sfreq0),
+   'Subhalo_RadProfile3D_FoF_Gas_CellSizeKpc_Mean' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op='mean',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_Gas_CellSizeKpc_Median' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op='median',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_Gas_CellSizeKpc_Min' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op='min',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_Gas_CellSizeKpc_p10' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op=lambda x: np.percentile(x,10),scope='fof'),
 
    # outflows/inflows
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),

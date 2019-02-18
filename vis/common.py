@@ -1116,6 +1116,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml')) or \
                            sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
 
+        if len(sP.data):
+            print(' gridBox(): have fields in sP.data, disabling chunking (possible spatial subset already applied)')
+            disableChunkLoad = True
+            sP.data['nThreads'] = 1 # disable parallel snapshot loading
+
         if indRange is None and sP.subbox is None and not disableChunkLoad:
             nChunks = np.max( [1, int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0)] )
             chunkSize = int(h['NumPart'][partTypeNum(partType)] / nChunks)
@@ -1966,12 +1971,12 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
         # bottom
         bottomNormBar = barAreaBottom - height*(hOffset+1.0)
         textTopY = -tOffset
-        textMidY = 0.5
+        textMidY = 0.45 # pixel adjust down by 1 hack
     else:
         # top
         bottomNormBar = (1.0-barAreaTop) + height*hOffset
         textTopY = 1.0 + tOffset
-        textMidY = 0.45 # pixel adjust down by 1 hack
+        textMidY = 0.45
 
     leftNormBar = leftNorm + 0.5*colWidth*(1-factor)   
     posBar = [leftNormBar, bottomNormBar, colWidth*factor, height]
@@ -2199,7 +2204,7 @@ def renderMultiPanel(panels, conf):
         barAreaHeight = (0.12 / nRows / aspect)
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
         if nRows == 1 and nCols in [1]:
-            barAreaHeight = 0.055
+            barAreaHeight = 0.055 / aspect
             #if conf.fontsize == min_fontsize:
             #    barAreaHeight = 0.06 / aspect * (400/conf.rasterPx[0])
             #    #barAreaHeight = np.clip(0.06 / aspect * (1200/conf.rasterPx[0]), 0.06, 0.08)
@@ -2236,6 +2241,15 @@ def renderMultiPanel(panels, conf):
             # should verify that each column contains the same field and valMinMax
             barAreaBottom *= 0.7
             pass
+
+        # colorbar has its own space, or is on top of the plot?
+        barTop = barAreaTop # used to draw bars
+        barBottom = barAreaBottom # used to draw bars
+
+        if conf.colorbarOverlay:
+            # used to resize actual panels, so set to zero
+            barAreaTop = 0.0
+            barAreaBottom = 0.0
 
         # variable-height rows? e.g. face-on and edge-on views together
         varRowHeights = False
@@ -2340,16 +2354,16 @@ def renderMultiPanel(panels, conf):
             if nRows == 2:
                 # both above and below, one per column
                 if curRow == 0:
-                    addCustomColorbars(fig, ax, conf, config, heightFac, 0.0, barAreaTop, color2, 
+                    addCustomColorbars(fig, ax, conf, config, heightFac, 0.0, barTop, color2, 
                                        rowHeight, colWidth, bottomNorm, leftNorm)
 
                 if curRow == nRows-1:
-                    addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, 0.0, color2, 
+                    addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, 0.0, color2, 
                                        rowHeight, colWidth, bottomNorm, leftNorm)
             
             if nRows == 1 or (nRows > 2 and curRow == nRows-1):
                 # only below, one per column
-                addCustomColorbars(fig, ax, conf, config, heightFac*1.4, barAreaBottom, barAreaTop, color2, 
+                addCustomColorbars(fig, ax, conf, config, heightFac*1.4, barBottom, barTop, color2, 
                                    rowHeight, colWidth, bottomNorm, leftNorm)
 
             if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
@@ -2360,16 +2374,16 @@ def renderMultiPanel(panels, conf):
             heightFac = np.max([1.0/nRows, 0.35])
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2: heightFac *= 1.3 # increase
-            if nRows == 1 and nCols == 1: heightFac *= 0.5 # decrease
+            #if nRows == 1 and nCols == 1: heightFac *= 1.1
             if nRows == 1 and nCols in [2,3]: heightFac *= 0.7 # decrease
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
-                addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 
                                    rowHeight, 0.4, bottomNorm, 0.3)
             else:
                 # normal, offset to the left
-                addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
+                addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 
                                    rowHeight, 0.4, bottomNorm, 0.05)
 
                 # colorbar for the vector field visualization, offset to the right
@@ -2377,7 +2391,7 @@ def renderMultiPanel(panels, conf):
                 vConfig['vecMinMax'] = p['vecMinMax']
                 vConfig['ctName'] = p['vecColormap']
 
-                addCustomColorbars(fig, ax, conf, vConfig, heightFac, barAreaBottom, barAreaTop, color2, 
+                addCustomColorbars(fig, ax, conf, vConfig, heightFac, barBottom, barTop, color2, 
                                    rowHeight, 0.4, bottomNorm, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path

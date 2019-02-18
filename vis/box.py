@@ -105,6 +105,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
         rasterPx  = [1400,1400]  # each panel will have this number of pixels if making a raster (png) output
                                  # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True         # include colorbars
+        colorbarOverlay = False  # overlay on top of image
         title     = True         # include title (only for open* styles)
         outputFmt = None         # if not None (automatic), then a format string for the matplotlib backend
 
@@ -209,6 +210,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
         rasterPx  = [960,960]  # each panel will have this number of pixels if making a raster (png) output
                                # but it also controls the relative size balance of raster/vector (e.g. fonts)
         colorbars = True       # include colorbars
+        colorbarOverlay = False  # overlay on top of image
         title     = True       # include title (only for open* styles)
         outputFmt = None       # if not None (automatic), then a format string for the matplotlib backend
         
