@@ -1929,12 +1929,20 @@ def snapshotSubset(sP, partType, fields,
         assert not sP.isPartType(partType, 'tracer') # not group-ordered
         subset = _haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
 
-    # check memory cache (only simplest support at present, for indRange returns of global cache)
-    if len(fields) == 1 and mdi[0] is None and indRange is not None:
+    # check memory cache (only simplest support at present, for indRange/full returns of global cache)
+    if len(fields) == 1 and mdi[0] is None:
         cache_key = 'snap%s_%s_%s' % (sP.snap,partType,fields[0].replace(" ","_"))
         if cache_key in sP.data:
-            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % (cache_key,indRange[0],indRange[1]))
-            return sP.data[cache_key][indRange[0]:indRange[1]+1]
+            # global? (or rather, whatever is in sP.data... be careful)
+            if indRange is None:
+                indRange = [0,sP.data[cache_key].shape[0]-1]
+                #print('CAUTION: Cached return, and indRange is None, returning all of sP.data field.')
+
+            #print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % (cache_key,indRange[0],indRange[1]))
+            if sq:
+                return sP.data[cache_key][indRange[0]:indRange[1]+1]
+            else:
+                return {fields[0]:sP.data[cache_key][indRange[0]:indRange[1]+1]}
 
     # load from disk
     r = il.snapshot.loadSubset(sP.simPath, sP.snap, partType, fields, subset=subset, mdi=mdi, sq=sq, float32=float32)
@@ -1974,6 +1982,13 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     import ctypes
     from functools import partial
 
+    # method to disable parallel loading, which does not work with custom-subset cached fields 
+    # inside sP.data since indRange as computed below cannot know about this
+    if 'nThreads' in sP.data and sP.data['nThreads'] == 1:
+        return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
+            subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
+
+    # sanity checks
     if indRange is not None:
         assert indRange[0] >= 0 and indRange[1] >= indRange[0]
     if haloSubset and (not sP.groupOrdered or (indRange is not None)):

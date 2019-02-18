@@ -369,7 +369,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     # median line?
     if np.count_nonzero(np.isnan(sim_xvals)) == sim_xvals.size:
         warnStr = 'Warning! All x-axis values are NaN, so nothing to plot (for example, mhalo_200 is NaN for satellites).'
-        ax.text( np.mean(ax.get_xlim()), np.mean(ax.get_ylim()), warnStr, ha='center', va='center', color='black')
+        ax.text( np.mean(ax.get_xlim()), np.mean(ax.get_ylim()), warnStr, ha='center', va='center', color='black', fontsize=11)
         medianLine = False # all x-axis values are nan (i.e. mhalo_200 for cenSatSelect=='sat')
 
     if medianLine:

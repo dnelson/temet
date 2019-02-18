@@ -275,7 +275,7 @@ legend.handlelength  : 2.0     # the length of the legend lines in fraction of f
 #legend.handleheight  : 0.7     # the height of the legend handle in fraction of fontsize
 #legend.handletextpad : 0.8    # the space between the legend line and legend text in fraction of fontsize
 #legend.borderaxespad : 0.5   # the border between the axes and legend edge in fraction of fontsize
-#legend.columnspacing : 2.    # the border between the axes and legend edge in fraction of fontsize
+legend.columnspacing : 1.5    # the border between the axes and legend edge in fraction of fontsize
 #legend.shadow        : False
 legend.frameon       : False   # whether or not to draw a frame around legend
 #legend.framealpha    : None    # opacity of of legend frame
