@@ -104,7 +104,7 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
         # TNG50_sb2_gasvel_stars movie: stars
         saveStr = 'stars'
         if res == 2160: mm = [2.8,8.4]
-        if res == 2500: mm = [2.8,9.0]
+        if res == 2500: mm = [2.6,7.6]
         panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':mm} )
 
     class plotConfig:
@@ -551,15 +551,50 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     axes     = [0,1] # x,y
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames/comp_gasdens_sb0/'
+        #savePath  = '/u/dnelson/data/frames/comp_gasdens_sb0/'
+        savePath  = '/u/dnelson/data/frames/1820subbox0_highz_gasdens/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = True
 
         # movie config
-        minZ      = 0.0
+        minZ      = 5.0
         maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
         maxNSnaps = 2700 # 90 seconds at 30 fps
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_highz_gasdens(curTask=0, numTasks=1):
+    """ Render a movie of the high-z evolution (down to ~1 Gyr, z=5) of a subbox. """
+    panels = []
+
+    panels.append( {'run':'tng', 'res':1820, 'variant':'subbox0', 'zoomFac':0.99} )
+
+    partType  = 'gas'
+    partField = 'coldens_msunkpc2'
+    valMinMax = [5.0,8.1]
+    ctName = 'magma'
+
+    method     = 'sphMap'
+    nPixels    = [1920,1080]
+    labelSim   = False
+    labelAge   = True
+    labelZ     = True
+    labelScale = 'physical'
+    axes       = [0,1] # x,y
+    textcolor  = 'black'
+
+    class plotConfig:
+        savePath  = '/u/dnelson/data/frames/1820subbox0_highz_gasdens/'
+        plotStyle = 'edged_black'
+        rasterPx  = nPixels
+        colorbars = False
+        #colorbarOverlay = True
+
+        # movie config
+        minZ      = 5.0
+        maxZ      = 50.0 # tng subboxes start at a=0.02, illustris at a=0.0078125
+        maxNSnaps = None #2700 # 90 seconds at 30 fps
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 

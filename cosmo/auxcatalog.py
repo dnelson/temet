@@ -649,8 +649,20 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 rr = sP.periodicDistsSq( pt_2d, vecs_2d ) # handles 2D
 
             if rad is not None:
-                validMask &= (rr <= radSqMax[subhaloID])
-                validMask &= (rr >= radSqMin[subhaloID])
+
+                if radSqMax.ndim == 1:
+                    # radial / circular aperture
+                    validMask &= (rr <= radSqMax[subhaloID])
+                    validMask &= (rr >= radSqMin[subhaloID])
+                else:
+                    # rectangular aperture in projected (x,y), e.g. slit
+                    xDist = vecs_2d[:,0] - pt_2d[0]
+                    yDist = vecs_2d[:,1] - pt_2d[1]
+                    correctPeriodicDistVecs(xDist, sP)
+                    correctPeriodicDistVecs(yDist, sP)
+
+                    validMask &= (xDist <= np.sqrt( radSqMax[subhaloID,0]) ) 
+                    validMask &= (yDist <= np.sqrt( radSqMax[subhaloID,1]) )
 
         # apply particle-level restrictions
         if ptRestrictions is not None:
@@ -1445,7 +1457,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             attrs['spectraUnits'] = '10^-19 erg/cm^2/s/Ang'.encode('ascii')
             attrs['slitSizeCode'] = [radSqMax[0,0],radSqMax[0,1]]
     else:
-        attrs['bands'] = [b.encode('ascii') for b in bands],
+        attrs['bands'] = [b.encode('ascii') for b in bands]
 
     if '_res' in dust:
         # save projection details
@@ -1861,7 +1873,7 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
 
     return r, attrs
 
-def wholeBoxColDensGrid(sP, pSplit, species):
+def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
     """ Compute a 2D grid of gas column densities [cm^-2] covering the entire simulation box. For 
         example to derive the neutral hydrogen CDDF. The grid has dimensions of boxGridDim x boxGridDim 
         and so a grid cell size of (sP.boxSize/boxGridDim) in each dimension. Strategy is a chunked 
@@ -1879,10 +1891,16 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
     if '_depth10' in species:
         projDepthCode = 10000.0 # 10 cMpc/h
-        species = species.split("_depth10")[0]  
+        species = species.split("_depth10")[0] 
+    if '_depth20' in species:
+        projDepthCode = 20000.0 # 20 cMpc/h
+        species = species.split("_depth20")[0] 
+    if '_depth5' in species:
+        projDepthCode = 5000.0 # 10 cMpc/h
+        species = species.split("_depth5")[0] 
     if '_depth125' in species:
         projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac) # 12.5 cMpc
-        species = species.split("_depth125")[0]  
+        species = species.split("_depth125")[0]
 
     # check
     hDensSpecies   = ['HI','HI_noH2']
@@ -1910,6 +1928,10 @@ def wholeBoxColDensGrid(sP, pSplit, species):
         boxGridSize = 10.0 # test, x2 bigger
     if species == 'O VI 25':
         boxGridSize = 2.5 # test, x2 smaller
+
+    if gridSize is not None:
+        print(' Seting gridSize = %f [code units]' % gridSize)
+        boxGridSize = gridSize
 
     boxGridDim = round(sP.boxSize / boxGridSize)
     chunkSize = int(h['NumPart'][sP.ptNum('gas')] / nChunks)
@@ -2018,8 +2040,12 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
         if species in preCompSpecies:
             # anything directly loaded from the snapshots, return in units of [10^10 Msun * h / ckpc^2]
+            nThreads = 8
+            if boxGridDim > 60000: nThreads = 4
+            if boxGridDim > 100000: nThreads = 2
+
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=gas[species], quant=None, 
-                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=1.0)
+                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, nThreads=nThreads, sliceFac=1.0)
 
             r += ri
 
@@ -2061,7 +2087,7 @@ def wholeBoxColDensGrid(sP, pSplit, species):
 
     return rr, attrs
 
-def wholeBoxCDDF(sP, pSplit, species, omega=False):
+def wholeBoxCDDF(sP, pSplit, species, omega=False, gridSize=None):
     """ Compute the column density distribution function (CDDF, i.e. histogram) of column densities 
         given a full box colDens grid. If omega == True, then instead compute the single number 
         Omega_species = rho_species / rho_crit,0. """
@@ -2087,12 +2113,19 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False):
 
     # load
     acField = 'Box_Grid_n'+species
+    if gridSize is not None:
+        acField += '_gridSize=%.1f' % gridSize
+
     ac = sP.auxCat(fields=[acField])
 
     # depth
     projDepthCode = sP.boxSize
     if '_depth10' in species:
         projDepthCode = 10000.0
+    if '_depth5' in species:
+        projDepthCode = 5000.0
+    if '_depth20' in species:
+        projDepthCode = 20000.0
     if '_depth125' in species: 
         projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac)
     assert not ('_depth' in species and projDepthCode == sP.boxSize) # handle
@@ -2826,6 +2859,9 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
 
+   'Subhalo_StellarZform_VIMOS_Slit'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='z_form',op='mean',rad='legac_slit',weighting='mass'),
+
    'Subhalo_StellarMeanVel' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='vel',op='mean',rad=None,weighting='mass'),
 
@@ -3029,6 +3065,9 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nH2_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10'),
    'Box_Grid_nH2_popping_KMT_depth10' : partial(wholeBoxColDensGrid,species='MH2KMT_popping_depth10'),
 
+   'Box_Grid_nH2_popping_GK_depth20'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth20'),
+   'Box_Grid_nH2_popping_GK_depth5'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth5'),
+
    'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
    'Box_CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
    'Box_CDDF_nOVI'           : partial(wholeBoxCDDF,species='OVI'),
@@ -3040,6 +3079,17 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nH2_popping_BR_depth10' : partial(wholeBoxCDDF,species='H2_popping_BR_depth10'),
    'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
    'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='H2_popping_KMT_depth10'),
+
+   'Box_CDDF_nH2_popping_GK_depth20' : partial(wholeBoxCDDF,species='H2_popping_GK_depth20'),
+   'Box_CDDF_nH2_popping_GK_depth5' : partial(wholeBoxCDDF,species='H2_popping_GK_depth5'),
+
+   'Box_Grid_nH2_popping_GK_depth10_gridSize=3.0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=3.0),
+   'Box_Grid_nH2_popping_GK_depth10_gridSize=1.0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=1.0),
+   'Box_Grid_nH2_popping_GK_depth10_gridSize=0.5' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=0.5),
+
+   'Box_CDDF_nH2_popping_GK_depth10_cell3' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10',gridSize=3.0),
+   'Box_CDDF_nH2_popping_GK_depth10_cell1' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10',gridSize=1.0),
+   'Box_CDDF_nH2_popping_GK_depth10_cell05' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10',gridSize=0.5),
 
    'Box_Grid_nOVI_depth10'           : partial(wholeBoxColDensGrid,species='O VI_depth10'),
    'Box_Grid_nOVI_10_depth10'        : partial(wholeBoxColDensGrid,species='O VI 10_depth10'),

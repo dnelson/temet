@@ -1812,6 +1812,21 @@ def bordoloi14(surfdens=False):
 
     return r
 
+def bordoloi16():
+    """ Load observational data points from Bordoloi+ (2016), sub-components of a lensed z=1.7 galaxy. """
+    sfr = [14, 1.1, 10, 65] # msun/yr, able 1
+    mstar = [8.5, 7.5, 7.7, 8.7] # log msun, Table 1
+    vout = [225, 233, 183, 251] # km/s, Table 3 (MgII)
+    eta_mgii = [2.1, 46, 3.4, 0.64] # Table 4 (order always: E, U, B, G)
+    eta_feii = [2.4, 60.0, 4.1, 1.2] # Table 4
+
+    r = {'sfr'   : np.log10(sfr),
+         'mstar' : mstar,
+         'vout'  : np.log10(vout),
+         'etaM'  : np.log10(np.array(eta_mgii)+np.array(eta_feii)),
+         'label' : 'Bordoloi+ (2016)'}
+    return r
+
 def erb12():
     """ Load observational data points from Erb+ (2012) Fig 13 (lower left), outflows based on FeII at 1<z<1 (stack points). """
     sfr  = [1.00, 2.11] # log msun/yr

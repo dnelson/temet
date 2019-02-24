@@ -1313,6 +1313,11 @@ def snapshotSubset(sP, partType, fields,
             birthRedshift = 1.0/birthTime - 1.0
             r[field] = curUniverseAgeGyr - sP.units.redshiftToAgeFlat(birthRedshift)
 
+        # formation redshift (convert GFM_StellarFormationTime scalefactor)
+        if field.lower() in ["z_formation","z_form"]:
+            birthTime = snapshotSubset(sP, partType, 'birthtime', **kwargs)
+            r[field] = 1.0/birthTime - 1.0
+
         # pressure_ratio (linear ratio of magnetic to gas pressure)
         if field.lower() in ['pres_ratio','pressure_ratio']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)

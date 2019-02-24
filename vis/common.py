@@ -1665,7 +1665,8 @@ def addBoxMarkers(p, conf, ax):
             else:
                 raise Exception('Handle.')
 
-            c = plt.Circle( (xyPos[0],xyPos[1]), rad, color='#ffffff', linewidth=1.5, fill=False, alpha=0.6)
+            color = '#ffffff'
+            c = plt.Circle( (xyPos[0],xyPos[1]), rad, color=color, linewidth=1.5, fill=False, alpha=0.6)
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
@@ -1679,7 +1680,9 @@ def addBoxMarkers(p, conf, ax):
 
         xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02)*conf.nLinear # upper right
         yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)*conf.nLinear
-        ax.text( xt, yt, zStr, color='white', alpha=1.0, 
+        color = 'white' if 'textcolor' not in p else p['textcolor']
+
+        ax.text( xt, yt, zStr, color=color, alpha=1.0, 
                  size=conf.fontsize, ha='right', va='top') # same size as legend text
 
     if 'labelScale' in p and p['labelScale']:
@@ -1759,8 +1762,10 @@ def addBoxMarkers(p, conf, ax):
             yy = p['sP'].units.codeLengthToMpc(yy)
             yt = p['sP'].units.codeLengthToMpc(yt)
 
-        ax.plot( [x0,x1], [yy,yy], '-', color='white', lw=lw, alpha=1.0)
-        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color='white', alpha=1.0, size=conf.fontsize, ha='center', va='top')
+        color = 'white' if 'textcolor' not in p else p['textcolor']
+
+        ax.plot( [x0,x1], [yy,yy], '-', color=color, lw=lw, alpha=1.0)
+        ax.text( np.mean([x0,x1]), yt, scaleBarStr, color=color, alpha=1.0, size=conf.fontsize, ha='center', va='top')
 
     # text in a combined legend?
     legend_labels = []
@@ -1807,6 +1812,10 @@ def addBoxMarkers(p, conf, ax):
         for label in p['labelCustom']:
             legend_labels.append( label )
 
+    if 'labelAge' in p and p['labelAge']:
+        # age of the universe
+        legend_labels.append( 't = %.2f Gyr' % p['sP'].tage )
+
     # draw legend
     if len(legend_labels):
         legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
@@ -1814,7 +1823,8 @@ def addBoxMarkers(p, conf, ax):
         legend = ax.legend(legend_lines, legend_labels, fontsize=conf.fontsize, loc=loc, 
                            handlelength=0, handletextpad=0)
 
-        for text in legend.get_texts(): text.set_color('white')
+        color = 'white' if 'textcolor' not in p else p['textcolor']
+        for text in legend.get_texts(): text.set_color(color)
 
 def addVectorFieldOverlay(p, conf, ax):
     """ Add quiver or streamline overlay on top to visualization vector field data. """

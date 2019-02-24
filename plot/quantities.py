@@ -89,7 +89,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_misc = ['zform_mm5','M_bulge_counter_rot','xray_r500','xray_subhalo',
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla',
                    'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo',
-                   'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi']
+                   'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi',
+                   'stellar_zform_vimos']
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur','color_nodust_UV','color_nodust_VJ','color_C-30kpc-z_UV','color_C-30kpc-z_VJ']
 
@@ -719,6 +720,16 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'z$_{\\rm form,halo}$'
         if not clean: label += ' [%s]' % zFormType
         minMax = [0.0,3.0]
+        takeLog = False
+
+    if quant in ['stellar_zform_vimos']:
+        fieldName = 'Subhalo_StellarZform_VIMOS_Slit'
+        ac = sP.auxCat(fieldName)
+
+        vals = ac[fieldName]
+
+        label = 'z$_{\\rm form,\star}$ (mass-weighted mean, VIMOS slit)'
+        minMax = [0.5,6.0]
         takeLog = False
 
     if quant in ['fcirc_all_eps07o','fcirc_all_eps07m','fcirc_10re_eps07o','fcirc_10re_eps07m']:
@@ -1795,6 +1806,13 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = True
 
     # todo: csnd, xray, pres_ratio, ub_ke_ratio
+
+    if ptProperty in ['gas_pres','gas_pressure','p_gas']:
+        assert ptType == 'gas'
+        label = 'Gas Pressure [ log K cm$^{-3}$ ]'
+        lim = [-1.0,7.0]
+        if haloLims: lim = [0.0, 5.0]
+        log = False
 
     if ptProperty == 'p_gas_linear':
         assert ptType == 'gas'
