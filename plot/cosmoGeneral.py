@@ -165,6 +165,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
 
     # arbitrary property restriction(s)?
     if qRestrictions is not None:
+        assert len(qRestrictions) == 1 # otherwise check, does it really make sense? second+ vals hasn't had wRestrict applied...
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             # load and restrict
             vals, _, _, _ = sP.simSubhaloQuantity(rFieldName)
@@ -223,13 +224,9 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     if getuser() == 'dnelson':
         print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect)
 
-    if not clean:
-        pass
-        #ax.set_title('stat=%s select=%s mincount=%s' % (cStatistic,cenSatSelect,minCount))
-    else:
-        cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
-        if getuser() != 'dnelson':
-            ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
+    cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
+    if getuser() != 'dnelson':
+        ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
 
     # 2d histogram
     bbox = ax.get_window_extent()
@@ -1060,25 +1057,28 @@ def plots3():
 
 def plots4():
     """ Driver (single median trend). """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
+    sPs = []
+    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=1.3) )
+    sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'size_stars'
-    cenSatSelect = 'all'
+    yQuant = 'stellar_zform_vimos'
+    cenSatSelect = 'cen'
     filterFlag = True
 
-    xlim = [7.5,11.5]
-    ylim = [-1.0,1.2]
+    xlim = [10.2,11.6]
+    ylim = [4.7,1.5]
 
     sQuant = None #'color_C_gr'
     sLowerPercs = None #[10,50]
     sUpperPercs = None #[90,50]
 
     pdf = PdfPages('median_x=%s_y=%s_%s_slice=%s_%s_z%.1f.pdf' % \
-        (xQuant,yQuant,cenSatSelect,sQuant,sP.simName,sP.redshift))
+        (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
 
     # one quantity
-    quantMedianVsSecondQuant([sP], pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+    quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
                              xlim=xlim, ylim=ylim, scatterPoints=True, markSubhaloIDs=None, filterFlag=filterFlag)
 

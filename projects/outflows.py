@@ -516,7 +516,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                     ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
 
         # special plotting behavior (including observational data sets)
-        from util.loadExtern import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17
+        from util.loadExtern import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
 
         color = '#555555'
         labels = []
@@ -529,7 +529,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
 
         if 'sfr_' in xQuant:
             # obs data: etaM vs SFR
-            for i, obs in enumerate([fiore17(), fluetsch18(), chisholm15(), genzel14(), rupke05()]):
+            for i, obs in enumerate([fiore17(), fluetsch18(), chisholm15(), genzel14(), rupke05(), bordoloi16()]):
                 ax.plot( obs['sfr'], obs['etaM'], markers[i], color=color)
                 labels.append( obs['label'] )
 
@@ -894,13 +894,14 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                     # median line and 1sigma band
                     minNum = 2 if 'etaM' in xQuant else 5 # for xQuants = mstar, SFR, Lbol, ...
                     if redshift is not None and redshift > 7.0: minNum = 2
-                    binSize = 0.28
-                    print('binSize changed, remove')
+                    #binSize = 0.28
+                    #print('binSize changed, remove')
                     xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
 
                     if xm.size > sKn:
-                        print('extra smoothing, remove')
-                        extra = 2 if xm.size > sKn+4 else 0
+                        #print('extra smoothing, remove')
+                        #extra = 2 if xm.size > sKn+4 else 0
+                        extra = 0
                         ym = savgol_filter(ym,sKn+2+extra,sKo+2)
                         sm = savgol_filter(sm,sKn+2+extra,sKo+2) 
                         pm = savgol_filter(pm,sKn+2+extra,sKo+2,axis=1)
@@ -937,7 +938,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
         # special plotting behavior (including observational data sets)
         from util.loadExtern import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18, toba17, \
-                                    bordoloi14, chisholm15, cicone16, genzel14, leung17, rupke05, rupke17, spence18
+                                    bordoloi14, chisholm15, cicone16, genzel14, leung17, rupke05, rupke17, spence18, bordoloi16
 
         color = '#555555'
         labels = []
@@ -963,7 +964,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             ax.text(txt_pos[0], txt_pos[1], '$\eta_{\\rm M} \propto v_{\\rm out}^{-2}$', color='#555555', rotation=-26.0)
 
             # obs data: v_out vs etaM
-            for i, obs in enumerate([fiore17(), heckman15(), fluetsch18(), chisholm15(), genzel14(), leung17(), rupke05()]):
+            for i, obs in enumerate([fiore17(), heckman15(), fluetsch18(), chisholm15(), genzel14(), bordoloi16(), leung17(), rupke05()]):
                 ax.plot( obs['etaM'], obs['vout'], markers[i], color=color)
                 labels.append( obs['label'] )
 

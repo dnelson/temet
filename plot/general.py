@@ -19,13 +19,14 @@ from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
 def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, 
-      ylog=True, ylim=None, xlim=None, sfreq0=False, pdf=None):
+      ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, pdf=None):
     """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
     both None), or of one or more halos/subhalos, where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
     Alternatively, subhaloIDs/haloIDs can be a list of lists, each sub-list of IDs of objects for that run, which are overplotted.
     If ptWeight is None, uniform weighting, otherwise weight by this quantity.
-    If sfreq0 is True, include only non-starforming cells. 
-    If ylim is None, then hard-coded typical limits for PDFs. If 'auto', then autoscale. Otherwise, 2-tuple to use as limits. """
+    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
+    If ylim is None, then hard-coded typical limits for PDFs. If 'auto', then autoscale. Otherwise, 2-tuple to use as limits. 
+    If medianPDF is True, then add this mean (per sP) on top. If meanPDF is 'only', then skip the individual objects. """
 
     # config
     if ylog:
@@ -37,13 +38,6 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     else:
         ylim = [0.0, 1.0]
         ylabel = 'PDF'
-
-    nBins = 400
-    lw = 2.0
-
-    # special behavior (not yet generalized)
-    coldDenseCGM = False # sims.josh2
-    radWithin10pkpc = False
 
     # inputs
     oneObjPerRun = False
@@ -88,7 +82,9 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             else:
                 sP_objIDs = [objIDs[i]]
 
-        for objID in sP_objIDs:
+        yy_save = np.zeros( (nBins,len(sP_objIDs)), dtype='float32' )
+
+        for j, objID in enumerate(sP_objIDs):
             # load
             load_haloID = objID if haloIDs is not None else None
             load_subID = objID if subhaloIDs is not None else None
@@ -102,36 +98,25 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             else:
                 weights = sP.snapshotSubset(ptType, ptWeight, haloID=load_haloID, subhaloID=load_subID)
 
-            if sfreq0:
-                # restrict to non eEOS cells
-                sfr = sP.snapshotSubset(ptType, 'sfr', haloID=load_haloID, subhaloID=load_subID)
-                w_sfr = np.where(sfr == 0.0)
-                vals = vals[w_sfr]
-                weights = weights[w_sfr]
+            # arbitrary property restriction(s)?
+            if qRestrictions is not None:
+                mask = np.zeros( vals.size, dtype='int16' )
+                for rFieldName, rFieldMin, rFieldMax in qRestrictions:
+                    # load and update mask
+                    r_vals = sP.snapshotSubset(ptType, rFieldName, haloID=load_haloID, subhaloID=load_subID)
 
-            if coldDenseCGM:
-                print(' Restricting to cold-dense phase of the CGM!')
-                temp = sP.snapshotSubset(ptType, 'temp', haloID=load_haloID, subhaloID=load_subID)
-                hdens = sP.snapshotSubset(ptType, 'hdens', haloID=load_haloID, subhaloID=load_subID)
-                if sfreq0:
-                    temp = temp[w_sfr]
-                    hdens = hdens[w_sfr]
-                w0 = np.where( (temp < 5.0) & (hdens > 1e-3) )
-                vals = vals[w0]
-                weights = weights[w0]
+                    wRestrict = np.where( (r_vals < rFieldMin) | (r_vals > rFieldMax) )
+                    mask[wRestrict] = 1
+                    print('[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%' % \
+                        (objID,rFieldName,len(wRestrict[0]),mask.size,len(wRestrict[0])/mask.size*100))
 
-            if radWithin10pkpc:
-                print(' Restricting to rad > 10 pkpc!')
-                rad = sP.snapshotSubset(ptType, 'rad_kpc', haloID=load_haloID, subhaloID=load_subID)
-                if sfreq0: rad = rad[w_sfr]
-                if coldDenseCGM: rad = rad[w0]
+                # apply mask
+                wRestrict = np.where(mask == 0)
+                vals = vals[wRestrict]
+                weights = weights[wRestrict]
 
-                wr = np.where( rad > 10.0 )
-                vals = vals[wr]
-                weights = weights[wr]
-
-            print(sP.simName,', min: ', np.nanmin(vals), ' max: ', np.nanmax(vals), ' median: ', np.nanmedian(vals))
-            print(sP.simName, ', 5,10,90,95 percentiles: ',np.nanpercentile(vals, [5,10,90,95]))
+            #print(sP.simName,', min: ', np.nanmin(vals), ' max: ', np.nanmax(vals), ' median: ', np.nanmedian(vals))
+            #print(sP.simName, ', 5,10,90,95 percentiles: ',np.nanpercentile(vals, [5,10,90,95]))
 
             # histogram (all equivalent methods)
             bins = np.linspace( xlim[0], xlim[1], nBins+1 )
@@ -151,16 +136,33 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             yy, xx4 = np.histogram(vals, bins=bins, weights=weights, density=True)
 
             if ylog: yy = logZeroNaN(yy)
-            #if xx.size > sKn:
-            #    yy = savgol_filter(yy,sKn,sKo)
 
-            label = '%s [%d]' % (sP.simName,objID) if not clean else sP.simName
+            yy_save[:,j] = yy
+
+            # plot
+            if xx.size > sKn:
+                yy = savgol_filter(yy,sKn,sKo)
+
+            label = '%s [%d]' % (sP.simName,objID) if len(sPs) > 1 else str(objID)
             ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
-            l, = ax.plot(xx, yy, linestyle=ls, lw=lw, label=label)
+            if medianPDF != 'only':
+                l, = ax.plot(xx, yy, linestyle=ls, lw=lw-1, label=label)
+
+        # add mean?
+        if len(sP_objIDs) > 1 and medianPDF:
+            yy1 = np.nanmean(yy_save, axis=1)
+            yy2 = np.nanmedian(yy_save, axis=1)
+
+            if xx.size > sKn:
+                yy1 = savgol_filter(yy1,sKn,sKo)
+                yy2 = savgol_filter(yy2,sKn,sKo)
+
+            ax.plot(xx, yy1, linestyle='-', color='black', lw=lw+0.5, alpha=0.7, label='mean')
+            ax.plot(xx, yy2, linestyle='-', color='black', lw=lw+0.5, alpha=1.0, label='median')
 
     # finish plot
     fig.tight_layout()
-    ax.legend(loc='upper left')
+    ax.legend(loc='best', ncol=3)
 
     sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
     hStr = 'global'
@@ -173,9 +175,9 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
         fig.savefig('histo1D_%s_%s_%s_wt-%s_%s.pdf' % (sPstr,ptType,ptProperty,ptWeight,hStr))
     plt.close(fig)
 
-def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, pdf=None,
-                     xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, nBins=None, 
-                     sfreq0=False, powellCorrection=False):
+def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, 
+                     xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, 
+                     nBins=None, qRestrictions=None, pdf=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
@@ -185,7 +187,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
     If hideBelow, then pixel values below clim[0] are left pure white. 
     If smoothSigma is not zero, gaussian smooth contours at this level. 
-    If sfreq0 is True, include only non-starforming cells. """
+    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by. """
 
     # config
     nBins2D = None
@@ -224,23 +226,33 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
-    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
+    xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
 
     if xlog: xvals = np.log10(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
+    yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
 
     if ylog: yvals = np.log10(yvals)
 
-    if sfreq0:
-        # restrict to non eEOS cells
-        sfr = sP.snapshotSubsetP(partType, 'sfr', haloID=haloID)
-        w_sfr = np.where(sfr == 0.0)
-        xvals = xvals[w_sfr]
-        yvals = yvals[w_sfr]
+    # arbitrary property restriction(s)?
+    if qRestrictions is not None:
+        mask = np.zeros( xvals.size, dtype='int16' )
+        for rFieldName, rFieldMin, rFieldMax in qRestrictions:
+            # load and update mask
+            r_vals = sP.snapshotSubset(partType, rFieldName, haloID=haloID)
+
+            wRestrict = np.where( (r_vals < rFieldMin) | (r_vals > rFieldMax) )
+            mask[wRestrict] = 1
+            print('[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%' % \
+                (haloID,rFieldName,len(wRestrict[0]),mask.size,len(wRestrict[0])/mask.size*100))
+
+        # apply mask
+        wRestrict = np.where(mask == 0)
+        xvals = xvals[wRestrict]
+        yvals = yvals[wRestrict]
 
     # start figure
     fig = plt.figure(figsize=[figsize[0]*sizefac*len(weights), figsize[1]*sizefac])
@@ -248,10 +260,10 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        weight = sP.snapshotSubsetP(partType, wtProp, haloID=haloID)
+        weight = sP.snapshotSubset(partType, wtProp, haloID=haloID)
 
-        if sfreq0:
-            weight = weight[w_sfr]
+        if qRestrictions is not None:
+            weight = weight[wRestrict]
 
         # add panel
         ax = fig.add_subplot(1,len(weights),i+1)
@@ -259,7 +271,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         if len(weights) == 1: # title
             hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
             wtStr = partType.capitalize() + ' ' + wtProp.capitalize()
-            #ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
+            ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -812,7 +824,7 @@ def compareVariants_NO_OH_stellar():
 
     for variant in variants:
         sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
-        if sP.simName == 'DM only': continue
+        if sP.simName in ['L25n512_0020','L25n512_0030']: continue
         print(variant,sP.simName)
         plotPhaseSpace2D(sP, partType=partType, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, haloID=None, pdf=pdf)
 

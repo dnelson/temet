@@ -7,13 +7,14 @@ import numpy as np
 import h5py
 
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from plot.config import *
-from plot.general import plotStackedRadialProfiles1D, plotHistogram1D
+from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3
 
 def stackedRadialProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
@@ -207,12 +208,26 @@ def paperPlots():
     TNG50_2 = simParams(res=1080,run='tng',redshift=0.0)
     TNG50_3 = simParams(res=540,run='tng',redshift=0.0)
 
+    haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 13.8]]
+
+    def _get_halo_ids(sP_loc):
+        """ Load and return the set of halo IDs in each haloMassBin. """
+        mhalo = sP_loc.groupCat(fieldsSubhalos=['mhalo_200_log'])
+        grnr  = sP_loc.groupCat(fieldsSubhalos=['SubhaloGrNr'])
+        haloIDs = []
+
+        for haloMassBin in haloMassBins:
+            with np.errstate(invalid='ignore'):
+                inds = np.where( (mhalo > haloMassBin[0]) & (mhalo < haloMassBin[1]) )[0]
+            haloIDs.append(grnr[inds])
+
+        return haloIDs
+
     # figure 1 - cgm resolution
     if 0:
         redshift = 0.3
         sPs = [TNG50, TNG50_2, TNG50_3]
         cenSatSelect = 'cen'
-        haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 13.8]]
 
         simNames = '_'.join([sP.simName for sP in sPs])
         
@@ -222,24 +237,72 @@ def paperPlots():
             stackedRadialProfiles(sPs, saveName, redshift=redshift, radRelToVirRad=radRelToVirRad, 
                                   cenSatSelect='cen', haloMassBins=haloMassBins)
 
-    # figure 2 - cgm gas density PDF
-    if 1:
-        redshift = 0.3
-        sP = TNG50_2
-        cenSatSelect = 'cen'
-        radRangeRvir = [0.15,0.5]
-        haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 13.6]]
+    # figure 2 - cgm gas density/temp/pressure 1D PDFs
+    if 0:
+        sP = simParams(res=2160,run='tng',redshift=0.5)
+        qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
+        nBins = 150
+        medianPDF = True
 
-        # get subhaloIDs
-        mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
-        subhaloIDs = []
+        if 1:
+            ptProperty = 'nh'
+            xlim = [-6.0, 0.0]
+        if 0:
+            ptProperty = 'temp'
+            qRestrictions.append( ['sfr',0.0,0.0] ) # non-eEOS
+            xlim = [3.5,7.5]
+        if 0:
+            ptProperty = 'gas_pres'
+            qRestrictions.append( ['sfr',0.0,0.0] ) # non-eEOS
+            xlim = [0.0, 5.0]
 
-        for haloMassBin in haloMassBins:
-            ids = np.where( (mhalo > haloMassBin[0]) & (mhalo < haloMassBin[1]) )[0]
-            subhaloIDs.append(ids)
-
-        subhaloIDs = [subhaloIDs[1]]
+        # testing: one mass bin
+        haloIDs = _get_halo_ids(sP)[1]
 
         # create density PDF of gas in radRangeRvir
-        plotHistogram1D([sP], ptType='gas', ptProperty='nh', subhaloIDs=subhaloIDs)
+        plotHistogram1D([sP], ptType='gas', ptProperty=ptProperty, xlim=xlim, nBins=nBins, medianPDF=medianPDF, 
+                        qRestrictions=qRestrictions, haloIDs=[haloIDs])
 
+    # fig 3 - cgm gas (n,T) 2D phase diagrams
+    if 1:
+        sP = simParams(res=2160,run='tng',redshift=0.5)
+        qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
+
+        xQuant = 'nh'
+        yQuant = 'temp'
+        xlim = [-5.5, -1.0]
+        ylim = [3.8, 7.8]
+
+        if 0:
+            weights = ['mass']
+            meancolors = None
+            clim = [-4.0,0.0]
+            contours = None
+        if 1:
+            # color by pressure
+            weights = None
+            meancolors = ['gas_pres']
+            clim = [1.0,4.0]
+            contours = [2.5,3.0,3.5]
+
+        saveStr = weights[0] if weights is not None else meancolors[0]
+
+        # testing: one mass bin, just one halo
+        massBinInd = 1
+        haloIDs = _get_halo_ids(sP)[massBinInd]
+
+        pdf = PdfPages('%s_z-%.1f_%s_massbin%d.pdf' % (sP.simName,sP.redshift,saveStr,massBinInd))
+
+        for haloID in haloIDs:
+            plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
+                         haloID=haloID, pdf=pdf, xlim=xlim, ylim=ylim, clim=clim, nBins=None, 
+                         contours=contours, qRestrictions=qRestrictions)
+        pdf.close()
+
+    # fig 4 - vis (single halo large) gas density, metallicity, MgII
+    # TODO: check MgII for eEOS
+
+    # fig 5 - N_MgII vs. b (derive from map) 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
+    # add data points
+
+    # fig 6 - N_HI vs. b (same as above)

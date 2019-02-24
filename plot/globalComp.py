@@ -1726,7 +1726,9 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     # config
     if molecular:
         # H2
-        speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
+        #speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
+        #speciesList = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10','nH2_popping_GK_depth10_cell1']
+        speciesList = ['nH2_popping_GK_depth5','nH2_popping_GK_depth10','nH2_popping_GK_depth20']
         sStr = 'H_2'
         ylim0 = [-30,-17]
         ylim1 = [-5, 0]
@@ -2402,8 +2404,8 @@ def plots():
 
     # add runs: fullboxes
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
-    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
-    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
+    #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
