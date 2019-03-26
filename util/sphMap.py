@@ -87,6 +87,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     """ Core routine for sphMap(), see below. """
     # init
     NumPart = pos.shape[0]
+    # axis along which to project
     axis3   = 3 - axes[0] - axes[1]
 
     BoxHalf = np.zeros( 3, dtype=np.float32 )
@@ -117,15 +118,17 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         v  = mass[k] if mass.size != 2 else mass[0]
         w  = quant[k] if quant.size > 1 else 0.0
 
-        # clip points ouside box (z) dimension
+        # clip points outside box (z) dimension
         if pos.shape[1] == 3:
+            # MG: why hard clipping here (no +h) and soft clipping (+h) below
+            # when clipping in x and y?
             if np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5 * boxSizeImg[2]:
                 continue
 
         # clamp smoothing length
         if h < hsmlMin:
             h = hsmlMin
-        if h > hsmlMax:
+        elif h > hsmlMax:
             h = hsmlMax
 
         # clip points outside box (x,y) dimensions
@@ -133,7 +136,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
            np.abs( _NEAREST(p1-boxCen[1],BoxHalf[1],boxSizeSim[1]) ) > 0.5*boxSizeImg[1]+h:
            continue
 
-        # position relative to box (x,y) center
+        # position relative to box (x,y) corner
         pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
         pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
 
@@ -211,6 +214,144 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     if normColDens:
         dens_out /= pixelArea
 
+    # void return
+
+@jit(nopython=True, nogil=True, cache=True)
+def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
+                 boxSizeImg, boxSizeSim, boxCen, ndims, nPixels,
+                 maxIntProj, minIntProj):
+    """
+    Core routine for sphMap() that does 3D gridding.
+    """
+
+    # init
+    NumPart = pos.shape[0]
+
+    BoxHalf = np.zeros( 3, dtype=np.float32 )
+    for i in range(3):
+        BoxHalf[i] = boxSizeSim[i] / 2.0
+
+    COEFF_1, COEFF_2, COEFF_3 = _kernelCoefficients(ndims)
+
+    # setup pixel sizes
+    pixelSizeX = boxSizeImg[0] / nPixels[0]
+    pixelSizeY = boxSizeImg[1] / nPixels[1]
+    pixelSizeZ = boxSizeImg[2] / nPixels[2]
+
+    minSize = min(pixelSizeX, pixelSizeY, pixelSizeZ)
+    hsmlMin = 1.001 * minSize * 0.5
+    hsmlMax = minSize * 500.0
+
+    # loop over all particles (Note: np.arange() seems to have a huge penalty
+    # here instead of range())
+    for k in range(NumPart):
+        p0 = pos[k, 0]
+        p1 = pos[k, 1]
+        p2 = pos[k, 2]
+        h  = hsml[k]
+        v  = mass[k] if mass.size != 2 else mass[0]
+        w  = quant[k] if quant.size > 1 else 0.0
+
+        # clamp smoothing length
+        if h < hsmlMin:
+            h = hsmlMin
+        elif h > hsmlMax:
+            h = hsmlMax
+
+        # clip points outside box (x, y, z) dimensions
+        if np.abs( _NEAREST(p0-boxCen[0],BoxHalf[0],boxSizeSim[0]) ) > 0.5*boxSizeImg[0]+h or \
+           np.abs( _NEAREST(p1-boxCen[1],BoxHalf[1],boxSizeSim[1]) ) > 0.5*boxSizeImg[1]+h or \
+           np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5*boxSizeImg[2]+h:
+           continue
+
+        # position relative to box (x, y, z) corner
+        pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
+        pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
+        pos2 = p2 - (boxCen[2] - 0.5*boxSizeImg[2])
+
+        h2 = h*h
+        hinv = 1.0 / h
+
+        # number of pixels covered by particle
+        nx = np.floor(h / pixelSizeX + 1)
+        ny = np.floor(h / pixelSizeY + 1)
+        nz = np.floor(h / pixelSizeZ + 1)
+
+        # coordinates of pixel center of pixel containing the particle
+        x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
+        y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
+        z = (np.floor( pos2 / pixelSizeZ ) + 0.5) * pixelSizeZ
+
+        # calculate sum (normalization), skip for MIP
+        kSum = 0.0
+        v_over_sum = 0.0
+
+        if not minIntProj and not maxIntProj:
+            for dx in range(-nx,nx+1):
+                for dy in range(-ny,ny+1):
+                    for dz in range(-nz,nz+1):
+                        # distance of covered pixel from actual position
+                        xx = x + dx * pixelSizeX - pos0
+                        yy = y + dy * pixelSizeY - pos1
+                        zz = z + dz * pixelSizeZ - pos2
+                        r2 = xx * xx + yy * yy + zz * zz
+
+                        if r2 < h2:
+                            kSum += _getkernel(hinv, r2, COEFF_1, COEFF_2, COEFF_3)
+
+            if kSum < 1e-10:
+                continue
+
+            v_over_sum = v / kSum # normalization such that all kernel values
+                                  # sum to the weight v
+
+        # calculate contribution
+        for dx in range(-nx,nx+1):
+            for dy in range(-ny,ny+1):
+                for dz in range(-nz,nz+1):
+                    # coordinates of pixel center of covering pixels
+                    xxx = _NEAREST_POS(x + dx * pixelSizeX, boxSizeSim[0])
+                    yyy = _NEAREST_POS(y + dy * pixelSizeY, boxSizeSim[1])
+                    zzz = _NEAREST_POS(z + dz * pixelSizeZ, boxSizeSim[2])
+
+                    # pixel array indices
+                    i = np.int(xxx / pixelSizeX)
+                    j = np.int(yyy / pixelSizeY)
+                    k = np.int(zzz / pixelSizeZ)
+
+                    # skip if desired pixel is out of bounds
+                    if i < 0 or i >= nPixels[0] or \
+                       j < 0 or j >= nPixels[1] or \
+                       k < 0 or k >= nPixels[2]:
+                        continue
+
+                    # calculate kernel contribution at pixel center
+                    xx = x + dx * pixelSizeX - pos0
+                    yy = y + dy * pixelSizeY - pos1
+                    zz = z + dz * pixelSizeZ - pos2
+                    r2 = xx * xx + yy * yy + zz * zz
+
+                    if r2 < h2:
+                        # divide by sum for normalization
+                        kVal = _getkernel(hinv, r2, COEFF_1, COEFF_2, COEFF_3)
+
+                        if minIntProj:
+                            # minimum intensity projection (kernel and mass
+                            # weighted to determine max)
+                            if kVal * v * w < quant_out[i, j, k]:
+                                dens_out [i, j, k] = kVal * v
+                                quant_out[i, j, k] = kVal * v * w
+                        elif maxIntProj:
+                            # maximum intensity projection (kernel and mass
+                            # weighted to determine max)
+                            if kVal * v * w > quant_out[i, j, k]:
+                                dens_out [i, j, k] = kVal * v
+                                quant_out[i, j, k] = kVal * v * w
+                        else:
+                            # normal weighted projection including
+                            # contributions from all overlapping kernels
+                            dens_out [i, j, k] += kVal * v_over_sum
+                            quant_out[i, j, k] += kVal * v_over_sum * w
     # void return
 
 @jit(nopython=True, nogil=True, cache=True)
@@ -741,17 +882,19 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 
     # void return
 
-def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, hsml_1=None, 
+def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, hsml_1=None,
            colDens=False, nThreads=16, multi=False, posTarget=None, maxIntProj=False, minIntProj=False, refGrid=None):
-    """ Simultaneously calculate a gridded map of projected density and some other mass weighted 
-        quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is 
-        returned, optionally converted to a column density map if colDens=True. If quant is specified, 
-        the mass-weighted map of the quantity is additionally returned.
-        
-          Note: transpose of _calcSphMap() is taken such that with default plotting approaches e.g. 
-                axes=[0,1] gives imshow(return[i,j]) with x and y axes corresponding correctly to 
-                code coordinates. 
-          Note: both boxSizeImg, boxCenter, and boxSizeSim [0,1,2] correspond to [axes[0],axes[1],axes2], meaning
+    """ Simultaneously calculate a gridded map of projected density and some other mass weighted
+        quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is
+        returned, optionally converted to a column density map if colDens=True. If quant is specified,
+        the mass-weighted map of the quantity is additionally returned. If len(nPixels) is three, compute grid
+        and not image.
+
+          Note: transpose of _calcSphMap() is taken such that with default plotting approaches e.g.
+                axes=[0,1] gives imshow(return[i,j]) with x and y axes corresponding correctly to
+                code coordinates. This does not apply if len(nPixels) == 3 and grid is computed.
+                No transpose is taken in that case.
+          Note: both boxSizeImg, boxCenter, and boxSizeSim [0,1,2] correspond to [axes[0],axes[1],axes[2]], meaning
                 pos[:,axes[0]] is compared against the first entries boxSizeImg[0] and boxCenter[0]
                 and not compared against e.g. boxSizeImg[axes[0]].
 
@@ -763,18 +906,19 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       boxSizeImg[3]  : the physical size the image should cover, same units as pos
       boxSizeSim[3]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
       boxCen[3]      : (x,y,z) coordinates of the center of the imaging box, same units as pos
-      nPixels[2]     : number of pixels in x,y directions for output image
+      nPixels[2]/[3] : number of pixels in x,y directions for output image or number of cells in x,y,z
+                       directions for output grid
       ndims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
       hsml_1[N]      : if not None, do asymmetric sph kernel projection with hsml==hsml_0 (x), and hsml_1 (y)
       colDens        : if True, normalize each grid value by its area (default=False)
       nThreads       : do multithreaded calculation (mem required=nThreads times more)
-      multi          : if True, return the tuple (dens,quant) instead of selecting one, under the 
+      multi          : if True, return the tuple (dens,quant) instead of selecting one, under the
                        assumption that we are using sphMap() in a chunked mode and have to normalize later
-      posTarget[N,3] : array of 3-coordinates for a set of targets (e.g. star particle locations). If 
-                       not None, then both pos and posTarget will be sorted on the 3rd (projection 
-                       direction) coordinate, and mapping will be front to back, such that the grid 
-                       value at the position (2D+depth) of each posTarget is estimated. In this case, 
-                       the return is of shape [N(posTarget)] giving the projected density or mass 
+      posTarget[N,3] : array of 3-coordinates for a set of targets (e.g. star particle locations). If
+                       not None, then both pos and posTarget will be sorted on the 3rd (projection
+                       direction) coordinate, and mapping will be front to back, such that the grid
+                       value at the position (2D+depth) of each posTarget is estimated. In this case,
+                       the return is of shape [N(posTarget)] giving the projected density or mass
                        weighted quantity along the line of sight to each posTarget.
       maxIntProj     : perform a maximum intensity projection (MIP) instead of the usual weighting
       minIntProj     : perform a -minimum- intensity projection, instead of the usual weighting
@@ -782,7 +926,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     # input sanity checks
     if len(boxSizeImg) != pos.shape[1] or len(boxCen) != pos.shape[1]:
         raise Exception('Strange size of box input(s).')
-    if len(nPixels) != 2 or len(axes) != 2:
+    if len(nPixels) not in [2, 3] or len(axes) != 2:
         raise Exception('Strange size of imaging input(s).')
 
     if not isinstance(boxSizeSim,(float)):
@@ -879,9 +1023,15 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         if posTarget is None:
             if hsml_1 is None:
                 if refGrid is None:
-                    # normal operation
-                    _calcSphMap(pos,hsml,mass,quant,rDens,rQuant,
-                                boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,colDens,maxIntProj,minIntProj)
+                    if len(nPixels) == 2:
+                        # normal operation
+                        _calcSphMap(pos,hsml,mass,quant,rDens,rQuant,
+                                    boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,colDens,maxIntProj,minIntProj)
+                    elif len(nPixels) == 3:
+                        # gridding
+                        _calcSphGrid(pos, hsml, mass ,quant, rDens, rQuant,
+                                     boxSizeImg, boxSizeSim, boxCen, ndims,
+                                     nPixels, maxIntProj, minIntProj)
                 else:
                     # symmetric, but relative to reference grid
                     _calcSphMapPixelRel(pos,hsml,mass,quant,rDens,rQuant,refGrid,
@@ -899,14 +1049,23 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             rQuant = rQuantT
 
         if multi:
-            return (rDens.T, rQuant.T)
+            if len(nPixels) == 2:
+                return (rDens.T, rQuant.T)
+            elif len(nPixels) == 3:
+                return (rDens, rQuant)
 
         if quant.size > 1:
             w = np.where(rDens > 0.0)
             rQuant[w] /= rDens[w]
 
-            return rQuant.T
-        return rDens.T
+            if len(nPixels) == 2:
+                return rQuant.T
+            elif len(nPixels) == 3:
+                return rQuant
+        if len(nPixels) == 2:
+            return rDens.T
+        elif len(nPixels) == 3:
+            return rDens
 
     # else, multithreaded
     # -------------------
@@ -961,10 +1120,16 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             if posTarget is None:
                 if hsml_1 is None:
                     if refGrid is None:
-                        # normal operation
-                        _calcSphMap(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,
-                                    self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
-                                    self.colDens,self.maxIntProj,self.minIntProj)
+                        if len(self.nPixels) == 2:
+                            # normal operation
+                            _calcSphMap(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,
+                                        self.boxSizeImg,self.boxSizeSim,self.boxCen,self.axes,self.ndims,self.nPixels,
+                                        self.colDens,self.maxIntProj,self.minIntProj)
+                        elif len(self.nPixels) == 3:
+                            # gridding
+                            _calcSphGrid(self.pos, self.hsml, self.mass, self.quant, self.rDens, self.rQuant,
+                                        self.boxSizeImg, self.boxSizeSim, self.boxCen, self.ndims, self.nPixels,
+                                        self.maxIntProj,self.minIntProj)
                     else:
                         # symmetric, but relative to reference grid
                         _calcSphMapPixelRel(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,self.refGrid,
@@ -1018,15 +1183,24 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
     # finalize and return
     if multi:
-        return (rDens.T, rQuant.T)
+        if len(nPixels) == 2:
+            return (rDens.T, rQuant.T)
+        elif len(nPixels) == 3:
+            return (rDens, rQuant)
 
     if quant.size > 1:
         w = np.where(rDens > 0.0)
         rQuant[w] /= rDens[w]
 
-        return rQuant.T
+        if len(nPixels) == 2:
+            return rQuant.T
+        elif len(nPixels) == 3:
+            return rQuant
 
-    return rDens.T
+    if len(nPixels) == 2:
+        return rDens.T
+    elif len(nPixels) == 3:
+        return rDens
 
 def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, 
                    colDens=False, nThreads=8, multi=False, posTarget=None, sliceFac=1.0):
