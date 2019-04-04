@@ -971,7 +971,10 @@ class units(object):
 
     def codeM200R200ToV200InKmS(self, m200, r200):
         """ Given a (M200,R200) pair of a FoF group, compute V200 in physical [km/s]. """
-        v200 = np.sqrt( self.G * m200 / r200 )
+        assert self._sP.redshift is not None
+
+        with np.errstate(invalid='ignore'):
+            v200 = np.sqrt( self.G * m200 / r200 * self._sP.scalefac ) # little h factors cancel
         v200 *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
         return v200
 
