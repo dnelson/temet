@@ -1083,17 +1083,21 @@ class units(object):
         flux = lum / dist_fac * photon_fac
         return flux
 
-    def fluxToSurfaceBrightness(self, flux, pxDimsCode, arcsec2=True, arcmin2=False, ster=False):
+    def fluxToSurfaceBrightness(self, flux, pxDimsCode, arcsec2=True, arcmin2=False, ster=False, kpc=False):
         """ Convert a flux in e.g. [energy/s/cm^2] or [photon/s/cm^2] into a surface brightness 
         at a given redshift and for a certain pixel scale. pxDimsCode is a 2-tuple of the x and y 
-        dimensions of the pixel in code units, i.e. [ckpc/h]^2. Output e.g.: [photon/s/cm^2/arcsec^2]. """
+        dimensions of the pixel in code units, i.e. [ckpc/h]^2. Output e.g.: [photon/s/cm^2/arcsec^2]
+        if arcsec2 == True, otherwise possibly [flux/arcmin^2], [flux/ster], or [flux/kpc^2]. """
         assert self._sP.redshift is not None
+        assert np.sum([arcsec2,arcmin2,ster,kpc]) in [1] # choose one
+
         # surface brightness SB = F/Omega_px where the solid angle Omega_px = 2*pi*(1-cos(theta/2))
         #   where theta is the pixel size in radians, note this reduces to Omega_px = 2*pi^2 for 
         #   small theta, i.e. just the area of a circle, and we instead do the area of the square pixel
-        theta1 = self.codeLengthToAngularSize(pxDimsCode[0], arcsec=True)
-        theta2 = self.codeLengthToAngularSize(pxDimsCode[1], arcsec=True)
-        solid_angle = theta1 * theta2 # arcsec^2
+        if not kpc:
+            theta1 = self.codeLengthToAngularSize(pxDimsCode[0], arcsec=True)
+            theta2 = self.codeLengthToAngularSize(pxDimsCode[1], arcsec=True)
+            solid_angle = theta1 * theta2 # arcsec^2
 
         if ster:
             # convert [arcsec^2] -> [steradian]
@@ -1103,6 +1107,12 @@ class units(object):
         if arcmin2:
             # convert [arcsec^2] -> [arcmin^2]
             solid_angle /= 3600.0
+
+        if kpc:
+            # overwrite [arcsec^2] with [pkpc^2]
+            theta1 = self.codeLengthToKpc(pxDimsCode[0])
+            theta2 = self.codeLengthToKpc(pxDimsCode[1])
+            solid_angle = theta1 * theta2
 
         return flux / solid_angle
 
