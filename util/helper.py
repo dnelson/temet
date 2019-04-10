@@ -850,11 +850,15 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                  'blue'  : ((0.0, 0.05, 0.05), (0.124,0.26,0.26), (0.266,0.5,0.5), (0.570, 0.33, 0.33), (0.891, 1.0, 1.0), (1.0, 1.0, 1.0))}
         cmap = LinearSegmentedColormap(ctName, cdict, N=1024)
 
-    if ctName == 'HI_segmented':
+    if ctName in ['HI_segmented','H2_segmented']:
         # discontinuous colormap for column densities, split at 10^20 and 10^19 cm^(-3)
         assert valMinMax is not None # need for placing discontinuities at correct physical locations
         valCut1 = 19.0
         valCut2 = 20.0
+
+        if ctName == 'H2_segmented':
+            valCut1 = 18.0
+            valCut2 = 21.0
 
         fCut1 = (valCut1-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
         fCut2 = (valCut2-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
@@ -1130,6 +1134,32 @@ def plotxy(x, y, filename='plot.pdf'):
             ax.plot(xx_log, yy_log, 'o-', lw=2.5)
 
         #if i in [2,3]: ax.set_yscale('log')        
+
+    fig.tight_layout()
+    fig.savefig(filename)
+    plt.close(fig)
+
+def plot2d(grid, label='', filename='plot.pdf'):
+    """ Plot a quick image plot of a 2d array/grid and save it to a PDF. """
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    figsize = np.array([14,10]) * 0.8
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    cmap = 'viridis'
+
+    # plot
+    plt.imshow(grid, cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
+
+    ax.autoscale(False)
+    #plt.clim([minval,maxval])
+
+    # colorbar
+    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+
+    cb = plt.colorbar(cax=cax)
+    cb.ax.set_ylabel(label)   
 
     fig.tight_layout()
     fig.savefig(filename)

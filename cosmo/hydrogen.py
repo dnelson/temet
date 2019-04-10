@@ -230,7 +230,7 @@ def calculateCDDF(N_GridVals, binMin, binMax, binSize, sP, depthFrac=1.0):
     binCen  = np.array([0.5*(hBinPts[i]+hBinPts[i+1]) for i in np.arange(0,hBinPts.size-1)])
     delta_N = np.array([hBinPts[i+1]-hBinPts[i] for i in np.arange(hBinPts.size-1)])
 
-    w = np.where( ~np.isfinite(N_GridVals) ) # zeros have been log10()'ed into -inf
+    w = np.where( ~np.isfinite(N_GridVals) ) # skip any nan (e.g. logged zeros)
     N_GridVals[w] = binMin - 1.0
 
     # f(N) defined as f(N)=F(N) / Delta_N * Delta_X(z)

@@ -1727,12 +1727,13 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     if molecular:
         # H2
         #speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
+        speciesList = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
         #speciesList = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10','nH2_popping_GK_depth10_cell1']
-        speciesList = ['nH2_popping_GK_depth5','nH2_popping_GK_depth10','nH2_popping_GK_depth20']
+        #speciesList = ['nH2_popping_GK_depth5','nH2_popping_GK_depth10','nH2_popping_GK_depth20','nH2_popping_GK','nH2_popping_GK_depth1']
         sStr = 'H_2'
-        ylim0 = [-30,-17]
+        ylim0 = [-31,-17]
         ylim1 = [-5, 0]
-        xlim = [18, 24]
+        xlim = [17.8, 24.2]
     else:
         # HI, show with and without H2 corrections
         speciesList = ['nHI_noH2','nHI'] #,'nHI2','nHI3']
@@ -1791,8 +1792,9 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
         # colDens definitions, plot vertical dotted lines [cm^-2] at dividing points
         limitDLA = 20.3
         ax.plot( [limitDLA,limitDLA], ax.get_ylim(), '--', color='#dddddd', alpha=0.5 )
+
     if sStr == 'H_2':
-        # Zwaan, Prochaska+ 2006, NOTE: definition mismatch of x-axis, they use [H atoms/cm^2] not [H2 molecules/cm^2] !
+        # Zwaan, Prochaska+ 2006
         xx = np.linspace(21.0, 24.0, 100)
         f_star = 1.1e-25
         sigma = 0.65
@@ -1801,8 +1803,16 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
         yy = np.log10(yy)
 
         l1, = ax.plot(xx, yy, '-', color='#555555', lw=lw)
-        labels = ['Zwaan & Prochaska (2006) z=0']
-        legend1 = ax.legend([l1], labels, loc='lower left')
+
+        # Peroux+ (in prep)
+        xx = [17, 18, 19, 20, 21, 22, 23, 24, 25, 26] # log N_H2 [1/cm^2]
+        yy = [-16.87, -20.11, -21.73, -23, -24, -25, -26, -27, -28, -29] # f(N), all upper limits
+
+        l2, = ax.plot(xx, yy, 'v', color='#222222')
+
+        # legend
+        labels = ['Zwaan & Prochaska (2006) z=0', 'Peroux+ (in prep)']
+        legend1 = ax.legend([l1,l2], labels, loc='lower left')
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -1835,6 +1845,23 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
             label = '%s z=%.1f' % (sP.simName,sP.redshift) if i == 0 else ''
             ax.plot(xx, yy, '-', lw=3.0, linestyle=linestyles[i], color=c, label=label)
 
+        # custom test
+        from cosmo.hydrogen import calculateCDDF
+        files = [] #['save_440839_sphmap1920','save_440839_histo1920','save_440839_histo200']
+
+        for file in files:
+            with h5py.File(file+'.hdf5','r') as f:
+                grid = f['grid'][()] # log cm^-2
+
+            # derive CDDF from this grid
+            depthFrac = 0.1 #TODO sP.units.physicalKpcToCodeLength(30.0) / sP.boxSize
+            fN, n = calculateCDDF(grid, 14.0, 25.0, 0.1, sP, depthFrac=depthFrac)
+            xx = np.log10(n)
+            yy = logZeroNaN(fN)
+
+            ax.plot(xx, yy, '-', lw=3.0, label=file.split('save_')[1])
+        # end custom test
+
     # variations legend
     #legend3 = ax.legend(sExtra, lExtra, loc='lower right')
     #ax.add_artist(legend3)
@@ -1844,7 +1871,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     #lExtra = ['[ sims z=%3.1f ]' % simRedshift]
 
     sExtra = [plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
-    lExtra = [str(s.replace('_depth10','').replace('nH2_','')) for s in speciesList]
+    lExtra = [str(s.replace('nH2_','')) for s in speciesList]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
@@ -2404,6 +2431,7 @@ def plots():
 
     # add runs: fullboxes
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
     #sPs.append( simParams(res=910, run='tng') )
@@ -2437,8 +2465,8 @@ def plots():
     if 1:
         # testing
         pdf = PdfPages('cddfh2_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        nHIcddf(sPs, pdf, simRedshift=None, molecular=True)
-        nHIcddf(sPs, pdf, simRedshift=None, molecular=True, moment=1)
+        nHIcddf(sPs, pdf, simRedshift=0.0, molecular=True)
+        nHIcddf(sPs, pdf, simRedshift=0.0, molecular=True, moment=1)
         pdf.close()
         return
 
