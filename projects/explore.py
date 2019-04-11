@@ -15,6 +15,7 @@ from util import simParams
 from util.helper import loadColorTable, logZeroNaN, running_median
 from plot.config import *
 from vis.halo import renderSingleHalo
+from vis.box import renderBox
 
 def singleHaloImage_CelineMuseProposal(conf=6):
     """ Metallicity distribution in CGM image for 2019 MUSE proposal. """
@@ -284,4 +285,89 @@ def amyDIGzProfiles():
     ax.legend(loc='upper right')
     fig.tight_layout()
     fig.savefig('sb_vs_z_Mstar=%.1f.pdf' % (massBin[0]))
+    plt.close(fig)
+
+def martinSubboxProj3DGrid():
+    """ Compute (i) 2D histo projection, (ii) 2D sphMap projection, (iii) 3D sphMap grid then projection (todo), of subbox gas. """
+    run        = 'tng'
+    redshift   = 8.0 # subbox snap 126
+    variant    = 'subbox0'
+    res        = 1080
+
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelSim   = False
+    plotHalos  = False
+    hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
+    nPixels    = [128,128]
+
+    partType   = 'gas'
+    partField  = 'coldens_msunkpc2'
+    valMinMax  = [5.5, 7.3]
+
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    class plotConfig:
+        plotStyle  = 'open' # open, edged
+        rasterPx   = 1000
+        colorbars  = True
+        saveBase   = ''
+
+    # (A) 
+    panels = [{}]
+    method = 'sphMap'
+    plotConfig.saveFilename = './boxImage_%s_%d_%s_%s.pdf' % (sP.simName,sP.snap,partType,method)
+
+    renderBox(panels, plotConfig, locals())
+
+    # (B)
+    panels = [{}]
+    method = 'histo'
+    plotConfig.saveFilename = './boxImage_%s_%d_%s_%s.pdf' % (sP.simName,sP.snap,partType,method)
+
+    renderBox(panels, plotConfig, locals())
+
+    # (C) get data grids and compare histograms
+    panels = [{}]
+    method = 'sphMap'
+    grid_sphmap, conf = renderBox(panels, plotConfig, locals(), returnData=True)
+
+    panels = [{}]
+    method = 'histo'
+    grid_histo, conf = renderBox(panels, plotConfig, locals(), returnData=True)
+
+    sphmap_total = np.sum(10.0**grid_sphmap)
+    histo_total  = np.sum(10.0**grid_histo)
+    frac         = np.sum(10.0**grid_sphmap)/np.sum(10.0**grid_histo)
+
+    # start plot
+    vmm = [5.0, 8.0]
+    nBins = 120
+
+    figsize = np.array([14,10]) * 0.8
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel(conf['label'])
+    ax.set_xlim([5.5,7.5])
+    ax.set_yscale('log')
+    ax.set_ylabel('Number of Pixels')
+    ax.set_title('sphmap total = %g, histo total = %g, frac = %.4f ' % (sphmap_total, histo_total, frac))
+
+    # histogram and plot
+    yy, xx = np.histogram(grid_sphmap.ravel(), bins=nBins, range=vmm)
+    xx = xx[:-1] + 0.5*(vmm[1]-vmm[0])/nBins
+
+    ax.plot(xx, yy, '-', drawstyle='steps', label='sphmap')
+
+    yy, xx = np.histogram(grid_histo.ravel(), bins=nBins, range=vmm)
+    xx = xx[:-1] + 0.5*(vmm[1]-vmm[0])/nBins
+
+    ax.plot(xx, yy, '-', drawstyle='steps', label='histo')
+
+    # finish and save plot
+    ax.legend(loc='upper right')
+    fig.tight_layout()
+    fig.savefig('px_comp.pdf')
     plt.close(fig)

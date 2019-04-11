@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from os.path import isfile
 
-from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac
+from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
 from cosmo.util import multiRunMatchedSnapList
 from util.helper import iterable, pSplit
 from util.boxRemap import findCuboidRemapInds
@@ -64,7 +64,7 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxO
 
     return boxSizeImg, boxCenter, extent
 
-def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
+def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, returnData=False):
     """ Driver: render views of a full/fraction of a cosmological box, variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
 
@@ -162,7 +162,13 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False):
 
     # request render and save
     if retInfo: return panels
-   
+ 
+    # request raw data grid and return?
+    if returnData:
+        assert len(panels) == 1 # otherwise could return a list of grids
+        _, config, data_grid = gridBox(**panels[0])
+        return data_grid, config
+
     # skip if final output render file already exists?
     if skipExisting and isfile(plotConfig.saveFilename):
         print('SKIP: %s' % plotConfig.saveFilename)
