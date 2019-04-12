@@ -2284,7 +2284,7 @@ def supplementVirtualSimHDF5AddSnapField():
     from util.simParams import simParams
     import cosmo
 
-    sP = simParams(res=1820,run='illustris')
+    sP = simParams(res=2500,run='tng')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -2294,8 +2294,8 @@ def supplementVirtualSimHDF5AddSnapField():
     # start custom
     chunkPath = cosmo.load.snapPath
     nChunks  = cosmo.load.snapNumChunks(sP.simPath, snaps[-1])
-    gName    = 'PartType4'
-    field    = 'StellarHsml'
+    gName    = 'PartType0'
+    field    = 'InternalEnergyOld'
     baseName = 'Snapshots'
 
     # acquire field name, shape, dtype of dataset from final snapshot

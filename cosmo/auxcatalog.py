@@ -285,11 +285,18 @@ def _radialRestriction(sP, nSubsTot, rad):
         ww = np.where(twiceStellarRHalf > rad_pkpc)
         twiceStellarRHalf[ww] = rad_pkpc
         radSqMax = twiceStellarRHalf**2.0
-    elif rad == '10pkpc_slice':
-        # slice at 10 +/- 2 pkpc
+    elif rad == '10pkpc_shell':
+        # shell at 10 +/- 2 pkpc
         radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
         radSqMax += (sP.units.physicalKpcToCodeLength(12.0))**2
         radSqMin += (sP.units.physicalKpcToCodeLength(8.0))**2
+    elif rad == 'rvir_shell':
+        # shell at 1.0rvir +/- 0.1 rvir
+        gcLoad = sP.groupCat(fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
+        parentR200 = gcLoad['halos'][gcLoad['subhalos']]
+
+        radSqMax = (1.1 * parentR200)**2
+        radSqMin = (0.9 * parentR200)**2
     elif rad == 'r015_1rvir_halo':
         # classic 'halo' definition, 0.15rvir < r < 1.0rvir (meaningless for non-centrals)
         gcLoad = sP.groupCat(fieldsHalos=['Group_R_Crit200'], fieldsSubhalos=['SubhaloGrNr'])
@@ -1873,7 +1880,7 @@ def tracerTracksQuant(sP, pSplit, quant, op, time, norm=None):
 
     return r, attrs
 
-def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
+def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSFR=False):
     """ Compute a 2D grid of gas column densities [cm^-2] covering the entire simulation box. For 
         example to derive the neutral hydrogen CDDF. The grid has dimensions of boxGridDim x boxGridDim 
         and so a grid cell size of (sP.boxSize/boxGridDim) in each dimension. Strategy is a chunked 
@@ -1896,8 +1903,11 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
         projDepthCode = 20000.0 # 20 cMpc/h
         species = species.split("_depth20")[0] 
     if '_depth5' in species:
-        projDepthCode = 5000.0 # 10 cMpc/h
+        projDepthCode = 5000.0 # 5 cMpc/h
         species = species.split("_depth5")[0] 
+    if '_depth1' in species:
+        projDepthCode = 1000.0 # 1 cMpc/h
+        species = species.split("_depth1")[0] 
     if '_depth125' in species:
         projDepthCode = sP.units.physicalKpcToCodeLength(12500.0 * sP.units.scalefac) # 12.5 cMpc
         species = species.split("_depth125")[0]
@@ -1965,7 +1975,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
         r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
 
     if species in preCompSpecies:
-        fields = ['Coordinates', species]
+        fields = ['Coordinates', 'Masses', species]
 
         r = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
 
@@ -1974,6 +1984,12 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
 
         rM = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
         rZ = np.zeros( (boxGridDim,boxGridDim), dtype='float32' )
+
+    if onlySFR or allSFR:
+        fields += ['StarFormationRate']
+
+    # determine projection depth fraction
+    boxWidthFrac = projDepthCode / sP.boxSize
 
     # loop over chunks (we are simply accumulating, so no need to load everything at once)
     for i in np.arange(nChunks):
@@ -1986,7 +2002,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
         gas = sP.snapshotSubsetP('gas', fields, indRange=indRange)
 
         # calculate smoothing size (V = 4/3*pi*h^3)
-        if 'Masses' in gas:
+        if 'Masses' in gas and 'Density' in gas:
             vol = gas['Masses'] / gas['Density']
             hsml = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
         else:
@@ -1994,6 +2010,17 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
             hsml = sP.snapshotSubsetP('gas', 'cellsize', indRange=indRange)
 
         hsml = hsml.astype('float32')
+
+        # modifications
+        if onlySFR:
+            # only SFR>0 gas contributes
+            w = np.where(gas['StarFormationRate'] == 0)
+            gas[species][w] = 0.0
+            gas['Masses'][w] = 0.0
+
+        if allSFR:
+            # SFR>0 gas has a fraction=1 of the given species
+            assert species in preCompSpecies # otherwise handle
 
         if species in hDensSpecies:
             # calculate atomic hydrogen mass (HI) or total neutral hydrogen mass (HI+H2) [10^10 Msun/h]
@@ -2006,7 +2033,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
 
             # grid gas mHI using SPH kernel, return in units of [10^10 Msun * h / ckpc^2]
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mHI, quant=None, 
-                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=1.0)
+                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, sliceFac=boxWidthFrac)
 
             r += ri
 
@@ -2044,21 +2071,25 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
             if boxGridDim > 60000: nThreads = 4
             if boxGridDim > 100000: nThreads = 2
 
+            if allSFR:
+                w = np.where(gas['StarFormationRate'] > 0)
+                gas[species][w] = gas['Masses'][w]
+
             ri = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=gas[species], quant=None, 
-                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, nThreads=nThreads, sliceFac=1.0)
+                                axes=axes, nPixels=boxGridDim, sP=sP, colDens=True, nThreads=nThreads, sliceFac=boxWidthFrac)
 
             r += ri
 
         if species == 'Z':
             # grid total gas mass using SPH kernel, return in units of [10^10 Msun / h]
             rMi = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=gas['Masses'], quant=None, 
-                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False, sliceFac=1.0)
+                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False, sliceFac=boxWidthFrac)
 
             # grid total gas metal mass
             mMetal = gas['Masses'] * gas['GFM_Metallicity']
 
             rZi = sphMapWholeBox(pos=gas['Coordinates'], hsml=hsml, mass=mMetal, quant=None, 
-                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False, sliceFac=1.0)
+                                 axes=axes, nPixels=boxGridDim, sP=sP, colDens=False, sliceFac=boxWidthFrac)
 
             rM += rMi
             rZ += rZi
@@ -2071,9 +2102,6 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None):
         if species in zDensSpecies:
             ion = cosmo.cloudy.cloudyIon(None)
             rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
-
-        if 'MH2' in species:
-            rr /= 2.0 # [H atoms/cm^2] to [H2 molecules/cm^2]
 
         rr = np.log10(rr)
 
@@ -2105,7 +2133,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False, gridSize=None):
 
     # config
     binSize   = 0.1 # log cm^-2
-    binMinMax = [11.0, 24.0] # log cm^-2
+    binMinMax = [11.0, 28.0] # log cm^-2
 
     desc   = "Column density distribution function (CDDF) for ["+species+"]. "
     desc  += "Return has shape [2,nBins] where the first slice gives n [cm^-2], the second fN [cm^-2]."
@@ -2124,6 +2152,8 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False, gridSize=None):
         projDepthCode = 10000.0
     if '_depth5' in species:
         projDepthCode = 5000.0
+    if '_depth1' in species:
+        projDepthCode = 1000.0
     if '_depth20' in species:
         projDepthCode = 20000.0
     if '_depth125' in species: 
@@ -2708,7 +2738,13 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_10pkpc_DM' : \
      partial(subhaloRadialReduction,ptType='dm',ptProperty='Masses',op='sum',rad=10.0),
    'Subhalo_EscapeVel_10pkpc_Gas' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='vesc',op='mean',rad='10pkpc_slice'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='vesc',op='mean',rad='10pkpc_shell'),
+   'Subhalo_EscapeVel_rvir_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='vesc',op='mean',rad='rvir_shell'),
+   'Subhalo_Potential_10pkpc_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Potential',op='mean',rad='10pkpc_shell'),
+   'Subhalo_Potential_rvir_Gas' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Potential',op='mean',rad='rvir_shell'),
 
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
@@ -3065,8 +3101,10 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nH2_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10'),
    'Box_Grid_nH2_popping_KMT_depth10' : partial(wholeBoxColDensGrid,species='MH2KMT_popping_depth10'),
 
+   'Box_Grid_nH2_popping_GK'  : partial(wholeBoxColDensGrid,species='MH2GK_popping'),
    'Box_Grid_nH2_popping_GK_depth20'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth20'),
    'Box_Grid_nH2_popping_GK_depth5'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth5'),
+   'Box_Grid_nH2_popping_GK_depth1'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth1'),
 
    'Box_CDDF_nHI'            : partial(wholeBoxCDDF,species='HI'),
    'Box_CDDF_nHI_noH2'       : partial(wholeBoxCDDF,species='HI_noH2'),
@@ -3080,8 +3118,15 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
    'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='H2_popping_KMT_depth10'),
 
+   'Box_CDDF_nH2_popping_GK' : partial(wholeBoxCDDF,species='H2_popping_GK'),
    'Box_CDDF_nH2_popping_GK_depth20' : partial(wholeBoxCDDF,species='H2_popping_GK_depth20'),
    'Box_CDDF_nH2_popping_GK_depth5' : partial(wholeBoxCDDF,species='H2_popping_GK_depth5'),
+   'Box_CDDF_nH2_popping_GK_depth1' : partial(wholeBoxCDDF,species='H2_popping_GK_depth1'),
+
+   'Box_Grid_nH2_popping_GK_depth10_onlySFRgt0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',onlySFR=True),
+   'Box_Grid_nH2_popping_GK_depth10_allSFRgt0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',allSFR=True),
+   'Box_CDDF_nH2_popping_GK_depth10_onlySFRgt0' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10_onlySFRgt0'),
+   'Box_CDDF_nH2_popping_GK_depth10_allSFRgt0' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10_allSFRgt0'),
 
    'Box_Grid_nH2_popping_GK_depth10_gridSize=3.0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=3.0),
    'Box_Grid_nH2_popping_GK_depth10_gridSize=1.0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',gridSize=1.0),
@@ -3293,6 +3338,12 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_OutflowVelocity2DProj_SubfindWithFuzz' : partial(outflowVelocities,proj2D=True),
    'Subhalo_OutflowVelocity2DProj_SiII_SubfindWithFuzz' : partial(outflowVelocities,proj2D=True,massField='SiII'),
+
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_v200norm' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',v200norm=True),
+   'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind_v200norm' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',v200norm=True),
+   'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr_v200norm' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',v200norm=True),
+   'Subhalo_OutflowVelocity_SubfindWithFuzz_v200norm' : partial(outflowVelocities,v200norm=True),
+
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 

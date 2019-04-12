@@ -255,7 +255,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
         p['haloVirRad'], p['galHalfMass'], p['galHalfMassStars'], \
         haloRotMatrix, haloRotCenter = haloImgSpecs(**p)
 
-        if 'rotMatrix' not in p:
+        if p['rotMatrix'] is None:
             p['rotMatrix'], p['rotCenter'] = haloRotMatrix, haloRotCenter
 
     # attach any cached data to sP (testing)

@@ -177,7 +177,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, 
                      xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, 
-                     nBins=None, qRestrictions=None, pdf=None):
+                     nBins=None, qRestrictions=None, median=False, pdf=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
@@ -187,7 +187,8 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
     If hideBelow, then pixel values below clim[0] are left pure white. 
     If smoothSigma is not zero, gaussian smooth contours at this level. 
-    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by. """
+    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
+    If median, add a median line of the yQuant as a function of the xQuant. """
 
     # config
     nBins2D = None
@@ -369,12 +370,17 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             ax.text(xlim[0]+0.3, yMinMax[-1]-0.3, labelText, 
                 va='top', ha='left', color='black', fontsize='40')
 
-        if 0:
-            # debugging EOS correction
-            xx = np.linspace(-6.0, -4.0, 10)
-            yy = (0.45*(xx+5.0)+3.45)
-            ax.plot(xx,yy,'o-',color='black')
-            ax.plot([-4,-1],[3.9,3.9],'-',color='#444444')
+        # median/percentiles line(s)?
+        if median:
+            binSize = (xlim[1] - xlim[0]) / nBins2D[0] * 5
+            group = sP.groupCatSingle(haloID=haloID)
+            v200 = sP.units.codeM200R200ToV200InKmS(group['Group_M_Crit200'], group['Group_R_Crit200'])
+            w = np.where(yvals > v200)
+            print('Note: Hard-coded behavior, restricting median line yvals to >v200.')
+            xm, ym, sm, pm = running_median(xvals[w], yvals[w], binSize=binSize, percs=[16,50,84])
+            ax.plot(xm, ym, '-', lw=lw, color='black', alpha=0.5)
+            print(xm)
+            print(ym)
 
         # mark virial radius?
         if haloID is not None and xQuant in ['rad','rad_kpc','rad_kpc_linear']:

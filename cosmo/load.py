@@ -435,6 +435,14 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 if '_log' in quant: r[field] = logZeroNaN(r[field])
 
+            # subhalo stellar mass (<1 or <2 rhalf definition, from groupcat) [msun or log msun]
+            if quant in ['mstar1','mstar2','mstar1_log','mstar2_log']:
+                field = 'SubhaloMassInRadType' if '2' in quant else 'SubhaloMassInHalfRadType'
+                mass = groupCat(sP, fieldsSubhalos=[field])[:,sP.ptNum('stars')]
+                r[field] = sP.units.codeMassToMsun(mass)
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
+
             # central flag (1 if central, 0 if not)
             if quant in ['central_flag','cen_flag','is_cen','is_central']:
                 gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
@@ -491,6 +499,13 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 mask[ gc['halos']['GroupFirstSub'] ] = 1
                 wSat = np.where(mask == 0)
                 r[field][wSat] = np.nan
+
+            # virial velocity (v200) of parent halo [km/s]
+            if quant in ['vhalo','v200','vhalo_log','v200_log']:
+                gc = groupCat(sP, fieldsSubhalos=['mhalo_200_code','rhalo_200_code'])
+                r[field] = sP.units.codeM200R200ToV200InKmS(gc['mhalo_200_code'], gc['rhalo_200_code'])
+
+                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
             # stellar half mass radii [code, pkpc, log pkpc]
             if quant in ['size_stars_code','size_stars','size_stars_log','rhalf_stars_code','rhalf_stars','rhalf_stars_log']:

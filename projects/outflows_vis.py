@@ -615,7 +615,7 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
     """ Projections of a single halo showing outflow characteristics (streamlines or LIC). """
     run        = 'tng'
     res        = 2160
-    redshift   = 1.0
+    redshift   = 0.5 # z=1.0 for paper figure
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap' # sphMap_global for paper figure
     nPixels    = [1920,1920]
@@ -667,7 +667,7 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
         vecOverlayWidth   = 10.0 # pkpc
         vecOverlayDensity = [2.0,2.0]
 
-    size      = 200.0 # [50,80,120] --> 25,40,60 ckpc/h each direction
+    size      = 200.0
     sizeType  = 'kpc'
 
     # which halo?
@@ -675,13 +675,13 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
 
     mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
     with np.errstate(invalid='ignore'):
-        #w = np.where( (mhalo>11.8)  & (mhalo<11.85) ) # for paper Figure
-        w = np.where( (mhalo>11.6))
+        w = np.where( (mhalo>11.8)  & (mhalo<11.85) ) # for paper Figure
+        #w = np.where( (mhalo>11.6)) # website gallery
 
     print('Processing [%d] halos...' % len(w[0]))
-    
-    #for hInd in [w[0][5]]: # paper
-    for hInd in w[0]:
+
+    for hInd in [w[0][5]]: # paper
+    #for hInd in w[0]:
         panels = []
         haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
 
@@ -698,12 +698,20 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
             #panels.append( {'partType':'gas', 'partField':'shocks_dedt', 'valMinMax':[33, 39.5]} )
             panels.append( {'partType':'gas', 'partField':'velmag', 'valMinMax':[0, 400]} )
 
+        if conf == 4:
+            panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]} )
+
+        if conf == 5:
+            panels.append( {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]} )
+
+        if conf == 6:
+            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]} )
+
         class plotConfig:
             plotStyle    = 'edged'
-            rasterPx     = nPixels[0] #1200 #nPixels[0]
-            colorbars    = False #True for paper figure
-            #saveFilename = './oneHaloSingleField_%s_%d_z%.1f_conf%d_haloID-%d.pdf' % (run,res,redshift,conf,haloID)
-            saveFilename = './%s.%d.%d.jpg' % (sP.simName,sP.snap,hInd) # infinite gallery test
+            rasterPx     = nPixels[0]
+            colorbars    = True # False for website gallery
+            saveFilename = './oneHaloSingleField_%s_%d_z%.1f_conf%d_haloID-%d.pdf' % (run,res,redshift,conf,haloID)
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -842,4 +850,3 @@ def run():
         sel = halo_selection(TNG50, minM200=12.0)
         #preRenderFullboxImages(TNG50, haloInds=sel['haloInds'][0:20])
         visHaloTimeEvoFullbox(TNG50, haloInd=sel['haloInds'][0], extended=True)
-

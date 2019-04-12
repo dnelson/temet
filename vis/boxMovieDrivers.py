@@ -82,8 +82,8 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
     method  = 'sphMap'
     nPixels = [3840,2160]
     axes    = [0,1] # x,y
-    res     = 2500 #2160
-    variant = 'subbox0' #'subbox2'
+    res     = 2160
+    variant = 'subbox2'
 
     labelScale = 'physical'
     labelZ     = True
@@ -116,8 +116,8 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
         # movie config
         minZ      = 0.0
         maxZ      = 50.0 # tng subboxes start at a=0.02
-        maxNSnaps = 2968 # there are 867 snaps with excessively small spacing between a=0.33 and a=0.47 (1308-2344)
-                         # as a final config, filter out half: take Nsb_final-867/2 (currently: 3400-433+eps = 2968)
+        maxNSnaps = 3068 # there are 867 snaps with excessively small spacing between a=0.33 and a=0.47 (1308-2344)
+                         # as a final config, filter out half: take Nsb_final-867/2 (currently: 3500-433+eps = 3068)
 
     # for TNG100 set 2.5 min max (150 sec * 30 fps), for TNG300 use all subboxes (only ~2500)
     if res in [1820,2500]:

@@ -1058,17 +1058,17 @@ def plots3():
 def plots4():
     """ Driver (single median trend). """
     sPs = []
-    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
-    sPs.append( simParams(res=1820, run='tng', redshift=1.3) )
-    sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=2160, run='tng', redshift=2.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'stellar_zform_vimos'
+    yQuant = 'v200'
     cenSatSelect = 'cen'
     filterFlag = True
 
-    xlim = [10.2,11.6]
-    ylim = [4.7,1.5]
+    xlim = [7.5, 11.5] #[10.2,11.6]
+    ylim = None #[4.7,1.5]
 
     sQuant = None #'color_C_gr'
     sLowerPercs = None #[10,50]
