@@ -34,7 +34,8 @@ savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
 # configure certain behavior types
 volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                    'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha']
+                    'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
+                    'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
 totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y']
@@ -509,6 +510,10 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
 
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
+    if partField in ['MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']:
+        # should generalize to colDens fields
+        mass = sP.snapshotSubsetP(partType, partField, indRange=indRange).astype('float32')
+
     # elemental mass fraction (do column densities)
     if 'metals_' in partField:
         elem_mass_frac = sP.snapshotSubsetP(partType, partField, indRange=indRange)
@@ -540,28 +545,39 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
         # zero contribution from SFing gas cells?
         zeroSfr = False
+        lumUnits = False
         if '_sf0' in partField:
             partField = partField.split("_sf0")[0]
             zeroSfr = True
-        if '_ster' in partField: partField = partField.replace("_ster","")
+        if '_lum' in partField:
+            partField = partField.split("_lum")[0]
+            lumUnits = True
+
+        partField = partField.replace("_ster","").replace("_kpc","") # options handled later
 
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
 
         # compute line emission flux for each gas cell in [photon/s/cm^2]
-        if 1:
+        if 0:
             # use cache
             assert not zeroSfr # not implemented in cache
+            assert not lumUnits # not implemented in cache
             mass = sP.snapshotSubsetP('gas', '%s flux' % lineName, indRange=indRange)
         else:
             e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
             lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
-            wavelength = e_interp.lineWavelength(lineName)
-            mass = sP.units.luminosityToFlux(lum, wavelength=wavelength)
+            
+            if lumUnits:
+                mass = lum / 1e30 # 10^30 erg/s
+            else:
+                wavelength = e_interp.lineWavelength(lineName)
+                mass = sP.units.luminosityToFlux(lum, wavelength=wavelength) # photon/s/cm^2 if wavelength is not None
+
             assert mass.min() >= 0.0
             assert np.count_nonzero( np.isnan(mass) ) == 0
 
         if zeroSfr:
-            sfr = sP.snapshotSubsetP( partType, 'sfr', indRange=indRange)
+            sfr = sP.snapshotSubsetP(partType, 'sfr', indRange=indRange)
             w = np.where(sfr > 0.0)
             mass[w] = 0.0
 
@@ -745,6 +761,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'HI_segmented'
 
+    if partField in ['MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']:
+        grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
+
+        if 'MH2' in partField:
+            config['label']  = 'N$_{\\rm H2}$ [log cm$^{-2}$]'
+            config['ctName'] = 'viridis' # 'H2_segmented'
+        if 'MHI' in partField:
+            config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
+            config['ctName'] = 'HI_segmented' #'viridis'
+
     if partField in ['xray','xray_lum']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
@@ -779,17 +805,27 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if 'sb_' in partField:
         # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec]
         pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
-
+        
+        arcsec2 = True
         ster = True if '_ster' in partField else False
-        arcsec2 = not ster
+        kpc = True if '_kpc' in partField else False
+        if ster or kpc: arcsec2 = False
 
-        grid = sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster)
+        if '_lum' in partField:
+            gridOffset = 30.0 # add 1e30 factor, to convert back to [erg/s]
+
+        grid = sP.units.fluxToSurfaceBrightness(grid, pxSizesCode, arcsec2=arcsec2, ster=ster, kpc=kpc)
         uLabel = 'arcsec$^{-2}$'
         if ster: uLabel = 'ster$^{-1}$'
+        if '_kpc' in partField: uLabel = 'kpc$^{-2}$'
+        eLabel = 'Surface Brightness [log photon s$^{-1}$ cm$^{-2}$'
+        if '_lum' in partField:
+            eLabel = 'Luminosity Surface Density [log erg s$^{-1}$'
 
-        lineName = partField.replace("_ster","").split("sb_")[1].replace("-"," ")
+        lineName = partField.replace("_ster","").split("sb_")[1].replace("_lum","").replace("_kpc","").replace("-"," ")
+        lineName = lineName.replace(" alpha","$\\alpha$").replace(" beta","$\\beta$")
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
-        config['label']  = '%s Surface Brightness [log photon s$^{-1}$ cm$^{-2}$ %s]' % (lineName,uLabel)
+        config['label']  = '%s %s %s]' % (lineName,eLabel,uLabel)
         config['ctName'] = 'inferno'
 
     # gas: mass-weighted quantities
@@ -1701,7 +1737,6 @@ def addBoxMarkers(p, conf, ax):
         # if scale bar is less than 10% of width, increase by 4x
         if scaleBarLen < 0.1 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen *= 4
-            print('new scaleBarLen: ', scaleBarLen)
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0, 1000.0, 100.0, 10.0]
@@ -1897,6 +1932,7 @@ def addVectorFieldOverlay(p, conf, ax):
         grid_c2 = 10.0**grid_c * 1e12 # [log G] -> [linear pG]
 
     grid_s = (maxSize - minSize)/(grid_c2.max() - grid_c2.min()) * (grid_c2 - grid_c2.min()) + minSize
+    #grid_s /= 2
 
     # set normalization?
     norm = None
@@ -1974,6 +2010,9 @@ def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaT
     #factor = 0.65 # tng data release paper: tng_fields override
     #conf.fontsize = 13 # tng data release paper: tng_fields override
     #height = 0.047 # tng data release paper: tng_fields override
+
+    #factor = 1.1 # celine muse figure
+    #height = 0.06 # celine muse figure
 
     height *= heightFac
 
@@ -2089,7 +2128,7 @@ def renderMultiPanel(panels, conf):
 
     # approximate font-size invariance with changing rasterPx    
     conf.nLinear = conf.nCols if conf.nCols > conf.nRows else conf.nRows
-    min_fontsize = 6 if 'edged' in conf.plotStyle else 12
+    min_fontsize = 9 if 'edged' in conf.plotStyle else 12
     if not hasattr(conf,'fontsize'):
         conf.fontsize = np.clip(int(conf.rasterPx[0] / 100.0 * conf.nLinear * 1.2), min_fontsize, 60)
 
@@ -2215,9 +2254,8 @@ def renderMultiPanel(panels, conf):
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
         if nRows == 1 and nCols in [1]:
             barAreaHeight = 0.055 / aspect
-            #if conf.fontsize == min_fontsize:
-            #    barAreaHeight = 0.06 / aspect * (400/conf.rasterPx[0])
-            #    #barAreaHeight = np.clip(0.06 / aspect * (1200/conf.rasterPx[0]), 0.06, 0.08)
+            if conf.fontsize == min_fontsize:
+                barAreaHeight += 0.03
         if nRows == 1 and nCols in [2,3]: barAreaHeight = 0.07 / aspect
         if not conf.colorbars:
             barAreaHeight = 0.0
@@ -2381,20 +2419,25 @@ def renderMultiPanel(panels, conf):
 
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:
+            widthFrac = 0.4
             heightFac = np.max([1.0/nRows, 0.35])
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2: heightFac *= 1.3 # increase
-            #if nRows == 1 and nCols == 1: heightFac *= 1.1
+            if nRows == 1 and nCols == 1:
+                heightFac *= 0.5 # decrease
+                if conf.fontsize == min_fontsize: # small images
+                    heightFac *= 1.6
+                    widthFrac = 0.8
             if nRows == 1 and nCols in [2,3]: heightFac *= 0.7 # decrease
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
                 addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 
-                                   rowHeight, 0.4, bottomNorm, 0.3)
+                                   rowHeight, widthFrac, bottomNorm, 0.5-widthFrac/2)
             else:
                 # normal, offset to the left
                 addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 
-                                   rowHeight, 0.4, bottomNorm, 0.05)
+                                   rowHeight, widthFrac, bottomNorm, 0.05)
 
                 # colorbar for the vector field visualization, offset to the right
                 _, vConfig, _ = gridOutputProcess(p['sP'], np.zeros(2), p['vecColorPT'], p['vecColorPF'], [1,1], 'ortho', 1.0)
@@ -2402,7 +2445,7 @@ def renderMultiPanel(panels, conf):
                 vConfig['ctName'] = p['vecColormap']
 
                 addCustomColorbars(fig, ax, conf, vConfig, heightFac, barBottom, barTop, color2, 
-                                   rowHeight, 0.4, bottomNorm, 0.55)
+                                   rowHeight, widthFrac, bottomNorm, 0.55)
 
     # note: conf.saveFilename may be an in-memory buffer, or an actual filesystem path
     fig.savefig(conf.saveFilename, format=conf.outputFmt, facecolor=fig.get_facecolor())

@@ -480,7 +480,7 @@ def generate(fofID, EnlargeHighResFactor=None):
     print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
 
 def generate_set():
-    haloIDs = [82,129,137,142,146,147,152,168,236,240]
+    haloIDs = [78, 88, 229, 305, 354, 385, 420, 430, 441, 625]
     sizeFacs = [3.0] #[2.0,3.0,4.0]
 
     for haloID in haloIDs:

@@ -967,8 +967,10 @@ class cloudyIon():
 class cloudyEmission():
     """ Use pre-computed Cloudy table to derive line emissivities for simulation gas cells. """
     lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
+                         'Lyman-beta'  : 'H  1 1025.72A',
                          'H-alpha'     : 'H  1 6562.81A',
-                         'H-beta'      : 'H  1 1025.72A',
+                         'H-beta'      : 'H  1 4861.33A',
+                         '[OII]3729'   : 'O  2 3728.81A',
                          'OVIII'       : 'O  8 18.9709A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
@@ -1156,12 +1158,16 @@ class cloudyEmission():
         else:
             # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
+            sym = ion.elementNameToSymbol(element)
             if snapHasField(sP, 'gas', 'GFM_Metals'):
-                assert ion.elementNameToSymbol(element) in sP.metals
-
-                fieldName = "metals_" + ion.elementNameToSymbol(element)
-                el_mass_fraction = snapshotSubset(sP, 'gas', fieldName, indRange=indRange)
-                el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
+                if sym not in sP.metals:
+                    print('WARNING: [%s] not in sP.metals (expected for sulphur), taking solar abunds.' % sym)
+                    el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
+                else:
+                    assert sym in sP.metals
+                    fieldName = "metals_" + sym
+                    el_mass_fraction = snapshotSubset(sP, 'gas', fieldName, indRange=indRange)
+                    el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
             else:
                 print('WARNING: line emission but GFM_Metals not available (mini-snap). Assuming solar abundances.')
                 el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)

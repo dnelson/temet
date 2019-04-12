@@ -302,6 +302,22 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ log kpc ]'
         if clean: label = 'R$_{\\rm halo}$ [ log kpc ]'
 
+    if quant in ['vhalo','v200','vhalo_log','v200_log']:
+        # virial velocity: v200
+        vals = sP.groupCat(fieldsSubhalos=[quant])
+        takeLog = False
+        logStr = ''
+        minMax = [0, 200]
+
+        if '_log' in quant:
+            vals = logZeroNaN(vals)
+            logStr = 'log '
+            minMax = [1.0, 2.5]
+            
+        label = 'v$_{\\rm 200,halo}$  [ %skm/s ]' % logStr
+        if clean: label = 'v$_{\\rm halo}$ [ %skm/s ]' % logStr
+
+
     if quant in ['vmag','velmag','vmag_log','velmag_log']:
         # SubhaloVel [physical km/s]
         gc = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
