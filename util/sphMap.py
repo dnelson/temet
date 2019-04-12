@@ -143,19 +143,46 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         h2 = h*h
         hinv = 1.0 / h
 
-        # number of pixels covered by particle
-        nx = np.floor(h / pixelSizeX + 1)
-        ny = np.floor(h / pixelSizeY + 1)
-
         # coordinates of pixel center of pixel containing the particle
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
 
-        # calculate sum (normalization), skip for MIP
-        kSum = 0.0
-        v_over_sum = 0.0
+        # number of pixels covered by particle
+        nx = np.floor(h / pixelSizeX + 1)
+        ny = np.floor(h / pixelSizeY + 1)
 
+        # if particle contained in one cell, dump everything into it
+        if nx*ny == 1:
+            # pixel array indices
+            i = np.int(x / pixelSizeX)
+            j = np.int(y / pixelSizeY)
+            # skip if desired pixel is out of bounds
+            if i < 0 or i >= nPixels[0] or \
+               j < 0 or j >= nPixels[1]:
+                continue
+            if minIntProj:
+                # minimum intensity projection (kernel and mass
+                # weighted to determine max)
+                if v * w < quant_out[i, j]:
+                    dens_out [i, j] = v
+                    quant_out[i, j] = v * w
+            elif maxIntProj:
+                # maximum intensity projection (kernel and mass
+                # weighted to determine max)
+                if v * w > quant_out[i, j]:
+                    dens_out [i, j] = v
+                    quant_out[i, j] = v * w
+            else:
+                # normal weighted projection including
+                # contributions from all overlapping kernels
+                dens_out [i, j] += v
+                quant_out[i, j] += v * w
+            continue
+
+        # calculate sum (normalization), skip for MIP
         if not minIntProj and not maxIntProj:
+            kSum = 0.0
+            v_over_sum = 0.0
             for dx in range(-nx,nx+1):
                 for dy in range(-ny,ny+1):
                     # distance of covered pixel from actual position
@@ -240,7 +267,7 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
 
     minSize = min(pixelSizeX, pixelSizeY, pixelSizeZ)
     hsmlMin = 1.001 * minSize * 0.5
-    hsmlMax = minSize * 500.0
+    hsmlMax = minSize * 65.0
 
     # loop over all particles (Note: np.arange() seems to have a huge penalty
     # here instead of range())
@@ -258,13 +285,13 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
         elif h > hsmlMax:
             h = hsmlMax
 
-        # clip points outside box (x, y, z) dimensions
+        # clip points outside subbox to grid
         if np.abs( _NEAREST(p0-boxCen[0],BoxHalf[0],boxSizeSim[0]) ) > 0.5*boxSizeImg[0]+h or \
            np.abs( _NEAREST(p1-boxCen[1],BoxHalf[1],boxSizeSim[1]) ) > 0.5*boxSizeImg[1]+h or \
            np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5*boxSizeImg[2]+h:
            continue
 
-        # position relative to box (x, y, z) corner
+        # position relative to subbox (x, y, z) corner
         pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
         pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
         pos2 = p2 - (boxCen[2] - 0.5*boxSizeImg[2])
@@ -272,21 +299,51 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
         h2 = h*h
         hinv = 1.0 / h
 
-        # number of pixels covered by particle
-        nx = np.floor(h / pixelSizeX + 1)
-        ny = np.floor(h / pixelSizeY + 1)
-        nz = np.floor(h / pixelSizeZ + 1)
-
-        # coordinates of pixel center of pixel containing the particle
+        # coordinates of center of pixel containing the particle relative to
+        # subbox corner
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
         z = (np.floor( pos2 / pixelSizeZ ) + 0.5) * pixelSizeZ
 
-        # calculate sum (normalization), skip for MIP
-        kSum = 0.0
-        v_over_sum = 0.0
+        # number of pixels covered by particle (at least one in each direction)
+        nx = np.floor(h / pixelSizeX + 1)
+        ny = np.floor(h / pixelSizeY + 1)
+        nz = np.floor(h / pixelSizeZ + 1)
 
+        # if particle contained in one cell, dump everything into it
+        if nx*ny*nz == 1:
+            # pixel array indices
+            i = np.int(x / pixelSizeX)
+            j = np.int(y / pixelSizeY)
+            k = np.int(z / pixelSizeZ)
+            # skip if desired pixel is out of bounds
+            if i < 0 or i >= nPixels[0] or \
+               j < 0 or j >= nPixels[1] or \
+               k < 0 or k >= nPixels[2]:
+                continue
+            if minIntProj:
+                # minimum intensity projection (kernel and mass
+                # weighted to determine max)
+                if v * w < quant_out[i, j, k]:
+                    dens_out [i, j, k] = v
+                    quant_out[i, j, k] = v * w
+            elif maxIntProj:
+                # maximum intensity projection (kernel and mass
+                # weighted to determine max)
+                if v * w > quant_out[i, j, k]:
+                    dens_out [i, j, k] = v
+                    quant_out[i, j, k] = v * w
+            else:
+                # normal weighted projection including
+                # contributions from all overlapping kernels
+                dens_out [i, j, k] += v
+                quant_out[i, j, k] += v * w
+            continue
+
+        # calculate sum (normalization), skip for MIP
         if not minIntProj and not maxIntProj:
+            kSum = 0.0
+            v_over_sum = 0.0
             for dx in range(-nx,nx+1):
                 for dy in range(-ny,ny+1):
                     for dz in range(-nz,nz+1):
