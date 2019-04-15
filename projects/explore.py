@@ -328,6 +328,11 @@ def martinSubboxProj3DGrid():
 
     renderBox(panels, plotConfig, locals())
 
+    # (C) load data to compute grids
+    pos = sP.snapshotSubset(partType, 'pos')
+    hsml = sP.snapshotSubset(partType, 'cellsize')
+    mass = sP.snapshotSubset(partType, 'mass')
+
     # (C) get data grids and compare histograms
     panels = [{}]
     method = 'sphMap'
@@ -337,9 +342,16 @@ def martinSubboxProj3DGrid():
     method = 'histo'
     grid_histo, conf = renderBox(panels, plotConfig, locals(), returnData=True)
 
-    sphmap_total = np.sum(10.0**grid_sphmap)
-    histo_total  = np.sum(10.0**grid_histo)
-    frac         = np.sum(10.0**grid_sphmap)/np.sum(10.0**grid_histo)
+    panels = [{}]
+    method = 'sphMap'
+    nPixels = [128,128,128]
+    grid_sphmap3d, conf = renderBox(panels, plotConfig, locals(), returnData=True)
+
+    sphmap_total   = np.sum(10.0**grid_sphmap)
+    sphmap3d_total = np.sum(10.0**grid_sphmap3d)
+    histo_total    = np.sum(10.0**grid_histo)
+    frac           = np.sum(10.0**grid_sphmap)/np.sum(10.0**grid_histo)
+    frac3d         = np.sum(10.0**grid_sphmap3d)/np.sum(10.0**grid_histo)
 
     # start plot
     vmm = [5.0, 8.0]
@@ -350,21 +362,26 @@ def martinSubboxProj3DGrid():
     ax = fig.add_subplot(111)
 
     ax.set_xlabel(conf['label'])
-    ax.set_xlim([5.5,7.5])
+    ax.set_xlim([5.8,7.4])
     ax.set_yscale('log')
     ax.set_ylabel('Number of Pixels')
-    ax.set_title('sphmap total = %g, histo total = %g, frac = %.4f ' % (sphmap_total, histo_total, frac))
+    ax.set_title('frac = %.4f, frac3d = %.4f ' % (frac, frac3d))
 
     # histogram and plot
     yy, xx = np.histogram(grid_sphmap.ravel(), bins=nBins, range=vmm)
     xx = xx[:-1] + 0.5*(vmm[1]-vmm[0])/nBins
 
-    ax.plot(xx, yy, '-', drawstyle='steps', label='sphmap')
+    ax.plot(xx, yy, '-', drawstyle='steps', label='sphmap [%g]' % sphmap_total)
+
+    yy, xx = np.histogram(grid_sphmap3d.ravel(), bins=nBins, range=vmm)
+    xx = xx[:-1] + 0.5*(vmm[1]-vmm[0])/nBins
+
+    ax.plot(xx, yy, ':', drawstyle='steps', label='sphmap3d [%g]' % sphmap3d_total)
 
     yy, xx = np.histogram(grid_histo.ravel(), bins=nBins, range=vmm)
     xx = xx[:-1] + 0.5*(vmm[1]-vmm[0])/nBins
 
-    ax.plot(xx, yy, '-', drawstyle='steps', label='histo')
+    ax.plot(xx, yy, '--', drawstyle='steps', label='histo [%g]' % histo_total)
 
     # finish and save plot
     ax.legend(loc='upper right')
