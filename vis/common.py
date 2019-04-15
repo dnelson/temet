@@ -697,6 +697,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'cubehelix'
 
     if partField in ['coldens_msunkpc2','coldens_sq_msunkpc2']:
+        if len(nPixels) == 3:
+            print('WARNING: Collapsing 3d grid along last axis for testing.')
+            pixelSizeZ = boxSizeImg[2] / nPixels[2] # code
+            grid = np.sum(grid, axis=2) * pixelSizeZ
         if partField == 'coldens_msunkpc2':
             grid  = sP.units.codeColDensToPhys( grid, msunKpc2=True )
             config['label']  = '%s Column Density [log M$_{\\rm sun}$ kpc$^{-2}$]' % ptStr
@@ -1056,6 +1060,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         optionalStr += '_alsoSFRgasForStars'
     if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
         optionalStr += str(rotCenter)
+    if len(nPixels) == 3:
+        optionalStr += 'grid3d-%d' % nPixels[2]
 
     hashstr = 'nPx-%d-%d.cen-%g-%g-%g.size-%g-%g-%g.axes=%d%d.%g.rot-%s%s' % \
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 

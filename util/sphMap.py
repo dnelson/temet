@@ -120,9 +120,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 
         # clip points outside box (z) dimension
         if pos.shape[1] == 3:
-            # MG: why hard clipping here (no +h) and soft clipping (+h) below
-            # when clipping in x and y?
-            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5 * boxSizeImg[2]:
+            if np.abs( _NEAREST(p2-boxCen[2],BoxHalf[2],boxSizeSim[2]) ) > 0.5*boxSizeImg[2]+h:
                 continue
 
         # clamp smoothing length
@@ -246,7 +244,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
 @jit(nopython=True, nogil=True, cache=True)
 def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
                  boxSizeImg, boxSizeSim, boxCen, ndims, nPixels,
-                 maxIntProj, minIntProj):
+                 normVolDens, maxIntProj, minIntProj):
     """
     Core routine for sphMap() that does 3D gridding.
     """
@@ -269,8 +267,7 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
     hsmlMin = 1.001 * minSize * 0.5
     hsmlMax = minSize * 65.0
 
-    # loop over all particles (Note: np.arange() seems to have a huge penalty
-    # here instead of range())
+    # loop over all particles
     for k in range(NumPart):
         p0 = pos[k, 0]
         p1 = pos[k, 1]
@@ -299,8 +296,7 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
         h2 = h*h
         hinv = 1.0 / h
 
-        # coordinates of center of pixel containing the particle relative to
-        # subbox corner
+        # coordinates of center of pixel containing the particle relative to subbox corner
         x = (np.floor( pos0 / pixelSizeX ) + 0.5) * pixelSizeX
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
         z = (np.floor( pos2 / pixelSizeZ ) + 0.5) * pixelSizeZ
@@ -409,6 +405,12 @@ def _calcSphGrid(pos, hsml, mass, quant, dens_out, quant_out,
                             # contributions from all overlapping kernels
                             dens_out [i, j, k] += kVal * v_over_sum
                             quant_out[i, j, k] += kVal * v_over_sum * w
+
+    # for volume density, normalize by the pixel volume, e.g. [10^10 Msun/h] -> [10^10 Msun * h^2 / ckpc^3]
+    if normVolDens:
+        pixelVol = pixelSizeX * pixelSizeY * pixelSizeZ
+        dens_out /= pixelVol
+
     # void return
 
 @jit(nopython=True, nogil=True, cache=True)
@@ -1088,7 +1090,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                         # gridding
                         _calcSphGrid(pos, hsml, mass ,quant, rDens, rQuant,
                                      boxSizeImg, boxSizeSim, boxCen, ndims,
-                                     nPixels, maxIntProj, minIntProj)
+                                     nPixels, colDens, maxIntProj, minIntProj)
                 else:
                     # symmetric, but relative to reference grid
                     _calcSphMapPixelRel(pos,hsml,mass,quant,rDens,rQuant,refGrid,
@@ -1186,7 +1188,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
                             # gridding
                             _calcSphGrid(self.pos, self.hsml, self.mass, self.quant, self.rDens, self.rQuant,
                                         self.boxSizeImg, self.boxSizeSim, self.boxCen, self.ndims, self.nPixels,
-                                        self.maxIntProj,self.minIntProj)
+                                        self.colDens,self.maxIntProj,self.minIntProj)
                     else:
                         # symmetric, but relative to reference grid
                         _calcSphMapPixelRel(self.pos,self.hsml,self.mass,self.quant,self.rDens,self.rQuant,self.refGrid,
@@ -1261,12 +1263,19 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
 
 def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP, 
                    colDens=False, nThreads=8, multi=False, posTarget=None, sliceFac=1.0):
-    """ Wrap sphMap() specialized to projecting an entire cosmological/periodic box. Specifically, 
-        (ndims,boxSizeSim,boxSizeImg,boxCen) are derived from sP, and nPixels should be input 
-        as a single scalar which is then assumed to be square. """
+    """ Wrap sphMap() specialized to projecting an entire cosmological/periodic box (or subbox). 
+    Specifically, (ndims,boxSizeSim,boxSizeImg,boxCen) are derived from sP, and nPixels should 
+    be input as a single scalar which is then assumed to be square. """
+    boxSizeImg = sP.boxSize * np.array([1.0,1.0,1.0*sliceFac])
+    boxCen = sP.boxSize * np.array([0.5,0.5,0.5])
+
+    if sP.isSubbox:
+        boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0,1.0,1.0*sliceFac])
+        boxCen = sP.subboxCen[sP.subbox]
+
     return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=axes, 
-                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=sP.boxSize*np.array([1.0,1.0,1.0*sliceFac]), 
-                   boxCen=sP.boxSize*np.array([0.5,0.5,0.5]), nPixels=[nPixels,nPixels], 
+                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+                   boxCen=boxCen, nPixels=[nPixels,nPixels], 
                    colDens=colDens, nThreads=nThreads, multi=multi, posTarget=posTarget )
 
 def benchmark():
