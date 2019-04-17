@@ -2806,11 +2806,11 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',weighting='O VI mass',rad='r015_1rvir_halo',ptRestrictions=sfreq0),
 
    'Subhalo_StellarMassFormed_10myr_30pkpc': \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.01]}),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.01]}),
    'Subhalo_StellarMassFormed_50myr_30pkpc': \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.05]}),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.05]}),
    'Subhalo_StellarMassFormed_100myr_30pkpc': \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.1]}),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='initialmass',op='sum',rad=30.0,ptRestrictions={'stellar_age':['lt',0.1]}),
    'Subhalo_GasSFR_30pkpc': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='sfr',op='sum',rad=30.0),
 
