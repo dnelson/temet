@@ -2078,11 +2078,11 @@ def _getPlotExtent(extent, axesUnits, projType, sP):
     if axesUnits == 'kpc':
         pExtent = sP.units.codeLengthToKpc(extent)
     if axesUnits == 'mpc':
-        pExtent = p['sP'].units.codeLengthToMpc(extent)
+        pExtent = sP.units.codeLengthToMpc(extent)
     if axesUnits == 'arcsec':
-        pExtent = p['sP'].units.codeLengthToAngularSize(extent, arcsec=True)
+        pExtent = sP.units.codeLengthToAngularSize(extent, arcsec=True)
     if axesUnits == 'arcmin':
-        pExtent = p['sP'].units.codeLengthToAngularSize(extent, arcmin=True)
+        pExtent = sP.units.codeLengthToAngularSize(extent, arcmin=True)
     if axesUnits == 'deg':
         if sP.redshift == 0.0: sP.redshift = 0.1 # temporary
         pExtent = sP.units.codeLengthToAngularSize(extent, deg=True)

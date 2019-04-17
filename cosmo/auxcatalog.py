@@ -1914,7 +1914,9 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
 
     # check
     hDensSpecies   = ['HI','HI_noH2']
-    preCompSpecies = ['MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping']
+    preCompSpecies = ['MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping',
+                      'MH2_GD14_diemer', 'MH2_GK11_diemer', 'MH2_K13_diemer', 'MH2_S14_diemer',
+                      'MHI_GD14_diemer', 'MHI_GK11_diemer', 'MHI_K13_diemer', 'MHI_S14_diemer']
     zDensSpecies   = ['O VI','O VI 10','O VI 25','O VI solar','O VII','O VIII','O VII solarz','O VII 10 solarz']
 
     if species not in hDensSpecies + zDensSpecies + preCompSpecies + ['Z']:
@@ -2148,12 +2150,12 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False, gridSize=None):
 
     # depth
     projDepthCode = sP.boxSize
-    if '_depth10' in species:
+    if '_depth1' in species:
+        projDepthCode = 1000.0
+    if '_depth10' in species: # must be after '_depth1'...
         projDepthCode = 10000.0
     if '_depth5' in species:
         projDepthCode = 5000.0
-    if '_depth1' in species:
-        projDepthCode = 1000.0
     if '_depth20' in species:
         projDepthCode = 20000.0
     if '_depth125' in species: 
@@ -3118,10 +3120,19 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
    'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='H2_popping_KMT_depth10'),
 
-   'Box_CDDF_nH2_popping_GK' : partial(wholeBoxCDDF,species='H2_popping_GK'),
+   'Box_CDDF_nH2_popping_GK' : partial(wholeBoxCDDF,species='H2_popping_GK'), # fullbox depth
    'Box_CDDF_nH2_popping_GK_depth20' : partial(wholeBoxCDDF,species='H2_popping_GK_depth20'),
    'Box_CDDF_nH2_popping_GK_depth5' : partial(wholeBoxCDDF,species='H2_popping_GK_depth5'),
    'Box_CDDF_nH2_popping_GK_depth1' : partial(wholeBoxCDDF,species='H2_popping_GK_depth1'),
+
+   'Box_Grid_nH2_diemer_GD14_depth10' : partial(wholeBoxColDensGrid,species='MH2_GD14_diemer_depth10'),
+   'Box_Grid_nH2_diemer_GK11_depth10' : partial(wholeBoxColDensGrid,species='MH2_GK11_diemer_depth10'),
+   'Box_Grid_nH2_diemer_K13_depth10'  : partial(wholeBoxColDensGrid,species='MH2_K13_diemer_depth10'),
+   'Box_Grid_nH2_diemer_S14_depth10'  : partial(wholeBoxColDensGrid,species='MH2_S14_diemer_depth10'),
+   'Box_CDDF_nH2_diemer_GD14_depth10' : partial(wholeBoxCDDF,species='H2_diemer_GD14_depth10'),
+   'Box_CDDF_nH2_diemer_GK11_depth10' : partial(wholeBoxCDDF,species='H2_diemer_GK11_depth10'),
+   'Box_CDDF_nH2_diemer_K13_depth10'  : partial(wholeBoxCDDF,species='H2_diemer_K13_depth10'),
+   'Box_CDDF_nH2_diemer_S14_depth10'  : partial(wholeBoxCDDF,species='H2_diemer_S14_depth10'),
 
    'Box_Grid_nH2_popping_GK_depth10_onlySFRgt0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',onlySFR=True),
    'Box_Grid_nH2_popping_GK_depth10_allSFRgt0' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10',allSFR=True),

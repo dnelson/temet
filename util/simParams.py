@@ -1181,6 +1181,12 @@ class simParams:
         """ Return number of Subfind subhalos in the group catalog at this sP.snap. """
         return self.groupCatHeader()['Nsubgroups_Total']
 
+    @property
+    def numPart(self):
+        """ Return number of particles/cells of all types at this sP.snap. """
+        return self.snapshotHeader()['NumPart']
+    
+
     # operator overloads
     def __eq__(self, other): 
         return self.__dict__ == other.__dict__

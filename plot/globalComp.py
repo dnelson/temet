@@ -1726,8 +1726,10 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     # config
     if molecular:
         # H2
-        #speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
-        speciesList = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
+        speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
+        #speciesList = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
+        #speciesList = ['nH2_diemer_GD14_depth10', 'nH2_diemer_GK11_depth10']
+        #speciesList = ['nH2_diemer_K13_depth10', 'nH2_diemer_S14_depth10']
         #speciesList = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10','nH2_popping_GK_depth10_cell1']
         #speciesList = ['nH2_popping_GK_depth5','nH2_popping_GK_depth10','nH2_popping_GK_depth20','nH2_popping_GK','nH2_popping_GK_depth1']
         sStr = 'H_2'
