@@ -184,6 +184,70 @@ def celineMuseProposalMetallicityVsTheta():
     fig.savefig('z_vs_theta_Mstar=%.1f.pdf' % (massBins[0][0]))
     plt.close(fig)
 
+def celineWriteH2CDDFBand():
+    """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
+    sP = simParams(res=1820, run='tng', redshift=0.0)
+
+    vars_sfr = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
+    vars_model = ['nH2_popping_BR_depth10','nH2_popping_KMT_depth10']
+    vars_diemer = ['nH2_diemer_GD14_depth10','nH2_diemer_GK11_depth10','nH2_diemer_K13_depth10','nH2_diemer_S14_depth10']
+    vars_cellsize = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10_cell1']
+    vars_depth = ['nH2_popping_GK_depth5','nH2_popping_GK_depth20','nH2_popping_GK_depth1']
+    vars_z = [0.0, 1.0] # TODO: do z=1 somehow
+
+    speciesList = vars_sfr + vars_model
+
+    # load
+    for i, species in enumerate(speciesList):
+        ac = sP.auxCat(fields=['Box_CDDF_'+species])
+
+        n_species  = logZeroNaN( ac['Box_CDDF_'+species][0,:] )
+        fN_species = logZeroNaN( ac['Box_CDDF_'+species][1,:] )
+
+        if i == 0:
+            # save x-axis on first iter
+            N_H2 = n_species.copy()
+            fN_H2_low = fN_species.copy()
+            fN_H2_high = fN_species.copy()
+            fN_H2_low.fill(np.nan)
+            fN_H2_high.fill(np.nan)
+        else:
+            # x-axes must match
+            assert np.array_equal(N_H2, n_species)
+
+        # take envelope
+        fN_H2_low  = np.nanmin( np.vstack((fN_H2_low, fN_species)), axis=0 )
+        fN_H2_high = np.nanmax( np.vstack((fN_H2_high, fN_species)), axis=0 )
+
+    # select reasonable range
+    w = np.where(N_H2 >= 15.0)
+    N_H2 = N_H2[w]
+    fN_H2_low = fN_H2_low[w]
+    fN_H2_high = fN_H2_high[w]
+
+    # plot
+    figsize = np.array([14,10]) * 0.7
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('N$_{\\rm H2}$ [cm$^{-2}$]')
+    ax.set_ylabel('log f(N$_{\\rm H2}$) [cm$^{2}$]')
+    ax.set_xlim([14, 24])
+    ax.set_ylim([-30,-14])
+    ax.fill_between(N_H2, fN_H2_low, fN_H2_high, alpha=0.8)
+
+    fig.tight_layout()
+    fig.savefig('h2_CDDF_%s_band-%d.pdf' % (sP.simName,len(speciesList)))
+    plt.close(fig)
+
+    # write text file
+    filename = 'h2_CDDF_%s_band-%d.txt' % (sP.simName,len(speciesList))
+    out = '# N_H2 [cm^-2], f_N,lower [cm^2], f_N,upper [cm^2]\n'
+    for i in range(N_H2.size):
+        out += '%.3f %.3f %.3f\n' % (N_H2[i], fN_H2_low[i], fN_H2_high[i])
+    with open(filename, 'w') as f:
+        f.write(out)
+
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """
     run        = 'tng'

@@ -1527,6 +1527,31 @@ def snapshotSubset(sP, partType, fields,
                 else:
                     r[field] = f[key][indRange[0]:indRange[1]+1]
 
+        if '_diemer' in field.lower():
+            # use Diemer+2019 pre-computed results in 'hydrogen' postprocessing catalog
+            # e.g. 'MH2_GD14_diemer', 'MH2_GK11_diemer', 'MH2_K13_diemer', 'MH2_S14_diemer'
+            # or 'MHI_GD14_diemer', 'MHI_GK11_diemer', 'MHI_K13_diemer', 'MHI_S14_diemer'
+            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
+            
+            path = sP.postPath + 'hydrogen/diemer_%03d.hdf5' % sP.snap
+            key = 'f_mol_' + field.split('_')[1]
+
+            with h5py.File(path,'r') as f:
+                if indRange is None:
+                    f_mol = f[key][()]
+                    f_neutral_H = f['f_neutral_H'][()]
+                else:
+                    f_mol = f[key][indRange[0]:indRange[1]+1]
+                    f_neutral_H = f['f_neutral_H'][indRange[0]:indRange[1]+1]
+
+            # file contains f_mol, for M_H2 = Mass_gas * f_neutral_H * f_mol, while for M_HI = MasS_gas * f_neutral_H * (1-f_mol)
+            mass = snapshotSubset(sP, partType, 'mass', **kwargs)
+
+            if 'mh2_' in field.lower():
+                r[field] = mass * f_neutral_H * f_mol
+            if 'mhi_' in field.lower():
+                r[field] = mass * f_neutral_H * (1.0 - f_mol)
+
         if '_ionmassratio' in field:
             # per-cell ratio between two ionic masses, e.g. "O6_O8_ionmassratio"
             from cosmo.cloudy import cloudyIon
