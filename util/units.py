@@ -40,7 +40,7 @@ class units(object):
     helium_massfrac   = 0.24            # Y (solar)
     mu                = 0.6             # for ionized primordial (e.g. hot halo gas)
     Gravity           = 6.673e-8        # G in cgs, cm**3/g/s**2
-    H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km)
+    H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km) (=HUBBLE in Arepo)
     Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
     L_sun             = 3.839e33        # solar luminosity [erg/s]
     Msun_in_g         = 1.98892e33      # solar mass [g]
@@ -75,9 +75,10 @@ class units(object):
     # derived constants (code units without h factors)
     H0               = None    # km/s/kpc (hubble constant at z=0)
     H0_kmsMpc        = None    # km/s/Mpc
-    G                = None    # kpc (km/s)**2 / 1e10 msun
+    G                = None    # kpc (km/s)**2 / 1e10 msun (== All.G)
     rhoCrit          = None    # 1e10 msun / kpc**3 (critical density, z=0)
     rhoCrit_msunMpc3 = None    # msun / mpc^3 (critical density, z=0)
+    Hubble           = None    # 0.1 (== All.Hubble)
 
     # derived cosmology parameters
     f_b         = None     # baryon fraction
@@ -85,6 +86,7 @@ class units(object):
     # redshift dependent values (code units without h factors)
     H2_z_fact   = None     # H^2(z)
     H_z         = None     # hubble constant at redshift z [km/s/kpc]
+    H_of_a      = None     # hubble constant, internal units (as computed in Arepo)
     rhoCrit_z   = None     # critical density at redshift z
     scalefac    = None     # a=1/(1+z)
 
@@ -150,12 +152,15 @@ class units(object):
         self.c_ang_per_sec = self.c_cgs / self.ang_in_cm
         self.f_b = self._sP.omega_b / self._sP.omega_m
 
+        self.Hubble = self.H0_h1_s * self.UnitTime_in_s
+
         # redshift dependent values (code units)
         if self._sP.redshift is not None:
             self.H2_z_fact = self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
                               self._sP.omega_L + \
                               self._sP.omega_k*(1+self._sP.redshift)**2.0
             self.H_z       = self.H0 * np.sqrt(self.H2_z_fact)
+            self.H_of_a    = self.Hubble * np.sqrt(self.H2_z_fact)
             self.rhoCrit_z = self.rhoCrit * self.H2_z_fact
             self.scalefac  = 1.0 / (1+self._sP.redshift)
 
