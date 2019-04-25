@@ -9,6 +9,8 @@ from builtins import *
 import numpy as np
 import time
 import glob
+import struct
+from os.path import isfile
 from numba import jit
 from util.sphMap import _NEAREST
 
@@ -37,11 +39,11 @@ MinimumComovingHydroSoftening = 0.05
 SofteningComoving = [0.390, 0.390, 0.390, 0.670, 1.15, 2.0]
 SofteningMaxPhys  = [0.195, 0.195, 0.390, 0.670, 1.15, 2.0]
 
-# L25n256_0000 TESTING:
-#NSOFTTYPES = 5
-#MinimumComovingHydroSoftening = 0.25
-#SofteningComoving = [2.0, 2.0, 2.0, 3.42, 5.84]
-#SofteningMaxPhys  = [1.0, 1.0, 2.0, 3.42, 5.84]
+# L25n128_0000 TESTING:
+#NSOFTTYPES = 4
+#MinimumComovingHydroSoftening = 0.5
+#SofteningComoving = [4.0, 4.0, 4.0, 6.84]
+#SofteningMaxPhys  = [2.0, 2.0, 4.0, 6.84]
 
 # define data types
 grad_data_dtype = np.dtype([
@@ -180,7 +182,35 @@ BHP_dtype = np.dtype([ # BLACK_HOLES
     ('BH_Bpress', MyFloat) # BH_USE_ALFVEN_SPEED_IN_BONDI
 ])
 
-P_dtype = np.dtype([
+#P_dtype = np.dtype([ # L25n128_000 TESTING:
+#    ('Pos', MyDouble, 3),
+#    ('Mass', MyDouble),
+#    ('Vel', MyFloat, 3),
+#    ('GravAccel', MySingle, 3),
+#    ('GravPM', MySingle, 3), # PMGRID
+#    ('BirthPos', MySingle, 3), # L25n128_0000 TESTING ONLY
+#    ('BirthVel', MySingle, 3), # L25n128_0000 TESTING ONLY
+#    ('Potential', MySingle), # EVALPOTENTIAL
+#    ('PM_Potential', MySingle), # EVALPOTENTIAL & PMGRID
+#    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES -- NOTE! TODO! Could be corrupted (padding may not be where I guessed)
+#    # TRACER_MC
+#    ('TracerHead', np.int32),
+#    ('NumberOfTracers', np.int32),
+#    ('OriginTask', np.int32),
+#    # general
+#    ('pad_0', np.int32, 1), # STRUCT PADDING (L25n128_000)
+#    ('ID', MyIDType), # TODO: padding before or after?
+#    ('pad_1', np.int32, 1), # STRUCT PADDING (L25n128_000)
+#    ('TI_Current', integertime),
+#    ('OldAcc', np.float32),
+#    ('GravCost', np.float32, GRAVCOSTLEVELS),
+#    ('Type', np.uint8),
+#    ('SofteningType', np.uint8),
+#    ('TimeBinGrav', np.int8),
+#    ('TimeBinHydro', np.int8)
+#])
+
+P_dtype = np.dtype([ # L35n2160TNG configuration
     ('Pos', MyDouble, 3),
     ('Mass', MyDouble),
     ('Vel', MyFloat, 3),
@@ -279,9 +309,7 @@ ud_dtype = np.dtype([
 
 def load_custom_dump(sP, GrNr):
     """ Load groups_{snapNum}/fof_{fofID}.{taskNum} custom binary data dump. """
-    import struct
-
-    filePath = sP.simPath + 'groups_%03d/fof_%d/fof_%d' % (sP.snap,GrNr,GrNr)
+    filePath = sP.simPath + 'groups_%03d/fof_%d' % (sP.snap,GrNr)
 
     headerSize = 4*5 + 4*5 + 4*4
 
@@ -294,9 +322,17 @@ def load_custom_dump(sP, GrNr):
     NumStarP = 0
     NumBHP = 0
 
-    for i in range(nChunks):
+    i = 0
+    nFound = 0
+
+    while nFound < nChunks:
         file = '%s.%d' % (filePath,i)
         if i % 100 == 0: print(file)
+        if not isfile(file):
+            print('WARNING: [%s] does not exist! skipping...' % file)
+            i += 1
+            continue
+
         with open(file,'rb') as f:
             header = f.read(headerSize)
 
@@ -316,6 +352,9 @@ def load_custom_dump(sP, GrNr):
         assert size_SphP == SphP_dtype.itemsize
         assert size_StarP == StarP_dtype.itemsize
         assert size_BHP == BHP_dtype.itemsize
+
+        i += 1
+        nFound += 1
 
     # allocate
     group = sP.groupCatSingle(haloID=GrNr)
@@ -355,8 +394,17 @@ def load_custom_dump(sP, GrNr):
     NumStarP = 0
     NumBHP = 0
 
-    for i in range(nChunks):
+    i = 0
+    nFound = 0
+    
+    while nFound < nChunks:
+
         file = '%s.%d' % (filePath,i)
+
+        if not isfile(file):
+            print('WARNING: [%s] does not exist! skipping...' % file)
+            i += 1
+            continue
 
         with open(file,'rb') as f:
             header = f.read(headerSize)
@@ -373,6 +421,7 @@ def load_custom_dump(sP, GrNr):
         w = np.where(PS_temp['GrNr'] == GrNr)
         gr_NumP = len(w[0])
         print('[%4d] [%7d of %7d] particles belong to group, now have [%9d of %9d] total.' % (i,gr_NumP,PS_temp.size,NumP+gr_NumP,group['GroupLen']))
+        #print(' file: sphp=%d, starp=%d, bhp=%d, min_ind=%d' % (NumSphP_loc, NumStarP_loc, NumBHP_loc, min_ind))
 
         # only save needed fields to optimize memory usage
         for field in PS_dtype_mem.names:
@@ -390,11 +439,10 @@ def load_custom_dump(sP, GrNr):
             assert min_sph_ind == 0
             if len(w_gas[0]) == NumSphP_loc: # full
                 assert max_sph_ind == NumSphP_loc - 1
-            else:
-                print(' first partial gas')
 
             w_gas = np.where( (P_temp['Type'] == 0) & (PS_temp['GrNr'] == GrNr) )
             assert len(w_gas[0]) == NumSphP_loc
+            #print(' file: sphp in group: ', len(w_gas[0]))
 
             for field in SphP_dtype_mem.names:
                 # only save needed fields to optimize memory usage
@@ -410,13 +458,17 @@ def load_custom_dump(sP, GrNr):
             w_star = np.where( (P_temp['Type'] == 4) & (PS_temp['GrNr'] == GrNr) )
             Pw_aux = P_temp['AuxDataID'][w_star]
             assert Pw_aux.min() >= 0 and Pw_aux.max() < NumStarP_loc
+            #print(' file: starp in group: ', len(w_star[0]))
 
             StarP[NumStarP:NumStarP+NumStarP_loc] = StarP_temp[Pw_aux]
 
-            # reassign AuxData ID as indices into new global StarP
-            #P[NumP:NumP+gr_NumP][w_star]['AuxDataID'] = np.arange( len(w_star[0]) ) + NumStarP # TODO
-            StarP[NumStarP:NumStarP+NumStarP_loc]['PID'] = w_star[0] + gr_NumP
-            #assert np.array_equal(P_temp['AuxDataID'][ StarP_temp[Pw_aux]['PID'] ], Pw_aux) # TODO
+            # reassign P.AuxData ID as indices into new global StarP, and likewise for StarP.PID
+            global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 4)[0] + NumP            
+            P['AuxDataID'][global_p_inds] = np.arange( len(w_star[0]) ) + NumStarP
+            StarP[NumStarP:NumStarP+NumStarP_loc]['PID'] = global_p_inds
+            
+            assert np.array_equal(StarP_temp[Pw_aux]['PID']-min_ind, w_star[0])
+            assert np.array_equal(P_temp['AuxDataID'][ StarP_temp[Pw_aux]['PID']-min_ind ], Pw_aux)
 
             NumStarP += len(w_star[0]) # != NumStarP_loc !
 
@@ -425,23 +477,36 @@ def load_custom_dump(sP, GrNr):
             w_bhs = np.where( (P_temp['Type'] == 5) & (PS_temp['GrNr'] == GrNr) )
             Pw_aux = P_temp['AuxDataID'][w_bhs]
             assert Pw_aux.min() >= 0 and Pw_aux.max() < NumBHP_loc
+            #print(' file: bhp in group: ', len(w_bhs[0]))
 
             BHP[NumBHP:NumBHP+NumBHP_loc] = BHP_temp[Pw_aux]
 
-            # reassign AuxData ID as indices into new global BHP
-            #P[NumP:NumP+gr_NumP][w_bhs]['AuxDataID'] = np.arange( len(w_bhs[0]) ) + NumBHP # TODO
-            StarP[NumBHP:NumBHP+NumBHP_loc]['PID'] = w_bhs[0] + gr_NumP
-            #assert np.array_equal(P_temp['AuxDataID'][ BHP_temp[Pw_aux]['PID'] ], Pw_aux) # TODO
+            # reassign P.AuxData ID as indices into new global BHP, and likewise for BHP.PID
+            global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 5)[0] + NumP
+            P['AuxDataID'][global_p_inds] = np.arange( len(w_bhs[0]) ) + NumBHP
+            BHP[NumBHP:NumBHP+NumBHP_loc]['PID'] = global_p_inds
+
+            assert np.array_equal(BHP_temp[Pw_aux]['PID']-min_ind, w_bhs[0])
+            assert np.array_equal(P_temp['AuxDataID'][ BHP_temp[Pw_aux]['PID']-min_ind ], Pw_aux)
 
             NumBHP += len(w_bhs[0]) # != NumBHP_loc !
 
-        NumP += gr_NumP        
+        NumP += gr_NumP
 
-    # final checks
+        i += 1
+        nFound += 1
+
+    # final checks: counts
     assert NumP == group['GroupLen']
     assert NumSphP == group['GroupLenType'][sP.ptNum('gas')]
     assert NumStarP == group['GroupLenType'][sP.ptNum('stars')]
     assert NumBHP == group['GroupLenType'][sP.ptNum('bhs')]
+
+    # final checks: PID <-> AuxDataID mapping (global)
+    w_stars = np.where(P['Type'] == 4)
+    assert np.array_equal(StarP[P['AuxDataID'][w_stars]]['PID'], w_stars[0])
+    w_bhs = np.where(P['Type'] == 5)
+    assert np.array_equal(BHP[P['AuxDataID'][w_bhs]]['PID'], w_bhs[0])
 
     print('Particle counts of all types verified, match expected Group [%d] lengths.' % GrNr)
 
@@ -525,56 +590,6 @@ def load_snapshot_data(sP, GrNr):
     return P, PS, SphP, StarP, BHP
 
 @jit(nopython=True, nogil=True)
-def _updateNodeRecursive(no,sib,last,next_node,tree_nodes):
-    """ Helper routine for calcHsml(), see below. """
-    pp = 0
-    nextsib = 0
-
-    NumPart = next_node.size
-
-    if no >= NumPart:
-        if last >= 0:
-            if last >= NumPart:
-                tree_nodes[last-NumPart]['nextnode'] = no
-            else:
-                next_node[last] = no
-
-        last = no
-
-        for i in range(8):
-            p = tree_nodes[no-NumPart]['suns'][i]
-
-            if p >= 0:
-                # check if we have a sibling on the same level
-                j = i + 1
-                while j < 8:
-                    pp = tree_nodes[no-NumPart]['suns'][j]
-                    if pp >= 0:
-                        break
-                    j += 1 # unusual syntax so that j==8 at the end of the loop if we never break
-
-                if j < 8: # yes, we do
-                    nextsib = pp
-                else:
-                    nextsib = sib
-
-                last = _updateNodeRecursive(p,nextsib,last,next_node,tree_nodes)
-
-        tree_nodes[no-NumPart]['sibling'] = sib
-
-    else:
-        # single particle or pseudo particle
-        if last >= 0:
-            if last >= NumPart:
-                tree_nodes[last-NumPart]['nextnode'] = no
-            else:
-                next_node[last] = no
-
-        last = no
-
-    return last # avoid use of global in numba
-
-@jit(nopython=True, nogil=True)
 def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoftening):
     """ As _updateNodeRecursive(), but also compute additional information for the tree nodes such as masses, softenings. """
     pp = 0
@@ -622,10 +637,8 @@ def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoft
 
                 if p < NumPart:
                     # individual particle
-                    mass   += P[p]['Mass']
-                    com[0] += P[p]['Mass'] * P_Pos[p,0]
-                    com[1] += P[p]['Mass'] * P_Pos[p,1]
-                    com[2] += P[p]['Mass'] * P_Pos[p,2]
+                    mass += P[p]['Mass']
+                    com  += P[p]['Mass'] * P_Pos[p,:]
 
                     if ForceSoftening[maxsofttype] < ForceSoftening[P[p]['SofteningType']]:
                         maxsofttype = P[p]['SofteningType']
@@ -643,10 +656,8 @@ def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoft
                     # internal node
                     ind = p-NumPart
 
-                    mass   += tree_nodes[ind]['mass']
-                    com[0] += tree_nodes[ind]['mass'] * tree_nodes[ind]['com'][0]
-                    com[1] += tree_nodes[ind]['mass'] * tree_nodes[ind]['com'][1]
-                    com[2] += tree_nodes[ind]['mass'] * tree_nodes[ind]['com'][2]
+                    mass += tree_nodes[ind]['mass']
+                    com  += tree_nodes[ind]['mass'] * tree_nodes[ind]['com']
 
                     if(ForceSoftening[maxsofttype] < ForceSoftening[tree_nodes[ind]['maxsofttype']]):
                         maxsofttype = tree_nodes[ind]['maxsofttype']
@@ -656,7 +667,7 @@ def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoft
 
                     if maxhydrosofttype < tree_nodes[ind]['maxhydrosofttype']:
                         maxhydrosofttype = tree_nodes[ind]['maxhydrosofttype']
-                    if minhydrosofttype < tree_nodes[ind]['minhydrosofttype']:
+                    if minhydrosofttype > tree_nodes[ind]['minhydrosofttype']:
                         minhydrosofttype = tree_nodes[ind]['minhydrosofttype']
 
         # update node properties
@@ -665,18 +676,13 @@ def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoft
         if mass > 0.0:
             com /= mass
         else:
-            com[0] = tree_nodes[ind]['center'][0]
-            com[1] = tree_nodes[ind]['center'][1]
-            com[2] = tree_nodes[ind]['center'][2]
+            com = tree_nodes[ind]['center'][:]
 
-        tree_nodes[ind]['com'][0] = com[0]
-        tree_nodes[ind]['com'][1] = com[1]
-        tree_nodes[ind]['com'][2] = com[2]
+        tree_nodes[ind]['com'][:] = com[:]
 
         tree_nodes[ind]['mass'] = mass
         tree_nodes[ind]['maxsofttype'] = maxsofttype
-        for k in range(NSOFTTYPES):
-            tree_nodes[ind]['mass_per_type'][k] = mass_per_type[k]
+        tree_nodes[ind]['mass_per_type'][:] = mass_per_type[:]
         tree_nodes[ind]['maxhydrosofttype'] = maxhydrosofttype
         tree_nodes[ind]['minhydrosofttype'] = minhydrosofttype
 
@@ -829,7 +835,7 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
                 if pos[no,2] > tree_nodes[ind2]['center'][2]:
                     subnode += 4
 
-                if(tree_nodes[ind2]['length'] < 1e-4):
+                if(tree_nodes[ind2]['length'] < 1e-8): # 1e-4 in the past
                     # may have particles at identical locations, in which case randomize the subnode 
                     # index to put the particle into a different leaf (happens well below the 
                     # gravitational softening scale)
@@ -1016,8 +1022,6 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
     h_i = ForceSoftening[P[target]['SofteningType']]
 
     pot = 0
-    indi_flag1 = -1
-    indi_flag2 = 0
 
     # start search
     NumPart = next_node.size
@@ -1025,6 +1029,9 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
                  # not place the root node at LocMaxPart (i.e. aware of P_Pos size) but rather at len (i.e. only aware of loc_pos size)
 
     while no >= 0:
+        indi_flag1 = -1 # MULTIPLE_NODE_SOFTENING
+        indi_flag2 = 0
+
         if no < NumPart:
             # single particle
             assert next_node[no] != no # Going into infinite loop.
@@ -1049,31 +1056,31 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
                 hmax = h_i
         else:
             # internal node
-            ind = no - NumPart
-            mass = tree_nodes[ind]['mass']
+            ind_nop = no - NumPart
+            mass = tree_nodes[ind_nop]['mass']
 
-            dx = _NEAREST( tree_nodes[ind]['com'][0] - pos[0], boxHalf, boxSizeSim )
-            dy = _NEAREST( tree_nodes[ind]['com'][0] - pos[0], boxHalf, boxSizeSim )
-            dz = _NEAREST( tree_nodes[ind]['com'][0] - pos[0], boxHalf, boxSizeSim )
+            dx = _NEAREST( tree_nodes[ind_nop]['com'][0] - pos[0], boxHalf, boxSizeSim )
+            dy = _NEAREST( tree_nodes[ind_nop]['com'][1] - pos[1], boxHalf, boxSizeSim )
+            dz = _NEAREST( tree_nodes[ind_nop]['com'][2] - pos[2], boxHalf, boxSizeSim )
 
             r2 = dx*dx + dy*dy + dz*dz
 
             # check Barnes-hut opening criterion
-            if tree_nodes[ind]['length']**2 > r2 * ErrTolThetaSubfind**2:
+            if tree_nodes[ind_nop]['length']**2 > r2 * ErrTolThetaSubfind**2:
                 # open the node
                 if mass:
-                    no = tree_nodes[ind]['nextnode']
+                    no = tree_nodes[ind_nop]['nextnode']
                     continue
 
-            h_j = ForceSoftening[tree_nodes[ind]['maxsofttype']]
+            h_j = ForceSoftening[tree_nodes[ind_nop]['maxsofttype']]
 
             if h_j > h_i:
                 # multiple hydro softenings in this node? compare to maximum
-                if tree_nodes[ind]['maxhydrosofttype'] != tree_nodes[ind]['minhydrosofttype']:
-                    if tree_nodes[ind]['mass_per_type'][0] > 0:
-                        if r2 < ForceSoftening[tree_nodes[ind]['maxhydrosofttype']]**2:
+                if tree_nodes[ind_nop]['maxhydrosofttype'] != tree_nodes[ind_nop]['minhydrosofttype']:
+                    if tree_nodes[ind_nop]['mass_per_type'][0] > 0:
+                        if r2 < ForceSoftening[tree_nodes[ind_nop]['maxhydrosofttype']]**2:
                             # open the node
-                            no = tree_nodes[ind]['nextnode']
+                            no = tree_nodes[ind_nop]['nextnode']
                             continue
 
                 indi_flag1 = 0
@@ -1082,17 +1089,16 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
             else:
                 hmax = h_i
 
-            no = tree_nodes[ind]['sibling'] # node can be used
+            no = tree_nodes[ind_nop]['sibling'] # node can be used
 
         # proceed (use node)
-        ind = no - NumPart
         r = np.sqrt(r2)
 
         for ptype in range(indi_flag1, indi_flag2):
             if ptype >= 0:
-                mass = tree_nodes[ind]['mass_per_type'][ptype]
+                mass = tree_nodes[ind_nop]['mass_per_type'][ptype]
                 if ptype == 0:
-                    h_j = ForceSoftening[tree_nodes[ind]['maxhydrosofttype']]
+                    h_j = ForceSoftening[tree_nodes[ind_nop]['maxhydrosofttype']]
                 else:
                     h_j = ForceSoftening[ptype]
 
@@ -1128,7 +1134,7 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
     unbound = 0
 
     iter_num = 0
-    phaseflag = 0 # this means we will recompute the potential for all particles
+    phaseflag = 0
 
     bnd_energy = np.zeros( len, dtype=np.float64 )
     v  = np.zeros( 3, dtype=np.float64 )
@@ -1136,16 +1142,29 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
     dv = np.zeros( 3, dtype=np.float64 )
     dx = np.zeros( 3, dtype=np.float64 )
 
+    # unused, delete this block:
+    # zero PS.BindingEnergy (will be in 'final' state if FOF0 was not actually skipped, i.e. during testing, messing up algo)
+    #for i in range(len):
+    #    p = ud[i]['index']
+    #    PS[p]['BindingEnergy'] = 0.0 # ok not actually needed, overwrriten @ phaseflag=0
+    #    # TODO: also 'SubNr', 'Potential', anything else in PS of relevance
+
     while 1:
         iter_num += 1
-        #print(' subfind_unbind(): iter =',iter_num,' length = ',len,' unbound = ',unbound,' phase = ',phaseflag)
 
         # build local tree, including only particles still inside the candidate
         loc_pos = np.zeros( (len,3), dtype=np.float64 )
+        loc_P   = np.zeros( len, dtype=P_dtype_mem )
+
         for i in range(len):
             loc_pos[i,:] = P_Pos[ud[i]['index']]
+            loc_P[i] = P[ud[i]['index']]
 
-        NextNode, TreeNodes = buildFullTree(loc_pos, 0.0, xyzMin, xyzMax, extent, P, P_Pos, ForceSoftening)
+        # WRONG!: mismatch between loc_pos and global P and P_pos
+        #NextNode, TreeNodes = buildFullTree(loc_pos, 0.0, xyzMin, xyzMax, extent, P, P_Pos, ForceSoftening)
+
+        # updated:
+        NextNode, TreeNodes = buildFullTree(loc_pos, 0.0, xyzMin, xyzMax, extent, loc_P, loc_pos, ForceSoftening)
 
         # compute the potential
         if phaseflag == 0:
@@ -1156,10 +1175,15 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
             # find particle with the minimum potential
             for i in range(len):
                 p = ud[i]['index']
-                pot = subfind_treeevaluate_potential(p, P_Pos, P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+
+                # WRONG!: mismatch between tree structures (local) and P/P_Pos (global)
+                #pot = subfind_treeevaluate_potential(p, P_Pos, P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+
+                # updated:
+                pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
 
                 PS[p]['Potential'] = G / atime * pot
-                #print(' [%2d] p = %3d pot = %g (%g)' % (i,p,pot,PS[p]['Potential']))
+                #print(' [%2d] p = %3d pot = %g (Potential=%g)' % (i,p,pot,PS[p]['Potential']))
 
                 if PS[p]['Potential'] < minpot or minindex == -1:
                     # new minimum potential found
@@ -1168,13 +1192,16 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
 
             # position of minimum potential (CELL_CENTER_GRAVITY)
             pos = P_Pos[minindex]
+            #print('iter=%d minpot=%g minindex=%d pos=%g %g %g' % (iter_num,minpot,minindex,pos[0],pos[1],pos[2]))
         else:
             # only repeat for those particles close to the unbinding threshold
             for i in range(len):
                 p = ud[i]['index']
 
                 if PS[p]['BindingEnergy'] >= weakly_bound_limit:
-                    pot = subfind_treeevaluate_potential(p, P_Pos, P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+                    # WRONG!: see above
+                    #pot = subfind_treeevaluate_potential(p, P_Pos, P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+                    pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
                     PS[p]['Potential'] *= G / atime
 
         # calculate the bulk velocity and center of mass
@@ -1190,6 +1217,9 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
                 s[j] += P[p]['Mass'] * ddxx
                 v[j] += P[p]['Mass'] * P[p]['Vel'][j]
 
+            #print('bulk i=%d p=%d ID=%d pos=%g %g %g ddxx=%g mass=%g vel=%g %g %g' % \
+            #    (i,p,P[p]['ID'],P_Pos[p,0],P_Pos[p,1],P_Pos[p,2],ddxx,P[p]['Mass'],P[p]['Vel'][0],P[p]['Vel'][1],P[p]['Vel'][2]))
+
             TotMass += P[p]['Mass']
 
         for j in range(3):
@@ -1201,6 +1231,8 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
                 s[j] += boxsize
             while(s[j] >= boxsize):
                 s[j] -= boxsize
+
+        #print('iter=%d v=%g %g %g s=%g %g %g TotMass=%g' % (iter_num,v[0],v[1],v[2],s[0],s[1],s[2],TotMass))
 
         # compute binding energy for all particles
         for i in range(len):
@@ -1220,14 +1252,19 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
             bnd_energy[i] = PS[p]['BindingEnergy']
 
         # sort by binding energy, largest first
-        bnd_energy_sorted = sorted(bnd_energy, reverse=True) # reverse=True ? double check
+        bnd_energy = np.sort(bnd_energy)[::-1]
+
+        #for i in range(len):
+        #    p = ud[i]['index']
+        #    print('i=%d p=%d ID=%d binding_energy = %g pot = %g soft = %g' % (i,p,P[p]['ID'],bnd_energy[i],PS[p]['Potential'],SofteningTable[P[p]['SofteningType']]))
 
         quarter_ind = np.int(np.floor(0.25*len))
-        energy_limit = bnd_energy_sorted[quarter_ind]
+        energy_limit = bnd_energy[quarter_ind]
         unbound = 0
 
         for i in range(len-1):
-            if bnd_energy_sorted[i] > 0:
+            #print('i=%d unbound=%d bnd_energy[i]=%g' % (i,unbound,bnd_energy[i]))
+            if bnd_energy[i] > 0:
                 unbound += 1
             else:
                 unbound -= 1
@@ -1235,22 +1272,29 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
             if unbound <= 0:
                 break
 
-        weakly_bound_limit = bnd_energy_sorted[i]
+        weakly_bound_limit = bnd_energy[i]
 
-        # now omit unbound particles, but at most 1/4 of the original size (not really)
+        # now omit unbound particles, but at most 1/4 of the original size
         unbound = 0
         len_non_gas = 0
+        i = 0
 
-        for i in range(len):
+        while i < len:
             p = ud[i]['index']
 
             if PS[p]['BindingEnergy'] > 0 and PS[p]['BindingEnergy'] > energy_limit:
                 unbound += 1
+                #print('replace ud[i=%d] p=%d with ud=[len-1=%d] p=%d' % (i,ud[i]['index'],len-1,ud[len-1]['index']))
                 ud[i] = ud[len-1]
                 i -= 1
                 len -= 1
-            elif P[p]['Type'] != 0:
+
+            if P[p]['Type'] != 0:
                 len_non_gas += 1
+
+            i += 1
+
+        #print(' subfind_unbind(): iter =',iter_num,' length = ',len,' unbound = ',unbound,' phase = ',phaseflag,' wbl = ',weakly_bound_limit)
 
         # already too small?
         if len < DesLinkNgb:
@@ -1262,7 +1306,7 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
                 phaseflag = 1
         else:
             if unbound == 0:
-                phaseflag = 0
+                phaseflag = 0 # repeat everything once more for all particles
                 unbound = 1
 
         if iter_num > max_iter:
@@ -1327,11 +1371,11 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     count_cand = 0
     listofdifferent = np.zeros( 2, dtype=np.int32 )
 
-    print('Tree built and arrays sorted, beginning neighbor search...')
+    #print('Tree built and arrays sorted, beginning neighbor search...')
 
     for i in range(N):
         # find neighbors, note: returned neighbors are already sorted by distance (ascending)
-        if i % np.int(N/10) == 0: print(' ',np.round(float(i)/N*100),'%')
+        #if i % np.int(N/10) == 0: print(' ',np.round(float(i)/N*100),'%')
         pos = P_Pos[i]
         h_guess = PS[i]['Hsml']
 
@@ -1384,7 +1428,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
             Next[i] = -1
 
         elif ndiff == 2:
-            # the particle mergers two groups together
+            # the particle merges two groups together
             head = listofdifferent[0]
             head_attach = listofdifferent[1]
 
@@ -1439,7 +1483,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     candidates[count_cand]['head'] = head
     count_cand += 1
 
-    print('Searches done, ended with [',count_cand,'] candidates, now unbinding...')
+    #print('Searches done, ended with [',count_cand,'] candidates, now unbinding...')
 
     # go through them once and assign the rank
     p = head
@@ -1453,6 +1497,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     # for each candidate, we now pull out the rank of its head
     for i in range(count_cand):
         candidates[i]['rank'] = Len[candidates[i]['head']]
+        #print(' cand: [',i,'] of [',count_cand,'] with length ',candidates[i]['len'])
 
     for i in range(N):
         Tail[i] = -1
@@ -1473,7 +1518,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
                 len += 1
             p = Next[p]
 
-        print(' cand: [',i,'] of [',count_cand,'] with length ',len)
+        #print('unbinding cand: [',i,'] of [',count_cand,'] with length ',len)
         #if i == count_cand-1:
         #    print(' SKIP JUST FOR NOW')
         #    continue
@@ -1494,7 +1539,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
             candidates[i]['nsub'] = -1
             candidates[i]['bound_length'] = 0
 
-        p = Next[p]
+    #print('GroupLen=%d, number of substructures: %d (before unbinding: %d)' % (P.size,nsubs,count_cand))
 
     return count_cand, nsubs, candidates, Tail, Next, P, PS, SphP, StarP, BHP
 
@@ -1552,6 +1597,12 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
     subnr = 0
     totlen = 0
 
+    v   = np.zeros( 3, dtype=np.float64 )
+    s   = np.zeros( 3, dtype=np.float64 )
+    pos = np.zeros( 3, dtype=np.float64 )
+    len_type = np.zeros( NTYPES, dtype=np.int32 )
+
+    # loop over candidates
     for k in range(candidates.size):
         len = candidates[k]['bound_length']
         totlen += len
@@ -1569,20 +1620,44 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
         if count != len:
             raise Exception('Mismatch.')
 
-        # subfind_determine_sub_halo_properties(); start
-        # temporary allocations
-        len_type = np.zeros( NTYPES, dtype=np.int32 )
-        #len_type_loc = np.zeros( NTYPES, dtype=np.int32 )
-        pos = np.zeros( 3, dtype=np.float64 )
+        # generate P_Pos, pure ndarray and handle CELL_CENTER_GRAVITY
+        P_Pos = np.zeros( (len,3), dtype=np.float64 )
 
-        sfr = 0.0
-        bh_Mass = 0.0
-        bh_Mdot = 0.0
-        windMass = 0.0
+        for i in range(len):
+            if P[i]['Type'] == 0:
+                P_Pos[i,:] = PS[i]['Center']
+            else:
+                P_Pos[i,:] = P[i]['Pos']
+
+        # subfind_determine_sub_halo_properties(); start
+
+        # allocations and zeroing
+        s *= 0
+        v *= 0
+        pos *= 0
+        len_type *= 0
+        
+        mass          = np.double(0.0)
+        massinrad     = np.double(0.0)
+        massinhalfrad = np.double(0.0)
+        massinmaxrad  = np.double(0.0)
+
+        sfr          = np.double(0.0)
+        sfrinrad     = np.double(0.0)
+        sfrinhalfrad = np.double(0.0)
+        sfrinmaxrad  = np.double(0.0)
+        gassMassSfr  = np.double(0.0)
+
+        bh_Mass = np.double(0.0)
+        bh_Mdot = np.double(0.0)
+
+
+        windMass  = np.double(0.0)
 
         minindex = -1
         minpot = 1.0e30
 
+        # start
         for i in range(len):
             p = ud_index[i]
             auxid = P[p]['AuxDataID']
@@ -1603,8 +1678,8 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
             if P[p]['Type'] == 4 and StarP[auxid]['BirthTime'] < 0:
                 windMass += P[p]['Mass']
 
-        #for i in range(NTYPES):
-        #    len_type_loc[i] = len_type[i]
+        #for i in range(NTYPES):  # delete, unused
+        #    len_type_loc[i] = len_type[i]  # delete, unused
 
         assert minindex != -1
 
@@ -1614,7 +1689,6 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
                 pos[j] = SphP[ PS[minindex]['OldIndex'] ]['Center'][j]
             else:
                 pos[j] = P[minindex]['Pos'][j]
-        #pos = P_Pos[minindex]
 
         # determine the particle ID with the smallest binding energy
         minindex = -1
@@ -1630,9 +1704,19 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
 
         mostboundid = P[minindex]['ID']
 
-        # let's get bulk velocity and the center-of-mass, here we still take all particles
-
         print('subnr ', subnr, ' len', len, ' pos:',pos,' mostboundid',mostboundid,' lentype',len_type)
+
+        # get bulk velocity and the center-of-mass, here we still take all particles
+        for i in range(len):
+            p = ud_index[i]
+
+            for j in range(3):
+                ddxx = _NEAREST( P_Pos[p,j] - pos[j], boxhalf, boxsize )
+                s[j] += P[p]['Mass'] * ddxx
+                v[j] ++ P[p]['Mass'] * P[p].Vel[j]
+
+            mass += P[p]['Mass']
+
         # ...
         # subfind_determine_sub_halo_properties(); end
 
@@ -1653,7 +1737,7 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
     
 
 
-def set_softenings(P, SphP, sP):
+def set_softenings(P, SphP, sP, snapLoaded=False):
     """ Generate SofteningTable following grav_softening.c, and see P[].SofteningType values (based on sizes/masses). """
     def get_softeningtype_for_hydro_cell(volume):
         radius = np.power(volume * 3.0 / (4.0 * np.pi), 1.0 / 3)
@@ -1710,7 +1794,7 @@ def set_softenings(P, SphP, sP):
     ForceSoftening[NSOFTTYPES + NSOFTTYPES_HYDRO] = 0
 
     # handle P[].SofteningType (snapshot load only)
-    if 1:
+    if snapLoaded:
         print('Setting P[].SofteningType for snapshot load.')
         # INDIVIDUAL_GRAVITY_SOFTENING=32 for L35n2160TNG
         w = np.where(P['Type'] == sP.ptNum('bhs'))[0]
@@ -1733,27 +1817,91 @@ def run_test():
     # load
     P, PS, SphP, StarP, BHP = load_snapshot_data(sP, GrNr=100) # testing
 
-    SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
+    SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP, snapLoaded=True)
 
     # execute
     count_cand, nsubs, candidates, Tail, Next, P, PS, SphP, StarP, BHP = subfind(P, PS, SphP, StarP, BHP, 
-        sP.scalefac, sP.units.H_z, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
+        sP.scalefac, sP.units.H_of_a, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
 
     print("Number of substructures: %d (before unbinding: %d)" % (nsubs,count_cand))
 
     candidates = subfind_properties_1(candidates)
-    test = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, sP.scalefac, sP.units.H_z, sP.units.G, sP.boxSize)
+    test = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, sP.scalefac, sP.units.H_of_a, sP.units.G, sP.boxSize)
 
     import pdb; pdb.set_trace()
 
 def run_test2():
     """ Testing. """
     from util.simParams import simParams
-    # snap=5 is fof0 SKIPPED (with new fof_0 dump), snap=4 is normal (with corrupt fof_0 dump)
-    #sP = simParams(res=512,run='tng',snap=5,variant='5006')
+    # snap=4 is normal z=0 with additional fof_0 dump files
+    sP = simParams(res=128,run='tng',snap=2,variant='0000')
+
+    # NOTE: at z=3 is serial algorithm in main run, at z<=2 (snap>=2) is collective algorithm
 
     # L35n2160TNG started skipping fof0 subfind at snapshot 69 and onwards
-    sP = simParams(res=2160,run='tng',snap=69)
+    #sP = simParams(res=2160,run='tng',snap=69)
 
+    # execute
+    temp_save_file = 'testing_%s_%d.npz' % (sP.simName,sP.snap)
+
+    if isfile(temp_save_file):
+        r = np.load(temp_save_file)
+        print('Loaded save file [%s].' % (temp_save_file))
+
+    else:
+        # load
+        P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=0)
+
+        SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
+
+        # execute subfind
+        count_cand, nsubs, candidates, Tail, Next, P, PS, SphP, StarP, BHP = subfind(P, PS, SphP, StarP, BHP, 
+            sP.scalefac, sP.units.H_of_a, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
+
+        # save
+        np.savez(temp_save_file, count_cand=count_cand, nsubs=nsubs, candidates=candidates, Tail=Tail,
+                 Next=Next, P=P, PS=PS, SphP=SphP, StarP=StarP, BHP=BHP)
+
+        print('Saved temporary file [%s], re-run.' % temp_save_file)
+        return
+
+    print("Number of substructures: %d (before unbinding: %d)" % (r['nsubs'],r['count_cand']))
+
+    candidates = subfind_properties_1(r['candidates'])
+    #test = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, sP.scalefac, sP.units.H_of_a, sP.units.G, sP.boxSize)
+
+    # check
+    fof0 = sP.groupCatSingle(haloID=0)
+    print("Actual Fof0 has [%d] subhalos." % fof0['GroupNsubs'])
+
+    actual_lengths = sP.groupCat(fieldsSubhalos=['SubhaloLen'])[0:fof0['GroupNsubs']]
+
+    # candidates
+    print('actual: ', actual_lengths)
+    print('cands: ', candidates['bound_length'])
+    assert np.array_equal(actual_lengths,candidates['bound_length'])
+
+def benchmark():
+    """ Benchmark. """
+    from util.simParams import simParams
+    sP = simParams(res=128,run='tng',snap=4,variant='0000')
+    #sP = simParams(res=2160,run='tng',snap=69)
+
+    nLoops = 4
+
+    # load
     P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=0)
+
+    SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
+
     import pdb; pdb.set_trace()
+
+    # run Subfind a few times
+    print('Running [%d] Subfind loops now...' % nLoops)
+    start_time = time.time()
+
+    for i in range(nLoops):
+        print(i)
+        result = subfind(P, PS, SphP, StarP, BHP, sP.scalefac, sP.units.H_of_a, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
+
+    print('Ran Subfind [%d] times on [%s], took [%g] sec on avg' % (nLoops,sP.simName,(time.time()-start_time)/nLoops))
