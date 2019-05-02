@@ -264,7 +264,7 @@ def paperPlots():
                         qRestrictions=qRestrictions, haloIDs=[haloIDs])
 
     # fig 3 - cgm gas (n,T) 2D phase diagrams
-    if 1:
+    if 0:
         sP = simParams(res=2160,run='tng',redshift=0.5)
         qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
 
@@ -301,6 +301,56 @@ def paperPlots():
 
     # fig 4 - vis (single halo large) gas density, metallicity, MgII
     # TODO: check MgII for eEOS
+    if 1:
+        from vis.halo import renderSingleHalo
+
+        run        = 'tng'
+        res        = 2160
+        redshift   = 0.2
+        rVirFracs  = [0.25]
+        method     = 'sphMap' # sphMap_global for paper figure
+        nPixels    = [1000,1000]
+        axes       = [0,1]
+        labelZ     = True
+        labelScale = 'physical'
+        labelSim   = False
+        labelHalo  = True
+        relCoords  = True
+        rotation   = 'edge-on'
+
+        size       = 400.0
+        sizeType   = 'kpc'
+
+        # which halo?
+        sP = simParams(res=res, run=run, redshift=redshift)
+        haloIDs = _get_halo_ids(sP)[1]
+
+        haloID = haloIDs[0] # testing
+        conf = 4 # testing
+
+        # config
+        if conf == 0:
+            lines = ['H-alpha','H-beta','O--2-3728.81A','O--3-5006.84A','N--2-6583.45A','S--2-6730.82A']
+            partField_loc = 'sb_%s_lum_kpc' % lines[0] # + '_sf0' to set SFR>0 cells to zero
+            panels = [{'partType':'gas', 'partField':partField_loc, 'valMinMax':[34,41]}]
+
+        if conf == 4:
+            panels = [{'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}]
+
+        if conf == 5:
+            panels = [{'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]}]
+
+        if conf == 6:
+            panels = [{'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]}]
+
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = nPixels[0]
+            colorbars    = True
+            saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'])
+
+        # render
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
     # fig 5 - N_MgII vs. b (derive from map) 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     # add data points

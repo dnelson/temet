@@ -80,13 +80,13 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
 
     run     = 'tng'
     method  = 'sphMap'
-    nPixels = [3840,2160]
+    nPixels = [3840,2160] #[7680,7680]
     axes    = [0,1] # x,y
     res     = 2160
     variant = 'subbox2'
 
-    labelScale = 'physical'
-    labelZ     = True
+    labelScale = 'physical' # 8k=False
+    labelZ     = True # 8k=False
 
     if conf == 'one':
         # TNG50_sb2_gasvel_stars movie: gasvel        
@@ -116,8 +116,8 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
         # movie config
         minZ      = 0.0
         maxZ      = 50.0 # tng subboxes start at a=0.02
-        maxNSnaps = 3068 # there are 867 snaps with excessively small spacing between a=0.33 and a=0.47 (1308-2344)
-                         # as a final config, filter out half: take Nsb_final-867/2 (currently: 3500-433+eps = 3068)
+        maxNSnaps = 3168 # there are 867 snaps with excessively small spacing between a=0.33 and a=0.47 (1308-2344)
+                         # as a final config, filter out half: take Nsb_final-867/2 (currently: 3600-433+eps = 3168)
 
     # for TNG100 set 2.5 min max (150 sec * 30 fps), for TNG300 use all subboxes (only ~2500)
     if res in [1820,2500]:

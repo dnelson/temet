@@ -1712,7 +1712,7 @@ def addBoxMarkers(p, conf, ax):
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
-        if p['sP'].redshift >= 0.99:
+        if p['sP'].redshift >= 0.99 or np.round(10*p['sP'].redshift)/10 == p['sP'].redshift:
             zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
@@ -1837,6 +1837,8 @@ def addBoxMarkers(p, conf, ax):
             # just Mstar
             str2 = "log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
+        if 'sfr' in str(p['labelHalo']):
+            legend_labels.append( 'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFR'])
         if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
             legend_labels.append( str1 )
@@ -2002,14 +2004,15 @@ def setColorbarColors(cb, color2):
     plt.setp(plt.getp(cb.ax.axes, 'yticklabels'), color=color2)
 
 def addCustomColorbars(fig, ax, conf, config, heightFac, barAreaBottom, barAreaTop, color2, 
-                       rowHeight, colWidth, bottomNorm, leftNorm, cmap=None):
+                       rowHeight, colWidth, bottomNorm, leftNorm, hOffset=None, cmap=None):
     """ Add colorbar(s) with custom positioning and labeling, either below or above panels. """
     if not conf.colorbars:
         return
 
     factor  = 0.80 # bar length, fraction of column width, 1.0=whole
     height  = 0.04 # colorbar height, fraction of entire figure
-    hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
+    if hOffset is None:
+        hOffset = 0.4  # padding between image and top of bar (fraction of bar height)
     tOffset = 0.20 # padding between top of bar and top of text label (fraction of bar height)
     lOffset = 0.02 # padding between colorbar edges and end label (frac of bar width)
 
@@ -2315,6 +2318,9 @@ def renderMultiPanel(panels, conf):
                 rowHeightRatio = p['nPixels'][1] / p['nPixels'][0] # e.g. 0.25 for 4x longer than tall
                 nShortPanels += 1
 
+        if varRowHeights and nRows == 2 and nCols == 1: # single face-on edge-on combination
+            barAreaBottom *= (1-rowHeightRatio/2)
+
         assert nShortPanels/nCols == np.round(nShortPanels/nCols) # exact number of panels to make full rows
         nShortRows = nShortPanels / nCols
 
@@ -2426,20 +2432,27 @@ def renderMultiPanel(panels, conf):
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:
             widthFrac = 0.4
+            hOffset = None
             heightFac = np.max([1.0/nRows, 0.35])
+
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
-            if nRows == 2: heightFac *= 1.3 # increase
+            if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1:
                 heightFac *= 0.5 # decrease
                 if conf.fontsize == min_fontsize: # small images
                     heightFac *= 1.6
                     widthFrac = 0.8
             if nRows == 1 and nCols in [2,3]: heightFac *= 0.7 # decrease
+            if nRows == 2 and nCols == 1 and varRowHeights:
+                # single edge-on face-on combination
+                heightFac = 0.7
+                widthFrac = 0.9
+                hOffset = -0.5
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal
                 addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 
-                                   rowHeight, widthFrac, bottomNorm, 0.5-widthFrac/2)
+                                   rowHeight, widthFrac, bottomNorm, 0.5-widthFrac/2, hOffset=hOffset)
             else:
                 # normal, offset to the left
                 addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 

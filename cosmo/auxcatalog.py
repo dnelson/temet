@@ -2105,6 +2105,10 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
             ion = cosmo.cloudy.cloudyIon(None)
             rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
+        if 'MH2' in species:
+            print('Coverting [H atoms/cm^2] to [H molecules/cm^2].')
+            rr /= 2 # [H atoms/cm^2] to [H molecules/cm^2]
+
         rr = np.log10(rr)
 
     if species == 'Z':
