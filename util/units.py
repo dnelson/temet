@@ -39,7 +39,7 @@ class units(object):
     hydrogen_massfrac = 0.76            # XH (solar)
     helium_massfrac   = 0.24            # Y (solar)
     mu                = 0.6             # for ionized primordial (e.g. hot halo gas)
-    Gravity           = 6.673e-8        # G in cgs, cm**3/g/s**2
+    Gravity           = 6.6738e-8       # G in cgs, cm**3/g/s**2 (== GRAVITY)
     H0_h1_s           = 3.24078e-18     # H0 (with h=1) in [1/s] (=H0_kmsMpc/HubbleParam/kpc_in_km) (=HUBBLE in Arepo)
     Z_solar           = 0.0127          # solar metallicity = (massZ/massTot) in the sun
     L_sun             = 3.839e33        # solar luminosity [erg/s]
