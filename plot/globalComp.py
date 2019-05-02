@@ -1726,10 +1726,10 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     # config
     if molecular:
         # H2
-        speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
+        #speciesList = ['nH2_popping_BR_depth10','nH2_popping_GK_depth10','nH2_popping_KMT_depth10']
         #speciesList = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
-        #speciesList = ['nH2_diemer_GD14_depth10', 'nH2_diemer_GK11_depth10']
-        #speciesList = ['nH2_diemer_K13_depth10', 'nH2_diemer_S14_depth10']
+        #speciesList = ['nH2_diemer_GD14_depth10','nH2_diemer_GK11_depth10','nH2_diemer_K13_depth10','nH2_diemer_S14_depth10']
+        speciesList = ['nH2_popping_GK_depth10']
         #speciesList = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10','nH2_popping_GK_depth10_cell1']
         #speciesList = ['nH2_popping_GK_depth5','nH2_popping_GK_depth10','nH2_popping_GK_depth20','nH2_popping_GK','nH2_popping_GK_depth1']
         sStr = 'H_2'
@@ -2434,8 +2434,9 @@ def plots():
     # add runs: fullboxes
     sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
-    #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
-    #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=4.0) )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
@@ -2467,8 +2468,8 @@ def plots():
     if 1:
         # testing
         pdf = PdfPages('cddfh2_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        nHIcddf(sPs, pdf, simRedshift=0.0, molecular=True)
-        nHIcddf(sPs, pdf, simRedshift=0.0, molecular=True, moment=1)
+        nHIcddf(sPs, pdf, simRedshift=None, molecular=True)
+        nHIcddf(sPs, pdf, simRedshift=None, molecular=True, moment=1)
         pdf.close()
         return
 

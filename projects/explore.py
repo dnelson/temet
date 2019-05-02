@@ -10,6 +10,7 @@ import h5py
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.signal import savgol_filter
 
 from util import simParams
 from util.helper import loadColorTable, logZeroNaN, running_median
@@ -21,11 +22,10 @@ def singleHaloImage_CelineMuseProposal(conf=6):
     """ Metallicity distribution in CGM image for 2019 MUSE proposal. """
     run        = 'tng'
     res        = 2160
-    redshift   = 0.5 # z=1.0 for paper figure
+    redshift   = 0.5
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap' # sphMap_global for paper figure
-    #method     = 'histo'
-    nPixels    = [100,100] #[800,800] # for celinemuse figure
+    nPixels    = [800,800] # for celinemuse figure
     axes       = [0,1]
     labelZ     = True
     labelScale = 'physical'
@@ -34,14 +34,40 @@ def singleHaloImage_CelineMuseProposal(conf=6):
     relCoords  = True
     rotation   = 'edge-on'
 
-    size      = 300.0
+    size      = 100.0
     sizeType  = 'kpc'
-    size = 30.0 # zoom-in
+
+    if conf == 7:
+        rVirFracs = [5.0]
+        fracsType = 'rHalfMassStars'
+
+        faceOnOptions = {'rotation'   : 'face-on',
+                         'labelScale' : 'physical',
+                         'labelHalo'  : 'mstar,sfr',
+                         'labelZ'     : True,
+                         'nPixels'    : [600,600]}
+
+        edgeOnOptions = {'rotation'   : 'edge-on',
+                         'labelScale' : False,
+                         'labelHalo'  : False,
+                         'labelZ'     : False,
+                         'nPixels'    : [600,200]}
 
     # which halo?
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    for hInd in [440839]:
+    if 1:
+        massBin = [10.48,10.5] # size = 100
+        #massBin = [10.0, 10.02] # size = 80
+        #massBin = [9.5,9.52] # size = 60
+        size = 100.0
+        
+        gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
+        w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
+        hInds = w[0]
+        #import pdb; pdb.set_trace()
+
+    for hInd in hInds:# [440839]: # 440839 for muse proposal
         panels = []
         haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
 
@@ -59,10 +85,16 @@ def singleHaloImage_CelineMuseProposal(conf=6):
         if conf == 6:
             panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]} )
 
+        if conf == 7:
+            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.0,21.8], **faceOnOptions} )
+            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.0,21.8], **edgeOnOptions} )
+
         class plotConfig:
             plotStyle    = 'edged'
             rasterPx     = 1000 #nPixels[0] 
             colorbars    = True
+            nCols        = 1
+            nRows        = 2
             #fontsize     = 42
             saveStr = panels[0]['partField'].replace("_lum","").replace("_kpc","")
             saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,hInd,saveStr,size)
@@ -193,9 +225,8 @@ def celineWriteH2CDDFBand():
     vars_diemer = ['nH2_diemer_GD14_depth10','nH2_diemer_GK11_depth10','nH2_diemer_K13_depth10','nH2_diemer_S14_depth10']
     vars_cellsize = ['nH2_popping_GK_depth10_cell3','nH2_popping_GK_depth10_cell1']
     vars_depth = ['nH2_popping_GK_depth5','nH2_popping_GK_depth20','nH2_popping_GK_depth1']
-    vars_z = [0.0, 1.0] # TODO: do z=1 somehow
 
-    speciesList = vars_sfr + vars_model
+    speciesList = vars_sfr + vars_model + vars_cellsize + vars_depth
 
     # load
     for i, species in enumerate(speciesList):
@@ -222,8 +253,8 @@ def celineWriteH2CDDFBand():
     # select reasonable range
     w = np.where(N_H2 >= 15.0)
     N_H2 = N_H2[w]
-    fN_H2_low = fN_H2_low[w]
-    fN_H2_high = fN_H2_high[w]
+    fN_H2_low = savgol_filter(fN_H2_low[w],sKn,sKo)
+    fN_H2_high = savgol_filter(fN_H2_high[w],sKn,sKo)
 
     # plot
     figsize = np.array([14,10]) * 0.7

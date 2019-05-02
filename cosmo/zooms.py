@@ -33,6 +33,7 @@ def pick_halos():
 
     for i, bin in enumerate(bins):
         print(bin,hInds[i])
+    print('Note: skipped h305 (IC gen failures, should replace in its mass bin.')
 
 def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 

@@ -426,6 +426,8 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
         for _ in range(colorOff):
             c = next(ax._get_lines.prop_cycler)['color']
 
+        txt = []
+
         # loop over radii and/or vcut selections
         for i, rad_ind in enumerate(radIndsPlot):
 
@@ -502,6 +504,8 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
                 if markersize > 0: lsInd = 0
                 l, = ax.plot(xm, ym, linestyles[lsInd], lw=lw, alpha=1.0, color=c, label=label)
 
+                txt.append( {'mstar':xm,'eta':ym,'rad':radMidPoint,'vcut':vcut_vals[vcut_ind]} )
+
                 # shade percentile band?
                 if i == j or markersize > 0 or 'mstar' not in xQuant:
                     y_down = pm[0,:] #np.array(ym[:-1]) - sm[:-1]
@@ -519,6 +523,26 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
 
                     # plot bottom
                     ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
+
+        # print text file
+        filename = 'fig5_eta_vs_mstar_z=%.1f.txt' % sP.redshift
+        out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
+        out += '# Figure 5 Mass Loading vs. Stellar Mass (%s z=%.1f) (r = %s)\n' % (sP.simName, sP.redshift, txt[0]['rad'])
+        out += '# M* [log Msun]'
+        for entry in txt: out += ', v_cut=%d' % entry['vcut']
+        out += ' (all [log km/])\n'
+
+        for i in range(len(txt)): # make sure all stellar mass values are the same
+            assert np.array_equal(txt[i]['mstar'], txt[0]['mstar'])
+
+        for i in range(txt[0]['mstar'].size):
+            out += '%7.2f' % txt[0]['mstar'][i]
+            for j in range(len(txt)): # loop over redshifts
+                out += ' %7.3f' % txt[j]['eta'][i]
+            out += '\n'
+
+        with open(filename, 'w') as f:
+            f.write(out)
 
         # special plotting behavior (including observational data sets)
         from util.loadExtern import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
@@ -1439,7 +1463,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
     # plot config
     ylim = [-3.0,2.0] if (config is None or 'ylim' not in config) else config['ylim']
     vcuts = [0,1,2,3,4] if quant != 'vrad' else [None]
-    linestyles = ['-','--',':','-.']
+    linestyles = ['-','--',':','-.',':']
     zStr = str(sP.snap) if len(redshifts) == 1 else 'z='+'-'.join(['%.1f'%z for z in redshifts])
 
     limits = {'temp'        : [2.9,8.1],
@@ -1478,6 +1502,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
             ax.plot([+np.pi/2,+np.pi/2],ylim,'-',color='#aaaaaa',alpha=0.3)
 
         # loop over redshifts
+        txt = []
         colors = []
 
         for j, redshift in enumerate(redshifts):
@@ -1520,6 +1545,9 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                     pm = logZeroNaN(pm)
                     sm = np.nanstd(logZeroNaN(mdot_local), axis=0)
 
+                if not isinstance(yy,np.ndarray):
+                    continue # single number
+
                 yy = logZeroNaN(yy) # zero flux -> nan
 
                 # label and color
@@ -1544,6 +1572,8 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                 #l, = ax.plot(xm[:-1], ym[:-1], linestyles[i], lw=lw, alpha=1.0, color=c, label=label)
                 l, = ax.plot(xx, yy, linestyles[0], linestyle=linestyles[j], lw=lw, alpha=1.0, color=c, label=label)
 
+                txt.append( {'vout':xx, 'outflowrate':yy, 'redshift':redshift, 'mstar':mStarMidPoint})
+
                 if j == 0 and (i == 0 or i == len(mStarBins)-1):
                     #w = np.where( np.isfinite(pm[0,:]) & np.isfinite(pm[-1,:]) )[0]
                     #ax.fill_between(xx[w], pm[0,w], pm[-1,w], color=l.get_color(), interpolate=True, alpha=0.05)
@@ -1561,6 +1591,29 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                         ls = ['-','--',':'][k]
                         ymax = -2.8 if k == 0 else -2.85
                         ax.plot( [xx[w],xx[w]], [-3.0,ymax], color=l.get_color(), lw=lw-0.5, linestyle=ls, alpha=0.5)
+
+        # print text file
+        filename = 'fig8_outflowrate_vs_vout_%dkpc.txt' % radMidPoint
+        out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
+        out += '# Figure 8 Gas Outflow Rate decomposed into Outflow Velocity (%s r = %d kpc)\n' % (sP.simName, radMidPoint)
+        out += '# Multiple stellar mass bins and redshifts for every entry\n'
+        out += '# vel [km/s]'
+        for entry in txt: out += ', M*=%.1f_z=%.1f' % (entry['mstar'],entry['redshift'])
+        out += '\n# (all values after vel are gas mass outflow rate [log msun/yr]) (all masses [log msun])\n'
+
+        for i in range(len(txt)): # make sure all vel values are the same
+            assert np.array_equal(txt[i]['vout'], txt[0]['vout'])
+
+        for i in range(txt[0]['vout'].size):
+            if txt[0]['vout'][i] < 0:
+                continue
+            out += '%4d' % txt[0]['vout'][i]
+            for j in range(len(txt)): # loop over M* bins and redshifts
+                out += ' %6.3f' % txt[j]['outflowrate'][i]
+            out += '\n'
+
+        with open(filename, 'w') as f:
+            f.write(out)
 
         # legends and finish plot
         if len(redshifts) > 1:
@@ -2644,22 +2697,18 @@ def paperPlots(sPs=None):
         gasOutflowRatesVsQuant(TNG50, xQuant='mstar_30pkpc', ptType='total', eta=True, config=config)
 
         # mass loading as a function of M* at one redshift, few variations in both (radius,vcut)
-        config = {'vcutInds':[1,2,4], 'radInds':[1,2,5], 'stat':'mean', 'skipZeros':False, 'addModelTNG':True}
-        gasOutflowRatesVsQuant(TNG50, xQuant='mstar_30pkpc', ptType='total', eta=True, config=config)
+        #config = {'vcutInds':[1,2,4], 'radInds':[1,2,5], 'stat':'mean', 'skipZeros':False, 'addModelTNG':True}
+        #gasOutflowRatesVsQuant(TNG50, xQuant='mstar_30pkpc', ptType='total', eta=True, config=config)
 
-        # mass loading 2D contours in (radius,vcut) plane: redshift evolution
-        contours = [-1.5]
-        gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=contours, redshifts=redshifts, eta=True)
+        # old panel: mass loading 2D contours in (radius,vcut) plane: redshift evolution
+        #contours = [-1.5]
+        #gasOutflowRates2DStackedInMstar(TNG50, xAxis='rad', yAxis='vcut', mStarBins=mStarBinsSm, contours=contours, redshifts=redshifts, eta=True)
+
+        # new panel: mass loading vs. redshift in M* bins
+        #config = {'vcutInds':[0], 'radInds':[1], 'stat':'mean', 'ylim':[-0.5,2.5], 'skipZeros':False}
+        #gasOutflowRatesVsRedshift(TNG50, ptType='total', eta=False, config=config)
 
     if 0:
-        # fig 5 new panel: mass loading vs. redshift in M* bins
-        config = {'vcutInds':[0], 'radInds':[1], 'stat':'mean', 'ylim':[-0.5,2.5], 'skipZeros':False}
-        #gasOutflowRatesVsRedshift(TNG50, ptType='total', eta=False, config=config)
-        gasOutflowRatesVsRedshift(TNG50, ptType='total', eta=False, config=config)
-        #config['stat'] = 'median'
-        #gasOutflowRatesVsRedshift(TNG50, ptType='total', eta=True, config=config)
-
-    if 1:
         # fig 5 (v200norm appendix)
         config = {'vcutInds':[0,5,11,12], 'radInds':[1], 'stat':'mean', 'ylim':[-0.55,2.05], 'skipZeros':False, 'markersize':4.0, 'addModelTNG':True}
         gasOutflowRatesVsQuant(TNG50, xQuant='mstar_30pkpc', ptType='total', eta=True, config=config, v200norm=True)
@@ -2711,12 +2760,13 @@ def paperPlots(sPs=None):
         #plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloID=haloID,
         #    yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim)
 
-    if 0:
+    if 1:
         # fig 8: distribution of radial velocities
         config = {'radInd':2, 'stat':'mean', 'ylim':[-3.0, 1.0], 'skipZeros':False}
 
         gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBins, config=config)
-        #gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBinsSm2, config=config, redshifts=redshifts)
+        #gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBins, config=config, redshifts=[0.2,0.5,1.0,2.0,4.0])
+        #gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='vrad', mStarBins=mStarBinsSm2, config=config, redshift=redshifts)
 
     if 0:
         # fig 9: radial velocities of outflows (2D): dependence on temperature, for one m* bin
