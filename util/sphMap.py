@@ -103,10 +103,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
     pixelArea   = pixelSizeX * pixelSizeY # e.g. (ckpc/h)^2
 
     if pixelSizeX < pixelSizeY:
-        hsmlMin = 1.001 * pixelSizeX * 0.5
         hsmlMax = pixelSizeX * 500.0
     else:
-        hsmlMin = 1.001 * pixelSizeY * 0.5
         hsmlMax = pixelSizeY * 500.0
 
     # loop over all particles (Note: np.arange() seems to have a huge penalty here instead of range())
@@ -124,9 +122,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 continue
 
         # clamp smoothing length
-        if h < hsmlMin:
-            h = hsmlMin
-        elif h > hsmlMax:
+        if h > hsmlMax:
             h = hsmlMax
 
         # clip points outside box (x,y) dimensions
@@ -135,8 +131,8 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
            continue
 
         # position relative to box (x,y) corner
-        pos0 = p0 - (boxCen[0] - 0.5*boxSizeImg[0])
-        pos1 = p1 - (boxCen[1] - 0.5*boxSizeImg[1])
+        pos0 = _NEAREST(p0 - (boxCen[0] - 0.5*boxSizeImg[0]), BoxHalf[0], boxSizeSim[0])
+        pos1 = _NEAREST(p1 - (boxCen[1] - 0.5*boxSizeImg[1]), BoxHalf[1], boxSizeSim[1])
 
         h2 = h*h
         hinv = 1.0 / h
@@ -150,7 +146,7 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         ny = np.int(np.floor(h / pixelSizeY + 1))
 
         # if particle contained in one cell, dump everything into it
-        if nx*ny == 1:
+        if nx * ny == 1:
             # coordinates of pixel center of covering pixels
             xxx = _NEAREST_POS(x, boxSizeSim[0])
             yyy = _NEAREST_POS(y, boxSizeSim[1])
@@ -164,20 +160,17 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
                 continue
 
             if minIntProj:
-                # minimum intensity projection (kernel and mass
-                # weighted to determine max)
+                # minimum intensity projection (kernel and mass weighted to determine max)
                 if v * w < quant_out[i, j]:
                     dens_out [i, j] = v
                     quant_out[i, j] = v * w
             elif maxIntProj:
-                # maximum intensity projection (kernel and mass
-                # weighted to determine max)
+                # maximum intensity projection (kernel and mass weighted to determine max)
                 if v * w > quant_out[i, j]:
                     dens_out [i, j] = v
                     quant_out[i, j] = v * w
             else:
-                # normal weighted projection including
-                # contributions from all overlapping kernels
+                # normal weighted projection including contributions from all overlapping kernels
                 dens_out [i, j] += v
                 quant_out[i, j] += v * w
             continue
