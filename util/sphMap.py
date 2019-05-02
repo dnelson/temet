@@ -146,18 +146,23 @@ def _calcSphMap(pos,hsml,mass,quant,dens_out,quant_out,
         y = (np.floor( pos1 / pixelSizeY ) + 0.5) * pixelSizeY
 
         # number of pixels covered by particle
-        nx = np.floor(h / pixelSizeX + 1)
-        ny = np.floor(h / pixelSizeY + 1)
+        nx = np.int(np.floor(h / pixelSizeX + 1))
+        ny = np.int(np.floor(h / pixelSizeY + 1))
 
         # if particle contained in one cell, dump everything into it
         if nx*ny == 1:
+            # coordinates of pixel center of covering pixels
+            xxx = _NEAREST_POS(x, boxSizeSim[0])
+            yyy = _NEAREST_POS(y, boxSizeSim[1])
+
             # pixel array indices
-            i = np.int(x / pixelSizeX)
-            j = np.int(y / pixelSizeY)
+            i = np.int(xxx / pixelSizeX)
+            j = np.int(yyy / pixelSizeY)
+
             # skip if desired pixel is out of bounds
-            if i < 0 or i >= nPixels[0] or \
-               j < 0 or j >= nPixels[1]:
+            if i < 0 or i >= nPixels[0] or j < 0 or j >= nPixels[1]:
                 continue
+
             if minIntProj:
                 # minimum intensity projection (kernel and mass
                 # weighted to determine max)
@@ -1083,11 +1088,11 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
             if hsml_1 is None:
                 if refGrid is None:
                     if len(nPixels) == 2:
-                        # normal operation
+                        # normal operation, produce 2D array
                         _calcSphMap(pos,hsml,mass,quant,rDens,rQuant,
                                     boxSizeImg,boxSizeSim,boxCen,axes,ndims,nPixels,colDens,maxIntProj,minIntProj)
                     elif len(nPixels) == 3:
-                        # gridding
+                        # gridding, produce 3D array
                         _calcSphGrid(pos, hsml, mass ,quant, rDens, rQuant,
                                      boxSizeImg, boxSizeSim, boxCen, ndims,
                                      nPixels, colDens, maxIntProj, minIntProj)
