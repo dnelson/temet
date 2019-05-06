@@ -2,17 +2,13 @@
 util/subfind.py
   Implementation of (serial) subfind algorithm.
 """
-from __future__ import (absolute_import,division,print_function)#,unicode_literals)
-# unicode_literals: https://github.com/numpy/numpy/issues/2407 (to be fixed in numpy 1.15)
-from builtins import *
-
 import numpy as np
 import time
 import glob
 import struct
 import h5py
 from os.path import isfile
-from numba import jit
+from numba import jit, prange
 from util.sphMap import _NEAREST
 
 # DOUBLEPRECISION == 1
@@ -42,11 +38,11 @@ GFM_STELLAR_PHOTOMETRICS_K_LIMIT = 20.7   # limiting surface brightness determin
 GFM_MIN_METAL = -20.0                     # minimum metallicity
 MAX_FLOAT_NUMBER = 1e37
 
-# L35n2160TNG:
-#NSOFTTYPES = 6
-#MinimumComovingHydroSoftening = 0.05
-#SofteningComoving = [0.390, 0.390, 0.390, 0.670, 1.15, 2.0]
-#SofteningMaxPhys  = [0.195, 0.195, 0.390, 0.670, 1.15, 2.0]
+# L35n2160TNG: (also change P.BirthPos/Vel!) (can shorten SphP_mem.dtype for phase1)
+NSOFTTYPES = 6
+MinimumComovingHydroSoftening = 0.05
+SofteningComoving = [0.390, 0.390, 0.390, 0.670, 1.15, 2.0]
+SofteningMaxPhys  = [0.195, 0.195, 0.390, 0.670, 1.15, 2.0]
 
 # L25n128_0000 TESTING:
 #NSOFTTYPES = 4
@@ -55,10 +51,10 @@ MAX_FLOAT_NUMBER = 1e37
 #SofteningMaxPhys  = [2.0, 2.0, 4.0, 6.84]
 
 # L25n256_0000 TESTING:
-NSOFTTYPES = 5
-MinimumComovingHydroSoftening = 0.25
-SofteningComoving = [2.0, 2.0, 2.0, 3.42, 5.84]
-SofteningMaxPhys  = [1.0, 1.0, 2.0, 3.42, 5.84]
+#NSOFTTYPES = 5
+#MinimumComovingHydroSoftening = 0.25
+#SofteningComoving = [2.0, 2.0, 2.0, 3.42, 5.84]
+#SofteningMaxPhys  = [1.0, 1.0, 2.0, 3.42, 5.84]
 
 # define data types
 grad_data_dtype = np.dtype([
@@ -125,10 +121,11 @@ SphP_dtype_mem = np.dtype([
     ('Volume', MyFloat),
     ('Utherm', MySingle),
     ('Center', MyDouble, 3),
-    ('B', MyFloat, 3),
-    ('Metallicity', MyFloat),
-    ('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS),
-    ('Sfr', MySingle), # USE_SFR
+    # TODO: TEMPORARILY DISABLE THESE NEXT 4, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    #('B', MyFloat, 3),
+    #('Metallicity', MyFloat),
+    #('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS),
+    #('Sfr', MySingle), # USE_SFR
 ])
 
 StarP_dtype = np.dtype([ # GFM
@@ -147,6 +144,13 @@ StarP_dtype = np.dtype([ # GFM
     ('MassMetalsChemTags', MyFloat, GFM_N_CHEM_TAGS), # GFM_CHEMTAGS
     ('Hsml', MyFloat), # GFM_STELLAR EVOLUTION || GFM_WINDS
     ('Utherm', MyFloat) # GFM_WINDS
+])
+
+StarP_dtype_mem = np.dtype([ # GFM
+    ('BirthTime', MyFloat),
+    ('InitialMass', MyDouble),
+    ('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS),
+    ('Metallicity', MyFloat)
 ])
 
 BHP_dtype = np.dtype([ # BLACK_HOLES
@@ -184,25 +188,25 @@ BHP_dtype = np.dtype([ # BLACK_HOLES
     ('BH_Bpress', MyFloat) # BH_USE_ALFVEN_SPEED_IN_BONDI
 ])
 
-P_dtype = np.dtype([ # L25n128_000 TESTING:
+P_dtype = np.dtype([
     ('Pos', MyDouble, 3),
     ('Mass', MyDouble),
     ('Vel', MyFloat, 3),
     ('GravAccel', MySingle, 3),
     ('GravPM', MySingle, 3), # PMGRID
-    ('BirthPos', MySingle, 3), # L25n128_0000 TESTING ONLY
-    ('BirthVel', MySingle, 3), # L25n128_0000 TESTING ONLY
+    #('BirthPos', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF (absent in TNG50-1)
+    #('BirthVel', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF (absent in TNG50-1)
     ('Potential', MySingle), # EVALPOTENTIAL
     ('PM_Potential', MySingle), # EVALPOTENTIAL & PMGRID
-    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES -- NOTE! TODO! Could be corrupted (padding may not be where I guessed)
+    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES
     # TRACER_MC
     ('TracerHead', np.int32),
     ('NumberOfTracers', np.int32),
     ('OriginTask', np.int32),
     # general
-    ('pad_0', np.int32, 1), # STRUCT PADDING (L25n128_000)
-    ('ID', MyIDType), # TODO: padding before or after?
-    ('pad_1', np.int32, 1), # STRUCT PADDING (L25n128_000)
+    ('pad_0', np.int32, 1), # STRUCT PADDING (TODO CHECK)
+    ('ID', MyIDType),
+    ('pad_1', np.int32, 1), # STRUCT PADDING (TODO CHECK, was here 2x and not above)
     ('TI_Current', integertime),
     ('OldAcc', np.float32),
     ('GravCost', np.float32, GRAVCOSTLEVELS),
@@ -211,33 +215,6 @@ P_dtype = np.dtype([ # L25n128_000 TESTING:
     ('TimeBinGrav', np.int8),
     ('TimeBinHydro', np.int8)
 ])
-
-#P_dtype = np.dtype([ # L35n2160TNG configuration
-#    ('Pos', MyDouble, 3),
-#    ('Mass', MyDouble),
-#    ('Vel', MyFloat, 3),
-#    ('GravAccel', MySingle, 3),
-#    ('GravPM', MySingle, 3), # PMGRID
-#    #('BirthPos', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF
-#    #('BirthVel', MySingle, 3), # L35n2160TNG_FIX_E7BF4CF
-#    ('Potential', MySingle), # EVALPOTENTIAL
-#    ('PM_Potential', MySingle), # EVALPOTENTIAL & PMGRID
-#    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES
-#    # TRACER_MC
-#    ('TracerHead', np.int32),
-#    ('NumberOfTracers', np.int32),
-#    ('OriginTask', np.int32),
-#    # general
-#    ('ID', MyIDType),
-#    ('pad_0', np.int32, 2), # STRUCT PADDING
-#    ('TI_Current', integertime),
-#    ('OldAcc', np.float32),
-#    ('GravCost', np.float32, GRAVCOSTLEVELS),
-#    ('Type', np.uint8),
-#    ('SofteningType', np.uint8),
-#    ('TimeBinGrav', np.int8),
-#    ('TimeBinHydro', np.int8)
-#])
 
 P_dtype_mem = np.dtype([
     ('Pos', MyDouble, 3),
@@ -275,16 +252,12 @@ PS_dtype = np.dtype([
 ])
 
 PS_dtype_mem = np.dtype([
-    ('GrNr', np.int32),
-    # SUBFIND
     ('SubNr', np.int32),
-    ('OldIndex', np.int32), # TODO: can remove and simplify
-    ('Utherm', MyFloat),
+    ('OldIndex', np.int32), # could remove and save mem, if we shuffle all PartType0 to be first
     ('Density', MyFloat),
     ('Potential', MyFloat),
     ('Hsml', MyFloat),
-    ('BindingEnergy', MyFloat),
-    ('Center', MyDouble, 3), # CELL_CENTER_GRAVITY
+    ('BindingEnergy', MyFloat)
 ])
 
 cand_dtype = np.dtype([
@@ -428,18 +401,20 @@ def load_custom_dump(sP, GrNr):
     sizeBytes = group['GroupLen'] * P_dtype_mem.itemsize + \
                 group['GroupLen'] * PS_dtype_mem.itemsize + \
                 group['GroupLenType'][sP.ptNum('gas')] * SphP_dtype_mem.itemsize + \
-                group['GroupLenType'][sP.ptNum('stars')] * StarP_dtype.itemsize + \
+                group['GroupLenType'][sP.ptNum('stars')] * StarP_dtype_mem.itemsize + \
                 group['GroupLenType'][sP.ptNum('bhs')] * BHP_dtype.itemsize
     sizeGB = sizeBytes / 1024.0**3
     print('Memory allocation for partial arrays, group members only, will require [%.2f GB]' % sizeGB)
 
     sizeGB = int(1.1*group['GroupLen']) * node_dtype.itemsize / 1024.0**3
     print('Memory allocation for tree will require another at least [%.2f GB]' % sizeGB)
+    sizeGB = group['GroupLen'] * (ud_dtype.itemsize + cand_dtype.itemsize + 16) / 1024.0**3
+    print('Memory allocation for subfind identification will require another at least [%.2f GB]' % sizeGB)
 
     P     = np.zeros(group['GroupLen'], dtype=P_dtype_mem)
     PS    = np.zeros(group['GroupLen'], dtype=PS_dtype_mem) # memset(0) in fof.c
     SphP  = np.empty(group['GroupLenType'][sP.ptNum('gas')], dtype=SphP_dtype_mem)
-    StarP = np.empty(group['GroupLenType'][sP.ptNum('stars')], dtype=StarP_dtype)
+    StarP = np.empty(group['GroupLenType'][sP.ptNum('stars')], dtype=StarP_dtype_mem)
     BHP   = np.empty(group['GroupLenType'][sP.ptNum('bhs')], dtype=BHP_dtype)
 
     NumP = 0
@@ -473,7 +448,7 @@ def load_custom_dump(sP, GrNr):
         # particles
         w = np.where(PS_temp['GrNr'] == GrNr)
         gr_NumP = len(w[0])
-        print('[%4d] [%7d of %7d] particles belong to group, now have [%9d of %9d] total.' % (i,gr_NumP,PS_temp.size,NumP+gr_NumP,group['GroupLen']))
+        print('[%4d] [%7d of %7d] particles belong to group, now have [%9d of %9d] total.' % (i,gr_NumP,PS_temp.size,NumP+gr_NumP,group['GroupLen']), flush=True)
         #print(' file: sphp=%d, starp=%d, bhp=%d, min_ind=%d' % (NumSphP_loc, NumStarP_loc, NumBHP_loc, min_ind))
 
         # only save needed fields to optimize memory usage
@@ -483,6 +458,7 @@ def load_custom_dump(sP, GrNr):
             P[field][NumP:NumP+gr_NumP] = P_temp[field][w]
 
         assert P_temp['Type'].min() >= 0 and P_temp['Type'].max() < NTYPES # sanity check for struct padding success
+        assert P_temp['ID'].min() > 0 and P_temp['ID'].max() < 1000000000000000000
         assert P_temp['TimeBinGrav'].min() >= 25 and P_temp['TimeBinGrav'].max() <= 52
         assert P_temp['Pos'].min() >= 0.0 and P_temp['Pos'].max() <= sP.boxSize
 
@@ -511,15 +487,19 @@ def load_custom_dump(sP, GrNr):
             Pw_aux = P_temp['AuxDataID'][w_star]
             assert Pw_aux.min() >= 0 and Pw_aux.max() < NumStarP_loc
 
-            StarP[NumStarP:NumStarP+NumStarP_loc] = StarP_temp[Pw_aux]
+            for field in StarP_dtype_mem.names:
+                StarP[field][NumStarP:NumStarP+NumStarP_loc] = StarP_temp[field][Pw_aux]
 
-            # reassign P.AuxData ID as indices into new global StarP, and likewise for StarP.PID
+            # reassign P.AuxData ID as indices into new global StarP
             global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 4)[0] + NumP            
             P['AuxDataID'][global_p_inds] = np.arange( len(w_star[0]) ) + NumStarP
-            StarP[NumStarP:NumStarP+NumStarP_loc]['PID'] = global_p_inds
-            
-            assert np.array_equal(StarP_temp[Pw_aux]['PID']-min_ind, w_star[0])
-            assert np.array_equal(P_temp['AuxDataID'][ StarP_temp[Pw_aux]['PID']-min_ind ], Pw_aux)
+
+            if 0:
+                # and likewise for StarP.PID (unused)
+                StarP[NumStarP:NumStarP+NumStarP_loc]['PID'] = global_p_inds
+                
+                assert np.array_equal(StarP_temp[Pw_aux]['PID']-min_ind, w_star[0])
+                assert np.array_equal(P_temp['AuxDataID'][ StarP_temp[Pw_aux]['PID']-min_ind ], Pw_aux)
 
             NumStarP += len(w_star[0]) # != NumStarP_loc !
 
@@ -553,18 +533,19 @@ def load_custom_dump(sP, GrNr):
     assert NumBHP == group['GroupLenType'][sP.ptNum('bhs')]
 
     # final checks: PID <-> AuxDataID mapping (global)
-    w_stars = np.where(P['Type'] == 4)
-    assert np.array_equal(StarP[P['AuxDataID'][w_stars]]['PID'], w_stars[0])
+    #w_stars = np.where(P['Type'] == 4)
+    #assert np.array_equal(StarP[P['AuxDataID'][w_stars]]['PID'], w_stars[0]) # unused
     w_bhs = np.where(P['Type'] == 5)
     assert np.array_equal(BHP[P['AuxDataID'][w_bhs]]['PID'], w_bhs[0])
 
-    print('Particle counts of all types verified, match expected Group [%d] lengths.\n' % GrNr)
+    print('Particle counts of all types verified, match expected Group [%d] lengths.\n' % GrNr, flush=True)
 
     # verify we have collected the -right- particles
-    for pt in [0,1,4,5]:
+    for pt in []: #[0,1,4,5]: # DISABLED
         w = np.where(P['Type'] == pt)
         loc_ids = P[w]['ID']
         snap_ids = sP.snapshotSubset(pt, 'ids', haloID=GrNr)
+        print("Verifying PT [%d], loaded len = %d, snap len = %d" % (pt,loc_ids.size,snap_ids.size), flush=True)
         loc_ids = np.sort(loc_ids)
         snap_ids = np.sort(snap_ids)
         assert np.array_equal(loc_ids, snap_ids)
@@ -625,12 +606,9 @@ def load_snapshot_data(sP, GrNr):
             for field in ['Density','Sfr','Utherm','Center','Volume']:
                 SphP[field] = sP.snapshotSubset(ptNum, field, haloID=GrNr)
 
-            PS[P_offset:P_offset+numPartType[ptNum]]['Center'] = SphP['Center']
-            PS[P_offset:P_offset+numPartType[ptNum]]['Utherm'] = SphP['Utherm']
-
         # stars only, and handle StarP
         if sP.isPartType(ptNum, 'stars'):
-            StarP['PID'] = np.arange(P_offset, P_offset + numPartType[ptNum])
+            #StarP['PID'] = np.arange(P_offset, P_offset + numPartType[ptNum]) # unused
             for field in ['BirthTime']:
                 StarP[field] = sP.snapshotSubset(ptNum, field, haloID=GrNr)
 
@@ -650,7 +628,6 @@ def load_snapshot_data(sP, GrNr):
         P_offset += numPartType[ptNum]
 
     # PS
-    PS['GrNr'] = GrNr
     PS['Hsml'] = PS['SubfindHsml']
     PS['Density'] = PS['SubfindDensity']
 
@@ -1193,10 +1170,34 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
 
     return pot
 
-@jit(nopython=True, nogil=True)
-def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize, SofteningTable, ForceSoftening, xyzMin, xyzMax, extent):
+@jit(nopython=True, parallel=True)
+def subfind_unbind_calculate_potential(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime):
+    """ Loop to parallelize. """
+    for i in prange(num):
+        p = ud[i]['index']
+
+        pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+
+        PS[p]['Potential'] = G / atime * pot
+
+@jit(nopython=True, parallel=True)
+def subfind_unbind_calculate_potential_weak(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime,weakly_bound_limit):
+    """ Loop to parallelize. """
+    for i in prange(num):
+        p = ud[i]['index']
+
+        if PS[p]['BindingEnergy'] >= weakly_bound_limit:
+            # TODO: pot is unused, how is this not a bug?
+            pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+            PS[p]['Potential'] *= G / atime
+
+@jit(nopython=True)
+def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize, 
+                   SofteningTable, ForceSoftening, xyzMin, xyzMax, extent, central_flag):
     """ Unbinding. """
     max_iter = 1000
+    unbind_percent_threshold = 0.001 # if we remove <0.0002*N of the subhalo particles in an iter, stop
+
     weakly_bound_limit = 0
     len_non_gas = 0
     minpot = 0
@@ -1206,7 +1207,7 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
     iter_num = 0
     phaseflag = 0
 
-    bnd_energy = np.zeros( len, dtype=np.float64 )
+    bnd_energy = np.zeros( num, dtype=np.float64 )
     v  = np.zeros( 3, dtype=np.float64 )
     s  = np.zeros( 3, dtype=np.float64 )
     dv = np.zeros( 3, dtype=np.float64 )
@@ -1216,10 +1217,10 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
         iter_num += 1
 
         # build local tree, including only particles still inside the candidate
-        loc_pos = np.zeros( (len,3), dtype=np.float64 )
-        loc_P   = np.zeros( len, dtype=P_dtype_mem )
+        loc_pos = np.zeros( (num,3), dtype=np.float64 )
+        loc_P   = np.zeros( num, dtype=P_dtype_mem )
 
-        for i in range(len):
+        for i in range(num):
             loc_pos[i,:] = P_Pos[ud[i]['index']]
             loc_P[i] = P[ud[i]['index']]
 
@@ -1227,17 +1228,15 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
 
         # compute the potential
         if phaseflag == 0:
-            # redo for all particles
+            # redo for all particles (threaded target)
+            subfind_unbind_calculate_potential(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime)
+
+            # find particle with the minimum potential
             minindex = -1
             minpot = 1.0e30
 
-            # find particle with the minimum potential
-            for i in range(len):
+            for i in range(num):
                 p = ud[i]['index']
-
-                pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
-
-                PS[p]['Potential'] = G / atime * pot
 
                 if PS[p]['Potential'] < minpot or minindex == -1:
                     # new minimum potential found
@@ -1248,19 +1247,14 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
             pos = P_Pos[minindex]
         else:
             # only repeat for those particles close to the unbinding threshold
-            for i in range(len):
-                p = ud[i]['index']
-
-                if PS[p]['BindingEnergy'] >= weakly_bound_limit:
-                    pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
-                    PS[p]['Potential'] *= G / atime
+            subfind_unbind_calculate_potential_weak(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime,weakly_bound_limit)
 
         # calculate the bulk velocity and center of mass
         v *= 0
         s *= 0
         TotMass = 0
 
-        for i in range(len):
+        for i in range(num):
             p = ud[i]['index']
 
             for j in range(3):
@@ -1281,7 +1275,7 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
                 s[j] -= boxsize
 
         # compute binding energy for all particles
-        for i in range(len):
+        for i in range(num):
             p = ud[i]['index']
 
             for j in range(3):
@@ -1293,18 +1287,18 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
             PS[p]['BindingEnergy'] += G / atime * P[p]['Mass'] / SofteningTable[P[p]['SofteningType']]
 
             if P[p]['Type'] == 0:
-                PS[p]['BindingEnergy'] += PS[p]['Utherm']
+                PS[p]['BindingEnergy'] += SphP[PS[p]['OldIndex']]['Utherm']
 
             bnd_energy[i] = PS[p]['BindingEnergy']
 
         # sort by binding energy, largest first
         bnd_energy = np.sort(bnd_energy)[::-1]
 
-        quarter_ind = np.int(np.floor(0.25*len))
+        quarter_ind = np.int(np.floor(0.25*num))
         energy_limit = bnd_energy[quarter_ind]
         unbound = 0
 
-        for i in range(len-1):
+        for i in range(num-1):
             if bnd_energy[i] > 0:
                 unbound += 1
             else:
@@ -1320,28 +1314,35 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
         len_non_gas = 0
         i = 0
 
-        while i < len:
+        while i < num:
             p = ud[i]['index']
 
             if PS[p]['BindingEnergy'] > 0 and PS[p]['BindingEnergy'] > energy_limit:
                 unbound += 1
-                ud[i] = ud[len-1]
+                ud[i] = ud[num-1]
                 i -= 1
-                len -= 1
+                num -= 1
 
             if P[p]['Type'] != 0:
                 len_non_gas += 1
 
             i += 1
 
+        if central_flag:
+            print('central: iter,num,unbound,phaseflag =',iter_num,num,unbound,phaseflag)
+
         # already too small?
-        if len < DesLinkNgb:
+        if num < DesLinkNgb:
             break
 
         # alternate full vs. partial potential calculations
         if phaseflag == 0:
             if unbound > 0:
                 phaseflag = 1
+
+            # NOTE: this earlier termination is an optimization not in the original subfind
+            if central_flag and unbound < np.int(unbind_percent_threshold * num):
+                break
         else:
             if unbound == 0:
                 phaseflag = 0 # repeat everything once more for all particles
@@ -1354,14 +1355,13 @@ def subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize
         if unbound <= 0:
             break
 
-    return len, len_non_gas
+    return num, len_non_gas
 
 @jit(nopython=True)
 def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, ForceSoftening):
     """ Run serial subfind. (Offs = 0). """
 
     # estimate the maximum number of substructures we need to store (conservative upper limit)
-    MaxNsubgroups = P.size / DesLinkNgb
     N = P.size
 
     # generate P_Pos, pure ndarray and handle CELL_CENTER_GRAVITY
@@ -1369,7 +1369,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
 
     for i in range(N):
         if P[i]['Type'] == 0:
-            P_Pos[i,:] = PS[i]['Center']
+            P_Pos[i,:] = SphP[PS[i]['OldIndex']]['Center']
         else:
             P_Pos[i,:] = P[i]['Pos']
 
@@ -1394,8 +1394,8 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     P  = P[sort_inds]
     P_Pos = P_Pos[sort_inds]
 
-    for i in range(StarP.size):
-        StarP[i]['PID'] = sort_inds_inv[ StarP[i]['PID'] ]
+    #for i in range(StarP.size):
+    #    StarP[i]['PID'] = sort_inds_inv[ StarP[i]['PID'] ] # unused, save memory
     for i in range(BHP.size):
         BHP[i]['PID'] = sort_inds_inv[ BHP[i]['PID'] ]
 
@@ -1409,7 +1409,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     count_cand = 0
     listofdifferent = np.zeros( 2, dtype=np.int32 )
 
-    #print('Tree built and arrays sorted, beginning neighbor search...')
+    print('Tree built and arrays sorted, beginning neighbor search...')
 
     for i in range(N):
         # find neighbors, note: returned neighbors are already sorted by distance (ascending)
@@ -1521,7 +1521,10 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     candidates[count_cand]['head'] = head
     count_cand += 1
 
-    #print('Searches done, ended with [',count_cand,'] candidates, now unbinding...')
+    print('Searches done, ended with [',count_cand,'] candidates, now unbinding...')
+
+    vel_to_phys = 1.0 / atime
+    nsubs = 0
 
     # go through them once and assign the rank
     p = head
@@ -1540,9 +1543,6 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
         Tail[i] = -1
 
     # do gravitational unbinding on each candidate
-    vel_to_phys = 1.0 / atime
-    nsubs = 0
-
     for i in range(count_cand):
         p = candidates[i]['head']
         len = 0
@@ -1555,9 +1555,13 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
                 len += 1
             p = Next[p]
 
+        central_flag = False
+        if i == count_cand - 1:
+            central_flag = True
+
         if len >= DesLinkNgb:
-            len, len_non_gas = subfind_unbind(P_Pos, P, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize, 
-                SofteningTable, ForceSoftening, xyzMin, xyzMax, extent)
+            len, len_non_gas = subfind_unbind(P_Pos, P, SphP, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize, 
+                SofteningTable, ForceSoftening, xyzMin, xyzMax, extent, central_flag)
 
         if len >= DesLinkNgb:
             # we found a substructure
@@ -1733,8 +1737,8 @@ def assign_stellar_photometrics(i, P, StarP, mags, LogMetallicity_bins, LogAgeIn
 
     return
 
-@jit(nopython=True)
-def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, 
+#@jit(nopython=True)
+def subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, 
                          LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr):
     """ Determine the properties of each subhalo. """
     vel_to_phys = np.double(1.0) / atime
@@ -1826,7 +1830,7 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
 
     for i in range(P.size):
         if P[i]['Type'] == 0:
-            P_Pos[i,:] = PS[i]['Center']
+            P_Pos[i,:] = SphP[PS[i]['OldIndex']]['Center']
         else:
             P_Pos[i,:] = P[i]['Pos']
 
@@ -2444,7 +2448,7 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
         if PS[i]['SubNr'] > subnr:
             PS[i]['BindingEnergy'] = 0
 
-    return Subgroup    
+    return Subgroup
 
 def subfind_particle_order(P, PS):
     """ Prepare a particle-level output order according to our new PS (subgroup) assignment. """
@@ -2591,7 +2595,7 @@ def run_subfind_snapshot(sP, GrNr):
     LogMetallicity_bins, LogAgeInGyr_bins, TableMags = load_gfm_stellar_photometrics()
 
     candidates = subfind_properties_1(candidates)
-    Subgroup = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
+    Subgroup = subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
                                     LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
 
     # sort order for Fof members (by type)
@@ -2610,18 +2614,27 @@ def run_subfind_customfof0save(sP, GrNr=0):
     SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
 
     # execute subfind
+    print("Now executing subfind...", flush=True)
+    start_time = time.time()
+
     count_cand, nsubs, candidates, Tail, Next, P, PS, SphP, StarP, BHP = subfind(P, PS, SphP, StarP, BHP, 
         atime, sP.units.H_of_a, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
 
-    print("Number of substructures: %d (before unbinding: %d), now determining properties..." % (nsubs,count_cand))
+    print("Found [%d] substructures (before unbinding: %d), in [%g sec], now determining properties..." % (nsubs,count_cand,time.time()-start_time))
+    start_time = time.time()
 
     candidates = subfind_properties_1(candidates)
+    print('subfind_properties_1: %g sec' % (time.time()-start_time))
+    start_time = time.time()
 
     # derive subhalo properties
     LogMetallicity_bins, LogAgeInGyr_bins, TableMags = load_gfm_stellar_photometrics()
 
-    Subgroup = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
+    Subgroup = subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
                                     LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
+                                    
+    print('subfind_properties_2: %g sec' % (time.time()-start_time))
+    start_time = time.time()
 
     # free some memory
     del Tail
@@ -2640,12 +2653,125 @@ def run_subfind_customfof0save(sP, GrNr=0):
     # save sort order for Fof0 members (by type)
     ParticleOrder = subfind_particle_order(P, PS)
 
+    print('subfind_particle_order: %g sec' % (time.time()-start_time))
+
     with h5py.File(final_save_file,'a') as f:
         for pt in ParticleOrder:
             f['sort_inds_%s' % pt] = ParticleOrder[pt]
 
         # need to modify the Group later with:
-        f['Group_nsubs'] = nsubs
+        f['Group_nsubs'] = candidates.size
+        f['Group_Pos'] = Subgroup[0]['Pos']
+
+        # note: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp (do after rearrangement)
+
+    print('Saved [ParticleOrder] to [%s].' % final_save_file)
+
+def run_subfind_customfof0save_phase1(sP, GrNr=0):
+    """ Run complete Subfind algorithm on custom FOF0 save files (TNG50-1). """
+    atime = sP.snapshotHeader()['Time']
+    final_save_file = 'save_phase1_%s_%d.hdf5' % (sP.simName,sP.snap)
+
+    # load
+    P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr)
+
+    SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
+
+    # execute subfind
+    print("Now executing subfind...", flush=True)
+    start_time = time.time()
+
+    count_cand, nsubs, candidates, Tail, Next, P, PS, SphP, StarP, BHP = subfind(P, PS, SphP, StarP, BHP, 
+        atime, sP.units.H_of_a, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
+
+    print("Found [%d] substructures (before unbinding: %d), in [%g sec], now determining properties..." % (nsubs,count_cand,time.time()-start_time))
+    start_time = time.time()
+
+    candidates = subfind_properties_1(candidates)
+    print('subfind_properties_1: %g sec' % (time.time()-start_time))
+
+    # need to save: candidates, Tail, Next, PS['Potential'], PS['BindingEnergy']
+    with h5py.File(final_save_file, 'w') as f:
+        f['Tail'] = Tail
+        f['Next'] = Next
+        f['Potential'] = PS['Potential']
+        f['BindingEnergy'] = PS['BindingEnergy']
+
+    with open(final_save_file.replace('hdf5','bin'), 'wb') as f:
+        candidates.tofile(f)
+
+    print('All data saved, terminating.')
+
+    # DEUBG: verify
+    if 0:
+        print('Verify...')
+        with h5py.File(final_save_file, 'r') as f:
+            Tail2 = f['Tail'][()]
+            Pot2 = f['Potential'][()]
+
+        with open(final_save_file.replace('hdf5','bin'), 'rb') as f:
+            cand2 = np.fromfile(f, dtype=cand_dtype)
+
+        print(np.array_equal(Tail2,Tail))
+        print(np.array_equal(Pot2, PS['Potential']))
+        print(np.array_equal(candidates,cand2))
+
+def run_subfind_customfof0save_phase2(sP, GrNr=0):
+    # load
+    print('Loading...')
+
+    atime = sP.snapshotHeader()['Time']
+    final_save_file = 'save_%s_%d.hdf5' % (sP.simName,sP.snap)
+    phase1_save_file = final_save_file.replace('save_','save_phase1_')
+
+    P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr)
+
+    SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
+
+    # redo sort: order particles (P, PS) in the order of decreasing density
+    sort_inds = np.argsort(PS['Density'])[::-1] # descending
+    P = P[sort_inds]
+    PS = PS[sort_inds]
+
+    # load phase1 data
+    with h5py.File(phase1_save_file, 'r') as f:
+        Tail = f['Tail'][()]
+        Next = f['Next'][()]
+        PS['Potential'][:] = f['Potential'][()]
+        PS['BindingEnergy'][:] = f['BindingEnergy'][()]
+
+    with open(phase1_save_file.replace('hdf5','bin'), 'rb') as f:
+        candidates = np.fromfile(f, dtype=cand_dtype)
+
+    # derive subhalo properties
+    start_time = time.time()
+
+    LogMetallicity_bins, LogAgeInGyr_bins, TableMags = load_gfm_stellar_photometrics()
+
+    Subgroup = subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
+                                    LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
+                                    
+    print('subfind_properties_2: %g sec' % (time.time()-start_time))
+    start_time = time.time()
+
+    # save Subgroup
+    with h5py.File(final_save_file,'w') as f:
+        for field in Subgroup_dtype.names:
+            f["Subhalo"+field] = Subgroup[field]
+
+    print('Saved [Subgroup] to [%s].' % final_save_file)
+
+    # save sort order for Fof0 members (by type)
+    ParticleOrder = subfind_particle_order(P, PS)
+
+    print('subfind_particle_order: %g sec' % (time.time()-start_time))
+
+    with h5py.File(final_save_file,'a') as f:
+        for pt in ParticleOrder:
+            f['sort_inds_%s' % pt] = ParticleOrder[pt]
+
+        # need to modify the Group later with:
+        f['Group_nsubs'] = candidates.size
         f['Group_Pos'] = Subgroup[0]['Pos']
 
         # note: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp (do after rearrangement)
@@ -2726,13 +2852,16 @@ def verify_results(sP, GrNr=0):
 def run_test():
     """ Test. """
     from util.simParams import simParams
-    sP = simParams(res=128,run='tng',snap=0,variant='0000') # note: collective vs. serial algorithm
+    #sP = simParams(res=128,run='tng',snap=4,variant='0000') # note: collective vs. serial algorithm
 
     # L35n2160TNG started skipping fof0 subfind at snapshot 69 and onwards
-    #sP = simParams(res=2160,run='tng',snap=69)
+    sP = simParams(res=2160,run='tng',snap=69)
 
-    run_subfind_customfof0save(sP, GrNr=0)
-    verify_results(sP, GrNr=0)
+    run_subfind_customfof0save_phase1(sP, GrNr=0)
+    #run_subfind_customfof0save_phase2(sP, GrNr=0)
+
+    #run_subfind_customfof0save(sP, GrNr=0)
+    #verify_results(sP, GrNr=0)
 
 def benchmark():
     """ Benchmark. """
