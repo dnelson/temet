@@ -1,5 +1,6 @@
 __pycache__
 .pyc
+.so
 .ipynb_checkpoints
 illustris_website
 illustris_python
