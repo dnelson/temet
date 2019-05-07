@@ -1737,8 +1737,8 @@ def assign_stellar_photometrics(i, P, StarP, mags, LogMetallicity_bins, LogAgeIn
 
     return
 
-#@jit(nopython=True)
-def subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, 
+@jit(nopython=True)
+def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, 
                          LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr):
     """ Determine the properties of each subhalo. """
     vel_to_phys = np.double(1.0) / atime
@@ -1793,20 +1793,9 @@ def subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, a
     sblim_list_rr   = np.zeros( GFM_STELLAR_PHOTOMETRICS_DIRECTIONS, dtype=np.float64 )
     sblim_list_mass = np.zeros( GFM_STELLAR_PHOTOMETRICS_DIRECTIONS, dtype=np.float64 )
 
-    # RandomAngles
+    # RandomAngles: directly from arepo given TNG codebase init sequence
     StellarPhotometricsRandomAngles = np.zeros( (GFM_STELLAR_PHOTOMETRICS_DIRECTIONS,2), dtype=np.float32 )
 
-    #np.random.seed(44)
-    #def get_random_number():
-    #    # note: Subfind uses gsl_rng_ranlxd1 generator with seed = 42+ThisTask = 42 since generated on task 0
-    #    # we don't have this random library, besides the fact of the entire state chain up until this point
-    #    return np.random.uniform()
-
-    #for i in range(GFM_STELLAR_PHOTOMETRICS_DIRECTIONS):
-    #    StellarPhotometricsRandomAngles[i][0] = np.arccos(2 * get_random_number() - 1)
-    #    StellarPhotometricsRandomAngles[i][1] = 2 * np.pi * get_random_number()
-
-    # directly from arepo given TNG codebase init sequence
     StellarPhotometricsRandomAngles[:,0] = [1.22469, 2.5156, 1.89036, 1.12041, 1.65378, 1.36382, 0.727205, 1.67738, 2.04625, 
     1.66005, 2.64311, 1.24508, 2.08531, 1.01916, 0.874651, 1.13585, 1.44381, 1.77666, 2.18747, 1.87275, 1.0667, 2.28515, 2.62462, 
     1.66419, 0.793788, 1.63055, 1.49722, 1.61738, 0.844168, 0.376032, 2.0015, 1.59893, 1.28786, 1.75146, 2.36355, 1.9561, 0.990663, 
@@ -2630,7 +2619,7 @@ def run_subfind_customfof0save(sP, GrNr=0):
     # derive subhalo properties
     LogMetallicity_bins, LogAgeInGyr_bins, TableMags = load_gfm_stellar_photometrics()
 
-    Subgroup = subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
+    Subgroup = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
                                     LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
                                     
     print('subfind_properties_2: %g sec' % (time.time()-start_time))
@@ -2748,7 +2737,7 @@ def run_subfind_customfof0save_phase2(sP, GrNr=0):
 
     LogMetallicity_bins, LogAgeInGyr_bins, TableMags = load_gfm_stellar_photometrics()
 
-    Subgroup = subfind_properties_finish(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
+    Subgroup = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
                                     LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
                                     
     print('subfind_properties_2: %g sec' % (time.time()-start_time))
