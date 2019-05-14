@@ -41,7 +41,8 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-3-dark':['tng_dm',540],
                      'tng50-4-dark':['tng_dm',270],
                      'eagle100-1':['eagle',1504],
-                     'milennium-1':['millennium',2160]}
+                     'millennium-1':['millennium',1],
+                     'millennium-2':['millennium',2]}
 
 class simParams:
     # paths and names
@@ -163,7 +164,7 @@ class simParams:
         self.data = {}
 
         # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
-        if 'tng' in run or 'prime' in run and ('zoom' not in run):
+        if 'tng' in run and ('zoom' not in run):
 
             res_L25  = [128, 256, 512] #, 1024]
             res_L35  = [270, 540, 1080, 2160]
@@ -312,8 +313,9 @@ class simParams:
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
             dmStr = '_DM' if '_dm' in run else ''
+            fof0str = '_fof0test' if 'fof0test' in run else ''
 
-            self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+'/'
+            self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
 
             # magny
             if 'karl' in platform.node():
@@ -327,6 +329,9 @@ class simParams:
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
+
+            if 'fof0test' in run:
+                self.simName += '_fof0test'
 
             if res in res_L35+res_L75+res_L205:#+res_L680:
                 # override flagship name
@@ -344,18 +349,29 @@ class simParams:
                     self.simName = method_run_names[self.simName]
 
         # TNG [cluster] zooms based on L680n2048 parent box
-        if run in ['tng_zoom','tng_zoom_dm']:
+        if run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm']:
             assert hInd is not None
             self.validResLevels = [11,12,13,14] # first is ZoomLevel==1 (i.e. at parentRes)
             self.groupOrdered   = True
 
-            parentRes = 2048
-            self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift)
-            self.zoomLevel = self.res # L11 (TNG1-3 or TNG300-3) to L13 (TNG1-1 or TNG300-1) to L14 (i.e. TNG100-1)
+            if run not in ['tng100_zoom', 'tng100_zoom_dm']:
+                parentRes = 2048
+                self.zoomLevel = self.res # L11 (TNG1-3 or TNG300-3) to L13 (TNG1-1 or TNG300-1) to L14 (i.e. TNG100-1)
+                self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
 
-            self.gravSoft = 16.0 / (res/1024)
-            self.targetGasMass = 0.00182873 * (8 ** np.log2(8192/res))
-            self.boxSize = 680000.0 # ckpc/h unit system
+                self.gravSoft = 16.0 / (res/1024)
+                self.targetGasMass = 0.00182873 * (8 ** (13-res))
+                self.boxSize = 680000.0 # ckpc/h unit system
+            else:
+                # L75* zoom tests
+                parentRes = 1820
+                self.zoomLevel = self.res # L11 (TNG100-1)
+                self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
+
+                self.gravSoft = 1.0 / (res/1820)
+                self.targetGasMass = 0.0000662478 * (8 ** (11-res))
+                self.boxSize = 75000.0 # ckpc/h
+
             self.numSnaps = 100
 
             # common: Planck2015 TNG cosmology
@@ -378,7 +394,7 @@ class simParams:
             if self.variant != 'None':
                 vStr = '_' + self.variant
 
-            # mpc? all except testing
+            # mpc? all L680* except testing
             if '_mpc' in self.variant or ('_dm' not in run and variant == 'sf3'):
                 self.mpcUnits = True
 
@@ -591,22 +607,29 @@ class simParams:
 
         # MILLENNIUM
         if run == 'millennium':
-            self.validResLevels = [2160]
-            self.boxSize        = 500.0
+            self.validResLevels = [1,2]
             self.mpcUnits       = True
             self.groupOrdered   = True # re-written HDF5 files
-            self.numSnaps       = 64
+
+            if self.res == 1:
+                # Millennium-1
+                self.boxSize  = 500.0
+                self.numSnaps = 64
+                self.gravSoft = 5.0
+            if self.res == 2:
+                # Millennium-2
+                self.boxSize  = 100.0
+                self.numSnaps = 68
+                self.gravSoft = 1.0
 
             self.omega_m     = 0.25
             self.omega_L     = 0.75
             self.omega_b     = 0.0
             self.HubbleParam = 0.73
 
-            self.gravSoft    = 5.0
-
-            self.arepoPath  = self.basePath + 'sims.other/Millennium-1/'
+            self.arepoPath  = self.basePath + 'sims.other/Millennium-%s/' % self.res
             self.savPrefix  = 'MIL'
-            self.simName    = 'Millennium-1'
+            self.simName    = 'Millennium-%s' % self.res
             self.colors     = ['#777777'] # gray
 
         # FEEDBACK (paper.feedback, 20Mpc box of ComparisonProject)
@@ -1082,6 +1105,12 @@ class simParams:
         partTypeNum(ptToCheck)==4. This can now vary for different simulations (so far it does not). """
         return self.ptNum(ptToCheck) == self.ptNum(ptToCheckAgainst)
 
+    def copy(self):
+        """ Return a deep copy of this simParams object, which can then be manipulated/changed without 
+        affecting the original. """
+        from copy import deepcopy
+        return deepcopy(self)
+
     # attribute helpers
     @property
     def isZoom(self):
@@ -1132,7 +1161,7 @@ class simParams:
     
     @property
     def zoomSubhaloID(self):
-        if self.run in ['tng_zoom','tng_zoom_dm']:
+        if self.run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm']:
             print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0 # hardcoded for now
 
