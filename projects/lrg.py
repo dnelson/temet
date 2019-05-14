@@ -8,14 +8,18 @@ import h5py
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.colors import Normalize, colorConverter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
+from scipy.stats import binned_statistic_2d
+from os.path import isfile
 
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3
+from vis.halo import renderSingleHalo
 
 def stackedRadialProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
                           radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
@@ -201,14 +205,251 @@ def stackedRadialProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen',
     fig.savefig(saveName)
     plt.close(fig)
 
+def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False, fullDepth=False):
+    """ Use gridded N_ion maps to plot a 2D pixel histogram of (N_ion vs impact parameter). """
+
+    ylim = [11.0, 17.0] # N_ion
+    if 'MHI' in ion:
+        ylim = [16.0, 22.0]
+
+    xlog       = False
+    nBins      = 100
+    ctName     = 'viridis'
+    medianLine = True
+    colorMed   = 'black'
+
+    if ycum:
+        cMinMax = [-2.0, 0.0] # log fraction
+        clabel  = "Fraction of Sightlines (at this b) with >= N"
+    else:
+        cMinMax = [-3.0, -1.8] # log fraction
+        #if 'MHI' in ion: cMinMax = [-3.0, -1.4]
+        clabel  = 'Conditional Covering Fraction = N [log]'
+
+    # grid config
+    run        = sP.run
+    res        = sP.res
+    redshift   = sP.redshift
+    method     = 'sphMap'
+    nPixels    = [1000,1000]
+    axes       = [0,1]
+    rotation   = 'edge-on'
+    size       = 400.0
+    sizeType   = 'kpc'
+
+    if fullDepth:
+        # global accumulation with appropriate depth along the projection direction
+        method = 'sphMap_global'
+        dv = 500.0 # +/- km/s (Zahedy) or +/- 600 km/s (Werk)
+        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
+
+    # quick caching
+    cacheSaveFile = sP.derivPath + 'cache/ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%s_fd=%s.hdf5' % \
+      (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth)
+
+    if isfile(cacheSaveFile):
+        # load previous result
+        with h5py.File(cacheSaveFile,'r') as f:
+            dist_global = f['dist_global'][()]
+            grid_global = f['grid_global'][()]
+        print('Loaded: [%s]' % cacheSaveFile)
+    else:
+        # get halo IDs in mass bin (centrals only by definition)
+        gc = sP.groupCat(fieldsSubhalos=['mhalo_200_log','rhalo_200_code'])
+
+        with np.errstate(invalid='ignore'):
+            subInds = np.where( (gc['mhalo_200_log'] > haloMassBin[0]) & (gc['mhalo_200_log'] < haloMassBin[1]) )[0]
+
+        # load grids
+        dist_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
+        grid_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
+
+        for i, hInd in enumerate(subInds):
+            class plotConfig:
+                saveFilename = 'dummy'
+
+            panels = [{'partType':'gas', 'partField':ion, 'valMinMax':[-1.4,0.2]}]
+            grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+            # compute impact parameter for every pixel
+            pxSize = size / nPixels[0] # pkpc
+
+            xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
+            xx = xx.astype('float64') - nPixels[0]/2
+            yy = yy.astype('float64') - nPixels[1]/2
+            dist = np.sqrt( xx**2 + yy**2 ) * pxSize
+
+            if radRelToVirRad:
+                dist /= gc['rhalo_200_code'][subInds[i]]
+
+            # bin
+            dist_global[:,i] = dist.ravel()
+            grid_global[:,i] = grid.ravel()
+
+        # flatten
+        dist_global = dist_global.ravel()
+        grid_global = grid_global.ravel()
+
+        # save cache
+        with h5py.File(cacheSaveFile,'w') as f:
+            f['dist_global'] = dist_global
+            f['grid_global'] = grid_global
+
+        print('Saved: [%s]' % cacheSaveFile)
+
+    # start plot
+    sizefac = 1.0 if not clean else sfclean
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    ax = fig.add_subplot(111)
+    
+    if xlog:
+        if radRelToVirRad:
+            ax.set_xlim([-2.0, 0.0])
+            ax.set_xticks([-2.0, -1.5, -1.0, -0.5, 0.0])
+            ax.set_xlabel('Impact Parameter / Virial Radius [ log ]')
+        else:
+            ax.set_xlim([0.5, 2.5])
+            ax.set_xlabel('Impact Parameter [ log pkpc ]')
+    else:
+        if radRelToVirRad:
+            ax.set_xlim([0.0, 1.0])
+            ax.set_xticks([0.0, 0.25, 0.5, 0.75, 1.0])
+            ax.set_xlabel('Impact Parameter / Virial Radius')
+        else:
+            ax.set_xlim([0, 200])
+            ax.set_xlabel('Impact Parameter [ pkpc ]')
+
+    ax.set_ylim(ylim)
+    ax.set_ylabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ion.replace(' sfCold',''))
+
+    # plot
+    w = np.where( (dist_global > 0) & np.isfinite(grid_global) )
+
+    dist_global = dist_global[w] # pkpc or r/rvir
+    grid_global = grid_global[w] # log cm^2
+
+    if xlog:
+        dist_global = np.log10(dist_global)
+
+    sim_cvals = np.zeros( dist_global.size, dtype='float32' ) # unused currently
+
+    # histogram 2d
+    bbox = ax.get_window_extent()
+    xlim = ax.get_xlim()
+
+    nBins2D = np.array([nBins, int(nBins*(bbox.height/bbox.width))])
+    extent = [xlim[0],xlim[1],ylim[0],ylim[1]]
+
+    cc, xBins, yBins, inds = binned_statistic_2d(dist_global, grid_global, sim_cvals, 'count', 
+                                                 bins=nBins2D, range=[xlim,ylim])
+
+    cc = cc.T # imshow convention
+
+    # histogram again, this time extending the y-axis bounds over all values, such that every pixel is counted
+    # required for proper normalizations
+    nn, _, _, _ = binned_statistic_2d(dist_global, grid_global, sim_cvals, 'count', 
+                                                 bins=nBins2D, range=[xlim,[grid_global.min(),grid_global.max()]])
+    nn = nn.T
+
+    # normalize each column separately: cc value becomes [fraction of sightlines, at this impact parameter, with this column]
+    with np.errstate(invalid='ignore'):
+        totVals = np.nansum(nn, axis=0)
+        totVals[totVals == 0] = 1
+        cc /= totVals[np.newaxis, :]
+
+    # cumulative y? i.e. each cc value becomes [fraction of sightlines, at this impact parameter, with >= this column]
+    if ycum:
+        cc = np.cumsum(cc[::-1,:], axis=0)[::-1,:] # flips give >= this column, otherwise is actually <= this column
+
+    # units and colormap
+    if not ycum:
+        cc2d = logZeroNaN(cc)
+    else:
+        # linear fraction for cumulative version
+        cc2d = cc
+        cMinMax = [0,0.8]
+
+    norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
+
+    cmap = loadColorTable(ctName, numColors=8 if ycum else None)
+    cc2d_rgb = cmap(norm(cc2d))
+
+    # mask empty bins to white
+    #cc2d_rgb[(cc == 0),:] = colorConverter.to_rgba('white')
+
+    plt.imshow(cc2d_rgb, extent=extent, origin='lower', interpolation='nearest', aspect='auto', 
+               cmap=cmap, norm=norm)
+
+    if medianLine:
+        binSizeMed = (xlim[1]-xlim[0]) / nBins * 2
+
+        xm, ym, sm, pm = running_median(dist_global,grid_global,binSize=binSizeMed,percs=[16,50,84])
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+            sm = savgol_filter(sm,sKn,sKo)
+            pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+        ax.plot(xm, ym, '-', color=colorMed, lw=lw, label='median')
+        ax.plot(xm, pm[0,:], ':', color=colorMed, lw=lw, label='P[10,90]')
+        ax.plot(xm, pm[-1,:], ':', color=colorMed, lw=lw)
+
+    # add obs data points
+    if 'Mg II' in ion:
+        zahedy_lower_d = [18.13, 83.17, 91.08, 91.08]
+        zahedy_lower_N = [13.61, 13.95, 14.07, 13.73]
+        zahedy_upper_d = [18.82, 31.79, 76.86, 78.00, 115.88, 148.98]
+        zahedy_upper_N = [12.38, 11.88, 12.00, 12.24, 11.97,  12.50]
+        zahedy_detection_d = [45.89, 102.03, 134.85]
+        zahedy_detection_N = [12.38, 12.71, 13.01]
+
+        coshalos_upper_d = [78.5, 125.8]
+        coshalos_upper_N = [11.84, 11.70]
+        coshalos_detection_d = [83.6, 93.6, 98.6, 108.5, 106.6, 140.0, 156.0, 160.1]
+        coshalos_detection_N = [13.97, 13.80, 12.39, 12.43, 12.70, 12.85, 12.22, 12.60]
+        coshalos_bar_d = [47.1, 47.1]
+        coshalos_bar_N = [13.45, 15.92]
+
+        markerColor  = 'white'
+        markerColor2 = 'orange'
+        markersize   = 6.0
+
+        ax.plot(zahedy_detection_d, zahedy_detection_N, 'o', color=markerColor, markersize=markersize)
+        ax.plot(zahedy_upper_d, zahedy_upper_N, 'v', color=markerColor, markersize=markersize)
+        ax.plot(zahedy_lower_d, zahedy_lower_N, '^', color=markerColor, markersize=markersize)
+
+        ax.plot(coshalos_detection_d, coshalos_detection_N, 'o', color=markerColor2, markersize=markersize)
+        ax.plot(coshalos_upper_d, coshalos_upper_N, 'v', color=markerColor2, markersize=markersize)
+        ax.plot(coshalos_bar_d, coshalos_bar_N, '-', color=markerColor2, lw=lw-1, alpha=0.3)
+
+        # legend
+        handles = [plt.Line2D( (0,0),(0,0),color=markerColor,lw=lw-1,linestyle='-',marker='o'),
+                   plt.Line2D( (0,0),(0,0),color=markerColor2,lw=lw-1,linestyle='-',marker='o'),]
+        labels  = ['COS-LRG (Zahedy+ 2019)', 'COS-Halos (Werk+ 2013)']
+        legend = ax.legend(handles, labels, loc='upper right', handlelength=0)
+        legend.get_texts()[0].set_color(markerColor)
+        legend.get_texts()[1].set_color(markerColor2)
+
+    # colorbar and finish plot
+    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+    cb = plt.colorbar(cax=cax)
+    cb.ax.set_ylabel(clabel)
+    #ax.set_title('%.1f < M$_{\\rm halo}$ [log M$_\odot$] < %.1f' % (haloMassBin[0],haloMassBin[1]))
+
+    fig.tight_layout()
+    fig.savefig('ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%d_xlog=%d_ycum=%d_fd=%d.pdf' % \
+        (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
+    plt.close(fig)
+
 def paperPlots():
     """ Testing. """
     TNG100  = simParams(res=1820,run='tng',redshift=0.0)
-    TNG50   = simParams(res=2160,run='tng',redshift=0.2)
+    TNG50   = simParams(res=2160,run='tng',redshift=0.0)
     TNG50_2 = simParams(res=1080,run='tng',redshift=0.0)
     TNG50_3 = simParams(res=540,run='tng',redshift=0.0)
 
     haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 13.8]]
+    redshift = 0.5 # default for analysis
 
     def _get_halo_ids(sP_loc):
         """ Load and return the set of halo IDs in each haloMassBin. """
@@ -225,7 +466,6 @@ def paperPlots():
 
     # figure 1 - cgm resolution
     if 0:
-        redshift = 0.3
         sPs = [TNG50, TNG50_2, TNG50_3]
         cenSatSelect = 'cen'
 
@@ -239,7 +479,7 @@ def paperPlots():
 
     # figure 2 - cgm gas density/temp/pressure 1D PDFs
     if 0:
-        sP = simParams(res=2160,run='tng',redshift=0.5)
+        sP = simParams(res=2160,run='tng',redshift=redshift)
         qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
         nBins = 150
         medianPDF = True
@@ -265,7 +505,7 @@ def paperPlots():
 
     # fig 3 - cgm gas (n,T) 2D phase diagrams
     if 0:
-        sP = simParams(res=2160,run='tng',redshift=0.5)
+        sP = simParams(res=2160,run='tng',redshift=redshift)
         qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
 
         xQuant = 'nh'
@@ -299,16 +539,13 @@ def paperPlots():
                          contours=contours, qRestrictions=qRestrictions)
         pdf.close()
 
-    # fig 4 - vis (single halo large) gas density, metallicity, MgII
-    # TODO: check MgII for eEOS
-    if 1:
-        from vis.halo import renderSingleHalo
-
+    # fig 4 - vis (single halo large) gas metallicity, N_MgII, N_HI, stellar light
+    if 0:
         run        = 'tng'
         res        = 2160
-        redshift   = 0.2
-        rVirFracs  = [0.25]
-        method     = 'sphMap' # sphMap_global for paper figure
+        #redshift   = 0.5
+        rVirFracs  = [0.25, 0.5, 1.0]
+        method     = 'sphMap'
         nPixels    = [1000,1000]
         axes       = [0,1]
         labelZ     = True
@@ -321,38 +558,57 @@ def paperPlots():
         size       = 400.0
         sizeType   = 'kpc'
 
+        conf = 2 # testing
+
         # which halo?
         sP = simParams(res=res, run=run, redshift=redshift)
-        haloIDs = _get_halo_ids(sP)[1]
+        haloIDSets = _get_halo_ids(sP)
 
-        haloID = haloIDs[0] # testing
-        conf = 4 # testing
+        if 1 and conf in [2,3]:
+            # global with appropriate depth (same as in ionColumnsVsImpact2D)
+            method = 'sphMap_global'
+            dv = 500.0 # +/- km/s (Zahedy) or +/- 600 km/s (Werk)
+            depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+            depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
 
-        # config
-        if conf == 0:
-            lines = ['H-alpha','H-beta','O--2-3728.81A','O--3-5006.84A','N--2-6583.45A','S--2-6730.82A']
-            partField_loc = 'sb_%s_lum_kpc' % lines[0] # + '_sf0' to set SFR>0 cells to zero
-            panels = [{'partType':'gas', 'partField':partField_loc, 'valMinMax':[34,41]}]
+        for haloID in list(haloIDSets[1]) + list(haloIDSets[2]):
+            hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
-        if conf == 4:
-            panels = [{'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}]
+            # config
+            if conf == 0:
+                lines = ['H-alpha','H-beta','O--2-3728.81A','O--3-5006.84A','N--2-6583.45A','S--2-6730.82A']
+                partField_loc = 'sb_%s_lum_kpc' % lines[0] # + '_sf0' to set SFR>0 cells to zero
+                panels = [{'partType':'gas', 'partField':partField_loc, 'valMinMax':[34,41]}]
 
-        if conf == 5:
-            panels = [{'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]}]
+            if conf == 1:
+                panels = [{'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}]
 
-        if conf == 6:
-            panels = [{'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]}]
+            if conf == 2:
+                panels = [{'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[15.0,21.0]}]
 
-        class plotConfig:
-            plotStyle    = 'edged'
-            rasterPx     = nPixels[0]
-            colorbars    = True
-            saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'])
+            if conf == 3:
+                panels = [{'partType':'gas', 'partField':'Mg II sfCold', 'valMinMax':[12.0,16.5]}]
 
-        # render
-        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+            if conf == 4:
+                panels = [{'partType':'stars', 'partField':'stellarComp'}]
 
-    # fig 5 - N_MgII vs. b (derive from map) 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
-    # add data points
+            class plotConfig:
+                plotStyle    = 'edged'
+                rasterPx     = nPixels[0]
+                colorbars    = True
+                saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'])
 
-    # fig 6 - N_HI vs. b (same as above)
+            # render
+            renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+    # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
+    if 1:
+        sP = simParams(res=2160, run='tng', redshift=redshift)
+        haloMassBin = haloMassBins[1]
+        #ion = 'Mg II sfCold'
+        ion = 'MHIGK_popping'
+        radRelToVirRad = False
+
+        for ycum in [True,False]:
+            for fullDepth in [True,False]:
+                ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=ycum, fullDepth=fullDepth)
