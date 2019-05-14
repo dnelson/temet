@@ -34,29 +34,35 @@ def singleHaloImage_CelineMuseProposal(conf=6):
     relCoords  = True
     rotation   = 'edge-on'
 
-    size      = 100.0
     sizeType  = 'kpc'
 
     if conf == 7:
-        rVirFracs = [5.0]
-        fracsType = 'rHalfMassStars'
+        # Klitsch+ (2019) paper figure
+        rVirFracs = None
+        size = 40
+        hInds = [564218] # for Klitsch+ (2019) paper
 
         faceOnOptions = {'rotation'   : 'face-on',
                          'labelScale' : 'physical',
                          'labelHalo'  : 'mstar,sfr',
                          'labelZ'     : True,
-                         'nPixels'    : [600,600]}
+                         'nPixels'    : [800,800]}
 
         edgeOnOptions = {'rotation'   : 'edge-on',
                          'labelScale' : False,
                          'labelHalo'  : False,
                          'labelZ'     : False,
-                         'nPixels'    : [600,200]}
+                         'nPixels'    : [800,250]}
+    else:
+        # celine muse proposal figure
+        size = 100
+        hInds = [440839] # for muse proposal
 
     # which halo?
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    if 1:
+    if 0:
+        # exploration
         massBin = [10.48,10.5] # size = 100
         #massBin = [10.0, 10.02] # size = 80
         #massBin = [9.5,9.52] # size = 60
@@ -65,9 +71,8 @@ def singleHaloImage_CelineMuseProposal(conf=6):
         gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
         w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
         hInds = w[0]
-        #import pdb; pdb.set_trace()
 
-    for hInd in hInds:# [440839]: # 440839 for muse proposal
+    for hInd in hInds:
         panels = []
         haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
 
@@ -86,16 +91,16 @@ def singleHaloImage_CelineMuseProposal(conf=6):
             panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]} )
 
         if conf == 7:
-            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.0,21.8], **faceOnOptions} )
-            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.0,21.8], **edgeOnOptions} )
+            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **faceOnOptions} )
+            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **edgeOnOptions} )
 
         class plotConfig:
             plotStyle    = 'edged'
-            rasterPx     = 1000 #nPixels[0] 
+            rasterPx     = 800 #nPixels[0] 
             colorbars    = True
             nCols        = 1
             nRows        = 2
-            #fontsize     = 42
+            fontsize     = 32
             saveStr = panels[0]['partField'].replace("_lum","").replace("_kpc","")
             saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,hInd,saveStr,size)
 
@@ -218,7 +223,7 @@ def celineMuseProposalMetallicityVsTheta():
 
 def celineWriteH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
-    sP = simParams(res=1820, run='tng', redshift=0.0)
+    sP = simParams(res=1820, run='tng', redshift=0.8)
 
     vars_sfr = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
     vars_model = ['nH2_popping_BR_depth10','nH2_popping_KMT_depth10']
@@ -272,8 +277,9 @@ def celineWriteH2CDDFBand():
     plt.close(fig)
 
     # write text file
-    filename = 'h2_CDDF_%s_band-%d.txt' % (sP.simName,len(speciesList))
-    out = '# N_H2 [cm^-2], f_N,lower [cm^2], f_N,upper [cm^2]\n'
+    filename = 'h2_CDDF_%s_band-%d_z=%.1f.txt' % (sP.simName,len(speciesList),sP.redshift)
+    out = '# %s z=%.1f\n# N_H2 [cm^-2], f_N,lower [cm^2], f_N,upper [cm^2]\n' % (sP.simName,sP.redshift)
+
     for i in range(N_H2.size):
         out += '%.3f %.3f %.3f\n' % (N_H2[i], fN_H2_low[i], fN_H2_high[i])
     with open(filename, 'w') as f:

@@ -74,19 +74,19 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
+def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
     """ Render a 4K movie of a single field from one subbox. """
     panels = []
 
     run     = 'tng'
     method  = 'sphMap'
-    nPixels = [3840,2160] #[7680,7680]
+    nPixels = [3840,2160]
     axes    = [0,1] # x,y
     res     = 2160
     variant = 'subbox2'
 
-    labelScale = 'physical' # 8k=False
-    labelZ     = True # 8k=False
+    labelScale = 'physical'
+    labelZ     = True
 
     if conf == 'one':
         # TNG50_sb2_gasvel_stars movie: gasvel        
@@ -106,6 +106,12 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one'):
         if res == 2160: mm = [2.8,8.4]
         if res == 2500: mm = [2.6,7.6]
         panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':mm} )
+
+    if render8k:
+        nPixels = [7680, 7680]
+        labelScale = False
+        labelZ = False
+        saveStr += '_8k'
 
     class plotConfig:
         savePath = '/u/dnelson/data/frames/%s%s_%s/' % (res,variant,saveStr)

@@ -881,7 +881,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
             for field in fieldsToCache:
                 cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))
                 print('Caching [%s] now...' % field)
-                dataCache[cache_key] = sP.snapshotSubset(partType, field)
+                dataCache[cache_key] = sP.snapshotSubsetP(partType, field)
             print('All caching done.')
 
     # load halos of this bin, from this run

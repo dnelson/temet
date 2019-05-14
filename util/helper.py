@@ -853,8 +853,8 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     if ctName in ['HI_segmented','H2_segmented']:
         # discontinuous colormap for column densities, split at 10^20 and 10^19 cm^(-3)
         assert valMinMax is not None # need for placing discontinuities at correct physical locations
-        valCut1 = 19.0
-        valCut2 = 20.0
+        valCut1 = 17.0 # sub-LLS and LLS boundary # 19.0 previously
+        valCut2 = 20.3 # LLS and DLA boundary # 20.0 previously
 
         if ctName == 'H2_segmented':
             valCut1 = 18.0
