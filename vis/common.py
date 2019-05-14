@@ -279,6 +279,9 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
     """ Generate 3-band RGB composite using starlight in three different passbands. Work in progress. """
     bands = partField.split("-")[1:]
 
+    if len(bands) == 0:
+        bands = ['jwst_f200w', 'jwst_f115w', 'jwst_f070w'] # default
+
     assert len(bands) == 3
     assert projType == 'ortho'
 
@@ -523,9 +526,13 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     if ' ' in partField:
         element = partField.split()[0]
         ionNum  = partField.split()[1]
+        field   = 'mass'
+
+        if partField.count(' ') == 2 and partField.split()[2] == 'sfCold':
+            field = 'mass_sfcold'
 
         # use cache or calculate on the fly, as needed
-        mass = sP.snapshotSubsetP('gas', '%s %s mass' % (element,ionNum), indRange=indRange)
+        mass = sP.snapshotSubsetP('gas', '%s %s %s' % (element,ionNum,field), indRange=indRange)
 
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
@@ -989,8 +996,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'gray_r'
         logMin = False
 
-    if 'stellarComp-' in partField:
-        print('Warning! gridOutputProcess() on stellarComp-*, should only occur for empty frames.')
+    if 'stellarComp' in partField:
+        print('Warning! gridOutputProcess() on stellarComp*, should only occur for empty frames.')
         config['label'] = 'dummy'
         config['ctName'] = 'gray'
         logMin = False
@@ -1096,7 +1103,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         return emptyReturn()
 
     # generate a 3-band composite stellar image from 3 bands
-    if 'stellarComp-' in partField or 'stellarCompObsFrame-' in partField:
+    if 'stellarComp' in partField or 'stellarCompObsFrame' in partField:
         return stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, projParams, boxCenter, boxSizeImg, 
                                           hsmlFac, rotMatrix, rotCenter, remapRatio, forceRecalculate, smoothFWHM)
 
@@ -1600,6 +1607,20 @@ def addBoxMarkers(p, conf, ax):
                 print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,numToAdd))
                 break
 
+        # special behavior
+        if 0:
+            sP_loc = p['sP'].copy()
+            sP_loc.setRedshift(0.0)
+            mpb = sP_loc.loadMPB(585369) # Christoph Saulder object
+
+            w = np.where(mpb['SnapNum'] == p['sP'].snap)[0]
+            xyzpos = np.squeeze(mpb['SubhaloPos'][w,:])
+            rad = 50.0
+
+            c = plt.Circle((xyzpos[p['axes'][0]],xyzpos[p['axes'][1]]), rad, color='red', alpha=alpha, linewidth=2.0, fill=False)
+            ax.add_artist(c)
+
+
     if 'plotHalos' in p and p['plotHalos'] > 0:
         # plotting N most massive halos in visible area
         sP_load = p['sP'] if not p['sP'].isSubbox else p['sP'].parentBox
@@ -1618,7 +1639,7 @@ def addBoxMarkers(p, conf, ax):
                 gc_s = sP_load.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
                 sub_ids = gc_h['GroupFirstSub']
 
-                # construct dictioanry of properties (one or more)
+                # construct dictionary of properties (one or more)
                 labelVals = {}
                 if 'mstar' in p['labelHalos']: # label with M*
                     labelVals['M$_\star$ = 10$^{%.1f}$ M$_\odot$'] = gc_s[sub_ids]

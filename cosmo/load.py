@@ -1011,6 +1011,12 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     else:
         element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
 
+    # use cold-phase temperature for SFR>0 instead of eEOS temperature?
+    tempSfCold = False
+    if '_sfcold' in prop:
+        prop = prop.replace('_sfcold','')
+        tempSfCold = True
+
     assert sP.isPartType(partType, 'gas')
     assert prop in ['mass','frac','flux']
 
@@ -1076,7 +1082,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
                 if prop in ['mass','frac']:
                     # either ionization fractions, or total mass in the ion
-                    values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
+                    values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal, tempSfCold=tempSfCold)
                     if prop == 'mass':
                         values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
                 else:
@@ -1114,7 +1120,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
         if prop in ['mass','frac']:
             # either ionization fractions, or total mass in the ion
-            values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
+            values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig, tempSfCold=tempSfCold)
             if prop == 'mass':
                 values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
         else:

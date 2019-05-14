@@ -910,11 +910,12 @@ class cloudyIon():
         return abunds
 
     def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
-                               assumeSolarAbunds=False, assumeSolarMetallicity=False):
+                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=False):
         """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
-         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. """
+         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. 
+         tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
 
         # load required gas properties
         dens = snapshotSubset(sP, 'gas', 'dens', indRange=indRange)
@@ -928,7 +929,8 @@ class cloudyIon():
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
+        tempField = 'temp_sfcold' if tempSfCold else 'temp'
+        temp = snapshotSubset(sP, 'gas', tempField, indRange=indRange) # log K
         
         # interpolate for log(abundance) and convert to linear
         # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
