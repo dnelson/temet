@@ -825,6 +825,30 @@ def snapHasField(sP, partType, field):
 
     return False
 
+def snapConfigVars(sP):
+    """ Load Config.sh flags and values as stored in the /Config/ group of modern snapshots. """
+    file = snapPath(sP.simPath, sP.snap, chunkNum=0, subbox=sP.subbox)
+
+    with h5py.File(file,'r') as f:
+        if 'Config' in f:
+            config = dict( f['Config'].attrs.items() )
+        else:
+            config = None
+
+    return config
+
+def snapParameterVars(sP):
+    """ Load param.txt flags and values as stored in the /Parameters/ group of modern snapshots. """
+    file = snapPath(sP.simPath, sP.snap, chunkNum=0, subbox=sP.subbox)
+
+    with h5py.File(file,'r') as f:
+        if 'Parameters' in f:
+            params = dict( f['Parameters'].attrs.items() )
+        else:
+            params = None
+            
+    return params
+
 def snapOffsetList(sP):
     """ Make the offset table (by type) for the snapshot files, to be able to quickly determine within 
         which file(s) a given offset+length will exist. """

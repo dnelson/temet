@@ -17,6 +17,7 @@ from cosmo.perf import loadCpuTxt
 from util.simParams import simParams
 from util.helper import logZeroNaN
 from vis.halo import renderSingleHalo
+from vis.box import renderBox
 from plot.config import *
 
 def pick_halos():
@@ -302,35 +303,49 @@ def sizefacComparison():
     fig.savefig('sizefac_comparison.pdf')
     plt.close(fig)
 
-def parentBoxVisualComparison(haloID, variant='sf3', conf=0):
+def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
     """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations. """
-    sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
+
+    #sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
+    sPz = simParams(run='tng100_zoom_dm', res=11, hInd=haloID, snap=snap, variant='sf4')
 
     # render config
-    rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap_global' # sphMap
-    nPixels    = [1920,1920]
+    rVirFracs  = [1.0] #[0.5, 1.0] # None
+    method     = 'sphMap' # sphMap
+    nPixels    = [800,800] #[1920,1920]
     axes       = [0,1]
     labelZ     = True
     labelScale = True
     labelSim   = True
     labelHalo  = True
     relCoords  = True
-    size       = 6000.0
-    sizeType   = 'pkpc'
+
+    #size       = 6000.0
+    #sizeType   = 'kpc'
+    size        = 3.0
+    sizeType    = 'rVirial'
 
     # setup panels
     if conf == 0:
         # dm column density
         p = {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 9.5]}
-    if conf == 2:
+    if conf == 1:
         # gas column density
         p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]}
 
     panel_zoom = p.copy()
     panel_parent = p.copy()
 
-    parSubID = sPz.sP_parent.groupCatSingle(haloID=haloID)['GroupFirstSub']
+    # haloID is always assumed to refer to z=0
+    sP_parent_z0 = sPz.sP_parent.copy()
+    sP_parent_z0.setRedshift(0.0)
+
+    # load MPB of this halo
+    haloMPB = sP_parent_z0.loadMPB( sP_parent_z0.groupCatSingle(haloID=haloID)['GroupFirstSub'] )
+    assert sPz.snap in haloMPB['SnapNum']
+
+    # locate subhaloID at requested snapshot (could be z=0 or z>0)
+    parSubID = haloMPB['SubfindID'][ list(haloMPB['SnapNum']).index(sPz.snap) ]
 
     panel_zoom.update( {'run':sPz.run, 'res':sPz.res, 'redshift':sPz.redshift, 'variant':sPz.variant, 'hInd':haloID})
     panel_parent.update( {'run':sPz.sP_parent.run, 'res':sPz.sP_parent.res, 'redshift':sPz.sP_parent.redshift, 'hInd':parSubID})
@@ -341,6 +356,57 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0):
         plotStyle    = 'open'
         rasterPx     = nPixels[0]
         colorbars    = True
-        saveFilename = './zoomParentBoxVisualComparison_%s_z%.1f_%s.pdf' % (sPz.simName,sPz.redshift,p['partType'])
+        saveFilename = './zoomParentBoxVisualComparison_%s_z%.1f_%s_snap%d.pdf' % (sPz.simName,sPz.redshift,p['partType'],sPz.snap)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+
+def zoomBoxVis(sPz, conf=0):
+    """ Make a visualization of a zoom simulation, without using/requiring group catalog information. """
+
+    # render config
+    method     = 'sphMap_global'
+    nPixels    = [1000,1000] #[1920,1920]
+    axes       = [1,2]
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    plotHalos  = 20
+
+    zoomFac    = 10000.0 / sPz.boxSize # show 10 cMpc/h size region around the box center
+
+    if not sPz.isZoom:
+        # full box (fixed vis in box coordinates)
+        sPz = simParams(res=1820,run='tng',snap=sPz.snap)
+        zoomFac = 1000.0 / sPz.boxSize # show 1 cMpc/h size region around location
+        relCenPos = None
+        absCenPos = [3.64e4, 3.9e4, 0.0] # from Shy's movie
+        absCenPos = [3.9e4, 0.0, 3.64e4] # axes = [1,2] order
+        sliceFac = 1000.0 / sPz.boxSize # 1000 ckpc/h depth
+        print('Centering on: ', absCenPos)
+
+    # setup panels
+    if conf == 0:
+        # dm column density
+        p = {'partType':'dm',  'partField':'coldens_msunkpc2', 'valMinMax':[4.0, 8.0]}
+    if conf == 1:
+        # gas column density
+        p = {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.5, 8.0]}
+    if conf == 2:
+        # stars
+        p = {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.8,7.8]}
+
+    panel_zoom = p.copy()
+    #panel_parent = p.copy()
+
+    panel_zoom.update( {'run':sPz.run, 'res':sPz.res, 'redshift':sPz.redshift, 'variant':sPz.variant, 'hInd':sPz.hInd})
+    #panel_parent.update( {'run':sPz.sP_parent.run, 'res':sPz.sP_parent.res, 'redshift':sPz.sP_parent.redshift, 'hInd':parSubID})
+
+    panels = [panel_zoom] #[panel_zoom, panel_parent]
+
+    class plotConfig:
+        plotStyle    = 'open'
+        rasterPx     = nPixels[0]
+        colorbars    = True
+        saveFilename = './zoomBoxVis_%s_%s_snap%d.pdf' % (sPz.simName,p['partType'],sPz.snap)
+
+    renderBox(panels, plotConfig, locals(), skipExisting=False)
