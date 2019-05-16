@@ -107,6 +107,13 @@ def _TNGboxSliceConfig(res):
         centerHaloID = None
         nSlicesTot = None
         curSlice = None
+    if res in [1,2]:
+        # original Millennium simulations
+        dmMM[1] += 0.5
+
+        centerHaloID = None
+        nSlicesTot = None
+        curSlice = None
 
     return dmMM, gasMM, starsMM, gasFullMM, centerHaloID, nSlicesTot, curSlice
 
@@ -182,7 +189,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice)
 
-    run        = 'tng'
+    run        = 'tng' # 'millennium'
     redshift   = 0.0
     nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y

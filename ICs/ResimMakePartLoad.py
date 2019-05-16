@@ -351,10 +351,14 @@ def generate(fofID, EnlargeHighResFactor=None):
     from util.simParams import simParams
 
     # config
-    sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-    MaxLevel = 11 # e.g. 9=512^3, 11=2048^3
+    #sP = simParams(res=2048,run='tng_dm',redshift=0.0)
+    MaxLevel = 11 # e.g. 9=512^3, 11=2048^3, should match closest to res of original run
     MinLevel = 6 # 2^5=32 coarsest background, 2^6=64
-    ZoomFactor = 3
+    #ZoomFactor = 3 # if one, then no increase beyond original, if two then x8 mass, etc
+
+    #sP = simParams(res=1820,run='tng',redshift=0.73) # fofID=609 at snap=58 is Saulder object (parent) (fofID=5405 MDB at z=0)
+    #ZoomFactor = 1
+
     Angle = 0.1
     if EnlargeHighResFactor is None: EnlargeHighResFactor = 2.0
 

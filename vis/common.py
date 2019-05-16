@@ -147,6 +147,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
         # dark matter
         if sP.isPartType(partType, 'dm') or sP.isPartType(partType, 'dmlowres'):
             if not sP.snapHasField(partType, 'SubfindHsml'):
+                if indRange is None: print('Warning: Computing DM hsml for global snapshot.')
                 pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'
                 nNGBDev = int( np.sqrt(nNGB)/2 )
@@ -1557,7 +1558,8 @@ def addBoxMarkers(p, conf, ax):
             # in bounds?
             if ( (xyzDistAbs[0] <= p['boxSizeImg'][0]/2) & \
                  (xyzDistAbs[1] <= p['boxSizeImg'][1]/2) & \
-                 (xyzDistAbs[2] <= p['boxSizeImg'][2]/2) ):
+                 (xyzDistAbs[2] <= p['boxSizeImg'][2]/2) & \
+                 (radii[gcInd] > 0) ):
                 # draw and count
                 countAdded += 1
 
@@ -1607,11 +1609,11 @@ def addBoxMarkers(p, conf, ax):
                 print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,numToAdd))
                 break
 
-        # special behavior
+        # special behavior: highlight the progenitor of a specific object
         if 0:
             sP_loc = p['sP'].copy()
             sP_loc.setRedshift(0.0)
-            mpb = sP_loc.loadMPB(585369) # Christoph Saulder object
+            mpb = sP_loc.loadMPB(585369) # Christoph Saulder boundary object
 
             w = np.where(mpb['SnapNum'] == p['sP'].snap)[0]
             xyzpos = np.squeeze(mpb['SubhaloPos'][w,:])
@@ -1620,6 +1622,14 @@ def addBoxMarkers(p, conf, ax):
             c = plt.Circle((xyzpos[p['axes'][0]],xyzpos[p['axes'][1]]), rad, color='red', alpha=alpha, linewidth=2.0, fill=False)
             ax.add_artist(c)
 
+        # special behavior: visualize PMGRID cells next to a periodic boundary
+        if 0:
+            PMGRID = p['sP'].snapConfigVars()['PMGRID'] # 4096
+            gridSizeCode = p['sP'].boxSize / PMGRID
+
+            ax.plot( [0,p['sP'].boxSize], [0,0], '-', lw=1.0, color='orange', alpha=0.8)
+            ax.plot( [0,p['sP'].boxSize], [gridSizeCode,gridSizeCode], '-', lw=1.0, color='orange', alpha=0.8)
+            ax.plot( [0,p['sP'].boxSize], [-gridSizeCode,-gridSizeCode], '--', lw=1.0, color='orange', alpha=0.8)
 
     if 'plotHalos' in p and p['plotHalos'] > 0:
         # plotting N most massive halos in visible area
