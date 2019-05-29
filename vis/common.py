@@ -38,7 +38,7 @@ colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_
                     'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
 totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
-velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y']
+velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y','bfield_x','bfield_y','bfield_z']
 
 def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
@@ -151,7 +151,7 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
                 pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
                 treePrec = 'single' if pos.dtype == np.float32 else 'double'
                 nNGBDev = int( np.sqrt(nNGB)/2 )
-                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec=treePrec)
+                hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=nNGBDev, treePrec='double')
             else:
                 hsml = sP.snapshotSubsetP(partType, 'SubfindHsml', indRange=indRange)
 
@@ -1163,7 +1163,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # accumulate per chunk by using a minimum reduction between the master grid and each chunk grid
         if '_minIP' in method: grid_quant.fill(np.inf)
 
-        disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml')) or \
+        disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml') and method != 'histo') or \
                            sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
 
         if len(sP.data):
@@ -1205,17 +1205,18 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 pos, _ = remapPositions(sP, pos, remapRatio, nPixels)
 
             # load: sizes (hsml) and manipulate as needed
-            if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
-                hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
-                                          useSnapHsml=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
-            else:
-                hsml = getHsmlForPartType(sP, partType, indRange=indRange)
+            if method != 'histo':
+                if 'stellarBand-' in partField or (partType == 'stars' and 'coldens' in partField):
+                    hsml = getHsmlForPartType(sP, partType, indRange=indRange, nNGB=32, 
+                                              useSnapHsml=snapHsmlForStars, alsoSFRgasForStars=alsoSFRgasForStars)
+                else:
+                    hsml = getHsmlForPartType(sP, partType, indRange=indRange)
 
-            hsml *= hsmlFac # modulate hsml values by hsmlFac
+                hsml *= hsmlFac # modulate hsml values by hsmlFac
 
-            if sP.isPartType(partType, 'stars'):
-                pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
-                hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
+                if sP.isPartType(partType, 'stars'):
+                    pxScale = np.max(np.array(boxSizeImg)[axes] / nPixels)
+                    hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
 
             # load: mass/weights, quantity, and render specifications required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=indRange)
@@ -1360,7 +1361,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
                 xvals = np.squeeze( pos[w,axes[0]] )
                 yvals = np.squeeze( pos[w,axes[1]] )
-                mass  = mass[w]
+
+                if mass.ndim == 0:
+                    mass = np.zeros(len(w[0]), dtype=mass.dtype) + mass
+                else:
+                    mass  = mass[w]
 
                 # compute mass sum grid
                 grid_d, _, _, _ = binned_statistic_2d(xvals, yvals, mass, stat, bins=nPixels, range=[xMinMax,yMinMax])
