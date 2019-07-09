@@ -110,7 +110,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
 
     # derive appropriate rotation matrix if requested
     rotMatrix = None
-    rotCenter = None
+    rotCenter = None 
 
     if rotation is not None:
         if str(rotation) in ['face-on-j','edge-on-j']:
