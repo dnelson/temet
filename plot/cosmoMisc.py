@@ -117,7 +117,7 @@ def plotMassFunctions():
             ax.hist(masses[w],bins=nBins,range=mass_range,lw=2.0,label=label,histtype='step',alpha=0.9)
 
         ax.set_ylim([1,yy_max*1.4])
-        ax.legend(loc='lower left')
+        ax.legend(loc='upper right')
 
     fig.tight_layout()    
     fig.savefig('mass_functions.pdf')

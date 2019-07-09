@@ -25,7 +25,7 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
     # plot setup
     xrange = [10.0, 15.0]
     yrange = [0.0, 0.30]
-    if dataRedshift > 0.0: yrange[1] = 0.25
+    if dataRedshift is not None and dataRedshift > 0.0: yrange[1] = 0.25
 
     # plot setup
     if fig_subplot[0] is None:
@@ -584,7 +584,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
     ax.set_ylim([1e-5,3e-1])
     ax.set_xlim([7,12.5])
     if clean: ax.set_xlim([6.5,12.5])
-    if dataRedshift >= 3.0: ax.set_ylim([5e-7,6e-2])
+    if dataRedshift is not None and dataRedshift >= 3.0: ax.set_ylim([5e-7,6e-2])
 
     if highMassEnd:
         #ax.set_ylim([1e-7,2e-2])
@@ -759,7 +759,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
 
                 normFac = sP.boxSizeCubicComovingMpc * binSize
                 xm, ym = running_histogram(xx, binSize=binSize, normFac=normFac, skipZeros=True)
-                ym = savgol_filter(ym_i,sKn,sKo)
+                ym = savgol_filter(ym,sKn,sKo)
 
                 label = sP.simName+' z=%.1f'%sP.redshift if count == 0 else ''
                 color = l.get_color() if count > 0 else None
@@ -773,7 +773,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
                     w = gc['halos']['GroupFirstSub'][wHalo]
 
                     xm, ym = running_histogram(xx[w], binSize=binSize, normFac=normFac, skipZeros=True)
-                    ym = savgol_filter(ym_i,sKn,sKo)
+                    ym = savgol_filter(ym,sKn,sKo)
                     l, = ax.plot(xm[3:], ym[3:], linestyles[count], lw=lw, label='%s [cen]' % sP.simName)
 
                 count += 1

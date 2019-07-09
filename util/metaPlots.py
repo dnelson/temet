@@ -18,7 +18,6 @@ def plotUsersData():
     col_headers = ["Date","NumUsers","Num30","CountApi","CountFits","CountSnapUni","CountSnapSub",
                    "SizeUni","SizeSub","CountGroup","CountLHaloTree","CountSublink","CutoutSubhalo",
                    "CutoutSublink"]
-    col_headers = [s.encode('latin1') for s in col_headers]
     labels = ["Total Number of Users","Users Active in Last 30 Days","Total API Requests", # / $10^3$
               "FITS File Downloads","Number of Downloads: Snapshots [Uniform]", #  / $10^2$
               "Number of Downloads: Snapshots [Subbox]","Total Download Size: Uniform [TB]",
@@ -33,10 +32,10 @@ def plotUsersData():
     lw = 2.0
 
     # load
-    convertfunc = lambda x: datetime.strptime(x, '%Y-%m-%d')    
+    convertfunc = lambda x: datetime.strptime(x.decode('utf8'), '%Y-%m-%d')    
     #dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
     dd = [object] + ['d' for a in col_headers[1:]]
-    data = np.genfromtxt('/home/extdylan/plot_stats.txt', delimiter=',',\
+    data = np.genfromtxt('/u/dnelson/plot_stats.txt', delimiter=',',\
                         names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=50)
     
     # plot
@@ -49,7 +48,7 @@ def plotUsersData():
         r, g, b = tableau20[i]
         tableau20[i] = (r / 255., g / 255., b / 255.)
     
-    fig = plt.figure(figsize=(20,13), facecolor='white')
+    fig = plt.figure(figsize=(22,13), facecolor='white')
     ax = fig.add_subplot(111)
     ax.set_yscale('log')
     
@@ -65,7 +64,9 @@ def plotUsersData():
     ax.set_ylim([1,1e10])
     
     launch_date = datetime.strptime('2015-04-01', '%Y-%m-%d')
+    launch_date_tng = datetime.strptime('2018-12-17', '%Y-%m-%d')
     ax.plot([launch_date,launch_date],[2,1e4],'-',lw=lw,color='black',alpha=0.8)
+    ax.plot([launch_date_tng,launch_date_tng],[2,1e4],'-',lw=lw,color='black',alpha=0.8)
     
     for i in range(len(col_headers)-1):
         col = col_headers[i+1]
