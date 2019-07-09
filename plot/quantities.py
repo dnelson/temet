@@ -13,9 +13,6 @@ from util.helper import logZeroNaN, running_median_clipped
 from cosmo.cloudy import cloudyIon
 from plot.config import *
 
-# abbreviations or alternative band names, mapped to FSPS appropriate names
-bandRenamesToFSPS = {'J': '2mass_j'}
-
 def bandMagRange(bands, tight=False):
     """ Hard-code some band dependent magnitude ranges. """
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.5,4.0]
@@ -1178,7 +1175,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if bands[1] in bandRenamesToFSPS: bands[1] = bandRenamesToFSPS[bands[1]]
 
         # load
-        vals, subhaloIDs = loadSimGalColors(sP, simColorsModel, bands=bands)
+        vals, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
 
         takeLog = False
         label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
