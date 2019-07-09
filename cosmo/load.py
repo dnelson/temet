@@ -463,6 +463,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
                 r[field] = ic3d['flag_iso_%s_%s' % (quant,max_type)]
 
+            # auxCat: photometric color
+            if 'color_' in quant:
+                from cosmo.color import loadColors
+
+                r[field] = loadColors(sP, quant)
+
             # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars) (optionally Mstar in 30pkpc)
             if quant in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr',
                          'ssfr_log','ssfr_gyr_log','ssfr_30pkpc_log','ssfr_30pkpc_gyr_log']:
@@ -1112,7 +1118,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 else:
                     # emission flux
                     lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
-                    values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2]
+                    values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sP.redshift
 
                 with h5py.File(cacheFile) as f:
                     f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values

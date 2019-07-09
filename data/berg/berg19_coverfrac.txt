@@ -1,0 +1,9 @@
+# Berg+ (2019) - Red dead redemption survey massive galaxy CGM - I - cool phase mass and metallicity (HI)
+# Table 4
+# log_NHI_min, rho bin [kpc], <rho> [kpc], f_c, f_c_err(1sigma), f_c(95% interval), n_sightlines, n_detect
+15.0           0-250          140          0.41 +0.15 -0.14      0.17 0.69          10            4
+15.0           250-500        390          0.22 +0.13 -0.10      0.06 0.48          11            2
+16.0           0-250          135          0.35 +0.15 -0.13      0.12 0.65          9             3
+16.0           250-500        390          0.14 +0.11 -0.08      0.02 0.39          11            1
+17.2           0-250          135          0.26 +0.15 -0.12      0.07 0.56          9             2
+17.2           250-500        390          0.06 +0.09 -0.04      0.00 0.27          11            0

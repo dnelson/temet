@@ -1371,6 +1371,130 @@ def johnson2015(surveys=['IMACS','SDSS'], coveringFractions=False):
 
     return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
 
+def berg2019(coveringFractions=False):
+    """ Load observational RDR survey data from Berg+ (2019). """
+    path1 = dataBasePath + 'berg/berg19.txt'
+    path2 = dataBasePath + 'berg/berg19_coverfrac.txt'
+
+    # load: covering fraction obs data points
+    with open(path2,'r') as f:
+        cfdata = f.readlines()
+
+    berg19_cf = []
+
+    for line in cfdata:
+        if line[0] == '#': continue
+        NHI_min, b_bin, b_avg, f_c, f_c_up, f_c_down, f_c_95_down, f_c_95_up, n_sight, n_detect = line.split()
+
+        berg19_cf.append( {'NHI_minimum' : float(NHI_min),
+                           'b_bin'       : b_bin,
+                           'b_avg'       : float(b_avg),
+                           'f_c'         : float(f_c),
+                           'f_c_68_down' : float(f_c) + float(f_c_down),
+                           'f_c_68_up'   : float(f_c) + float(f_c_up),
+                           'f_c_95_down' : float(f_c_95_down),
+                           'f_c_95_up'   : float(f_c_95_up),
+                           'n_sight'     : int(n_sight),
+                           'n_detect'    : int(n_detect)} )
+
+    if coveringFractions:
+        return berg19_cf
+
+    # load: galaxy sample and HI columns
+    with open(path1,'r') as f:
+        galdata = f.readlines()
+
+    gals = []
+
+    for line in galdata:
+        if line[0] == '#': continue
+        name, z, b, Mr, Mstar, Mhalo, rvir, sSFR, sSFR_err, NHI, NHI_err = line.split()
+
+        gals.append( {'name'     : name,
+                      'z'        : float(z), # redshift
+                      'b'        : float(b), # pkpc
+                      'Mr'       : float(Mr), # r-band absolute magnitude
+                      'Mstar'    : float(Mstar),
+                      'Mhalo'    : float(Mhalo),
+                      'rvir'     : float(rvir),
+                      'sSFR'     : float(sSFR), # log Msun/yr,
+                      'sSFR_err' : float(sSFR_err) if sSFR_err != '<' else 0.0, # dex
+                      'sSFR_lim' : True if sSFR_err == '<' else False, # upper limit?
+                      'NHI'      : float(NHI), # log cm^2
+                      'NHI_err'  : float(NHI_err) if NHI_err not in ['<','>'] else 0.0,
+                      'NHI_lim'  : False if NHI_err not in ['<','>'] else NHI_err} )
+
+    # pull out some flat numpy arrays
+    names    = [gal['name'] for gal in gals]
+    logM     = np.array( [gal['Mstar'] for gal in gals] )
+    z        = np.array( [gal['z'] for gal in gals] )
+    ssfr     = np.array( [gal['sSFR'] for gal in gals] )
+    ssfr_err = np.array( [gal['sSFR_err'] for gal in gals] )
+    ssfr_lim = np.array( [gal['sSFR_lim'] for gal in gals] ) # True=upper, False=detection (use sSFR_err)
+    b        = np.array( [gal['b'] for gal in gals] )
+    NHI      = np.array( [gal['NHI'] for gal in gals] )
+    NHI_err  = np.array( [gal['NHI_err'] for gal in gals] )
+    NHI_lim  = np.array( [gal['NHI_lim'] for gal in gals] ) # '<' or '>' or False (=detection, use NHI_err)
+
+    return names, logM, z, ssfr, ssfr_err, ssfr_lim, b, NHI, NHI_err, NHI_lim
+
+def chen2018zahedy2019():
+    """ Load observational COS-LRG survey data from Chen+ (2018) and Zahedy+ (2019). """
+    path1 = dataBasePath + 'chen/chen18_table1.txt'
+    path2 = dataBasePath + 'zahedy/zahedy18_tableA.txt'
+
+    # load: galaxy sample and HI columns
+    with open(path1,'r') as f:
+        lines = f.readlines()
+
+    gals = []
+
+    for line in lines:
+        if line[0] == '#': continue
+        qso_name, qso_z, qso_FUV, lrg_name, z, theta, d, ug_color, ug_err, Mr, Mr_err, Mstar = line.split()
+
+        gals.append( {'name'     : qso_name,
+                      'z'        : float(z), # redshift
+                      'd'        : float(d), # pkpc
+                      'Mr'       : float(Mr), # r-band absolute magnitude
+                      'Mr_err'   : float(Mr_err),
+                      'Mstar'    : float(Mstar),
+                      'ug'       : float(ug_color), # (u-g)_rest, mag
+                      'ug_err'   : float(ug_err)} )
+
+    gal_names = [gal['name'] for gal in gals]
+
+    # load: HI and metal columns
+    with open(path2,'r') as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if line[0] == '#': continue
+        qso_name, N_HI, err_HI, N_CII, err_CII, N_CIII, err_CIII, N_NII, err_NII, N_NIII, err_NIII, \
+                  N_OI, err_OI, N_OVI, err_OVI, N_MgI, err_MgI, N_MgII, err_MgII, N_SiII, err_SiII, \
+                  N_SiIII, err_SiIII, N_SiIV, err_SiIV, N_FeII, err_FeII, N_FeIII, err_FeIII = line.split(',')
+
+        ind = gal_names.index(qso_name)
+        gals[ind]['N_HI'] = float(N_HI)
+        gals[ind]['N_HI_err'] = err_HI.strip() if err_HI.strip() in ['<','>','-'] else float(err_HI)
+        gals[ind]['N_MgII'] = float(N_MgII)
+        gals[ind]['N_MgII_err'] = err_MgII.strip() if err_MgII.strip() in ['<','>','-'] else float(err_MgII)
+
+    # pull out some flat numpy arrays
+    names  = [gal['name'] for gal in gals]
+    logM   = np.array( [gal['Mstar'] for gal in gals] )
+    z      = np.array( [gal['z'] for gal in gals] )
+    ug     = np.array( [gal['ug'] for gal in gals] )
+    ug_err = np.array( [gal['ug_err'] for gal in gals] )
+    d      = np.array( [gal['d'] for gal in gals] )
+
+    N_HI       = np.array( [gal['N_HI'] for gal in gals] )
+    N_HI_err   = np.array( [gal['N_HI_err'] for gal in gals] )
+    N_MgII     = np.array( [gal['N_MgII'] for gal in gals] )
+    N_MgII_err = np.array( [gal['N_MgII_err'] for gal in gals] )
+
+    return names, logM, z, ug, ug_err, d, N_HI, N_HI_err, N_MgII, N_MgII_err
+
 def rossetti17planck():
     """ Load observational data points from Rosetti+ (2017) Table 1, Planck clusters. """
     path = dataBasePath + 'rossetti/r17_table1.txt'

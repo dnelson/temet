@@ -10,7 +10,7 @@ import h5py
 from os.path import isfile, isdir
 from os import mkdir
 
-from util.loadExtern import werk2013, johnson2015
+from util.loadExtern import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from cosmo.util import redshiftToSnapNum
 from vis.common import getHsmlForPartType
 from util.sphMap import sphMap
@@ -124,6 +124,86 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
             props['mstar_30pkpc_log'][:,i] = logM + mass_random_err_log
             props['impact_parameter'][:,i] = R + impact_param_random_err
+
+    if datasetName == 'LRG-RDR':
+        # load
+        gals, logM, redshift, ssfr, ssfr_err, ssfr_lim, b, _, _, _ = berg2019() # RDR survey
+
+        logM_err = 0.2 # dex, assumed
+        R_err = 2.0 # kpc, assumed
+        ssfr_err[ssfr_lim] = 0.0 # upper limits
+
+        # define how we will create this sample, by matching on what quantities
+        propList = ['mstar_30pkpc_log','ssfr_30pkpc_log','central_flag']
+
+        # set up required properties and limit types
+        shape = (len(gals), numRealizations)
+
+        props = {}
+        props['mstar_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+        props['ssfr_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+
+        props['central_flag'] = np.zeros( shape, dtype='int16' )
+        props['central_flag'].fill(1) # realization independent, always required
+
+        props['impact_parameter'] = np.zeros( shape, dtype='float32' )
+
+        limits = {}
+        for propName in propList:
+            # -1=ignore, 0=compute in distance (def.), 1=upper limit, 2=lower limit, 3=exact match required
+            limits[propName] = np.zeros( shape, dtype='int16' )
+
+        limits['ssfr_30pkpc_log'][np.where(ssfr_lim),:] = 1 # realization independent, upper limit
+        limits['central_flag'][:] = 3 # realization/galaxy indepedent, exact
+
+        # create realizations by adding appropriate noise to obs
+        for i in range(numRealizations):
+            impact_param_random_err = np.random.normal(loc=0.0, scale=R_err, size=len(gals))
+            mass_random_err_log = np.random.normal(loc=0.0, scale=logM_err, size=len(gals))
+            ssfr_random_err_log = np.random.normal(loc=0.0, scale=ssfr_err, size=len(gals))
+
+            props['mstar_30pkpc_log'][:,i] = logM + mass_random_err_log
+            props['ssfr_30pkpc_log'][:,i] = ssfr + ssfr_random_err_log
+            props['impact_parameter'][:,i] = b + impact_param_random_err
+
+    if datasetName == 'COS-LRG':
+        # load (note: 5 systems in common with RDR)
+        gals, logM, redshift, ug, ug_err, b, _, _, _, _ = chen2018zahedy2019() # COS-LRG survey
+
+        logM_err = 0.2 # dex, assumed
+        R_err = 2.0 # kpc, assumed
+
+        # define how we will create this sample, by matching on what quantities
+        propList = ['mstar_30pkpc_log','color_C_ug','central_flag']
+
+        # set up required properties and limit types
+        shape = (len(gals), numRealizations)
+
+        props = {}
+        props['mstar_30pkpc_log'] = np.zeros( shape, dtype='float32' )
+        props['color_C_ug'] = np.zeros( shape, dtype='float32' )
+
+        props['central_flag'] = np.zeros( shape, dtype='int16' )
+        props['central_flag'].fill(1) # realization independent, always required
+
+        props['impact_parameter'] = np.zeros( shape, dtype='float32' )
+
+        limits = {}
+        for propName in propList:
+            # -1=ignore, 0=compute in distance (def.), 1=upper limit, 2=lower limit, 3=exact match required
+            limits[propName] = np.zeros( shape, dtype='int16' )
+
+        limits['central_flag'][:] = 3 # realization/galaxy indepedent, exact
+
+        # create realizations by adding appropriate noise to obs
+        for i in range(numRealizations):
+            impact_param_random_err = np.random.normal(loc=0.0, scale=R_err, size=len(gals))
+            mass_random_err_log = np.random.normal(loc=0.0, scale=logM_err, size=len(gals))
+            ug_random_err = np.random.normal(loc=0.0, scale=ug_err, size=len(gals))
+
+            props['mstar_30pkpc_log'][:,i] = logM + mass_random_err_log
+            props['color_C_ug'][:,i] = ug + ug_random_err
+            props['impact_parameter'][:,i] = b + impact_param_random_err
 
     if datasetName == 'SimHalos_115-125':
         # pure theory analysis: all central halos with 10^11.5 < Mhalo/Msun < 10^12.5, one realization each

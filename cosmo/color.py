@@ -19,6 +19,27 @@ from cosmo.kCorr import kCorrections, coeff
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
             'g':4, 'r':5, 'i':6, 'z':7}
 
+def loadColors(sP, quantName):
+    """ Wrap the below function including some logic to take only a single lowercase string 'quantName' input. """
+    from plot.config import colorModelNames, bandRenamesToFSPS
+
+    names = {}
+    for key,val in colorModelNames.items():
+        names[key.lower()] = val
+
+    # determine which color model/bands are requested
+    _, model, bands = quantName.split("_")
+    simColorsModel = names[model]
+    bands = [bands[0],bands[1]]
+
+    if bands[0] in bandRenamesToFSPS: bands[0] = bandRenamesToFSPS[bands[0]]
+    if bands[1] in bandRenamesToFSPS: bands[1] = bandRenamesToFSPS[bands[1]]
+
+    # load
+    vals, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
+
+    return vals
+
 def loadSimGalColors(sP, simColorsModel, colorData=None, bands=None, projs=None, rad=''):
     """ Load band-magnitudes either from snapshot photometrics or from auxCat SPS modeling, 
     and convert to a color if bands is passed in, otherwise return loaded data. If loaded 
