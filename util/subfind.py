@@ -38,7 +38,7 @@ GFM_STELLAR_PHOTOMETRICS_K_LIMIT = 20.7   # limiting surface brightness determin
 GFM_MIN_METAL = -20.0                     # minimum metallicity
 MAX_FLOAT_NUMBER = 1e37
 
-# L35n2160TNG: (also change P.BirthPos/Vel!) (can shorten SphP_mem.dtype for phase1)
+# L35n2160TNG: (also change P.BirthPos/Vel!) (can shorten *_mem.dtype for phase1)
 NSOFTTYPES = 6
 MinimumComovingHydroSoftening = 0.05
 SofteningComoving = [0.390, 0.390, 0.390, 0.670, 1.15, 2.0]
@@ -55,6 +55,12 @@ SofteningMaxPhys  = [0.195, 0.195, 0.390, 0.670, 1.15, 2.0]
 #MinimumComovingHydroSoftening = 0.25
 #SofteningComoving = [2.0, 2.0, 2.0, 3.42, 5.84]
 #SofteningMaxPhys  = [1.0, 1.0, 2.0, 3.42, 5.84]
+
+# L25n512_0000 TESTING:
+#NSOFTTYPES = 6
+#MinimumComovingHydroSoftening = 0.125
+#SofteningComoving = [1.0, 1.0, 1.0, 1.71, 2.92, 5.0]
+#SofteningMaxPhys  = [0.5, 0.5, 1.0, 1.71, 2.92, 5.0]
 
 # define data types
 grad_data_dtype = np.dtype([
@@ -147,10 +153,11 @@ StarP_dtype = np.dtype([ # GFM
 ])
 
 StarP_dtype_mem = np.dtype([ # GFM
-    ('BirthTime', MyFloat),
-    ('InitialMass', MyDouble),
-    ('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS),
-    ('Metallicity', MyFloat)
+    # TODO: TEMPORARILY DISABLE THESE NEXT 4, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    #('BirthTime', MyFloat),
+    #('InitialMass', MyDouble),
+    #('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS),
+    #('Metallicity', MyFloat)
 ])
 
 BHP_dtype = np.dtype([ # BLACK_HOLES
@@ -221,7 +228,8 @@ P_dtype_mem = np.dtype([
     ('Mass', MyDouble),
     ('Vel', MyFloat, 3),
     ('AuxDataID', MyIDType), # GFM || BLACK_HOLES
-    ('ID', MyIDType),
+    # TODO: TEMPORARILY DISABLE THIS NEXT 1, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    #('ID', MyIDType),
     ('Type', np.uint8),
     ('SofteningType', np.uint8),
 ])
@@ -329,7 +337,6 @@ Subgroup_dtype = np.dtype([
     ('StellarPhotometricsMassInRad', MyFloat)
 ])
 
-#@jit(nopython=True, nogil=True) #, cache=True)
 def load_custom_dump(sP, GrNr):
     """ Load groups_{snapNum}/fof_{fofID}.{taskNum} custom binary data dump. """
     filePath = sP.simPath + 'groups_%03d/fof_%d' % (sP.snap,GrNr)
@@ -339,6 +346,7 @@ def load_custom_dump(sP, GrNr):
     # first loop: load all headers, accumulate total counts
     nChunks = len(glob.glob(filePath + '.*'))
     print('nChunks: [%d], reading headers...' % nChunks)
+    assert nChunks > 0, 'Custom FoF0 save files not found.'
 
     NumP = 0
     NumSphP = 0
@@ -1037,7 +1045,7 @@ node_dtype = np.dtype([
     ('maxsofttype', np.uint8),
     ('maxhydrosofttype', np.uint8),
     ('minhydrosofttype', np.uint8),
-    ('mass_per_type', np.float64, NSOFTTYPES)
+    ('mass_per_type', np.float32, NSOFTTYPES) # TODO: changed from np.float64 for memory (snap 99)
 ])
 
 @jit(nopython=True)
@@ -1187,16 +1195,22 @@ def subfind_unbind_calculate_potential_weak(num,ud,loc_pos,loc_P,ForceSoftening,
         p = ud[i]['index']
 
         if PS[p]['BindingEnergy'] >= weakly_bound_limit:
-            # TODO: pot is unused, how is this not a bug?
-            pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
-            PS[p]['Potential'] *= G / atime
+            # note: this is a bugfix from TNG codebase subfind, which has a typo making pot completely unused
+            #pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+            #PS[p]['Potential'] = G / atime * pot
+
+            PS[p]['Potential'] *= G / atime # TODO: BUG ACTIVE FOR 'nopot' run
 
 @jit(nopython=True)
 def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize, 
                    SofteningTable, ForceSoftening, xyzMin, xyzMax, extent, central_flag):
     """ Unbinding. """
-    max_iter = 1000
-    unbind_percent_threshold = 0.001 # if we remove <0.0002*N of the subhalo particles in an iter, stop
+    max_iter = 10000
+    unbind_percent_threshold = 0.00001 # if we remove <unbind_percent_threshold*N of the subhalo particles in an iter, stop
+    # current run (snap 69): no bug, the above threshold (checking current codebase result)
+    # 'nopot' run (snap 69, 5 days 20 hours): unbind_percent_threshold = 0.001
+    # 'check' run (snap 69, 4 days 12 hours): unbind_percent_threshold = 0.00001
+    # 'orig' run (snap 69, 4 days 9 hours): unbind_percent_threshold = 0.001
 
     weakly_bound_limit = 0
     len_non_gas = 0
@@ -1340,7 +1354,7 @@ def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, b
             if unbound > 0:
                 phaseflag = 1
 
-            # NOTE: this earlier termination is an optimization not in the original subfind
+            # note: this earlier termination is an optimization not in the original subfind
             if central_flag and unbound < np.int(unbind_percent_threshold * num):
                 break
         else:
@@ -2431,7 +2445,7 @@ def subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime,
 
         subnr += 1
 
-    # note: for fuzz have PS[i].SubNr = TotNgroups + 1; /* set a default that is larger than reasonable group number */
+    # note: for fuzz have PS[i].SubNr = TotNgroups + 1;
     # set binding energy of fuzz to zero, was overwritten with Hsml before; needed for proper snapshot sorting of fuzz */
     for i in range(P.size):
         if PS[i]['SubNr'] > subnr:
@@ -2460,17 +2474,16 @@ def subfind_particle_order(P, PS):
         loc_P = P[w]
 
         # sort kernel: fof_compare_aux_sort_GrNr = GrNr, SubNr, BindingEnergy, ID
-        sort_inds[i] = np.argsort(loc_P, order=['AuxDataID','Mass','ID']) # SubNr ascending, BindingEnergy ascending, ID ascending
+        sort_loc = np.argsort(loc_P, order=['AuxDataID','Mass','ID']) # SubNr ascending, BindingEnergy ascending, ID ascending
 
         # cast to int32
-        if sort_inds[i].dtype == np.int64 and sort_inds[i].max() < np.iinfo(np.int32).max:
-            sort_inds[i] = sort_inds[i].astype(np.int32)
+        if sort_loc.dtype == np.int64 and sort_loc.max() < np.iinfo(np.int32).max:
+            sort_loc = sort_loc.astype(np.int32)
 
-        # also include IDs for doublechecking that unsorted order matches original snaps
-        sort_inds['%d_ids_unsorted' % i] = loc_P['ID']
-        sort_inds['%d_ids' % i] = loc_P['ID'][sort_inds[i]]
+        # save IDs in sorted order, i.e. shuffling the snapshot IDs into this order is the required permutation
+        sort_inds['%d_ids' % i] = loc_P['ID'][sort_loc]
 
-    tot_inds = np.sum( sort_inds[key].size for key in range(NTYPES) if key in sort_inds )
+    tot_inds = np.sum( sort_inds[key].size for key in sort_inds.keys() )
     assert tot_inds == P.size
 
     return sort_inds
@@ -2592,74 +2605,10 @@ def run_subfind_snapshot(sP, GrNr):
 
     return Subgroup, ParticleOrder
 
-def run_subfind_customfof0save(sP, GrNr=0):
-    """ Run complete Subfind algorithm on custom FOF0 save files (TNG50-1). """
-    atime = sP.snapshotHeader()['Time']
-    final_save_file = 'save_%s_%d.hdf5' % (sP.simName,sP.snap)
-
-    # load
-    P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr)
-
-    SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
-
-    # execute subfind
-    print("Now executing subfind...", flush=True)
-    start_time = time.time()
-
-    count_cand, nsubs, candidates, Tail, Next, P, PS, SphP, StarP, BHP = subfind(P, PS, SphP, StarP, BHP, 
-        atime, sP.units.H_of_a, sP.units.G, sP.boxSize, SofteningTable, ForceSoftening)
-
-    print("Found [%d] substructures (before unbinding: %d), in [%g sec], now determining properties..." % (nsubs,count_cand,time.time()-start_time))
-    start_time = time.time()
-
-    candidates = subfind_properties_1(candidates)
-    print('subfind_properties_1: %g sec' % (time.time()-start_time))
-    start_time = time.time()
-
-    # derive subhalo properties
-    LogMetallicity_bins, LogAgeInGyr_bins, TableMags = load_gfm_stellar_photometrics()
-
-    Subgroup = subfind_properties_2(candidates, Tail, Next, P, PS, SphP, StarP, BHP, atime, sP.units.H_of_a, sP.units.G, sP.boxSize,
-                                    LogMetallicity_bins, LogAgeInGyr_bins, TableMags, SofteningTable, GrNr)
-                                    
-    print('subfind_properties_2: %g sec' % (time.time()-start_time))
-    start_time = time.time()
-
-    # free some memory
-    del Tail
-    del Next
-    del SphP
-    del StarP
-    del BHP
-
-    # save Subgroup
-    with h5py.File(final_save_file,'w') as f:
-        for field in Subgroup_dtype.names:
-            f["Subhalo"+field] = Subgroup[field]
-
-    print('Saved [Subgroup] to [%s].' % final_save_file)
-
-    # save sort order for Fof0 members (by type)
-    ParticleOrder = subfind_particle_order(P, PS)
-
-    print('subfind_particle_order: %g sec' % (time.time()-start_time))
-
-    with h5py.File(final_save_file,'a') as f:
-        for pt in ParticleOrder:
-            f['sort_inds_%s' % pt] = ParticleOrder[pt]
-
-        # need to modify the Group later with:
-        f['Group_nsubs'] = candidates.size
-        f['Group_Pos'] = Subgroup[0]['Pos']
-
-        # note: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp (do after rearrangement)
-
-    print('Saved [ParticleOrder] to [%s].' % final_save_file)
-
 def run_subfind_customfof0save_phase1(sP, GrNr=0):
     """ Run complete Subfind algorithm on custom FOF0 save files (TNG50-1). """
     atime = sP.snapshotHeader()['Time']
-    final_save_file = 'save_phase1_%s_%d.hdf5' % (sP.simName,sP.snap)
+    phase1_save_file = sP.derivPath + 'fof0_save_phase1_%s_%d.hdf5' % (sP.simName,sP.snap)
 
     # load
     P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr)
@@ -2680,37 +2629,23 @@ def run_subfind_customfof0save_phase1(sP, GrNr=0):
     print('subfind_properties_1: %g sec' % (time.time()-start_time))
 
     # need to save: candidates, Tail, Next, PS['Potential'], PS['BindingEnergy']
-    with h5py.File(final_save_file, 'w') as f:
+    with h5py.File(phase1_save_file, 'w') as f:
         f['Tail'] = Tail
         f['Next'] = Next
         f['Potential'] = PS['Potential']
         f['BindingEnergy'] = PS['BindingEnergy']
 
-    with open(final_save_file.replace('hdf5','bin'), 'wb') as f:
+    with open(phase1_save_file.replace('hdf5','bin'), 'wb') as f:
         candidates.tofile(f)
 
     print('All data saved, terminating.')
-
-    # DEUBG: verify
-    if 0:
-        print('Verify...')
-        with h5py.File(final_save_file, 'r') as f:
-            Tail2 = f['Tail'][()]
-            Pot2 = f['Potential'][()]
-
-        with open(final_save_file.replace('hdf5','bin'), 'rb') as f:
-            cand2 = np.fromfile(f, dtype=cand_dtype)
-
-        print(np.array_equal(Tail2,Tail))
-        print(np.array_equal(Pot2, PS['Potential']))
-        print(np.array_equal(candidates,cand2))
 
 def run_subfind_customfof0save_phase2(sP, GrNr=0):
     # load
     print('Loading...')
 
     atime = sP.snapshotHeader()['Time']
-    final_save_file = 'save_%s_%d.hdf5' % (sP.simName,sP.snap)
+    final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
     phase1_save_file = final_save_file.replace('save_','save_phase1_')
 
     P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr)
@@ -2721,6 +2656,9 @@ def run_subfind_customfof0save_phase2(sP, GrNr=0):
     sort_inds = np.argsort(PS['Density'])[::-1] # descending
     P = P[sort_inds]
     PS = PS[sort_inds]
+
+    # fuzz: set a default SubNr that is larger than reasonable group number
+    PS['SubNr'] = sP.groupCatHeader()['Ngroups_Total'] + 1
 
     # load phase1 data
     with h5py.File(phase1_save_file, 'r') as f:
@@ -2778,7 +2716,7 @@ def verify_results(sP, GrNr=0):
     actual_lengths = sP.groupCat(fieldsSubhalos=['SubhaloLen'])[0:fof0['GroupNsubs']]
 
     # load our results file
-    final_save_file = 'save_%s_%d.hdf5' % (sP.simName,sP.snap)
+    final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
 
     result = {}
     with h5py.File(final_save_file,'r') as f:
@@ -2792,17 +2730,22 @@ def verify_results(sP, GrNr=0):
 
     # check all subhalo properties
     for i in range(result['Group_nsubs']):
+        failed = []
+
         sub = sP.groupCatSingle(subhaloID=i)
         for key in sub:
             if key in ['SubhaloBfldDisk', 'SubhaloBfldHalo']:
                 continue
             if not np.allclose(sub[key], result[key][i]):
-                print(key)
-                print(sub[key])
-                print(result[key][i])
+                failed.append(key)
+                #print(sub[key])
+                #print(result[key][i])
                 #assert 0
 
-        print('sub = %3d, length = %6d, passed all checks.' % (i,sub['SubhaloLen']))
+        if len(failed) > 0:
+            print('sub = %4d (length = %7d) failed allclose: [%d] fields' % (i,sub['SubhaloLen'],len(failed)))
+        else:
+            print('sub = %4d (length = %7d) passed all checks.' % (i,sub['SubhaloLen']))
 
     # check particle ordering
     for pt in [0,1,4,5]:
@@ -2824,7 +2767,8 @@ def verify_results(sP, GrNr=0):
             loc_snap_ids = np.sort(loc_snap_ids)
             loc_res_ids  = np.sort(loc_res_ids)
 
-            assert np.array_equal(loc_snap_ids, loc_res_ids)
+            if not np.array_equal(loc_snap_ids, loc_res_ids):
+                print('[%4d] sub particle members mismatch with snap' % i)
             offset += result['SubhaloLenType'][i,pt]
 
         # check fuzz
@@ -2834,22 +2778,404 @@ def verify_results(sP, GrNr=0):
         fuzz_snap_ids = np.sort(fuzz_snap_ids)
         fuzz_res_ids  = np.sort(fuzz_res_ids)
 
-        assert np.array_equal(fuzz_snap_ids, fuzz_res_ids)
+        if not np.array_equal(fuzz_snap_ids, fuzz_res_ids):
+            print('halo fuzz mismatch with snap')
 
     print('done.')
 
-def run_test():
-    """ Test. """
+def rewrite_groupcat(sP, GrNr=0):
+    """ Rewrite a group catalog which is missing FOF0 subhalos using the phase2 (final) results. """
+    from cosmo.load import gcPath
+
+    assert GrNr == 0 # no generalization
+    assert 'fof0test' in sP.run # testing, only modify L35n2160TNG_fof0test/ files
+
+    final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
+
+    # load our new FoF0 subhalos
+    subs = {}
+
+    with h5py.File(final_save_file,'r') as f:
+        # all subhalo fields
+        for key in f:
+            if 'Subhalo' not in key:
+                continue
+            subs[key] = f[key][()]
+            print(key)
+
+        # Fof0 fields
+        Group_nsubs = f['Group_nsubs'][()]
+        Group_Pos   = f['Group_Pos'][()]
+
+    # verify first groupcat chunk has no subhalos and has FoF0
+    with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+        nChunks = f['Header'].attrs['NumFiles']
+        assert f['Header'].attrs['Ngroups_ThisFile'] == 1
+        assert f['Header'].attrs['Nsubgroups_ThisFile'] == 0
+
+    # update first chunk
+    print('Updating groupcat files...')
+
+    with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
+        # write all FoF0 subhalo fields
+        for key in subs:
+            f['Subhalo'][key] = subs[key]
+
+        # update FoF0: number of subhalos and position
+        f['Group']['GroupFirstSub'][0] = 0
+        f['Group']['GroupNsubs'][0] = Group_nsubs
+        f['Group']['GroupPos'][0,:] = Group_Pos
+
+    # update headers of all chunks
+    with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
+        f['Header'].attrs['Nsubgroups_ThisFile'] = Group_nsubs
+        Nsubs_Total_old = f['Header'].attrs['Nsubgroups_Total']
+
+    Nsubgroups_Total = Nsubs_Total_old + Group_nsubs
+
+    for i in range(nChunks):
+        with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=i),'r+') as f:
+            f['Header'].attrs['Nsubgroups_Total'] = Nsubgroups_Total
+
+    print('Done.')
+
+@jit(nopython=True)
+def _find_so_quantities(dists, mass, rhoBack, Deltas):
+    """ Helper. """
+    cur_mass = 0.0
+    cur_overdensity = 0.0
+
+    R200 = np.zeros( len(Deltas), dtype=np.float32 )
+    M200 = np.zeros( len(Deltas), dtype=np.float32 )
+
+    for i in range(dists.size):
+        cur_mass += mass[i]
+        if dists[i] > 0:
+            cur_overdensity = cur_mass / (4*np.pi / 3.0 * dists[i]**3) / rhoBack
+
+        for delta_ind in range(Deltas.size):
+            if cur_overdensity > Deltas[delta_ind]:
+                R200[delta_ind] = dists[i]
+                M200[delta_ind] = cur_mass
+
+    return R200, M200
+
+def add_so_quantities(sP, GrNr=0):
+    """ FoF0 is missing SO quantities (Group_R_Crit200, etc). Need to derive now. """
+    from cosmo.load import gcPath
+
+    assert GrNr == 0 # no generalization for chunkNum
+    assert 'fof0test' in sP.run # testing, only modify L35n2160TNG_fof0test/ files
+
+    DeltaMean200 = 200.0
+    DeltaCrit200 = 200.0 / sP.units.Omega_z
+    DeltaCrit500 = 500.0 / sP.units.Omega_z
+
+    x = sP.units.Omega_z - 1.0
+    DeltaTopHat = (18 * np.pi**2 + 82 * x - 39 * x**2) / sP.units.Omega_z
+
+    Deltas = np.array([DeltaMean200, DeltaTopHat, DeltaCrit200, DeltaCrit500])
+
+    # allocate
+    ptTypes = [0,1,4,5]
+    NumPart = sP.snapshotHeader()['NumPart']
+    NumPartTot = np.sum([NumPart[pt] for pt in ptTypes])
+
+    pos = np.zeros( (NumPartTot,3), dtype='float32' )
+    mass = np.zeros( NumPartTot, dtype='float32' )
+
+    fof = sP.groupCatSingle(haloID=GrNr)
+
+    # global load
+    offset = 0
+    for pt in ptTypes:
+        print(pt, flush=True)
+        pos[offset:offset+NumPart[pt],:] = sP.snapshotSubset(pt, 'pos', float32=True)
+        mass[offset:offset+NumPart[pt]] = sP.snapshotSubset(pt, 'mass')
+        offset += NumPart[pt]
+
+    # distances
+    dists = sP.periodicDists(fof['GroupPos'],pos)
+
+    # sort
+    sort_inds = np.argsort(dists)
+
+    dists = dists[sort_inds]
+    mass = mass[sort_inds]
+
+    # overdensity
+    R200, M200 = _find_so_quantities(dists, mass, sP.units.rhoBack, Deltas)
+
+    print('R200: ', R200)
+    print('M200: ', M200)
+
+    if 1:
+        with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
+            f['Group']['Group_R_Mean200'][GrNr] = R200[0]
+            f['Group']['Group_R_TopHat200'][GrNr] = R200[1]
+            f['Group']['Group_R_Crit200'][GrNr] = R200[2]
+            f['Group']['Group_R_Crit500'][GrNr] = R200[3]
+
+            f['Group']['Group_M_Mean200'][GrNr] = M200[0]
+            f['Group']['Group_M_TopHat200'][GrNr] = M200[1]
+            f['Group']['Group_M_Crit200'][GrNr] = M200[2]
+            f['Group']['Group_M_Crit500'][GrNr] = M200[3]
+
+    print('Written.')
+
+def rewrite_snapshot(sP, GrNr=0):
+    """ Rewrite a snapshot which is missing FOF0 subhalos using the phase2 (final) results. """
+    from cosmo.load import snapPath
+    from tracer.tracerMC import match3
+
+    assert GrNr == 0 # no generalization
+    assert 'fof0test' in sP.run # testing, only modify L35n2160TNG_fof0test/ files
+
+    ptTypes = [0,1,4,5]
+
+    final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
+
+    # how many snapshot chunk files are covered by Fof0 (by type)?
+    fof0 = sP.groupCatSingle(haloID=GrNr)
+
+    if 1:
+        nchunks_type = np.zeros(NTYPES, dtype=np.int32) - 1
+        cumlen_type  = np.zeros(NTYPES, dtype=np.int64)
+
+        i = 0
+
+        while np.any(nchunks_type[ptTypes] == -1):
+            with h5py.File(snapPath(sP.simPath,sP.snap,chunkNum=i),'r') as f:
+                for pt in ptTypes:
+                    if nchunks_type[pt] >= 0:
+                        continue
+
+                    loc_len = f['Header'].attrs['NumPart_ThisFile'][pt]
+                    cumlen_type[pt] += loc_len
+
+                    #print('[%3d] pt = %d, len = %7d, cumlen [%7d of %8d]' % (i,pt,loc_len,cumlen_type[pt],fof0['GroupLenType'][pt]))
+                    if cumlen_type[pt] >= fof0['GroupLenType'][pt]:
+                        nchunks_type[pt] = i + 1
+
+            i += 1
+
+        for pt in ptTypes:
+            print('For partType = %d have to rewrite through chunk [%d].' % (pt,nchunks_type[pt]))
+
+    # load particle sort indices to shuffle FoF0 member particles into proper Subfind order
+    particle_sort = {}
+
+    with h5py.File(final_save_file,'r') as f:
+        for key in f:
+            if 'sort_inds' not in key:
+                continue
+            particle_sort[key] = f[key][()]
+
+    # verify against FoF0 size
+    for pt in ptTypes:
+        assert particle_sort['sort_inds_%d_ids' % pt].size == fof0['GroupLenType'][pt]
+
+    # derive shuffle order
+    for pt in ptTypes:
+        print('finding shuffle: ', pt)
+        snap_ids = sP.snapshotSubset(pt, 'id', haloID=GrNr)
+        particle_sort['sort_inds_%d' % pt], _ = match3(snap_ids, particle_sort['sort_inds_%d_ids' % pt])
+        assert particle_sort['sort_inds_%d' % pt].size == snap_ids.size
+
+    # list of all fields we will need to rewrite
+    fields = {}
+
+    with h5py.File(snapPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+        for pt in ptTypes:
+            fields[pt] = []
+            for key in f['PartType%d' % pt]:
+                fields[pt].append(key)
+            print('PartType = %d have [%d] fields.' % (pt,len(fields[pt])))
+
+    # rewrite loop
+    print('Writing...')
+
+    for pt in ptTypes:
+        for field in fields[pt]:
+            print(pt,field)
+
+            # load using normal routines
+            data = sP.snapshotSubset(pt, field, haloID=GrNr)
+
+            # reshuffle
+            data = data[particle_sort['sort_inds_%d' % pt]]
+
+            # loop over chunks to rewrite
+            offset = 0
+
+            for i in range(nchunks_type[pt]):
+                file = snapPath(sP.simPath, sP.snap, chunkNum=i)
+
+                num_remaining = fof0['GroupLenType'][pt] - offset
+
+                with h5py.File(file,'r+') as f:
+                    write_size = f['Header'].attrs['NumPart_ThisFile'][pt]
+
+                    if write_size > num_remaining:
+                        write_size = num_remaining
+
+                    #print(' [%s] write [0-%d] from data[%d-%d] left = %d' % \
+                    #    (file,write_size,offset,offset+write_size,num_remaining))
+
+                    # stamp
+                    f['PartType%d' % pt][field][0 : write_size] = data[offset : offset + write_size]
+
+                offset += write_size
+
+            # wrote full length?
+            assert offset == fof0['GroupLenType'][pt]
+
+    # note: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp
+    # (do after rearrangement) (full snaps only)
+
+    print('Done.')
+
+def compare_subhalos_all_quantities():
+    """ Plot diagnostic histograms. """
+    from cosmo.load import gcPath
     from util.simParams import simParams
-    #sP = simParams(res=128,run='tng',snap=4,variant='0000') # note: collective vs. serial algorithm
+    from matplotlib.backends.backend_pdf import PdfPages
+    import matplotlib.pyplot as plt
+    from plot.config import figsize
+    from util.helper import logZeroNaN
+
+    nBins = 50
+
+    sPs = []
+    sPs.append( simParams(res=2160, run='tng', snap=67) )
+    sPs.append( simParams(res=2160, run='tng', snap=68) )
+    sPs.append( simParams(res=2160, run='tng_fof0test', snap=69) )
+
+    #sPs.append( simParams(res=512, run='tng', snap=3, variant='5011') )
+    #sPs.append( 'fof0save' ) # load final save file of this run itself
+
+    # start pdf book
+    pdf = PdfPages('compare_subhalos_%s_%d.pdf' % (sPs[0].simName,len(sPs)))
+
+    # get list of subhalo properties
+    with h5py.File(gcPath(sPs[0].simPath,sPs[0].snap,chunkNum=0),'r') as f:
+        fields = list(f['Subhalo'].keys())
+
+    # get GroupNsubs[0] for each sim
+    fof0len = []
+    for sP in sPs:
+        if str(sP) == 'fof0save':
+            final_save_file = sPs[0].derivPath + 'fof0_save_%s_%d.hdf5' % (sPs[0].simName,sPs[0].snap)
+            with h5py.File(final_save_file,'r') as f:
+                fof0len.append( f['Group_nsubs'][()] )
+        else:
+            fof0len.append( sP.groupCatSingle(haloID=0)['GroupNsubs'] )
+
+    for field in fields:
+        # start plot
+        print(field)
+
+        fig = plt.figure(figsize=[figsize[0], figsize[1]])
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel(field + ' [log]')
+        ax.set_ylabel('log N')
+        #ax.set_yscale('log')
+
+        # load and histogram
+        for i, sP in enumerate(sPs):
+            if str(sP) == 'fof0save':
+                label = 'fof0save' + ' snap=%d' % sPs[0].snap
+                with h5py.File(final_save_file,'r') as f:
+                    vals = f[field][()]
+            else:
+                label = sP.simName + ' snap=%d' % sP.snap
+                with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+                    vals = f['Subhalo'][field][()]
+
+            assert vals.shape[0] == fof0len[i]
+
+            vals = vals.ravel() # 1D for all multi-D
+
+            if field not in ['SubhaloCM','SubhaloGrNr','SubhaloIDMostbound']:
+                vals = np.log10(vals)
+            vals = vals[np.isfinite(vals)]
+
+            ax.hist(vals, bins=nBins, alpha=0.6, label=label)
+
+        # finish plot
+        ax.legend(loc='best')
+        fig.tight_layout()
+        pdf.savefig()
+        plt.close(fig)
+
+    # by type
+    for field in fields:
+        if field[-4:] != 'Type':
+            continue
+        print(field)
+
+        # load
+        data = []
+        labels = []
+
+        for i, sP in enumerate(sPs):
+            if str(sP) == 'fof0save':
+                label = 'fof0save' + ' snap=%d' % sPs[0].snap
+                with h5py.File(final_save_file,'r') as f:
+                    vals = f[field][()]
+            else:
+                label = sP.simName + ' snap=%d' % sP.snap
+                with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+                    vals = f['Subhalo'][field][()]
+
+            data.append(vals)
+            labels.append(label)
+
+        # separate plot for each type
+        for pt in [0,1,4,5]:
+            fig = plt.figure(figsize=[figsize[0], figsize[1]])
+            ax = fig.add_subplot(111)
+
+            ax.set_xlabel(field + ' [Type=%d] [log]' % pt)
+            ax.set_ylabel('log N')
+
+            for i, sP in enumerate(sPs):
+                vals = np.squeeze(data[i][:,pt])
+                w = np.where(vals == 0)
+                print(field,pt,' number of zeros: ',len(w[0]),' of ',vals.size)
+                vals = np.log10(vals)
+                vals = vals[np.isfinite(vals)]
+
+                ax.hist(vals, bins=nBins, alpha=0.6, label=labels[i])
+
+            # finish plot
+            ax.legend(loc='best')
+            fig.tight_layout()
+            pdf.savefig()
+            plt.close(fig)
+
+    # finish
+    pdf.close()
+
+def run_subfind(snap):
+    """ Main driver. """
+    from util.simParams import simParams
+    #sP = simParams(res=128,run='tng',snap=snap,variant='0000') # note: collective vs. serial algorithm
+    #sP = simParams(res=512,run='tng',snap=snap,variant='0000')
 
     # L35n2160TNG started skipping fof0 subfind at snapshot 69 and onwards
-    sP = simParams(res=2160,run='tng',snap=69)
+    sP = simParams(res=2160,run='tng',snap=snap)
 
     run_subfind_customfof0save_phase1(sP, GrNr=0)
     #run_subfind_customfof0save_phase2(sP, GrNr=0)
 
-    #run_subfind_customfof0save(sP, GrNr=0)
+    # rewrite
+    #sP = simParams(res=2160,run='tng_fof0test',snap=snap)
+    #rewrite_groupcat(sP, GrNr=0)
+    #add_so_quantities(sP, GrNr=0)
+    #rewrite_snapshot(sP, GrNr=0)
+
     #verify_results(sP, GrNr=0)
 
 def benchmark():

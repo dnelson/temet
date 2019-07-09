@@ -16,6 +16,80 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_groupcat_snap_rewrite(GrNr=0):
+    """ Check custom Subfind. """
+    sP = simParams(res=2160,run='tng_fof0test',snap=69)
+    #sP = simParams(res=2160,run='tng',snap=68)
+    from tracer.tracerMC import match3
+    #sP = simParams(res=128,run='tng',snap=4,variant='0000')
+
+    final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
+    
+    fof = sP.groupCatSingle(haloID=GrNr)
+    h = sP.snapshotHeader()
+
+    np.random.seed(4242)
+    sub_ids = np.arange(fof['GroupNsubs']) + fof['GroupFirstSub']
+    np.random.shuffle(sub_ids)
+
+    num_todo = 5
+    sub_ids = [0,1,2,3,4,5]
+
+    for i in range(num_todo):
+        print(i, sub_ids[i])
+
+        # load
+        sub = sP.groupCatSingle(subhaloID=sub_ids[i])
+
+        dm = sP.snapshotSubset('dm', ['pos','vel'], subhaloID=sub_ids[i])
+        gas = sP.snapshotSubset('gas', ['mass','pos','sfr'], subhaloID=sub_ids[i])
+        stars = sP.snapshotSubset('stars', ['mass','pos'], subhaloID=sub_ids[i])
+        bh = sP.snapshotSubset('bh', ['BH_Mdot','pos','mass'], subhaloID=sub_ids[i])
+
+        gas_sfr    = 0.0
+        gas_mass   = 0.0
+        stars_mass = 0.0
+        bh_mass    = 0.0
+        bh_mdot    = 0.0
+        dm_mass    = dm['count'] * h['MassTable'][sP.ptNum('dm')]
+
+        if gas['count'] > 0:
+            gas_mass = gas['Masses'].sum()
+            gas_sfr  = gas['StarFormationRate'].sum()
+        if stars['count'] > 0:
+            stars_mass = stars['Masses'].sum()
+        if bh['count'] > 0:
+            bh_mass = bh['Masses'].sum()
+            bh_mdot = bh['BH_Mdot'].sum()
+
+        sub_mass = (dm_mass + gas_mass + stars_mass + bh_mass)
+
+        cm = np.zeros(3, dtype='float64')
+        for i in range(3):
+            if dm['count']:
+                cm[i] += np.sum((dm['Coordinates'][:,i]-sub['SubhaloPos'][i]) * h['MassTable'][sP.ptNum('dm')])
+            if gas['count']:
+                cm[i] += np.sum((gas['Coordinates'][:,i]-sub['SubhaloPos'][i]) * gas['Masses'])
+            if stars['count']:
+                cm[i] += np.sum((stars['Coordinates'][:,i]-sub['SubhaloPos'][i]) * stars['Masses'])
+            if bh['count']:
+                cm[i] += np.sum((bh['Coordinates'][:,i]-sub['SubhaloPos'][i]) * bh['Masses'])
+
+        cm /= sub_mass
+        cm += sub['SubhaloPos']
+
+        # compare
+        print( 'lentype ', sub['SubhaloLenType'] )
+        print( 'su mass ', sub_mass, sub['SubhaloMass'] )
+        print( 'ga mass ', gas_mass, sub['SubhaloMassType'][sP.ptNum('gas')] )
+        print( 'gas sfr ', gas_sfr, sub['SubhaloSFR'] )
+        print( 'st mass ', stars_mass, sub['SubhaloMassType'][sP.ptNum('stars')] )
+        print( 'dm mass ', dm_mass, sub['SubhaloMassType'][sP.ptNum('dm')] )
+        print( 'bh mass ', bh_mass, sub['SubhaloMassType'][sP.ptNum('bh')] )
+        print( 'bh mdot ', bh_mdot, sub['SubhaloBHMdot'] )
+        print( 'cm      ', cm, sub['SubhaloCM'], end='\n\n' )
+        #import pdb; pdb.set_trace()
+
 def convert_annalisa_infinite_images():
     """ Convert PDF -> JPG, combine, and resize. """
     import subprocess
