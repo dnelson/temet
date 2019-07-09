@@ -85,10 +85,14 @@ class units(object):
 
     # redshift dependent values (code units without h factors)
     H2_z_fact   = None     # H^2(z)
+    Omega_z     = None     # Omega_m(z) = Omega_m(0) * (1+z)^3 / H^2(z)
     H_z         = None     # hubble constant at redshift z [km/s/kpc]
     H_of_a      = None     # hubble constant, internal units (as computed in Arepo)
     rhoCrit_z   = None     # critical density at redshift z
     scalefac    = None     # a=1/(1+z)
+
+    # as above but strict code units, e.g. with h factors
+    rhoBack     = None     # = 3 * Omega0 * All.Hubble**2 / (8*pi*All.G)
 
     # unit conversions
     s_in_yr       = 3.155693e7
@@ -153,12 +157,14 @@ class units(object):
         self.f_b = self._sP.omega_b / self._sP.omega_m
 
         self.Hubble = self.H0_h1_s * self.UnitTime_in_s
+        self.rhoBack = 3 * self._sP.omega_m * self.Hubble**2 / (8 * np.pi * self.G)
 
         # redshift dependent values (code units)
         if self._sP.redshift is not None:
             self.H2_z_fact = self._sP.omega_m*(1+self._sP.redshift)**3.0 + \
                               self._sP.omega_L + \
                               self._sP.omega_k*(1+self._sP.redshift)**2.0
+            self.Omega_z   = self._sP.omega_m * (1+self._sP.redshift)**3.0 / self.H2_z_fact
             self.H_z       = self.H0 * np.sqrt(self.H2_z_fact)
             self.H_of_a    = self.Hubble * np.sqrt(self.H2_z_fact)
             self.rhoCrit_z = self.rhoCrit * self.H2_z_fact
