@@ -1758,7 +1758,7 @@ def convertMillenniumSnapshot(snap=63):
         fOut.close()
         print('All done.')
 
-def convertMillennium2Snapshot(snap=63):
+def convertMillennium2Snapshot(snap=67):
     """ Convert a complete Millennium-2 snapshot into TNG-like group-ordered HDF5 format. 
     Note all snapshots except 4-7 (inclusive) are already group-ordered. """
     from tracer.tracerMC import match3
@@ -1769,17 +1769,23 @@ def convertMillennium2Snapshot(snap=63):
 
     saveFile = savePath + 'snapdir_%03d/snap_%03d.hdf5' % (snap,snap)
 
+    unorderedSnaps = [4,5,6,7] # on /virgo/, only these snapshots are not yet in group order
+
     if not path.isdir(savePath + 'snapdir_%03d' % snap):
         mkdir(savePath + 'snapdir_%03d' % snap)
 
     def _snapChunkPath(snap, chunkNum):
+        if snap in unorderedSnaps:
+            return loadPath + 'snapdir_%03d/snap_newMillen_%03d.%s' % (snap,snap,chunkNum)
         return loadPath + 'snapdir_%03d/snap_newMillen_subidorder_%03d.%s' % (snap,snap,chunkNum)
     def _idChunkPath(snap, chunkNum):
         return loadPath + 'groups_%03d/subhalo_ids_%03d.%s' % (snap,snap,chunkNum)
 
     nChunks = len( glob.glob(_snapChunkPath(snap,'*')) )
     nChunksIDs = len( glob.glob(_idChunkPath(snap,'*')) )
-    assert nChunks == nChunksIDs or nChunksIDs == 0
+
+    # three cases for file organization
+    assert nChunks == nChunksIDs or nChunksIDs == 0 or (nChunks == 512 and nChunksIDs == 2048)
     print('Found [%d] chunks for snapshot [%03d], loading...' % (nChunks,snap))
 
     # load header
@@ -1789,11 +1795,11 @@ def convertMillennium2Snapshot(snap=63):
         NFiles = struct.unpack(endian+'i', header[128:128+4])[0]
 
     if NFiles != nChunks:
-        endian = '>'
+        endian = '>' # big
         NFiles = struct.unpack(endian+'i', header[128:128+4])[0]
+        print('WARNING: Endian set to big, true for snapshots then?')
 
-    assert NFiles == nChunks
-    print('WARNING: Endian set to big, true for snapshots then?')
+    assert NFiles == nChunks 
 
     # reader header of first snapshot chunk
     with open(_snapChunkPath(snap,0),'rb') as f:
@@ -1841,36 +1847,45 @@ def convertMillennium2Snapshot(snap=63):
 
         ids_snapordered[offset : offset+npart_local] = ids
 
-        print('[%4d] Snap IDs [%8d] particles, from [%10d] to [%10d].' % (i, npart_local, offset, offset+npart_local))
+        min_val = np.min(ids)
+        print('[%4d] Snap IDs [%8d] particles, from [%10d] to [%10d] min = %10d' % \
+            (i, npart_local, offset, offset+npart_local, min_val))
         offset += npart_local
+        if min_val == 0:
+            import pdb; pdb.set_trace()
 
     if nChunksIDs > 0:
         # need to reshuffle
-        assert snap in [4,5,6,7]
+        assert snap in unorderedSnaps
 
         # first, load all IDs from the sub files
         offset = 0
 
-        for i in range(nChunks):
+        # M-WAMP7/AQ/M2: Ngroups[int32], TotNgroups[int32], Nids[int32], TotNids[int64], NFiles[int32], SendOffset[int32(?)], ids[int64*]
+        # M1: Ngroups[int32], Nids[int32], TotNgroups[int32], NTask[int32], ids[int64*]
+        # P-M: Ngroups[int32], TotNgroups[int64], Nids[int32], TotNids[int64], NFiles[int32], SendOffset[int64], ids[int64*]
+        for i in range(nChunksIDs):
             with open(_idChunkPath(snap,i),'rb') as f:
-                header = f.read(16)
-                Nids = struct.unpack(endian+'i', header[4:8])[0]
+                header = f.read(28)
+                Nids    = struct.unpack(endian+'i', header[8:12])[0]
+                TotNids = struct.unpack(endian+'q', header[12:20])[0]
                 offset += Nids
 
         ids_groupordered = np.zeros( offset, dtype='int64' )
         print('Reading a total of [%d] IDs now...' % offset)
+        assert offset == TotNids
 
-        bitshift = ((1 << 34) - 1) # from get_group_coordinates() # TODO check for M2
+        bitshift = ((1 << 34) - 1) # same as Millennium-1 (should be corrent)
         offset = 0
 
-        for i in range(nChunks):
+        for i in range(nChunksIDs):
             # full read
             with open(_idChunkPath(snap,i),'rb') as f:
                 data = f.read()
-            Nids = struct.unpack(endian+'i', data[4:8])[0]
+            Nids = struct.unpack(endian+'i', data[8:12])[0]
             if Nids == 0:
                 continue
-            ids = struct.unpack(endian+'q' * Nids, data[16:16 + Nids*8])
+            ids = struct.unpack(endian+'q' * Nids, data[28:28 + Nids*8])
 
             # transform into actual particle ID and stamp
             ids_groupordered[offset : offset+Nids] = np.array(ids) & bitshift
@@ -1881,7 +1896,7 @@ def convertMillennium2Snapshot(snap=63):
         assert np.min(ids_groupordered) >= 0 # otherwise overflow or bad conversion above
 
         # crossmatch group catalog IDs and snapshot IDs
-        if Nids_tot > 0:
+        if TotNids > 0:
             print('Matching two ID sets now...')
             start = time.time()
 
@@ -1924,8 +1939,8 @@ def convertMillennium2Snapshot(snap=63):
     header.attrs['HubbleParam'] = Hubble
     header.attrs['MassTable'] = np.array(mass, dtype='float64')
     header.attrs['NumFilesPerSnapshot'] = np.int32(1)
-    header.attrs['NumPart_ThisFile'] = np.int32(numPartTot)
-    header.attrs['NumPart_Total'] = np.int32(numPartTot)
+    header.attrs['NumPart_ThisFile'] = np.int64(numPartTot)
+    header.attrs['NumPart_Total'] = np.int64(numPartTot)
     header.attrs['NumPart_Total_HighWord'] = np.zeros(6, dtype='int32')
     header.attrs['Omega0'] = Omega0
     header.attrs['OmegaLambda'] = OmegaL
@@ -1956,19 +1971,24 @@ def convertMillennium2Snapshot(snap=63):
             start_vel = 276 + 12*npart_local
             start = start_pos if ptName == 'Coordinates' else start_vel
 
-            val_local = struct.unpack(endian+'f' * npart_local*3, data[start:start + npart_local*12])
+            unpacker = struct.Struct(endian+'f' * npart_local*3)
+            val_local = unpacker.unpack(data[start:start + npart_local*12])
+            val_local = np.reshape(val_local, (npart_local,3))
 
             # stamp
-            val[offset:offset+npart_local,:] = np.reshape(val_local, (npart_local,3))
+            val[offset:offset+npart_local,:] = val_local
 
-            print('[%4d] %s [%8d] particles, from [%10d] to [%10d].' % (i, ptName, npart_local, offset, offset+npart_local))
+            curmem = reportMemory()
+            print('[%4d] %s [%8d] particles, from [%10d] to [%10d].' % (i, ptName, npart_local, offset, offset+npart_local), flush=True)
             offset += npart_local
 
         # re-order and write
         if inds_reorder is not None:
             val = val[inds_reorder,:]
 
+        print('writing...')
         pt1[ptName] = val
+        print('written.')
 
     # close
     fOut.close()
