@@ -351,10 +351,10 @@ def generate(fofID, EnlargeHighResFactor=None):
     from util.simParams import simParams
 
     # config
-    #sP = simParams(res=2048,run='tng_dm',redshift=0.0)
+    sP = simParams(res=2048,run='tng_dm',redshift=0.0)
     MaxLevel = 11 # e.g. 9=512^3, 11=2048^3, should match closest to res of original run
     MinLevel = 6 # 2^5=32 coarsest background, 2^6=64
-    #ZoomFactor = 3 # if one, then no increase beyond original, if two then x8 mass, etc
+    ZoomFactor = 3 # if one, then no increase beyond original, if two then x8 mass, etc
 
     #sP = simParams(res=1820,run='tng',redshift=0.73) # fofID=609 at snap=58 is Saulder object (parent) (fofID=5405 MDB at z=0)
     #ZoomFactor = 1
@@ -484,7 +484,17 @@ def generate(fofID, EnlargeHighResFactor=None):
     print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
 
 def generate_set():
-    haloIDs = [78, 88, 229, 305, 354, 385, 420, 430, 441, 625]
+    #haloIDs = [653, 858, 1244, 1291, 1523, 1544, 1775, 1838, 1890, 1919] # todo: 14.5-14.6 bin of 10
+    #haloIDs = [283, 435, 562, 592, 694, 752, 785, 836, 856, 877] # todo: part 1, increase 14.6-14.7 to 40
+    #haloIDs = [901, 980, 998, 1016, 1039, 1041, 1067, 1071, 1086, 1087] # todo: part 2, increase 14.6-14.7 to 40
+    #haloIDs = [1096, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 to 40
+    #haloIDs = [446, 463, 466, 490, 497, 518, 532, 571, 604, 636] # todo: part 2, increase 14.7-14.8 to 40
+    #haloIDs = [698, 701, 720, 778, 789, 790, 797, 798, 844, 884] # todo: part 3, increase 14.7-14.8 to 40
+    #haloIDs = [36, 42, 55, 77, 130, 196, 198, 209, 253, 265] # todo: part 1, increase 14.8-14.9 to 50
+    #haloIDs = [269, 270, 284, 299, 310, 312, 315, 321, 330, 331] # todo: part 2, increase 14.8-14.9 to 50
+    #haloIDs = [360, 368, 376, 378, 382, 393, 395, 416, 419, 429] # todo: part 3, increase 14.8-14.9 to 50
+    #haloIDs = [443, 451, 481, 485, 496, 510, 526, 550, 565, 586] # todo: part 4, increase 14.8-14.9 to 50
+
     sizeFacs = [3.0] #[2.0,3.0,4.0]
 
     for haloID in haloIDs:
