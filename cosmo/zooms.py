@@ -28,13 +28,76 @@ def pick_halos():
 
     # config
     bins = [ [x+0.0,x+0.1] for x in np.linspace(14.0,15.4,15) ]
-    numPerBin = 10
+    numPerBin = 50
 
     hInds = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
 
     for i, bin in enumerate(bins):
         print(bin,hInds[i])
-    print('Note: skipped h305 (IC gen failures, should replace in its mass bin.')
+
+    # note: skipped h305 (IC gen failures, replaced with 443 in its mass bin.
+    # note: run down to 14.5 mass bin with 10 per bin, then:
+    #  increase to 20 for 14.9-15, 50 for 14.8-14.9, 40 each for 14.6-14.8
+    return hInds
+
+def mass_function():
+    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
+    mass_range = [14.0, 15.5]
+    binSize = 0.1
+    
+    sP_tng300 = simParams(res=2500,run='tng',redshift=0.0)
+    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=0.0)
+
+    # load halos
+
+    # start figure
+    fig = plt.figure(figsize=figsize)
+
+    nBins = int((mass_range[1]-mass_range[0])/binSize)
+
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlim(mass_range)
+    ax.set_xticks(np.arange(mass_range[0],mass_range[1],binSize))
+    ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('N$_{\\rm bin=%.1f}$' % binSize)
+    ax.set_yscale('log')
+
+    yy_max = 1.0
+
+    hh = []
+    labels = []
+
+    for i in [0,1]:
+        if i == 0:
+            # tng300
+            gc = sP_tng300.groupCat(fieldsHalos=['Group_M_Crit200'])
+            masses = sP_tng300.units.codeMassToLogMsun(gc)
+            label = 'TNG300-1'
+        else:
+            # tng1 parent box for zooms
+            gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
+            halo_inds = pick_halos()
+            first_bin = 5 # >=14.5
+            masses = [gc[inds] for inds in halo_inds[first_bin:]] # list of masses in each bin
+            masses = np.hstack(masses)
+            masses = sP_tng1.units.codeMassToLogMsun(masses)
+            label = 'TNG1-Cluster'
+
+        w = np.where(~np.isnan(masses))
+        yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
+        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
+
+        hh.append(masses[w])
+        labels.append(label)
+
+    ax.hist(hh,bins=nBins,range=mass_range,label=labels,histtype='bar',alpha=0.9,stacked=True)
+
+    ax.set_ylim([1,200])
+    ax.legend(loc='upper right')
+
+    fig.tight_layout()    
+    fig.savefig('mass_functions.pdf')
+    plt.close(fig)
 
 def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 
@@ -360,8 +423,11 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
-def zoomBoxVis(sPz, conf=0):
+def zoomBoxVis(sPz=None, conf=0):
     """ Make a visualization of a zoom simulation, without using/requiring group catalog information. """
+
+    if sPz is None:
+        sPz = simParams(res=11,run='tng100_zoom',redshift=0.0,hInd=5405,variant='sf4')
 
     # render config
     method     = 'sphMap_global'
@@ -372,16 +438,23 @@ def zoomBoxVis(sPz, conf=0):
     labelSim   = True
     plotHalos  = 20
 
-    zoomFac    = 10000.0 / sPz.boxSize # show 10 cMpc/h size region around the box center
-
     if not sPz.isZoom:
         # full box (fixed vis in box coordinates)
         sPz = simParams(res=1820,run='tng',snap=sPz.snap)
-        zoomFac = 1000.0 / sPz.boxSize # show 1 cMpc/h size region around location
+        zoomFac = 5000.0 / sPz.boxSize # show 1 cMpc/h size region around location
         relCenPos = None
         absCenPos = [3.64e4, 3.9e4, 0.0] # from Shy's movie
         absCenPos = [3.9e4, 0.0, 3.64e4] # axes = [1,2] order
-        sliceFac = 1000.0 / sPz.boxSize # 1000 ckpc/h depth
+        sliceFac = 5000.0 / sPz.boxSize # 1000 ckpc/h depth
+        print('Centering on: ', absCenPos)
+
+    if sPz.isZoom:
+        # zoom 5405 (fixed vis in box coordinates around the object)
+        zoomFac = 5000.0 / sPz.boxSize # show 1 cMpc/h size region around location
+        relCenPos = None
+
+        absCenPos = [3.6e4+1000, 75000/2-3000, 75000/2] # axes = [1,2] order
+        sliceFac = 10000.0 / sPz.boxSize # 1000 ckpc/h depth
         print('Centering on: ', absCenPos)
 
     # setup panels
