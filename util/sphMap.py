@@ -1053,6 +1053,10 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         if axes[0] != 0 or axes[1] != 1:
             raise Exception('Must have axes=[0,1] for 3D projection with two coordinates only.')
 
+    # single-threaded for small calculations (avoid zero-size pSplits)
+    if mass.size < nThreads * 10:
+        nThreads = 1
+
     # massage quant if not specified
     if quant is None:
         quant = np.array([0])
