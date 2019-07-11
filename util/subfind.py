@@ -2813,6 +2813,15 @@ def rewrite_groupcat(sP, GrNr=0):
         assert f['Header'].attrs['Ngroups_ThisFile'] == 1
         assert f['Header'].attrs['Nsubgroups_ThisFile'] == 0
 
+    # update GroupFirstSub across all halos of all chunks
+    for i in range(nChunks):
+        with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=i),'r+') as f:
+            if f['Header'].attrs['Ngroups_ThisFile'] > 0:
+                gfs_loc = f['Group']['GroupFirstSub'][()]
+                w = np.where(gfs_loc >= 0)
+                gfs_loc[w] += Group_nsubs
+                f['Group']['GroupFirstSub'][:] = gfs_loc
+
     # update first chunk
     print('Updating groupcat files...')
 
