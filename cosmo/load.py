@@ -10,7 +10,7 @@ import h5py
 import glob
 from functools import partial
 from os.path import isfile, isdir
-from os import mkdir, makedirs
+from os import mkdir, makedirs, unlink
 from getpass import getuser
 
 import illustris_python as il
@@ -152,8 +152,12 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     continue # typically too large to store as an attribute
                 f[datasetName].attrs[attr] = attrValue
 
-        print(' Concatenated new [%s] and saved.' % auxCatPath.split("/")[-1])
-        print(' All chunks concatenated, please manually delete them now.')
+        # remove split files
+        for i in range(pSplit[1]):
+            auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+            unlink(auxCatPathSplit_i)
+
+        print(' Concatenated new [%s] and saved, split files deleted.' % auxCatPath.split("/")[-1])
         return
 
     def _expand_partial():
@@ -446,6 +450,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
             # central flag (1 if central, 0 if not)
             if quant in ['central_flag','cen_flag','is_cen','is_central']:
                 gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
+                gc = gc[ np.where(gc >= 0) ]
 
                 # satellites given zero
                 r[field] = np.zeros( sP.numSubhalos, dtype='int16' )
@@ -1035,6 +1040,7 @@ def _haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
 def _ionLoadHelper(sP, partType, field, kwargs):
     """ Helper to load (with particle level caching) ionization fraction, or total ion mass, 
     values values for gas cells. Or, total line flux for emission. """
+
     if 'flux' in field:
         lineName, prop = field.rsplit(" ",1)
         lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
@@ -1117,7 +1123,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                         values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
                 else:
                     # emission flux
-                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
+                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal, tempSfCold=tempSfCold)
                     values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sP.redshift
 
                 with h5py.File(cacheFile) as f:
