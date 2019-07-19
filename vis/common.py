@@ -1534,7 +1534,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     return grid_master, config, data_grid
 
-def addBoxMarkers(p, conf, ax):
+def addBoxMarkers(p, conf, ax, pExtent):
     """ Factor out common annotation/markers to overlay. """
 
     def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None):
@@ -1753,11 +1753,8 @@ def addBoxMarkers(p, conf, ax):
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
 
-        if p['axesUnits'] != 'code':
-            print('Warning: Such a manual placement of the redshift label might fail, need modified pExtent here.')
-
-        xt = p['extent'][1] - (p['extent'][1]-p['extent'][0])*(0.02)*conf.nLinear # upper right
-        yt = p['extent'][3] - (p['extent'][3]-p['extent'][2])*(0.02)*conf.nLinear
+        xt = pExtent[1] - (pExtent[1]-pExtent[0])*(0.02)*conf.nLinear # upper right
+        yt = pExtent[3] - (pExtent[3]-pExtent[2])*(0.02)*conf.nLinear
         color = 'white' if 'textcolor' not in p else p['textcolor']
 
         ax.text( xt, yt, zStr, color=color, alpha=1.0, 
@@ -2262,11 +2259,11 @@ def renderMultiPanel(panels, conf):
             if cmap is not None:
                 plt.clim( vMM )
 
-            addBoxMarkers(p, conf, ax)
+            addBoxMarkers(p, conf, ax, pExtent)
 
             addVectorFieldOverlay(p, conf, ax)
 
-            # colobar
+            # colorbar
             if conf.colorbars:
                 pad = np.clip(conf.rasterPx[0] / 6000.0, 0.05, 0.4) # 0.2 for 1200px
                 cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=pad)
@@ -2437,7 +2434,7 @@ def renderMultiPanel(panels, conf):
             if cmap is not None:
                 plt.clim( vMM )
 
-            addBoxMarkers(p, conf, ax)
+            addBoxMarkers(p, conf, ax, pExtent)
 
             addVectorFieldOverlay(p, conf, ax)
 
