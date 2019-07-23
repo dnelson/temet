@@ -528,7 +528,7 @@ def periodic_slurm_status(nosave=False):
 
     # text
     timeStr = 'Last Updated'
-    timeStr2 = '%s' % curTime.strftime('%A %d %b')
+    timeStr2 = '%s' % curTime.strftime('%a %d %b')
     timeStr3 = '%s' % curTime.strftime('%H:%M')
     nodesStr = 'nodes: [%d] total, of which [%d] are idle, [%d] are allocated, and [%d] are down.' % \
         (len(nodes_main), len(nodes_idle), len(nodes_alloc), len(nodes_down))
@@ -543,9 +543,9 @@ def periodic_slurm_status(nosave=False):
         nextJobsStr = 'next to run: id=%d %s (%s)' % (next_job_starting['job_id'],next_job_starting['name2'],next_job_starting['user_name'])
 
     ax.annotate('FREYA Status', [0.994,0.952], xycoords='figure fraction', fontsize=48.0, horizontalalignment='right', verticalalignment='center')
-    ax.annotate(timeStr, [0.992, 0.08], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
-    ax.annotate(timeStr2, [0.992, 0.055], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
-    ax.annotate(timeStr3, [0.992, 0.03], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
+    #ax.annotate(timeStr, [0.988, 0.08], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
+    ax.annotate(timeStr2, [0.988, 0.055], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
+    ax.annotate(timeStr3, [0.988, 0.03], xycoords='figure fraction', fontsize=12.0, horizontalalignment='right', verticalalignment='center', color='green')
     ax.annotate(nodesStr, [0.006, 0.98], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(coresStr, [0.006, 0.943], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')
     ax.annotate(loadStr, [0.006, 0.906], xycoords='figure fraction', fontsize=20.0, horizontalalignment='left', verticalalignment='center')

@@ -904,8 +904,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         bands = []
         bands += ['sdss_u','sdss_g','sdss_r','sdss_i','sdss_z']
         #bands += ['wfcam_y','wfcam_j','wfcam_h','wfcam_k'] # UKIRT IR wide
-        bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
-        bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
+        #bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
+        #bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
         if indivStarMags or sizes: bands = ['sdss_r','jwst_f150w']
 
@@ -2218,17 +2218,20 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             return std, None, None
 
     # config (hard-coded for oxygen/outflows projects at the moment, could be generalized)
-    if sP.boxSize in [75000,205000]:
+    minHaloMass = None
+
+    if sP.boxSize in [67770,75000,205000]:
         radMin = 0.0 # log code units
         radMax = 4.0 # log code units
         radNumBins = 100
-        minHaloMass = 10.8 # log m200crit
+        minHaloMass = 10.8 # 11.4 for auroraVoyage2050 # log m200crit
     if sP.boxSize in [20000,35000]:
         radMin = -0.5 # log code units
         radMax = 3.0 # log code units
         radNumBins = 100
         minHaloMass = 9.0 # log m200crit
 
+    assert minHaloMass is not None
     cenSatSelect = 'cen'
 
     # determine ptRestriction
@@ -2978,8 +2981,10 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_eff', Nside=1),
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1),
-   'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, 
+   'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, # main model, with 12 projections per
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1, rad=30.0),
+   'Subhalo_StellarPhot_p07c_cf00dust_res_conv_z_30pkpc' : partial(subhaloStellarPhot, # main model, with 1 projection per
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', rad=30.0),
    'Subhalo_StellarPhot_p07c_cf00b_dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00b_res_conv', Nside=1, rad=30.0),
    'Subhalo_StellarPhot_p07c_cf00dust_res3_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, 
@@ -3069,6 +3074,10 @@ fieldComputeFunctionMapping = \
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['u','v','2mass_j'], rad=30.0),
    'Subhalo_StellarPhot_UVJ_p07c_cf00dust_res_conv_z_2rhalf'   : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['u','v','2mass_j'], rad='2rhalfstars'),
+   'Subhalo_StellarPhot_vistaK_p07c_cf00dust_res_conv_z_30pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['vista_k'], rad=30.0),
+   'Subhalo_StellarPhot_ugr_p07c_cf00dust_res_conv_z_30pkpc'   : partial(subhaloStellarPhot, 
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', bands=['sdss_u','sdss_g','sdss_r'], rad=30.0),
 
    # light: redshifted/apparent
    'Subhalo_StellarPhot_p07c_nodust_red'   : partial(subhaloStellarPhot,
@@ -3106,9 +3115,10 @@ fieldComputeFunctionMapping = \
    'Box_Grid_nH2_popping_BR_depth10'  : partial(wholeBoxColDensGrid,species='MH2BR_popping_depth10'),
    'Box_Grid_nH2_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth10'),
    'Box_Grid_nH2_popping_KMT_depth10' : partial(wholeBoxColDensGrid,species='MH2KMT_popping_depth10'),
+   'Box_Grid_nHI_popping_GK_depth10'  : partial(wholeBoxColDensGrid,species='MHIGK_popping_depth10'),
 
-   'Box_Grid_nH2_popping_GK'  : partial(wholeBoxColDensGrid,species='MH2GK_popping'),
-   'Box_Grid_nH2_popping_GK_depth20'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth20'),
+   'Box_Grid_nH2_popping_GK'         : partial(wholeBoxColDensGrid,species='MH2GK_popping'),
+   'Box_Grid_nH2_popping_GK_depth20' : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth20'),
    'Box_Grid_nH2_popping_GK_depth5'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth5'),
    'Box_Grid_nH2_popping_GK_depth1'  : partial(wholeBoxColDensGrid,species='MH2GK_popping_depth1'),
 
@@ -3120,14 +3130,15 @@ fieldComputeFunctionMapping = \
    'Box_CDDF_nOVII'          : partial(wholeBoxCDDF,species='OVII'),
    'Box_CDDF_nOVIII'         : partial(wholeBoxCDDF,species='OVIII'),
 
-   'Box_CDDF_nH2_popping_BR_depth10' : partial(wholeBoxCDDF,species='H2_popping_BR_depth10'),
-   'Box_CDDF_nH2_popping_GK_depth10' : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
+   'Box_CDDF_nH2_popping_BR_depth10'  : partial(wholeBoxCDDF,species='H2_popping_BR_depth10'),
+   'Box_CDDF_nH2_popping_GK_depth10'  : partial(wholeBoxCDDF,species='H2_popping_GK_depth10'),
    'Box_CDDF_nH2_popping_KMT_depth10' : partial(wholeBoxCDDF,species='H2_popping_KMT_depth10'),
+   'Box_CDDF_nHI_popping_GK_depth10'  : partial(wholeBoxCDDF,species='HI_popping_GK_depth10'),
 
-   'Box_CDDF_nH2_popping_GK' : partial(wholeBoxCDDF,species='H2_popping_GK'), # fullbox depth
+   'Box_CDDF_nH2_popping_GK'         : partial(wholeBoxCDDF,species='H2_popping_GK'), # fullbox depth
    'Box_CDDF_nH2_popping_GK_depth20' : partial(wholeBoxCDDF,species='H2_popping_GK_depth20'),
-   'Box_CDDF_nH2_popping_GK_depth5' : partial(wholeBoxCDDF,species='H2_popping_GK_depth5'),
-   'Box_CDDF_nH2_popping_GK_depth1' : partial(wholeBoxCDDF,species='H2_popping_GK_depth1'),
+   'Box_CDDF_nH2_popping_GK_depth5'  : partial(wholeBoxCDDF,species='H2_popping_GK_depth5'),
+   'Box_CDDF_nH2_popping_GK_depth1'  : partial(wholeBoxCDDF,species='H2_popping_GK_depth1'),
 
    'Box_Grid_nH2_diemer_GD14_depth10' : partial(wholeBoxColDensGrid,species='MH2_GD14_diemer_depth10'),
    'Box_Grid_nH2_diemer_GK11_depth10' : partial(wholeBoxColDensGrid,species='MH2_GK11_diemer_depth10'),
@@ -3241,6 +3252,25 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII mass',op='sum',scope='global_fof'),
    'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_OVIII_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII mass',op='sum',scope='global_fof',proj2D=[2,2000]),
+
+   'Subhalo_RadProfile3D_FoF_OVII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII mass',op='sum',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_OVII_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux',op='sum',scope='fof'),
+   'Subhalo_RadProfile2Dz_2Mpc_FoF_OVII_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux',op='sum',scope='fof',proj2D=[2,2000]),
+   'Subhalo_RadProfile2Dz_2Mpc_FoF_OVII_sfCold_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux_sfcold',op='sum',scope='fof',proj2D=[2,2000]),
+   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_OVII_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux',op='sum',scope='global_fof',proj2D=[2,2000]),
+   'Subhalo_RadProfile3D_FoF_OVIII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII mass',op='sum',scope='fof'),
+   'Subhalo_RadProfile3D_FoF_OVIII_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII flux',op='sum',scope='fof'),
+   'Subhalo_RadProfile2Dz_2Mpc_FoF_OVIII_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII flux',op='sum',scope='fof',proj2D=[2,2000]),
+   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_OVIII_Flux' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII flux',op='sum',scope='global_fof',proj2D=[2,2000]),
 
    'Subhalo_RadProfile3D_Global_Gas_O_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass_O',op='sum',scope='global'),

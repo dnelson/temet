@@ -168,20 +168,20 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
 
     if datasetName == 'COS-LRG':
         # load (note: 5 systems in common with RDR)
-        gals, logM, redshift, ug, ug_err, b, _, _, _, _ = chen2018zahedy2019() # COS-LRG survey
+        gals, logM, redshift, ug, ug_err, ug_lim, b, _, _, _, _ = chen2018zahedy2019() # COS-LRG survey
 
         logM_err = 0.2 # dex, assumed
         R_err = 2.0 # kpc, assumed
 
         # define how we will create this sample, by matching on what quantities
-        propList = ['mstar_30pkpc_log','color_C_ug','central_flag']
+        propList = ['mstar_30pkpc_log','color_C-30kpc-z_ug','central_flag']
 
         # set up required properties and limit types
         shape = (len(gals), numRealizations)
 
         props = {}
         props['mstar_30pkpc_log'] = np.zeros( shape, dtype='float32' )
-        props['color_C_ug'] = np.zeros( shape, dtype='float32' )
+        props['color_C-30kpc-z_ug'] = np.zeros( shape, dtype='float32' )
 
         props['central_flag'] = np.zeros( shape, dtype='int16' )
         props['central_flag'].fill(1) # realization independent, always required
@@ -202,7 +202,7 @@ def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
             ug_random_err = np.random.normal(loc=0.0, scale=ug_err, size=len(gals))
 
             props['mstar_30pkpc_log'][:,i] = logM + mass_random_err_log
-            props['color_C_ug'][:,i] = ug + ug_random_err
+            props['color_C-30kpc-z_ug'][:,i] = ug + ug_random_err
             props['impact_parameter'][:,i] = b + impact_param_random_err
 
     if datasetName == 'SimHalos_115-125':
@@ -371,6 +371,24 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         gridRes   = 2.0
         axes      = [0,1] # x,y
 
+    if config == 'LRG-RDR':
+        # grid parameters (Berg+ 2019)
+        partType  = 'gas'
+        ionName   = 'H I' #'MHIGK_popping' # 'H I' with H2 removed following G&K model
+        projDepth = 2000.0 # +/- 1000 km/s
+        gridSize  = 1200.0 # pkpc, need out to b = 500kpc
+        gridRes   = 2.0
+        axes      = [0,1] # x,y
+
+    if config in ['COS-LRG HI','COS-LRG MgII','COS-LRG MgII sfCold']:
+        # grid parameters (Chen+ 2018, Zahedy+ 2018)
+        partType  = 'gas'
+        ionName   = 'H I' if 'HI' in config else 'Mg II'
+        projDepth = 1000.0 # +/- 500 km/s
+        gridSize  = 400.0 # pkpc, need out to b = 160kpc
+        gridRes   = 2.0
+        axes      = [0,1] # x,y
+
     # save file exists?
     saveFilename = sP.derivPath + "obsMatchedColumns_%s_%d.hdf5" % (config,sim_sample['selected_inds'].size)
 
@@ -425,9 +443,12 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
             print(' all subhalos done, skipping this snapshot.')
             continue
 
-        # process: global load all particle data needed (calculate OVI on the fly, no cache)
-        print(' loading mass...')
-        mass = sP.snapshotSubsetP(partType, '%s mass' % ionName).astype('float32')
+        # process: global load all particle data needed
+        sfColdStr = '_sfcold' if 'sfCold' in config else ''
+        massField = '%s mass%s' % (ionName,sfColdStr) if " " in ionName else ionName
+
+        print(' loading mass [%s]...' % massField)
+        mass = sP.snapshotSubsetP(partType, massField).astype('float32')
         print(' loading pos...')
         pos = sP.snapshotSubsetP(partType, 'pos')
         print(' loading hsml...')

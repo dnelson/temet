@@ -30,7 +30,7 @@ colorModelNames = {'A' :'p07c',
                    'Br':'p07c_cf00dust_rad30pkpc',
                    'C' :'p07c_cf00dust_res_conv_ns1_rad30pkpc',
                    'nodust'    : 'p07c_nodust', # same as A
-                   'C-30kpc-z' : 'p07c_cf00dust_res_conv_z_30pkpc', # z-axis only inside of 12 healpix projections
+                   'C-30kpc-z' : 'p07c_cf00dust_res_conv_z_30pkpc', # z-axis only instead of 12 healpix projections
                    'snap'      : 'snap'}
 
 # abbreviations or alternative band names, mapped to FSPS appropriate names

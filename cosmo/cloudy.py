@@ -973,6 +973,7 @@ class cloudyEmission():
                          'H-alpha'     : 'H  1 6562.81A',
                          'H-beta'      : 'H  1 4861.33A',
                          '[OII]3729'   : 'O  2 3728.81A',
+                         'OVII'        : 'O  7 22.1012A',
                          'OVIII'       : 'O  8 18.9709A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
@@ -1029,6 +1030,9 @@ class cloudyEmission():
                 continue
             if line in self.lineAbbreviations:
                 validLines.append(self.lineAbbreviations[line])
+                continue
+            if line.replace(" ","") in self.lineAbbreviations:
+                validLines.append(self.lineAbbreviations[line.replace(" ","")])
                 continue
             if line.replace(' ','-') in self.lineAbbreviations:
                 validLines.append(self.lineAbbreviations[line.replace(' ','-')])
@@ -1123,7 +1127,7 @@ class cloudyEmission():
         return emis
 
     def calcGasLineLuminosity(self, sP, line, indRange=None, 
-                              assumeSolarAbunds=False, assumeSolarMetallicity=False):
+                              assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=False):
         """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
         for gas particles in the whole snapshot, optionally restricted to an indRange. 
          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
@@ -1143,7 +1147,8 @@ class cloudyEmission():
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        temp = snapshotSubset(sP, 'gas', 'temp', indRange=indRange) # log K
+        tempField = 'temp_sfcold' if tempSfCold else 'temp'
+        temp = snapshotSubset(sP, 'gas', tempField, indRange=indRange) # log K
         
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
         emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)

@@ -1,6 +1,6 @@
 # Chen+ (2018) - COS-LRG sample
 # Table 1
-# QSO_ID,               z_QSO, FUV_QSO, LRG_ID,                  z_LRG, theta", d_kpc, (u-g)rest, (u-g)err, Mr,     Mr_err, Mstar_logMsun
+# QSO_ID,          z_QSO, FUV_QSO, LRG_ID,                  z_LRG, theta", d_kpc, (u-g)rest, (u-g)err, Mr,     Mr_err, Mstar_logMsun
 SDSSJ0946+512339.9 0.741  18.4     SDSSJ094632.40+512335.9  0.4076 7.7     41.7   1.71       0.12      -22.42  0.06    11.2
 SDSSJ1406+250921.0 0.867  18.3     SDSSJ140625.97+250923.2  0.4004 8.8     47.3   1.77       0.11      -22.36  0.04    11.1
 SDSSJ1111+554726.1 0.766  17.5     SDSSJ111132.33+554712.8  0.4629 13.2    77.1   1.60       0.08      -23.15  0.07    11.4

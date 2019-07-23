@@ -885,7 +885,30 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                             (fCut1, color1[2], color2[2]*cFac), 
                             (fCut2, color2[2], color3[2]*cFac), 
                             (1.0,   color3[2], color3[2])) }
+
         cmap = LinearSegmentedColormap(ctName, cdict, N=512)
+
+    if ctName == 'magma_gray':
+        # discontinuous colormap: magma on the upper half, grayscale on the lower half, split at 1e-16 (e.g. surface brightness)
+        assert valMinMax is not None # need for placing discontinuities at correct physical locations
+        valCut = -17.0
+
+        fCut = (valCut-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
+        if fCut <= 0 or fCut >= 1:
+            print('Warning: strange fCut, fix!')
+            fCut = 0.5
+
+        # sample from both colormaps
+        x1 = np.linspace(0.1, 1.0, int(512*(1-fCut))) # avoid darkest (black) region of magma
+        x2 = np.linspace(0.0, 0.8, int(512*fCut)) # avoid brightness whites
+        colors1 = plt.cm.magma(x1)
+        colors2 = plt.cm.gray(x2)
+
+        # combine them and construct a new colormap
+        colors = np.vstack((colors2, colors1))
+        cmap = LinearSegmentedColormap.from_list('magma_gray', colors)
+
+        return cmap
 
     if ctName == 'perula':
         # matlab new default colortable: https://github.com/BIDS/colormap/blob/master/parula.py

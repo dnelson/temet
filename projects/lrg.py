@@ -20,6 +20,7 @@ from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3
 from vis.halo import renderSingleHalo
+from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended
 
 def stackedRadialProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
                           radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
@@ -602,7 +603,7 @@ def paperPlots():
             renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
     # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
-    if 1:
+    if 0:
         sP = simParams(res=2160, run='tng', redshift=redshift)
         haloMassBin = haloMassBins[1]
         #ion = 'Mg II sfCold'
@@ -612,3 +613,26 @@ def paperPlots():
         for ycum in [True,False]:
             for fullDepth in [True,False]:
                 ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=ycum, fullDepth=fullDepth)
+
+    # fig 6: obs matched samples for COS-LRG and LRG-RDR surveys
+    if 0:
+        sPs = [TNG50, TNG100]
+
+        simNames = '_'.join([sP.simName for sP in sPs])
+        obsSimMatchedGalaxySamples(sPs, 'sample_lrg_rdr_%s.pdf' % simNames, config='LRG-RDR')
+        obsSimMatchedGalaxySamples(sPs, 'sample_cos_lrg_%s.pdf' % simNames, config='COS-LRG')
+
+    # fig 7: run old OVI machinery to derive goodness of fit parameters and associated plots
+    if 1:
+        #for sP in [TNG50, TNG100]:
+        #    obsColumnsDataPlot(sP, saveName='obscomp_lrg_rdr_hi_%s.pdf' % sP.simName, config='LRG-RDR')
+        #    obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
+        
+        sP = TNG100
+        obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
+
+        # covering fractions
+        #sPs = [TNG50, TNG100]
+        #novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
+        #saveName = 'coshalos_covering_frac_%s.pdf' % '_'.join([sP.simName for sP in sPs])
+        #coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=0)
