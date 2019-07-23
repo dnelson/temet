@@ -124,10 +124,10 @@ SphP_dtype = np.dtype([
 ])
 
 SphP_dtype_mem = np.dtype([
-    ('Volume', MyFloat),
+    # TODO: TEMPORARILY DISABLE THESE 6, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    #('Volume', MyFloat),
     ('Utherm', MySingle),
-    ('Center', MyDouble, 3),
-    # TODO: TEMPORARILY DISABLE THESE NEXT 4, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    #('Center', MyDouble, 3), # NOTE: directly stamped into P['Pos'] instead of P_Pos method when loading
     #('B', MyFloat, 3),
     #('Metallicity', MyFloat),
     #('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS),
@@ -227,8 +227,8 @@ P_dtype_mem = np.dtype([
     ('Pos', MyDouble, 3),
     ('Mass', MyDouble),
     ('Vel', MyFloat, 3),
-    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES
-    # TODO: TEMPORARILY DISABLE THIS NEXT 1, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    # TODO: TEMPORARILY DISABLE THESE NEXT 2, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
+    #('AuxDataID', MyIDType), # GFM || BLACK_HOLES
     #('ID', MyIDType),
     ('Type', np.uint8),
     ('SofteningType', np.uint8),
@@ -425,6 +425,10 @@ def load_custom_dump(sP, GrNr):
     StarP = np.empty(group['GroupLenType'][sP.ptNum('stars')], dtype=StarP_dtype_mem)
     BHP   = np.empty(group['GroupLenType'][sP.ptNum('bhs')], dtype=BHP_dtype)
 
+    # TODO: gas allocate temporary Center (phase1 only)
+    gas_Center = np.zeros( (NumSphP,3), dtype=MyDouble)
+    # END TODO
+
     NumP = 0
     NumSphP = 0
     NumStarP = 0
@@ -432,7 +436,7 @@ def load_custom_dump(sP, GrNr):
 
     i = 0
     nFound = 0
-    
+
     while nFound < nChunks:
 
         file = '%s.%d' % (filePath,i)
@@ -484,6 +488,10 @@ def load_custom_dump(sP, GrNr):
                 # only save needed fields to optimize memory usage
                 SphP[field][NumSphP:NumSphP+NumSphP_loc] = SphP_temp[field][w_gas]
 
+            # TODO: save 'Center' separately (phase 1 only)
+            gas_Center[NumSphP:NumSphP+NumSphP_loc,:] = SphP_temp['Center'][w_gas]
+            # END TODO
+
             NumSphP += len(w_gas[0]) # == NumSphP_loc
 
         # note: AuxDataID's will be good (file local), since we always write full StarP/BHP,
@@ -499,8 +507,10 @@ def load_custom_dump(sP, GrNr):
                 StarP[field][NumStarP:NumStarP+NumStarP_loc] = StarP_temp[field][Pw_aux]
 
             # reassign P.AuxData ID as indices into new global StarP
-            global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 4)[0] + NumP            
-            P['AuxDataID'][global_p_inds] = np.arange( len(w_star[0]) ) + NumStarP
+            global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 4)[0] + NumP
+
+            # TODO: temporarily disable next for phase1:
+            #P['AuxDataID'][global_p_inds] = np.arange( len(w_star[0]) ) + NumStarP
 
             if 0:
                 # and likewise for StarP.PID (unused)
@@ -521,7 +531,10 @@ def load_custom_dump(sP, GrNr):
 
             # reassign P.AuxData ID as indices into new global BHP, and likewise for BHP.PID
             global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 5)[0] + NumP
-            P['AuxDataID'][global_p_inds] = np.arange( len(w_bhs[0]) ) + NumBHP
+
+            # TODO: temporarily disable next for phase1:
+            #P['AuxDataID'][global_p_inds] = np.arange( len(w_bhs[0]) ) + NumBHP
+
             BHP[NumBHP:NumBHP+NumBHP_loc]['PID'] = global_p_inds
 
             assert np.array_equal(BHP_temp[Pw_aux]['PID']-min_ind, w_bhs[0])
@@ -543,8 +556,8 @@ def load_custom_dump(sP, GrNr):
     # final checks: PID <-> AuxDataID mapping (global)
     #w_stars = np.where(P['Type'] == 4)
     #assert np.array_equal(StarP[P['AuxDataID'][w_stars]]['PID'], w_stars[0]) # unused
-    w_bhs = np.where(P['Type'] == 5)
-    assert np.array_equal(BHP[P['AuxDataID'][w_bhs]]['PID'], w_bhs[0])
+    #w_bhs = np.where(P['Type'] == 5)
+    #assert np.array_equal(BHP[P['AuxDataID'][w_bhs]]['PID'], w_bhs[0])
 
     print('Particle counts of all types verified, match expected Group [%d] lengths.\n' % GrNr, flush=True)
 
@@ -563,6 +576,11 @@ def load_custom_dump(sP, GrNr):
     for i in range(P.size):
         if P[i]['Type'] == 0:
             PS['OldIndex'][i] = offset
+
+            # TODO: stamp gas_Center into P['Pos'] (phase1 only)
+            P[i]['Pos'] = gas_Center[offset]
+            # END TODO
+
             offset += 1
         else:
             PS['OldIndex'][i] = -1
@@ -645,7 +663,7 @@ def load_snapshot_data(sP, GrNr):
     return P, PS, SphP, StarP, BHP
 
 @jit(nopython=True, nogil=True)
-def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoftening):
+def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,ForceSoftening):
     """ As _updateNodeRecursive(), but also compute additional information for the tree nodes such as masses, softenings. """
     pp = 0
     nextsib = 0
@@ -688,12 +706,12 @@ def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoft
                 else:
                     nextsib = sib
 
-                last = _updateNodeRecursiveExtra(p,nextsib,last,next_node,tree_nodes,P,P_Pos,ForceSoftening)
+                last = _updateNodeRecursiveExtra(p,nextsib,last,next_node,tree_nodes,P,ForceSoftening)
 
                 if p < NumPart:
                     # individual particle
                     mass += P[p]['Mass']
-                    com  += P[p]['Mass'] * P_Pos[p,:]
+                    com  += P[p]['Mass'] * P[p]['Pos'][:]
 
                     if ForceSoftening[maxsofttype] < ForceSoftening[P[p]['SofteningType']]:
                         maxsofttype = P[p]['SofteningType']
@@ -756,10 +774,8 @@ def _updateNodeRecursiveExtra(no,sib,last,next_node,tree_nodes,P,P_Pos,ForceSoft
     return last # avoid use of global in numba
 
 @jit(nopython=True, nogil=True)
-def _treeExtent(pos):
+def _treeExtent(P):
     """ Determine extent for non-periodic (local) tree. """
-    NumPart = pos.shape[0]
-
     xyzMin = np.zeros( 3, dtype=np.float64 )
     xyzMax = np.zeros( 3, dtype=np.float64 )
 
@@ -767,12 +783,12 @@ def _treeExtent(pos):
         xyzMin[j] = 1.0e35 # MAX_REAL_NUMBER
         xyzMax[j] = -1.0e35 # MAX_REAL_NUMBER
 
-    for i in range(NumPart):
+    for i in range(P.size):
         for j in range(3):
-            if pos[i,j] > xyzMax[j]:
-                xyzMax[j] = pos[i,j]
-            if pos[i,j] < xyzMin[j]:
-                xyzMin[j] = pos[i,j]
+            if P[i]['Pos'][j] > xyzMax[j]:
+                xyzMax[j] = P[i]['Pos'][j]
+            if P[i]['Pos'][j] < xyzMin[j]:
+                xyzMin[j] = P[i]['Pos'][j]
 
     # determine maximum extension
     extent = 0.0
@@ -784,7 +800,7 @@ def _treeExtent(pos):
     return xyzMin, xyzMax, extent
 
 @jit(nopython=True, nogil=True)
-def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_Pos,ForceSoftening):
+def _constructTree(P,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,ForceSoftening):
     """ Core routine for calcHsml(), see below. """
     subnode = 0
     parent  = -1
@@ -796,7 +812,7 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
     #  Nodes just points to Nodes_base-NumPart (such that Nodes[no]=Nodes_base[no-NumPart])
 
     # select first node
-    NumPart = pos.shape[0]
+    NumPart = P.size
     nFree = NumPart
 
     # create an empty root node
@@ -809,7 +825,7 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
         # non-periodic
         if extent == 0.0:
             # do not have a pre-computed xyzMin, xyzMax, extent, so determine now
-            xyzMin, xyzMax, extent = _treeExtent(pos)
+            xyzMin, xyzMax, extent = _treeExtent(P)
 
         # set center position and extent
         for j in range(3):
@@ -835,11 +851,11 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
                 subnode = 0
                 ind = no-NumPart
 
-                if pos[i,0] > tree_nodes[ind]['center'][0]:
+                if P[i]['Pos'][0] > tree_nodes[ind]['center'][0]:
                     subnode += 1
-                if pos[i,1] > tree_nodes[ind]['center'][1]:
+                if P[i]['Pos'][1] > tree_nodes[ind]['center'][1]:
                     subnode += 2
-                if pos[i,2] > tree_nodes[ind]['center'][2]:
+                if P[i]['Pos'][2] > tree_nodes[ind]['center'][2]:
                     subnode += 4
 
                 # get the next node
@@ -883,11 +899,11 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
                 # which subnode
                 subnode = 0
 
-                if pos[no,0] > tree_nodes[ind2]['center'][0]:
+                if P[no]['Pos'][0] > tree_nodes[ind2]['center'][0]:
                     subnode += 1
-                if pos[no,1] > tree_nodes[ind2]['center'][1]:
+                if P[no]['Pos'][1] > tree_nodes[ind2]['center'][1]:
                     subnode += 2
-                if pos[no,2] > tree_nodes[ind2]['center'][2]:
+                if P[no]['Pos'][2] > tree_nodes[ind2]['center'][2]:
                     subnode += 4
 
                 if(tree_nodes[ind2]['length'] < 1e-8): # 1e-4 in the past
@@ -911,7 +927,7 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
     # now compute the (sibling,nextnode,next_node) recursively
     last = np.int32(-1)
 
-    last = _updateNodeRecursiveExtra(NumPart,-1,last,next_node,tree_nodes,P,P_Pos,ForceSoftening)
+    last = _updateNodeRecursiveExtra(NumPart,-1,last,next_node,tree_nodes,P,ForceSoftening)
 
     if last >= NumPart:
         tree_nodes[last-NumPart]['nextnode'] = -1
@@ -921,7 +937,7 @@ def _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,next_node,tree_nodes,P,P_
     return numNodes
 
 @jit(nopython=True, nogil=True)
-def _treeSearchIndices(xyz,h,boxSizeSim,pos,next_node,tree_nodes):
+def _treeSearchIndices(P,xyz,h,boxSizeSim,next_node,tree_nodes):
     """ Helper routine for calcParticleIndices(), see below. """
     boxHalf = 0.5 * boxSizeSim
 
@@ -953,15 +969,15 @@ def _treeSearchIndices(xyz,h,boxSizeSim,pos,next_node,tree_nodes):
             no = next_node[no]
 
             # box-exclusion along each axis
-            dx = _NEAREST( pos[p,0] - xyz[0], boxHalf, boxSizeSim )
+            dx = _NEAREST( P[p]['Pos'][0] - xyz[0], boxHalf, boxSizeSim )
             if dx < -h or dx > h:
                 continue
 
-            dy = _NEAREST( pos[p,1] - xyz[1], boxHalf, boxSizeSim )
+            dy = _NEAREST( P[p]['Pos'][1] - xyz[1], boxHalf, boxSizeSim )
             if dy < -h or dy > h:
                 continue
 
-            dz = _NEAREST( pos[p,2] - xyz[2], boxHalf, boxSizeSim )
+            dz = _NEAREST( P[p]['Pos'][2] - xyz[2], boxHalf, boxSizeSim )
             if dz < -h or dz > h:
                 continue
 
@@ -1005,7 +1021,7 @@ def _treeSearchIndices(xyz,h,boxSizeSim,pos,next_node,tree_nodes):
     return 0, inds, dists2
 
 @jit(nopython=True, nogil=True, cache=True)
-def treeSearchIndicesIterate(xyz,h_guess,nNGB,boxSizeSim,pos,next_node,tree_nodes):
+def treeSearchIndicesIterate(P,xyz,h_guess,nNGB,boxSizeSim,next_node,tree_nodes):
     """ Helper routine for subfind(), see below. 
     Note: no nNGBDev, instead we terminate if we ever find >=nNGB, and the return is sorted by distance. """
     if h_guess == 0.0:
@@ -1018,7 +1034,7 @@ def treeSearchIndicesIterate(xyz,h_guess,nNGB,boxSizeSim,pos,next_node,tree_node
 
         assert iter_num < 1000 # Convergence failure, too many iterations.
 
-        numNgbInH, inds, dists_sq = _treeSearchIndices(xyz,h_guess,boxSizeSim,pos,next_node,tree_nodes)
+        numNgbInH, inds, dists_sq = _treeSearchIndices(P,xyz,h_guess,boxSizeSim,next_node,tree_nodes)
 
         # enough
         if numNgbInH >= nNGB:
@@ -1049,9 +1065,9 @@ node_dtype = np.dtype([
 ])
 
 @jit(nopython=True)
-def buildFullTree(pos, boxSizeSim, xyzMin, xyzMax, extent, P, P_Pos, ForceSoftening):
+def buildFullTree(P, boxSizeSim, xyzMin, xyzMax, extent, ForceSoftening):
     """ As above, but minimal and JITed. """
-    NumPart = pos.shape[0]
+    NumPart = P.size
     NextNode = np.zeros( NumPart, dtype=np.int32 )
 
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
@@ -1064,7 +1080,7 @@ def buildFullTree(pos, boxSizeSim, xyzMin, xyzMax, extent, P, P_Pos, ForceSoften
         TreeNodes = np.zeros( MaxNodes, dtype=node_dtype )
 
         # construct: call JIT compiled kernel
-        numNodes = _constructTree(pos,boxSizeSim,xyzMin,xyzMax,extent,NextNode,TreeNodes,P,P_Pos,ForceSoftening)
+        numNodes = _constructTree(P,boxSizeSim,xyzMin,xyzMax,extent,NextNode,TreeNodes,ForceSoftening)
 
         if numNodes > 0:
             break
@@ -1072,8 +1088,8 @@ def buildFullTree(pos, boxSizeSim, xyzMin, xyzMax, extent, P, P_Pos, ForceSoften
     return NextNode, TreeNodes
 
 @jit(nopython=True, nogil=True)
-def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, tree_nodes, boxHalf, boxSizeSim):
-    pos = P_Pos[target]
+def subfind_treeevaluate_potential(target, P, ForceSoftening, next_node, tree_nodes, boxHalf, boxSizeSim):
+    pos = P[target]['Pos']
     h_i = ForceSoftening[P[target]['SofteningType']]
 
     pot = 0
@@ -1081,7 +1097,7 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
     # start search
     NumPart = next_node.size
     no = NumPart # note: NumPart here is len (local), as opposed to LocMaxPart in arepo, because our local tree construction does 
-                 # not place the root node at LocMaxPart (i.e. aware of P_Pos size) but rather at len (i.e. only aware of loc_pos size)
+                 # not place the root node at LocMaxPart (i.e. aware of P size) but rather at len (i.e. only aware of loc_P size)
 
     while no >= 0:
         indi_flag1 = -1 # MULTIPLE_NODE_SOFTENING
@@ -1095,9 +1111,9 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
             no = next_node[no]
 
             # box-exclusion along each axis
-            dx = _NEAREST( P_Pos[p,0] - pos[0], boxHalf, boxSizeSim )
-            dy = _NEAREST( P_Pos[p,1] - pos[1], boxHalf, boxSizeSim )
-            dz = _NEAREST( P_Pos[p,2] - pos[2], boxHalf, boxSizeSim )
+            dx = _NEAREST( P[p]['Pos'][0] - pos[0], boxHalf, boxSizeSim )
+            dy = _NEAREST( P[p]['Pos'][1] - pos[1], boxHalf, boxSizeSim )
+            dz = _NEAREST( P[p]['Pos'][2] - pos[2], boxHalf, boxSizeSim )
 
             r2 = dx*dx + dy*dy + dz*dz
 
@@ -1179,30 +1195,30 @@ def subfind_treeevaluate_potential(target, P_Pos, P, ForceSoftening, next_node, 
     return pot
 
 @jit(nopython=True, parallel=True)
-def subfind_unbind_calculate_potential(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime):
+def subfind_unbind_calculate_potential(num,ud,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime):
     """ Loop to parallelize. """
     for i in prange(num):
         p = ud[i]['index']
 
-        pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+        pot = subfind_treeevaluate_potential(i, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
 
         PS[p]['Potential'] = G / atime * pot
 
 @jit(nopython=True, parallel=True)
-def subfind_unbind_calculate_potential_weak(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime,weakly_bound_limit):
+def subfind_unbind_calculate_potential_weak(num,ud,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime,weakly_bound_limit):
     """ Loop to parallelize. """
     for i in prange(num):
         p = ud[i]['index']
 
         if PS[p]['BindingEnergy'] >= weakly_bound_limit:
             # note: this is a bugfix from TNG codebase subfind, which has a typo making pot completely unused
-            #pot = subfind_treeevaluate_potential(i, loc_pos, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
+            #pot = subfind_treeevaluate_potential(i, loc_P, ForceSoftening, NextNode, TreeNodes, boxhalf, boxsize)
             #PS[p]['Potential'] = G / atime * pot
 
             PS[p]['Potential'] *= G / atime # TODO: BUG ACTIVE FOR 'nopot' run
 
 @jit(nopython=True)
-def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize, 
+def subfind_unbind(P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize, 
                    SofteningTable, ForceSoftening, xyzMin, xyzMax, extent, central_flag):
     """ Unbinding. """
     max_iter = 10000
@@ -1231,19 +1247,17 @@ def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, b
         iter_num += 1
 
         # build local tree, including only particles still inside the candidate
-        loc_pos = np.zeros( (num,3), dtype=np.float64 )
-        loc_P   = np.zeros( num, dtype=P_dtype_mem )
+        loc_P = np.zeros( num, dtype=P_dtype_mem )
 
         for i in range(num):
-            loc_pos[i,:] = P_Pos[ud[i]['index']]
             loc_P[i] = P[ud[i]['index']]
 
-        NextNode, TreeNodes = buildFullTree(loc_pos, 0.0, xyzMin, xyzMax, extent, loc_P, loc_pos, ForceSoftening)
+        NextNode, TreeNodes = buildFullTree(loc_P, 0.0, xyzMin, xyzMax, extent, ForceSoftening)
 
         # compute the potential
         if phaseflag == 0:
             # redo for all particles (threaded target)
-            subfind_unbind_calculate_potential(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime)
+            subfind_unbind_calculate_potential(num,ud,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime)
 
             # find particle with the minimum potential
             minindex = -1
@@ -1258,10 +1272,10 @@ def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, b
                     minindex = p
 
             # position of minimum potential (CELL_CENTER_GRAVITY)
-            pos = P_Pos[minindex]
+            pos = P[minindex]['Pos']
         else:
             # only repeat for those particles close to the unbinding threshold
-            subfind_unbind_calculate_potential_weak(num,ud,loc_pos,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime,weakly_bound_limit)
+            subfind_unbind_calculate_potential_weak(num,ud,loc_P,ForceSoftening,NextNode,TreeNodes,boxhalf,boxsize,PS,G,atime,weakly_bound_limit)
 
         # calculate the bulk velocity and center of mass
         v *= 0
@@ -1272,7 +1286,7 @@ def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, b
             p = ud[i]['index']
 
             for j in range(3):
-                ddxx = _NEAREST( P_Pos[p,j] - pos[j], boxhalf, boxsize )
+                ddxx = _NEAREST( P[p]['Pos'][j] - pos[j], boxhalf, boxsize )
                 s[j] += P[p]['Mass'] * ddxx
                 v[j] += P[p]['Mass'] * P[p]['Vel'][j]
 
@@ -1294,7 +1308,7 @@ def subfind_unbind(P_Pos, P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, b
 
             for j in range(3):
                 dv[j] = vel_to_phys * (P[p]['Vel'][j] - v[j])
-                dx[j] = atime * _NEAREST( P_Pos[p,j] - s[j], boxhalf, boxsize )
+                dx[j] = atime * _NEAREST( P[p]['Pos'][j] - s[j], boxhalf, boxsize )
                 dv[j] += H_of_a * dx[j] # Hubble expansion, per coordinate
 
             PS[p]['BindingEnergy'] = PS[p]['Potential'] + 0.5 * (dv[0]*dv[0] + dv[1]*dv[1] + dv[2]*dv[2])
@@ -1379,13 +1393,12 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     N = P.size
 
     # generate P_Pos, pure ndarray and handle CELL_CENTER_GRAVITY
-    P_Pos = np.zeros( (N,3), dtype=np.float64 )
-
-    for i in range(N):
-        if P[i]['Type'] == 0:
-            P_Pos[i,:] = SphP[PS[i]['OldIndex']]['Center']
-        else:
-            P_Pos[i,:] = P[i]['Pos']
+    #P_Pos = np.zeros( (N,3), dtype=np.float64 )
+    #for i in range(N):
+    #    if P[i]['Type'] == 0:
+    #        P_Pos[i,:] = SphP[PS[i]['OldIndex']]['Center']
+    #    else:
+    #        P_Pos[i,:] = P[i]['Pos']
 
     # allocate
     candidates = np.zeros( N, dtype=cand_dtype )
@@ -1406,7 +1419,6 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     # note: temporarily break the association with SphP[] and other arrays!
     PS = PS[sort_inds]
     P  = P[sort_inds]
-    P_Pos = P_Pos[sort_inds]
 
     #for i in range(StarP.size):
     #    StarP[i]['PID'] = sort_inds_inv[ StarP[i]['PID'] ] # unused, save memory
@@ -1415,8 +1427,8 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
 
     # build tree for all particles of this group
     BoxSizeSim = 0.0 # tree searches are non-periodic, and we use local (non-box-global) extents
-    xyzMin, xyzMax, extent = _treeExtent(P_Pos)
-    NextNode, TreeNodes = buildFullTree(P_Pos, BoxSizeSim, xyzMin, xyzMax, extent, P, P_Pos, ForceSoftening)
+    xyzMin, xyzMax, extent = _treeExtent(P)
+    NextNode, TreeNodes = buildFullTree(P, BoxSizeSim, xyzMin, xyzMax, extent, ForceSoftening)
 
     # process every particle
     head = 0
@@ -1428,10 +1440,10 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
     for i in range(N):
         # find neighbors, note: returned neighbors are already sorted by distance (ascending)
         #if i % np.int(N/10) == 0: print(' ',np.round(float(i)/N*100),'%')
-        pos = P_Pos[i]
+        pos = P[i]['Pos']
         h_guess = PS[i]['Hsml']
 
-        inds, dists = treeSearchIndicesIterate(pos,h_guess,DesLinkNgb,BoxSizeSim,P_Pos,NextNode,TreeNodes)
+        inds, dists = treeSearchIndicesIterate(P,pos,h_guess,DesLinkNgb,BoxSizeSim,NextNode,TreeNodes)
 
         # process neighbors
         ndiff = 0
@@ -1574,7 +1586,7 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
             central_flag = True
 
         if len >= DesLinkNgb:
-            len, len_non_gas = subfind_unbind(P_Pos, P, SphP, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize, 
+            len, len_non_gas = subfind_unbind(P, SphP, PS, ud, len, vel_to_phys, H_of_a, G, atime, boxsize, 
                 SofteningTable, ForceSoftening, xyzMin, xyzMax, extent, central_flag)
 
         if len >= DesLinkNgb:
