@@ -489,3 +489,44 @@ def martinSubboxProj3DGrid():
     fig.tight_layout()
     fig.savefig('px_comp.pdf')
     plt.close(fig)
+
+def auroraVoyage2050WhitePaper():
+    """ Create plots for Aurora's ESA Voyage 2050 white paper. """
+    from projects.oxygen import stackedRadialProfiles
+
+    redshift = 0.1
+
+    TNG100     = simParams(res=1820, run='tng', redshift=redshift)
+    Illustris1 = simParams(res=1820, run='illustris', redshift=redshift)
+    Eagle      = simParams(res=1504, run='eagle', redshift=redshift)
+
+    if 1:
+        # radial profiles of ionic density or emission SB
+        sPs = [TNG100, Eagle, Illustris1]
+        ions = ['OVII'] #['OVII_sfCold'] #,'OVIII']
+        cenSatSelect = 'cen'
+        haloMassBins = [[12.4,12.6],[11.4,11.6]] #[[11.9,12.1], [12.4,12.6]]
+        combine2Halo = True
+        median = True
+        massDensity = False
+        fieldTypes = ['FoF'] # GlobalFoF for final
+
+        # cols (redshift = 0.0)
+        #emFlux = False
+        #projDim = '3D'
+
+        # fluxes (redshift = 0.1)
+        emFlux = True
+        projDim = '2Dz_2Mpc'
+
+        simNames = '_'.join([sP.simName for sP in sPs])
+
+        for radRelToVirRad in [True, False]:
+
+            saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
+              (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
+
+            stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
+                                  radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
+                                  haloMassBins=haloMassBins, combine2Halo=combine2Halo, fieldTypes=fieldTypes, 
+                                  emFlux=emFlux, median=median)

@@ -18,14 +18,15 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    run        = 'tng' #'tng_zoom_dm'
-    res        = 1820
+    run        = 'tng_fof0test' #'tng_zoom_dm'
+    res        = 2160 #1820
     variant    = None #'sf2' # None
 
-    redshift   = 0.0
+    #redshift   = 0.0
+    redshift   = simParams(res=2160,run='tng',snap=69).redshift
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
-    nPixels    = [800,800] #[1920,1920]
+    nPixels    = [1200,1200] #[800,800] #[1920,1920]
     axes       = [0,1]
     labelZ     = True
     labelScale = True
@@ -74,7 +75,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
     if conf == 6:
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
-    if 1:
+    if 0:
         size = 2.5
         sizeType = 'rVirial'
     if 0:
@@ -85,6 +86,11 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         sizeType = 'rHalfMassStars'
         rVirFracs = [2.0,10.0]
         fracsType = 'rHalfMassStars'
+    if 1:
+        # fof0test
+        plotSubhalos = 100
+        size = 3500.0
+        sizeType = 'codeUnits'
 
     class plotConfig:
         plotStyle    = 'edged'

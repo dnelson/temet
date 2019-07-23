@@ -2439,7 +2439,7 @@ def plots():
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
 
-    sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
+    #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
@@ -2452,7 +2452,7 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
-    sPs.append( simParams(res=1504, run='eagle', redshift=0.0) )
+    #sPs.append( simParams(res=1504, run='eagle', redshift=0.0) )
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=128, run='tng', variant='6003') )
@@ -2468,7 +2468,7 @@ def plots():
         # testing
         pdf = PdfPages('cddfh2_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
         nHIcddf(sPs, pdf, simRedshift=None, molecular=True)
-        nHIcddf(sPs, pdf, simRedshift=None, molecular=True, moment=1)
+        #nHIcddf(sPs, pdf, simRedshift=None, molecular=True, moment=1)
         pdf.close()
         return
 

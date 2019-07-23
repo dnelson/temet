@@ -1422,7 +1422,7 @@ def berg2019(coveringFractions=False):
                       'sSFR_lim' : True if sSFR_err == '<' else False, # upper limit?
                       'NHI'      : float(NHI), # log cm^2
                       'NHI_err'  : float(NHI_err) if NHI_err not in ['<','>'] else 0.0,
-                      'NHI_lim'  : False if NHI_err not in ['<','>'] else NHI_err} )
+                      'NHI_lim'  : ['=','<','>'].index(NHI_err.strip()) if NHI_err.strip() in ['<','>'] else 0} )
 
     # pull out some flat numpy arrays
     names    = [gal['name'] for gal in gals]
@@ -1436,7 +1436,7 @@ def berg2019(coveringFractions=False):
     NHI_err  = np.array( [gal['NHI_err'] for gal in gals] )
     NHI_lim  = np.array( [gal['NHI_lim'] for gal in gals] ) # '<' or '>' or False (=detection, use NHI_err)
 
-    return names, logM, z, ssfr, ssfr_err, ssfr_lim, b, NHI, NHI_err, NHI_lim
+    return gals, logM, z, ssfr, ssfr_err, ssfr_lim, b, NHI, NHI_err, NHI_lim
 
 def chen2018zahedy2019():
     """ Load observational COS-LRG survey data from Chen+ (2018) and Zahedy+ (2019). """
@@ -1460,7 +1460,8 @@ def chen2018zahedy2019():
                       'Mr_err'   : float(Mr_err),
                       'Mstar'    : float(Mstar),
                       'ug'       : float(ug_color), # (u-g)_rest, mag
-                      'ug_err'   : float(ug_err)} )
+                      'ug_err'   : float(ug_err),
+                      'ug_lim'   : False } ) # always exact
 
     gal_names = [gal['name'] for gal in gals]
 
@@ -1486,6 +1487,7 @@ def chen2018zahedy2019():
     z      = np.array( [gal['z'] for gal in gals] )
     ug     = np.array( [gal['ug'] for gal in gals] )
     ug_err = np.array( [gal['ug_err'] for gal in gals] )
+    ug_lim = np.array( [gal['ug_lim'] for gal in gals] )
     d      = np.array( [gal['d'] for gal in gals] )
 
     N_HI       = np.array( [gal['N_HI'] for gal in gals] )
@@ -1493,7 +1495,7 @@ def chen2018zahedy2019():
     N_MgII     = np.array( [gal['N_MgII'] for gal in gals] )
     N_MgII_err = np.array( [gal['N_MgII_err'] for gal in gals] )
 
-    return names, logM, z, ug, ug_err, d, N_HI, N_HI_err, N_MgII, N_MgII_err
+    return gals, logM, z, ug, ug_err, ug_lim, d, N_HI, N_HI_err, N_MgII, N_MgII_err
 
 def rossetti17planck():
     """ Load observational data points from Rosetti+ (2017) Table 1, Planck clusters. """

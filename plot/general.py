@@ -548,25 +548,33 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     fig.savefig('particleMedian_%s_%s-vs-%s_%s_%s.pdf' % (partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
-def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', op='mean', weighting=None, halo=None):
+def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='temp_linear', op='mean', weighting=None, 
+                                proj2D=None, halo=None):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
     (parent FoF particle restricted, using non-caching auxCat functionality). 
     subhalo is a list, one entry per sPs entry. For each entry of subhalo:
     If subhalo[i] is a single subhalo ID number, then one halo only. If a list, then median stack.
     If a dict, then k:v pairs where keys are a string description, and values are subhaloID lists, which 
     are then overplotted. sPs supports one or multiple runs to be overplotted. 
+    if proj2D is not None, then a 2-tuple as input to subhaloRadialProfile().
     If halo is not None, then use these FoF IDs as inputs instead of Subfind IDs. """
     from cosmo.auxcatalog import subhaloRadialProfile
     from tracer.tracerMC import match3
 
     # config
     xlim = [0.0,3.0] # for plot only [loc pkpc]
-    percs = [10,90]
+    percs = [16,84]
     lw = 2.0
     scope = 'fof' # fof, subfind
-    ptRestriction = 'sfreq0' # None
     #op = 'mean' # mean, sum, min, max
 
+    # restrictions
+    sfrgt0 = {'StarFormationRate':['gt',0.0]}
+    sfreq0 = {'StarFormationRate':['eq',0.0]}
+
+    ptRestrictions = sfreq0
+
+    # sanity checks
     assert subhalo is not None or halo is not None # pick one
     if subhalo is None: subhalo = halo # use halo ids
     if isinstance(subhalo,int) and len(sPs) == 1: subhalo = [subhalo] # single number to list (one sP case)
@@ -600,15 +608,15 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
 
         # load
         data, attrs = subhaloRadialProfile(sP, pSplit=None, ptType=ptType, ptProperty=ptProperty, op=op, 
-                                          scope=scope, weighting=weighting, subhaloIDsTodo=subhaloIDs, 
-                                          ptRestriction=ptRestriction)
+                                          scope=scope, weighting=weighting, subhaloIDsTodo=subhaloIDs, proj2D=proj2D, 
+                                          ptRestrictions=ptRestrictions)
         assert data.shape[0] == len(subhaloIDs)
 
         nSamples = 1 if not isinstance(subhalo[i],dict) else len(subhalo[i].keys())
 
         for j in range(nSamples):
             # crossmatch attrs['subhaloIDs'] with subhalo[key] sub-list if needed
-            subIDsLoc = subhalo[i][subhalo[i].keys()[j]] if isinstance(subhalo[i],dict) else subhaloIDs
+            subIDsLoc = subhalo[i][list(subhalo[i].keys())[j]] if isinstance(subhalo[i],dict) else subhaloIDs
             w, _ = match3( attrs['subhaloIDs'], subIDsLoc )
             assert len(w) == len(subIDsLoc)
 
@@ -616,6 +624,22 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
             yy_mean = np.nanmean( data[w,:], axis=0 )
             yy_median = np.nanmedian( data[w,:], axis=0 )
             yp = np.nanpercentile( data[w,:], percs, axis=0 )
+
+            if proj2D is not None:
+                print('Normalizing to column density (could use generalization, i.e. mass fields only).')
+                # [code mass] -> [code mass / code length^2]
+                yy_mean /= attrs['bin_areas_code']
+                yy_median /= attrs['bin_areas_code']
+                yp /= attrs['bin_areas_code']
+
+                # [code mass / code length^2] -> [H atoms/cm^2]
+                yy_mean   = sP.units.codeColDensToPhys(yy_mean, cgs=True, numDens=True)
+                yy_median = sP.units.codeColDensToPhys(yy_median, cgs=True, numDens=True)
+                yp        = sP.units.codeColDensToPhys(yp, cgs=True, numDens=True)
+
+                ax.set_ylabel('Column Density [H atoms / cm$^2$]')
+                ax.set_ylim([8,19])
+                ax.set_xlim([0.5,2.5])
 
             if ylog:
                 yy_median = logZeroNaN(yy_median)
@@ -628,11 +652,23 @@ def plotStackedRadialProfiles1D(sPs, subhalo=None, ptType='gas', ptProperty='tem
                 yy_median = savgol_filter(yy_median,sKn,sKo)
                 yp = savgol_filter(yp,sKn,sKo,axis=1) # P[10,90]
 
-            sampleDesc = '' if nSamples == 1 else subhalo[i].keys()[j]
+            # plot
+            sampleDesc = '' if nSamples == 0 else list(subhalo[i].keys())[j]
             l, = ax.plot(rr, yy_median, '-', lw=lw, label='%s %s' % (sP.simName,sampleDesc))
-            ax.plot(rr, yy_mean, ':', lw=lw, color=l.get_color())
+            #ax.plot(rr, yy_mean, ':', lw=lw, color=l.get_color())
             if len(sPs) == 1 and subhaloIDs.size > 1:
-                ax.fill_between(rr, yp[0,:], yp[-1,:], color=l.get_color(), interpolate=True, alpha=0.2)
+                w = np.where(np.isfinite(yp[0,:]) & np.isfinite(yp[-1,:]))[0]
+                ax.fill_between(rr[w], yp[0,w], yp[-1,w], color=l.get_color(), interpolate=True, alpha=0.2)
+
+            # save to text file (not generalized)
+            if 1:
+                filename = 'radprof_stacked_%s.txt' % ptProperty
+                out = '# %s z=%.1f %s %s %s %s %s\n' % (sP.simName, sP.redshift, ptType, ptProperty, op, weighting, proj2D)
+                out += '# r [log pkpc], N [log cm^-2], p%d, p%d\n' % (percs[0],percs[1])
+                for k in range(rr.size):
+                    out += '%8.5f %6.3f %6.3f %6.3f\n' % (rr[k], yy_median[k], yp[0,k], yp[-1,k])
+                with open(filename, 'w') as f:
+                    f.write(out)
 
     # finish plot
     fig.tight_layout()
@@ -897,20 +933,37 @@ def compareHaloSets_RadProfiles():
     sPs = []
     sPs.append( simParams(res=1820,run='tng',redshift=0.0) )
 
+    # select subhalos
     mhalo = sPs[0].groupCat(fieldsSubhalos=['mhalo_200_log'])
-    gr,_,_,_ = simSubhaloQuantity(sPs[0], 'color_B_gr')
 
-    with np.errstate(invalid='ignore'):
-        w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr < 0.35) )
-        w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr > 0.65) )
+    if 0:
+        gr,_,_,_ = simSubhaloQuantity(sPs[0], 'color_B_gr')
 
-    print( len(w1[0]), len(w2[0]) )
+        with np.errstate(invalid='ignore'):
+            w1 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr < 0.35) )
+            w2 = np.where( (mhalo > 11.8) & (mhalo < 12.2) & (gr > 0.65) )
 
-    subhalos = [{'11.8 < M$_{\\rm halo}$ < 12.2, (g-r) < 0.35':w1[0], 
-                 '11.8 < M$_{\\rm halo}$ < 12.2, (g-r) > 0.65':w2[0]}]
+        print( len(w1[0]), len(w2[0]) )
 
-    for field in ['tcool']: #['metaldens','dens','temp_linear','P_gas_linear','z_solar']:
-        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, weighting='O VI mass')
+        subhalos = [{'11.8 < M$_{\\rm halo}$ < 12.2, (g-r) < 0.35':w1[0], 
+                     '11.8 < M$_{\\rm halo}$ < 12.2, (g-r) > 0.65':w2[0]}]
+
+    if 1:
+        with np.errstate(invalid='ignore'):
+            ww = np.where( (mhalo > 11.8) & (mhalo < 11.9) )
+
+        subhalos = [{'11.8 < M$_{\\rm halo}$ < 11.9':ww[0]}]
+
+    # select properties
+    #fields = ['tcool'] #['metaldens','dens','temp_linear','P_gas_linear','z_solar']
+    fields = ['MHIGK_popping','MH2GK_popping']
+    weighting = None #'O VI mass'
+
+    proj2D = [2, None] # z-axis, no depth restriction
+
+    for field in fields:
+        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, 
+                                    weighting=weighting, proj2D=proj2D)
 
 def compareHaloSets_1DHists():
     """ Driver. Compare 1D histograms of a quantity, overplotting several halos. One run. """

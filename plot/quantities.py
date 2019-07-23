@@ -1848,6 +1848,11 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
 
     # todo: u_ke, p_tot, p_sync
 
+    if ('MHI' in ptProperty or 'MH2' in ptProperty) and '_popping' in ptProperty:
+        label = ptProperty + ' [code]'
+        lim = [5.0,12.0]
+        log = True
+
     if ' ' in ptProperty: # cloudy based ionic mass (or emission flux), if field name has a space in it
         if 'flux' in field:
             lineName, prop = field.rsplit(" ",1) # e.g. "H alpha flux"

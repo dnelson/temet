@@ -55,8 +55,8 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
 
     run     = 'tng'
-    variant = 'subbox2'
-    res     = 2160
+    variant = 'subbox0'
+    res     = 2500
     method  = 'sphMap'
     nPixels = 1920
     axes    = [0,1] # x,y
@@ -71,6 +71,39 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
         minZ      = 0.0
         maxZ      = 50.0 # tng subboxes start at a=0.02
         maxNSnaps = None #2700 # 90 seconds at 30 fps
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_movie_tng300fof0(curTask=0, numTasks=1):
+    """ Render a movie comparing two quantities of a single subbox (2x1 panels, 4K). """
+    panels = []
+
+    panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.4,8.8], 'labelScale':True} )
+    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.8]} )
+    panels.append( {'partType':'stars', 'partField':'stellarComp', 'labelZ':True} )
+    panels.append( {'partType':'gas',   'partField':'temp_sfcold', 'valMinMax':[4.4,7.6]} )
+    panels.append( {'partType':'gas',   'partField':'metal_solar', 'valMinMax':[-2.0,-0.4]} )
+    panels.append( {'partType':'gas',   'partField':'sfr_halpha', 'valMinMax':[36.0,40.0]} )
+
+    run     = 'tng'
+    variant = 'subbox0'
+    res     = 2500
+    method  = 'sphMap'
+    nPixels = 1280 # 3*1280 = 3840, but too high with colorbars
+    axes    = [0,1] # x,y
+    #zoomFac = 0.1 # testing
+
+    class plotConfig:
+        savePath  = '/u/dnelson/data/frames/%s%d_%s/' % (run,res,variant)
+        plotStyle = 'edged_black'
+        rasterPx  = nPixels
+        colorbars = True
+        fontsize  = 24
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 10.0 # tng subboxes start at a=0.02
+        maxNSnaps = None #2100 # 70 seconds at 30 fps, out of ~2400 total available
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 

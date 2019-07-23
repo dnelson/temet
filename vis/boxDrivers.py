@@ -189,7 +189,7 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
     """ Create the FoF[0/1]-centered slices to be used for main presentation of the box. """
     panels, centerHaloID, nSlicesTot, curSlice = _TNGboxFieldConfig(res, conf, thinSlice)
 
-    run        = 'tng' # 'millennium'
+    run        = 'tng' #'millennium'
     redshift   = 0.0
     nPixels    = 2000 # 800, 2000, 8000
     axes       = [0,1] # x,y
@@ -425,15 +425,15 @@ def TNG_oxygenPaperImages(part=0):
     res        = 1820
     nPixels    = 6000 #2000
     axes       = [0,1] # x,y
-    labelZ     = False
-    labelScale = False
+    labelZ     = True
+    labelScale = True
     labelSim   = False
     plotHalos  = False
     axesUnits  = 'mpc'
 
     sP = simParams(res=res, run=run, redshift=redshift)
 
-    if part in [0,3]:
+    if part in [0,3,4]:
         # part 0: TNG100 full box OVII (15 Mpc depth)
         _, _, _,_, centerHaloID, _, _ = _TNGboxSliceConfig(res)
         sliceFac = sP.units.physicalKpcToCodeLength(15000.0) / sP.boxSize
@@ -452,6 +452,8 @@ def TNG_oxygenPaperImages(part=0):
             panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
         if part == 3:
             panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 2.0]} )
+        if part == 4:
+            panels.append( {'partType':'gas', 'partField':'sb_OVII', 'valMinMax':[-22, -10], 'ctName':'magma_gray'} )
 
     if part == 1:
         # part 1: cluster halo scale OVIII (halo #22)
@@ -519,14 +521,14 @@ def TNG_oxygenPaperImages(part=0):
 
     class plotConfig:
         plotStyle  = 'edged' # open
-        #rasterPx   = 1800 if part in [0,3] else 900
-        rasterPx   = 6000
-        colorbars  = False #True
+        rasterPx   = 1800 if part in [0,3,4] else 900
+        #rasterPx   = 6000
+        colorbars  = True
 
-        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.png' % \
+        saveFilename = './boxImage_%s_%s-%s_axes%d%d%s.pdf' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],saveStr)
 
-    if part in [0,3]:
+    if part in [0,3,4]:
         renderBox(panels, plotConfig, locals())
     else:
         renderSingleHalo(panels, plotConfig, locals())
