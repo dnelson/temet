@@ -942,17 +942,20 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(res=2160, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'ssfr'
-    xQuant = 'mstar_30pkpc_log'
+    yQuant = 'surfdens1_dm' #'ssfr'
+    xQuant = 'size_stars' #'mstar_30pkpc_log'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = [None,'sfr2','ssfr','delta_sfms'] #quantList(wTr=True, wMasses=True)
-    clim = None
+    quants = [None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
+    clim = None #[10.0,11.0]
     medianLine = True
     minCount = 0
+
+    xlim = None #[0.0, 1.2]
+    qRestrictions = None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
 
     for sP in sPs:
         for css in cenSatSelects:
@@ -960,8 +963,8 @@ def plots():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,css,minCount))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, clim=clim, minCount=minCount, 
-                             medianLine=medianLine, cenSatSelect=css, cQuant=cQuant)
+                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim, minCount=minCount, 
+                             qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, cQuant=cQuant)
 
             pdf.close()
 

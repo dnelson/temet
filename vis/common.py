@@ -407,7 +407,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
         resFac = 1.0 #(512.0/sP.res)**2.0
 
-        minValLog = np.array([2.2,2.2,2.2]) # previous: 2.8, and before that 3.3 (nice control of low-SB features)
+        minValLog = np.array([0.6,0.6,0.6]) # previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
@@ -751,8 +751,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
-        if partField == 'O VII': config['ctName'] = 'magma'
-        if partField == 'O VIII': config['ctName'] = 'plasma'
+        if partField == 'O VII': config['ctName'] = 'magma_gray' # magma
+        if partField == 'O VIII': config['ctName'] = 'magma_gray' # 'plasma'
 
     if '_ionmassratio' in partField:
         ion = cloudyIon(sP=None)
