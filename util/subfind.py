@@ -124,14 +124,13 @@ SphP_dtype = np.dtype([
 ])
 
 SphP_dtype_mem = np.dtype([
-    # TODO: TEMPORARILY DISABLE THESE 6, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
-    #('Volume', MyFloat),
+    ('Volume', MyFloat), # PHASE 1 DISABLE
     ('Utherm', MySingle),
-    #('Center', MyDouble, 3), # NOTE: directly stamped into P['Pos'] instead of P_Pos method when loading
-    #('B', MyFloat, 3),
-    #('Metallicity', MyFloat),
-    #('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS),
-    #('Sfr', MySingle), # USE_SFR
+    ('Center', MyDouble, 3), # PHASE 1 DISABLE, NOTE: directly stamped into P['Pos'] instead of P_Pos method when loading
+    ('B', MyFloat, 3), # PHASE 1 DISABLE
+    ('Metallicity', MyFloat), # PHASE 1 DISABLE
+    ('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS), # PHASE 1 DISABLE
+    ('Sfr', MySingle), # USE_SFR # PHASE 1 DISABLE
 ])
 
 StarP_dtype = np.dtype([ # GFM
@@ -153,11 +152,10 @@ StarP_dtype = np.dtype([ # GFM
 ])
 
 StarP_dtype_mem = np.dtype([ # GFM
-    # TODO: TEMPORARILY DISABLE THESE NEXT 4, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
-    #('BirthTime', MyFloat),
-    #('InitialMass', MyDouble),
-    #('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS),
-    #('Metallicity', MyFloat)
+    #('BirthTime', MyFloat), # PHASE 1 DISABLE
+    #('InitialMass', MyDouble), # PHASE 1 DISABLE
+    #('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS), # PHASE 1 DISABLE
+    #('Metallicity', MyFloat) # PHASE 1 DISABLE
 ])
 
 BHP_dtype = np.dtype([ # BLACK_HOLES
@@ -227,9 +225,8 @@ P_dtype_mem = np.dtype([
     ('Pos', MyDouble, 3),
     ('Mass', MyDouble),
     ('Vel', MyFloat, 3),
-    # TODO: TEMPORARILY DISABLE THESE NEXT 2, NOT NEEDED FOR SUBFIND ALGORITHM (ONLY PROPERTIES)
-    #('AuxDataID', MyIDType), # GFM || BLACK_HOLES
-    #('ID', MyIDType),
+    #('AuxDataID', MyIDType), # GFM || BLACK_HOLES # PHASE 1 DISABLE
+    #('ID', MyIDType), # PHASE 1 DISABLE
     ('Type', np.uint8),
     ('SofteningType', np.uint8),
 ])
@@ -337,7 +334,7 @@ Subgroup_dtype = np.dtype([
     ('StellarPhotometricsMassInRad', MyFloat)
 ])
 
-def load_custom_dump(sP, GrNr):
+def load_custom_dump(sP, GrNr, phase1=False):
     """ Load groups_{snapNum}/fof_{fofID}.{taskNum} custom binary data dump. """
     filePath = sP.simPath + 'groups_%03d/fof_%d' % (sP.snap,GrNr)
 
@@ -425,9 +422,8 @@ def load_custom_dump(sP, GrNr):
     StarP = np.empty(group['GroupLenType'][sP.ptNum('stars')], dtype=StarP_dtype_mem)
     BHP   = np.empty(group['GroupLenType'][sP.ptNum('bhs')], dtype=BHP_dtype)
 
-    # TODO: gas allocate temporary Center (phase1 only)
-    gas_Center = np.zeros( (NumSphP,3), dtype=MyDouble)
-    # END TODO
+    if phase1:
+        gas_Center = np.zeros( (NumSphP,3), dtype=MyDouble)
 
     NumP = 0
     NumSphP = 0
@@ -488,9 +484,8 @@ def load_custom_dump(sP, GrNr):
                 # only save needed fields to optimize memory usage
                 SphP[field][NumSphP:NumSphP+NumSphP_loc] = SphP_temp[field][w_gas]
 
-            # TODO: save 'Center' separately (phase 1 only)
-            gas_Center[NumSphP:NumSphP+NumSphP_loc,:] = SphP_temp['Center'][w_gas]
-            # END TODO
+            if phase1: #save 'Center' separately (phase 1 only)
+                gas_Center[NumSphP:NumSphP+NumSphP_loc,:] = SphP_temp['Center'][w_gas]
 
             NumSphP += len(w_gas[0]) # == NumSphP_loc
 
@@ -577,9 +572,8 @@ def load_custom_dump(sP, GrNr):
         if P[i]['Type'] == 0:
             PS['OldIndex'][i] = offset
 
-            # TODO: stamp gas_Center into P['Pos'] (phase1 only)
-            P[i]['Pos'] = gas_Center[offset]
-            # END TODO
+            if phase1: # stamp gas_Center into P['Pos'] (phase1 only)
+                P[i]['Pos'] = gas_Center[offset]
 
             offset += 1
         else:
@@ -1223,10 +1217,6 @@ def subfind_unbind(P, SphP, PS, ud, num, vel_to_phys, H_of_a, G, atime, boxsize,
     """ Unbinding. """
     max_iter = 10000
     unbind_percent_threshold = 0.00001 # if we remove <unbind_percent_threshold*N of the subhalo particles in an iter, stop
-    # current run (snap 69): no bug, the above threshold (checking current codebase result)
-    # 'nopot' run (snap 69, 5 days 20 hours): unbind_percent_threshold = 0.001
-    # 'check' run (snap 69, 4 days 12 hours): unbind_percent_threshold = 0.00001
-    # 'orig' run (snap 69, 4 days 9 hours): unbind_percent_threshold = 0.001
 
     weakly_bound_limit = 0
     len_non_gas = 0
@@ -1391,14 +1381,6 @@ def subfind(P, PS, SphP, StarP, BHP, atime, H_of_a, G, boxsize, SofteningTable, 
 
     # estimate the maximum number of substructures we need to store (conservative upper limit)
     N = P.size
-
-    # generate P_Pos, pure ndarray and handle CELL_CENTER_GRAVITY
-    #P_Pos = np.zeros( (N,3), dtype=np.float64 )
-    #for i in range(N):
-    #    if P[i]['Type'] == 0:
-    #        P_Pos[i,:] = SphP[PS[i]['OldIndex']]['Center']
-    #    else:
-    #        P_Pos[i,:] = P[i]['Pos']
 
     # allocate
     candidates = np.zeros( N, dtype=cand_dtype )
@@ -2623,7 +2605,7 @@ def run_subfind_customfof0save_phase1(sP, GrNr=0):
     phase1_save_file = sP.derivPath + 'fof0_save_phase1_%s_%d.hdf5' % (sP.simName,sP.snap)
 
     # load
-    P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr)
+    P, PS, SphP, StarP, BHP = load_custom_dump(sP, GrNr=GrNr, phase1=True)
 
     SofteningTable, ForceSoftening, P = set_softenings(P, SphP, sP)
 
@@ -3188,8 +3170,8 @@ def run_subfind(snap):
     # L35n2160TNG started skipping fof0 subfind at snapshot 69 and onwards
     sP = simParams(res=2160,run='tng',snap=snap)
 
-    run_subfind_customfof0save_phase1(sP, GrNr=0)
-    #run_subfind_customfof0save_phase2(sP, GrNr=0)
+    #run_subfind_customfof0save_phase1(sP, GrNr=0)
+    run_subfind_customfof0save_phase2(sP, GrNr=0)
 
     # rewrite
     #sP = simParams(res=2160,run='tng_fof0test',snap=snap)

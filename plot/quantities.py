@@ -53,7 +53,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (groupcat)
     quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2', 'fgas', 
-               'surfdens1_stars', 'surfdens2_stars', 'delta_sfms',
+               'surfdens1_stars', 'surfdens2_stars', 'surfdens1_dm', 'delta_sfms',
                'sfr1', 'sfr2', 'sfr1_surfdens', 'sfr2_surfdens']
 
     # generally available (masses)
@@ -638,24 +638,30 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax[0] -= 0.4
             minMax[1] -= 0.4
 
-    if quant in ['surfdens1_stars','surfdens2_stars']:
+    if quant in ['surfdens1_stars','surfdens2_stars','surfdens1_dm']:
         if '1_' in quant:
             selStr = 'HalfRad'
             detailsStr = ', <r_{\star,1/2}'
         if '2_' in quant:
             selStr = 'Rad'
             detailsStr = ', <2r_{\star,1/2}'
+        if '_stars' in quant:
+            pt = 'stars'
+            ptStr = '\star'
+        if '_dm' in quant:
+            pt = 'dm'
+            ptStr = 'DM'
 
         fields = ['SubhaloMassIn%sType' % selStr,'SubhaloHalfmassRadType']
         gc = sP.groupCat(fieldsSubhalos=fields)
 
-        mass = sP.units.codeMassToMsun( gc['SubhaloMassIn%sType'%selStr][:,sP.ptNum('stars')] )
-        size = sP.units.codeLengthToKpc( gc['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] )
+        mass = sP.units.codeMassToMsun( gc['SubhaloMassIn%sType'%selStr][:,sP.ptNum(pt)] )
+        size = sP.units.codeLengthToKpc( gc['SubhaloHalfmassRadType'][:,sP.ptNum('stars')] ) # size always Re or 2Re (of stars)
         if '2_' in quant: size *= 2.0
 
         with np.errstate(invalid='ignore'):
             vals = mass / (np.pi*size*size)
-        label = '$\Sigma_{\star%s}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]' % detailsStr
+        label = '$\Sigma_{%s%s}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]' % (ptStr,detailsStr)
 
         minMax = [6.5, 9.0]
         if tight: minMax = [6.5, 10.0]
@@ -1763,6 +1769,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-4.0, 2.0]
         log = True
 
+    if ptProperty == 'mass':
+        label = '%s Mass [ 10$^{10}$ M$_{\\rm sun}$ h$^{-1}$ ]' % typeStr
+        lim = [-3.0, 0.0]
+        if haloLims: lim = [-6.0, -2.0]
+        log = True
+
     if ptProperty == 'mass_msun':
         label = '%s Mass [ log M$_{\\rm sun}$ ]' % typeStr
         lim = [5.0, 7.0]
@@ -1892,7 +1904,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: [-3.0, 1.0] # more depends on which species, todo
         log = False
 
-    if '_massratio' in ptProperty: # e.g. 'Si_H_numratio', species number density ratio
+    if '_massratio' in ptProperty: # e.g. 'Si_H_numratio', species mass density ratio
         el1, el2, _ = ptProperty.split('_')
 
         label = 'log ( %s/%s )$_{\\rm %s}$' % (el1,el2,typeStr)

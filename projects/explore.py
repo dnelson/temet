@@ -223,7 +223,7 @@ def celineMuseProposalMetallicityVsTheta():
 
 def celineWriteH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
-    sP = simParams(res=1820, run='tng', redshift=0.8)
+    sP = simParams(res=2500, run='tng', redshift=0.2) # z=0.2, z=0.8
 
     vars_sfr = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
     vars_model = ['nH2_popping_BR_depth10','nH2_popping_KMT_depth10']
@@ -232,6 +232,7 @@ def celineWriteH2CDDFBand():
     vars_depth = ['nH2_popping_GK_depth5','nH2_popping_GK_depth20','nH2_popping_GK_depth1']
 
     speciesList = vars_sfr + vars_model + vars_cellsize + vars_depth
+    speciesList = ['nH2_popping_GK_depth10'] # TNG300 test
 
     # load
     for i, species in enumerate(speciesList):
@@ -284,6 +285,32 @@ def celineWriteH2CDDFBand():
         out += '%.3f %.3f %.3f\n' % (N_H2[i], fN_H2_low[i], fN_H2_high[i])
     with open(filename, 'w') as f:
         f.write(out)
+
+def celineHIH2RadialProfiles():
+    """ Compute stacked radial profiles of N_HI(b) and N_H2(b). """
+    from util.simParams import simParams
+    from plot.general import plotStackedRadialProfiles1D
+
+    sPs = []
+    sPs.append( simParams(res=1820,run='tng',redshift=2.0) )
+
+    # select subhalos
+    mhalo = sPs[0].groupCat(fieldsSubhalos=['mhalo_200_log'])
+
+    with np.errstate(invalid='ignore'):
+        ww = np.where( (mhalo > 11.8) & (mhalo < 11.9) )
+
+    subhalos = [{'11.8 < M$_{\\rm halo}$ < 11.9':ww[0]}]
+
+    # select properties
+    fields    = ['MHIGK_popping','MH2GK_popping']
+    weighting = None
+    op        = 'sum'
+    proj2D    = [2, None] # z-axis, no depth restriction
+
+    for field in fields:
+        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, op=op, 
+                                    weighting=weighting, proj2D=proj2D)
 
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """

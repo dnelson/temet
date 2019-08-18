@@ -449,11 +449,11 @@ def TNG_oxygenPaperImages(part=0):
 
         plotHalos = 100
         if part == 0:
-            panels.append( {'partType':'gas', 'partField':'O VII', 'valMinMax':[11, 16]} )
+            panels.append( {'partType':'gas', 'partField':'O VIII', 'valMinMax':[11, 16]} ) # O VII
         if part == 3:
             panels.append( {'partType':'gas', 'partField':'O6_O8_ionmassratio', 'valMinMax':[-2.0, 2.0]} )
         if part == 4:
-            panels.append( {'partType':'gas', 'partField':'sb_OVII', 'valMinMax':[-22, -10], 'ctName':'magma_gray'} )
+            panels.append( {'partType':'gas', 'partField':'sb_OVIII', 'valMinMax':[-22, -10], 'ctName':'magma_gray'} )
 
     if part == 1:
         # part 1: cluster halo scale OVIII (halo #22)
