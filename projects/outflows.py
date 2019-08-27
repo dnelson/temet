@@ -1,7 +1,7 @@
 """
 projects/outflows.py
   Plots: Outflows paper (TNG50 presentation).
-  in prep.
+  https://arxiv.org/abs/1902.05554
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -85,6 +85,7 @@ def explore_vrad_halos(sP, haloIDs):
 def sample_comparison_z2_sins_ao(sP):
     """ Compare available galaxies vs. the SINS-AO sample of ~35 systems. """
     from util.loadExtern import foersterSchreiber2018
+    from util.helper import closest
 
     # config
     xlim = [9.0, 12.0]
@@ -106,7 +107,7 @@ def sample_comparison_z2_sins_ao(sP):
 
     # load simulation points
     sfrField = 'SubhaloSFR' if fullSubhaloSFR else 'SubhaloSFRinRad'
-    fieldsSubhalos = ['SubhaloMassInRadType',sfrField,'central_flag']
+    fieldsSubhalos = ['SubhaloMassInRadType',sfrField,'central_flag','mhalo_200_log']
 
     gc = sP.groupCat(fieldsSubhalos=fieldsSubhalos)
 
@@ -136,6 +137,17 @@ def sample_comparison_z2_sins_ao(sP):
     # observational points (put on top at the end)
     fs = foersterSchreiber2018()
     l1, = ax.plot(fs['Mstar'], np.log10(fs['SFR']), 's', color='#444444', label=fs['label'])
+
+    # find analog of each
+    mhalo = np.zeros( fs['Mstar'].size, dtype='float32' )
+
+    for i in range(fs['Mstar'].size):
+        _, ind = closest(xx[ww], fs['Mstar'][i])
+        mhalo[i] = gc['mhalo_200_log'][ww][ind]
+
+        print(i, fs['Mstar'][i], xx[ww][ind], mhalo[i])
+
+    print(np.min(mhalo), np.max(mhalo), np.mean(mhalo), np.median(mhalo))
 
     # second legend
     legend2 = ax.legend(loc='upper left')
@@ -2760,7 +2772,7 @@ def paperPlots(sPs=None):
         #plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloID=haloID,
         #    yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim)
 
-    if 1:
+    if 0:
         # fig 8: distribution of radial velocities
         config = {'radInd':2, 'stat':'mean', 'ylim':[-3.0, 1.0], 'skipZeros':False}
 
@@ -2931,8 +2943,8 @@ def paperPlots(sPs=None):
 
     if 0:
         # explore: sample comparison against SINS-AO survey at z=2 (M*, SFR)
-        TNG50.setRedshift(2.0)
-        sample_comparison_z2_sins_ao(TNG50)
+        TNG100.setRedshift(2.0)
+        sample_comparison_z2_sins_ao(TNG100)
 
     if 0:
         # explore: outflow velocity as a function of M* at one redshift
