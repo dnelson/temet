@@ -7,6 +7,7 @@ import time
 import glob
 import struct
 import h5py
+import multiprocessing as mp
 from os.path import isfile
 from numba import jit, prange
 from util.sphMap import _NEAREST
@@ -126,7 +127,7 @@ SphP_dtype = np.dtype([
 SphP_dtype_mem = np.dtype([
     ('Volume', MyFloat), # PHASE 1 DISABLE
     ('Utherm', MySingle),
-    ('Center', MyDouble, 3), # PHASE 1 DISABLE, NOTE: directly stamped into P['Pos'] instead of P_Pos method when loading
+    ('Center', MyDouble, 3), # PHASE 1 DISABLE, NOTE: phase1 directly stamped into P['Pos'] when loading
     ('B', MyFloat, 3), # PHASE 1 DISABLE
     ('Metallicity', MyFloat), # PHASE 1 DISABLE
     ('MetalsFraction', MyFloat, GFM_N_CHEM_ELEMENTS), # PHASE 1 DISABLE
@@ -152,10 +153,10 @@ StarP_dtype = np.dtype([ # GFM
 ])
 
 StarP_dtype_mem = np.dtype([ # GFM
-    #('BirthTime', MyFloat), # PHASE 1 DISABLE
-    #('InitialMass', MyDouble), # PHASE 1 DISABLE
-    #('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS), # PHASE 1 DISABLE
-    #('Metallicity', MyFloat) # PHASE 1 DISABLE
+    ('BirthTime', MyFloat), # PHASE 1 DISABLE
+    ('InitialMass', MyDouble), # PHASE 1 DISABLE
+    ('MassMetals', MyFloat, GFM_N_CHEM_ELEMENTS), # PHASE 1 DISABLE
+    ('Metallicity', MyFloat) # PHASE 1 DISABLE
 ])
 
 BHP_dtype = np.dtype([ # BLACK_HOLES
@@ -209,9 +210,9 @@ P_dtype = np.dtype([
     ('NumberOfTracers', np.int32),
     ('OriginTask', np.int32),
     # general
-    ('pad_0', np.int32, 1), # STRUCT PADDING (TODO CHECK)
+    ('pad_0', np.int32, 1), # STRUCT PADDING
     ('ID', MyIDType),
-    ('pad_1', np.int32, 1), # STRUCT PADDING (TODO CHECK, was here 2x and not above)
+    ('pad_1', np.int32, 1), # STRUCT PADDING
     ('TI_Current', integertime),
     ('OldAcc', np.float32),
     ('GravCost', np.float32, GRAVCOSTLEVELS),
@@ -225,8 +226,8 @@ P_dtype_mem = np.dtype([
     ('Pos', MyDouble, 3),
     ('Mass', MyDouble),
     ('Vel', MyFloat, 3),
-    #('AuxDataID', MyIDType), # GFM || BLACK_HOLES # PHASE 1 DISABLE
-    #('ID', MyIDType), # PHASE 1 DISABLE
+    ('AuxDataID', MyIDType), # GFM || BLACK_HOLES # PHASE 1 DISABLE
+    ('ID', MyIDType), # PHASE 1 DISABLE
     ('Type', np.uint8),
     ('SofteningType', np.uint8),
 ])
@@ -504,8 +505,8 @@ def load_custom_dump(sP, GrNr, phase1=False):
             # reassign P.AuxData ID as indices into new global StarP
             global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 4)[0] + NumP
 
-            # TODO: temporarily disable next for phase1:
-            #P['AuxDataID'][global_p_inds] = np.arange( len(w_star[0]) ) + NumStarP
+            if not phase1:
+                P['AuxDataID'][global_p_inds] = np.arange( len(w_star[0]) ) + NumStarP
 
             if 0:
                 # and likewise for StarP.PID (unused)
@@ -527,8 +528,8 @@ def load_custom_dump(sP, GrNr, phase1=False):
             # reassign P.AuxData ID as indices into new global BHP, and likewise for BHP.PID
             global_p_inds = np.where(P[NumP:NumP+gr_NumP]['Type'] == 5)[0] + NumP
 
-            # TODO: temporarily disable next for phase1:
-            #P['AuxDataID'][global_p_inds] = np.arange( len(w_bhs[0]) ) + NumBHP
+            if not phase1:
+                P['AuxDataID'][global_p_inds] = np.arange( len(w_bhs[0]) ) + NumBHP
 
             BHP[NumBHP:NumBHP+NumBHP_loc]['PID'] = global_p_inds
 
@@ -2822,6 +2823,9 @@ def rewrite_groupcat(sP, GrNr=0):
     with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
         # write all FoF0 subhalo fields
         for key in subs:
+            if subs[key].dtype == np.float64:
+                # all such float fields saved as float32
+                subs[key] = subs[key].astype('float32')
             f['Subhalo'][key] = subs[key]
 
         # update FoF0: number of subhalos and position
@@ -2831,14 +2835,14 @@ def rewrite_groupcat(sP, GrNr=0):
 
     # update headers of all chunks
     with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
-        f['Header'].attrs['Nsubgroups_ThisFile'] = Group_nsubs
+        f['Header'].attrs['Nsubgroups_ThisFile'] = np.int32(Group_nsubs)
         Nsubs_Total_old = f['Header'].attrs['Nsubgroups_Total']
 
     Nsubgroups_Total = Nsubs_Total_old + Group_nsubs
 
     for i in range(nChunks):
         with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=i),'r+') as f:
-            f['Header'].attrs['Nsubgroups_Total'] = Nsubgroups_Total
+            f['Header'].attrs['Nsubgroups_Total'] = np.int32(Nsubgroups_Total)
 
     print('Done.')
 
@@ -2865,10 +2869,12 @@ def _find_so_quantities(dists, mass, rhoBack, Deltas):
 
 def add_so_quantities(sP, GrNr=0):
     """ FoF0 is missing SO quantities (Group_R_Crit200, etc). Need to derive now. """
+    import gc
     from cosmo.load import gcPath
+    from util.helper import pSplitRange, reportMemory
 
     assert GrNr == 0 # no generalization for chunkNum
-    assert 'fof0test' in sP.run # testing, only modify L35n2160TNG_fof0test/ files
+    assert 'fof0test' in sP.run # only modify L35n2160TNG_fof0test/ files
 
     DeltaMean200 = 200.0
     DeltaCrit200 = 200.0 / sP.units.Omega_z
@@ -2879,32 +2885,63 @@ def add_so_quantities(sP, GrNr=0):
 
     Deltas = np.array([DeltaMean200, DeltaTopHat, DeltaCrit200, DeltaCrit500])
 
-    # allocate
+    # load meta
     ptTypes = [0,1,4,5]
     NumPart = sP.snapshotHeader()['NumPart']
     NumPartTot = np.sum([NumPart[pt] for pt in ptTypes])
 
-    pos = np.zeros( (NumPartTot,3), dtype='float32' )
-    mass = np.zeros( NumPartTot, dtype='float32' )
-
     fof = sP.groupCatSingle(haloID=GrNr)
 
-    # global load
+    # global load pos and compute distances
+    dists = np.zeros( NumPartTot, dtype='float32' )
     offset = 0
-    for pt in ptTypes:
-        print(pt, flush=True)
-        pos[offset:offset+NumPart[pt],:] = sP.snapshotSubset(pt, 'pos', float32=True)
-        mass[offset:offset+NumPart[pt]] = sP.snapshotSubset(pt, 'mass')
-        offset += NumPart[pt]
 
-    # distances
-    dists = sP.periodicDists(fof['GroupPos'],pos)
+    for pt in ptTypes:
+        indRange = [0, NumPart[pt]]
+        pSplitNum = 10 if pt in [0,1,4] else 1
+
+        for i in range(pSplitNum):
+            # local range, snapshotSubset inclusive on last index
+            locRange = pSplitRange( indRange, pSplitNum, i )
+            locRange[1] -= 1
+
+            print('load pos: ', pt, i, locRange, reportMemory(), flush=True)
+
+            # load
+            pos_loc = sP.snapshotSubsetP(pt, 'pos', indRange=locRange, float32=True)
+
+            # distances
+            dists[offset:offset+pos_loc.shape[0]] = sP.periodicDists(fof['GroupPos'],pos_loc)
+            offset += pos_loc.shape[0]
+
+            # hack: https://bugs.python.org/issue32759 (fixed only in python 3.8x)
+            del pos_loc
+            mp.heap.BufferWrapper._heap = mp.heap.Heap()
+            gc.collect()
 
     # sort
     sort_inds = np.argsort(dists)
 
-    dists = dists[sort_inds]
-    mass = mass[sort_inds]
+    # truncate unused entries to save memory
+    num_save = int(4e9) # first 3 billion closest only, plenty to capture local environment
+    sort_inds = sort_inds[0:num_save]
+
+    dists = dists[sort_inds] # shuffle and truncate
+
+    # global load mass
+    mass = np.zeros( NumPartTot, dtype='float32' )
+    offset = 0
+
+    for pt in ptTypes:
+        print('load mass: ', pt, reportMemory(), flush=True)
+        mass[offset:offset+NumPart[pt]] = sP.snapshotSubsetP(pt, 'mass')
+        offset += NumPart[pt]
+
+        # hack: https://bugs.python.org/issue32759 (fixed only in python 3.8x)
+        mp.heap.BufferWrapper._heap = mp.heap.Heap()
+        gc.collect()
+
+    mass = mass[sort_inds] # shuffle and truncate
 
     # overdensity
     R200, M200 = _find_so_quantities(dists, mass, sP.units.rhoBack, Deltas)
@@ -3033,12 +3070,12 @@ def rewrite_snapshot(sP, GrNr=0):
             # wrote full length?
             assert offset == fof0['GroupLenType'][pt]
 
-    # note: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp
+    # TODO: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp
     # (do after rearrangement) (full snaps only)
 
     print('Done.')
 
-def compare_subhalos_all_quantities():
+def compare_subhalos_all_quantities(snap_start=67):
     """ Plot diagnostic histograms. """
     from cosmo.load import gcPath
     from util.simParams import simParams
@@ -3050,15 +3087,15 @@ def compare_subhalos_all_quantities():
     nBins = 50
 
     sPs = []
-    sPs.append( simParams(res=2160, run='tng', snap=67) )
-    sPs.append( simParams(res=2160, run='tng', snap=68) )
-    sPs.append( simParams(res=2160, run='tng_fof0test', snap=69) )
+    sPs.append( simParams(res=2160, run='tng_fof0test', snap=snap_start+0) )
+    sPs.append( simParams(res=2160, run='tng_fof0test', snap=snap_start+1) )
+    sPs.append( simParams(res=2160, run='tng_fof0test', snap=snap_start+2) )
 
     #sPs.append( simParams(res=512, run='tng', snap=3, variant='5011') )
     #sPs.append( 'fof0save' ) # load final save file of this run itself
 
     # start pdf book
-    pdf = PdfPages('compare_subhalos_%s_%d.pdf' % (sPs[0].simName,len(sPs)))
+    pdf = PdfPages('compare_subhalos_%s_%d.pdf' % (sPs[0].simName,snap_start))
 
     # get list of subhalo properties
     with h5py.File(gcPath(sPs[0].simPath,sPs[0].snap,chunkNum=0),'r') as f:
@@ -3179,6 +3216,7 @@ def run_subfind(snap):
     #add_so_quantities(sP, GrNr=0)
     #rewrite_snapshot(sP, GrNr=0)
 
+    #compare_subhalos_all_quantities(snap_start=snap)
     #verify_results(sP, GrNr=0)
 
 def benchmark():

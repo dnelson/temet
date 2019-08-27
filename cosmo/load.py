@@ -8,6 +8,8 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
+import multiprocessing as mp
+import multiprocessing.sharedctypes
 from functools import partial
 from os.path import isfile, isdir
 from os import mkdir, makedirs, unlink
@@ -2065,15 +2067,18 @@ def _func(sP,partType,field,indRangeLoad,indRangeSave,float32,array):
     directly into a shared memory array. Always called with only one field. """
     data = sP.snapshotSubset(partType, field, indRange=indRangeLoad, sq=True, float32=float32)
     array[ indRangeSave[0]:indRangeSave[1], ... ] = data
+
     # note: could move this into il.snapshot.loadSubset() following the strategy of the 
     # parallel groupCat() load, to actually avoid this intermediate memory usage
+
+#enable global logging of multiprocessing to stderr:
+#logger = mp.log_to_stderr()
+#logger.setLevel(mp.SUBDEBUG)
 
 def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, 
                            sq=True, haloSubset=False, float32=False, nThreads=8):
     """ Identical to snapshotSubset() except split filesystem load over a number of 
     concurrent python+h5py reader processes and gather the result. """
-    import multiprocessing as mp
-    import multiprocessing.sharedctypes
     import ctypes
     from functools import partial
 
@@ -2175,6 +2180,15 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         finally:
             for p in processes:
                 p.join()
+
+        # memory nightmare is this (python 3.8x fix): https://bugs.python.org/issue32759 https://github.com/python/cpython/pull/5827
+        # see also this for python 3.8: https://bugs.python.org/issue35813
+        if 0:
+            # hack: delete the global _heap and create a new one (all buffers erased!)
+            # have to do this at exactly the right moment (after done with the return of snapshotSubsetP)
+            print('WARNING: Erasing global _heap of mp and recreating!')
+            mp.heap.BufferWrapper._heap = mp.heap.Heap()
+            gc.collect()
 
         # add into dict
         if inds is not None:

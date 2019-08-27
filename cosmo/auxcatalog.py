@@ -1891,6 +1891,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
 
     from cosmo import hydrogen
     from util.sphMap import sphMapWholeBox
+    from util.helper import reportMemory
     from cosmo.cloudy import cloudyIon
 
     # adjust projection depth
@@ -1998,7 +1999,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
         # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
         indRange = [i*chunkSize, (i+1)*chunkSize-1]
         if i == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum('gas')]-1
-        print('  [%2d] %9d - %d' % (i,indRange[0],indRange[1]))
+        print('  [%2d] %9d - %d' % (i,indRange[0],indRange[1]), reportMemory())
 
         # load
         gas = sP.snapshotSubsetP('gas', fields, indRange=indRange)

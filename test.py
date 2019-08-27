@@ -16,6 +16,93 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_load_memusage():
+    """ Check memory usage with snapshotSubset(). """
+    import multiprocessing as mp
+    from util.helper import pSplitRange, reportMemory
+    import gc
+    import tracemalloc
+
+    pSplitNum = 10
+    ptTypes = [0,1,4,5]
+
+    sP = simParams(res=540,run='tng',redshift=0.0)
+    pt = 'gas'
+
+    print('a: ', reportMemory()*1024) # base
+
+    # allocate
+    NumPart = sP.snapshotHeader()['NumPart']
+    NumPartTot = np.sum([NumPart[pt] for pt in ptTypes])
+
+    indRange = [0, NumPart[sP.ptNum(pt)]]
+    offset = 0
+
+    tracemalloc.start()
+
+    if 0:
+        data = np.zeros( NumPart[sP.ptNum(pt)], dtype='float32' )
+        print('D: ', NumPart[sP.ptNum(pt)]*4/1024**2)
+        print('b: ', reportMemory()*1024)
+
+        for i in range(pSplitNum):
+            # local range, snapshotSubset inclusive on last index
+            locRange = pSplitRange( indRange, pSplitNum, i )
+            locRange[1] -= 1
+
+            expectedSize = (locRange[1]-locRange[0])*4/1024**2 # MB
+
+            print('%d: ' % i, reportMemory()*1024, locRange, expectedSize, flush=True)
+
+            # load
+            data_loc = sP.snapshotSubsetP(pt, 'mass', indRange=locRange)
+
+            data[offset:offset+data_loc.shape[0]] = data_loc
+            offset += data_loc.shape[0]
+
+    if 1:
+        data = np.zeros( NumPartTot, dtype='float32' )
+        print('D: ', NumPartTot*4/1024**2, data.nbytes/1024**2)
+        print('b: ', reportMemory()*1024)
+
+        snapshot = tracemalloc.take_snapshot()
+        top_stats = snapshot.statistics('lineno')
+
+        for stat in top_stats[:10]:
+            print(stat)
+
+        for pt in ptTypes:
+            expectedSize = NumPart[pt]*4/1024**2 # MB
+            print('%da: ' % pt, reportMemory()*1024, expectedSize, flush=True)
+
+            data_loc = sP.snapshotSubsetP(pt, 'mass')
+            print('%db: ' % pt, reportMemory()*1024, expectedSize, flush=True)
+            data[offset:offset+NumPart[pt]] = data_loc
+
+            print('%dc: ' % pt, reportMemory()*1024, expectedSize, flush=True)
+
+            # hack: https://bugs.python.org/issue32759 (fixed only in python 3.8x)
+            del data_loc
+            mp.heap.BufferWrapper._heap = mp.heap.Heap()
+            gc.collect()
+
+            print('%dd: ' % pt, reportMemory()*1024, expectedSize, flush=True)
+
+            offset += NumPart[pt]
+
+    print('c: ', reportMemory()*1024)
+
+    # verify removing data_loc returns us to base+sizeof(data)
+    del data_loc
+    gc.collect()
+    print('d: ', reportMemory()*1024)
+
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+
+    for stat in top_stats[:10]:
+        print(stat)
+
 def check_groupcat_snap_rewrite(GrNr=0):
     """ Check custom Subfind. """
     sP = simParams(res=2160,run='tng_fof0test',snap=69)
