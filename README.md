@@ -122,3 +122,96 @@ ipython
 >>> gas_pos = sP.snapshotSubset('gas', 'pos')
 >>> dm_vel_sub10 = sP.snapshotSubset('dm', 'vel', subhaloID=10)
 ```
+
+
+generic exploratory plots
+=========================
+
+Several types of basic plots can be made, particularly for cosmological simulations. These routines are quite 
+general and can plot any quantity at the particle or catalog level which is known.
+
+For example, for general particle-level plots:
+
+```python
+>>> sP = simParams(res=1820, run='tng', redshift=0.0)
+>>> sP2 = simParams(res=910, run='tng', redshift=0.0)
+
+>>> plot.general.plotHistogram1D([sP], 'gas', 'temp')
+>>> plot.general.plotHistogram1D([sP], 'gas', 'temp', subhaloIDs=[0,1,2,3,4])
+>>> plot.general.plotHistogram1D([sP, sP2], 'gas', 'dens', qRestrictions=[('temp',5.0,np.inf)])
+
+>>> plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='numdens', yQuant='temp')
+>>> plot.general.plotPhaseSpace2D(sP, 'gas', xQuant='numdens', yQuant='temp', meancolors=['dens','O VI frac'])
+
+>>> plot.general.plotParticleMedianVsSecondQuant(sP, 'dm', xQuant='velmag', yQuant='veldisp')
+
+>>> plot.general.plotStackedRadialProfiles1D([sP], subhalo=[0], 'gas', ptProperty='entropy', op='median')
+>>> plot.general.plotStackedRadialProfiles1D([sP,sP2], subhalo=[[0,1,2],[1,4,5]], 'gas', ptProperty='bmag')
+```
+
+And for general group catalog-level plots:
+
+```python
+>>> sP = simParams(run='tng300-1', redshift=0.0)
+
+>>> plot.cosmoGeneral.quantHisto2D(sP, pdf=None, yQuant='sfr2_surfdens', xQuant='mstar2_log', cenSatSelect='cen')
+>>> plot.cosmoGeneral.quantHisto2D(sP, pdf=None, yQuant='stellarage', xQuant='mstar_30pkpc', cQuant='Krot_stars2')
+
+>>> plot.cosmoGeneral.quantSlice1D([sP], pdf=None, xQuant='sfr2', yQuants=['BH_BolLum','Z_gas'], sQuant='mstar_30pkpc_log', sRange=[10.0,10.2])
+
+>>> plot.cosmoGeneral.quantMedianVsSecondQuant([sP], pdf=None, yQuants=['Z_stars','ssfr'], xQuant='mhalo_200')
+```
+
+Note that at the bottom of `plot/general.py` and `plot/cosmoGeneral.py` there are several "driver" functions which 
+show more complex examples of making these types of plots, including advanced functionality, and automatic 
+generation of large sets of plots exploring all possible relationships and quantities. The configuration and 
+metadata of known simulation properties can be found in `plot/quantities.py`.
+
+
+visualization
+=============
+
+There are broadly two types of visualizations: box-based and halo-based, spanning all particle types and fields.
+
+* `vis/boxDrivers.py` contains numerous driver functions which create different types of full box images.
+* `vis/boxMovieDrivers.py` create frames for movies, including many of the available TNG movies.
+* `vis/haloDrivers.py` as above, except targeted for images of individual galaxies and/or halos.
+* `vis/haloMovieDrivers.py` generate frames for halo/galaxy-centric movies, including time/merger tree tracking.
+
+All such driver functions generally set a large number of configurable options, which are then passed into the 
+extremely general `vis.box.renderBox()` or `vis.halo.renderSingleHalo()` functions, which accept a large number of 
+arguments.
+
+
+data catalogs
+=============
+
+All "supplementary data catalog" types products are produced in `cosmo/auxcatalog.py`. At the bottom of this file all 
+known data catalog names are listed, together with their functional definition (i.e., how to compute them, and with 
+what parameters). For example, 
+
+```python
+'Subhalo_StellarZ_SDSSFiber_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
+```
+
+gives the generating function of this catalog. A large number of catalogs are produced with the `subhaloRadialReduction()`, 
+`subhaloStellarPhot()`, and `subhaloRadialProfile()` functions, which are fully generalized to operate on any particle type 
+and field with different statistical reductions, aperture definitions, weighting, particle restrictions, and so on.
+
+These functions implement the `pSplit` parallelization scheme, meaning that all such computations can be chunked and only 
+subsets of the full group catalog can be operated on at once, to reduce memory usage and distribute computational cost.
+
+
+reproducing published papers
+============================
+
+The complete analysis and plot set of published papers can (theoretically) be reproduced with the following entry points 
+inside the `projects/` directory. Note that in practice some analyses are costly and would better be done (and were actually 
+done) by splitting into many parallel jobs on a cluster.
+
+[Nelson et al. (2018a) - TNG colors](http://arxiv.org/abs/1707.03395) - `projects.color.paperPlots()`
+
+[Nelson et al. (2018b) - TNG oxygen](http://arxiv.org/abs/1712.00016) - `projects.oxygen.paperPlots()`
+
+[Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.color.paperPlots()`
