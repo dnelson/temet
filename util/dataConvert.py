@@ -1978,7 +1978,6 @@ def convertMillennium2Snapshot(snap=67):
             # stamp
             val[offset:offset+npart_local,:] = val_local
 
-            curmem = reportMemory()
             print('[%4d] %s [%8d] particles, from [%10d] to [%10d].' % (i, ptName, npart_local, offset, offset+npart_local), flush=True)
             offset += npart_local
 

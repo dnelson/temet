@@ -199,7 +199,7 @@ gives the generating function of this catalog. A large number of catalogs are pr
 `subhaloStellarPhot()`, and `subhaloRadialProfile()` functions, which are fully generalized to operate on any particle type 
 and field with different statistical reductions, aperture definitions, weighting, particle restrictions, and so on.
 
-These functions implement the `pSplit` parallelization scheme, meaning that all such computations can be chunked and only 
+These functions implement the `pSplit` parallelization scheme, meaning that all such computations can be chunked and partial 
 subsets of the full group catalog can be operated on at once, to reduce memory usage and distribute computational cost.
 
 
@@ -208,10 +208,11 @@ reproducing published papers
 
 The complete analysis and plot set of published papers can (theoretically) be reproduced with the following entry points 
 inside the `projects/` directory. Note that in practice some analyses are costly and would better be done (and were actually 
-done) by splitting into many parallel jobs on a cluster.
+done) by splitting into many parallel jobs on a cluster. Also note that exact reproduction may require use of an (older) code 
+version, tagged on the date near the finalization of the paper.
 
 [Nelson et al. (2018a) - TNG colors](http://arxiv.org/abs/1707.03395) - `projects.color.paperPlots()`
 
 [Nelson et al. (2018b) - TNG oxygen](http://arxiv.org/abs/1712.00016) - `projects.oxygen.paperPlots()`
 
-[Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.color.paperPlots()`
+[Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.outflows.paperPlots()`
