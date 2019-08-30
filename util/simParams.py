@@ -313,25 +313,18 @@ class simParams:
             if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
             dmStr = '_DM' if '_dm' in run else ''
-            fof0str = '_fof0test' if 'fof0test' in run else ''
+
+            # temporary: new L35n2160TNG_fof0test/ used by -default-!
+            fof0str = '_fof0test' if (res == 2160 and '_old' not in run) else ''
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
-
-            # magny
-            if 'karl' in platform.node():
-                # no mount to /hits/basement
-                if (self.boxSize == 205000 and res == 2500) or (self.boxSize == 35000 and res == 2160):
-                    self.arepoPath  = self.basePath + 'data/out/L'+bs+'n'+str(res)+runStr+dmStr+'/'
-                    print('WARNING: No mount on [karl] to TNG300 or TNG50 data unless manually made...')
-            #end magny
-
             self.savPrefix  = 'IP'
             self.simName    = 'L' + bs + 'n' + str(res) + runStr + dmStr
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if 'fof0test' in run:
-                self.simName += '_fof0test'
+            if '_old' in run:
+                self.simName += '_old' # temporary
 
             if res in res_L35+res_L75+res_L205:#+res_L680:
                 # override flagship name

@@ -2756,6 +2756,10 @@ fieldComputeFunctionMapping = \
    'Subhalo_Potential_rvir_Gas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Potential',op='mean',rad='rvir_shell'),
 
+   'Subhalo_Mass_HIGK_popping' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad=None),
+   'Subhalo_Mass_MgII' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Mg II mass',op='sum',rad=None),
    'Subhalo_Mass_OV' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O V mass',op='sum',rad=None),
    'Subhalo_Mass_OVI' : \
@@ -2767,6 +2771,8 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_OVIII' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='O VIII mass',op='sum',rad=None),
 
+   'Subhalo_Mass_AllGas_Mg' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_Mg',op='sum',rad=None),
    'Subhalo_Mass_AllGas_Oxygen' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad=None),
    'Subhalo_Mass_AllGas_Metal' : \
@@ -3260,8 +3266,6 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux',op='sum',scope='fof'),
    'Subhalo_RadProfile2Dz_2Mpc_FoF_OVII_Flux' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux',op='sum',scope='fof',proj2D=[2,2000]),
-   'Subhalo_RadProfile2Dz_2Mpc_FoF_OVII_sfCold_Flux' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux_sfcold',op='sum',scope='fof',proj2D=[2,2000]),
    'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_OVII_Flux' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VII flux',op='sum',scope='global_fof',proj2D=[2,2000]),
    'Subhalo_RadProfile3D_FoF_OVIII_Mass' : \

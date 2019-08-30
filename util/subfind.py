@@ -2783,7 +2783,7 @@ def rewrite_groupcat(sP, GrNr=0):
     from cosmo.load import gcPath
 
     assert GrNr == 0 # no generalization
-    assert 'fof0test' in sP.run # testing, only modify L35n2160TNG_fof0test/ files
+    assert 'fof0test' in sP.arepoPath # testing, only modify L35n2160TNG_fof0test/ files
 
     final_save_file = sP.derivPath + 'fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
 
@@ -2874,7 +2874,7 @@ def add_so_quantities(sP, GrNr=0):
     from util.helper import pSplitRange, reportMemory
 
     assert GrNr == 0 # no generalization for chunkNum
-    assert 'fof0test' in sP.run # only modify L35n2160TNG_fof0test/ files
+    assert 'fof0test' in sP.arepoPath # only modify L35n2160TNG_fof0test/ files
 
     DeltaMean200 = 200.0
     DeltaCrit200 = 200.0 / sP.units.Omega_z
@@ -2969,7 +2969,7 @@ def rewrite_snapshot(sP, GrNr=0):
     from tracer.tracerMC import match3
 
     assert GrNr == 0 # no generalization
-    assert 'fof0test' in sP.run # testing, only modify L35n2160TNG_fof0test/ files
+    assert 'fof0test' in sP.arepoPath # testing, only modify L35n2160TNG_fof0test/ files
 
     ptTypes = [0,1,4,5]
 
@@ -3087,9 +3087,9 @@ def compare_subhalos_all_quantities(snap_start=67):
     nBins = 50
 
     sPs = []
-    sPs.append( simParams(res=2160, run='tng_fof0test', snap=snap_start+0) )
-    sPs.append( simParams(res=2160, run='tng_fof0test', snap=snap_start+1) )
-    sPs.append( simParams(res=2160, run='tng_fof0test', snap=snap_start+2) )
+    sPs.append( simParams(res=2160, run='tng', snap=snap_start+0) )
+    sPs.append( simParams(res=2160, run='tng', snap=snap_start+1) )
+    sPs.append( simParams(res=2160, run='tng', snap=snap_start+2) )
 
     #sPs.append( simParams(res=512, run='tng', snap=3, variant='5011') )
     #sPs.append( 'fof0save' ) # load final save file of this run itself
@@ -3131,7 +3131,12 @@ def compare_subhalos_all_quantities(snap_start=67):
             else:
                 label = sP.simName + ' snap=%d' % sP.snap
                 with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
-                    vals = f['Subhalo'][field][()]
+                    if field in f['Subhalo']:
+                        vals = f['Subhalo'][field][()]
+                    else:
+                        assert 'Bfld' in field # only occasionally missing fields
+                        vals = np.zeros( fof0len[i], dtype='float32' )
+                        vals.fill(np.nan)
 
             assert vals.shape[0] == fof0len[i]
 
@@ -3208,15 +3213,14 @@ def run_subfind(snap):
     sP = simParams(res=2160,run='tng',snap=snap)
 
     #run_subfind_customfof0save_phase1(sP, GrNr=0)
-    run_subfind_customfof0save_phase2(sP, GrNr=0)
+    #run_subfind_customfof0save_phase2(sP, GrNr=0)
 
     # rewrite
-    #sP = simParams(res=2160,run='tng_fof0test',snap=snap)
     #rewrite_groupcat(sP, GrNr=0)
     #add_so_quantities(sP, GrNr=0)
     #rewrite_snapshot(sP, GrNr=0)
 
-    #compare_subhalos_all_quantities(snap_start=snap)
+    compare_subhalos_all_quantities(snap_start=snap)
     #verify_results(sP, GrNr=0)
 
 def benchmark():

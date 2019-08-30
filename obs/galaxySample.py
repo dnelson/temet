@@ -375,17 +375,17 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         # grid parameters (Berg+ 2019)
         partType  = 'gas'
         ionName   = 'H I' #'MHIGK_popping' # 'H I' with H2 removed following G&K model
-        projDepth = 2000.0 # +/- 1000 km/s
+        projDepth = 11190.0 # +/- 1000 km/s (i.e. dv/(sP.units.H_z*1000) is pMpc at this redshift, assumed z=0.5)
         gridSize  = 1200.0 # pkpc, need out to b = 500kpc
         gridRes   = 2.0
         axes      = [0,1] # x,y
 
-    if config in ['COS-LRG HI','COS-LRG MgII','COS-LRG MgII sfCold']:
+    if config in ['COS-LRG HI','COS-LRG MgII']:
         # grid parameters (Chen+ 2018, Zahedy+ 2018)
         partType  = 'gas'
         ionName   = 'H I' if 'HI' in config else 'Mg II'
-        projDepth = 1000.0 # +/- 500 km/s
-        gridSize  = 400.0 # pkpc, need out to b = 160kpc
+        projDepth = 5600.0 # +/- 500 km/s (z=0.5)
+        gridSize  = 500.0 # pkpc, need out to b = 160kpc
         gridRes   = 2.0
         axes      = [0,1] # x,y
 
@@ -420,6 +420,8 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         gridFile = gridPath + 'snap-%d_ind-%d_axes-%d%d.hdf5' % (snap,ind,axes[0],axes[1])
         return gridFile
 
+    print('sim matches cover snapshots: ', np.unique(sim_sample['snaps']))
+
     for snap in np.unique(sim_sample['snaps']):
         # which realized galaxies (a unique set) are in this snap?
         sP.setSnap(snap)
@@ -444,8 +446,7 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
             continue
 
         # process: global load all particle data needed
-        sfColdStr = '_sfcold' if 'sfCold' in config else ''
-        massField = '%s mass%s' % (ionName,sfColdStr) if " " in ionName else ionName
+        massField = '%s mass' % (ionName) if " " in ionName else ionName
 
         print(' loading mass [%s]...' % massField)
         mass = sP.snapshotSubsetP(partType, massField).astype('float32')

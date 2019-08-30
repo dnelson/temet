@@ -910,7 +910,7 @@ class cloudyIon():
         return abunds
 
     def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
-                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=False):
+                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
         """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
@@ -929,7 +929,7 @@ class cloudyIon():
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        tempField = 'temp_sfcold' if tempSfCold else 'temp'
+        tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
         temp = snapshotSubset(sP, 'gas', tempField, indRange=indRange) # log K
         
         # interpolate for log(abundance) and convert to linear
@@ -1127,11 +1127,12 @@ class cloudyEmission():
         return emis
 
     def calcGasLineLuminosity(self, sP, line, indRange=None, 
-                              assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=False):
+                              assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
         """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
         for gas particles in the whole snapshot, optionally restricted to an indRange. 
          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
-         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. """
+         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field.
+         tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
         ion = cloudyIon(sP=None)
         line = self.resolveLineNames(line, single=True)
 
@@ -1147,7 +1148,7 @@ class cloudyEmission():
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
-        tempField = 'temp_sfcold' if tempSfCold else 'temp'
+        tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
         temp = snapshotSubset(sP, 'gas', tempField, indRange=indRange) # log K
         
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]

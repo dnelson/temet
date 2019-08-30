@@ -181,9 +181,10 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
     If pSplit!=None and the requested partial file exists, concatenate all and return intermediate result.
     if pSplit!=None and the requested partial file does not exist, then run a partial computation and save."""
 
-    minRad = 2.0 # ckpc/h
-    maxRad = 20000.0 # ckpc/h
-    numRadBins = 40
+    # for oxygen paper: 2.0, 20000, 40
+    minRad = 0.1 # ckpc/h
+    maxRad = 10000.0 # ckpc/h
+    numRadBins = 50
 
     savePath = sP.derivPath + "/clustering/"
     saveStr = '%s_%s_rad-%d-%d-%d' % (partType,partField.replace(" ","-"),numRadBins,minRad,maxRad)
@@ -256,6 +257,7 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
     pos = sP.snapshotSubsetP(partType, 'pos')
     weights = sP.snapshotSubsetP(partType, partField)
 
+    # process weights
     w = np.where(weights < 0.0)
     weights[w] = 0.0 # non-negative
     assert np.count_nonzero(np.isfinite(weights)) == weights.size # finite
@@ -278,6 +280,7 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
         pos2 = pos[indRangeLoc[0]:indRangeLoc[1],:]
         weights2 = weights[indRangeLoc[0]:indRangeLoc[1]]
     else:
+        # global load
         pos2 = pos
         weights2 = weights
 
