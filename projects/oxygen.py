@@ -708,7 +708,6 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         ax.set_xlabel('%s [ log pkpc ]' % radStr)
 
     speciesStr = ions[0] if len(ions) == 1 else 'oxygen'
-    speciesStr = speciesStr.replace("_sfCold","")
 
     if emFlux:
         assert '2D' in projDim
@@ -985,7 +984,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     fig.savefig(saveName)
     plt.close(fig)
 
-def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, colorOff=0):
+def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, colorOff=0):
     """ Plot the real-space 3D two point correlation function of e.g. OVI mass. """
     from cosmo.clustering import twoPointAutoCorrelationParticle
 
@@ -998,6 +997,7 @@ def oxygenTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0
 
     # quick helper mapping from ions[] inputs to snapshotSubset() particle field names
     ionNameToPartFieldMap = {'OVI':'O VI mass','OVII':'O VII mass','OVIII':'O VIII mass',
+                             'MgII':'Mg II mass', 'Mg':'metalmass_Mg',
                              'O':'metalmass_O','Z':'metalmass','gas':'mass','bhmass':'BH_Mass'}
 
     # plot setup
@@ -1451,6 +1451,11 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
     ylim = [-14.0, -10.0] # colorbar on ext0
     ylim2 = ylim # x-axis on ext1
 
+    # clip obs to two binary colors at the maxima of the scale to avoid apparent brightness changes towards the center?
+    clipObsColorsToExtrema = True
+
+    simSquaresAlpha = 0.6 # 0.3 for oxygen paper
+
     if config in ['COS-Halos', 'eCGM', 'eCGMfull']:
         gals, logM, z, sfr, _, yvals_limit, R, col_logN, col_err, col_limit = datafunc()
         yvals = np.log10(sfr/10.0**logM)
@@ -1470,6 +1475,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
     if config in ['COS-LRG HI', 'COS-LRG MgII']:
         xlim = [10.6, 12.0]
         ylim = [1.4, 2.0] # color_ug [mag]
+        ylim2 = [1.35, 1.95] # color_ug [mag]
         yval_label = 'Galaxy (u-g) Color [mag]'
         yval_name = 'color_C-30kpc-z_ug'
         gals, logM, z, yvals, _, yvals_limit, R, N_HI, N_HI_err, N_MgII, N_MgII_err = chen2018zahedy2019()
@@ -1480,15 +1486,20 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
         col_logN = N_HI
         col_err  = N_HI_err
 
-        import pdb; pdb.set_trace() # TODO: need to generate col_limit, and handle '-' cases (no data) below
-
-    if config == 'COS-LRG MgII':
+    if config in ['COS-LRG MgII']:
         species = 'MgII'
-        collim = [12.0, 19.0]
+        collim = [10.0, 17.0]
         col_logN = N_MgII
         col_err  = N_MgII_err
 
-        import pdb; pdb.set_trace() # TODO: need to generate col_limit, and handle '-' cases (no data) below
+    if config in ['COS-LRG HI','COS-LRG MgII']:
+        # generate col_limit, including '-' (missing data) cases
+        col_limit = np.zeros( col_logN.size, dtype='int32' )
+        col_limit[col_err == '<'] = 1
+        col_limit[col_err == '>'] = 2
+        col_limit[col_err == '-'] = 3 # missing data
+        col_err[col_limit != 0] = '0.0'
+        col_err = np.array(col_err, dtype='float32')
 
     ylabel = 'Column Density $N_{\\rm %s}$ [ log cm$^{-2}$ ]' % species
 
@@ -1542,35 +1553,38 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
         ax_right.xaxis.set_major_formatter(ticker.NullFormatter())
         ax_right.yaxis.set_major_formatter(ticker.NullFormatter())
 
-        xtick_vals = np.linspace(0.0, 1.0-(1.0/(len(gals)+2))*(kdeHeightFac-1.5), len(gals)+2)
+        kde_inv_horz_spacing = 1.5
+        if 'COS-LRG MgII' in config: kde_inv_horz_spacing = 4.0
+        if 'LRG-RDR' in config: kde_inv_horz_spacing = 3.0
+
+        xtick_vals = np.linspace(0.0, 1.0-(1.0/(len(gals)+2))*(kdeHeightFac-kde_inv_horz_spacing), len(gals)+2)
         ax_right.set_xticks([])
 
         #ax_right.spines["bottom"].set_visible(False)
         #ax_right.spines["top"].set_visible(False)
 
         # main panel: plot obs
-        for limitType in [2,1,0]: # upper, lower, exact (species column density)
+        for limitType in [2,1,0,3]: # upper, lower, exact, missing data (species column density)
             w = np.where(col_limit == limitType)
 
             if not len(w[0]): continue
 
-            label = config if limitType == 0 else ''
-            marker = ['o','v','^'][limitType]
+            label = config.split(" ")[0] if limitType == 0 else ''
+            marker = ['o','v','^','s'][limitType]
 
             if iter == 0:
                 x_vals = R[w]
                 c_vals = yvals[w]
 
-                # clip obs to two binary colors at the maxima of the scale to avoid apparent brightness changes towards the center
-                if config in ['LRG-RDR']:
+                if clipObsColorsToExtrema:
                     c_vals[c_vals <= yvals.mean()] = colorMinMax[0]
                     c_vals[c_vals > yvals.mean()] = colorMinMax[1]
             if iter == 1:
                 x_vals = yvals[w]
                 c_vals = logM[w]
 
-                # clip obs to two binary colors at the maxima of the scale to avoid apparent brightness changes towards the center
-                if config in ['LRG-RDR']:
+                
+                if clipObsColorsToExtrema:
                     c_vals[c_vals <= logM.mean()] = colorMinMax[0]
                     c_vals[c_vals > logM.mean()] = colorMinMax[1]
 
@@ -1611,9 +1625,9 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
 
         y_vals = sim_sample['column'].ravel()
 
-        s = ax.scatter(x_vals, y_vals, s=10, marker='s', c=c_vals, label=sP.simName, alpha=0.3, 
+        s = ax.scatter(x_vals, y_vals, s=10, marker='s', c=c_vals, label=sP.simName, alpha=simSquaresAlpha, 
                        edgecolors='none', cmap=cmap, vmin=colorMinMax[0], vmax=colorMinMax[1], 
-                       rasterized=True) # rasterize the 3700 squares into a single image
+                       rasterized=True) # rasterize the small squares into a single image
 
         # right panel: sort by order along x-axis of main panel
         if iter == 0:
@@ -1622,10 +1636,12 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             sort_inds = np.argsort( yvals )
 
         xx = xtick_vals[1:-1]
+        xx_spacing = xx[1] - xx[0]
 
         # save some data for later
         pvals = np.zeros(R.size, dtype='float32')
-        plims = np.zeros(R.size, dtype='int32')
+        plims = np.zeros(R.size, dtype='int32') - 1
+        pvals.fill(np.nan)
 
         for i, sort_ind in enumerate(sort_inds):
             # plot vertical line and obs. galaxy name
@@ -1638,8 +1654,24 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             sim_cols = np.squeeze( sim_sample['column'][sort_ind,:] )
             sim_cols = sim_cols[np.isfinite(sim_cols)]
 
+            if len(sim_cols) == 0:
+                print(gals[sort_ind]['name'], ' skipped, all NaN values...')
+                continue
+
+            # KDE is heavily skewed/flattened if there are any distant outliers
+            # note: important impact on MgII (no impact on HI) where the majority of grid samples are effectively N_MgII==0
+            if 1:
+                #print('WARNING: clipping sim columns to column limit range (consider implications.)') # we label
+                wColLim = np.where( (sim_cols >= collim[0]) & (sim_cols < collim[1]) )
+                frac_above = len(wColLim[0]) / sim_cols.size * 100
+
+                textOpts = {'ha':'center', 'va':'top', 'color':'#000000', 'fontsize':12}
+                ax_right.text( xx[i] + xx_spacing*0.5, collim[1] - (collim[1]-collim[0])/100, '%d%%' % frac_above, **textOpts)
+            else:
+                wColLim = np.where( np.isfinite(sim_cols) ) # all
+
             kde_x = np.linspace(collim[0], collim[1], nKDE1D)
-            kde = gaussian_kde(sim_cols, bw_method='scott')
+            kde = gaussian_kde(sim_cols[wColLim], bw_method='scott')
             kde_y = kde(kde_x) * (1.0/len(gals)) * kdeHeightFac
 
             l, = ax_right.plot(kde_y + xx[i], kde_x, '-', alpha=1.0, lw=lw)
@@ -1648,31 +1680,38 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             # locate 'height' of observed point beyond xx[i], i.e. the KDE value at its log_N
             _, kde_ind_obs = closest(kde_x, col_logN[sort_ind])
 
-            # mark observed data point
-            marker = ['o','v','^'][col_limit[sort_ind]]
-            ax_right.plot( xx[i] + kde_y[kde_ind_obs], col_logN[sort_ind], markersize=12, marker=marker, 
-                           color=l.get_color(), alpha=1.0)
+            # if we have an observed column
+            if col_limit[sort_ind] in [0,1,2]:
+                # mark observed data point
+                marker = ['o','v','^'][col_limit[sort_ind]]
+                ax_right.plot( xx[i] + kde_y[kde_ind_obs], col_logN[sort_ind], markersize=12, marker=marker, 
+                               color=l.get_color(), alpha=1.0)
 
-            # add observational error as vertical line
-            if col_err[sort_ind] > 0.0:
-                obs_xerr = [xx[i], xx[i]] + kde_y[kde_ind_obs]
-                obs_yerr = [col_logN[sort_ind]-col_err[sort_ind], col_logN[sort_ind]+col_err[sort_ind]]
-                ax_right.plot( obs_xerr, obs_yerr, '-', color=l.get_color(), lw=lw, alpha=1.0 )
+                # add observational error as vertical line
+                if col_err[sort_ind] > 0.0:
+                    obs_xerr = [xx[i], xx[i]] + kde_y[kde_ind_obs]
+                    obs_yerr = [col_logN[sort_ind]-col_err[sort_ind], col_logN[sort_ind]+col_err[sort_ind]]
+                    ax_right.plot( obs_xerr, obs_yerr, '-', color=l.get_color(), lw=lw, alpha=1.0 )
 
-            # calculate and print a quantitative probability number
-            z1 = kde.integrate_box_1d(-np.inf, col_logN[sort_ind])
-            z2 = kde.integrate_box_1d(col_logN[sort_ind], np.inf)
+                # calculate and print a quantitative probability number
+                z1 = kde.integrate_box_1d(-np.inf, col_logN[sort_ind])
+                z2 = kde.integrate_box_1d(col_logN[sort_ind], np.inf)
 
-            if col_limit[sort_ind] == 0: pvals[i] = 2*np.min([z1,z2]) # detection, 2*PDF area more extreme
-            if col_limit[sort_ind] == 1: pvals[i] = z1 # upper limit, PDF area which is consistent
-            if col_limit[sort_ind] == 2: pvals[i] = z2 # lower limit, PDF area which is consistent
-            plims[i] = col_limit[sort_ind]
+                if col_limit[sort_ind] == 0: pvals[i] = 2*np.min([z1,z2]) # detection, 2*PDF area more extreme
+                if col_limit[sort_ind] == 1: pvals[i] = z1 # upper limit, PDF area which is consistent
+                if col_limit[sort_ind] == 2: pvals[i] = z2 # lower limit, PDF area which is consistent
+                plims[i] = col_limit[sort_ind]
 
-            print(gals[sort_ind]['name'], col_logN[sort_ind], pvals[i])
+                print(gals[sort_ind]['name'], col_logN[sort_ind], pvals[i])
+            else:
+                print(gals[sort_ind]['name'], ' no obs column')
+                marker = 's'
+                ax_right.plot( xx[i] + kde_y[-1], collim[1], markersize=8, marker=marker, color=l.get_color(), alpha=0.5 )
 
         # print summary of pvals statistic
         percs = np.nanpercentile(pvals, [16,50,84])
         print('all percentiles: ',percs)
+        print('NOTE: for p-values for MgII, should take with the KDE clipping removed (to preserve the statistical meaning)')
         for lim in [0,1,2]:
             w = np.where(plims == lim)
             percs = np.nanpercentile(pvals[w], [16,50,84])
@@ -2065,14 +2104,15 @@ def paperPlots():
         xQuant = 'hdens'
         yQuant = 'temp'
         weights = ['O VI mass','O VII mass','O VIII mass']
+        meancolors = None #['z_solar']
         xMinMax = [-9.0,0.0]
         yMinMax = [3.0,8.0]
-        contours = [-3.0, -2.0, -1.0]
-        massFracMinMax = [-4.0, 0.0] #[-10.0, 0.0]
+        contours =[-3.0, -2.0, -1.0]
+        massFracMinMax = [-4.0, 0.0]
         hideBelow = True
         smoothSigma = 1.0
 
-        plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=None, 
+        plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=None, 
                          clim=massFracMinMax, xlim=xMinMax, ylim=yMinMax, 
                          contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
@@ -2134,10 +2174,10 @@ def paperPlots():
             saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
               (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
 
-            oxygenTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
+            ionTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
 
     # figure 8, bound mass of O ions vs halo/stellar mass
-    if 1:
+    if 0:
         sPs = [TNG300]#, TNG100]
         cenSatSelect = 'cen'
         redshift = 0.0

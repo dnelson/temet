@@ -105,8 +105,7 @@ def check_load_memusage():
 
 def check_groupcat_snap_rewrite(GrNr=0):
     """ Check custom Subfind. """
-    sP = simParams(res=2160,run='tng_fof0test',snap=69)
-    #sP = simParams(res=2160,run='tng',snap=68)
+    sP = simParams(res=2160,run='tng',snap=69) # 69-99
     from tracer.tracerMC import match3
     #sP = simParams(res=128,run='tng',snap=4,variant='0000')
 

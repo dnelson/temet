@@ -2,7 +2,7 @@
 # Table A* - "all components" data for each QSO sightline, err '>' denotes lower limit, '<' denotes upper limit, '-' denotes no data
 #          - note all errors take the greater of the upper/lower bounds
 #
-# QSO_ID,                N_HI,  err,  N_CII, err,  N_CIII, err,  N_NII, err,  N_NIII, err,  N_OI,  err,  N_OVI, err,  N_MgI, err,  N_MgII, err,  N_SiII, err,  N_SiIII, err,  N_SiIV, err,  N_FeII, err,  N_FeIII, err
+# QSO_ID,           N_HI,  err,  N_CII, err,  N_CIII, err,  N_NII, err,  N_NIII, err,  N_OI,  err,  N_OVI, err,  N_MgI, err,  N_MgII, err,  N_SiII, err,  N_SiIII, err,  N_SiIV, err,  N_FeII, err,  N_FeIII, err
 #
 SDSSJ0946+512339.9, 17.34, 0.01, 14.11, 0.16, 14.73,  >,    13.90, 0.22, 0.0,    -,    0.0,   -,    14.93, 0.02, 0.0,   -,    0.0,    -,    13.87,  0.21, 13.48,   0.19, 0.0,    -,    14.04,  <,    14.14,   <
 SDSSJ1406+250921.0, 18.03, 0.20, 14.58, 0.16, 0.0,    -,    14.47, >,    0.0,    -,    0.0,   -,    0.0,   -,    11.92, 0.22, 13.45,  >,    14.29,  0.47, 13.45,   >,    0.0,    -,    13.81,  0.27, 14.18,   <

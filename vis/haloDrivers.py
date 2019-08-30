@@ -14,16 +14,16 @@ from util.helper import pSplit, logZeroNaN, evenlySample
 from cosmo.util import crossMatchSubhalosBetweenRuns
 from util import simParams
 
-def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
+def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
-    run        = 'tng_fof0test' #'tng_zoom_dm'
+    run        = 'tng' #'tng_zoom_dm'
     res        = 2160 #1820
     variant    = None #'sf2' # None
 
     #redshift   = 0.0
-    redshift   = simParams(res=2160,run='tng',snap=69).redshift
+    redshift   = simParams(res=2160,run='tng',snap=snap).redshift
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
     nPixels    = [1200,1200] #[800,800] #[1920,1920]
@@ -87,7 +87,6 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         rVirFracs = [2.0,10.0]
         fracsType = 'rHalfMassStars'
     if 1:
-        # fof0test
         plotSubhalos = 100
         size = 3500.0
         sizeType = 'codeUnits'
@@ -96,8 +95,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None):
         plotStyle    = 'edged'
         rasterPx     = 1200
         colorbars    = True
-        saveFilename = './oneHaloSingleField_%d_%s_%d_z%.1f_ID-%d_%s.png' % \
-          (conf,run,res,redshift,subhaloID if subhaloID is not None else haloID,method)
+        saveFilename = './oneHaloSingleField_%d_%s_%d_%d_ID-%d_%s.png' % \
+          (conf,run,res,snap,subhaloID if subhaloID is not None else haloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 

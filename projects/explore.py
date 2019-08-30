@@ -530,7 +530,7 @@ def auroraVoyage2050WhitePaper():
     if 1:
         # radial profiles of ionic density or emission SB
         sPs = [TNG100, Eagle, Illustris1]
-        ions = ['OVII'] #['OVII_sfCold'] #,'OVIII']
+        ions = ['OVII'] #,'OVIII']
         cenSatSelect = 'cen'
         haloMassBins = [[12.4,12.6],[11.4,11.6]] #[[11.9,12.1], [12.4,12.6]]
         combine2Halo = True

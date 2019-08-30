@@ -1049,12 +1049,6 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     else:
         element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
 
-    # use cold-phase temperature for SFR>0 instead of eEOS temperature?
-    tempSfCold = False
-    if '_sfcold' in prop:
-        prop = prop.replace('_sfcold','')
-        tempSfCold = True
-
     assert sP.isPartType(partType, 'gas')
     assert prop in ['mass','frac','flux']
 
@@ -1120,12 +1114,12 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
                 if prop in ['mass','frac']:
                     # either ionization fractions, or total mass in the ion
-                    values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal, tempSfCold=tempSfCold)
+                    values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
                     if prop == 'mass':
                         values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
                 else:
                     # emission flux
-                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal, tempSfCold=tempSfCold)
+                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
                     values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sP.redshift
 
                 with h5py.File(cacheFile) as f:
@@ -1158,7 +1152,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
         if prop in ['mass','frac']:
             # either ionization fractions, or total mass in the ion
-            values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig, tempSfCold=tempSfCold)
+            values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
             if prop == 'mass':
                 values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
         else:

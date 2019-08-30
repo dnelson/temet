@@ -20,7 +20,8 @@ from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3
 from vis.halo import renderSingleHalo
-from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended
+from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
+                            ionTwoPointCorrelation, totalIonMassVsHaloMass
 
 def stackedRadialProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
                           radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
@@ -322,7 +323,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
             ax.set_xlabel('Impact Parameter [ pkpc ]')
 
     ax.set_ylim(ylim)
-    ax.set_ylabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ion.replace(' sfCold',''))
+    ax.set_ylabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ion)
 
     # plot
     w = np.where( (dist_global > 0) & np.isfinite(grid_global) )
@@ -559,28 +560,23 @@ def paperPlots():
         size       = 400.0
         sizeType   = 'kpc'
 
-        conf = 2 # testing
+        conf = 3 # choose from below
 
         # which halo?
         sP = simParams(res=res, run=run, redshift=redshift)
         haloIDSets = _get_halo_ids(sP)
 
-        if 1 and conf in [2,3]:
-            # global with appropriate depth (same as in ionColumnsVsImpact2D)
-            method = 'sphMap_global'
-            dv = 500.0 # +/- km/s (Zahedy) or +/- 600 km/s (Werk)
-            depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
-            depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
+        # global with ~appropriate depth (same as in ionColumnsVsImpact2D)
+        method = 'sphMap_global'
+        dv = 500.0 # +/- km/s (Zahedy), or +/- 1000 km/s (Berg)
+        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
 
-        for haloID in list(haloIDSets[1]) + list(haloIDSets[2]):
+        #for haloID in list(haloIDSets[1]) + list(haloIDSets[2]):
+        for haloID in [haloIDSets[1][0]]:
             hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
-            # config
-            if conf == 0:
-                lines = ['H-alpha','H-beta','O--2-3728.81A','O--3-5006.84A','N--2-6583.45A','S--2-6730.82A']
-                partField_loc = 'sb_%s_lum_kpc' % lines[0] # + '_sf0' to set SFR>0 cells to zero
-                panels = [{'partType':'gas', 'partField':partField_loc, 'valMinMax':[34,41]}]
-
+            # which config?
             if conf == 1:
                 panels = [{'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}]
 
@@ -588,7 +584,7 @@ def paperPlots():
                 panels = [{'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[15.0,21.0]}]
 
             if conf == 3:
-                panels = [{'partType':'gas', 'partField':'Mg II sfCold', 'valMinMax':[12.0,16.5]}]
+                panels = [{'partType':'gas', 'partField':'Mg II', 'valMinMax':[12.0,16.5]}]
 
             if conf == 4:
                 panels = [{'partType':'stars', 'partField':'stellarComp'}]
@@ -606,7 +602,7 @@ def paperPlots():
     if 0:
         sP = simParams(res=2160, run='tng', redshift=redshift)
         haloMassBin = haloMassBins[1]
-        #ion = 'Mg II sfCold'
+        #ion = 'Mg II'
         ion = 'MHIGK_popping'
         radRelToVirRad = False
 
@@ -623,16 +619,50 @@ def paperPlots():
         obsSimMatchedGalaxySamples(sPs, 'sample_cos_lrg_%s.pdf' % simNames, config='COS-LRG')
 
     # fig 7: run old OVI machinery to derive goodness of fit parameters and associated plots
-    if 1:
-        #for sP in [TNG50, TNG100]:
-        #    obsColumnsDataPlot(sP, saveName='obscomp_lrg_rdr_hi_%s.pdf' % sP.simName, config='LRG-RDR')
-        #    obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
-        
-        sP = TNG100
-        obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
+    if 0:
+        for sP in [TNG50]:#[TNG50, TNG100]:
+            obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
+            obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
+            obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
         # covering fractions
         #sPs = [TNG50, TNG100]
         #novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
         #saveName = 'coshalos_covering_frac_%s.pdf' % '_'.join([sP.simName for sP in sPs])
         #coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=0)
+
+    # fig 8: 2pcf
+    if 1:
+        redshift = 0.5
+        sPs = [TNG50] #[TNG100, TNG300]
+        ions = ['MgII'] #,'Mg','gas']
+
+        # compute time for one split:
+        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
+        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
+        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
+        for order in [0,1,2]:
+            saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
+              (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
+
+            ionTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
+
+    # fig 9: bound ion mass as a function of halo mass
+    if 0:
+        sPs = [TNG100,TNG50,TNG50_2,TNG50_3] #[TNG300]#, TNG100]
+        cenSatSelect = 'cen'
+        redshift = 0.5
+        ionsLoc = ['AllGas_Mg','MgII','HIGK_popping']
+
+        for vsHaloMass in [True,False]:
+            massStr = '%smass' % ['stellar','halo'][vsHaloMass]
+
+            saveName = 'ions_masses_vs_%s_%s_z%d_%s.pdf' % \
+                (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
+            totalIonMassVsHaloMass(sPs, saveName, ions=ionsLoc, cenSatSelect=cenSatSelect, 
+                redshift=redshift, vsHaloMass=vsHaloMass, secondTopAxis=True)
+
+            #saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
+            #    (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
+            #totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+            #    redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)#, secondTopAxis=True)

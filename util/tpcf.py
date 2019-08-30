@@ -158,7 +158,7 @@ def _reduceQuantsInRad(pos_search, pos_target, radial_bins, quants, reduced_quan
 
     # void return
 
-def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nThreads=16):
+def tpcf(pos, radialBins, boxSizeSim, weights=None, pos2=None, weights2=None, nThreads=32):
     """ Calculate and simultaneously histogram the results of a two-point auto correlation function, 
     by computing all the pairwise (periodic) distances in pos. 3D only. 
 

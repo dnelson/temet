@@ -529,9 +529,6 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
         ionNum  = partField.split()[1]
         field   = 'mass'
 
-        if partField.count(' ') == 2 and partField.split()[2] == 'sfCold':
-            field = 'mass_sfcold'
-
         # use cache or calculate on the fly, as needed
         mass = sP.snapshotSubsetP('gas', '%s %s %s' % (element,ionNum,field), indRange=indRange)
 
@@ -1298,6 +1295,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     # slice corresponding to (optionally rotated) _x or _y velocity component
                     if '_x' in partField: sliceIndRot = 0
                     if '_y' in partField: sliceIndRot = 1
+                    if '_z' in partField: sliceIndRot = 2
                     sliceIndNoRot = sliceIndRot
 
                 # do slice (convert 3-vector into scalar)
