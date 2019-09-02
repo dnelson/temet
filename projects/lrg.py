@@ -21,10 +21,10 @@ from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhase
 from tracer.tracerMC import match3
 from vis.halo import renderSingleHalo
 from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
-                            ionTwoPointCorrelation, totalIonMassVsHaloMass
+                            ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles
 
-def stackedRadialProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
-                          radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
+def radialResolutionProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
+                             radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
     """ Plot average/stacked radial gas cellsize profiles in stellar mass bins. Specify one of 
     haloMassBins or stellarMassBins. If radRelToVirRad, then [r/rvir] instead of [pkpc]. """
     from tracer.tracerMC import match3
@@ -242,7 +242,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
     if fullDepth:
         # global accumulation with appropriate depth along the projection direction
         method = 'sphMap_global'
-        dv = 500.0 # +/- km/s (Zahedy) or +/- 600 km/s (Werk)
+        dv = 500.0 # +/- km/s (Zahedy / COS-LRG config) or +/- 600 km/s (Werk / COS-Halos config)
         depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
         depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
 
@@ -443,6 +443,80 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
     plt.close(fig)
 
+def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
+    """ Configure single halo and multi-halo gallery visualizations. """
+    run        = sP.run
+    res        = sP.res
+    redshift   = sP.redshift
+
+    rVirFracs  = [0.25]
+    method     = 'sphMap'
+    nPixels    = [1000,1000]
+    axes       = [0,1]
+    labelZ     = True
+    labelScale = 'physical'
+    labelSim   = False
+    labelHalo  = True
+    relCoords  = True
+    rotation   = 'edge-on'
+
+    size       = 400.0
+    sizeType   = 'kpc'
+
+    # global with ~appropriate depth (same as in ionColumnsVsImpact2D)
+    method = 'sphMap_global'
+    dv = 500.0 # +/- km/s (Zahedy), or +/- 1000 km/s (Berg)
+    depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+    depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
+
+    # which conf?
+    if conf == 1:
+        panel = {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}
+    if conf == 2:
+        panel = {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[15.0,21.0]}
+    if conf == 3:
+        panel = {'partType':'gas', 'partField':'Mg II', 'valMinMax':[12.0,16.5]}
+    if conf == 4:
+        panel = {'partType':'stars', 'partField':'stellarComp'}
+
+    if gallery:
+        # multi-panel
+        panels = []
+        setInd = 2 # TODO: just choose these manually?
+        labelZ = False
+
+        for haloID in haloIDSets[setInd][0:12]:
+            panel_loc = dict(panel)
+            panel_loc['hInd'] = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+
+            panels.append(panel_loc)
+
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = nPixels[0] * 2
+            nRows        = 3 # 3x4
+            colorbars    = True
+            saveFilename = './vis_%s_%d_gal%d_%s.pdf' % (sP.simName,sP.snap,setInd,panels[0]['partField'].replace(" ","_"))
+
+        # render
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+    else:
+        # single image
+        for haloID in [haloIDSets[1][0]]: # list(haloIDSets[1]) + list(haloIDSets[2]):
+            hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+
+            panels = [panel]
+
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = nPixels[0]
+            colorbars    = True
+            saveFilename = saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'].replace(" ","_"))
+
+        # render
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
 def paperPlots():
     """ Testing. """
     TNG100  = simParams(res=1820,run='tng',redshift=0.0)
@@ -476,8 +550,8 @@ def paperPlots():
         for radRelToVirRad in [True]: #,False]:
             saveName = 'resolution_profiles_%s_z%02d_%s_rvir%d.pdf' % (simNames,redshift*10,cenSatSelect,radRelToVirRad)
 
-            stackedRadialProfiles(sPs, saveName, redshift=redshift, radRelToVirRad=radRelToVirRad, 
-                                  cenSatSelect='cen', haloMassBins=haloMassBins)
+            radialResolutionProfiles(sPs, saveName, redshift=redshift, radRelToVirRad=radRelToVirRad, 
+                                     cenSatSelect='cen', haloMassBins=haloMassBins)
 
     # figure 2 - cgm gas density/temp/pressure 1D PDFs
     if 0:
@@ -543,60 +617,10 @@ def paperPlots():
 
     # fig 4 - vis (single halo large) gas metallicity, N_MgII, N_HI, stellar light
     if 0:
-        run        = 'tng'
-        res        = 2160
-        #redshift   = 0.5
-        rVirFracs  = [0.25, 0.5, 1.0]
-        method     = 'sphMap'
-        nPixels    = [1000,1000]
-        axes       = [0,1]
-        labelZ     = True
-        labelScale = 'physical'
-        labelSim   = False
-        labelHalo  = True
-        relCoords  = True
-        rotation   = 'edge-on'
-
-        size       = 400.0
-        sizeType   = 'kpc'
-
-        conf = 3 # choose from below
-
-        # which halo?
-        sP = simParams(res=res, run=run, redshift=redshift)
+        sP = simParams(run='tng50-1', redshift=redshift)
         haloIDSets = _get_halo_ids(sP)
 
-        # global with ~appropriate depth (same as in ionColumnsVsImpact2D)
-        method = 'sphMap_global'
-        dv = 500.0 # +/- km/s (Zahedy), or +/- 1000 km/s (Berg)
-        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
-        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
-
-        #for haloID in list(haloIDSets[1]) + list(haloIDSets[2]):
-        for haloID in [haloIDSets[1][0]]:
-            hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
-
-            # which config?
-            if conf == 1:
-                panels = [{'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}]
-
-            if conf == 2:
-                panels = [{'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[15.0,21.0]}]
-
-            if conf == 3:
-                panels = [{'partType':'gas', 'partField':'Mg II', 'valMinMax':[12.0,16.5]}]
-
-            if conf == 4:
-                panels = [{'partType':'stars', 'partField':'stellarComp'}]
-
-            class plotConfig:
-                plotStyle    = 'edged'
-                rasterPx     = nPixels[0]
-                colorbars    = True
-                saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'])
-
-            # render
-            renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+        lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=True)
 
     # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     if 0:
@@ -620,19 +644,13 @@ def paperPlots():
 
     # fig 7: run old OVI machinery to derive goodness of fit parameters and associated plots
     if 0:
-        for sP in [TNG50]:#[TNG50, TNG100]:
+        for sP in [TNG50]: #[TNG50, TNG100]:
             obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
-        # covering fractions
-        #sPs = [TNG50, TNG100]
-        #novi_vals = [13.5, 14.0, 14.15, 14.5, 15.0]
-        #saveName = 'coshalos_covering_frac_%s.pdf' % '_'.join([sP.simName for sP in sPs])
-        #coveringFractionVsDist(sPs, saveName, ions=['OVI'], colDensThresholds=novi_vals, conf=0)
-
     # fig 8: 2pcf
-    if 1:
+    if 0:
         redshift = 0.5
         sPs = [TNG50] #[TNG100, TNG300]
         ions = ['MgII'] #,'Mg','gas']
@@ -649,20 +667,42 @@ def paperPlots():
 
     # fig 9: bound ion mass as a function of halo mass
     if 0:
-        sPs = [TNG100,TNG50,TNG50_2,TNG50_3] #[TNG300]#, TNG100]
+        sPs = [TNG50] #[TNG100,TNG50] #,TNG50_2,TNG50_3] #[TNG300]
         cenSatSelect = 'cen'
         redshift = 0.5
-        ionsLoc = ['AllGas_Mg','MgII','HIGK_popping']
+        ions = ['AllGas_Mg','MgII','HIGK_popping']
 
         for vsHaloMass in [True,False]:
             massStr = '%smass' % ['stellar','halo'][vsHaloMass]
 
             saveName = 'ions_masses_vs_%s_%s_z%d_%s.pdf' % \
                 (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-            totalIonMassVsHaloMass(sPs, saveName, ions=ionsLoc, cenSatSelect=cenSatSelect, 
-                redshift=redshift, vsHaloMass=vsHaloMass, secondTopAxis=True)
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+                redshift=redshift, vsHaloMass=vsHaloMass) # , secondTopAxis=True
 
-            #saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
-            #    (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-            #totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-            #    redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)#, secondTopAxis=True)
+            saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
+                (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+                redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
+
+    # fig 10: radial profiles
+    if 1:
+        redshift = 0.5
+        sPs = [TNG50]
+        ions = ['MgII','HIGK_popping']
+        cenSatSelect = 'cen'
+        haloMassBins = [[11.4,11.6], [11.9,12.1], [12.4,12.6], [12.8, 13.2], [13.2, 13.8]]
+        projSpecs = ['3D','2Dz_2Mpc']
+        combine2Halo = True
+
+        simNames = '_'.join([sP.simName for sP in sPs])
+
+        for massDensity in [False]: #[True,False]:
+            for radRelToVirRad in [False]: #[True,False]:
+                for projDim in projSpecs:
+
+                    saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
+                      (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
+                    stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
+                                          radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
+                                          haloMassBins=haloMassBins, combine2Halo=combine2Halo)

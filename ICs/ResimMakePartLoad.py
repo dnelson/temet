@@ -490,8 +490,7 @@ def generate_set():
     #haloIDs = [1096, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 to 40
     #haloIDs = [446, 463, 466, 490, 497, 518, 532, 571, 604, 636] # todo: part 2, increase 14.7-14.8 to 40
     #haloIDs = [698, 701, 720, 778, 789, 790, 797, 798, 844, 884] # todo: part 3, increase 14.7-14.8 to 40
-    #haloIDs = [269, 270, 284, 299, 310, 312, 315, 321, 330, 331] # todo: part 2, increase 14.8-14.9 to 50
-    #haloIDs = [360, 368, 376, 378, 382, 393, 395, 416, 419, 429] # todo: part 3, increase 14.8-14.9 to 50
+    haloIDs = [360, 368, 376, 378, 382, 393, 395, 416, 419, 429] # todo: part 3, increase 14.8-14.9 to 50
     #haloIDs = [443, 451, 481, 485, 496, 510, 526, 550, 565, 586] # todo: part 4, increase 14.8-14.9 to 50
 
     sizeFacs = [3.0] #[2.0,3.0,4.0]

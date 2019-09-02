@@ -808,7 +808,7 @@ class cloudyIon():
         if len(ionNums) == 1: return ionNums[0]
         return ionNums
 
-    def formatWithSpace(self, str):
+    def formatWithSpace(self, str, name=False):
         """ Convert a string of the type e.g. 'Mg2' or 'O6' to 'Mg II' or 'O VI'. """
         elName = None
         ionNum = None
@@ -820,6 +820,9 @@ class cloudyIon():
 
         ionNum = str.split(elName)[1]
         assert elName is not None and ionNum is not None
+
+        if name:
+            return elName
 
         return '%s %s' % (elName, self.numToRoman(ionNum))
 

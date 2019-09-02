@@ -733,7 +733,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             grid[i,:] /= pxAreasByLat[i]
 
         grid = sP.units.codeMassToMsun(grid) # log(msun/ster)
-        config['label'] = '%s Column Density [log M$_{\\rm sun}$ ster$^{-2}$]' % ptStr
+        config['label'] = '%s Column Density [log M$_{\\rm sun}$ ster$^{-1}$]' % ptStr
 
         if sP.isPartType(partType,'dm'):    config['ctName'] = 'dmdens_tng'
         if sP.isPartType(partType,'gas'):   config['ctName'] = 'gray' #'gasdens_tng4'
@@ -812,7 +812,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         #config['plawScale'] = 1.0
 
     if 'sb_' in partField:
-        # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec]
+        # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec^2]
         pxSizesCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
         
         arcsec2 = True

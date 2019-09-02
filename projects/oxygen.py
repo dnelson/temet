@@ -349,7 +349,8 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     If secondTopAxis, add the other (halo/stellar) mass as a secondary top axis, average relation. """
 
     binSize = 0.2 # log mass
-    renames = {'AllGas':'Total Gas / 100','AllGas_Metal':'Total Metals','AllGas_Oxygen':'Total Oxygen'}
+    renames = {'AllGas':'Total Gas / 100','AllGas_Metal':'Total Metals','AllGas_Oxygen':'Total Oxygen',
+               'AllGas_Mg':'Total Mg','HIGK_popping':'Neutral HI'}
     ionColors = {'AllGas':'#444444','AllGas_Metal':'#777777','AllGas_Oxygen':'#cccccc'}
 
     runToyModel = False # testing Lars' idea
@@ -367,20 +368,20 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     mStarField = 'mstar_30pkpc_log'
 
     if vsHaloMass:
-        ax.set_xlim([11.0, 15.0])
+        ax.set_xlim([9.8, 13.7])
         ax.set_xlabel(mHaloLabel)
         massField = mHaloField
     else:
-        ax.set_xlim([9.0, 12.0])
+        ax.set_xlim([7.8, 11.7])
         ax.set_xlabel(mStarLabel)
         massField = mStarField
 
     if toAvgColDens:
-        ax.set_ylim([12.0, 16.0])
+        ax.set_ylim([13.0, 18.0])
         #ax.set_ylabel('Average Column Density $<N_{\\rm oxygen}>$ [ log cm$^{-2}$ ]')
         ax.set_ylabel('Avg Column Density <N> [ log cm$^{-2}$ ]')
     else:
-        ax.set_ylim([5.0, 9.0])
+        ax.set_ylim([5.0, 11.0])
         if 'AllGas' in ions: ax.set_ylim([4.0, 12.0])
         ax.set_ylabel('Total Bound Gas Mass [ log M$_{\\rm sun}$ ]')
 
@@ -489,13 +490,13 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
             # unit conversions
             if toAvgColDens:
                 # per subhalo normalization, from [code mass] -> [ions/cm^2]
-                assert ion[0] == 'O' # oxygen
+                ionName = ionData.formatWithSpace(ion, name=True)
 
                 # [code mass] -> [code mass / code length^2]
                 yy = ac[fieldName] / (np.pi * rad * rad)
                 # [code mass/code length^2] -> [H atoms/cm^2]
                 yy = sP.units.codeColDensToPhys(yy, cgs=True, numDens=True) 
-                yy /= ionData.atomicMass(ion[0]) # [H atoms/cm^2] to [ions/cm^2]
+                yy /= ionData.atomicMass(ionName) # [H atoms/cm^2] to [ions/cm^2]
                 yy = logZeroNaN(yy)
             else:
                 yy = sP.units.codeMassToLogMsun(ac[fieldName])
@@ -511,7 +512,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 sm = savgol_filter(sm,sKn,sKo)
                 pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
-            if ion in ['OVI','OVII','OVIII']:
+            if ion in ['OVI','OVII','OVIII','AllGas_Mg','MgII','HIGK_popping']:
                 txt_sP.append([xm,ym,pm[0,:],pm[-1,:]])
 
             # determine color
@@ -549,29 +550,31 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     # print
     massAxis = 'mhalo' if vsHaloMass else 'mstar'
     for i, txt_sP in enumerate(txt): # loop over runs
-        filename = 'fig8_%s_%s_%s.txt' % (sPs[i].simName,'ionmasses' if not toAvgColDens else 'avgcoldens',massAxis)
+        filename = 'figN_%s_%s_%s.txt' % (sPs[i].simName,'ionmasses' if not toAvgColDens else 'avgcoldens',massAxis)
         
-        out = '# Nelson+ (2018) http://arxiv.org/abs/1712.00016\n'
+        out = '# Nelson+ (2020) http://arxiv.org/abs/xxxx.xxxxx\n'
         if toAvgColDens:
-            out += '# Figure 8 Right Panel (Average <N_ion> = M_ion / (pi*rvir^2)) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
-            out += "# columns: %s, <N_OVI>, p10, p90, <N_OVII>, p10, p90, <N_OVIII>, p10, p90\n" % massAxis
+            out += '# Figure N Right Panel (Average <N_ion> = M_ion / (pi*rvir^2)) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
+            out += '# columns: %s' % massAxis
+            for ion in ions: out += ' <N_%s>, p10, p90,' % ion
         else:
-            out += '# Figure 8 Left Panel (Total bound OVI, OVII, OVIII masses) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
-            out += "# columns: %s, M_OVI, p10, p90, M_OVII, p10, p90, M_OVIII, p10, p90\n" % massAxis
-        out += "# all masses in [log msun], column densities in [log cm^-2], p10 and p90 denote 10th and 90th percentiles of previous field\n"
+            out += '# Figure N Left Panel (Total bound %s masses) (%s z=%.1f)\n' % (', '.join(ions),sPs[i].simName, sPs[i].redshift)
+            out += '# columns: %s' % massAxis
+            for ion in ions: out += 'M_%s, p10, p90, ' % ion
+        out += "\n# all masses in [log msun], column densities in [log cm^-2], p10 and p90 denote 10th and 90th percentiles of previous field\n"
 
-        o6_x, o6_y, o6_p10, o6_p90 = txt_sP[0]
-        o7_x, o7_y, o7_p10, o7_p90 = txt_sP[1]
-        o8_x, o8_y, o8_p10, o8_p90 = txt_sP[2]
+        ion1_x, ion1_y, ion1_p10, ion1_p90 = txt_sP[0]
+        ion2_x, ion2_y, ion2_p10, ion2_p90 = txt_sP[1]
+        ion3_x, ion3_y, ion3_p10, ion3_p90 = txt_sP[2]
 
-        assert np.array_equal(o6_x,o7_x) and np.array_equal(o6_x,o8_x) # same mass bins for all ions
-        nMassBins = o6_x.size
+        assert np.array_equal(ion1_x,ion2_x) and np.array_equal(ion1_x,ion3_x) # same mass bins for all ions
+        nMassBins = ion1_x.size
 
         for k in range(nMassBins):
-            out += '%5.2f' % o6_x[k]
-            out += ', %5.2f, %5.2f, %5.2f' % (o6_y[k], o6_p10[k], o6_p90[k])
-            out += ', %5.2f, %5.2f, %5.2f' % (o7_y[k], o7_p10[k], o7_p90[k])
-            out += ', %5.2f, %5.2f, %5.2f\n' % (o8_y[k], o8_p10[k], o8_p90[k])
+            out += '%5.2f' % ion1_x[k]
+            out += ', %5.2f, %5.2f, %5.2f' % (ion1_y[k], ion1_p10[k], ion1_p90[k])
+            out += ', %5.2f, %5.2f, %5.2f\n' % (ion2_y[k], ion2_p10[k], ion2_p90[k])
+            out += ', %5.2f, %5.2f, %5.2f\n' % (ion3_y[k], ion3_p10[k], ion3_p90[k])
 
         with open(filename, 'w') as f:
             f.write(out)
@@ -713,7 +716,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         assert '2D' in projDim
         ax.set_ylim([-6.5, 3]) # [-9.5,2]
         ax.set_xlim([1.0,2.8])
-        ax.set_ylabel('%s Emission [phot s$^{-1}$ cm$^{-2}$ ster$^{-2}$]' % speciesStr)
+        ax.set_ylabel('%s Emission [phot s$^{-1}$ cm$^{-2}$ ster$^{-1}$]' % speciesStr)
     else:
         if '3D' in projDim:
             # 3D mass/number density
