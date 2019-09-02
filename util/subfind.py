@@ -210,9 +210,9 @@ P_dtype = np.dtype([
     ('NumberOfTracers', np.int32),
     ('OriginTask', np.int32),
     # general
-    ('pad_0', np.int32, 1), # STRUCT PADDING
+    ('pad_0', np.int32), # STRUCT PADDING
     ('ID', MyIDType),
-    ('pad_1', np.int32, 1), # STRUCT PADDING
+    ('pad_1', np.int32), # STRUCT PADDING
     ('TI_Current', integertime),
     ('OldAcc', np.float32),
     ('GravCost', np.float32, GRAVCOSTLEVELS),
@@ -3070,8 +3070,66 @@ def rewrite_snapshot(sP, GrNr=0):
             # wrote full length?
             assert offset == fof0['GroupLenType'][pt]
 
-    # TODO: still need to calculate SubfindDensity, SubfindDMDensity, SubfindHsml, SubfindVelDisp
-    # (do after rearrangement) (full snaps only)
+    print('Done.')
+
+def rewrite_particle_level_cat(sP, filename, partType):
+    """ Take an input HDF5 filename (with at most one dataset), whose size is assumed to correspond to the 
+    size of sP.NumPart[partType] at that snapshot, and shuffle the fof0 segment into the new order. """
+    from tracer.tracerMC import match3
+
+    GrNr = 0
+    final_save_file = sP.derivPath + 'fof0/fof0_save_%s_%d.hdf5' % (sP.simName,sP.snap)
+
+    ptNum = sP.ptNum(partType)
+    fof0_size = sP.groupCatSingle(haloID=GrNr)['GroupLenType'][ptNum]
+
+    # sanity check: such a filename probably has sP.snap encoded in it, otherwise remove this check
+    assert '_%d' % sP.snap in filename
+
+    # load particle sort indices to shuffle FoF0 member particles into proper Subfind order
+    print('Loading sort indices...')
+    with h5py.File(final_save_file,'r') as f:
+        if 'sort_inds_%d' % ptNum in f:
+            indsDone = True
+            sort_inds = f['sort_inds_%d' % ptNum][()]
+        else:
+            indsDone = False
+            particle_sort = f['sort_inds_%d_ids' % ptNum][()]
+
+    if not indsDone:
+        assert particle_sort.size == fof0_size
+
+        # derive shuffle order
+        print('Loading snap IDs...')
+        snap_ids = sP.snapshotSubset(partType, 'id', haloID=GrNr)
+
+        print('Finding shuffle...')
+        sort_inds, _ = match3(snap_ids, particle_sort)
+        assert sort_inds.size == snap_ids.size
+
+        # save for future uses
+        with h5py.File(final_save_file,'r+') as f:
+            f['sort_inds_%d' % ptNum] = sort_inds
+        print('Saved sort inds for future uses.')
+
+    # load catalog file
+    print('Loading and rewriting datafile...')
+    with h5py.File(filename,'r+') as f:
+        dsetNames = list(f.keys())
+        assert len(dsetNames) == 1 # otherwise which?
+        dset = dsetNames[0]
+
+        assert f[dset].size == sP.snapshotHeader()['NumPart'][ptNum]
+        assert f[dset].ndim == 1 # otherwise generalize below
+
+        # load
+        fof0_data = f[dset][0:fof0_size]
+
+        # re-shuffle
+        fof0_data = fof0_data[sort_inds]
+
+        # write
+        f[dset][0:fof0_size] = fof0_data
 
     print('Done.')
 

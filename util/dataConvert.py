@@ -2500,7 +2500,7 @@ def createVirtualSimHDF5():
 
     snaps = sP.validSnapList()
 
-    snapsToDo = snaps #[-2:] # testing only
+    snapsToDo = snaps
 
     # two big iterations: first for snapshots, then for group catalogs
     for mode in ['snaps','groups']:
@@ -2977,7 +2977,7 @@ def supplementVirtualSimHDF5():
     from util.simParams import simParams
     import cosmo
 
-    sP = simParams(res=1820,run='illustris')
+    sP = simParams(res=1820,run='tng_dark')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -2986,6 +2986,18 @@ def supplementVirtualSimHDF5():
 
     # start custom
     if 1:
+        # add missing Offsets
+        for snap in snaps:
+            # load snapshot and group catalog headers
+            print('snap [%3d]' % snap)
+
+            filepath = 'postprocessing/offsets/offsets_%03d.hdf5' % snap
+            baseName = 'Offsets/%d' % snap
+            gNames = ['Group','Subhalo']
+
+            _addPostprocessingCat(fSim,filepath,baseName,gNames)
+
+    if 0:
         # add new LHaloTree catalogs and delete old
         for snap in snaps:
             print('snap [%3d]' % snap)

@@ -14,7 +14,7 @@ from util.loadExtern import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from cosmo.util import redshiftToSnapNum
 from vis.common import getHsmlForPartType
 from util.sphMap import sphMap
-from util.helper import logZeroNaN, closest, iterable
+from util.helper import logZeroNaN, closest, iterable, reportMemory
 from cosmo.cloudy import cloudyIon
 
 def obsMatchedSample(sP, datasetName='COS-Halos', numRealizations=100):
@@ -448,11 +448,11 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
         # process: global load all particle data needed
         massField = '%s mass' % (ionName) if " " in ionName else ionName
 
-        print(' loading mass [%s]...' % massField)
-        mass = sP.snapshotSubsetP(partType, massField).astype('float32')
-        print(' loading pos...')
+        print(' loading mass [%s]...' % massField, reportMemory())
+        mass = sP.snapshotSubsetP(partType, massField, float32=True) #.astype('float32')
+        print(' loading pos...', reportMemory())
         pos = sP.snapshotSubsetP(partType, 'pos')
-        print(' loading hsml...')
+        print(' loading hsml...', reportMemory())
         hsml = getHsmlForPartType(sP, partType)
 
         assert mass.min() >= 0.0

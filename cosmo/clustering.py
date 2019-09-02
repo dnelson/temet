@@ -254,9 +254,19 @@ def twoPointAutoCorrelationParticle(sP, partType, partField, pSplit=None):
     rad = 10.0**(np.log10(radialBins) + rrBinSizeLog/2)[:-1]
 
     # load
+    print('start pos', flush=True)
     pos = sP.snapshotSubsetP(partType, 'pos')
+    print('pos done', flush=True)
+    # hack: https://bugs.python.org/issue32759 (fixed only in python 3.8x)
+    import multiprocessing as mp
+    import gc
+    mp.heap.BufferWrapper._heap = mp.heap.Heap()
+    gc.collect()
+    # end hack
+    print('start wt', flush=True)
     weights = sP.snapshotSubsetP(partType, partField)
-
+    print('wt done', flush=True)
+    
     # process weights
     w = np.where(weights < 0.0)
     weights[w] = 0.0 # non-negative

@@ -3289,6 +3289,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_MgII_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',proj2D=[2,2000]),
 
+   'Subhalo_RadProfile3D_GlobalFoF_HIGK_popping_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='MHIGK_popping',op='sum',scope='global_fof'),
+   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_HIGK_popping_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='MHIGK_popping',op='sum',scope='global_fof',proj2D=[2,2000]),
+
    'Subhalo_RadProfile3D_Global_Stars_Mass' : \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='global'),
    'Subhalo_RadProfile2Dz_2Mpc_Global_Stars_Mass' : \
