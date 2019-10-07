@@ -1047,10 +1047,10 @@ def _ionLoadHelper(sP, partType, field, kwargs):
         lineName, prop = field.rsplit(" ",1)
         lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
     else:
-        element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac"
+        element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac" or "C IV numdens"
 
     assert sP.isPartType(partType, 'gas')
-    assert prop in ['mass','frac','flux']
+    assert prop in ['mass','frac','flux','numdens']
 
     # indRange subset
     indRangeOrig = kwargs['indRange']
@@ -1094,7 +1094,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 dset = f.create_dataset('field', (indRangeAll[1],), dtype='float32')
 
             from cosmo.cloudy import cloudyIon, cloudyEmission
-            if prop in ['mass','frac']:
+            if prop in ['mass','frac','numdens']:
                 ion = cloudyIon(sP, el=element, redshiftInterp=True)
             else:
                 emis = cloudyEmission(sP, line=lineName, redshiftInterp=True)
@@ -1112,11 +1112,14 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                 if indRangeLocal[0] == indRangeLocal[1]:
                     continue # we are done
 
-                if prop in ['mass','frac']:
+                if prop in ['mass','frac','numdens']:
                     # either ionization fractions, or total mass in the ion
                     values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
                     if prop == 'mass':
                         values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
+                    if prop == 'numdens':
+                        values *= sP.snapshotSubset(partType, 'numdens', **kwargs)
+                        values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
                 else:
                     # emission flux
                     lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
@@ -1144,17 +1147,20 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     if not useCache or not isfile(cacheFile):
         # don't use cache, or tried to use and it doesn't exist yet, so run computation now
         from cosmo.cloudy import cloudyIon, cloudyEmission
-        if prop in ['mass','frac']:
+        if prop in ['mass','frac','numdens']:
             ion = cloudyIon(sP, el=element, redshiftInterp=True)
         else:
             emis = cloudyEmission(sP, line=lineName, redshiftInterp=True)
             wavelength = emis.lineWavelength(lineName)
 
-        if prop in ['mass','frac']:
+        if prop in ['mass','frac','numdens']:
             # either ionization fractions, or total mass in the ion
             values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
             if prop == 'mass':
                 values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
+            if prop == 'numdens':
+                values *= sP.snapshotSubset(partType, 'numdens', **kwargs)
+                values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
         else:
             # emission flux
             lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeOrig)
@@ -1525,6 +1531,49 @@ def snapshotSubset(sP, partType, fields,
                 ismCut = False
 
             r[field] = sP.units.gasSfrMetalMassToS850Flux(sfr, metalmass, temp, dens, ismCut=ismCut)
+
+        # test: assign a N_HI (column density) to every particle/cell based on a xy-grid projection
+        if field.lower() in ['hi_column','n_hi']:
+            # savefile
+            assert inds is None and indRange is None # otherwise generalize
+            assert haloID is None and subhaloID is None # otherwise generalize
+            savepath = sP.derivPath + 'cache/hi_column_%s_%03d.hdf5' % (partType,sP.snap)
+
+            if isfile(savepath):
+                with h5py.File(savepath,'r') as f:
+                    r[field] = f['hi_column'][()]
+                print('Loaded: [%s]' % savepath)
+            else:
+                # config
+                fieldname = 'Box_Grid_nHI_popping_GK_depth10'
+                boxWidth = 10000.0 # only those in slice, columns don't apply to others
+                z_bounds = [sP.boxSize*0.5 - boxWidth/2, sP.boxSize*0.5 + boxWidth/2]
+
+                # load z coords
+                pos_z = snapshotSubset(sP, partType, 'pos_z', **kwargs)
+
+                r[field] = np.zeros( pos_z.shape[0], dtype='float32' ) # allocate
+                r[field].fill(np.nan)
+
+                w = np.where( (pos_z > z_bounds[0]) & (pos_z < z_bounds[1]) )
+                pos_z = None
+
+                # load x,y coords and find grid indices
+                pos_x = snapshotSubset(sP, partType, 'pos_x', **kwargs)[w]
+                pos_y = snapshotSubset(sP, partType, 'pos_y', **kwargs)[w]
+
+                grid = sP.auxCat(fieldname)[fieldname]
+                pxSize = sP.boxSize / grid.shape[0]
+
+                x_ind = np.floor(pos_x / pxSize).astype('int64')
+                y_ind = np.floor(pos_y / pxSize).astype('int64')
+
+                r[field][w] = grid[y_ind,x_ind]
+
+                # save
+                with h5py.File(savepath,'w') as f:
+                    f['hi_column'] = r[field]
+                print('Saved: [%s]' % savepath)
 
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:

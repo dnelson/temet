@@ -314,8 +314,8 @@ class simParams:
 
             dmStr = '_DM' if '_dm' in run else ''
 
-            # temporary: new L35n2160TNG_fof0test/ used by -default-!
-            fof0str = '_fof0test' if (res == 2160 and '_old' not in run) else ''
+            # temporary: new L35n2160TNG_fixed/ used by -default-!
+            fof0str = '_old' if (res == 2160 and '_old' in run) else ''
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
             self.savPrefix  = 'IP'
