@@ -223,7 +223,7 @@ def celineMuseProposalMetallicityVsTheta():
 
 def celineWriteH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
-    sP = simParams(res=2500, run='tng', redshift=0.2) # z=0.2, z=0.8
+    sP = simParams(res=1820, run='tng', redshift=0.2) # z=0.2, z=0.8
 
     vars_sfr = ['nH2_popping_GK_depth10','nH2_popping_GK_depth10_allSFRgt0','nH2_popping_GK_depth10_onlySFRgt0']
     vars_model = ['nH2_popping_BR_depth10','nH2_popping_KMT_depth10']
@@ -311,6 +311,98 @@ def celineHIH2RadialProfiles():
     for field in fields:
         plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, op=op, 
                                     weighting=weighting, proj2D=proj2D)
+
+def celineHIDensityVsColumn():
+    """ Re-create Rahmati+ (2013) Fig 2. """
+    from util.simParams import simParams
+    sP = simParams(run='tng100-1', redshift=3.0)
+
+    N_HI = sP.snapshotSubset('gas', 'hi_column')
+    M_HI = sP.snapshotSubset('gas', 'MHIGK_popping')
+    M_H2 = sP.snapshotSubset('gas', 'MH2GK_popping')
+    M_H  = sP.snapshotSubset('gas', 'MH_popping')
+
+    w = np.where( np.isfinite(N_HI) ) # in grid slice
+
+    N_HI = N_HI[w]
+    M_HI = M_HI[w]
+    M_H2 = M_H2[w]
+    M_H  = M_H[w]
+
+    # compute num dens
+    vol = sP.snapshotSubsetP('gas', 'volume')[w]
+
+    numdens_HI = sP.units.codeDensToPhys(M_HI / vol, cgs=True, numDens=True)
+    numdens_H2 = sP.units.codeDensToPhys(M_H2 / vol, cgs=True, numDens=True)
+    numdens_H  = sP.units.codeDensToPhys(M_H  / vol, cgs=True, numDens=True)
+
+    # zero densities where n_HI == 0 (although done in running_median if we are weighting by n_HI)
+    w = np.where(numdens_HI == 0)
+    numdens_HI[w] = np.nan
+    numdens_H2[w] = np.nan
+    numdens_H[w]  = np.nan
+
+    # restrict to interesting column range
+    w = np.where(N_HI > 15.0)
+    N_HI = N_HI[w]
+    numdens_HI = numdens_HI[w]
+    numdens_H2 = numdens_H2[w]
+    numdens_H  = numdens_H[w]
+
+    # median (or mean weighted by n_HI)
+    nBins = 90
+    percs = [16, 50, 84]
+
+    N_HI_vals,  _, _, nhi_percs = running_median(N_HI, numdens_HI, nBins=nBins, percs=percs, mean=True, weights=numdens_HI)
+    N_HI_vals2, _, _, nh2_percs = running_median(N_HI, numdens_H2, nBins=nBins, percs=percs, mean=True, weights=numdens_HI)
+    N_HI_vals3, _, _, nh_percs  = running_median(N_HI, numdens_H, nBins=nBins, percs=percs, mean=True, weights=numdens_HI)
+
+    assert np.array_equal(N_HI_vals, N_HI_vals2) and np.array_equal(N_HI_vals, N_HI_vals3)
+
+    nhi_percs = logZeroNaN(nhi_percs)
+    nh2_percs = logZeroNaN(nh2_percs)
+    nh_percs  = logZeroNaN(nh_percs)
+
+    # plot
+    figsize = np.array([14,10]) * 0.8
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('N$_{\\rm HI}$ [log cm$^{-2}$]')
+    ax.set_ylabel('n$_{\\rm H}$ or n$_{\\rm HI}$ or n$_{\\rm H2}$ [log cm$^{-3}$]')
+    ax.set_xlim([15, 23])
+    ax.set_ylim([-6.0, 2.0])
+
+    l, = ax.plot(N_HI_vals, nh_percs[1,:], '-', lw=2.0, label='n$_{\\rm H}$')
+    ax.fill_between(N_HI_vals, nh_percs[0,:], nh_percs[-1,:], alpha=0.5, color=l.get_color())
+
+    l, = ax.plot(N_HI_vals, nhi_percs[1,:], '-', lw=2.0, label='n$_{\\rm HI}$')
+    ax.fill_between(N_HI_vals, nhi_percs[0,:], nhi_percs[-1,:], alpha=0.5, color=l.get_color())
+
+    ax.plot(N_HI_vals, nh2_percs[1,:], '-', lw=2.0, label='n$_{\\rm H2}$')
+    ax.fill_between(N_HI_vals, nh2_percs[0,:], nh2_percs[-1,:], alpha=0.5, color=l.get_color())
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('N_HI_vs_n_H_HI_H2_%s.pdf' % sP.simName)
+    plt.close(fig)
+
+    # write text file
+    filename = 'N_HI_vs_n_H_HI_H2_%s_z=%.1f.txt' % (sP.simName,sP.redshift)
+    out = '# %s z=%.1f\n (all values in log10)' % (sP.simName,sP.redshift)
+    out += '# N_HI [cm^-2], '
+    out += 'n_H [cm^-3], n_H_p16 [cm^-3] n_H_p84 [cm^-3], '
+    out += 'n_HI [cm^-3], n_HI_p16 [cm^-3] n_HI_p84 [cm^-3], '
+    out += 'n_H2 [cm^-3], n_H2_p16 [cm^-3] n_H2_p84 [cm^-3]\n'
+
+    for i in range(N_HI_vals.size):
+        out += '%6.3f ' % N_HI_vals[i]
+        out += '%7.3f %7.3f %7.3f '  % (nh_percs[1,i], nh_percs[0,i], nh_percs[2,i])
+        out += '%7.3f %7.3f %7.3f '  % (nhi_percs[1,i], nhi_percs[0,i], nhi_percs[2,i])
+        out += '%7.3f %7.3f %7.3f\n' % (nh2_percs[1,i], nh2_percs[0,i], nh2_percs[2,i])
+    with open(filename, 'w') as f:
+        f.write(out)
+
 
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """
