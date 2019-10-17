@@ -143,8 +143,13 @@ def tail(fileName, nLines):
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10, mean=False):
+def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10, mean=False, weights=None):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
+    assert X.shape == Y.shape
+    if weights is not None:
+        assert mean
+        assert weights.size == Y.size
+
     minVal = np.nanmin(X)
     if skipZeros:
         minVal = np.nanmin( X[X != 0.0] )
@@ -179,7 +184,11 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
 
             binLeft = binMax
             if mean:
-                running_median.append( np.nanmean(Y[w]) )
+                if weights is None:
+                    running_median.append( np.nanmean(Y[w]) )
+                else:
+                    loc_value = np.nansum(Y[w]*weights[w]) / np.nansum(weights[w])
+                    running_median.append( loc_value )
             else:
                 running_median.append( np.nanmedian(Y[w]) )
             running_std.append( np.nanstd(Y[w]) )
@@ -719,6 +728,16 @@ def weighted_std_binned(x, vals, weights, bins):
         std[i] = np.sqrt(variance)
         
     return std
+
+@jit(nopython=True, nogil=True, cache=True)
+def bincount(x, dtype):
+    """ Same behavior as np.bincount() except can specify dtype different than x.dtype to save memory. """
+    c = np.zeros(np.max(x)+1, dtype=dtype)
+
+    for i in range(x.size):
+        c[x[i]] += 1
+
+    return c
 
 # --- vis ---
 

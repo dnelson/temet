@@ -12,7 +12,7 @@ import time
 from os.path import isfile, isdir
 from os import mkdir
 
-from util.helper import iterable, nUnique
+from util.helper import iterable, nUnique, bincount, reportMemory
 from cosmo.mergertree import mpbSmoothedProperties, loadTreeFieldnames
 from cosmo.util import inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
 
@@ -349,7 +349,7 @@ def concatTracersByType(trIDsByParType, parPartTypes):
     """ Collapse trIDsByParType dictionary into 1D tracer ID/index list. Ordering preserved according 
     to the order of parPartTypes. """
     totNumTracers = np.array([trIDsByParType[k].size for k in trIDsByParType.keys()]).sum()
-    trIDsAllTypes = np.zeros( totNumTracers, dtype=trIDsByParType.values()[0].dtype )
+    trIDsAllTypes = np.zeros( totNumTracers, dtype=list(trIDsByParType.values())[0].dtype )
 
     offset = 0
 
@@ -1055,10 +1055,10 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
     assert halos is True or subhalos is True # pick one
     if subhalos is True: assert haloTracerOffsets is not None # required for subhalo-based offsets
 
-    # load and sort the parent IDs of all tracers in this snapshot
-    ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
-
     if histoMethod:
+        # load and count the parent IDs of all tracers in this snapshot
+        ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
+
         # if the IDs of parents are dense enough, use a histogram counting approach
         ParentID_min = ParentID.min()
         ParentID_max = ParentID.max()
@@ -1066,12 +1066,21 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
 
         # offset ParentIDs by their minimum, cast into signed type, then histogram
         ParentID -= ParentID_min
+
         assert ParentID.max() < np.iinfo('int64').max
-        ParentID = ParentID.astype('int64', casting='unsafe')
-        ParentHisto = np.bincount(ParentID)
+        #ParentID = ParentID.astype('int64', casting='unsafe')
+        ParentID.dtype = np.int64 # change dtype (unsafe cast)
+
+        ParentHisto = bincount(ParentID, dtype=np.int32)
+
         assert ParentHisto.max() < np.iinfo('int32').max
-        ParentHisto = ParentHisto.astype('int32', casting='unsafe')
+        #ParentHisto = ParentHisto.astype('int32', casting='unsafe')
+
+        ParentID = None
     else:
+        # load and sort the parent IDs of all tracers in this snapshot
+        ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
+
         # otherwise do a pre-sort and we will later do many bisection searches
         ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
         ParentID = ParentID[ParentIDSortInds]
@@ -1339,7 +1348,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         mpb = globalTracerMPBMap(sP, halos=halos, subhalos=subhalos, trIDs=trIDs)
 
     # follow tracer and tracer parent properties (one at a time and save) from sP.snap back to snap=0
-    print('Computing: [%s]' % saveFilename.split(savePath)[1])
+    print('Computing: [%s]' % saveFilename.split(savePath)[1], flush=True)
 
     if field == 'meta':
         # save the metadata (ordered tracer/parent IDs, lengths/offsets of tracers by group/subhalo)
@@ -1348,26 +1357,37 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         # save the tracer IDs in the order we are saving the tracks
         trVals['TracerIDs'] = trIDs
 
-        # save the parent IDs of these tracers in the same order
-        TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
-        trInds,_ = match3(TracerID,trIDs)
-        assert trInds.size == trIDs.size
-
-        trVals['ParentIDs'] = sP.snapshotSubsetP('tracer', 'ParentID', inds=trInds)
-
         # compute lengths/offsets by halo
+        print('one ', reportMemory(), flush=True)
         trCounts, trOffsets = globalTracerLength(sP, halos=True)
-
+        print('two', reportMemory(),flush=True)
         for key in trCounts:
             trVals['Halo/TracerLength/'+key] = trCounts[key]
             trVals['Halo/TracerOffset/'+key] = trOffsets[key]
 
         # compute lengths/offsets by halo
+        print('three', reportMemory(), flush=True)
         trCounts, trOffsets = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets)
+
+        print('four', reportMemory(), flush=True)
 
         for key in trCounts:
             trVals['Subhalo/TracerLength/'+key] = trCounts[key]
             trVals['Subhalo/TracerOffset/'+key] = trOffsets[key]
+
+        # save the parent IDs of these tracers in the same order
+        TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
+
+        print('five', reportMemory(), flush=True)
+
+        trInds,_ = match3(TracerID,trIDs)
+        assert trInds.size == trIDs.size
+
+        print('six', reportMemory(), flush=True)
+
+        trVals['ParentIDs'] = sP.snapshotSubsetP('tracer', 'ParentID', inds=trInds)
+
+        print('seven', reportMemory(), flush=True)
 
         # save
         with h5py.File(saveFilename,'w') as f:
