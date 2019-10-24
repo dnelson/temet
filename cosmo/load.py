@@ -71,6 +71,14 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             #r[field] = None
             return
             
+        # for full saves we want (auxCat size is groupcat size), assuming we computed a subset of objects
+        numSubs = sP.groupCatHeader()['Nsubgroups_Total']
+        writeSparseCalcFullSize = False
+        if numSubs > allCount:
+            print('Note: Increasing save size from [%d] computed, to full groupcat size [%d].' % (allCount,numSubs))
+            allCount = numSubs
+            writeSparseCalcFullSize = True
+
         # all chunks exist, concatenate them now and continue
         catIndFieldName = 'subhaloIDs'
 
@@ -134,8 +142,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                 if 'wavelength' in f: attrs['wavelength'] = f['wavelength'][()]
 
-        assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
-        assert np.count_nonzero(new_r == -1.0) == 0
+        if not writeSparseCalcFullSize:
+            assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
+            assert np.count_nonzero(new_r == -1.0) == 0
+        else:
+            print('WARNING: Skipping checks that we wrote entries for all subhalos, since we are writing a sparse calc to a full size auxCat.')
 
         # auxCat already exists? only allowed if we are processing multiple fields
         if isfile(auxCatPath):
@@ -144,7 +155,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 assert datasetName not in f
 
         # save (or append to) new auxCat
-        with h5py.File(auxCatPath) as f:
+        with h5py.File(auxCatPath,'a') as f:
             f.create_dataset(datasetName, data=new_r)
             if catIndFieldName == 'subhaloIDs' and catIndFieldName not in f:
                 f.create_dataset(catIndFieldName, data=subhaloIDs)
