@@ -52,7 +52,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
     # generally available (groupcat)
-    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2', 'fgas', 
+    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2', 'fgas', 'fdm1', 'fdm2', 'fdm',
                'surfdens1_stars', 'surfdens2_stars', 'surfdens1_dm', 'delta_sfms',
                'sfr1', 'sfr2', 'sfr1_surfdens', 'sfr2_surfdens']
 
@@ -60,7 +60,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
                    'mstar_30pkpc','mstar_30pkpc_log','mhi_30pkpc','mhi_30pkpc_log','mhi2','mhi2_log',
                    'mhalo_200','mhalo_200_log','mhalo_500','mhalo_500_log',
-                   'mhalo_subfind','mhalo_subfind_log','mstar2_mhalo200_ratio']
+                   'mhalo_subfind','mhalo_subfind_log','mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
 
     quants_rad = ['rhalo_200','rhalo_500','velmag']
 
@@ -204,6 +204,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'M$_{\star}(<2r_{\star,1/2})$ / $M_{\\rm halo,200crit}$ [ log ]'
         if clean: label = 'M$_{\star}(<2r_{\star,1/2})$ / $M_{\\rm halo}$ [ log ]'
+
+    if quant in ['mstar30pkpc_mhalo200_ratio']:
+        # stellar mass / halo mass ratio
+        mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_code'])
+
+        acField = 'Subhalo_Mass_30pkpc_Stars'
+        mstar = sP.auxCat(fields=[acField])[acField]
+
+        with np.errstate(invalid='ignore'):
+            vals = mstar / mhalo
+        minMax = [-3.0, -1.0]
+
+        label = 'M$_{\star}$ / $M_{\\rm halo,200crit}$ [ log ]'
+        if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
 
     if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
         # stellar mass (auxcat based calculations)
@@ -666,37 +680,46 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [6.5, 9.0]
         if tight: minMax = [6.5, 10.0]
 
-    if quant in ['fgas1','fgas2','fgas','fgas1_alt','fgas2_alt','fgas_alt']:
+    if quant in ['fgas1','fgas2','fgas','fgas1_alt','fgas2_alt','fgas_alt','fdm1','fdm2','fdm']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
-        if quant in ['fgas','fgas_alt']:   fieldName = 'SubhaloMassType'
-        if quant in ['fgas1','fgas1_alt']: fieldName = 'SubhaloMassInHalfRadType'
-        if quant in ['fgas2','fgas2_alt']: fieldName = 'SubhaloMassInRadType'
+        if quant in ['fgas','fgas_alt','fdm']:   fieldName = 'SubhaloMassType'
+        if quant in ['fgas1','fgas1_alt','fdm1']: fieldName = 'SubhaloMassInHalfRadType'
+        if quant in ['fgas2','fgas2_alt','fdm2']: fieldName = 'SubhaloMassInRadType'
 
         gc = sP.groupCat(fieldsSubhalos=[fieldName])
         mstar = sP.units.codeMassToMsun( gc[:,sP.ptNum('stars')] )
-        mgas = sP.units.codeMassToMsun( gc[:,sP.ptNum('gas')] )
+        mgas  = sP.units.codeMassToMsun( gc[:,sP.ptNum('gas')] )
+        mdm   = sP.units.codeMassToMsun( gc[:,sP.ptNum('dm')] )
+        mtot  = sP.units.codeMassToMsun( np.sum(gc, axis=1) )
 
-        # fix mstar=0 values such that vals_raw is zero, which is then specially colored
+        # fix mstar=0 and mdm=0 values such that vals_raw is zero, which is then specially colored
         w = np.where(mstar == 0.0)[0]
         if len(w):
             mstar[w] = 1.0
             mgas[w] = 0.0
 
+        w = np.where(mdm == 0.0)[0]
+        if len(w):
+            mdm[w] = 0.0
+            mtot[w] = 1.0
+
         # two different definitions of gas fraction
         label_extra = ''
-        if not clean:
-            if quant in ['fgas','fgas_alt']:   label_extra = ' (subhalo)'
-            if quant in ['fgas1','fgas1_alt']: label_extra = ' (<1r$_{\star,1/2}$)'
-            if quant in ['fgas2','fgas2_alt']: label_extra = ' (<2r$_{\star,1/2}$)'
+        if not clean or 'fdm' in quant:
+            if quant in ['fgas','fgas_alt','fdm']:   label_extra = ' (subhalo)'
+            if quant in ['fgas1','fgas1_alt','fdm1']: label_extra = ' (<1r$_{\star,1/2}$)'
+            if quant in ['fgas2','fgas2_alt','fdm2']: label_extra = ' (<2r$_{\star,1/2}$)'
 
-        if '_alt' in quant:
-            vals = mgas / mstar
-
-            label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / M$_{\star}$%s' % label_extra
+        if 'fgas' in quant:
+            if '_alt' in quant:
+                vals = mgas / mstar
+                label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / M$_{\star}$%s' % label_extra
+            else:
+                vals = mgas / (mgas+mstar)
+                label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / (M$_{\\rm gas}$ + M$_{\star}$)%s' % label_extra
         else:
-            vals = mgas / (mgas+mstar)
-            
-            label = 'log f$_{\\rm gas}$ = M$_{\\rm gas}$ / (M$_{\\rm gas}$ + M$_{\star}$)%s' % label_extra
+            vals = mdm / mtot
+            label = 'f$_{\\rm DM}$ = M$_{\\rm DM}$ / M$_{\\rm tot}$%s' % label_extra
 
         minMax = [-3.5,0.0]
         if tight: minMax = [-4.0, 0.0]
@@ -710,6 +733,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax[0] += 1.0
 
         if minMax[0] > -0.4: minMax[0] = -0.4
+
+        if 'fdm' in quant:
+            minMax = [0.0, 1.0]
+            takeLog = False
 
     if quant in ['stellarage']:
         ageType = '4pkpc_rBandLumWt'
@@ -1486,7 +1513,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # multiply 2 x (massfrac) x (stellar mass) and convert to solar masses
         vals = sP.units.codeMassToMsun(2.0 * ac * masses)
 
-        minMax = [8.0, 12.0]
+        minMax = [8.0, 10.5]
         label = 'M$_{\\rm bulge}$ [ log M$_{\\rm sun}$ ]'
         if not clean: label += ' (r < r$_{\star,1/2}$ counter-rotating)'
 

@@ -11,6 +11,7 @@ import copy
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import Normalize, LogNorm, colorConverter
+from matplotlib.cm import ScalarMappable
 from matplotlib.backends.backend_pdf import PdfPages
 from os.path import isfile
 from getpass import getuser
@@ -96,7 +97,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     if nBins is None: 
         nBins = 80
 
-    cmap     = loadColorTable(ctName if ctName is not None else 'viridis')
+    cmap     = loadColorTable(ctName if ctName is not None else 'viridis') # , numColors=13
     colorMed = 'black'
     lwMed    = 2.0
 
@@ -500,7 +501,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         else:
             # note: saveFilename could be an in-memory buffer
             if saveFilename is None:
-                saveFilename = 'histo2d_%s_%s_%s_%s_%s_%s.pdf' % (ylabel,xQuant,cQuant,cStatistic,cenSatSelect,minCount)
+                saveFilename = 'histo2d_%s_%s_%s_%s_%s_%s.pdf' % (yQuant,xQuant,cQuant,cStatistic,cenSatSelect,minCount)
             fig.savefig(saveFilename, format=output_fmt, facecolor=fig.get_facecolor())
         plt.close(fig)
 
@@ -685,7 +686,8 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, 
-                             scatterPoints=False, markSubhaloIDs=None, mark1to1=False,
+                             scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
+                             markSubhaloIDs=None, mark1to1=False, drawMedian=True, 
                              xlim=None, ylim=None, filterFlag=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
@@ -694,11 +696,15 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If sQuant is not None, then in addition to the median, load this third quantity and split the 
     subhalos on it according to sLowerPercs, sUpperPercs (above/below the given percentiles), for 
     each split plotting the sub-sample yQuant again versus xQuant.
-    If scatterPoints, include all raw points with a scatterplot. 
+    If scatterPoints, include all raw points with a scatterplot. If maxPointsPerDex, then randomly sub-sample down to 
+    this number (equal number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. If scatterColor, 
+    color each point by a third property.
     If markSubhaloIDs, highlight these subhalos especially on the plot. 
     If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
+    If drawMedian, then include median line and 1-sigma band.
     If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects. """
     assert cenSatSelect in ['all', 'cen', 'sat']
+    if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
 
     nRows = np.floor(np.sqrt(len(yQuants)))
     nCols = np.ceil(len(yQuants) / nRows)
@@ -706,7 +712,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     # hard-coded config
     lw = 2.5
     ptPlotThresh = 2000
-    markersize = 4.0
     nBins = 60
     legendLoc = 'best'
 
@@ -753,6 +758,12 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     continue
                 if sLog: sim_svals = logZeroNaN(sim_svals)
 
+            # coloring points by third quantity? load now
+            sim_cvals = np.zeros( sim_xvals.size, dtype='float32' )
+            if scatterColor is not None:
+                sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, scatterColor, clean, tight=True)
+                if cLog: sim_cvals = logZeroNaN(sim_cvals)
+
             # flagging?
             sim_flag = np.ones(sim_xvals.shape).astype('bool')
             if filterFlag and sP.groupCatHasField('Subhalo','SubhaloFlag'):
@@ -767,6 +778,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             sim_yvals = sim_yvals[wSelect]
             sim_xvals = sim_xvals[wSelect]
+            sim_cvals = sim_cvals[wSelect]
             sim_flag  = sim_flag[wSelect]
 
             # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
@@ -775,8 +787,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             # reduce to the good-flagged subset
             wFinite &= (sim_flag)
 
-            sim_yvals  = sim_yvals[wFinite]
-            sim_xvals  = sim_xvals[wFinite]
+            sim_xvals = sim_xvals[wFinite]
+            sim_yvals = sim_yvals[wFinite]
+            sim_cvals = sim_cvals[wFinite]
 
             ax.set_xlim(xMinMax)
             ax.set_ylim(yMinMax)
@@ -793,18 +806,19 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             binSize = (xMinMax[1]-xMinMax[0]) / nBins
             if sP.boxSize < 205000.0: binSize *= 2.0
 
-            xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-            if xm.size > sKn:
-                ym = savgol_filter(ym,sKn,sKo)
-                sm = savgol_filter(sm,sKn,sKo)
-                pm = savgol_filter(pm,sKn,sKo,axis=1)
+            if drawMedian:
+                xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
+                if xm.size > sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-            label = sP.simName + ' z=%.1f' % sP.redshift
-            ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
+                label = sP.simName + ' z=%.1f' % sP.redshift
+                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
 
-            # percentile:
-            if sim_xvals.size >= ptPlotThresh:
-                ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+                # percentile:
+                if sim_xvals.size >= ptPlotThresh:
+                    ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
             # slice value?
             if sQuant is not None:
@@ -834,13 +848,57 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     label = '%s > P[%d]' % (slabel,sUpperPerc)
                     ax.plot(xm, yma[j], linestyles[1+j+lsOffset], lw=lw, color=c, label=label)
 
-            # contours (optionally conditional, i.e. independently normalized for each x-axis value
+            # contours (optionally conditional, i.e. independently normalized for each x-axis value)
             # todo
 
             # scatter all points?
             if scatterPoints:
+                alpha = 0.2
+
                 w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) ) # reduce PDF weight
-                ax.scatter(sim_xvals[w], sim_yvals[w], s=markersize, marker='o', color=c, edgecolors='none', alpha=0.2)
+                xx = sim_xvals[w]
+                yy = sim_yvals[w]
+                cc = sim_cvals[w]
+
+                if maxPointsPerDex is not None:
+                    # sub-select in 0.1 dex bins, at most N points per bin
+                    np.random.seed(424242)
+                    binsize = 0.1 # dex
+
+                    inds = np.zeros( xx.size, dtype='int32' )
+                    count = 0
+                    xbin = xMinMax[0]
+
+                    while xbin < xMinMax[1]:
+                        w = np.where( (xx >= xbin) & (xx < xbin+binsize))[0]
+
+                        if len(w) < maxPointsPerDex*binsize:
+                            inds[count:count + len(w)] = w
+                            count += len(w)
+                        else:
+                            inds_loc = np.random.choice(w, int(maxPointsPerDex*binsize), replace=False)
+                            inds[count:count+inds_loc.size] = inds_loc
+                            count += inds_loc.size
+
+                        xbin += binsize
+
+                    xx = xx[inds[0:count]]
+                    yy = yy[inds[0:count]]
+
+                # plot scatter
+                opts = {'color':c}
+
+                if scatterColor is not None:
+                    # override constant color
+                    cc = cc[inds[0:count]]
+                    cmap = loadColorTable('viridis')
+                    #norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
+                    #c = cmap(norm(cc))
+                    alpha = 1.0
+
+                    opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
+
+                sc = ax.scatter(xx, yy, s=markersize, marker='o', edgecolors='none', alpha=alpha, **opts)
 
             # 1-to-1 line?
             if mark1to1:
@@ -922,6 +980,15 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             legend = ax.legend(handles+handlesO, labels+labelsO, loc=legendLoc)
 
+    # colorbar?
+    if scatterColor is not None:
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(sc, cax=cax)
+        cb.ax.set_ylabel(clabel)
+        if len(clabel) > 45:
+            newsize = 23 - (len(clabel)-45)/5
+            cb.ax.set_ylabel(clabel, size=newsize) # default: 24.192 (14 * x-large)
+
     # finish plot and save
     finishFlag = False
     if fig_subplot[0] is not None: # add_subplot(abc)
@@ -942,19 +1009,21 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.2) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'surfdens1_dm' #'ssfr'
-    xQuant = 'size_stars' #'mstar_30pkpc_log'
+    yQuant = 'mhalo_200_log' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
+    xQuant = 'mstar_30pkpc_log' # #'mstar_30pkpc_log'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = [None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
-    clim = None #[10.0,11.0]
+    quants = ['color_C_ur'] #[None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
+    clim = [1.2,2.5] #None #[10.0,11.0]
     medianLine = True
     minCount = 0
+    nBins = 80 #40
 
-    xlim = None #[0.0, 1.2]
+    xlim = [10.0,11.0]
+    ylim = [11.0, 13.0] # None
     qRestrictions = None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
 
     for sP in sPs:
@@ -963,8 +1032,8 @@ def plots():
             pdf = PdfPages('galaxy_2dhistos_%s_%d_%s_%s_%s_min=%d.pdf' % (sP.simName,sP.snap,yQuant,xQuant,css,minCount))
 
             for cQuant in quants:
-                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, clim=clim, minCount=minCount, 
-                             qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, cQuant=cQuant)
+                quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
+                             nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, cQuant=cQuant)
 
             pdf.close()
 
@@ -1061,17 +1130,21 @@ def plots3():
 def plots4():
     """ Driver (single median trend). """
     sPs = []
-    sPs.append( simParams(res=2160, run='tng', redshift=2.0) )
+    #sPs.append( simParams(res=2160, run='tng', redshift=2.0) )
     sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'v200'
+    yQuant = 'fdm1'
+    scatterColor = 'size_stars' #'M_bulge_counter_rot' # 'size_stars'
     cenSatSelect = 'cen'
-    filterFlag = True
+    filterFlag = False #True
 
-    xlim = [7.5, 11.5] #[10.2,11.6]
+    xlim = [9.0, 11.5] #[10.2,11.6]
     ylim = None #[4.7,1.5]
+    drawMedian = False
+    markersize = 20.0
+    maxPointsPerDex = 2000
 
     sQuant = None #'color_C_gr'
     sLowerPercs = None #[10,50]
@@ -1083,7 +1156,9 @@ def plots4():
     # one quantity
     quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
-                             xlim=xlim, ylim=ylim, scatterPoints=True, markSubhaloIDs=None, filterFlag=filterFlag)
+                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=True, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
+                             markSubhaloIDs=None, filterFlag=filterFlag)
 
     pdf.close()
 
