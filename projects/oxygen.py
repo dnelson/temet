@@ -707,7 +707,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
         ax.set_xlim([-2.0, 2.0])
         ax.set_xlabel('%s / Virial Radius [ log ]' % radStr)
     else:
-        ax.set_xlim([0.0, 4.0])
+        ax.set_xlim([0.0, 3.0]) # 4.0 for oxygen paper
         ax.set_xlabel('%s [ log pkpc ]' % radStr)
 
     speciesStr = ions[0] if len(ions) == 1 else 'oxygen'
@@ -725,7 +725,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                 ax.set_ylabel('Mass Density $\\rho_{\\rm %s}$ [ log g cm$^{-3}$ ]' % speciesStr)
             else:
                 #ax.set_ylim([-14.0, -6.0])
-                ax.set_ylim([-13.0, -6.0])
+                ax.set_ylim([-13.0, -4.0])
                 ax.set_ylabel('Number Density $n_{\\rm %s}$ [ log cm$^{-3}$ ]' % speciesStr)
         else:
             # 2D mass/column density
@@ -733,7 +733,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                 ax.set_ylim([-12.0,-6.0])
                 ax.set_ylabel('Column Mass Density $\\rho_{\\rm %s}$ [ log g cm$^{-2}$ ]' % speciesStr)
             else:
-                ax.set_ylim([11.0, 16.0])
+                ax.set_ylim([11.0, 18.2]) # [11.0,16.0]
                 ax.set_ylabel('Column Number Density $N_{\\rm %s}$ [ log cm$^{-2}$ ]' % speciesStr)
 
     # init
@@ -811,9 +811,9 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         yy = unitConversionFunc(yy, cgs=True)
                     else:
                         # from e.g. [code mass / code length^3] -> [ions/cm^3]
-                        species = ion.replace('I','').replace('V','').replace('X','') # e.g. 'OVI' -> 'O'
+                        ionName = ionData.formatWithSpace(ion, name=True)
                         yy = unitConversionFunc(yy, cgs=True, numDens=True) 
-                        yy /= ionData.atomicMass(species) # [H atoms/cm^3] to [ions/cm^3]
+                        yy /= ionData.atomicMass(ionName) # [H atoms/cm^3] to [ions/cm^3]
 
                 # loop over mass bins
                 for k, massBin in enumerate(massBins):
@@ -877,16 +877,16 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                             yp = savgol_filter(yp,sKn,sKo,axis=1) # P[10,50,90]
 
                         # determine color
-                        #if i == 0 and radType == 0:
-                        if k == 0: # different color per something other than massbin (i.e. sP)
+                        if i == 0 and radType == 0:
+                        #if k == 0: # different color per something other than massbin (i.e. sP)
                             c = next(ax._get_lines.prop_cycler)['color']
                             colors.append(c)
                         else:
-                            c = colors[i] # sP
-                            #c = colors[k] # massbin
+                            #c = colors[i] # sP
+                            c = colors[k] # massbin
 
                         linestyle = linestyles[radType] # 1-halo, 2-halo
-                        linestyle = linestyles[k] # massbin
+                        #linestyle = linestyles[k] # massbin
 
                         # plot median line
                         label = '%.1f < $M_{\\rm halo}$ < %.1f' \
@@ -928,14 +928,14 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                                 yrvir[1] -= 0.1 * (len(massBins)-k)
 
                         if i == 0:
-                            ax.plot(xrvir, yrvir, lw=lw*1.5, color='black', alpha=0.1)
-                            ax.text(xrvir[0]-0.02, yrvir[1], textStr, color='black', va='bottom', ha='right', 
+                            ax.plot(xrvir, yrvir, lw=lw*1.5, color=c, alpha=0.1)
+                            ax.text(xrvir[0]-0.02, yrvir[1], textStr, color=c, va='bottom', ha='right', 
                                     fontsize=20.0, alpha=0.1, rotation=90)
 
                         if k == 0: #i == 0 and radType == 0:
                             # show percentile scatter only for first run
-                            w = np.where(np.isfinite(yp[0,:]) & np.isfinite(yp[-1,:]))[0]
-                            ax.fill_between(rr[w], yp[-1,w], yp[0,w], color=c, interpolate=True, alpha=0.2)
+                            wf = np.where(np.isfinite(yp[0,:]) & np.isfinite(yp[-1,:]))[0]
+                            ax.fill_between(rr[wf], yp[-1,wf], yp[0,wf], color=c, interpolate=True, alpha=0.2)
                             #import pdb; pdb.set_trace()
 
                     txt.append(txt_mb)

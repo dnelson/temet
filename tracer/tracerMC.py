@@ -465,6 +465,20 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         optionally restricted to input particle type(s). """
     trIDsByParType = {}
 
+    # check cache
+    hStr = 'halos' if halos else 'subhalos'
+    saveFilename = sP.derivPath + 'tracer_tracks/globalTracerChildren_%s_%d.hdf5' % (hStr,sP.snap)
+    if os.isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                trIDsByParType[key] = f[key][()]
+        print('Loaded cached [%s]' % saveFilename)
+
+        if concatTypes:
+            return concatTracersByType(trIDsByParType, parPartTypes)
+
+        return trIDsByParType
+
     assert halos == True or subhalos == True # pick one
 
     if ParentID is None:
@@ -537,7 +551,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         # load global IDs of this type
         if nPartTotInHalosThisType == 0:
             continue
-            
+           
         parIDsType = sP.snapshotSubsetP(parPartType, 'id', inds=inds, indRange=indRange)
 
         # no particles of this type in the snapshot
@@ -624,7 +638,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 for key in r:
                     f[key] = r[key]
                 f['done'] = done
-            print('Started new save file: [%s]' % saveFilename.split("/")[-1])
+            print('Started new save file: [%s]' % saveFilename.split("/")[-1], flush=True)
         else:
             with h5py.File(saveFilename,'r') as f:
                 done = f['done'][()]
@@ -637,7 +651,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                         r[key] = f[key][()]
                 return r
             
-            print('Restarting: [%s] [numDone = %d]' % (saveFilename.split("/")[-1],done.sum()))
+            print('Restarting: [%s] [numDone = %d]' % (saveFilename.split("/")[-1],done.sum()), flush=True)
 
     for field in parFields+trFields:
         # hardcode some dtypes and dimensionality for now
@@ -767,8 +781,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
             # load parent cells/particles by type
             for ptName in tracerParsLocal['partTypes']:
-                if debug:
-                    print('  '+field+' '+ptName)
+                #if debug:
+                print('  '+field+' '+ptName, flush=True)
 
                 wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
@@ -1068,13 +1082,11 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         ParentID -= ParentID_min
 
         assert ParentID.max() < np.iinfo('int64').max
-        #ParentID = ParentID.astype('int64', casting='unsafe')
         ParentID.dtype = np.int64 # change dtype (unsafe cast)
 
         ParentHisto = bincount(ParentID, dtype=np.int32)
 
         assert ParentHisto.max() < np.iinfo('int32').max
-        #ParentHisto = ParentHisto.astype('int32', casting='unsafe')
 
         ParentID = None
     else:
@@ -1358,18 +1370,13 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         trVals['TracerIDs'] = trIDs
 
         # compute lengths/offsets by halo
-        print('one ', reportMemory(), flush=True)
         trCounts, trOffsets = globalTracerLength(sP, halos=True)
-        print('two', reportMemory(),flush=True)
         for key in trCounts:
             trVals['Halo/TracerLength/'+key] = trCounts[key]
             trVals['Halo/TracerOffset/'+key] = trOffsets[key]
 
         # compute lengths/offsets by halo
-        print('three', reportMemory(), flush=True)
         trCounts, trOffsets = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets)
-
-        print('four', reportMemory(), flush=True)
 
         for key in trCounts:
             trVals['Subhalo/TracerLength/'+key] = trCounts[key]
@@ -1378,16 +1385,10 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         # save the parent IDs of these tracers in the same order
         TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
 
-        print('five', reportMemory(), flush=True)
-
         trInds,_ = match3(TracerID,trIDs)
         assert trInds.size == trIDs.size
 
-        print('six', reportMemory(), flush=True)
-
         trVals['ParentIDs'] = sP.snapshotSubsetP('tracer', 'ParentID', inds=trInds)
-
-        print('seven', reportMemory(), flush=True)
 
         # save
         with h5py.File(saveFilename,'w') as f:

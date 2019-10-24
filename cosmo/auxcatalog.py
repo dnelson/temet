@@ -360,7 +360,7 @@ def _radialRestriction(sP, nSubsTot, rad):
 
     return radRestrictIn2D, radSqMin, radSqMax, slit_code
 
-def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
+def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect=None):
     """ For a given pSplit = [thisTaskNum,totNumOfTasks], determine an efficient work split and 
     return the required processing for this task, in the form of the list of subhaloIDs to 
     process and the global snapshot index range required in load to cover these subhalos. """
@@ -375,6 +375,11 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
             wSelect = np.where( masses >= minStellarMass )
 
         subhaloIDsTodo = subhaloIDsTodo[wSelect]
+
+    # cen/sat select?
+    if cenSatSelect is not None:
+        cssSubIDs = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+        subhaloIDsTodo = np.intersect1d(subhaloIDsTodo, cssSubIDs)
 
     # if no task parallelism (pSplit), set default particle load ranges
     indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
@@ -445,7 +450,8 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass):
     return subhaloIDsTodo, indRange
 
 def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, 
-                           ptRestrictions=None, weighting=None, scope='subfind', minStellarMass=None):
+                           ptRestrictions=None, weighting=None, scope='subfind', 
+                           minStellarMass=None, cenSatSelect=None):
     """ Compute a reduction operation (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type enclosed within a fixed radius (input as a scalar, in physical 
         kpc, or as a string specifying a particular model for a variable cut radius). 
@@ -457,7 +463,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         the first being the inequality to apply ('gt','lt','eq') and the second the numeric value to compare to.
         If minStellarMass is not None, then only process subhalos with mstar_30pkpc_log above this value.
     """
-    assert op in ['sum','mean','max','ufunc','halfrad']
+    assert op in ['sum','mean','max','ufunc','halfrad','dist256']
     assert scope in ['subfind','fof','global']
     if op == 'ufunc': assert ptProperty in userCustomFields
 
@@ -480,6 +486,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     if scope == 'global': desc  +=" (all global particles included). "
     select = "All Subhalos."
     if minStellarMass is not None: select += ' (Only with stellar mass >= %.2f)' % minStellarMass
+    if cenSatSelect is not None: select += ' (Only [%s] subhalos)' % cenSatSelect
 
     # load group information
     gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
@@ -503,7 +510,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         print(' Requested: radRestrictIn2D! Using hard-coded projection direction of [%s]!' % Nside)
 
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
-    subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, None, False, minStellarMass)
+    subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, None, False, minStellarMass, cenSatSelect)
     nSubsDo = len(subhaloIDsTodo)
 
     indRange = indRange[ptType] # choose index range for the requested particle type
@@ -524,7 +531,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = []
 
-    if rad is not None or op == 'halfrad':
+    if rad is not None or op in ['halfrad','dist256']:
         fieldsLoad.append('pos')
 
     if ptRestrictions is not None:
@@ -635,7 +642,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         # use squared radii and sq distance function
         validMask = np.ones( i1-i0, dtype=np.bool )
 
-        if rad is not None or op == 'halfrad':
+        if rad is not None or op in ['halfrad','dist256']:
 
             if not radRestrictIn2D:
                 # apply in 3D
@@ -689,7 +696,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             continue # zero length of particles satisfying radial cut and restriction
 
         # user function reduction operations
-        if op in ['ufunc','halfrad']:
+        if op in ['ufunc','halfrad','dist256']:
             # ufunc: kappa rot
             if ptProperty == 'Krot':
                 # minimum two star particles
@@ -758,12 +765,6 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
                 r[i] = np.average(vrad, weights=gas_weights)
 
-            # ufunc: 'half radius' of the quantity
-            if op == 'halfrad':
-                loc_val = particles[ptProperty][i0:i1][wValid]
-                loc_rad = np.sqrt( rr[wValid] )
-                r[i] = _findHalfLightRadius(loc_rad, mags=None, vals=loc_val)
-
             # shape measurement via iterative ellipsoid fitting
             if ptProperty in ['shape_ellipsoid','shape_ellipsoid_1r']:
                 scale_rad = gc['SubhaloRhalfStars'][subhaloID]
@@ -784,6 +785,17 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 q, s, _, _ = ellipsoidfit(loc_val, loc_wt, scale_rad, ellipsoid_rin, ellipsoid_rout)
                 r[i,0] = q
                 r[i,1] = s
+
+            # ufunc: 'half radius' of the quantity
+            if op == 'halfrad':
+                loc_val = particles[ptProperty][i0:i1][wValid]
+                loc_rad = np.sqrt( rr[wValid] )
+                r[i] = _findHalfLightRadius(loc_rad, mags=None, vals=loc_val)
+
+            # distance to 256th closest particle
+            if op == 'dist256':
+                rr = np.sort( rr[wValid] )
+                r[i] = np.sqrt( np.take(rr, 256, mode='clip') )
 
             # ufunc processed and value stored, skip to next subhalo
             continue
@@ -2230,7 +2242,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         radMin = -0.5 # log code units
         radMax = 3.0 # log code units
         radNumBins = 100
-        minHaloMass = 9.0 # log m200crit
+        minHaloMass = 9.9 # log m200crit
 
     assert minHaloMass is not None
     cenSatSelect = 'cen'
@@ -2832,6 +2844,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='sfr',op='halfrad',rad=None),
    'Subhalo_Gas_HI_HalfRad': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='halfrad',rad=None),
+   'Subhalo_Gas_Dist256': \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='dist256',scope='fof',cenSatSelect='cen',minStellarMass=9.0,rad=None),
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
@@ -3286,8 +3300,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_RadProfile3D_GlobalFoF_MgII_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof'),
-   'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_MgII_Mass' : \
-     partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',proj2D=[2,2000]),
+   'Subhalo_RadProfile2Dz_6Mpc_GlobalFoF_MgII_Mass' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='Mg II mass',op='sum',scope='global_fof',proj2D=[2,5700]),
 
    'Subhalo_RadProfile3D_GlobalFoF_HIGK_popping_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='MHIGK_popping',op='sum',scope='global_fof'),

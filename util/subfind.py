@@ -3084,7 +3084,7 @@ def rewrite_particle_level_cat(sP, filename, partType):
     fof0_size = sP.groupCatSingle(haloID=GrNr)['GroupLenType'][ptNum]
 
     # sanity check: such a filename probably has sP.snap encoded in it, otherwise remove this check
-    assert '_%d' % sP.snap in filename
+    assert '_%03d' % sP.snap in filename
 
     # load particle sort indices to shuffle FoF0 member particles into proper Subfind order
     print('Loading sort indices...')
@@ -3116,20 +3116,25 @@ def rewrite_particle_level_cat(sP, filename, partType):
     print('Loading and rewriting datafile...')
     with h5py.File(filename,'r+') as f:
         dsetNames = list(f.keys())
-        assert len(dsetNames) == 1 # otherwise which?
-        dset = dsetNames[0]
 
-        assert f[dset].size == sP.snapshotHeader()['NumPart'][ptNum]
-        assert f[dset].ndim == 1 # otherwise generalize below
+        #assert len(dsetNames) == 1 # otherwise which?
+        #dset = dsetNames[0]
 
-        # load
-        fof0_data = f[dset][0:fof0_size]
+        for dset in dsetNames:
+            if dset == 'Header': continue
+            print(dset)
 
-        # re-shuffle
-        fof0_data = fof0_data[sort_inds]
+            assert f[dset].size == sP.snapshotHeader()['NumPart'][ptNum]
+            assert f[dset].ndim == 1 # otherwise generalize below
 
-        # write
-        f[dset][0:fof0_size] = fof0_data
+            # load
+            fof0_data = f[dset][0:fof0_size]
+
+            # re-shuffle
+            fof0_data = fof0_data[sort_inds]
+
+            # write
+            f[dset][0:fof0_size] = fof0_data
 
     print('Done.')
 

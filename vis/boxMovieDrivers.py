@@ -51,26 +51,30 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     """ Render a movie comparing two quantities of a single subbox (2x1 panels, 4K). """
     panels = []
 
-    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.5], 'labelScale':True} )
-    panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
+    #panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.5], 'labelScale':True} )
+    #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
+
+    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[6.2,7.8]} ) # 5.8,7.4
+    #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.0,8.0], 'labelZ':False} ) # True
+    panels.append( {'partType':'stars', 'partField':'stellarComp', 'labelZ':False, 'labelScale':'physical'} ) # True
 
     run     = 'tng'
-    variant = 'subbox0'
-    res     = 2500
+    variant = 'subbox0' #'subbox0'
+    res     = 2500 #1820
     method  = 'sphMap'
     nPixels = 1920
-    axes    = [0,1] # x,y
+    axes    = [1,2] # x,y
 
     class plotConfig:
-        savePath = '/u/dnelson/data/frames/%s_sb0/' % run
+        savePath = '/u/dnelson/' #data/frames/%s_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 1920
-        colorbars = True
+        colorbars = False #True
 
         # movie config
-        minZ      = 0.0
-        maxZ      = 50.0 # tng subboxes start at a=0.02
-        maxNSnaps = None #2700 # 90 seconds at 30 fps
+        minZ      = 1.0 #0.0
+        maxZ      = 1.01 #50.0 # tng subboxes start at a=0.02
+        maxNSnaps = 1 #2700 # 90 seconds at 30 fps
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
