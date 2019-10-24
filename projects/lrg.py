@@ -479,6 +479,18 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
     if conf == 4:
         panel = {'partType':'stars', 'partField':'stellarComp'}
 
+    if conf == 5:
+        # NARROW SLICE!
+        nPixels = [4000,4000]
+        method = 'sphMap'
+        depthFac = 0.05
+
+        #panel = {'partType':'gas', 'partField':'cellsize_kpc', 'valMinMax':[-0.7,0.0]}
+        #panel = {'partType':'gas', 'partField':'P_gas', 'valMinMax':[2.8,4.5]}
+        #panel = {'partType':'gas', 'partField':'P_B', 'valMinMax':[1.8,4.0]}
+        panel = {'partType':'gas', 'partField':'P_tot', 'valMinMax':[2.8,4.5]}
+        #panel = {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]}
+
     if gallery:
         # multi-panel
         panels = []
@@ -622,6 +634,10 @@ def paperPlots():
 
         lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=True)
 
+        # zoomed in (high res) visualizations of multiple properties of clumps
+        haloIDSets = [[],[19]] #[[_get_halo_ids(sP)]]
+        lrgHaloVisualization(sP, haloIDSets, conf=5, gallery=False)       
+
     # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     if 0:
         sP = simParams(res=2160, run='tng', redshift=redshift)
@@ -650,7 +666,7 @@ def paperPlots():
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
     # fig 8: 2pcf
-    if 0:
+    if 1:
         redshift = 0.5
         sPs = [TNG50] #[TNG100, TNG300]
         ions = ['MgII'] #,'Mg','gas']
@@ -686,13 +702,13 @@ def paperPlots():
                 redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
 
     # fig 10: radial profiles
-    if 1:
+    if 0:
         redshift = 0.5
         sPs = [TNG50]
-        ions = ['MgII','HIGK_popping']
+        ions = ['MgII']#,'HIGK_popping']
         cenSatSelect = 'cen'
         haloMassBins = [[11.4,11.6], [11.9,12.1], [12.4,12.6], [12.8, 13.2], [13.2, 13.8]]
-        projSpecs = ['3D','2Dz_2Mpc']
+        projSpecs = ['2Dz_6Mpc','3D']
         combine2Halo = True
 
         simNames = '_'.join([sP.simName for sP in sPs])
@@ -705,4 +721,13 @@ def paperPlots():
                       (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
                     stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
                                           radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
-                                          haloMassBins=haloMassBins, combine2Halo=combine2Halo)
+                                          haloMassBins=haloMassBins, combine2Halo=combine2Halo, median=True)
+
+
+    # fig todo: tpcf of single halo (0.15 < r/rvir < 1.0)
+
+    # fig todo: clump demographics: size distribution, total mass, average numdens, etc
+
+    # fig todo: individual (or stacked) 'clump' properties, i.e. radial profiles, including pressure/cellsize
+
+    # fig todo: time tracks via tracers

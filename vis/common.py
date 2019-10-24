@@ -20,7 +20,7 @@ from vis.lic import line_integral_convolution
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
-from util.helper import loadColorTable, logZeroMin, logZeroNaN
+from util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
 from util.boxRemap import remapPositions
 from cosmo.load import subboxVals
 from cosmo.util import correctPeriodicDistVecs, correctPeriodicPosVecs
@@ -111,7 +111,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
 
     return fields
 
-def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False):
+def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False, pSplit=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
     _, sbStr, _ = subboxVals(sP.subbox)
@@ -124,6 +124,11 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
 
     if not isdir(sP.derivPath + 'hsml/'):
         mkdir(sP.derivPath + 'hsml/')
+
+    if pSplit is not None:
+        #assert 0 # only for testing
+        saveFilename = saveFilename.replace(".hdf5","_%d_of_%d.hdf5" % (pSplit[0],pSplit[1]))
+        print('Running pSplit! ', pSplit, saveFilename)
 
     # cache?
     useCache = (sP.isPartType(partType, 'stars') and (not useSnapHsml)) or \
@@ -192,7 +197,13 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
                 if isinstance(pos,dict) and pos['count'] == 0:
                     hsml = np.array([])
                 else:
-                    hsml = calcHsml(pos, sP.boxSize, nNGB=nNGB, nNGBDev=1, treePrec='double')
+                    posSearch = pos # default
+                    if pSplit is not None:
+                        indRangeLoc = pSplitRange( [0,pos.shape[0]], pSplit[1], pSplit[0] )
+                        posSearch = pos[indRangeLoc[0]:indRangeLoc[1]]
+                        print(' posSearch range: ', indRangeLoc)
+
+                    hsml = calcHsml(pos, sP.boxSize, posSearch=posSearch, nNGB=nNGB, nNGBDev=1, treePrec='double')
 
         # save
         if useCache:
@@ -407,7 +418,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
         resFac = 1.0 #(512.0/sP.res)**2.0
 
-        minValLog = np.array([0.6,0.6,0.6]) # previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
+        minValLog = np.array([0.6,0.6,0.6]) # 0.6, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
@@ -716,7 +727,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
         if sP.isPartType(partType,'dm'):       config['ctName'] = 'dmdens_tng' #'gray_r' (pillepich.stellar)
         if sP.isPartType(partType,'dmlowres'): config['ctName'] = 'dmdens_tng'
-        if sP.isPartType(partType,'gas'):      config['ctName'] = 'inferno' # 'gasdens_tng5' for old movies/TNG papers # 'perula' for methods2
+        if sP.isPartType(partType,'gas'):      config['ctName'] = 'magma' #'inferno' # 'gasdens_tng5' for old movies/TNG papers # 'perula' for methods2
         if sP.isPartType(partType,'stars'):    config['ctName'] = 'gray' # copper
 
     if partField in ['coldens_msun_ster']:
@@ -866,6 +877,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'PuOr' # is brewer-purpleorange
         logMin = False
 
+    if partField in ['cellsize_kpc','cellrad_kpc']:
+        grid = grid
+        config['label'] = 'Gas Cell Size [log kpc]'
+        config['ctName'] = 'Spectral'
+
     # gas: shock finder
     if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:
         grid = sP.units.codeEnergyRateToErgPerSec(grid)
@@ -888,6 +904,11 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['P_B']:
         grid = grid
         config['label']  = 'Magnetic Pressure [log K cm$^{-3}$]'
+        config['ctName'] = 'viridis'
+
+    if partField in ['P_tot']:
+        grid = grid
+        config['label']  = 'Total Thermal+Magnetic Pressure [log K cm$^{-3}$]'
         config['ctName'] = 'viridis'
 
     if partField in ['pressure_ratio']:
@@ -1781,6 +1802,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
+        #scaleBarLen *= 1.1
+
         # actually plot size in code units (e.g. ckpc/h)
         scaleBarPlotLen = scaleBarLen * p['sP'].HubbleParam
 
@@ -1801,7 +1824,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         scaleBarStr = "%d %s" % (scaleBarLen, unitStrs[unitInd])
         if scaleBarLen > 900: # use Mpc label
-            scaleText = '%.2f' % (scaleBarLen/1000.0) if scaleBarLen/1000.0 < 10 else '%g' % (scaleBarLen/1000.0)
+           # scaleText = '%.2f' % (scaleBarLen/1000.0) if scaleBarLen/1000.0 < 10 else '%g' % (scaleBarLen/1000.0)
+            scaleText = '%d' % (scaleBarLen/1000.0) if scaleBarLen/1000.0 < 10 else '%g' % (scaleBarLen/1000.0)
             scaleBarStr = "%s %s" % (scaleText, unitStrs[unitInd+1])
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])

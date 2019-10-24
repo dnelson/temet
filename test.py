@@ -16,6 +16,37 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def plot_dist256():
+    """ Plot distance to 256th gas cell (i.e. BH accretion radius) vs M*. """
+    from util.helper import running_median
+
+    # load
+    sP = simParams(run='tng100-1',redshift=0.0)
+    dist = sP.auxCat('Subhalo_Gas_Dist256')['Subhalo_Gas_Dist256']
+    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+
+    dist = sP.units.codeLengthToKpc(dist)
+
+    # plot
+    fig = plt.figure(figsize=[12, 8])
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('Distance to 256th closest gas cell [ pkpc ]')
+
+    ax.set_xlim([9.0,12.0])
+    ax.set_ylim([0,20])
+
+    ax.scatter(mstar, dist, 4.0, marker='.')
+
+    xm, ym, sm = running_median(mstar,dist,binSize=0.1)
+    ax.plot(xm,ym,'-',label='median')
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('check_dist256.pdf')
+    plt.close(fig)
+
+
 def check_load_memusage():
     """ Check memory usage with snapshotSubset(). """
     import multiprocessing as mp
@@ -1039,7 +1070,7 @@ def illustris_api_check():
         # make HTTP GET request to path
         headers = {"api-key":"3b1618b0629b21396b8af9cbf76caafa"}
         r = requests.get(path, params=params, headers=headers)
-
+        print(r.url)
         # raise exception if response code is not HTTP SUCCESS (200)
         r.raise_for_status()
 
@@ -1053,6 +1084,12 @@ def illustris_api_check():
             return filename # return the filename string
 
         return r
+
+    base_url = "http://www.tng-project.org/api/TNG100-1/snapshots/55/subhalos/195979/vis.png"
+    params = {'partType':'stars', 'partField':'mass', 'size':0.08, 'sizeType':'arcmin', 'nPixels':20, 'axes':'0,1'}
+    saved_filename = get(base_url, params)
+    print(saved_filename)
+    return
 
     base_url = "http://www.illustris-project.org/api/Illustris-1/"
     sim_metadata = get(base_url)

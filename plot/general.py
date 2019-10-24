@@ -189,6 +189,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     If smoothSigma is not zero, gaussian smooth contours at this level. 
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
     If median, add a median line of the yQuant as a function of the xQuant. """
+    from util.helper import reportMemory
 
     # config
     nBins2D = None
@@ -228,6 +229,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
     xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
+    print('x done', reportMemory())
 
     if xlog: xvals = np.log10(xvals)
 
@@ -235,6 +237,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
     yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
+    print('y done', reportMemory())
 
     if ylog: yvals = np.log10(yvals)
 
@@ -261,7 +264,9 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        weight = sP.snapshotSubsetP(partType, wtProp, haloID=haloID)
+        print('start wt', reportMemory())
+        weight = sP.snapshotSubset(partType, wtProp, haloID=haloID)
+        print(i, wtProp, ' done', reportMemory())
 
         if qRestrictions is not None:
             weight = weight[wRestrict]
@@ -931,6 +936,37 @@ def oneRun_PhaseDiagram(snaps=None):
             xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
 
         pdf.close()
+
+def oneRun_tempcheck():
+    """ Driver. """
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    # config
+    sP = simParams(run='tng50-1')
+    xQuant = 'nh'
+
+    zoom = False
+
+    xlim = [-9.0, 3.0]
+    ylim = [1.0, 8.5]
+    clim   = [-6.0,-0.2]
+
+    snaps = sP.validSnapList()
+
+    # start PDF, add one page for temp, one for old_temp
+    for snap in snaps:
+        sP.setSnap(snap)
+        print(snap)
+
+        pdf = PdfPages('phaseCheck_%s_%d.pdf' % (sP.simName,snap))
+
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp', 
+            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp_old', 
+            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+
+        pdf.close()
+
 
 def compareRuns_RadProfiles():
     """ Driver. Compare median radial profile of a quantity, differentiating between two runs. """
