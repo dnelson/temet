@@ -3072,3 +3072,272 @@ def vdsTest():
         f.create_virtual_dataset('data', layout, fillvalue=np.nan)
         print("Virtual dataset:")
         print(f['data'][:,:])
+
+def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
+    """ Read the Voronoi mesh data from Chris Byrohl using his vppp (voro++ parallel) approach, save to HDF5. """
+    from util.simParams import simParams
+    from util.helper import pSplitRange
+
+    sP = simParams(run='tng50-1', redshift=0.5)
+    basepath = "/freya/ptmp/mpa/cbyrohl/public/vppp_dataset/IllustrisTNG50_z0.5_posdata"
+
+    file1 = basepath + ".bin.nb"
+    file2 = basepath + ".bin.nb2"
+
+    outfile1 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_temp_%02d.hdf5" % sP.snap
+    outfile2 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_%02d.hdf5" % sP.snap
+
+    dtype_nb = np.dtype([
+        ("x", np.float64),
+        ("y", np.float64),
+        ("z", np.float64),
+        ("gidx", np.int64), # snapshot index (1-indexed !!!!!)
+        ("noffset", np.int64), #offset in neighbor list (1-indexed !!!!!)
+        ("ncount", np.int32), #neighborcount
+    ])
+
+    # convert stage (1): rewrite into HDF5
+    if stage == 1:
+        # chunked load
+        chunksize = 100000000
+
+        # get npart and ngb list size
+        with open(file1, "rb") as f:
+            f.seek(0)
+            npart = np.fromfile(f,dtype=np.int64,count=1)[0]
+
+        with open(file2,"rb") as f:
+            f.seek(0)
+            tot_num_entries = np.fromfile(f, dtype=np.int64, count=1)[0]
+
+        # open save file
+        fOut = h5py.File(outfile1,"w")
+
+        snap_index = fOut.create_dataset("snap_index", (npart,), dtype='int64')
+        num_ngb    = fOut.create_dataset("num_ngb", (npart,), dtype='int16')
+        offset_ngb = fOut.create_dataset("offset_ngb", (npart,), dtype='int64')
+        x          = fOut.create_dataset("x", (npart,), dtype='float32')
+        ngb_inds   = fOut.create_dataset("ngb_inds", (tot_num_entries,), dtype='int64')
+
+        # load all from file1
+        with open(file1, "rb") as f:
+            # get npart
+            f.seek(0)
+
+            nloaded = 0
+            byte_offset = 8 # skip npart
+
+            while nloaded < npart:
+                print('loaded %4.1f%% [%10d] of [%10d]' % (nloaded/npart*100,nloaded,npart))
+                f.seek(byte_offset)
+                data = np.fromfile(f, dtype=dtype_nb, count=chunksize)
+
+                # save
+                snap_index[nloaded : nloaded + data.size] = data['gidx'] - 1 # change from 1-based fortran indexing
+                num_ngb[nloaded : nloaded + data.size] = data['ncount']
+                offset_ngb[nloaded : nloaded + data.size] = data['noffset'] - 1 # change from 1-based fortran indexing
+                x[nloaded : nloaded + data.size] = data['x']
+
+                # continue
+                nloaded += data.size
+                byte_offset += data.size * dtype_nb.itemsize
+
+        # load neighbor list from file2
+        with open(file2,"rb") as f:
+            f.seek(0)
+
+            nloaded = 0
+            byte_offset = 8 # skip tot_num_entries
+
+            while nloaded < tot_num_entries:
+                print('ngblist %4.1f%% [%10d] of [%10d]' % (nloaded/tot_num_entries*100,nloaded,tot_num_entries))
+                f.seek(byte_offset)
+                data = np.fromfile(f, dtype=np.int64, count=chunksize*10)
+
+                if data.size == 0:
+                    break
+
+                # save
+                ngb_inds[nloaded : nloaded + data.size] = data
+
+                # continue
+                nloaded += data.size
+                byte_offset += data.size * data.itemsize
+
+        fOut.close()
+
+    # convert stage (2): shuffle into snapshot order
+    if stage == 2:
+        with h5py.File(outfile1,'r') as f:
+            snap_index = f['snap_index'][()]
+
+            sort_inds = np.argsort(snap_index)
+            f['sort_inds'] = sort_inds
+
+    # sanity checks
+    if stage == 3:
+        with h5py.File(outfile1,'r') as f:
+            snap_index = f['snap_index'][()]
+            sort_inds = f['sort_inds'][()]
+
+        # check: indices are dense
+        new_snap_index = snap_index[sort_inds]
+
+        numGas = sP.snapshotHeader()['NumPart'][sP.ptNum('gas')]
+        lin_list = np.arange(numGas)
+        print(np.array_equal(lin_list,new_snap_index))
+
+    # sanity checks
+    if stage == 4:
+        with h5py.File(outfile1,'r+') as f:
+            x = f['x'][()] * sP.boxSize # [0,1] -> [0,sP.boxSize]
+            sort_inds = f['sort_inds'][()]
+
+        # check: order is correct by comparing x-coordinates
+        new_x = x[sort_inds]
+        snap_x = sP.snapshotSubsetP('gas','pos_x')
+
+        print(new_x[0:5], snap_x[0:5])
+        print(np.array_equal(new_x,snap_x))
+        print(np.allclose(new_x,snap_x))
+
+    # convert stage (5)
+    if stage == 5:
+        # create new final 'mesh' file with shuffled num_ngb and offset_ngb
+        with h5py.File(outfile1,'r') as f:
+            sort_inds = f['sort_inds'][()]
+            tot_num_entries = f['ngb_inds'].size
+
+        for key in ['num_ngb','offset_ngb']:
+            with h5py.File(outfile1,'r') as f:
+                data = f[key][()]
+            with h5py.File(outfile2,'a') as f:
+                f[key] = data[sort_inds]
+            print(key, flush=True)
+
+        # allocate unfilled neighbor list
+        with h5py.File(outfile2,'r+') as f:
+            ngb_inds = f.create_dataset("ngb_inds", (tot_num_entries,), dtype='int64')
+            for i in range(20):
+                locrange = pSplitRange( [0,tot_num_entries], 20, i)
+                print(i,locrange,flush=True)
+                ngb_inds[locrange[0]:locrange[1]] = -1
+        
+    # convert stage (6): rewrite ngb_inds into dense, contiguous subsets following snapshot order
+    nTasks = 80
+
+    if stage == 6:
+        with h5py.File(outfile2,'r') as f:
+            num_cells = f['num_ngb'].size
+
+        locRange = pSplitRange( [0,num_cells], nTasks, thisTask)
+
+        # load original offsets
+        with h5py.File(outfile2,'r') as f:
+            num_ngb = f['num_ngb'][locRange[0]:locRange[1]]
+            offset_ngb = f['offset_ngb'][locRange[0]:locRange[1]]
+
+        # allocate sub-task output file
+        subfile = outfile2.replace(".hdf5","_%d_of_%d.hdf5" % (thisTask,nTasks))
+        totNumNgbLoc = num_ngb.sum()
+        ngb_inds = np.zeros( totNumNgbLoc, dtype='int64' ) - 1
+
+        print('[%2d of %2d] starting... ' % (thisTask,nTasks), locRange, flush=True)
+
+        offset = 0
+
+        with h5py.File(outfile1,'r') as f: # open source
+            for i in range(num_ngb.size):
+                if i % 100000 == 0:
+                    print('[%2d] [%10d] %.2f%%' % (thisTask,i,i/num_ngb.size*100), flush=True)
+
+                # read
+                loc_inds = f['ngb_inds'][offset_ngb[i] : offset_ngb[i]+num_ngb[i]]
+
+                ngb_inds[offset:offset+num_ngb[i]] = loc_inds
+
+                offset += num_ngb[i]
+
+        # save
+        with h5py.File(subfile,'w') as f:
+            f['ngb_inds'] = ngb_inds
+
+    # convert stage (7): ngb_inds refer to old ordered data, rewrite while concatenating
+    if stage == 7:
+        # derive inverse sort_inds
+        with h5py.File(outfile1,'r') as f:
+            sort_inds = f['sort_inds'][()]
+
+        inv_sort_inds = np.zeros( sort_inds.size, dtype=sort_inds.dtype )
+        inv_sort_inds[sort_inds] = np.arange(sort_inds.size)
+
+        global_min = np.inf
+        global_max = -1
+
+        offset = 0
+
+        print('TODO REMOVE RANGE CHANGE')
+        for i in range(20): #range(nTasks):
+            print(i, flush=True)
+            subfile = outfile2.replace(".hdf5","_%d_of_%d.hdf5" % (i,nTasks))
+            with h5py.File(subfile,'r') as f:
+                loc_inds = f['ngb_inds'][()]
+
+            print(i, loc_inds.min(), loc_inds.max(), flush=True)
+
+            loc_inds = inv_sort_inds[loc_inds]
+
+            if loc_inds.max() > global_max:
+                global_max = loc_inds.max()
+            if loc_inds.min() < global_min:
+                global_min = loc_inds.min()
+
+            # save
+            with h5py.File(outfile2,'r+') as f:
+                f['ngb_inds'][offset:offset+loc_inds.size] = loc_inds
+
+            offset += loc_inds.size
+
+        print('global min: ', global_min)
+        print('global max: ', global_max)
+        print('final offset: ', offset)
+
+        with h5py.File(outfile1,'r') as f:
+            print('should equal: ', f['ngb_inds'].size)
+
+    # convert stage (8): new offset_ngb
+    if stage == 8:
+        import pdb; pdb.set_trace() # do not run before stage 6 is finished
+        with h5py.File(outfile2,'r+') as f:
+            num_ngb = f['num_ngb'][()]
+            offset_ngb = np.zeros(num_ngb.size, dtype='int64')
+            offset_ngb[1:] = np.cumsum(num_ngb)[:-1]
+            f['offset_ngb'][:] = offset_ngb
+        print('wrote new offset_ngb, final file done. can delete mesh_temp.')
+
+    # UNUSED example: for a given entry, read its neighbor (index) list
+    if stage == 9:
+        cell_index = 123456
+
+        with open(file, "rb") as f:
+            f.seek(0)
+            tot_num_cells = np.fromfile(f, dtype=np.int64, count=1)[0]
+            
+            byte_offset = 8 + cell_index * dtype_nb.itemsize
+            f.seek(byte_offset)
+
+            entry = np.fromfile(f, dtype=dtype_nb, count=1)[0]
+
+        with open(ngb_ind_file,"rb") as f:
+            f.seek(0)
+            tot_num_entries = np.fromfile(f, dtype=np.int64, count=1)[0]
+
+            byte_offset = 8 + entry['noffset'] * 8
+            byte_offset 
+            f.seek(byte_offset)
+
+            ngb_inds = np.fromfile(f, dtype=np.int64, count=entry['ncount'])
+
+        import pdb; pdb.set_trace()
+
+    print('done.')
