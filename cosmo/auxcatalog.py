@@ -2842,6 +2842,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_Gas_SFR_HalfRad': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='sfr',op='halfrad',rad=None),
+   'Subhalo_Gas_Halpha_HalfRad': \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='halpha_lum',op='halfrad',rad=None),
    'Subhalo_Gas_HI_HalfRad': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='halfrad',rad=None),
    'Subhalo_Gas_Dist256': \

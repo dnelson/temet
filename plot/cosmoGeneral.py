@@ -686,9 +686,10 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, 
+                             qRestrictions=None,
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
                              markSubhaloIDs=None, mark1to1=False, drawMedian=True, 
-                             xlim=None, ylim=None, filterFlag=False, fig_subplot=[None,None]):
+                             xlim=None, ylim=None, clim=None, filterFlag=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -696,6 +697,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If sQuant is not None, then in addition to the median, load this third quantity and split the 
     subhalos on it according to sLowerPercs, sUpperPercs (above/below the given percentiles), for 
     each split plotting the sub-sample yQuant again versus xQuant.
+    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
     If scatterPoints, include all raw points with a scatterplot. If maxPointsPerDex, then randomly sub-sample down to 
     this number (equal number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. If scatterColor, 
     color each point by a third property.
@@ -763,6 +765,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if scatterColor is not None:
                 sim_cvals, clabel, cMinMax, cLog = simSubhaloQuantity(sP, scatterColor, clean, tight=True)
                 if cLog: sim_cvals = logZeroNaN(sim_cvals)
+                cMinMax = cMinMax if clim is None else clim
 
             # flagging?
             sim_flag = np.ones(sim_xvals.shape).astype('bool')
@@ -790,6 +793,26 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             sim_xvals = sim_xvals[wFinite]
             sim_yvals = sim_yvals[wFinite]
             sim_cvals = sim_cvals[wFinite]
+
+            # arbitrary property restriction(s)?
+            if qRestrictions is not None:
+                wRestrictions = []
+                for rFieldName, rFieldMin, rFieldMax in qRestrictions:
+                    # load and restrict
+                    vals, _, _, _ = sP.simSubhaloQuantity(rFieldName)
+                    vals = vals[wSelect][wFinite]
+
+                    for wPastRestrict in wRestrictions:
+                        vals = vals[wPastRestrict] # AND
+
+                    wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
+
+                    sim_yvals = sim_yvals[wRestrict]
+                    sim_xvals = sim_xvals[wRestrict]
+                    sim_cvals = sim_cvals[wRestrict]
+
+                    wRestrictions.append(wRestrict)
+                    assert len(sim_xvals) # otherwise, no galaxies left
 
             ax.set_xlim(xMinMax)
             ax.set_ylim(yMinMax)
@@ -1136,12 +1159,14 @@ def plots4():
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
     yQuant = 'fdm1'
-    scatterColor = 'size_stars' #'M_bulge_counter_rot' # 'size_stars'
+    scatterColor = 'size_halpha' #'size_gas' #'M_bulge_counter_rot' # 'size_stars'
     cenSatSelect = 'cen'
     filterFlag = False #True
 
     xlim = [9.0, 11.5] #[10.2,11.6]
     ylim = None #[4.7,1.5]
+    clim = [0.0, 1.5] #[1.0, 2.0]
+    scatterPoints = True
     drawMedian = False
     markersize = 20.0
     maxPointsPerDex = 2000
@@ -1150,17 +1175,66 @@ def plots4():
     sLowerPercs = None #[10,50]
     sUpperPercs = None #[90,50]
 
+    #qRestrictions = None
+    qRestrictions = [ ['delta_sfms',-0.5,np.inf] ] #  [ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
+
     pdf = PdfPages('median_x=%s_y=%s_%s_slice=%s_%s_z%.1f.pdf' % \
         (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
 
     # one quantity
     quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
-                             xlim=xlim, ylim=ylim, drawMedian=drawMedian, markersize=markersize,
-                             scatterPoints=True, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
+                             qRestrictions=qRestrictions,
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
                              markSubhaloIDs=None, filterFlag=filterFlag)
 
     pdf.close()
+
+def plots5():
+    """ Driver (single median trend). """
+    sPs = []
+    #sPs.append( simParams(res=2160, run='tng', redshift=2.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=3.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
+    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    #sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
+
+    xQuant = 'size_stars' #mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
+    yQuant = 'fdm1'
+    scatterColor = None #'mstar_30pkpc' #'M_bulge_counter_rot' # 'size_stars'
+    cenSatSelect = 'cen'
+    filterFlag = False #True
+
+    xlim = [-0.4,1.5] #[9.0, 11.5] #[10.2,11.6]
+    ylim = None #[4.7,1.5]
+    scatterPoints = False
+    drawMedian = True
+    markersize = None #20.0
+    maxPointsPerDex = None #2000
+
+    clim = [10,11.2]
+
+    sQuant = None #'color_C_gr'
+    sLowerPercs = None #[10,50]
+    sUpperPercs = None #[90,50]
+
+    qRestrictions = [ ['mstar_30pkpc_log',10.0,11.0], ['delta_sfms',-0.5,np.inf] ] # SINS-AO rough cut
+
+    pdf = PdfPages('median_x=%s_y=%s_%s_slice=%s_%s_z%.1f.pdf' % \
+        (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))
+
+    # one quantity
+    quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             #sQuant=sQuant, sLowerPercs=sLowerPercs, sUpperPercs=sUpperPercs, 
+                             qRestrictions=qRestrictions,
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, maxPointsPerDex=maxPointsPerDex, 
+                             markSubhaloIDs=None, filterFlag=filterFlag)
+
+    pdf.close()
+
 
 def plots_uvj():
     """ Driver. Explore UVJ color-color diagram. """
