@@ -7,6 +7,7 @@ from builtins import *
 
 import numpy as np
 from datetime import datetime
+from os.path import isfile
 
 from vis.common import savePathDefault
 from vis.box import renderBox, renderBoxFrames
@@ -329,7 +330,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     # set selection subhaloID at sP.snap
     if gal == 'one':
         # first movie (sbSnaps 51 - 3400+)
-        sP = simParams(res=2160,run='tng',snap=90)
+        sP = simParams(res=2160,run='tng_old',snap=90)
         sbNum = 0
         #subhaloID = 389836 # halo 296, snap 58
         subhaloID = 440389 # re-located at snap 90 (halo 227)
@@ -348,7 +349,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     if gal == 'two':
         # second movie (sbSnaps 0 - 3400+)
-        sP = simParams(res=2160,run='tng',snap=58)
+        sP = simParams(res=2160,run='tng_old',snap=58)
         sbNum = 2
         subhaloID = 0 # halo 0, snap 58, also snap 68, but after this run into fof0/MDB issues
         refVel = np.array([-195.3,-52.9,-157.0]) # avg of stars within 30 pkpc of subhalo_pos at sbSnapNum=1762
@@ -439,14 +440,14 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     panels = []
 
     res     = 2160
-    run     = 'tng'
+    run     = 'tng_old'
     method  = 'sphMap'
     variant = 'subbox%d' % sbNum
     snap    = sbSnapNum
 
     axes       = [0,1] # x,y
-    labelScale = 'physical'
-    labelZ     = True
+    labelScale = 'lightyears'
+    labelZ     = 'tage'
     plotHalos  = False
 
     nPixels   = [3840,2160]
@@ -490,11 +491,14 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
             
         # add custom label of subbox time resolution galaxy properties if extended info is available
         if conf == 'one' and 'SubhaloStars_Mass' in cat:
+            import locale
+            x = locale.setlocale(locale.LC_ALL, 'de_DE.utf-8')
             aperture_num = 0 # 0= 30 pkpc, 1= 30 ckpc/h, 2= 50 ckpc/h
             stellarMass = np.squeeze(cat['SubhaloStars_Mass'][w[0],aperture_num,sbSnapNum])
             SFR = np.squeeze(cat['SubhaloGas_SFR'][w[0],aperture_num,sbSnapNum])
-            labelCustom = ["log M$_{\star}$ = %.2f" % sP.units.codeMassToLogMsun(stellarMass),
-                           "SFR = %.1f M$_\odot$ yr$^{-1}$" % SFR]
+            #labelCustom = ["log M$_{\star}$ = %.2f" % sP.units.codeMassToLogMsun(stellarMass),
+            #               "SFR = %.1f M$_\odot$ yr$^{-1}$" % SFR]
+            labelCustom = ["galaxy stellar mass = %s million suns" % locale.format_string('%d', sP.units.codeMassToMsun(stellarMass)/1e6,'1')]
 
     if conf == 'two':
         # galaxy zoom panel: gas
@@ -553,7 +557,8 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     from cosmo.util import validSnapList
 
     # movie config
-    minZ = 0.0
+    minZ = 0.1260 # stop after sb snap 3399 which was what existed when we originally made the movies (to keep frameNum sync)
+
     if gal == 'one':
         maxZ = 12.7 # tng subboxes start at a=0.02, but gal=='one' starts at sbSnapNum==51
     else:
@@ -563,12 +568,17 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
                      # as a final config, filter out half: take Nsb_final-867/2 (currently: 3400-433+eps = 2968)
 
     # get snapshot list
-    sP = simParams(res=2160,run='tng',snap=90,variant='subbox0')
+    sP = simParams(res=2160,run='tng_old',snap=90,variant='subbox0')
 
     sbSnapNums = validSnapList(sP, maxNum=maxNSnaps, minRedshift=minZ, maxRedshift=maxZ)
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
+        #if isfile('/u/dnelson/data/frames/2160sb0_s90_sh440389/frame_one_%d.png' % i):
+        #    print('skip ', i)
+        #    continue
+        #if i < 2000 or i >= 2500:
+        #    continue
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
 
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):

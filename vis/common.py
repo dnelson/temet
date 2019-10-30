@@ -1710,11 +1710,12 @@ def addBoxMarkers(p, conf, ax, pExtent):
         if p['relCoords']:
             xyPos = [0.0, 0.0]
 
-        #if p['sP'].subhaloInd is not None:
-        #    # in the case that the box is not centered on the halo (e.g. offset quadrant), can use:
-        #    assert not p['relCoords']
-        #    sub = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
-        #    xyPos = sub['SubhaloPos'][p['axes']]
+        if p['sP'].subhaloInd is not None:
+            # in the case that the box is not centered on the halo (e.g. offset quadrant), can use:
+            sub = p['sP'].groupCatSingle(subhaloID=p['sP'].subhaloInd)
+
+            if not p['relCoords']:
+                xyPos = sub['SubhaloPos'][p['axes']]
 
         if p['axesUnits'] == 'code':
             pass
@@ -1772,6 +1773,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
 
+        if p['labelZ'] == 'tage':
+            zStr = "%5.2f billion years after the Big Bang" % p['sP'].units.redshiftToAgeFlat(p['sP'].redshift)
+
         xt = pExtent[1] - (pExtent[1]-pExtent[0])*(0.02)*conf.nLinear # upper right
         yt = pExtent[3] - (pExtent[3]-pExtent[2])*(0.02)*conf.nLinear
         color = 'white' if 'textcolor' not in p else p['textcolor']
@@ -1802,8 +1806,6 @@ def addBoxMarkers(p, conf, ax, pExtent):
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
 
-        #scaleBarLen *= 1.1
-
         # actually plot size in code units (e.g. ckpc/h)
         scaleBarPlotLen = scaleBarLen * p['sP'].HubbleParam
 
@@ -1829,6 +1831,17 @@ def addBoxMarkers(p, conf, ax, pExtent):
             scaleBarStr = "%s %s" % (scaleText, unitStrs[unitInd+1])
         if scaleBarLen < 1: # use pc label
             scaleBarStr = "%g %s" % (scaleBarLen*1000.0, unitStrs[unitInd-1])
+
+        if p['labelScale'] == 'lightyears':
+            scaleBarLen = scaleBarLen * 2.4 * p['sP'].units.scalefac * (p['sP'].units.kpc_in_ly/1000)
+
+            # want to round this display value
+            for roundScale in roundScales:
+                if scaleBarLen >= roundScale:
+                    scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
+                    scaleBarPlotLen = p['sP'].units.lightyearsToCodeLength(scaleBarLen*1000)
+
+            scaleBarStr = "%d thousand lightyears" % scaleBarLen
 
         lw = 2.5 * np.sqrt(conf.rasterPx[1] / 1000)
         y_off = np.clip(0.04 - 0.01 * 1000 / conf.rasterPx[1], 0.01, 0.06)
@@ -2314,7 +2327,7 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
-        barAreaHeight = (0.12 / nRows / aspect)
+        barAreaHeight = (0.125 / nRows) # / aspect)
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
         if nRows == 1 and nCols in [1]:
             barAreaHeight = 0.055 / aspect
@@ -2383,7 +2396,7 @@ def renderMultiPanel(panels, conf):
         fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
 
         width_in  = sizeFac[0] * np.ceil(nCols)
-        height_in = sizeFac[1] * np.ceil(nRows)
+        height_in = sizeFac[1] * np.ceil(nRows)# * aspect
 
         rowHeight  = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
 

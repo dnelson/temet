@@ -86,8 +86,8 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, r
     axes        = [0,1]       # e.g. [0,1] is x,y
     boxOffset   = [0,0,0]     # offset in x,y,z directions (code units) from fiducial center
     axesUnits   = 'code'      # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
-    labelZ      = False       # label redshift inside (upper right corner) of panel
-    labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True or 'physical')
+    labelZ      = False       # label redshift inside (upper right corner) of panel (True or 'tage')
+    labelScale  = False       # label spatial scale with scalebar (upper left of panel) (True, 'physical', or 'lightyears')
     labelSim    = False       # label simulation name (lower right corner) of panel
     labelCustom = False       # custom label string to include
     ctName      = None        # if not None (automatic based on field), specify colormap name

@@ -22,8 +22,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
     res        = 2160 #1820
     variant    = None #'sf2' # None
 
-    #redshift   = 0.0
-    redshift   = simParams(res=2160,run='tng',snap=snap).redshift
+    redshift   = 6.0
+    #redshift   = simParams(res=2160,run='tng',snap=snap).redshift
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
     nPixels    = [1200,1200] #[800,800] #[1920,1920]
@@ -71,11 +71,12 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
     if conf == 5:
         # magnetic field strength
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
-        panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.0,3.5]} )
+        #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.0,3.5]} )
+        panels.append( {'partType':'gas', 'partField':'temp',   'valMinMax':[4.0,6.0]} )
     if conf == 6:
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 
-    if 0:
+    if 1:
         size = 2.5
         sizeType = 'rVirial'
     if 0:
@@ -86,7 +87,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
         sizeType = 'rHalfMassStars'
         rVirFracs = [2.0,10.0]
         fracsType = 'rHalfMassStars'
-    if 1:
+    if 0:
         plotSubhalos = 100
         size = 3500.0
         sizeType = 'codeUnits'
@@ -96,7 +97,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
         rasterPx     = 1200
         colorbars    = True
         saveFilename = './oneHaloSingleField_%d_%s_%d_%d_ID-%d_%s.png' % \
-          (conf,run,res,snap,subhaloID if subhaloID is not None else haloID,method)
+          (conf,run,res,snap if snap is not None else redshift,subhaloID if subhaloID is not None else haloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 

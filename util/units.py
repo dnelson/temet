@@ -98,6 +98,7 @@ class units(object):
     s_in_yr       = 3.155693e7
     pc_in_cm      = 3.085680e18
     km_in_cm      = 1e5
+    kpc_in_ly     = 3261.56    # lightyears in 1 pkpc
     arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
     erg_in_J      = 1e-7       # 1 erg in joules
@@ -410,6 +411,16 @@ class units(object):
         assert self._sP.redshift is not None
 
         x_comoving = np.array(x, dtype='float32') / self.scalefac
+        x_comoving /= (self.UnitLength_in_cm/self.kpc_in_cm) # account for non-kpc code lengths
+        x_comoving *= self._sP.HubbleParam # add little h factor
+
+        return x_comoving
+
+    def lightyearsToCodeLength(self, x):
+        """ Convert a length in [lightyears] to code units. """
+        assert self._sP.redshift is not None
+
+        x_comoving = np.array(x, dtype='float32') / self.scalefac / self.kpc_in_ly # ckpc
         x_comoving /= (self.UnitLength_in_cm/self.kpc_in_cm) # account for non-kpc code lengths
         x_comoving *= self._sP.HubbleParam # add little h factor
 

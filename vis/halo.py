@@ -183,8 +183,8 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
     vecColorPF  = None          # partField to use for vector field vis coloring (if None, =partField)
     vecColorbar = False         # add additional colorbar for the vector field coloring
     vecColormap = 'afmhot'      # default colormap to use when showing quivers or streamlines
-    labelZ      = False         # label redshift inside (upper right corner) of panel
-    labelScale  = False         # label spatial scale with scalebar (upper left of panel) (True or 'physical')
+    labelZ      = False         # label redshift inside (upper right corner) of panel (True or 'tage')
+    labelScale  = False         # label spatial scale with scalebar (upper left of panel) (True, 'physical', 'lightyears')
     labelSim    = False         # label simulation name (lower right corner) of panel
     labelHalo   = False         # label halo total mass and stellar mass
     labelCustom = False         # custom label string to include
