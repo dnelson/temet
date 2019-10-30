@@ -1011,10 +1011,16 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
     ax.set_xlim([0.0, 4.0])
     ax.set_xlabel('Radius [ log pkpc ]')
 
-    ax.set_ylim([-1.0,6.0])
-    if order == 1: ax.set_ylim([1.0,7.0])
-    if order == 2: ax.set_ylim([1.0,8.0])
-    if ions[0] == 'bhmass' and order == 0: ax.set_ylim([-1.0,5.0])
+    ylim = [-1.0, 6.0]
+    if order == 1: ylim = [1.0, 7.0]
+    if order == 2: ylim = [1.0, 8.0]
+    if ions[0] == 'MgII':
+        ylim[0] += 2.0
+        ylim[1] += 2.0
+    if ions[0] == 'bhmass' and order == 0:
+        ylim = [-1.0, 5.0]
+
+    ax.set_ylim(ylim)
     ionStr = '_{\\rm %s}'%ions[0] if len(ions) == 1 else ''
     ax.set_ylabel('%s$\\xi%s(r)$ [ log ]' % (['','r','r$^2$'][order],ionStr))
 
@@ -1034,6 +1040,10 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
 
         # loop over each fullbox run
         for i, sP in enumerate(sPs):
+            if 'OVI' in ion and sP.res == 2160:
+                continue
+            if 'MgII' in ion and sP.res == 1820:
+                continue
             print('[%s]: %s' % (ion,sP.simName))
             sP.setRedshift(redshift)
 

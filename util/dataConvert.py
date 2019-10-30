@@ -3084,7 +3084,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
     file1 = basepath + ".bin.nb"
     file2 = basepath + ".bin.nb2"
 
-    outfile1 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_temp_%02d.hdf5" % sP.snap
+    outfile1 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_spatialorder_%02d.hdf5" % sP.snap
     outfile2 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_%02d.hdf5" % sP.snap
 
     dtype_nb = np.dtype([
@@ -3117,7 +3117,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
         num_ngb    = fOut.create_dataset("num_ngb", (npart,), dtype='int16')
         offset_ngb = fOut.create_dataset("offset_ngb", (npart,), dtype='int64')
         x          = fOut.create_dataset("x", (npart,), dtype='float32')
-        ngb_inds   = fOut.create_dataset("ngb_inds", (tot_num_entries,), dtype='int64')
+        ngb_inds   = fOut.create_dataset("ngb_inds", (tot_num_entries,), dtype='int64') # (1-indexed !!)
 
         # load all from file1
         with open(file1, "rb") as f:
@@ -3158,7 +3158,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
                     break
 
                 # save
-                ngb_inds[nloaded : nloaded + data.size] = data
+                ngb_inds[nloaded : nloaded + data.size] = data - 1 # change from 1-based fortran indexing
 
                 # continue
                 nloaded += data.size
@@ -3168,13 +3168,13 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
 
     # convert stage (2): shuffle into snapshot order
     if stage == 2:
-        with h5py.File(outfile1,'r') as f:
+        with h5py.File(outfile1,'r+') as f:
             snap_index = f['snap_index'][()]
 
             sort_inds = np.argsort(snap_index)
             f['sort_inds'] = sort_inds
 
-    # sanity checks
+    # sanity checks A
     if stage == 3:
         with h5py.File(outfile1,'r') as f:
             snap_index = f['snap_index'][()]
@@ -3187,7 +3187,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
         lin_list = np.arange(numGas)
         print(np.array_equal(lin_list,new_snap_index))
 
-    # sanity checks
+    # sanity checks B
     if stage == 4:
         with h5py.File(outfile1,'r+') as f:
             x = f['x'][()] * sP.boxSize # [0,1] -> [0,sP.boxSize]
@@ -3198,16 +3198,59 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
         snap_x = sP.snapshotSubsetP('gas','pos_x')
 
         print(new_x[0:5], snap_x[0:5])
-        print(np.array_equal(new_x,snap_x))
         print(np.allclose(new_x,snap_x))
 
-    # convert stage (5)
+    # stage (5): save spatial domain information for non-groupordered datafile
     if stage == 5:
-        # create new final 'mesh' file with shuffled num_ngb and offset_ngb
+        with open(basepath.replace("posdata","domains.txt")) as f:
+            lines = f.readlines()
+
+        #Format (4 lines per chunk): (all lengths/starts in numbers of entries, not bytes)
+        #CHUNKID, NB2 start, NB2 length
+        #NB1 start, NB1 length
+        #xstart, ystart, zstart
+        #xend, yend, zend
+        nChunks = 512
+        assert len(lines) == nChunks * 4 # 512 cubic spatial subsets
+
+        # allocate
+        r = {'chunk_id'     : np.zeros( nChunks, dtype='int32' ),
+             'offset_ngb'   : np.zeros( nChunks, dtype='int64' ),
+             'num_ngb'      : np.zeros( nChunks, dtype='int64' ),
+             'offset_cells' : np.zeros( nChunks, dtype='int64' ),
+             'num_cells'    : np.zeros( nChunks, dtype='int64' ),
+             'xyz_min'      : np.zeros( (nChunks,3), dtype='float32' ),
+             'xyz_max'      : np.zeros( (nChunks,3), dtype='float32' )}
+
+        # parse
+        for i in np.arange(0, nChunks):
+            r['chunk_id'][i], r['offset_ngb'][i], r['num_ngb'][i] = [int(x) for x in lines[i*4+0].split()]
+            r['offset_cells'][i], r['num_cells'][i] = [int(x) for x in lines[i*4+1].split()]
+            r['xyz_min'][i,:] = [float(x) for x in lines[i*4+2].split()]
+            r['xyz_max'][i,:] = [float(x) for x in lines[i*4+3].split()]
+
+        # sanity checks
+        nCells = sP.snapshotHeader()['NumPart'][sP.ptNum('gas')]
+        assert np.array_equal(r['chunk_id'], np.arange(nChunks))
+        assert r['offset_ngb'].min() >= 0 and r['num_ngb'].min() >= 0
+        assert r['offset_cells'].min() >= 0 and r['num_cells'].min() >= 0 and r['offset_cells'].max() < nCells
+        assert r['xyz_min'].min() >= 0 and r['xyz_min'].max() <= 1.0
+        assert r['xyz_max'].min() >= 0 and r['xyz_max'].max() <= 1.0
+
+        # save into spatially ordered datafile
+        with h5py.File(outfile1,'r+') as f:
+            for key in r:
+                f['meta/%s' % key] = r[key]
+        print('Saved spatial metadata.')
+
+    # convert stage (6): create new final 'mesh' file with shuffled num_ngb and offset_ngb
+    if stage == 6:
+        # metadata
         with h5py.File(outfile1,'r') as f:
             sort_inds = f['sort_inds'][()]
             tot_num_entries = f['ngb_inds'].size
 
+        # read and write per-cell datasets
         for key in ['num_ngb','offset_ngb']:
             with h5py.File(outfile1,'r') as f:
                 data = f[key][()]
@@ -3223,10 +3266,10 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
                 print(i,locrange,flush=True)
                 ngb_inds[locrange[0]:locrange[1]] = -1
         
-    # convert stage (6): rewrite ngb_inds into dense, contiguous subsets following snapshot order
-    nTasks = 80
+    # convert stage (7): rewrite ngb_inds into dense, contiguous subsets following snapshot order
+    nTasks = 140
 
-    if stage == 6:
+    if stage == 7:
         with h5py.File(outfile2,'r') as f:
             num_cells = f['num_ngb'].size
 
@@ -3262,30 +3305,33 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
         with h5py.File(subfile,'w') as f:
             f['ngb_inds'] = ngb_inds
 
-    # convert stage (7): ngb_inds refer to old ordered data, rewrite while concatenating
-    if stage == 7:
-        # derive inverse sort_inds
-        with h5py.File(outfile1,'r') as f:
-            sort_inds = f['sort_inds'][()]
+    # convert stage (8): concatenate ngb_inds
+    if stage == 8:
+        # derive inverse sort_inds (NO!)
+        # ngb_inds are actually indices into the snapshot, not into the nb1 file
+        #with h5py.File(outfile1,'r') as f:
+        #    sort_inds = f['sort_inds'][()]
 
-        inv_sort_inds = np.zeros( sort_inds.size, dtype=sort_inds.dtype )
-        inv_sort_inds[sort_inds] = np.arange(sort_inds.size)
+        #inv_sort_inds = np.zeros( sort_inds.size, dtype=sort_inds.dtype )
+        #inv_sort_inds[sort_inds] = np.arange(sort_inds.size)
 
         global_min = np.inf
         global_max = -1
 
         offset = 0
 
-        print('TODO REMOVE RANGE CHANGE')
-        for i in range(20): #range(nTasks):
-            print(i, flush=True)
+        print('REMOVE -1 !!!')
+
+        for i in range(nTasks):
             subfile = outfile2.replace(".hdf5","_%d_of_%d.hdf5" % (i,nTasks))
             with h5py.File(subfile,'r') as f:
                 loc_inds = f['ngb_inds'][()]
 
+            loc_inds -= 1 # REMOVE
+
             print(i, loc_inds.min(), loc_inds.max(), flush=True)
 
-            loc_inds = inv_sort_inds[loc_inds]
+            #loc_inds = inv_sort_inds[loc_inds] # NO! see above
 
             if loc_inds.max() > global_max:
                 global_max = loc_inds.max()
@@ -3305,39 +3351,12 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
         with h5py.File(outfile1,'r') as f:
             print('should equal: ', f['ngb_inds'].size)
 
-    # convert stage (8): new offset_ngb
-    if stage == 8:
-        import pdb; pdb.set_trace() # do not run before stage 6 is finished
+    # convert stage (9): new offset_ngb
+    if stage == 9:
         with h5py.File(outfile2,'r+') as f:
             num_ngb = f['num_ngb'][()]
             offset_ngb = np.zeros(num_ngb.size, dtype='int64')
             offset_ngb[1:] = np.cumsum(num_ngb)[:-1]
             f['offset_ngb'][:] = offset_ngb
-        print('wrote new offset_ngb, final file done. can delete mesh_temp.')
-
-    # UNUSED example: for a given entry, read its neighbor (index) list
-    if stage == 9:
-        cell_index = 123456
-
-        with open(file, "rb") as f:
-            f.seek(0)
-            tot_num_cells = np.fromfile(f, dtype=np.int64, count=1)[0]
-            
-            byte_offset = 8 + cell_index * dtype_nb.itemsize
-            f.seek(byte_offset)
-
-            entry = np.fromfile(f, dtype=dtype_nb, count=1)[0]
-
-        with open(ngb_ind_file,"rb") as f:
-            f.seek(0)
-            tot_num_entries = np.fromfile(f, dtype=np.int64, count=1)[0]
-
-            byte_offset = 8 + entry['noffset'] * 8
-            byte_offset 
-            f.seek(byte_offset)
-
-            ngb_inds = np.fromfile(f, dtype=np.int64, count=entry['ncount'])
-
-        import pdb; pdb.set_trace()
 
     print('done.')

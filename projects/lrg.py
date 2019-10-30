@@ -16,6 +16,7 @@ from os.path import isfile
 
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
+from util.voronoi import voronoiThresholdSegmentation
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3
@@ -457,17 +458,18 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
     labelScale = 'physical'
     labelSim   = False
     labelHalo  = True
-    relCoords  = True
+    relCoords  = False
     rotation   = 'edge-on'
 
     size       = 400.0
     sizeType   = 'kpc'
 
     # global with ~appropriate depth (same as in ionColumnsVsImpact2D)
-    method = 'sphMap_global'
-    dv = 500.0 # +/- km/s (Zahedy), or +/- 1000 km/s (Berg)
-    depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
-    depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
+    if 1:
+        method = 'sphMap_global'
+        dv = 500.0 # +/- km/s (Zahedy), or +/- 1000 km/s (Berg)
+        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
 
     # which conf?
     if conf == 1:
@@ -480,16 +482,46 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
         panel = {'partType':'stars', 'partField':'stellarComp'}
 
     if conf == 5:
-        # NARROW SLICE!
-        nPixels = [4000,4000]
-        method = 'sphMap'
-        depthFac = 0.05
+        # NARROW SLICE! h1
+        haloIDSets = [[],[1]]
 
-        #panel = {'partType':'gas', 'partField':'cellsize_kpc', 'valMinMax':[-0.7,0.0]}
-        #panel = {'partType':'gas', 'partField':'P_gas', 'valMinMax':[2.8,4.5]}
-        #panel = {'partType':'gas', 'partField':'P_B', 'valMinMax':[1.8,4.0]}
-        panel = {'partType':'gas', 'partField':'P_tot', 'valMinMax':[2.8,4.5]}
-        #panel = {'partType':'gas', 'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]}
+        nPixels   = [2000,1500]
+        method    = 'sphMap'
+        rVirFracs = [0.01,0.02,0.05]
+        depthFac  = 0.15
+        partType  = 'gas'
+        size      = 50.0
+        cenShift  = [size/2+4,size/2*(nPixels[1]/nPixels[0])+4,0] # center on upper-right quadrant
+
+        labelZ     = False
+        labelHalo  = False
+
+        panel = []
+        panel.append( {'partField':'cellsize_kpc', 'valMinMax':[-1.0,-0.3]} )
+        panel.append( {'partField':'P_gas', 'valMinMax':[4.4,6.0]} )
+        panel.append( {'partField':'P_B', 'valMinMax':[2.8,5.2]} )
+        panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.5,1.5]} )
+
+    if conf == 6:
+        # NARROW SLICE! h19
+        haloIDSets = [[],[19]]
+
+        nPixels   = [2000,1500]
+        method    = 'sphMap'
+        rVirFracs = [0.05,0.1]
+        depthFac  = 0.2
+        partType  = 'gas'
+        size      = 80.0
+        cenShift  = [-size/2,-size/2,0] # center on lower-left
+
+        labelZ     = False
+        labelHalo  = False
+
+        panel = []
+        panel.append( {'partField':'cellsize_kpc', 'valMinMax':[-0.7,0.0]} )
+        panel.append( {'partField':'P_gas', 'valMinMax':[3.2,4.6]} )
+        panel.append( {'partField':'P_B', 'valMinMax':[2.0,3.8]} )
+        panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]} )
 
     if gallery:
         # multi-panel
@@ -518,16 +550,141 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
         for haloID in [haloIDSets[1][0]]: # list(haloIDSets[1]) + list(haloIDSets[2]):
             hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
-            panels = [panel]
+            panels = [panel] if not isinstance(panel,list) else panel
 
         class plotConfig:
             plotStyle    = 'edged'
-            rasterPx     = nPixels[0]
+            rasterPx     = nPixels
             colorbars    = True
             saveFilename = saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'].replace(" ","_"))
 
         # render
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def clumpDemographics(sP):
+    """ Plot demographics of clump population for a single halo or stacked halos. """
+
+    # config
+    haloID = 19
+
+    if 0:
+        propName = 'Mg II numdens'
+        propThreshVals = [1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]
+        propThreshComp = 'gt'
+    if 1:
+        propName = 'temp'
+        propThreshVals = [4.0,4.2,4.4]
+        propThreshComp = 'lt'
+
+    lim_size   = [0, 3.0] # linear pkpc
+    lim_mass   = [4.5, 8.5] # log msun
+    lim_ncells = [0, 40] # linear
+
+    label_size   = 'Clump Radius [ kpc ]'
+    label_mass   = 'Clump Total Mass [ log M$_{\\rm sun}$ ]'
+    label_ncells = 'Number of Gas Cells in Clump [ linear ]'
+
+    propNameDisp = "n$_{\\rm %s}$" % propName.replace(" numdens","") if "numdens" in propName else propName
+    sizefac = 1.0 if not clean else sfclean
+
+    # load
+    data = []
+
+    for i, propThresh in enumerate(propThreshVals):
+        objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, propName=propName, propThresh=propThresh, propThreshComp=propThreshComp)
+        data.append( [objs,props] )
+        print(i, 'threshold = ', propThresh, ' tot objs = ', objs['count'])
+
+    # A: sizes, masses, ncells
+    nBins = 30
+    
+    for niter, saveStr in enumerate(['size','mass','ncells']):
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
+
+        if niter == 0:
+            ax.set_xlim(lim_size)
+            ax.set_xlabel(label_size)
+            bins = np.linspace( lim_size[0], lim_size[1], nBins+1 )
+
+        if niter == 1:
+            ax.set_xlim(lim_mass)
+            ax.set_xlabel(label_mass)
+            bins = np.linspace( lim_mass[0], lim_mass[1], nBins+1 )
+
+        if niter == 2:
+            ax.set_xlim(lim_ncells)
+            ax.set_xlabel(label_ncells)
+            bins = np.linspace( lim_ncells[0], lim_ncells[1], nBins+1 )
+
+        ax.set_ylabel('Number of Clumps')
+
+        for i, propThresh in enumerate(propThreshVals):
+            # load
+            objs, props = data[i]
+
+            if niter == 0:
+                vals = sP.units.codeLengthToKpc(props['radius'])
+            if niter == 1:
+                vals = sP.units.codeMassToLogMsun(props['mass'])
+            if niter == 2:
+                vals = objs['lengths']
+
+            # histogram
+            xx = bins[:-1] + (bins[1]-bins[0])/2
+            #binsize = bins[1]-bins[0]
+
+            yy, xx2 = np.histogram(vals, bins=bins)
+
+            label = '%s %s %s' % (propNameDisp, {'gt':'>','lt':'<'}[propThreshComp], propThresh)
+            l, = ax.plot(xx, yy, '-', lw=lw, drawstyle='steps-mid', label=label)
+            ax.fill_between(xx, np.zeros(yy.size), yy, step='mid', color=l.get_color(), alpha=0.05)
+
+        ax.set_ylim([0,ax.get_ylim()[1]])
+        ax.legend()
+
+        fig.tight_layout()
+        fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,saveStr))
+        plt.close(fig)
+
+    # B: size vs mass
+    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim(lim_size)
+    ax.set_ylim(lim_mass)
+    ax.set_xlabel(label_size)
+    ax.set_ylabel(label_mass)
+
+    for i, propThresh in enumerate(propThreshVals):
+        # load
+        objs, props = data[i]
+
+        xvals = sP.units.codeLengthToKpc(props['radius'])
+        yvals = sP.units.codeMassToLogMsun(props['mass'])
+
+        # running median
+        binSize = 0.1
+        xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=[16,50,84])
+
+        if xm.size > sKn:
+            ym2 = savgol_filter(ym,sKn,sKo)
+            sm2 = savgol_filter(sm,sKn,sKo)
+            pm2 = savgol_filter(pm,sKn,sKo,axis=1)
+
+        label = '%s %s %s' % (propNameDisp, {'gt':'>','lt':'<'}[propThreshComp], propThresh)
+
+        l, = ax.plot(xm, ym2, '-', lw=lw, alpha=0.8, label=label)
+        if i in [0,len(propThreshVals)-1]:
+            ax.fill_between(xm, pm2[0,:], pm2[-1,:], facecolor=l.get_color(), alpha=0.2, interpolate=True)
+
+    ax.legend(loc='lower right')
+
+    fig.tight_layout()
+    fig.savefig('clumpDemographics_size-mass_%s.pdf' % (sP.simName))
+    plt.close(fig)
+
+    # C: 
 
 def paperPlots():
     """ Testing. """
@@ -627,16 +784,18 @@ def paperPlots():
                          contours=contours, qRestrictions=qRestrictions)
         pdf.close()
 
-    # fig 4 - vis (single halo large) gas metallicity, N_MgII, N_HI, stellar light
+    # fig 4 - vis (single halo large)
     if 0:
         sP = simParams(run='tng50-1', redshift=redshift)
         haloIDSets = _get_halo_ids(sP)
 
-        lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=True)
+        # gas metallicity, N_MgII, N_HI, stellar light
+        for conf in [0,1,2,3]:
+            lrgHaloVisualization(sP, haloIDSets, conf=conf, gallery=True)
 
         # zoomed in (high res) visualizations of multiple properties of clumps
-        haloIDSets = [[],[19]] #[[_get_halo_ids(sP)]]
-        lrgHaloVisualization(sP, haloIDSets, conf=5, gallery=False)       
+        for conf in [5,6]:
+            lrgHaloVisualization(sP, None, conf=conf, gallery=False)
 
     # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     if 0:
@@ -666,8 +825,7 @@ def paperPlots():
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
     # fig 8: 2pcf
-    if 1:
-        redshift = 0.5
+    if 0:
         sPs = [TNG50] #[TNG100, TNG300]
         ions = ['MgII'] #,'Mg','gas']
 
@@ -685,7 +843,6 @@ def paperPlots():
     if 0:
         sPs = [TNG50] #[TNG100,TNG50] #,TNG50_2,TNG50_3] #[TNG300]
         cenSatSelect = 'cen'
-        redshift = 0.5
         ions = ['AllGas_Mg','MgII','HIGK_popping']
 
         for vsHaloMass in [True,False]:
@@ -703,7 +860,6 @@ def paperPlots():
 
     # fig 10: radial profiles
     if 0:
-        redshift = 0.5
         sPs = [TNG50]
         ions = ['MgII']#,'HIGK_popping']
         cenSatSelect = 'cen'
@@ -726,7 +882,10 @@ def paperPlots():
 
     # fig todo: tpcf of single halo (0.15 < r/rvir < 1.0)
 
-    # fig todo: clump demographics: size distribution, total mass, average numdens, etc
+    # fig 11: clump demographics: size distribution, total mass, average numdens, etc
+    if 1:
+        sP = simParams(run='tng50-1', redshift=redshift)
+        clumpDemographics(sP)
 
     # fig todo: individual (or stacked) 'clump' properties, i.e. radial profiles, including pressure/cellsize
 
