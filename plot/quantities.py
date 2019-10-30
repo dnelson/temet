@@ -87,7 +87,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla',
                    'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo',
                    'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi',
-                   'stellar_zform_vimos']
+                   'stellar_zform_vimos','size_halpha']
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur','color_nodust_UV','color_nodust_VJ','color_C-30kpc-z_UV','color_C-30kpc-z_VJ']
 
@@ -445,6 +445,19 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'Stellar R$_{\\rm e}$ [ log kpc ]'
         minMax = [0.1, 1.6]
         if tight: minMax = [0.2, 1.8]
+
+    if quant == 'size_halpha':
+        fieldName = 'Subhalo_Gas_Halpha_HalfRad'
+        ac = sP.auxCat(fieldName)
+
+        vals = sP.units.codeLengthToKpc(ac[fieldName])
+
+        label = 'Gas r$_{\\rm 1/2,H\\alpha}$ [ log kpc ]'
+        minMax = [0.5, 2.0]
+        if tight: minMax = [1.0, 2.2]
+
+        minMax[0] -= sP.redshift/4
+        minMax[1] -= sP.redshift/4
 
     if quant in ['shape_q_sfrgas','shape_q_stars','shape_s_sfrgas','shape_s_stars','shape_ratio_sfrgas','shape_ratio_stars']:
         # iterative ellipsoid shape measurements: sphericity (s)
