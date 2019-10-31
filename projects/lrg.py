@@ -564,125 +564,172 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
 def clumpDemographics(sP):
     """ Plot demographics of clump population for a single halo or stacked halos. """
 
+    # TODO: visually verify a ~1.5kpc clump by weighting those indices to zero in vis()
+
     # config
     haloID = 19
 
-    if 0:
-        propName = 'Mg II numdens'
-        propThreshVals = [1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]
-        propThreshComp = 'gt'
-    if 1:
-        propName = 'temp'
-        propThreshVals = [4.0,4.2,4.4]
-        propThreshComp = 'lt'
+    threshSets = []
 
-    lim_size   = [0, 3.0] # linear pkpc
-    lim_mass   = [4.5, 8.5] # log msun
-    lim_ncells = [0, 40] # linear
+    for val in [1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]:
+        label = "n$_{\\rm Mg II}$ > %s cm$^{-3}$" % val
+        threshSets.append( {'propName':'Mg II numdens', 'propThreshComp':'gt', 'propThresh':val, 'label':label})
 
-    label_size   = 'Clump Radius [ kpc ]'
-    label_mass   = 'Clump Total Mass [ log M$_{\\rm sun}$ ]'
-    label_ncells = 'Number of Gas Cells in Clump [ linear ]'
+    #for val in [4.0,4.2,4.4,4.8]:
+    #    label = "log(T) < %.1f K" % val
+    #    threshSets.append( {'propName':'temp_sfcold', 'propThreshComp':'lt', 'propThresh':val, 'label':label})
 
-    propNameDisp = "n$_{\\rm %s}$" % propName.replace(" numdens","") if "numdens" in propName else propName
+    #threshSets.append( {'propName':'sfr', 'propThreshComp':'gt', 'propThresh':1e-10, 'label':'SFR > 0'})
+    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.02, 'label':'n$_{\\rm H}$ > 0.02 cm$^{-3}$'})
+    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.1, 'label':'n$_{\\rm H}$ > 0.1 cm$^{-3}$'})
+    #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.5, 'label':'n$_{\\rm H}$ > 0.5 cm$^{-3}$'})
+
+    lims = {'size'     : [0, 3.0],    # linear pkpc
+            'mass'     : [4.5, 8.5],  # log msun
+            'ncells'   : [0, 40],     # linear
+            'dist'     : [0, 500],    # linear pkpc
+            'dens'     : [-3.0, 2.5], # log cc
+            'temp'     : [3.5,5.0],   # log K
+            'bmag'     : [-1.0,2.0],  # log G
+            'beta'     : [-2.0, 1.0], # log
+            'sfr'      : [0, 0.01],    # linear msun/yr
+            'metal'    : [-1.4, 0.4], # log solar
+            'rcell1'   : [0, 800],    # linear parsec
+            'rcell2'   : [0, 800],    # linear parsec
+            'mg2_mass' : [0.0, 5.0],  # log msun
+            'hi_mass'  : [2.0, 7.0]}  # log msun
+
+    labels = {'size'     : 'Clump Radius [ kpc ]',
+              'mass'     : 'Clump Total Mass [ log M$_{\\rm sun}$ ]',
+              'ncells'   : 'Number of Gas Cells [ linear ]',
+              'dist'     : 'Halocentric Distance [ kpc ]',
+              'dens'     : 'Mean Hydrogen Number Density [ log cm$^{-3}$ ]',
+              'temp'     : 'Mean Clump Temperature [ log K ]',
+              'bmag'     : 'Mean Clump Magnetic Field Strength [ log $\mu$G ]',
+              'beta'     : 'Mean $\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]',
+              'sfr'      : 'Total Clump Star Formation Rate [ M$_{\\rm sun}$ / yr ]',
+              'metal'    : 'Mean Clump Gas Metallicity [ log Z$_{\\rm sun}$ ]',
+              'rcell1'   : 'Average Member Gas r$_{\\rm cell}$ [ parsec ]',
+              'rcell2'   : 'Smallest Member Gas r$_{\\rm cell}$ [ parsec ]',
+              'mg2_mass' : 'Total MgII Mass [ log M$_{\\rm sun}$ ]',
+              'hi_mass'  : 'Total Neutral HI Mass [ log M$_{\\rm sun}$ ]'}
+
+    nBins1D = 100 # 1d histograms
+
+    configs_2d = ['size-mass','ncells-size','size-dist','ncells-dist','dens-size',
+                  'temp-size','bmag-size','beta-size','sfr-size','metal-size','rcell1-size','rcell2-size',
+                  'mg2_mass-size','hi_mass-size','metal-dist']
+
     sizefac = 1.0 if not clean else sfclean
 
     # load
     data = []
 
-    for i, propThresh in enumerate(propThreshVals):
-        objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, propName=propName, propThresh=propThresh, propThreshComp=propThreshComp)
-        data.append( [objs,props] )
-        print(i, 'threshold = ', propThresh, ' tot objs = ', objs['count'])
+    for i, th in enumerate(threshSets):
+        objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
+            propName=th['propName'], propThresh=th['propThresh'], propThreshComp=th['propThreshComp'])
 
-    # A: sizes, masses, ncells
-    nBins = 30
-    
-    for niter, saveStr in enumerate(['size','mass','ncells']):
+        # some common unit conversions
+        values = {}
+        values['size']   = sP.units.codeLengthToKpc(props['radius'])
+        values['mass']   = sP.units.codeMassToLogMsun(props['mass'])
+        values['ncells'] = objs['lengths']
+        values['dist']   = sP.units.codeLengthToKpc(props['distance'])
+        values['dens']   = np.log10(props['dens_mean'])
+        values['temp']   = np.log10(props['temp_mean'])
+        values['bmag']   = np.log10(props['bmag_mean'] * 1e6)
+        values['beta']   = np.log10(props['beta_mean'])
+        values['sfr']    = props['sfr_tot']
+        values['metal']  = np.log10(props['metal_mean'])
+        values['rcell1'] = sP.units.codeLengthToKpc(props['rcell_mean']) * 1000
+        values['rcell2'] = sP.units.codeLengthToKpc(props['rcell_min']) * 1000
+        values['mg2_mass'] = sP.units.codeMassToLogMsun(props['mg2_mass'])
+        values['hi_mass']  = sP.units.codeMassToLogMsun(props['hi_mass'])
+
+        data.append( [objs,props,values] )
+        print(i, 'prop = ', th['propName'], ' ', th['propThreshComp'], ' ', th['propThresh'], ' tot objs = ', objs['count'])
+
+    # A: 1D histograms of all properties
+    for config in lims.keys():
         fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
         ax = fig.add_subplot(111)
 
-        if niter == 0:
-            ax.set_xlim(lim_size)
-            ax.set_xlabel(label_size)
-            bins = np.linspace( lim_size[0], lim_size[1], nBins+1 )
-
-        if niter == 1:
-            ax.set_xlim(lim_mass)
-            ax.set_xlabel(label_mass)
-            bins = np.linspace( lim_mass[0], lim_mass[1], nBins+1 )
-
-        if niter == 2:
-            ax.set_xlim(lim_ncells)
-            ax.set_xlabel(label_ncells)
-            bins = np.linspace( lim_ncells[0], lim_ncells[1], nBins+1 )
-
+        lim = lims[config]
+        ax.set_xlabel(labels[config])
+        ax.set_xlim(lim)
         ax.set_ylabel('Number of Clumps')
 
-        for i, propThresh in enumerate(propThreshVals):
-            # load
-            objs, props = data[i]
+        nBins = nBins1D if config != 'ncells' else lim[1]
 
-            if niter == 0:
-                vals = sP.units.codeLengthToKpc(props['radius'])
-            if niter == 1:
-                vals = sP.units.codeMassToLogMsun(props['mass'])
-            if niter == 2:
-                vals = objs['lengths']
+        binsize = (lim[1] - lim[0]) / nBins
+        bins = np.linspace( lim[0]-binsize, lim[1]+binsize, nBins+3 )
+
+        for i, th in enumerate(threshSets):
+            # load
+            objs, props, values = data[i]
+
+            vals = values[config]
 
             # histogram
-            xx = bins[:-1] + (bins[1]-bins[0])/2
-            #binsize = bins[1]-bins[0]
+            yy, xx = np.histogram(vals, bins=bins)
+            xx = xx[:-1] + binsize/2 # mid
 
-            yy, xx2 = np.histogram(vals, bins=bins)
-
-            label = '%s %s %s' % (propNameDisp, {'gt':'>','lt':'<'}[propThreshComp], propThresh)
-            l, = ax.plot(xx, yy, '-', lw=lw, drawstyle='steps-mid', label=label)
+            #label = '%s %s %s' % (th['dispName'], {'gt':'>','lt':'<'}[propThreshComp], propThresh)
+            l, = ax.plot(xx, yy, '-', lw=lw, drawstyle='steps-mid', label=th['label'])
             ax.fill_between(xx, np.zeros(yy.size), yy, step='mid', color=l.get_color(), alpha=0.05)
 
         ax.set_ylim([0,ax.get_ylim()[1]])
         ax.legend()
 
         fig.tight_layout()
-        fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,saveStr))
+        fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,config))
         plt.close(fig)
 
     # B: size vs mass
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
-    ax = fig.add_subplot(111)
+    for config in configs_2d:
+        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        ax = fig.add_subplot(111)
 
-    ax.set_xlim(lim_size)
-    ax.set_ylim(lim_mass)
-    ax.set_xlabel(label_size)
-    ax.set_ylabel(label_mass)
+        yname, xname = config.split('-')
 
-    for i, propThresh in enumerate(propThreshVals):
-        # load
-        objs, props = data[i]
+        ax.set_xlim(lims[xname])
+        ax.set_ylim(lims[yname])
+        ax.set_xlabel(labels[xname])
+        ax.set_ylabel(labels[yname])
 
-        xvals = sP.units.codeLengthToKpc(props['radius'])
-        yvals = sP.units.codeMassToLogMsun(props['mass'])
+        for i, th in enumerate(threshSets):
+            # load
+            objs, props, values = data[i]
 
-        # running median
-        binSize = 0.1
-        xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=[16,50,84])
+            xvals = values[xname]
+            yvals = values[yname]
 
-        if xm.size > sKn:
-            ym2 = savgol_filter(ym,sKn,sKo)
-            sm2 = savgol_filter(sm,sKn,sKo)
-            pm2 = savgol_filter(pm,sKn,sKo,axis=1)
+            if xvals.size == 1:
+                ax.plot(xvals,yvals,'o',label=th['label'])
+                continue
 
-        label = '%s %s %s' % (propNameDisp, {'gt':'>','lt':'<'}[propThreshComp], propThresh)
+            # running median
+            binSize = (lims[xname][1] - lims[xname][0]) / nBins1D
+            if xname == 'ncells': binSize = 1
+            xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=[16,50,84])
 
-        l, = ax.plot(xm, ym2, '-', lw=lw, alpha=0.8, label=label)
-        if i in [0,len(propThreshVals)-1]:
-            ax.fill_between(xm, pm2[0,:], pm2[-1,:], facecolor=l.get_color(), alpha=0.2, interpolate=True)
+            #if xm.size > sKn:
+            #    ym2 = savgol_filter(ym,sKn,sKo)
+            #    sm2 = savgol_filter(sm,sKn,sKo)
+            #    pm2 = savgol_filter(pm,sKn,sKo,axis=1)
 
-    ax.legend(loc='lower right')
+            #if yname == 'ncells' and xname == 'size':
+            #    import pdb; pdb.set_trace()
 
-    fig.tight_layout()
-    fig.savefig('clumpDemographics_size-mass_%s.pdf' % (sP.simName))
-    plt.close(fig)
+            l, = ax.plot(xm, ym, '-', lw=lw, alpha=0.8, label=th['label'])
+            if i in [0,len(threshSets)-1]:
+                ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.2, interpolate=True)
+
+        ax.legend(loc='lower right')
+
+        fig.tight_layout()
+        fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,config))
+        plt.close(fig)
 
     # C: 
 

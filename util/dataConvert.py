@@ -3078,14 +3078,14 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
     from util.simParams import simParams
     from util.helper import pSplitRange
 
-    sP = simParams(run='tng50-1', redshift=0.5)
-    basepath = "/freya/ptmp/mpa/cbyrohl/public/vppp_dataset/IllustrisTNG50_z0.5_posdata"
+    sP = simParams(run='tng50-2', redshift=0.5)
+    basepath = "/freya/ptmp/mpa/cbyrohl/public/vppp_dataset/IllustrisTNG50-2_z0.5_posdata"
 
     file1 = basepath + ".bin.nb"
     file2 = basepath + ".bin.nb2"
 
-    outfile1 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_spatialorder_%02d.hdf5" % sP.snap
-    outfile2 = "/u/dnelson/sims.TNG/L35n2160TNG/data.files/voronoi/mesh_%02d.hdf5" % sP.snap
+    outfile1 = "/u/dnelson/sims.TNG/L35n1080TNG/data.files/voronoi/mesh_spatialorder_%02d.hdf5" % sP.snap
+    outfile2 = "/u/dnelson/sims.TNG/L35n1080TNG/data.files/voronoi/mesh_%02d.hdf5" % sP.snap
 
     dtype_nb = np.dtype([
         ("x", np.float64),
@@ -3267,7 +3267,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
                 ngb_inds[locrange[0]:locrange[1]] = -1
         
     # convert stage (7): rewrite ngb_inds into dense, contiguous subsets following snapshot order
-    nTasks = 140
+    nTasks = 10 #140
 
     if stage == 7:
         with h5py.File(outfile2,'r') as f:
@@ -3307,31 +3307,18 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
 
     # convert stage (8): concatenate ngb_inds
     if stage == 8:
-        # derive inverse sort_inds (NO!)
-        # ngb_inds are actually indices into the snapshot, not into the nb1 file
-        #with h5py.File(outfile1,'r') as f:
-        #    sort_inds = f['sort_inds'][()]
-
-        #inv_sort_inds = np.zeros( sort_inds.size, dtype=sort_inds.dtype )
-        #inv_sort_inds[sort_inds] = np.arange(sort_inds.size)
-
+        # note: do not need to permute ngb_inds, since they are indices into the snapshot, not into the nb1 file
         global_min = np.inf
         global_max = -1
 
         offset = 0
-
-        print('REMOVE -1 !!!')
 
         for i in range(nTasks):
             subfile = outfile2.replace(".hdf5","_%d_of_%d.hdf5" % (i,nTasks))
             with h5py.File(subfile,'r') as f:
                 loc_inds = f['ngb_inds'][()]
 
-            loc_inds -= 1 # REMOVE
-
             print(i, loc_inds.min(), loc_inds.max(), flush=True)
-
-            #loc_inds = inv_sort_inds[loc_inds] # NO! see above
 
             if loc_inds.max() > global_max:
                 global_max = loc_inds.max()
