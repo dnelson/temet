@@ -1398,6 +1398,10 @@ def snapshotSubset(sP, partType, fields,
             P_B   = sP.units.calcMagneticPressureCGS(b)
             r[field] = P_B/P_gas
 
+        # beta = P_therm / P_B (inverse of above pressure ratio) [linear]
+        if field.lower() in ['beta']:
+            r[field] = 1.0 / snapshotSubset(sP, partType, 'pres_ratio', **kwargs)
+
         # u_B_ke_ratio (linear ratio of magnetic to kinetic energy density)
         if field.lower() in ['u_b_ke_ratio','magnetic_kinetic_edens_ratio','b_ke_edens_ratio']:
             u_b = snapshotSubset(sP, partType, 'p_b', **kwargs) # [log K/cm^3]
@@ -1614,8 +1618,14 @@ def snapshotSubset(sP, partType, fields,
         if '_popping' in field.lower():
             # use Popping+2019 pre-computed results in 'hydrogen' postprocessing catalog
             # e.g. 'MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping'
-            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
-            
+            if haloID is not None or subhaloID is not None:
+                subset = _haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
+
+                indStart = subset['offsetType'][sP.ptNum(partType)]
+                indStop  = indStart + subset['lenType'][sP.ptNum(partType)]
+
+                indRange = [indStart, indStop - 1]
+
             path = sP.postPath + 'hydrogen/gas_%03d.hdf5' % sP.snap
             key = field.split('_popping')[0]
 

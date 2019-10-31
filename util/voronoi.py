@@ -52,45 +52,123 @@ def _contiguousVoronoiCells(num_ngb, offset_ngb, ngb_inds, prop_val, identity, m
     Only those with thresh_mask == True are assigned. Identity output. """
     ncells = num_ngb.size
 
+    # process cells in a sorted order (ascending if mode==1/lt, descending if mode==0/gt)
+    # note: result is independent of this processing order if we include the merge stage
+    sort_inds = np.argsort(prop_val, kind='mergesort')
+
     count = 0
 
     # loop over all cells
     for i in range(ncells):
-        # skip cells which do not satisfy threshold
+        # which cell?
         if mode == 0:
-            if prop_val[i] < propThresh:
+            cell_index_i = sort_inds[ncells-i-1]
+        if mode == 1:
+            cell_index_i = sort_inds[i]
+
+        # skip cells which do not satisfy threshold
+        if mode == 0 and prop_val[cell_index_i] < propThresh:
+            continue
+
+        if mode == 1 and prop_val[cell_index_i] > propThresh:
+            continue
+
+        # loop over all natural neighbors of this cell
+        for j in range(num_ngb[cell_index_i]):
+            # index of this voronoi neighbor
+            ngb_index = offset_ngb[cell_index_i] + j
+            cell_index_j = ngb_inds[ngb_index]
+
+            # if neighbor is not in FoF-scope particle load, skip
+            if cell_index_j == -1:
                 continue
 
-        if mode == 1:
-            if prop_val[i] >= propThresh:
+            # if the neighbor does not satisfy threshold, skip
+            if mode == 0 and prop_val[cell_index_j] < propThresh:
                 continue
+
+            if mode == 1 and prop_val[cell_index_j] > propThresh:
+                continue
+
+            # if the neighbor belongs to an existing object? then assign to this cell, and exit
+            if identity[cell_index_j] >= 0:
+                identity[cell_index_i] = identity[cell_index_j]
+                break
+
+        # no neighbors already assigned, so start a new object now
+        if identity[cell_index_i] < 0:
+            identity[cell_index_i] = count
+            count += 1
+
+    # iterate: merge step
+    assert np.max(identity) + 1 == count
+
+    for niter in range(1000):
+        changes_count = 0
+
+        for i in range(ncells):
+            # skip cells which do not below to any object
+            if identity[i] < 0:
+                continue
+
+            # loop over all natural neighbors of this cell
+            for j in range(num_ngb[i]):
+                # index of this voronoi neighbor
+                ngb_index = offset_ngb[i] + j
+                cell_index_j = ngb_inds[ngb_index]
+
+                if identity[cell_index_j] < 0:
+                    continue
+
+                # neighbor belongs to an object with a lower id? merge cell (i) into this object
+                if identity[cell_index_j] < identity[i]:
+                    identity[i] = identity[cell_index_j]
+                    changes_count += 1
+
+        # converged?
+        if changes_count == 0:
+            break
+
+    # debug check: every assigned cells should have neighbors with the same identity, or identity == -1
+    for i in range(ncells):
+        # skip cells which do not below to any object
+        if identity[i] < 0:
+            continue
 
         # loop over all natural neighbors of this cell
         for j in range(num_ngb[i]):
             # index of this voronoi neighbor
             ngb_index = offset_ngb[i] + j
-            cell_index = ngb_inds[ngb_index]
+            cell_index_j = ngb_inds[ngb_index]
 
-            # if neighbor is not in FoF-scope particle load, skip
-            if cell_index == -1:
+            if identity[cell_index_j] < 0:
                 continue
 
-            # if the neighbor does not satisfy threshold, skip
-            if mode == 0 and prop_val[cell_index] < propThresh:
-                continue
+            assert identity[i] == identity[cell_index_j]
 
-            if mode == 1 and prop_val[cell_index] >= propThresh:
-                continue
+    # identity IDs are now sparse, condense
+    c = np.zeros(count, dtype=np.int32) - 1
 
-            # if the neighbor belongs to an existing object? then assign to this cell, and exit
-            if identity[cell_index] >= 0:
-                identity[i] = identity[cell_index]
-                break
+    for i in range(identity.size):
+        if identity[i] >= 0:
+            c[identity[i]] = 1
 
-        # no neighbors already assigned, so start a new object now
-        if identity[i] < 0:
-            identity[i] = count
+    count = 0
+
+    # create mapping (old ID -> new ID)
+    for i in range(c.size):
+        if c[i] > 0:
+            # old ID still exists, assign a new dense ID, and recount
+            c[i] = count
             count += 1
+
+    # relabel cells
+    for i in range(ncells):
+        if identity[i] >= 0:
+            assert c[identity[i]] >= 0
+            identity[i] = c[identity[i]]
+
+    assert np.max(identity) + 1 == count
 
     return count
 
@@ -98,6 +176,7 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
     """ For all the gas cells of a given halo, identify collections which are spatially connected in the 
     sense that they are Voronoi natural neighbors, and which satisfy a threshold criterion on a particular 
     gas property, e.g. log(T) < 4.5. """
+    assert propThresh != 0.0, 'Better to use +/- 1e-10 for instance, to avoid issues around zero.'
 
     saveFilename = sP.derivPath + 'voronoi/segmentation_%d_h%d_%s_%s_%s.hdf5' % \
       (sP.snap,haloID,propName.replace(" ","-"),propThreshComp,propThresh)
@@ -123,13 +202,16 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
 
     assert prop_val.shape[0] == num_ngb.size
 
-    # sub-select based on property threshold
+    # shift property threshold to zero
     if propThreshComp == 'gt':
-        w_thresh = np.where(prop_val >= propThresh)
+        w_thresh = np.where(prop_val > propThresh)
         mode = 0
     if propThreshComp == 'lt':
         w_thresh = np.where(prop_val < propThresh)
         mode = 1
+
+    frac_cells = len(w_thresh[0]) / ncells * 100
+    print('segmentation: %.1f%% of the total [%d] cells satisfy threshold (%s %s %s)' % (frac_cells,ncells,propName,propThreshComp,propThresh))
 
     # run segmentation algorithm
     identity = np.zeros( ncells, dtype='int32' ) - 1
@@ -138,13 +220,14 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
 
     count = _contiguousVoronoiCells(num_ngb, offset_ngb, ngb_inds, prop_val, identity, mode, propThresh)
 
-    print('segmentation took [%.1f] sec' % (time.time()-start_time))
+    print('segmentation found [%d] objects, took [%.1f] sec' % (count,time.time()-start_time))
 
-    # all cells satisfying threshold should have been assigned
-    assert identity[w_thresh].min() >= 0
+    # due to small round off differences, we take the answer of identity to determine which cells satisfy the threshold
+    w_thresh = np.where(identity >= 0)
 
     # count number of cells per object
     lengths = np.bincount(identity[w_thresh])
+    assert lengths.size == count and lengths.min() > 0
 
     # create mapping from (assigned cells) -> (parent object index)
     bins = np.arange( identity[w_thresh].max()+1 )
@@ -158,30 +241,57 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
 
     # per object: compute volume, radius, mass (tot), prop (tot), prop (mean), prop (median)
     print('loading additional data for properties...')
-    mass = sP.snapshotSubset('gas', 'mass', haloID=haloID)
-    dens = sP.snapshotSubset('gas', 'nh', haloID=haloID)
-    vol  = sP.snapshotSubset('gas', 'volume', haloID=haloID)
-    pos  = sP.snapshotSubset('gas', 'pos', haloID=haloID)
+    mass  = sP.snapshotSubset('gas', 'mass', haloID=haloID)
+    dens  = sP.snapshotSubset('gas', 'nh', haloID=haloID)
+    temp  = sP.snapshotSubset('gas', 'temp_sfcold', haloID=haloID)
+    bmag  = sP.snapshotSubset('gas', 'bmag', haloID=haloID)
+    rcell = sP.snapshotSubset('gas', 'cellsize_kpc', haloID=haloID)
+    vol   = sP.snapshotSubset('gas', 'volume', haloID=haloID)
+    pos   = sP.snapshotSubset('gas', 'pos', haloID=haloID)
+    sfr   = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
+    metal = sP.snapshotSubset('gas', 'z_solar', haloID=haloID)
+    beta  = sP.snapshotSubset('gas', 'beta', haloID=haloID)
 
-    props = {'vol'         : np.zeros(count, dtype='float32'),
-             'mass'        : np.zeros(count, dtype='float32'),
-             'dens_mean'   : np.zeros(count, dtype='float32'),
-             'prop_tot'    : np.zeros(count, dtype='float32'),
-             'prop_mean'   : np.zeros(count, dtype='float32'),
-             'prop_median' : np.zeros(count, dtype='float32'),
-             'cen'         : np.zeros( (count,3), dtype='float32'),
-             'cen_masswt'  : np.zeros( (count,3), dtype='float32'),
-             'cen_denswt'  : np.zeros( (count,3), dtype='float32'),
-             'cen_propwt'  : np.zeros( (count,3), dtype='float32')}
+    mg2_mass = sP.snapshotSubset('gas', 'Mg II mass', haloID=haloID)
+    hi_mass  = sP.snapshotSubset('gas', 'MHIGK_popping', haloID=haloID)
+
+    props = {'vol'         : np.zeros(count, dtype='float32'), # code units
+             'mass'        : np.zeros(count, dtype='float32'), # code units
+             'dens_mean'   : np.zeros(count, dtype='float32'), # linear 1/cm^3
+             'temp_mean'   : np.zeros(count, dtype='float32'), # linear K
+             'bmag_mean'   : np.zeros(count, dtype='float32'), # physical Gauss
+             'rcell_mean'  : np.zeros(count, dtype='float32'), # pkpc
+             'rcell_min'   : np.zeros(count, dtype='float32'), # pkpc
+             'sfr_tot'     : np.zeros(count, dtype='float32'), # msun/yr
+             'metal_mean'  : np.zeros(count, dtype='float32'), # linear solar
+             'beta_mean'   : np.zeros(count, dtype='float32'), # linear
+             'mg2_mass'    : np.zeros(count, dtype='float32'), # code units
+             'hi_mass'     : np.zeros(count, dtype='float32'), # code units
+             'prop_tot'    : np.zeros(count, dtype='float32'), # code
+             'prop_mean'   : np.zeros(count, dtype='float32'), # code
+             'prop_median' : np.zeros(count, dtype='float32'), # code
+             'cen'         : np.zeros( (count,3), dtype='float32'), # code xyz
+             'cen_masswt'  : np.zeros( (count,3), dtype='float32'), # code xyz
+             'cen_denswt'  : np.zeros( (count,3), dtype='float32'), # code xyz
+             'cen_propwt'  : np.zeros( (count,3), dtype='float32')} # code xyz
 
     for i in range(count):
-        if i % int(count/10) == 0: print('%d%%' % ((i+1)/count*100))
+        if i % np.max([int(count/10),1]) == 0: print('%d%%' % ((i+1)/count*100))
         loc_inds = cell_inds[offsets[i] : offsets[i] + lengths[i]]
         assert identity[loc_inds].min() == i and identity[loc_inds].max() == i
 
-        props['vol'][i] = vol[loc_inds].sum()
-        props['mass'][i] = mass[loc_inds].sum()
-        props['dens_mean'][i] = dens[loc_inds].sum()
+        props['vol'][i]        = vol[loc_inds].sum()
+        props['mass'][i]       = mass[loc_inds].sum()
+        props['dens_mean'][i]  = dens[loc_inds].mean()
+        props['temp_mean'][i]  = 10.0**temp[loc_inds].mean()
+        props['bmag_mean'][i]  = bmag[loc_inds].mean()
+        props['rcell_mean'][i] = rcell[loc_inds].mean()
+        props['rcell_min'][i]  = rcell[loc_inds].min()
+        props['sfr_tot'][i]    = sfr[loc_inds].sum()
+        props['metal_mean'][i] = metal[loc_inds].mean()
+        props['beta_mean'][i]  = beta[loc_inds].mean()
+        props['mg2_mass'][i]   = mg2_mass[loc_inds].sum()
+        props['hi_mass'][i]    = hi_mass[loc_inds].sum()
 
         props['cen'][i,:] = np.average( pos[loc_inds,:], axis=0 )
         props['cen_masswt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=mass[loc_inds] )
@@ -192,7 +302,10 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
         props['prop_mean'][i] = np.nanmean( prop_val[loc_inds] )
         props['prop_median'][i] = np.nanmedian( prop_val[loc_inds] )
     
-    props['radius'] = (props['vol'] * 3.0 / (4*np.pi))**(1.0/3.0)
+    props['radius'] = (props['vol'] * 3.0 / (4*np.pi))**(1.0/3.0) # code units
+
+    halo_cen = sP.groupCatSingle(haloID=haloID)['GroupPos']
+    props['distance'] = sP.periodicDists(halo_cen, props['cen']) # code units
 
     # save
     objects = {'count':count, 'lengths':lengths, 'offsets':offsets, 'obj_inds':obj_inds, 'cell_inds':cell_inds, 'identity':identity}
