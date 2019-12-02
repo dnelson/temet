@@ -56,54 +56,115 @@ def write_ic_file(fileName, partTypes, boxSize, massTable=None, headerExtra=None
 
 def visualize_result_2d(basePath):
     """ Helper function to load density_field_NNN projection files and plot a series of PNG frames. """
-    boxSize = 1.0
-    path = basePath + '/output/density_field_'
+    path = basePath + '/output/'
 
-    vMM = None
-    figsize = (16,14)
+    #vMM = None # automatic
+    #figsize = (16,14)
+
+    figsize = None # automatic
+    clean = True
+
+    # config3
+    vMM = [0.2, 5.0]
+    cmap = 'viridis'
+
+    # config4
+    #vMM = [0.6, 4.0]
+    #cmap = 'twilight_shifted'
+
+    # config7
+    #vMM = [0.4, 1.2]
+    #cmap = 'magma'
+
 
     # loop over snapshots
-    nSnaps = len(glob.glob(path+'*'))
+    nSnaps = len(glob.glob(path + 'density_field_*'))
 
     for i in range(nSnaps):
         print(i)
 
         # load
-        with open(path + '%03d' % i, mode='rb') as f:
+        with open(path + 'density_field_%03d' % i, mode='rb') as f:
             data = f.read()
 
         # unpack
         nPixelsX = struct.unpack('i', data[0:4])[0]
         nPixelsY = struct.unpack('i', data[4:8])[0]
 
-        nGridFloats = (len(data)-8) / 4
+        nGridFloats = int((len(data)-8) / 4)
         grid = struct.unpack('f' * nGridFloats, data[8:])
         grid = np.array(grid).reshape( (nPixelsX,nPixelsY) )
 
+        # fix border artifacts
+        if 1:
+            w = np.where( grid[0,:]>(grid[0,:].mean()+np.std(grid[0,:])) )
+            grid[0,w] = grid[1,w]
+
+            w = np.where( grid[-1,:]>(grid[-1,:].mean()+np.std(grid[-1,:])) )
+            grid[-1,w] = grid[-2,w]
+
+            w = np.where( grid[:,0]>(grid[:,0].mean()+np.std(grid[:,0])) )
+            grid[w,0] = grid[w,1]
+
+            w = np.where( grid[:,-1]>(grid[:,-1].mean()+np.std(grid[:,-1])) )
+            grid[w,-1] = grid[w,-2]
+
+            fac = 1.3
+            w = np.where( grid[:,0] > grid[:,1]*fac )
+            grid[w,0] = grid[w,1]
+            w = np.where( grid[:,-1] > grid[:,-2]*fac )
+            grid[w,-1] = grid[w,-2]
+            w = np.where( grid[0,:] > grid[1,:]*fac )
+            grid[w,0] = grid[w,1]
+            w = np.where( grid[-1,:] > grid[-2,:]*fac )
+            grid[w,-1] = grid[w,-2]
+
         if vMM is None: vMM = [grid.min(), grid.max()] # set on first snap
 
-        # plot
+        # get time
+        with h5py.File(path + 'snap_%03d.hdf5' % i,'r') as f:
+            time = f['Header'].attrs['Time']
+            boxSize = f['Header'].attrs['BoxSize']
+
+        # start plot
+        if figsize is None: figsize = (nPixelsX/100,nPixelsY/100) # exact
+
         fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_title('snapshot %03d' % i)
 
-        plt.imshow(grid.T, extent=[0,boxSize,0,boxSize], cmap='magma', aspect=1.0)
-        ax.autoscale(False)
-        plt.clim(vMM)
+        # plot (clean)
+        if clean:
+            ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
+            ax.set_axis_off()
 
-        # colorbar
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(cax=cax)
-        cb.ax.set_ylabel('Density')
+            plt.imshow(grid.T, cmap=cmap, aspect='equal')
+            ax.autoscale(False)
+            plt.clim(vMM)
 
-        fig.tight_layout()
+            ax.text(nPixelsX-10, nPixelsY-10, "t = %5.3f" % time, color='white', alpha=0.6, ha='right', va='top')
+
+        # plot (with axes, colorbar)
+        if not clean:
+            ax = fig.add_subplot(111)            
+
+            plt.imshow(grid.T, extent=[0,boxSize,0,boxSize], cmap=cmap, aspect='equal')
+            ax.autoscale(False)
+            plt.clim(vMM)
+
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_title('snapshot %03d' % i)
+
+            cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+            cb = plt.colorbar(cax=cax)
+            cb.ax.set_ylabel('Density')
+
+            fig.tight_layout()
+
         fig.savefig('density_%d.png' % i)
         plt.close(fig)
 
     # if ffmpeg exists, make a movie
-    cmd = ['ffmpeg','-framerate','10','-i','density_%d.png','-pix_fmt','yuv420p','movie.mp4','-y']
+    cmd = ['ffmpeg','-framerate','30','-i','density_%d.png','-pix_fmt','yuv420p','movie.mp4','-y']
     try:
         output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, cwd='%s/vis/' % path)
     except:
