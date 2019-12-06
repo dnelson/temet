@@ -14,32 +14,40 @@ from os.path import isfile, isdir, expanduser
 
 def plotUsersData():
     """ Parse and plot a user data dump from the Illustris public data release website. """
-    
+    from vis.common import setAxisColors
+    from util.helper import getWhiteBlackColors
+    from plot.config import linestyles, figsize, lw
+
     # config
-    col_headers = ["Date","NumUsers","Num30","CountApi","CountFits","CountSnapUni","CountSnapSub",
+    col_headers = ["Date","NumUsers","Num30","NumLab","CountLogin","CountApi",
+                   "CountFits","CountLabLogins","CountSnapUni","CountSnapSub",
                    "SizeUni","SizeSub","CountGroup","CountLHaloTree","CountSublink","CutoutSubhalo",
                    "CutoutSublink"]
-    labels = ["Total Number of Users","Users Active in Last 30 Days","Total API Requests", # / $10^3$
-              "FITS File Downloads","Number of Downloads: Snapshots [Uniform]", #  / $10^2$
-              "Number of Downloads: Snapshots [Subbox]","Total Download Size: Uniform [TB]",
-              "Total Download Size: Subbox [TB]", "Number of Downloads: Group Catalogs",
+    labels = ["Total Users","Users Active in Last 30 Days","Users with TNG-Lab Access",
+              "Total Logins", "Total API Requests","FITS File Downloads", # / $10^3$
+              "Total Lab Logins", "# Snapshots Downloaded", #  / $10^2$
+              "# Snapshots [Subbox]","Download Volume [TB]",
+              "Total Download Size: Subbox [TB]", "# Catalogs Downloaded",
               "Number of Downloads: LHaloTree","Number of Downloads: Sublink",
               "Cutout Requests: Subhalos","Cutout Requests: Sublink"]
-    #facs = [1,1,1e3,1e2,1,1,1e3,1e3,1,1,1,1,1]
-    facs = [1,1,1,1,1,1,1e3,1e3,1,1,1,1,1]
-    facs2 = [0.80,0.85,1.06,1.06,1.1,1.06,0.75,1.06,1.06,1.06,1.06,1.06,0.82]
-    sym  = ['-','-','-','-','--','--',':',':','--','--','--','-','-']
 
-    lw = 2.0
+    pStyle = 'black' # 'white', 'black'
+    fac2 = 1.05
 
     # load
     convertfunc = lambda x: datetime.strptime(x.decode('utf8'), '%Y-%m-%d')    
     #dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
     dd = [object] + ['d' for a in col_headers[1:]]
-    data = np.genfromtxt('/u/dnelson/plot_stats.txt', delimiter=',',\
+    data_load = np.genfromtxt('/u/dnelson/plot_stats.txt', delimiter=',',\
                         names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=50)
     
-    # plot
+    data = {}
+    w = np.where(data_load['NumUsers'] >= 275) # clip pre-release activity to zero for visuals
+    for key in col_headers:
+        data[key] = data_load[key][w]
+    data['NumUsers'][0] = 1
+
+    # colortable
     tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
                  (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
                  (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),
@@ -48,10 +56,15 @@ def plotUsersData():
     for i in range(len(tableau20)):
         r, g, b = tableau20[i]
         tableau20[i] = (r / 255., g / 255., b / 255.)
-    
-    fig = plt.figure(figsize=(22,13), facecolor='white')
-    ax = fig.add_subplot(111)
+
+    color1, color2, color3, color4 = getWhiteBlackColors(pStyle)    
+
+    # plot (1) - everything
+    fig = plt.figure(figsize=(22,13), facecolor=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
     ax.set_yscale('log')
+
+    setAxisColors(ax, color2)
     
     ax.spines["top"].set_visible(False)
     ax.spines["bottom"].set_visible(True)
@@ -66,28 +79,74 @@ def plotUsersData():
     
     launch_date = datetime.strptime('2015-04-01', '%Y-%m-%d')
     launch_date_tng = datetime.strptime('2018-12-17', '%Y-%m-%d')
-    ax.plot([launch_date,launch_date],[2,1e4],'-',lw=lw,color='black',alpha=0.8)
-    ax.plot([launch_date_tng,launch_date_tng],[2,1e4],'-',lw=lw,color='black',alpha=0.8)
+    ax.plot([launch_date,launch_date],[2,1e4],'-',lw=lw,color=color2,alpha=0.6)
+    ax.plot([launch_date_tng,launch_date_tng],[2,1e4],'-',lw=lw,color=color2,alpha=0.6)
     
     for i in range(len(col_headers)-1):
         col = col_headers[i+1]
         label = labels[i]
+
+        fac = 1e3 if '[TB]' in label else 1.0
+        ls = linestyles[i % len(linestyles)]
     
-        ax.plot_date(data['Date'], data[col]/facs[i], sym[i], label=label,lw=lw,color=tableau20[i])
+        ax.plot_date(data['Date'], data[col]/fac, marker=None,linestyle=ls,label=label,lw=lw,color=tableau20[i])
         
         if col != "SizeUni" and col != "SizeSub":
-            ax.text(data['Date'][-1], data[col][-1]/facs[i]*facs2[i], str(int(data[col][-1])), \
+            ax.text(data['Date'][-1], data[col][-1]/fac*fac2, str(int(data[col][-1])), \
                     horizontalalignment='right',color=tableau20[i])
         else:
-            ax.text(data['Date'][-1], data[col][-1]/facs[i]*facs2[i], '{:.1f}'.format(data[col][-1]/facs[i]), \
+            ax.text(data['Date'][-1], data[col][-1]/fac*fac2, '{:.1f}'.format(data[col][-1]/fac), \
                     horizontalalignment='right',color=tableau20[i])
     
     ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
-    ax.legend(loc='best', ncol=3, frameon=False)
+    l = ax.legend(loc='best', ncol=3, frameon=False)
+    for text in l.get_texts():
+        text.set_color(color2)
     fig.autofmt_xdate()
     fig.tight_layout()
     
-    fig.savefig('out.pdf')
+    fig.savefig('userstats_all.pdf', facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    # plot (2) - user counts
+    fig = plt.figure(figsize=(figsize[0]*0.8, figsize[1]*0.8), facecolor=color1)
+    ax = fig.add_subplot(111, facecolor=color1)
+    ax.set_yscale('log')
+    ax.set_ylabel('Number')
+    ax.yaxis.set_ticks_position('both')
+    setAxisColors(ax, color2)
+    
+    ax.set_ylim([1e1,1e5])
+
+    launch_date2 = datetime.strptime('2015-05-01', '%Y-%m-%d')
+    launch_date_tng2 = datetime.strptime('2019-01-17', '%Y-%m-%d')
+    ax.plot([launch_date,launch_date],[10,13],'-',lw=14,color=color2,alpha=0.3)
+    ax.text(launch_date2, 40, "Illustris Public Data Release", color=color2, alpha=0.3, rotation=20)
+    ax.plot([launch_date_tng,launch_date_tng],[10,13],'-',lw=14,color=color2,alpha=0.3)
+    ax.text(launch_date_tng2, 30, "TNG Data Release", color=color2, alpha=0.3, rotation=20)
+
+    for col in ["Num30","NumLab","CountSnapUni","CountGroup","SizeUni","NumUsers"]:
+        w = col_headers.index(col) - 1
+        fac = 1e3 if '[TB]' in labels[w] else 1.0
+        if 'Count' in col: fac = 1
+
+        l, = ax.plot_date(data['Date'], data[col]/fac, marker=None, linestyle='-', label=labels[w], lw=lw)
+        ax.text(data['Date'][-1], data[col][-1]/fac*0.8, '%d'%(data[col][-1]/fac), color=l.get_color(),
+                fontsize=22, horizontalalignment='center')
+
+    from matplotlib.dates import MonthLocator
+    ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
+    ax.xaxis.set_minor_formatter(DateFormatter('%B'))
+    ax.xaxis.set_minor_locator(MonthLocator(bymonth=6))
+    ax.tick_params(axis='x', which='minor', labelsize=13)
+    l = ax.legend(loc='upper left', ncol=1, frameon=False)
+    for text in l.get_texts():
+        text.set_color(color2)
+    fig.autofmt_xdate(which='both')
+    fig.tight_layout()
+    
+    fig.savefig('userstats_users.pdf', facecolor=fig.get_facecolor())
+    plt.close(fig)
     
 def plotCpuTimeEstimates():
     """ Read the log file produced by plotCpuTimes() and plot the 'predicted' total CPUhs 
