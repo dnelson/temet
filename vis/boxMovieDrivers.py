@@ -55,7 +55,7 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     #panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.2,7.5], 'labelScale':True} )
     #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[2.8,8.4], 'labelZ':True} )
 
-    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[6.2,7.8]} ) # 5.8,7.4
+    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]} ) # 5.8,7.4
     #panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[4.0,8.0], 'labelZ':False} ) # True
     panels.append( {'partType':'stars', 'partField':'stellarComp', 'labelZ':False, 'labelScale':'physical'} ) # True
 
@@ -63,24 +63,24 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     variant = 'subbox0' #'subbox0'
     res     = 2500 #1820
     method  = 'sphMap'
-    nPixels = 1920
+    nPixels = [1920,1080]
     axes    = [1,2] # x,y
 
     class plotConfig:
-        savePath = '/u/dnelson/' #data/frames/%s_sb0/' % run
+        savePath  = '/u/dnelson/data/frames/%s_%s/' % (run,variant)
         plotStyle = 'edged_black'
-        rasterPx  = 1920
+        rasterPx  = nPixels
         colorbars = False #True
 
         # movie config
-        minZ      = 1.0 #0.0
-        maxZ      = 1.01 #50.0 # tng subboxes start at a=0.02
-        maxNSnaps = 1 #2700 # 90 seconds at 30 fps
+        minZ      = 0.0
+        maxZ      = 10.0 # tng subboxes start at a=0.02
+        maxNSnaps = 2100
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
-def subbox_movie_tng300fof0(curTask=0, numTasks=1):
-    """ Render a movie comparing two quantities of a single subbox (2x1 panels, 4K). """
+def subbox_movie_tng300fof0_6panel(curTask=0, numTasks=1):
+    """ Render a 6-panel movie watching the evolution of Fof0 from TNG300. """
     panels = []
 
     panels.append( {'partType':'dm',    'partField':'coldens_msunkpc2', 'valMinMax':[5.4,8.8], 'labelScale':True} )
@@ -109,6 +109,34 @@ def subbox_movie_tng300fof0(curTask=0, numTasks=1):
         minZ      = 0.0
         maxZ      = 10.0 # tng subboxes start at a=0.02
         maxNSnaps = None #2100 # 70 seconds at 30 fps, out of ~2400 total available
+
+    renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
+
+def subbox_movie_tng300fof0(curTask=0, numTasks=1):
+    """ Render a movie of the TNG300 most massive cluster (1 field, 4K). """
+    panels = []
+
+    panels.append( {'partType':'gas',   'partField':'coldens_msunkpc2', 'valMinMax':[4.7,8.0]} )
+
+    run     = 'tng'
+    variant = 'subbox0'
+    res     = 2500
+    method  = 'sphMap'
+    nPixels = [3840,2160]
+    axes    = [1,2] # x,y
+    labelZ  = True
+    labelScale = 'physical'
+
+    class plotConfig:
+        savePath  = '/u/dnelson/data/frames/%s_%s/' % (run,variant)
+        plotStyle = 'edged_black'
+        rasterPx  = nPixels
+        colorbars = False #True
+
+        # movie config
+        minZ      = 0.0
+        maxZ      = 10.0 # tng subboxes start at a=0.02
+        maxNSnaps = 2100
 
     renderBoxFrames(panels, plotConfig, locals(), curTask, numTasks)
 
@@ -446,11 +474,11 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     snap    = sbSnapNum
 
     axes       = [0,1] # x,y
-    labelScale = 'lightyears'
-    labelZ     = 'tage'
+    labelScale = 'physical' #'lightyears'
+    labelZ     = True #'tage'
     plotHalos  = False
 
-    nPixels   = [3840,2160]
+    nPixels   = [1920,1080] #[3840,2160]
     nPixelsSq = [540,540]
     nPixelsSm = [960,540]
 
@@ -464,12 +492,12 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     boxCenter = subhalo_pos[sbSnapNum,:]
 
     # panel config    
-    if conf in ['one','six','seven','eight','nine','ten','eleven']:
+    if conf in ['one','six','seven','eight','nine','ten','eleven','fifteen']:
         # main panel: gas density on intermediate scales
         boxSizeImg = [int(boxSizeLg * aspect), boxSizeLg, boxSizeLg]
         loc = [0.003, 0.26]
 
-        if conf == 'one':
+        if conf in ['one','fifteen']:
             panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'magma', 'valMinMax':mm1, 'legendLoc':loc} )
         if conf == 'six':
             panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':mm6, 'legendLoc':loc} )
@@ -488,7 +516,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
             panels.append( {'partType':'gas', 'partField':'sfr_halpha', 'valMinMax':mm10, 'legendLoc':loc} )
         if conf == 'eleven':
             panels.append( {'partType':'gas', 'partField':'bmag_uG', 'valMinMax':[-1.0,1.6], 'legendLoc':loc} )
-            
+
         # add custom label of subbox time resolution galaxy properties if extended info is available
         if conf == 'one' and 'SubhaloStars_Mass' in cat:
             import locale
@@ -536,6 +564,30 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'thermal', 'valMinMax':mm5} )
         boxSizeImg = [int(boxSizeSm * aspect), boxSizeSm, boxSizeSm]
 
+    if conf == 'twelve':
+        # SWR: medium zoom stars
+        panels.append( {'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        boxSizeImg = [boxSizeSq*2, boxSizeSq*2, boxSizeSq*2]
+
+    if conf == 'thirteen':
+        # SWR: large zoom DM
+        panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[6.8, 9.0]} )
+        boxSizeImg = [boxSizeLg, boxSizeLg, boxSizeLg]
+        hsmlFac = 1.0
+
+    if conf == 'fourteen':
+        # SWR: large zoom stars
+        panels.append( {'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        boxSizeImg = [boxSizeLg, boxSizeLg, boxSizeLg]
+
+    if 0:
+        # SWR
+        nPixels = [1200,1200] # square
+        labelScale = False
+        labelZ = False
+        labelCustom = None
+        if conf == 'one': boxSizeImg = [boxSizeLg, boxSizeLg, boxSizeLg]
+
     extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0], 
                boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
 
@@ -574,11 +626,9 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
-        #if isfile('/u/dnelson/data/frames/2160sb0_s90_sh440389/frame_one_%d.png' % i):
-        #    print('skip ', i)
-        #    continue
-        #if i < 2000 or i >= 2500:
-        #    continue
+        if isfile('/u/dnelson/data/frames/2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
+            print('skip ', i)
+            continue
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
 
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):

@@ -418,7 +418,8 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         pxArea0 = (80.0/960)**2.0 # at which the following ranges were calibrated
         resFac = 1.0 #(512.0/sP.res)**2.0
 
-        minValLog = np.array([0.6,0.6,0.6]) # 0.6, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
+        # 2.2 for twelve, 1.4 for thirteen
+        minValLog = np.array([1.4,1.4,1.4]) # 0.6, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
@@ -2062,7 +2063,7 @@ def setAxisColors(ax, color2):
     for s in ['bottom','left','top','right']:
         ax.spines[s].set_color(color2)
     for a in ['x','y']:
-        ax.tick_params(axis=a, colors=color2)
+        ax.tick_params(axis=a, which='both', colors=color2)
 
 def setColorbarColors(cb, color2):
     """ Factor out common colorbar color commands. """
