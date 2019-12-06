@@ -54,37 +54,80 @@ def write_ic_file(fileName, partTypes, boxSize, massTable=None, headerExtra=None
         else:
             h.attrs['MassTable'] = np.zeros( nPartTypes, dtype='float64' )
 
+def _fix_grid_border_artifacts(grid):
+    """ Helper. The density_field_* procedure has issues for the outermost rows/cols of pixels. """
+    w = np.where( grid < 0.0 )
+    grid[w] = 0.0
+
+    w = np.where( grid[0,:]>(grid[0,:].mean()+np.std(grid[0,:])) )
+    grid[0,w] = grid[1,w]
+
+    w = np.where( grid[-1,:]>(grid[-1,:].mean()+np.std(grid[-1,:])) )
+    grid[-1,w] = grid[-2,w]
+
+    w = np.where( grid[:,0]>(grid[:,0].mean()+np.std(grid[:,0])) )
+    grid[w,0] = grid[w,1]
+
+    w = np.where( grid[:,-1]>(grid[:,-1].mean()+np.std(grid[:,-1])) )
+    grid[w,-1] = grid[w,-2]
+
+    fac = 1.2
+
+    for i in [2,1,0]:
+        w = np.where( grid[:,i] > grid[:,i+1]*fac )
+        grid[w,i] = grid[w,i+1]
+        w = np.where( grid[:,-i-1] > grid[:,-i-2]*fac )
+        grid[w,-i-1] = grid[w,-i-2]
+
+        w = np.where( grid[i,:] > grid[i+1,:]*fac )
+        grid[i,w] = grid[i+1,w]
+        w = np.where( grid[-i-1,:] > grid[-i-2,:]*fac )
+        grid[-i-1,w] = grid[-i-2,w]
+
+    return grid
+
 def visualize_result_2d(basePath):
     """ Helper function to load density_field_NNN projection files and plot a series of PNG frames. """
-    path = basePath + '/output/'
+    from os import getcwd, path
 
-    #vMM = None # automatic
-    #figsize = (16,14)
+    vMM = None # automatic
+    cmap = 'magma'
 
-    figsize = None # automatic
+    figsize = None # automatic # (16,14)
     clean = True
 
-    # config3
-    vMM = [0.2, 5.0]
-    cmap = 'viridis'
-
-    # config4
-    #vMM = [0.6, 4.0]
-    #cmap = 'twilight_shifted'
-
-    # config7
-    #vMM = [0.4, 1.2]
-    #cmap = 'magma'
-
+    if 'config_1' in getcwd():
+        vMM = [0.0, 1.2]
+        cmap = 'inferno' # rainbow
+    if 'config_2' in getcwd():
+        vMM = [0.0, 1.4]
+        cmap = 'magma'
+    if 'config_3' in getcwd():
+        vMM = [0.2, 5.0]
+        cmap = 'viridis'
+    if 'config_4' in getcwd():
+        vMM = [0.2, 4.0]
+        cmap = 'twilight_shifted'
+    if 'config_5' in getcwd():
+        vMM = [0.0, 1.5]
+        cmap = 'inferno'
+    if 'config_6' in getcwd():
+        vMM = [0.0, 1.6]
+        cmap = 'magma'
+    if 'config_7' in getcwd():
+        vMM = [0.2, 1.3]
+        cmap = 'gist_heat' # jet
 
     # loop over snapshots
-    nSnaps = len(glob.glob(path + 'density_field_*'))
+    nSnaps = len(glob.glob(basePath + '/output/density_field_*'))
 
     for i in range(nSnaps):
         print(i)
+        if path.isfile('density_%d.png' % i):
+            continue
 
         # load
-        with open(path + 'density_field_%03d' % i, mode='rb') as f:
+        with open(basePath + '/output/density_field_%03d' % i, mode='rb') as f:
             data = f.read()
 
         # unpack
@@ -95,34 +138,12 @@ def visualize_result_2d(basePath):
         grid = struct.unpack('f' * nGridFloats, data[8:])
         grid = np.array(grid).reshape( (nPixelsX,nPixelsY) )
 
-        # fix border artifacts
-        if 1:
-            w = np.where( grid[0,:]>(grid[0,:].mean()+np.std(grid[0,:])) )
-            grid[0,w] = grid[1,w]
-
-            w = np.where( grid[-1,:]>(grid[-1,:].mean()+np.std(grid[-1,:])) )
-            grid[-1,w] = grid[-2,w]
-
-            w = np.where( grid[:,0]>(grid[:,0].mean()+np.std(grid[:,0])) )
-            grid[w,0] = grid[w,1]
-
-            w = np.where( grid[:,-1]>(grid[:,-1].mean()+np.std(grid[:,-1])) )
-            grid[w,-1] = grid[w,-2]
-
-            fac = 1.3
-            w = np.where( grid[:,0] > grid[:,1]*fac )
-            grid[w,0] = grid[w,1]
-            w = np.where( grid[:,-1] > grid[:,-2]*fac )
-            grid[w,-1] = grid[w,-2]
-            w = np.where( grid[0,:] > grid[1,:]*fac )
-            grid[w,0] = grid[w,1]
-            w = np.where( grid[-1,:] > grid[-2,:]*fac )
-            grid[w,-1] = grid[w,-2]
+        grid = _fix_grid_border_artifacts(grid)
 
         if vMM is None: vMM = [grid.min(), grid.max()] # set on first snap
 
         # get time
-        with h5py.File(path + 'snap_%03d.hdf5' % i,'r') as f:
+        with h5py.File(basePath + '/output/snap_%03d.hdf5' % i,'r') as f:
             time = f['Header'].attrs['Time']
             boxSize = f['Header'].attrs['BoxSize']
 
@@ -144,7 +165,7 @@ def visualize_result_2d(basePath):
 
         # plot (with axes, colorbar)
         if not clean:
-            ax = fig.add_subplot(111)            
+            ax = fig.add_subplot(111)
 
             plt.imshow(grid.T, extent=[0,boxSize,0,boxSize], cmap=cmap, aspect='equal')
             ax.autoscale(False)
@@ -164,8 +185,49 @@ def visualize_result_2d(basePath):
         plt.close(fig)
 
     # if ffmpeg exists, make a movie
-    cmd = ['ffmpeg','-framerate','30','-i','density_%d.png','-pix_fmt','yuv420p','movie.mp4','-y']
+    cmd = 'ffmpeg -f image2 -start_number 0 -i density_%d.png -vcodec libx264 -pix_fmt yuv420p -crf 19 -an -threads 0 movie.mp4 -y'
+
     try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, cwd='%s/vis/' % path)
+        output = subprocess.getoutput(cmd)
     except:
         pass
+
+def histogram_result_2d(basePath):
+    """ Helper function to load density_field_NNN projection files and plot histograms across the time series, to see range. """
+    path = basePath + '/output/'
+
+    # start plot
+    fig = plt.figure(figsize=(16,10))
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('Density Value')
+    ax.set_ylabel('log N$_{\\rm pixels}$')
+
+    # loop over snapshots
+    nSnaps = len(glob.glob(path + 'density_field_*'))
+
+    for i in range(nSnaps)[::10]:
+        print(i)
+
+        # load
+        with open(path + 'density_field_%03d' % i, mode='rb') as f:
+            data = f.read()
+
+        # unpack
+        nPixelsX = struct.unpack('i', data[0:4])[0]
+        nPixelsY = struct.unpack('i', data[4:8])[0]
+
+        nGridFloats = int((len(data)-8) / 4)
+        grid = struct.unpack('f' * nGridFloats, data[8:])
+        grid = np.array(grid).reshape( (nPixelsX,nPixelsY) )
+
+        grid = _fix_grid_border_artifacts(grid)
+
+        # plot histogram
+        hist, bins = np.histogram(grid, bins=20)
+        w = np.where( (hist >= 10) & (bins[:-1] >= 0) )
+        ax.plot(bins[:-1][w], np.log10(hist[w]), alpha=0.7)
+
+    # finish plot
+    fig.tight_layout()
+    fig.savefig('density_hists.pdf')
+    plt.close(fig)

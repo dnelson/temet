@@ -837,8 +837,7 @@ def run():
     """ Run. """
     redshift = 0.73 # snapshot 58, where intermediate trees were constructed
 
-    TNG50   = simParams(res=2160,run='tng',redshift=redshift)
-    TNG50_2 = simParams(res=1080,run='tng',redshift=redshift)
+    TNG50   = simParams(res=2160,run='tng_old',redshift=redshift)
 
     if 0:
         # subbox: vis image sequence
