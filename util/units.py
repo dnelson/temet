@@ -31,6 +31,7 @@ class units(object):
 
     # constants
     boltzmann         = 1.380650e-16    # cgs (erg/K)
+    boltzmann_JK      = 1.380650e-23    # joules/Kelvin
     boltzmann_keV     = 11604505.0      # Kelvin/KeV
     planck_erg_s      = 6.626e-27       # Planck constant, [erg*s]
     mass_proton       = 1.672622e-24    # cgs
@@ -613,17 +614,19 @@ class units(object):
 
         return p_vel
 
-    def codeDensToPhys(self, dens, cgs=False, numDens=False, totKpc3=False):
+    def codeDensToPhys(self, dens, cgs=False, numDens=False, msunpc3=False, totKpc3=False):
         """ Convert mass density comoving->physical and add little_h factors. 
             Input: dens in code units should have [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3].
-            Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or 
+            Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or [Msun/pc^3 if msunpc3=True] or
                     [1/cm^3 if cgs=True and numDens=True] or
                     [(orig units)/kpc^3 if totKpc3=True].
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
-        if totKpc3 and (cgs or numDens):
+        if totKpc3 and (cgs or numDens or msunpc3):
+            raise Exception('Invalid combination.')
+        if msunpc3 and (cgs or numDens or totKpc3):
             raise Exception('Invalid combination.')
 
         dens_phys = dens.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3
@@ -633,6 +636,8 @@ class units(object):
             dens_phys *= self.UnitDensity_in_cgs
         if numDens:
             dens_phys /= self.mass_proton
+        if msunpc3:
+            dens_phys *= 10 # 1e10 msun/kpc^3 -> msun/pc^3
         if totKpc3:
             # non-mass quantity input as numerator, assume it did not have an h factor
             dens_phys *= self._sP.HubbleParam

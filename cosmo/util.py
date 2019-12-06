@@ -693,7 +693,7 @@ def subhaloIDListToBoundingPartIndices(sP, subhaloIDs, groups=False, strictSubha
     then do not use parent groups to bound subhalo members, instead return exact bounding 
     index ranges. """
     if strictSubhalos: assert not groups
-    if groups: assert not strictSubhalos #  mutually exclusive
+    if groups: assert not strictSubhalos # mutually exclusive
 
     first_sub = subhaloIDs[0]
     last_sub = subhaloIDs[-1]
