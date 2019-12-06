@@ -694,7 +694,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
         if fieldsSubhalos is None: r = r['halos']
         if fieldsHalos is None: r = r['subhalos']
 
-        if isinstance(r,dict) and len(r.keys()) == 1:
+        if isinstance(r,dict) and len(r.keys()) == 1 and r['count'] > 0:
             r = r[ list(r.keys())[0] ]
 
     return r
@@ -1251,7 +1251,9 @@ def snapshotSubset(sP, partType, fields,
 
         if isinstance(ret,dict):
             for key in ret.keys():
+                if key == 'count': continue
                 ret[key] = ret[key][w_sel]
+            ret['count'] = len(w_sel[0])
             return ret
         return ret[w_sel] # single ndarray
 
@@ -1846,6 +1848,9 @@ def snapshotSubset(sP, partType, fields,
                 haloID = sub['SubhaloGrNr']
                 haloPos = sub['SubhaloPos']
 
+            if sP.refPos is not None:
+                haloPos = sP.refPos # allow override
+
             for j in range(3):
                 pos[:,j] -= haloPos[j]
 
@@ -1899,7 +1904,7 @@ def snapshotSubset(sP, partType, fields,
             r[field] = sP.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
 
         # velocity 3-vector, relative to the central subhalo pos/vel, [km/s] for each component
-        if field.lower() in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
+        if field.lower() in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel','vel_rel']:
             if sP.isZoom:
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
@@ -1912,6 +1917,9 @@ def snapshotSubset(sP, partType, fields,
                 shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
                 firstSub = groupCatSingle(sP, subhaloID=shID)
                 refVel = firstSub['SubhaloVel']
+
+            if sP.refVel is not None:
+                refVel = sP.refVel # allow override
 
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)
 
