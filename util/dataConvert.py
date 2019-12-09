@@ -1490,8 +1490,8 @@ def convertMillennium2SubhaloCatalog(snap=67):
         SubhaloMassType = np.zeros( (SubLen.size,6), dtype='float32' )
         SubhaloLenType[:,1]  = SubLen
         SubhaloMassType[:,1] = SubMass
-        groups['SubhaloLenType']  = SubhaloLenType
-        groups['SubhaloMassType'] = SubhaloMassType
+        subs['SubhaloLenType']  = SubhaloLenType
+        subs['SubhaloMassType'] = SubhaloMassType
 
         # offsets (inside group files, similar to Illustris public data release, for convenience)
         offs = f.create_group('Offsets')
@@ -1995,8 +1995,8 @@ def convertMillennium2Snapshot(snap=67):
 
 def convertGadgetICsToHDF5():
     """ Convert a Gadget-1 binary format ICs (dm-only, 8 byte IDs, 4 byte pos/vel) into HDF5 format (keep original ordering). """
-    loadPath = '/u/dnelson/sims.illustris/InitialConditions/L75n455FP/output/ICs.%s' 
-    savePath = '/u/dnelson/sims.illustris/L75n455FP/output/snap_ics.hdf5'
+    loadPath = '/u/dnelson/sims.TNG/InitialConditions/L35n2160TNG/output/ICs.%s' 
+    savePath = '/u/dnelson/sims.TNG/L35n2160TNG/output/snap_ics.hdf5'
 
     ptNum = 1
     longids = True # 64 bit, else 32 bit
@@ -2486,7 +2486,7 @@ def createVirtualSimHDF5():
     from util.simParams import simParams
     import cosmo
 
-    sP = simParams(res=1820,run='illustris_dm')
+    sP = simParams(res=2160,run='tng')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     global_attr_skip = ['Ngroups_ThisFile','Ngroups_Total','Nids_ThisFile','Nids_Total','Nsubgroups_ThisFile','Nsubgroups_Total',
