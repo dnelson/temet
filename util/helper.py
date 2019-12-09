@@ -739,6 +739,60 @@ def bincount(x, dtype):
 
     return c
 
+@jit(nopython=True, nogil=True, cache=True)
+def periodicDistsN(pos1, pos2, BoxSize):
+    """ Compute periodic distance between each (x,y,z) coordinate in pos1 vs. the 
+    corresponding (x,y,z) point in pos2. """
+    BoxHalf = BoxSize * 0.5
+
+    dists = np.zeros( pos1.shape[0], dtype=pos1.dtype )
+    assert pos1.shape[0] == pos2.shape[0]
+    assert pos1.shape[1] == 3 and pos2.shape[1] == 3
+
+    for i in range(pos1.shape[0]):
+        for j in range(3):
+            xx = pos1[i,j] - pos2[i,j]
+
+            if xx > BoxHalf:
+                xx -= BoxSize
+            if xx < -BoxHalf:
+                xx += BoxSize
+
+            dists[i] += xx
+        dists[i] = np.sqrt( dists[i] )
+
+    return dists
+
+@jit(nopython=True, nogil=True, cache=True)
+def periodicDistsIndexed(pos1, pos2, indices, BoxSize):
+    """ Compute periodic distance between each (x,y,z) coordinate in pos1 vs. the 
+    corresponding (x,y,z) point in pos2. Here pos1.shape[0] != pos2.shape[0], 
+    e.g. in the case that pos1 are group centers, and pos2 are particle positions.
+    Then indices gives, for each pos2, the index of the corresponding pos1 element 
+    to compute the distance to, e.g. the group ID of each particle. Return size is 
+    the length of pos2. """
+    BoxHalf = BoxSize * 0.5
+
+    dists = np.zeros( pos2.shape[0], dtype=pos1.dtype )
+    assert pos1.shape[0] != pos2.shape[0] # not generically expected
+    assert pos1.shape[1] == 3 and pos2.shape[1] == 3
+    assert indices.ndim == 1 and indices.size == pos2.shape[0]
+
+    for i in range(pos2.shape[0]):
+        pos1_loc = pos2[:,indices[i]]
+        for j in range(3):
+            xx = pos1_loc[j] - pos2[i,j]
+
+            if xx > BoxHalf:
+                xx -= BoxSize
+            if xx < -BoxHalf:
+                xx += BoxSize
+
+            dists[i] += xx
+        dists[i] = np.sqrt( dists[i] )
+
+    return dists
+
 # --- vis ---
 
 def getWhiteBlackColors(pStyle):

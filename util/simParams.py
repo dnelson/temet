@@ -316,6 +316,7 @@ class simParams:
 
             # temporary: new L35n2160TNG_fixed/ used by -default-!
             fof0str = '_old' if (res == 2160 and '_old' in run) else ''
+            fof0str = '_alex' if (res == 910 and 'alex' in variant) else fof0str
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
             self.savPrefix  = 'IP'
@@ -762,14 +763,17 @@ class simParams:
                                snapConfigVars, snapParameterVars
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity, simParticleQuantity
+        from util.helper import periodicDistsN, periodicDistsIndexed
 
-        self.redshiftToSnapNum   = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift   = partial(snapNumToRedshift, self)
-        self.periodicDists       = partial(periodicDists, sP=self)
-        self.periodicDistsSq     = partial(periodicDistsSq, sP=self)
-        self.validSnapList       = partial(validSnapList, sP=self)
-        self.simSubhaloQuantity  = partial(simSubhaloQuantity, self)
-        self.simParticleQuantity = partial(simParticleQuantity, self)
+        self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift    = partial(snapNumToRedshift, self)
+        self.periodicDists        = partial(periodicDists, sP=self)
+        self.periodicDistsSq      = partial(periodicDistsSq, sP=self)
+        self.periodicDistsN       = partial(periodicDistsN, BoxSize=self.boxSize)
+        self.periodicDistsIndexed = partial(periodicDistsIndexed, BoxSize=self.boxSize)
+        self.validSnapList        = partial(validSnapList, sP=self)
+        self.simSubhaloQuantity   = partial(simSubhaloQuantity, self)
+        self.simParticleQuantity  = partial(simParticleQuantity, self)
 
         self.snapshotSubsetP    = partial(snapshotSubsetParallel, self)
         self.snapshotSubset     = partial(snapshotSubset, self)
