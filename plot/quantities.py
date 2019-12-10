@@ -52,9 +52,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
     # generally available (groupcat)
-    quants1 = ['ssfr', 'Z_stars', 'Z_gas', 'size_stars', 'size_gas', 'fgas1', 'fgas2', 'fgas', 'fdm1', 'fdm2', 'fdm',
-               'surfdens1_stars', 'surfdens2_stars', 'surfdens1_dm', 'delta_sfms',
-               'sfr1', 'sfr2', 'sfr1_surfdens', 'sfr2_surfdens']
+    quants1 = ['ssfr','Z_stars','Z_gas','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',
+               'surfdens1_stars','surfdens2_stars','surfdens1_dm','delta_sfms',
+               'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens']
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar1_log','mstar2_log','mgas1','mgas2',
@@ -517,8 +517,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax[0] += sP.redshift/2
         minMax[1] += sP.redshift/2
 
-    if quant in ['sfr1','sfr2','sfr1_surfdens','sfr2_surfdens']:
+    if quant in ['sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens']:
         # SFR or SFR surface density within either 1 or 2 times 2r1/2stars
+        if quant == 'sfr': quant = 'sfr2' # default
+
         if '1' in quant:
             hStr = 'Half'
             hFac = 1.0
@@ -1733,7 +1735,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     # cache
     if label is None:
-        raise Exception('Unrecognized particle field [%s].' % quant)
+        raise Exception('Unrecognized subhalo quantity [%s].' % quant)
 
     sP.data[cacheKey] = vals.copy(), label, list(minMax), takeLog # copy instead of view in case data or metadata is modified
     #k = 'sim_' + quant + '_' tight + '_'

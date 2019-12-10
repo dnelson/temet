@@ -2186,6 +2186,82 @@ def splitSingleHDF5IntoChunks():
 
     print('Done.')
 
+def combineMultipleHDF5FilesIntoSingle():
+    """ Combine multiple groupcat file chunks into a single HDF5 file. """
+    basePath = '/mnt/nvme/cache/L205n2500TNG/output/groups_099/'
+    fileBase = "fof_subhalo_tab_099.%s.hdf5"
+    outFile  = "fof_subhalo_tab_099.test.hdf5"
+
+    # metadata
+    data = {}
+    offsets = {}
+    headers = {}
+
+    with h5py.File(basePath + fileBase % 0, 'r') as f:
+        for gName in f.keys():
+            if len(f[gName]):
+                # group with datasets, e.g. Group, Subhalo, PartType0
+                data[gName] = {}
+                offsets[gName] = 0
+            else:
+                # group with no datasets, i.e. only attributes, e.g. Header, Config, Parameters
+                headers[gName] = dict( f[gName].attrs.items() )
+
+            for field in f[gName].keys():
+                shape = list(f[gName][field].shape)
+
+                # replace first dim with total length
+                if gName == 'Group':
+                    shape[0] = f['Header'].attrs['Ngroups_Total']
+                elif gName == 'Subhalo':
+                    shape[0] = f['Header'].attrs['Nsubgroups_Total']
+                else:
+                    assert 0 # handle
+                
+                # allocate
+                data[gName][field] = np.zeros(shape, dtype=f[gName][field].dtype)
+
+    # load
+    nFiles = len(glob.glob(basePath + fileBase % '*'))
+
+    for i in range(nFiles):
+        print(i,offsets['Group'],offsets['Subhalo'])
+        with h5py.File(basePath + fileBase % i, 'r') as f:
+            for gName in f.keys():
+                if len(f[gName]) == 0:
+                    continue
+
+                offset = offsets[gName]
+
+                # load and stamp
+                for field in f[gName]:
+                    length = f[gName][field].shape[0]
+
+                    data[gName][field][offset:offset+length,...] = f[gName][field][()]
+
+                offsets[gName] += length
+
+    # save
+    with h5py.File(basePath + outFile, 'w') as f:
+        # add header groups
+        for gName in headers:
+            f.create_group(gName)
+            for attr in headers[gName]:
+                f[gName].attrs[attr] = headers[gName][attr]
+
+        f['Header'].attrs['Ngroups_ThisFile'] = f['Header'].attrs['Ngroups_Total']
+        f['Header'].attrs['Nsubgroups_ThisFile'] = f['Header'].attrs['Nsubgroups_Total']
+        f['Header'].attrs['NumFiles'] = 1
+
+        # add datasets
+        for gName in data:
+            f.create_group(gName)
+            for field in data[gName]:
+                f[gName][field] = data[gName][field]
+                assert data[gName][field].shape[0] == offsets[gName]
+
+    print('Saved: [%s]' % outFile)
+
 def convertEagleSnapshot(snap=20):
     """ Convert an EAGLE simulation snapshot (HDF5) to a TNG-like snapshot (field names, units, etc). """
     from util.simParams import simParams

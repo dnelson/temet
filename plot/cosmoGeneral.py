@@ -19,7 +19,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
 from util import simParams
-from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors, sampleColorTable
+from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors, sampleColorTable, binned_stat_2d
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors, setColorbarColors
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
@@ -90,7 +90,7 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     If xlim, ylim, or clim are not None, then override the respective axes ranges with these [min,max] bounds. 
     If cNanZeroToMin, then change the color of the NaN-only bins from the usual gray to the colormap minimum. """
     assert cenSatSelect in ['all', 'cen', 'sat']
-    assert cStatistic in [None,'mean','median','count','sum','median_nan'] # or any user function
+    assert cStatistic in [None,'mean','median','count','sum','mean_nan','median_nan'] # or any user function
     assert np.count_nonzero([cRel,cFrac]) <= 1 # at most one
 
     # hard-coded config
@@ -235,14 +235,17 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     extent = [xMinMax[0],xMinMax[1],yMinMax[0],yMinMax[1]]
 
     # statistic reduction (e.g. median, sum, count) color by bin
-    cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, cStatistic, 
-                                                 bins=nBins2D, range=[xMinMax,yMinMax])
+    if cStatistic == 'median' and nanFlag:
+        # custom version
+        cc, nn = binned_stat_2d(sim_xvals, sim_yvals, sim_cvals, bins=nBins2D, range_x=xMinMax, range_y=yMinMax, stat='median')
+    else:
+        cc, xBins, yBins, inds = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, cStatistic, 
+                                                     bins=nBins2D, range=[xMinMax,yMinMax])
+        nn, _, _, _ = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, 'count', 
+                                          bins=nBins2D, range=[xMinMax,yMinMax])
 
-    cc = cc.T # imshow convention
-
-    # only show bins with a minimum number of points?
-    nn, _, _, _ = binned_statistic_2d(sim_xvals, sim_yvals, sim_cvals, 'count', 
-                                      bins=nBins2D, range=[xMinMax,yMinMax])
+    # imshow convention
+    cc = cc.T
     nn = nn.T
 
     # relative coloring as a function of the x-axis?
@@ -1032,20 +1035,21 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(res=2500, run='tng', redshift=0.2) )
+    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
     yQuant = 'mhalo_200_log' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
     xQuant = 'mstar_30pkpc_log' # #'mstar_30pkpc_log'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = ['color_C_ur'] #[None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
-    clim = [1.2,2.5] #None #[10.0,11.0]
+    quants = ['mgas1'] #['sfr'] #[None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
+    clim = [7.5,9.5] #None #[10.0,11.0]
     medianLine = True
     minCount = 0
-    nBins = 80 #40
+    nBins = 20 #40
+    cStatistic = 'median_nan'
 
-    xlim = [10.0,11.0]
+    xlim = [9.0,11.0]
     ylim = [11.0, 13.0] # None
     qRestrictions = None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
 
@@ -1056,7 +1060,8 @@ def plots():
 
             for cQuant in quants:
                 quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
-                             nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, cQuant=cQuant)
+                             nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, 
+                             cQuant=cQuant, cStatistic=cStatistic)
 
             pdf.close()
 
