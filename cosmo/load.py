@@ -360,7 +360,7 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
         localFT = gcPath(localBP, snapNum, chunkNum=chunkNum, noLocal=True, checkExists=True)
 
         if localFT:
-            #print("Note: Reading group catalog from local scratch!")
+            #print("Note: Reading groupcat from local scratch [%s]!" % localFT)
             return localFT
 
     # format snapshot number

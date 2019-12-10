@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import glob
+import time
 from os import path, mkdir, rename
 import matplotlib.pyplot as plt
 
@@ -15,6 +16,88 @@ import cosmo
 from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
+
+def loadspeed_test():
+    # test nvme cache
+    sP = simParams(run='tng300-1', redshift=0.0)
+
+    fields = ['SubhaloMassType','SubhaloLenType','SubhaloMassInRadType','SubhaloGasMetalFractions','SubhaloGasMetalFractionsSfr','SubhaloLen']
+
+    # direct h5py
+    start_time = time.time()
+    with h5py.File('/mnt/nvme/cache/%s/output/groups_099/fof_subhalo_tab_099.hdf5' % (sP.simNameAlt),'r') as f:
+        y = {}
+        for field in fields:
+            print(field)
+            y[field] = f['Subhalo'][field][()]
+    print('single file: %.2f sec' % (time.time()-start_time)) 
+
+    # load (possibly threaded)
+    start_time = time.time()
+    x = sP.groupCat(fieldsSubhalos=fields)
+    print('done: %.2f sec' % (time.time()-start_time))
+
+    # verify
+    for key in fields:
+        assert np.array_equal(x[key],y[key])
+
+def francesca_voversigma():
+    # load
+    sP = simParams(run='tng50-1', redshift=4.0)
+    file = sP.postPath + 'SlitKinematics/Subhalo_Halpha_BinnedSlitKinematics_%03d.hdf5' % sP.snap
+
+    with h5py.File(file,'r') as f:
+        v = f['Subhalo']['Halpha_05ckpc_InRad_V_max_kms'][()]
+        sigma = f['Subhalo']['Halpha_05ckpc_InRad_sigmaV_binned_HalfRad2Rad'][()]
+
+    mstar = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
+
+    mstar_bins = [[9.7,10.3], [9.65,10.35]]
+
+    # plot
+    fig = plt.figure(figsize=[12, 8])
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('H-alpha based V$_{\\rm rot}$ / $\sigma$')
+    ax.set_ylabel('Number of Galaxies')
+
+    nBins = 13
+
+    ax.set_xlim([0, nBins])
+    ax.set_ylim([0, 25])
+
+    for mstar_bin in mstar_bins:
+        w = np.where( (mstar >= mstar_bin[0]) & (mstar < mstar_bin[1]) )
+        label = '%.2f < M$_\\star$ < %.2f' % (mstar_bin[0],mstar_bin[1])
+
+        #hist,bins = np.histogram( (v/sigma)[w], bins=np.arange(nBins+1))
+        #ax.plot(bins, hist, label=label, drawstyle='steps', alpha=0.5)
+
+        plt.hist( (v/sigma)[w], bins=nBins, range=[0,nBins], label=label, alpha=0.5)
+        print(mstar_bin, (v/sigma)[w].mean(), np.median( (v/sigma)[w] ), np.std( (v/sigma)[w] ) )
+
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig('voversigma_%s_z=%d.pdf' % (sP.simName,sP.redshift))
+    plt.close(fig)
+
+    # count
+    w = np.where( v/sigma > 7)
+    print('voversigma values above seven: ', len(w[0]), w[0], v[w], sigma[w], (v/sigma)[w], mstar[w])
+
+def integrate():
+    # bounds and function
+    num_pts = 1000
+    x0 = 0.0
+    x1 = 7.0
+
+    x = np.linspace(x0, x1, num_pts)
+    y = np.sin(x)
+
+    # trap rule: integral of y(x)dx from x0 to x1
+    dx = (x1 - x0) / num_pts
+
+    integral = dx * ( np.sum(y[1:-1]) + 0.5*(y[0]+y[-1]) )
+    print(integral)
 
 def plot_dist256():
     """ Plot distance to 256th gas cell (i.e. BH accretion radius) vs M*. """
@@ -1085,12 +1168,21 @@ def illustris_api_check():
 
         return r
 
-    base_url = "http://www.tng-project.org/api/TNG100-1/snapshots/55/subhalos/195979/vis.png"
-    params = {'partType':'stars', 'partField':'mass', 'size':0.08, 'sizeType':'arcmin', 'nPixels':20, 'axes':'0,1'}
-    saved_filename = get(base_url, params)
+    # test1
+    #base_url = "http://www.tng-project.org/api/TNG100-1/snapshots/55/subhalos/195979/vis.png"
+    #params = {'partType':'stars', 'partField':'mass', 'size':0.08, 'sizeType':'arcmin', 'nPixels':20, 'axes':'0,1'}
+    #saved_filename = get(base_url, params)
+    #print(saved_filename)
+    #return
+
+    # test2
+    base_url = "http://www.tng-project.org/api/TNG300-1/snapshots/50/subhalos/10/cutout.hdf5"
+    params = {'gas':'Coordinates,Density'}
+    saved_filename = get(base_url,params)
     print(saved_filename)
     return
 
+    # test3
     base_url = "http://www.illustris-project.org/api/Illustris-1/"
     sim_metadata = get(base_url)
     params = {'dm':'Coordinates'}

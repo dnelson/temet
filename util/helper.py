@@ -645,6 +645,84 @@ def sgolay2d(z, window_size, order, derivative=None):
         r = np.linalg.pinv(A)[2].reshape((window_size, -1))
         return sfftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
 
+def binned_stat_2d(x, y, c, bins, range_x, range_y, stat='median'):
+    """ Replacement of binned_statistic_2d for mean_nan or median_nan. """
+    assert stat in ['mean','median']
+
+    nbins = bins[0] * bins[1]
+    binsize_x = (range_x[1] - range_x[0]) / bins[0]
+    binsize_y = (range_y[1] - range_y[0]) / bins[1]
+
+    # finite only
+    w = np.where( np.isfinite(x) & np.isfinite(y) & np.isfinite(c) )
+    x = x[w]
+    y = y[w]
+    c = c[w]
+
+    # in bounds only
+    w = np.where( (x>=range_x[0]) & (x<=range_x[1]) & (y>=range_y[0]) & (y<=range_y[1]) )
+
+    # bin
+    inds_x = np.floor( (x[w] - range_x[0]) / binsize_x ).astype('int32')
+    inds_y = np.floor( (y[w] - range_y[0]) / binsize_y ).astype('int32')
+    c = c[w]
+
+    ind_1d = np.ravel_multi_index([inds_x,inds_y], bins)
+
+    count = np.bincount(ind_1d, minlength=nbins).astype('float64')
+
+    if stat == 'mean':
+        # statistic: mean
+        total = np.bincount(ind_1d, c, minlength=nbins)
+        
+        # only non-zero bins
+        w = np.where(count > 0)
+        
+        mean = np.zeros( nbins, dtype=c.dtype )
+        mean.fill(np.nan)
+        mean[w] = total[w] / count[w]
+
+        result = np.reshape( mean, bins )
+
+    if stat == 'median':
+        # statistic: median
+        sort_inds = np.argsort(ind_1d)
+        ind_1d_sorted = ind_1d[sort_inds]
+        c_sorted = c[sort_inds]
+
+        # bin edges and mid points
+        bin_edges_inds = (ind_1d_sorted[1:] != ind_1d_sorted[:-1]).nonzero()[0] + 1
+        target_inds = ind_1d_sorted[bin_edges_inds-1]
+
+        # allocate
+        result = np.zeros( nbins, dtype=c.dtype )
+        result.fill(np.nan)
+
+        if 0:
+            # handle odd/even definition for np.median
+            result[w] = (c_sorted[med_inds[w_even]] + c_sorted[med_inds[w_even]-1]) * 0.5
+            result[w] = c_sorted[med_inds[w_odd]]
+
+        # fastest method (unfinished!)
+        if 0:
+            med_inds = ( np.r_[0, bin_edges_inds] + np.r_[bin_edges_inds, len(w)] ) * 0.5
+            med_inds = med_inds.astype('int32')
+            #sort_inds_c = np.argsort(c_sorted) # need to rearrange vals
+            # med_inds must sample the s-sorted index list for each bin
+            result[target_inds] = c_sorted[med_inds]
+
+        # clearer method (effectively a sort on each bin subset)
+        result[target_inds] = [np.median(i) for i in np.split(c_sorted, bin_edges_inds[:-1])]
+        
+        if 0: # debug
+            for bin_ind in range(10):
+                ww = np.where(ind_1d == bin_ind)
+                print(bin_ind, result[bin_ind], np.median(c[ww]), result[bin_ind]/np.median(c[ww]))
+
+        result = np.reshape( result, bins )
+
+    return result, np.reshape(count,bins)
+
 # --- numba accelerated ---
 
 @jit(nopython=True, nogil=True, cache=True)
