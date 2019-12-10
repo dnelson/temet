@@ -771,7 +771,9 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
         if gc is None:
             # load what we need
             assert sP is not None
+            
             gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
+            
 
         # halos with a primary subhalo
         wHalo = np.where((gc['GroupFirstSub'] >= 0) & (gc['Group_M_Crit200'] > 0))
@@ -779,7 +781,11 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
         # indices
         w1 = gc['GroupFirstSub'][wHalo] # centrals only
         w2 = np.arange(sP.numSubhalos) # centrals + satellites
-        w3 = np.array( list(set(w2) - set(w1)) ) # satellites only
+
+        mask = np.zeros( sP.numSubhalos, dtype='int16' )
+        mask[w1] = 1
+        w3 = np.where(mask == 0)[0]
+        #w3 = np.array( list(set(w2) - set(w1)) ) # satellites only (slow)
 
         # cache
         sP.data['css_inds_w1'] = w1
