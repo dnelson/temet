@@ -353,7 +353,7 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
     """ Find and return absolute path to a group catalog HDF5 file.
         Can be used to redefine illustris_python version (il.groupcat.gcPath = cosmo.load.gcPath). """
 
-    # local scratch test: call ourself with a basePath corresponding to local stratch (on freyator)
+    # local scratch test: call ourself with a basePath corresponding to local scratch (on freyator)
     if not noLocal:
         bpSplit = basePath.split("/")
         localBP = "/mnt/nvme/cache/%s/%s/" % (bpSplit[-3], bpSplit[-2])
@@ -914,6 +914,15 @@ def groupCatOffsetList(sP):
 
     r = {}
 
+    # local nvme? we use here only single files for efficiency
+    path = gcPath(sP.simPath,sP.snap)
+    if '/nvme/' in path:
+        assert len(glob.glob(path.replace('.0.hdf5','.hdf5'))) == 1 # make sure we are as expected
+        r['offsetsGroup'] = np.array([0], dtype='int32')
+        r['offsetsSubhalo'] = np.array([0], dtype='int32')
+        return r
+
+    # normal
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             r['offsetsGroup']   = f['offsetsGroup'][()]

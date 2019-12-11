@@ -967,7 +967,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
                 sim_x_loc = sim_x_loc[wSelect]
 
-                for bhPropNum, bhPropName in enumerate(['M_BH_actual','Mdot_BH_edd']):
+                for bhPropNum, bhPropName in enumerate(['BH_mass','BH_Mdot_edd']):
                     sim_m_bh, _, _, take_log2 = simSubhaloQuantity(sP_loc, bhPropName, clean)
                     if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
 
@@ -986,7 +986,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                     # derive eddington ratio transition as a function of x-axis (e.g. M_star)
                     linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
-                    if bhPropName == 'M_BH_actual':
+                    if bhPropName == 'BH_mass':
                         ym_bh = sP.units.BH_chi(ym_bh)
 
                     ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
