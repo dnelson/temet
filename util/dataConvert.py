@@ -2188,16 +2188,20 @@ def splitSingleHDF5IntoChunks():
 
 def combineMultipleHDF5FilesIntoSingle():
     """ Combine multiple groupcat file chunks into a single HDF5 file. """
-    basePath = '/mnt/nvme/cache/L205n2500TNG/output/groups_099/'
-    fileBase = "fof_subhalo_tab_099.%s.hdf5"
-    outFile  = "fof_subhalo_tab_099.test.hdf5"
+    simName = 'L35n2160TNG'
+    snap    = 33
+
+    loadPath = '/u/dnelson/sims.TNG/%s/output/groups_%03d/' % (simName,snap)
+    savePath = '/mnt/nvme/cache/%s/output/groups_%03d/' % (simName,snap)
+    fileBase = "fof_subhalo_tab_%03d.%s.hdf5"
+    outFile  = "fof_subhalo_tab_%03d.hdf5" % snap
 
     # metadata
     data = {}
     offsets = {}
     headers = {}
 
-    with h5py.File(basePath + fileBase % 0, 'r') as f:
+    with h5py.File(loadPath + fileBase % (snap,0), 'r') as f:
         for gName in f.keys():
             if len(f[gName]):
                 # group with datasets, e.g. Group, Subhalo, PartType0
@@ -2222,11 +2226,11 @@ def combineMultipleHDF5FilesIntoSingle():
                 data[gName][field] = np.zeros(shape, dtype=f[gName][field].dtype)
 
     # load
-    nFiles = len(glob.glob(basePath + fileBase % '*'))
+    nFiles = len(glob.glob(loadPath + fileBase % (snap,'*')))
 
     for i in range(nFiles):
         print(i,offsets['Group'],offsets['Subhalo'])
-        with h5py.File(basePath + fileBase % i, 'r') as f:
+        with h5py.File(loadPath + fileBase % (snap,i), 'r') as f:
             for gName in f.keys():
                 if len(f[gName]) == 0:
                     continue
@@ -2242,7 +2246,10 @@ def combineMultipleHDF5FilesIntoSingle():
                 offsets[gName] += length
 
     # save
-    with h5py.File(basePath + outFile, 'w') as f:
+    if not path.isdir(savePath):
+        mkdir(savePath)
+
+    with h5py.File(savePath + outFile, 'w') as f:
         # add header groups
         for gName in headers:
             f.create_group(gName)
@@ -2562,7 +2569,7 @@ def createVirtualSimHDF5():
     from util.simParams import simParams
     import cosmo
 
-    sP = simParams(res=2160,run='tng')
+    sP = simParams(run='millennium-2')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     global_attr_skip = ['Ngroups_ThisFile','Ngroups_Total','Nids_ThisFile','Nids_Total','Nsubgroups_ThisFile','Nsubgroups_Total',

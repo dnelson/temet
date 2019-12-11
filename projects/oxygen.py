@@ -2324,7 +2324,7 @@ def paperPlots():
 
         yQuants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo_volwt','mass_z']
         yQuants2 = ['surfdens1_stars','Z_stars','color_C_gr','size_stars','Krot_oriented_stars2','Krot_oriented_gas2']
-        yQuants3 = ['nh_halo_volwt','fgas_r200','pratio_halo_volwt','BH_CumEgy_low','M_BH_actual','_dummy_']
+        yQuants3 = ['nh_halo_volwt','fgas_r200','pratio_halo_volwt','BH_CumEgy_low','BH_mass','_dummy_']
 
         yQuantSets = [yQuants1, yQuants2, yQuants3]
 

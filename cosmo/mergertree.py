@@ -873,6 +873,8 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
 
     # load tree
     fields = ['SubhaloID', 'DescendantID', 'FirstProgenitorID', 'SnapNum', 'SubhaloMass', 'SubhaloMassType', 'SubhaloSFR']
+    if sP.isDMO:
+        fields = ['SubhaloID', 'DescendantID', 'FirstProgenitorID', 'SnapNum', 'SubhaloMass', 'SubhaloVel']
     tree = il.sublink.loadTree(sP.simPath, sP.snap, subhaloID, fields=fields, treeName=treeName)
 
     if tree is None:
@@ -902,8 +904,12 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     # the calibration above accounts mainly for trees of different mass halos calibrated at ~TNG100-1 resolution
     # but at different resolutions, trees of the same halo mass (e.g. typical circle sizes) have much fewer
     # nrows and so are excessively boosted - here we scale them back to a canonical mean size
-    targetGasMass1820 = 9.4395e-05
-    resFac = (targetGasMass1820/sP.targetGasMass)**(1.0/5.0)
+    if sP.isDMO:
+        targetDMMass1820 = 0.00050557
+        resFac = (targetDMMass1820/sP.dmParticleMass)**(1.0/5.0)
+    else:
+        targetGasMass1820 = 9.4395e-05
+        resFac = (targetGasMass1820/sP.targetGasMass)**(1.0/5.0)
     markersize *= resFac
 
     #print(' min to plot: ',minMarkerSize)
@@ -912,12 +918,22 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     #print(' lw:', lw, ' alpha2: ', alpha2)
 
     # calculate color quantity
-    mstar = sP.units.codeMassToMsun( tree['SubhaloMassType'][:,sP.ptNum('stars')] )
-    w = np.where(mstar == 0.0)
-    mstar[w] = np.nan
+    if sP.isDMO:
+        vmag = np.sqrt( tree['SubhaloVel'][:,0]**2 + tree['SubhaloVel'][:,1]**2 + tree['SubhaloVel'][:,2]**2 )
+        vmag = sP.units.subhaloCodeVelocityToKms(vmag)
+        tree['colorField'] = logZeroNaN(vmag)
+        clabel = 'log(Velocity) [km/s]'
+        cminmax = [1.4, 3.0] # default
+    else:
+        # sSFR
+        mstar = sP.units.codeMassToMsun( tree['SubhaloMassType'][:,sP.ptNum('stars')] )
+        w = np.where(mstar == 0.0)
+        mstar[w] = np.nan
 
-    with np.errstate(invalid='ignore'):
-        tree['colorField'] = logZeroNaN(tree['SubhaloSFR'] / mstar ) # 1/yr
+        with np.errstate(invalid='ignore'):
+            tree['colorField'] = logZeroNaN(tree['SubhaloSFR'] / mstar ) # 1/yr
+        clabel = 'log(sSFR) [yr$^{-1}$]'
+        cminmax = [-12.0, -8.0] # default
 
     # call JITed helper
     xc, yc, lines = _helper_plot_tree(tree['SnapNum'],tree['SubhaloID'],tree['DescendantID'],tree['FirstProgenitorID'])
@@ -957,8 +973,8 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
         vmin = np.round(np.nanmin(tree['colorField']) - 0.5)
         vmax = np.round(np.nanmax(tree['colorField']))
     else:
-        vmin = -12.0
-        vmax = -8.0
+        vmin = cminmax[0]
+        vmax = cminmax[1]
     norm = Normalize(vmin=vmin, vmax=vmax)
 
     w_minsize = np.where(markersize >= minMarkerSize)
@@ -977,7 +993,7 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
 
     cax = inset_axes(ax, width='4%', height='40%', borderpad=1.0, loc='upper left')
     cb = ColorbarBase(cax, cmap=cmap, norm=norm, orientation='vertical')
-    cb.ax.set_ylabel('log(sSFR) [yr$^{-1}$]')
+    cb.ax.set_ylabel(clabel)
 
     # finish (note: saveFilename could be in-memory buffer)
     if saveFilename is not None:

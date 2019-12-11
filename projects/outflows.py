@@ -2671,7 +2671,7 @@ def paperPlots(sPs=None):
     quants1 = ['ssfr','Z_gas','fgas2','size_gas','temp_halo_volwt','mass_z']
     quants2 = ['surfdens1_stars','Z_stars','color_B_gr','size_stars','vout_75_all','etaM_100myr_10kpc_0kms']
     quants3 = ['nh_halo_volwt','fgas_r200','pratio_halo_volwt','Krot_oriented_stars2','Krot_oriented_gas2','_dummy_']
-    quants4 = ['BH_BolLum','BH_BolLum_basic','BH_EddRatio','BH_dEdt','BH_CumEgy_low','M_BH_actual']
+    quants4 = ['BH_BolLum','BH_BolLum_basic','BH_EddRatio','BH_dEdt','BH_CumEgy_low','BH_mass']
     quantSets = [quants1, quants2, quants3, quants4]
 
     # --------------------------------------------------------------------------------------------------------------------------------------
