@@ -1477,6 +1477,15 @@ def snapshotSubset(sP, partType, fields,
             bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
             r[field] = sP.units.codeBHMassToLumEdd(bh_mass)
 
+        # blackhole accretion/feedback mode [0=low/kinetic, 1=high/quasar]
+        if field.lower() in ['bh_mode']:
+            bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
+            bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
+            bh_mdot_bondi = snapshotSubset(sP, partType, 'BH_MdotBondi', **kwargs)
+            bh_mdot_edd = snapshotSubset(sP, partType, 'BH_MdotEddington', **kwargs)
+
+            r[field] = sP.units.codeBHValsToFeedbackMode(bh_mass, bh_mdot, bh_mdot_bondi, bh_mdot_edd)
+
         # blackhole feedback energy injection rate [erg/s linear]
         if field.lower() in ['bh_dedt','bh_edot']:
             bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)

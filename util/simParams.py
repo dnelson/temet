@@ -253,7 +253,7 @@ class simParams:
             runStr = 'TNG'
             dirStr = 'TNG'
 
-            if self.variant is not 'None':
+            if self.variant != 'None':
                 # r001 through r010 IC realizations, L25n256 boxes
                 if 'r0' in self.variant:
                     assert self.boxSize == 25000.0 and self.res == 256
@@ -736,7 +736,7 @@ class simParams:
                 print('Made new directory [%s].' % self.derivPath)
 
         # if variant passed in, see if it requests a subbox
-        if self.variant is not 'None' and 'subbox' in self.variant:
+        if self.variant != 'None' and 'subbox' in self.variant:
             # intentionally cause exceptions if we don't recognize sbNum
             try:
                 sbNum  = np.int(self.variant[6:])

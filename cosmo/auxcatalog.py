@@ -578,7 +578,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     dtype = particles[ptProperty].dtype if ptProperty in particles.keys() else 'float32' # for custom
-    assert dtype in ['float32','float64'] # otherwise check, when does this happen?
+    assert dtype in ['int16','float32','float64'] # otherwise check, when does this happen?
 
     if op == 'ufunc': 
         r = np.zeros( allocSize, dtype=dtype )
@@ -2871,6 +2871,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_EddRatio',op='max',rad=None),
    'Subhalo_BH_dEdt_largest' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_dEdt',op='max',rad=None),
+   'Subhalo_BH_mode' : \
+     partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_mode',op='mean',rad=None), # if not zero or unity, >1 BH
 
    'Subhalo_Gas_Wind_vel' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='wind_vel',op='mean',rad='2rhalfstars'),
