@@ -63,6 +63,7 @@ quantDescriptions = {
   'BH_BolLum_basic'    : 'Black hole bolometric luminosity, instantaneous and unobscured. Uses a constant radiative efficiency model.',
   'BH_EddRatio'        : 'Black hole Eddington ratio, instantaneous and unobscured.',
   'BH_dEdt'            : 'Black hole instantaneous (feedback) energy injection rate, based on its accretion rate and the underlying physics model.',
+  'BH_mode'            : 'Current black hole accretion/feedback mode, where 0 denotes low-state/kinetic, and 1 denotes high-state/quasar mode.',
   'zform_mm5'          : 'Galaxy formation redshift. Defined as the redshift when the subhalo reaches half of its current total mass (moving median 5 snapshot smoothing).',
   'stellarage'         : 'Galaxy stellar age, defined as the mass-weighted mean age of all stars in the entire subhalo (no aperture restriction).',
   'massfrac_exsitu'    : 'Ex-situ stellar mass fraction, considering all stars in the entire subhalo. Defined as stellar mass which formed outside the main progenitor branch.',
@@ -137,9 +138,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'ptot_gas_halo', 'ptot_b_halo',
                    'bke_ratio_2rhalf_masswt', 'bke_ratio_halo_masswt', 'bke_ratio_halo_volwt']
 
-    quants_bh = ['BH_mass',   'BH_CumEgy_low',  'BH_CumEgy_high',   'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
+    quants_bh = ['BH_mass', 'BH_CumEgy_low', 'BH_CumEgy_high', 'BH_CumEgy_ratio', 'BH_CumEgy_ratioInv',
                  'BH_CumMass_low','BH_CumMass_high','BH_CumMass_ratio', 'BH_Mdot_edd', 
-                 'BH_BolLum',     'BH_BolLum_basic','BH_EddRatio',      'BH_dEdt']
+                 'BH_BolLum', 'BH_BolLum_basic','BH_EddRatio', 'BH_dEdt', 'BH_mode']
 
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
@@ -1395,8 +1396,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = ac['Subhalo_BH_Mdot_largest'] / ac['Subhalo_BH_MdotEdd_largest']
 
-    if quantname in ['BH_BolLum','BH_BolLum_basic','BH_EddRatio','BH_dEdt']:
+    if quantname in ['BH_BolLum','BH_BolLum_basic','BH_EddRatio','BH_dEdt','BH_mode']:
         # blackhole bolometric luminosity, complex or simple model, eddington ratio, energy injection rate
+        endStr = '_largest'
+
         if quant in ['BH_BolLum','BH_BolLum_basic']:
             label = 'Blackhole $L_{\\rm bol}$ [ log erg/s ]'
             minMax = [41.0, 45.0]
@@ -1413,7 +1416,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [42.0, 45.0]
             if tight: minMax = [41.0, 45.0]
 
-        acName = 'Subhalo_%s_largest' % quant
+        if quant in ['BH_mode']:
+            endStr = ''
+            label = 'Blackhole Mode [ 0=low/kinetic, 1=high/quasar ]'
+            takeLog = False
+            minMax = [-0.1, 1.1]
+
+        acName = 'Subhalo_%s%s' % (quant,endStr)
         ac = sP.auxCat(fields=[acName])
         vals = ac[acName]
 

@@ -280,27 +280,40 @@ class units(object):
             chi_max = 0.1
 
             chi_bh = np.clip( chi0 * (M_BH / 1e8)**beta, 0.0, chi_max )
-
         else:
             raise Exception('Unimplemented (or DMO or other strangeness).')
 
         return chi_bh
 
-    def codeBHMassMdotToInstantaneousEnergy(self, bh_mass, bh_mdot, bh_density, bh_mdot_bondi, bh_mdot_edd):
-        """ Convert the instantaneous mass/accretion properties of a BH, all in code units, to an instantaneous amount of 
-        energy being injected as per the (mode-dependent) feedback model of the simulation, in [erg/s]. """
-        assert self._sP.BHs == 2 # denotes fiducial TNG model, otherwise generalize to Illustris and/or orthers
-
+    def codeBHValsToFeedbackMode(self, bh_mass, bh_mdot, bh_mdot_bondi, bh_mdot_edd):
+        """ Return the feedback mode (0 = low/kinetic, 1 = high/quasar) of the black hole, based on its mass and accretion rate. """
         mass_msun = self.codeMassToMsun(bh_mass)
         bh_chi = self.BH_chi(mass_msun) # low-state/high-state threshold
-        mdot_g_s = self.codeMassOverTimeToMsunPerYear(bh_mdot).astype('float64') * self.Msun_in_g / self.s_in_yr # g/s
-
-        dEdt = np.zeros( bh_mass.size, dtype='float64' )
 
         w_high = np.where(bh_mdot_bondi/bh_mdot_edd >= bh_chi)
         w_low  = np.where(bh_mdot_bondi/bh_mdot_edd < bh_chi)
 
+        mode = np.zeros( bh_mass.size, dtype='int16' )
+        mode[w_high] = 1
+
+        return mode
+
+    def codeBHMassMdotToInstantaneousEnergy(self, bh_mass, bh_mdot, bh_density, bh_mdot_bondi, bh_mdot_edd):
+        """ Convert the instantaneous mass/accretion properties of a BH, all in code units, to an instantaneous amount of 
+        energy being injected as per the (mode-dependent) feedback model of the simulation, in [erg/s]. """
+        assert self._sP.BHs == 2 # denotes fiducial TNG model, otherwise generalize to Illustris and/or others
+
+        # get mode separation
+        mode = self.codeBHMassMdotToFeedbackMode(bh_mass, bh_mdot, bh_mdot_bondi, bh_mdot_edd)
+        w_low = np.where(mode == 0)
+        w_high = np.where(mode == 1)
+
         assert len(w_high[0]) + len(w_low[0]) == bh_mass.size
+
+        # energy
+        mdot_g_s = self.codeMassOverTimeToMsunPerYear(bh_mdot).astype('float64') * self.Msun_in_g / self.s_in_yr # g/s
+
+        dEdt = np.zeros( bh_mass.size, dtype='float64' )
 
         BH_eps_f_low = np.clip(bh_density / (self.BH_f_thresh * self.PhysDensThresh), None, 0.2) # max of 0.2
 
