@@ -19,6 +19,8 @@ from cosmo.kCorr import kCorrections, coeff
 gfmBands = {'U':0, 'B':1, 'V':2, 'K':3,
             'g':4, 'r':5, 'i':6, 'z':7}
 
+vegaMagCorrections = {'V': 0.02, 'U':0.79}
+
 def loadColors(sP, quantName):
     """ Wrap the below function including some logic to take only a single lowercase string 'quantName' input. """
     from plot.config import colorModelNames, bandRenamesToFSPS

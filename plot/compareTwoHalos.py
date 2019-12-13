@@ -18,7 +18,6 @@ from cosmo.util import crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatS
 from cosmo.color import loadSimGalColors, gfmBands
 from cosmo.mergertree import loadMPB
 from plot.quantities import simSubhaloQuantity
-from vis.common import setAxisColors
 from plot.config import *
 from cosmo.load import groupCat, groupCatSingle, snapshotSubset
     
@@ -178,6 +177,7 @@ def globalCatComparison(sP1,sP22,matchPath):
 def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
     """ A few panels of time-series evolution of two subhalos shID1 and shID2 from sP1 and sP2, 
     respectively. Can be lists, in which case all are individually plotted. """
+    from vis.common import setAxisColors
 
     # visual config
     xMinMax = [0.0, 2.0]

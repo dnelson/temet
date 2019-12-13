@@ -293,7 +293,7 @@ class units(object):
         w_high = np.where(bh_mdot_bondi/bh_mdot_edd >= bh_chi)
         w_low  = np.where(bh_mdot_bondi/bh_mdot_edd < bh_chi)
 
-        mode = np.zeros( bh_mass.size, dtype='int16' )
+        mode = np.zeros( bh_mass.size, dtype='float32' ) # better not as int, confuses auxCat/nan's
         mode[w_high] = 1
 
         return mode
@@ -467,6 +467,15 @@ class units(object):
         assert self._sP.redshift is not None
 
         x_phys = np.array(x, dtype='float32')
+        x_phys *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
+
+        return x_phys
+
+    def subhaloSpinToKpcKms(self, x):
+        """ Convert spin vector (for subhalos, not groups nor particles) into kpc km/s. """
+        assert self._sP.redshift is not None
+
+        x_phys = np.array(x, dtype='float32') / self._sP.HubbleParam
         x_phys *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
 
         return x_phys
