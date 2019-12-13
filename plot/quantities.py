@@ -18,6 +18,7 @@ quantDescriptions = {
   'ssfr'            : 'Galaxy specific star formation rate, where sSFR = SFR / M*, both defined within twice the stellar half mass radius.',
   'Z_stars'         : 'Galaxy stellar metallicity, mass-weighted, measured within twice the stellar half mass radius.',
   'Z_gas'           : 'Galaxy gas-phase metallicity, mass-weighted, measured within twice the stellar half mass radius.',
+  'Z_gas_sfr'       : 'Galaxy gas-phase metallicity, SFR-weighted (i.e. approximately emission line weighted), measured for all cells within this subhalo.',
   'size_stars'      : 'Galaxy stellar size (i.e. half mass radius), derived from all stars within this subhalo.',
   'size_gas'        : 'Galaxy gaseous size (i.e. half mass radius), derived from all gas cells within this subhalo.',
   'fgas1'           : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within the stellar half mass radius.',
@@ -48,6 +49,9 @@ quantDescriptions = {
   'rhalo_200'       : 'Virial radius of the parent dark matter halo, defined by R_200_Crit. Because satellites have no such measure, they are excluded.',
   'rhalo_500'       : 'The radius R500 of the parent dark matter halo, defined by R_500_Crit. Because satellites have no such measure, they are excluded.',
   'velmag'          : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
+  'spinmag'         : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
+  'M_V'             : 'Galaxy absolute magnitude in the visible (V) band. Intrisic light, with no consideration of dust or obscuration.',
+  'vcirc'           : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
   'mstar2_mhalo200_ratio'      : 'Galaxy stellar mass to halo mass ratio, the former defined as M* within twice the stellar half mass radius, the latter as M_200_Crit.',
   'mstar30pkpc_mhalo200_ratio' : 'Galaxy stellar mass to halo mass ratio, the former defined as M* within 30 physical kpc, the latter as M_200_Crit.',
   'BH_mass'            : 'Black hole mass of this galaxy, a value which starts at the seed mass and increases monotonically as gas is accreted.',
@@ -111,9 +115,10 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     """ Return a list of quantities (galaxy properties) which we know about for exploration. """
 
     # generally available (groupcat)
-    quants1 = ['ssfr','Z_stars','Z_gas','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',
+    quants1 = ['ssfr','Z_stars','Z_gas','Z_gas_sfr','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',
                'surfdens1_stars','surfdens2_stars','surfdens1_dm','delta_sfms',
-               'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens','velmag']
+               'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens','velmag','spinmag',
+               'M_V','vcirc']
 
     # generally available (want to make available on the online interface)
     quants1b = ['zform_mm5', 'stellarage']
@@ -366,14 +371,57 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'v$_{\\rm 200,halo}$  [ %skm/s ]' % logStr
         if clean: label = 'v$_{\\rm halo}$ [ %skm/s ]' % logStr
 
-    if quantname in ['vmag','velmag']:
-        # SubhaloVel [physical km/s]
-        gc = sP.groupCat(fieldsSubhalos=['SubhaloVel'])
-        vals = sP.units.subhaloCodeVelocityToKms(gc)
+    if quantname in ['vmag','velmag','spinmag']:
+        # SubhaloVel [physical km/s] or SubhaloSpin [physical kpc km/s]
+        if quant == 'spinmag':
+            field = 'SubhaloSpin'
+            label = '|V|$_{\\rm subhalo}$ [ log kpc km/s ]'
+            minMax = [0.5, 4.5]
+            if tight: minMax = [0.0, 5.0]
+        else:
+            field = 'SubhaloVel'
+            label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
+            minMax = [1.5, 3.5]
+            if tight: minMax = [1.0, 3.5]
+
+        gc = sP.groupCat(fieldsSubhalos=[field])
+        if quant == 'spinmag':
+            vals = sP.units.subhaloSpinToKpcKms(gc)
+        else:
+            vals = sP.units.subhaloCodeVelocityToKms(gc)
+
         vals = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
 
-        minMax = [1.5,3.5]
-        label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
+    if quantname in ['M_V', 'M_U']:
+        # StellarPhotometrics from snapshot
+        from cosmo.color import gfmBands, vegaMagCorrections
+        bandName = quantname.split('_')[1]
+
+        vals = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])
+        vals = vals[:,gfmBands[bandName]]
+
+        # fix zero values
+        w = np.where(vals > 1e10)
+        vals[w] = np.nan
+
+        # Vega corrections
+        if bandName in vegaMagCorrections:
+            vals += vegaMagCorrections[bandName]
+
+        assert '_log' not in quant
+        takeLog = False
+        label = 'M$_{\\rm %s}$ [ mag, no dust ]' % bandName
+
+        minMax = [-10, -24]
+        if tight: minMax = [-7, -25]
+
+    if quantname == 'vcirc':
+        # circular velocity [km/s] from snapshot
+        vals = sP.groupCat(fieldsSubhalos=['SubhaloVmax'])
+
+        label = 'V$_{\\rm circ} [ log km/s ]'
+        minMax = [1.0, 2.5]
+        if tight: minMax = [0.5, 3.0]
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo
@@ -626,12 +674,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if not clean: label += ' (<2r$_{\star,1/2}$)'
         minMax = [-0.5, 0.5]
 
-    if quantname in ['Z_gas','Z_gas_all']:
+    if quantname in ['Z_gas','Z_gas_sfr','Z_gas_all']:
         # mass-weighted mean gas metallicity (within 2r1/2stars) (or global subhalo)
         ptName = 'gas'
 
         if quant == 'Z_gas':
             metallicity_mass_ratio = sP.groupCat(fieldsSubhalos=['SubhaloGasMetallicity'])
+        if quant == 'Z_gas_sfr':
+            metallicity_mass_ratio = sP.groupCat(fieldsSubhalos=['SubhaloGasMetallicitySfrWeighted'])
         if quant == 'Z_gas_all':
             fieldName1 = 'Subhalo_Mass_All%s' % ptName.capitalize()
             fieldName2 = 'Subhalo_Mass_All%s_Metal' % ptName.capitalize()
@@ -646,6 +696,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'log ( Z$_{\\rm gas}$ / Z$_{\\rm sun}$ )'
         if not clean:
             if quant == 'Z_gas': label += ' (<2r$_{\star,1/2}$)'
+            if quant == 'Z_gas_sfr': label += ' (SFR-weighted)'
             if quant == 'Z_gas_all': label += ' (subhalo)'
         minMax = [-1.0, 0.5]
 
