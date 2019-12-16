@@ -562,11 +562,10 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 if '_rvir' in quant:
                     r[field] /= gc['halos']['Group_R_Crit200'][parInds]
 
-            # virial temperature of parent halo
+            # virial temperature of parent halo (satellites have nan)
             if quantName in ['tvir','virtemp']:
-                # get mass with self-call
                 mass = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
-                r[field] = sP.units.codeMassToVirTemp(mass)
+                r[field] = sP.units.codeMassToVirTemp(mass).astype('float32')
 
             # log?
             if quant[-4:] == '_log':
