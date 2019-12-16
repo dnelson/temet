@@ -467,10 +467,11 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         optionally restricted to input particle type(s). """
     trIDsByParType = {}
 
-    assert halos == True or subhalos == True # pick one
+    assert halos == True or subhalos == True or sP.isSubbox # pick one
 
     # check cache
     hStr = 'halos' if halos else 'subhalos'
+    if sP.isSubbox: hStr = 'subbox%d' % sP.subbox
     saveFilename = sP.derivPath + 'tracer_tracks/globalTracerChildren_%s_%d.hdf5' % (hStr,sP.snap)
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -492,9 +493,6 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
         ParentID = ParentID[ParentIDSortInds]
 
     # consider each parent type
-    nGroups = sP.numHalos
-    nSubhalos = sP.numSubhalos
-
     for parPartType in parPartTypes:
         # determine index range of particles of this type
         ptNum = sP.ptNum(parPartType)
@@ -507,14 +505,14 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
             gc = sP.groupCat(fieldsHalos=['GroupLenType'])
             haloOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
 
-            nPartTotInHalosThisType = np.sum(gc[:,ptNum])
-            indRange = [0,int(nPartTotInHalosThisType-1)]
+            nPartTotThisType = np.sum(gc[:,ptNum])
+            indRange = [0,int(nPartTotThisType-1)]
 
             if debug:
                 offset = 0
-                indsDebug = np.zeros( nPartTotInHalosThisType, dtype='int64' ) - 1
+                indsDebug = np.zeros( nPartTotThisType, dtype='int64' ) - 1
 
-                for i in range(nGroups):
+                for i in range(sP.numHalos):
                     # slice starting/ending indices for stars local to this FoF
                     i0 = haloOffsetType[i,ptNum]
                     i1 = i0 + gc[i,ptNum]
@@ -535,11 +533,11 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
             gc = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
             subhaloOffsetType = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
-            nPartTotInSubhalosThisType = np.sum(gc[:,ptNum])
-            inds = np.zeros( nPartTotInSubhalosThisType, dtype='int64' )
+            nPartTotThisType = np.sum(gc[:,ptNum])
+            inds = np.zeros( nPartTotThisType, dtype='int64' )
             offset = 0
 
-            for i in range(nSubhalos):
+            for i in range(sP.numSubhalos):
                 # slice starting/ending indices for stars local to this FoF
                 i0 = subhaloOffsetType[i,ptNum]
                 i1 = i0 + gc[i,ptNum]
@@ -550,8 +548,13 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
                 inds[offset:offset+(i1-i0)] = np.arange(i0,i1)
                 offset += (i1-i0)
 
+        if sP.isSubbox:
+            # in entire subbox snapshot (no group catalogs)
+            nPartTotThisType = sP.numPart[ptNum]
+            indRange = [0, nPartTotThisType-1]
+
         # load global IDs of this type
-        if nPartTotInHalosThisType == 0:
+        if nPartTotThisType == 0:
             continue
            
         parIDsType = sP.snapshotSubsetP(parPartType, 'id', inds=inds, indRange=indRange)
@@ -606,7 +609,7 @@ def getEvoSnapList(sP, toRedshift=None, snapStep=1):
     snaps = snaps[snaps >= 0]
 
     # intersect with valid snapshots (skip missing, etc) with tracers (e.g. skip mini's in L75TNG)
-    validSnaps = sP.validSnapList(reqTr=True)
+    validSnaps = sP.validSnapList(reqTr=(True if not sP.isSubbox else False))
     snaps = [snap for snap in snaps if snap in validSnaps]
 
     redshifts = sP.snapNumToRedshift(snaps)
@@ -617,21 +620,21 @@ def getEvoSnapList(sP, toRedshift=None, snapStep=1):
     return snaps, redshifts
 
 def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, snapStep=1, mpb=None, 
-                   saveFilename=None, onlySnap=None):
+                   saveFilename=None, onlySnap=None, exitAfterOneSnap=False):
     """ For a given set of tracerIDs at sP.redshift, walk through snapshots either forwards or backwards 
         until reaching toRedshift. At each snapshot, re-locate the tracers and record trFields as a 
         time sequence (from fluid_properties). Then, locate their parents at each snapshot and record 
         parFields (from valid snapshot fields). For gas fields (e.g. temp), if the tracer is in a parent of 
         a different type at that snapshot, record NaN. If the tracer is in a BH, set Velocity=0 as a flag. 
         If saveFilename specified, then we save inside this function one snapshot at a time (avoid large 
-        memory allocation, and can be restarted). Otherwise, return for external save. """
+        memory allocation, and can be restarted). Otherwise, return for external save. If exitAfterOneSnap, 
+        then process only one snapshot and return, mostly for memory efficiency. """
 
     if 0:
         # create inverse sort indices for tracerSearchIDs (old method)
         sortIndsSearch = np.argsort(tracerSearchIDs)
         revIndsSearch = np.zeros_like( sortIndsSearch )
         revIndsSearch[sortIndsSearch] = np.arange(sortIndsSearch.size)
-        print('00', reportMemory(), flush=True)
 
     # snapshot config
     snaps, redshifts = getEvoSnapList(sP, toRedshift, snapStep)
@@ -671,8 +674,6 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
         # memory allocation
         numAllocSnaps = len(snaps) if saveFilename is None else 1 # 1 vs global memory allocation
-
-        print('0 ', reportMemory(), flush=True)
 
         if field in n_3d_fields:
             r[field] = np.zeros( (numAllocSnaps,tracerSearchIDs.size,3), dtype=dtype )
@@ -721,8 +722,12 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             tracerIDsLocalCheck = tracerIDsLocal[sortIndsLocal[revIndsSearch]]
             tracerIndsLocal = tracerIndsLocal[sortIndsLocal[revIndsSearch]]
 
-        if not np.array_equal(tracerIDsLocalCheck, tracerSearchIDs):
+        if not np.array_equal(tracerIDsLocalCheck, tracerSearchIDs) and not sP.isSubbox:
             raise Exception('Failure to match TracerID set between snapshots.')
+
+        if sP.isSubbox:
+            frac = tracerIndsLocal.size / tracerSearchIDs.size * 100
+            print('  subbox: %10d of %10d original tracers inside, %.3f%%' % (tracerIndsLocal.size,tracerSearchIDs.size,frac))
 
         tracerIDsLocal = None
         tracerIDsLocalCheck = None
@@ -797,11 +802,16 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 Subhalo_StellarMeanVel = sP.units.particleCodeVelocityToKms(ac['Subhalo_StellarMeanVel'])
 
             # load parent cells/particles by type
-            for ptName in tracerParsLocal['partTypes']:
-                print('  '+field+' '+ptName, flush=True)
+            for ptName in tracerParsLocal['partTypes'][::-1]:
+                print('  '+field+' '+ptName, reportMemory(), flush=True)
 
                 wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
+
+                if exitAfterOneSnap:
+                    # memory optimization, do gas last (largest), and erase things we don't need anymore
+                    if ptName == tracerParsLocal['partTypes'][0]:
+                        tracerParsLocal = None
 
                 if not indsType.size:
                     continue # no parents of this type
@@ -871,6 +881,11 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     subhaloIDs_target = mpb['subhalo_ids_evo'][m,subhaloID_trackIndexByTr]
                     subhaloID_trackIndexByTr = None
 
+                    if exitAfterOneSnap:
+                        # memory optimization, do gas last (largest), and erase things we don't need anymore
+                        if tracerParsLocal is None:
+                            mpb = None
+
                     # assumed in m indexing above, e.g. we called getEvoSnapList(sP) with no args in the driver
                     assert toRedshift is None and snapStep == 1 
 
@@ -893,16 +908,13 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                         haloVirVel = gcHalo['halos']['Group_M_Crit200'][haloIDs_target]
                         haloVirVel = sP.units.codeMassToVirVel(haloVirVel)
 
-                    #if not sP.isZoom:
-                    #    w_untracked = np.where(subhaloIDs_target < 0)[0]
-
-                    #subhaloIDs_target = None
                     haloIDs_target = None
 
                 # load required raw fields(s) from the snapshot
                 data = {}
                 for fName in halo_rel_fields[field]:
-                    data[fName] = sP.snapshotSubset(ptName, fName, inds=indsType, float32=True)
+                    data[fName] = sP.snapshotSubset(ptName, fName, float32=True)
+                    data[fName] = data[fName][indsType]
 
                 # compute (the 4 halo properties can be scalar or arrays of the same size of indsType)
                 if field in ['rad','rad_rvir']:
@@ -911,7 +923,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     val = sP.periodicDistsIndexed(gcHalo['subhalos']['SubhaloPos'], data['pos'], subhaloIDs_target)
 
                     data = None
-                    
+
                     if field == 'rad_rvir':
                         val /= haloVirRad # normalized, unitless
 
@@ -953,9 +965,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                 print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
 
-        if parFields[0] != 'halo_id': # so we can compute globalTracerMPBMap() for 'rad' catalog
+        if exitAfterOneSnap and parFields[0] != 'halo_id': # so we can compute globalTracerMPBMap() for 'rad' catalog
             print('Exiting for now (one snap at a time)!')
-            return # TODO: REMOVE
+            sP.setSnap(startSnap)
+            return
 
     sP.setSnap(startSnap)
     return r
@@ -1234,10 +1247,21 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
 
     treeName = 'SubLink'
 
+    mpb = {}
+
+    # check cache file
+    hStr = 'halos' if halos else 'subhalos'
+    saveFilename = sP.derivPath + 'tracer_tracks/globalTracerMPBMap_%s_%d.hdf5' % (hStr,sP.snap)
+    if isfile(saveFilename) and not retMPBs and len(extraFields) == 0 and indRange is None:
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                mpb[key] = f[key][()]
+        print('Loaded cached [%s]' % saveFilename)
+
+        return mpb
+
     if trIDs is None: # lazy load
         trIDs = globalTracerChildren(sP, halos=halos, subhalos=subhalos)
-
-    mpb = {}
 
     # where do we start each tree? all tracers in a given FoF are assigned to follow the MPB
     # of the central subhalo of that FoF at sP.snap! e.g. tracers in satellites at sP.snap 
@@ -1319,16 +1343,23 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
 
     assert wUniq.size == trIDs.size == trVals['subhalo_id'].size == trVals['halo_id'].size
 
+    # save cache
+    if 1 and not retMPBs:
+        with h5py.File(saveFilename,'w') as f:
+            for key in mpb:
+                f[key] = mpb[key]
+        print('Saved: [%s]' % saveFilename)
+
     if retMPBs: # attach to return
         mpb['mpbs'] = mpbs
         mpb['subhalo_id'] = trVals['subhalo_id'] # indices into mpb['mpbs'] for each tracer
 
     return mpb
 
-def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None):
+def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None, toRedshift=None):
     """ For all tracers in all FoFs at the simulation endtime, record time evolution tracks of one 
     field for all snapshots (which contain tracers). """
-    assert halos is True or subhalos is True # pick one
+    assert halos is True or subhalos is True or sP.isSubbox # pick one
 
     savePath = sP.postPath + '/tracer_tracks/'
     if not isdir(savePath):
@@ -1336,6 +1367,11 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
 
     if halos: selectStr = 'groups'
     if subhalos: selectStr = 'subhalos'
+    if sP.isSubbox:
+        assert field not in halo_rel_fields
+        halos = False
+        subhalos = False
+        selectStr = 'subbox%d' % sP.subbox
 
     saveFilename = savePath + 'tr_all_%s_%d_%s.hdf5' % (selectStr,sP.snap,field)
 
@@ -1402,18 +1438,20 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         # save the tracer IDs in the order we are saving the tracks
         trVals['TracerIDs'] = trIDs
 
-        # compute lengths/offsets by halo
-        trCounts, trOffsets = globalTracerLength(sP, halos=True)
-        for key in trCounts:
-            trVals['Halo/TracerLength/'+key] = trCounts[key]
-            trVals['Halo/TracerOffset/'+key] = trOffsets[key]
+        if not sP.isSubbox:
+            # compute lengths/offsets by halo
+            trCounts, trOffsets = globalTracerLength(sP, halos=True)
 
-        # compute lengths/offsets by halo
-        trCounts, trOffsets = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets)
+            for key in trCounts:
+                trVals['Halo/TracerLength/'+key] = trCounts[key]
+                trVals['Halo/TracerOffset/'+key] = trOffsets[key]
 
-        for key in trCounts:
-            trVals['Subhalo/TracerLength/'+key] = trCounts[key]
-            trVals['Subhalo/TracerOffset/'+key] = trOffsets[key]
+            # compute lengths/offsets by halo
+            trCounts, trOffsets = globalTracerLength(sP, subhalos=True, haloTracerOffsets=trOffsets)
+
+            for key in trCounts:
+                trVals['Subhalo/TracerLength/'+key] = trCounts[key]
+                trVals['Subhalo/TracerOffset/'+key] = trOffsets[key]
 
         # save the parent IDs of these tracers in the same order
         TracerID = sP.snapshotSubsetP('tracer', 'TracerID')
@@ -1432,10 +1470,12 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
 
     else:
         # saved inside tracersTimeEvo() one snapshot at a time, can be restarted
+        oneSnap = (sP.res == 2160 and not sP.isSubbox)
+
         if 'tracer_' in field: # trField
-            trVals = tracersTimeEvo(sP, trIDs, [field], [], mpb=mpb, saveFilename=saveFilename)
+            trVals = tracersTimeEvo(sP, trIDs, [field], [], toRedshift=toRedshift, mpb=mpb, saveFilename=saveFilename, exitAfterOneSnap=oneSnap)
         else: # parField
-            trVals = tracersTimeEvo(sP, trIDs, [], [field], mpb=mpb, saveFilename=saveFilename)
+            trVals = tracersTimeEvo(sP, trIDs, [], [field], toRedshift=toRedshift, mpb=mpb, saveFilename=saveFilename, exitAfterOneSnap=oneSnap)
 
     return trVals
 

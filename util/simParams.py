@@ -316,7 +316,7 @@ class simParams:
 
             # temporary: new L35n2160TNG_fixed/ used by -default-!
             fof0str = '_old' if (res == 2160 and '_old' in run) else ''
-            fof0str = '_alex' if (res == 910 and 'alex' in variant) else fof0str
+            fof0str = '_alex' if (res == 910 and 'alex' in self.variant) else fof0str
 
             self.arepoPath  = self.basePath + 'sims.'+dirStr+'/L'+bs+'n'+str(res)+runStr+dmStr+fof0str+'/'
             self.savPrefix  = 'IP'
@@ -389,7 +389,7 @@ class simParams:
                 vStr = '_' + self.variant
 
             # mpc? all L680* except testing
-            if '_mpc' in self.variant or ('_dm' not in run and variant == 'sf3'):
+            if '_mpc' in self.variant or ('_dm' not in run and self.variant == 'sf3'):
                 self.mpcUnits = True
 
             # paths
@@ -572,7 +572,7 @@ class simParams:
             else:
                 assert self.variant == 'None'
 
-            if variant == 'FPorig':
+            if self.variant == 'FPorig':
                 self.trMCFields = [0,1,2,3,-1,-1,-1,-1,4,5,-1,-1,-1,-1] # Config_L11_FP_noCgmZoom.sh
 
             bs = str(round(self.boxSize/1000))
@@ -581,7 +581,7 @@ class simParams:
 
             if run == 'zooms2_josh':
                 ls = '%d_%d_%s' % (self.levelMax,self.levelMax+1,self.variant) # CGM_ZOOM boosted
-                if variant == 'FPorig': ls = '%d_FP' % (self.levelMax) # UNBOOSTED
+                if self.variant == 'FPorig': ls = '%d_FP' % (self.levelMax) # UNBOOSTED
 
             self.arepoPath  = self.basePath+'sims.zooms2/h'+str(hInd)+'_L'+ls+ts+'/'
             self.savPrefix  = 'Z2'
@@ -589,14 +589,14 @@ class simParams:
 
             if hInd == 2: # overrides for plots for paper.zooms2
                 snStr = ' (Primordial Only)'
-                if '_josh' in run and variant == 'PO': snStr = '_%d (Primordial Only)'
-                if '_josh' in run and variant == 'MO': snStr = '_%d (Primordial + Metal)'
-                if '_josh' in run and variant == 'FP': snStr = '_%d (Galactic Winds)'
-                if '_josh' in run and variant == 'FPorig': snStr = ' (Galactic Winds)'
-                if '_josh' in run and variant == 'FP1': snStr = '_%d (Galactic Winds high-time-res)'
-                if '_josh' in run and variant == 'FP2': snStr = '_%d (Galactic Winds high-time-res2)'
-                if '_josh' in run and variant == 'FP3': snStr = '_%d (Galactic Winds RecouplingDensity10)'
-                if '_josh' in run and variant != 'FPorig': snStr = snStr % (self.res+1)
+                if '_josh' in run and self.variant == 'PO': snStr = '_%d (Primordial Only)'
+                if '_josh' in run and self.variant == 'MO': snStr = '_%d (Primordial + Metal)'
+                if '_josh' in run and self.variant == 'FP': snStr = '_%d (Galactic Winds)'
+                if '_josh' in run and self.variant == 'FPorig': snStr = ' (Galactic Winds)'
+                if '_josh' in run and self.variant == 'FP1': snStr = '_%d (Galactic Winds high-time-res)'
+                if '_josh' in run and self.variant == 'FP2': snStr = '_%d (Galactic Winds high-time-res2)'
+                if '_josh' in run and self.variant == 'FP3': snStr = '_%d (Galactic Winds RecouplingDensity10)'
+                if '_josh' in run and self.variant != 'FPorig': snStr = snStr % (self.res+1)
                 self.simName = 'L%d%s' % (self.res,snStr)
 
         # MILLENNIUM
@@ -743,7 +743,7 @@ class simParams:
                 sbCen  = self.subboxCen[sbNum]
                 sbSize = self.subboxSize[sbNum]
             except:
-                raise Exception('Input subbox request [%s] not recognized or out of bounds!' % variant)
+                raise Exception('Input subbox request [%s] not recognized or out of bounds!' % self.variant)
 
             # are we on a system without subbox data copied?
 
@@ -760,11 +760,12 @@ class simParams:
         from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
                                gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
                                auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath, \
-                               snapConfigVars, snapParameterVars
+                               snapConfigVars, snapParameterVars, groupCat_subhalos, groupCat_halos
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity, simParticleQuantity
         from util.helper import periodicDistsN, periodicDistsIndexed
 
+        # cosmo helpers
         self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
         self.snapNumToRedshift    = partial(snapNumToRedshift, self)
         self.periodicDists        = partial(periodicDists, sP=self)
@@ -772,8 +773,10 @@ class simParams:
         self.periodicDistsN       = partial(periodicDistsN, BoxSize=self.boxSize)
         self.periodicDistsIndexed = partial(periodicDistsIndexed, BoxSize=self.boxSize)
         self.validSnapList        = partial(validSnapList, sP=self)
-        self.simSubhaloQuantity   = partial(simSubhaloQuantity, self)
-        self.simParticleQuantity  = partial(simParticleQuantity, self)
+
+        # loading
+        self.simSubhaloQuantity  = partial(simSubhaloQuantity, self)
+        self.simParticleQuantity = partial(simParticleQuantity, self)
 
         self.snapshotSubsetP    = partial(snapshotSubsetParallel, self)
         self.snapshotSubset     = partial(snapshotSubset, self)
@@ -793,6 +796,16 @@ class simParams:
         self.loadMPB            = partial(loadMPB, self)
         self.loadMDB            = partial(loadMDB, self)
         self.loadMPBs           = partial(loadMPBs, self)
+
+        # loading shortcuts
+        self.subhalos           = partial(groupCat_subhalos, self)
+        self.halos              = partial(groupCat_halos, self)
+        self.groups             = partial(groupCat_halos, self)
+        self.gas                = partial(snapshotSubsetParallel, self, 'gas')
+        self.dm                 = partial(snapshotSubsetParallel, self, 'dm')
+        self.stars              = partial(snapshotSubsetParallel, self, 'stars')
+        self.bhs                = partial(snapshotSubsetParallel, self, 'bhs')
+        self.tracers            = partial(snapshotSubsetParallel, self, 'tracerMC')
 
         self.cenSatSubhaloIndices       = partial(cenSatSubhaloIndices, sP=self)
         self.correctPeriodicDistVecs    = partial(correctPeriodicDistVecs, sP=self)
@@ -1190,10 +1203,6 @@ class simParams:
         raise Exception('Unhandled.')
     
     @property
-    def snapRange(self):
-        raise Exception('Not implemented')
-    
-    @property
     def dmParticleMass(self):
         """ Return dark matter particle mass (scalar constant) in code units. """
         # load snapshot header for MassTable
@@ -1203,11 +1212,15 @@ class simParams:
     @property
     def numHalos(self):
         """ Return number of FoF halos / groups in the group catalog at this sP.snap. """
+        if self.isSubbox:
+            return 0
         return self.groupCatHeader()['Ngroups_Total']
 
     @property
     def numSubhalos(self):
         """ Return number of Subfind subhalos in the group catalog at this sP.snap. """
+        if self.isSubbox:
+            return 0
         return self.groupCatHeader()['Nsubgroups_Total']
 
     @property
