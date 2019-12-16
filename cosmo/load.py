@@ -391,17 +391,28 @@ def gcPath(basePath, snapNum, chunkNum=0, noLocal=False, checkExists=False):
         print(' '+fileName)
     raise Exception("No group catalog found.")
 
-def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=None, sq=True):
-    """ Load HDF5 fof+subfind group catalog for a given snapshot.
+def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHalos=None, sq=True):
+    """ Load HDF5 fof+subfind group catalog for a given snapshot, one or more fields, possibly custom.
                          
-       readIDs=1 : by default, skip IDs since we operate under the group ordered snapshot assumption, but
-                   if this flag is set then read IDs and include them (if they exist)
-       skipIDs=1 : acknowledge we are working with a STOREIDS type .hdf5 group cat and don't warn
-       fields*   : read only a subset fields from the catalog
-       sq        : squeeze single field return into a numpy array instead of within a dict
+       fieldsSubhalos : read only a subset of Subgroup fields from the catalog
+       fieldsHalos    : read only a subset of Group fields from the catalog
+       sub            : shorthand for fieldsSubhalos
+       halo,group     : shorthands for fieldsHalos
+       sq             : squeeze single field return into a numpy array instead of within a dict
     """
     assert sP.snap is not None, "Must specify sP.snap for groupCat() load."
     assert sP.subbox is None, "No groupCat() for subbox snapshots."
+
+    if sub is not None:
+        assert fieldsSubhalos is None
+        fieldsSubhalos = sub
+    if halo is not None:
+        assert group is None and fieldsHalos is None
+        fieldsHalos = halo
+    if group is not None:
+        assert halo is None and fieldsHalos is None
+        fieldsHalos = group
+
     assert fieldsSubhalos is not None or fieldsHalos is not None, "Must specify fields type."
 
     r = {}
@@ -409,6 +420,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
     # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Can request >=1 custom fields 
     # and >=1 standard fields simultaneously, as opposed to snapshotSubset().
     if fieldsSubhalos is not None:
+        fieldsSubhalos = iterable(fieldsSubhalos)
 
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
@@ -419,9 +431,10 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field] = sP.data[cacheKey]
                 continue
 
+            quantName = quant.lower().replace("_log","")
+
             # halo mass (m200 or m500) of parent halo [code, msun, or log msun]
-            if quant in ['mhalo_200','mhalo_200_log','mhalo_200_code',
-                         'mhalo_500','mhalo_500_log','mhalo_200_code']:
+            if quantName in ['mhalo_200','mhalo_200_code','mhalo_500','mhalo_200_code','mhalo_200_parent']:
                 od = 200 if '_200' in quant else 500
 
                 gc = groupCat(sP, fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
@@ -429,39 +442,36 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field] = gc['halos']['Group_M_Crit%d'%od][gc['subhalos']]
 
                 if '_code' not in quant: r[field] = sP.units.codeMassToMsun( r[field] )
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
                 # satellites given nan
-                mask = np.zeros( gc['subhalos'].size, dtype='int16' )
-                mask[ gc['halos']['GroupFirstSub'] ] = 1
-                wSat = np.where(mask == 0)
-                r[field][wSat] = np.nan
+                if '_parent' not in quantName:
+                    mask = np.zeros( gc['subhalos'].size, dtype='int16' )
+                    mask[ gc['halos']['GroupFirstSub'] ] = 1
+                    wSat = np.where(mask == 0)
+                    r[field][wSat] = np.nan
 
             # subhalo mass [msun or log msun]
-            if quant in ['mhalo_subfind','mhalo_subfind_log']:
+            if quantName in ['mhalo_subfind']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
                 r[field] = sP.units.codeMassToMsun( gc )
 
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
-
             # subhalo stellar mass (<30 pkpc definition, with auxCat) [msun or log msun]
-            if quant in ['mstar_30pkpc','mstar_30pkpc_log']:
+            if quantName in ['mstar_30pkpc']:
                 acField = 'Subhalo_Mass_30pkpc_Stars'
                 ac = auxCat(sP, fields=[acField])
                 r[field] = sP.units.codeMassToMsun( ac[acField] )
 
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
-
             # subhalo stellar mass (<1 or <2 rhalf definition, from groupcat) [msun or log msun]
-            if quant in ['mstar1','mstar2','mstar1_log','mstar2_log']:
+            if quantName in ['mstar1','mstar2','mgas1','mgas2']:
                 field = 'SubhaloMassInRadType' if '2' in quant else 'SubhaloMassInHalfRadType'
-                mass = groupCat(sP, fieldsSubhalos=[field])[:,sP.ptNum('stars')]
+                if 'mstar' in quantName: ptNum = sP.ptNum('stars')
+                if 'mgas' in quantName: ptNum = sP.ptNum('gas')
+
+                mass = groupCat(sP, fieldsSubhalos=[field])[:,ptNum]
                 r[field] = sP.units.codeMassToMsun(mass)
 
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
-
             # central flag (1 if central, 0 if not)
-            if quant in ['central_flag','cen_flag','is_cen','is_central']:
+            if quantName in ['central_flag','cen_flag','is_cen','is_central']:
                 gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
                 gc = gc[ np.where(gc >= 0) ]
 
@@ -470,7 +480,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field][ gc ] = 1
 
             # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
-            if 'isolated3d,' in quant:
+            if 'isolated3d,' in quantName:
                 from cosmo.clustering import isolationCriterion3D
 
                 # e.g. 'isolated3d,mstar_30pkpc,max,in_300pkpc'
@@ -482,14 +492,13 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field] = ic3d['flag_iso_%s_%s' % (quant,max_type)]
 
             # auxCat: photometric color
-            if 'color_' in quant:
+            if 'color_' in quantName:
                 from cosmo.color import loadColors
 
                 r[field] = loadColors(sP, quant)
 
             # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars) (optionally Mstar in 30pkpc)
-            if quant in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr',
-                         'ssfr_log','ssfr_gyr_log','ssfr_30pkpc_log','ssfr_30pkpc_gyr_log']:
+            if quantName in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMassInRadType','SubhaloSFRinRad'])
                 mstar = sP.units.codeMassToMsun( gc['SubhaloMassInRadType'][:,sP.ptNum('stars')] )
 
@@ -506,17 +515,15 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field] = gc['SubhaloSFRinRad'] / mstar
 
                 if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
             # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
-            if quant in ['rhalo_200_code', 'rhalo_200','rhalo_200_log','rhalo_500','rhalo_500_log']:
+            if quantName in ['rhalo_200_code', 'rhalo_200','rhalo_500']:
                 od = 200 if '_200' in quant else 500
 
                 gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
                 r[field] = gc['halos']['Group_R_Crit%d'%od][gc['subhalos']]
 
                 if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
                 # satellites given nan
                 mask = np.zeros( gc['subhalos'].size, dtype='int16' )
@@ -525,22 +532,23 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field][wSat] = np.nan
 
             # virial velocity (v200) of parent halo [km/s]
-            if quant in ['vhalo','v200','vhalo_log','v200_log']:
+            if quantName in ['vhalo','v200']:
                 gc = groupCat(sP, fieldsSubhalos=['mhalo_200_code','rhalo_200_code'])
                 r[field] = sP.units.codeM200R200ToV200InKmS(gc['mhalo_200_code'], gc['rhalo_200_code'])
 
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
+            # circular velocity [km/s]
+            if quantName in ['vcirc','vmax']:
+                r[field] = groupCat(sP, sub='SubhaloVmax') # units correct
 
             # stellar half mass radii [code, pkpc, log pkpc]
-            if quant in ['size_stars_code','size_stars','size_stars_log','rhalf_stars_code','rhalf_stars','rhalf_stars_log']:
+            if quantName in ['size_stars_code','size_stars','rhalf_stars_code','rhalf_stars']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloHalfmassRadType'])
                 r[field] = gc[:,sP.ptNum('stars')]
 
                 if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
 
             # radial distance to parent halo [code, pkpc, log pkpc, r200frac] (centrals will have 0)
-            if quant in ['rdist_code','rdist','rdist_log','rdist_rvir']:
+            if quantName in ['rdist_code','rdist','rdist_rvir','distance','distance_rvir']:
                 gc = groupCat(sP, fieldsHalos=['GroupPos','Group_R_Crit200'], 
                                   fieldsSubhalos=['SubhaloPos','SubhaloGrNr'])
 
@@ -548,19 +556,21 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
                 r[field] = sP.periodicDists( gc['halos']['GroupPos'][parInds,:], 
                                              gc['subhalos']['SubhaloPos'])
 
-                if quant in ['rdist','rdist_log']:
+                if '_rvir' not in quantName and '_code' not in quantName:
                     r[field] = sP.units.codeLengthToKpc( r[field] )
 
-                if '_rvir' in quant: r[field] /= gc['halos']['Group_R_Crit200'][parInds]
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
+                if '_rvir' in quant:
+                    r[field] /= gc['halos']['Group_R_Crit200'][parInds]
 
             # virial temperature of parent halo
-            if quant in ['tvir', 'tvir_log']:
+            if quantName in ['tvir','virtemp']:
                 # get mass with self-call
                 mass = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
                 r[field] = sP.units.codeMassToVirTemp(mass)
 
-                if '_log' in quant: r[field] = logZeroNaN(r[field])
+            # log?
+            if quant[-4:] == '_log':
+                r[field] = logZeroNaN(r[field])
 
             # save cache
             if field in r:
@@ -596,21 +606,12 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
     il.groupcat.gcPathOrig = il.groupcat.gcPath
     il.groupcat.gcPath = gcPath
 
-    # IDs exist? either read or skip
-    with h5py.File(gcPath(sP.simPath,sP.snap),'r') as f:
-        if 'IDs' in f.keys() and len(f['IDs']):
-            if readIDs:
-                r['ids'] = f['IDs']['ID'][:]
-            else:
-                if not skipIDs:
-                    print("Warning: readIDs not requested, but IDs present in group catalog!")
-
     # read
     r['header'] = il.groupcat.loadHeader(sP.simPath,sP.snap)
 
     if fieldsSubhalos is not None:
         # check cache
-        fieldsSubhalos = list(fieldsSubhalos)
+        fieldsSubhalos = iterable(fieldsSubhalos)
         r['subhalos'] = {}
 
         for field in fieldsSubhalos:
@@ -646,7 +647,7 @@ def groupCat(sP, readIDs=False, skipIDs=False, fieldsSubhalos=None, fieldsHalos=
 
     if fieldsHalos is not None:
         # check cache
-        fieldsHalos = list(fieldsHalos)
+        fieldsHalos = iterable(fieldsHalos)
         r['halos'] = {}
 
         for field in fieldsHalos:

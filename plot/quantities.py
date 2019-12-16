@@ -14,44 +14,48 @@ from cosmo.cloudy import cloudyIon
 from plot.config import *
 
 quantDescriptions = {
-  'None'            : 'Count of the number of galaxies in each bin.',
-  'ssfr'            : 'Galaxy specific star formation rate, where sSFR = SFR / M*, both defined within twice the stellar half mass radius.',
-  'Z_stars'         : 'Galaxy stellar metallicity, mass-weighted, measured within twice the stellar half mass radius.',
-  'Z_gas'           : 'Galaxy gas-phase metallicity, mass-weighted, measured within twice the stellar half mass radius.',
-  'Z_gas_sfr'       : 'Galaxy gas-phase metallicity, SFR-weighted (i.e. approximately emission line weighted), measured for all cells within this subhalo.',
-  'size_stars'      : 'Galaxy stellar size (i.e. half mass radius), derived from all stars within this subhalo.',
-  'size_gas'        : 'Galaxy gaseous size (i.e. half mass radius), derived from all gas cells within this subhalo.',
-  'fgas1'           : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within the stellar half mass radius.',
-  'fgas2'           : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within twice the stellar half mass radius.',
-  'fgas'            : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within the entire subhalo.',
-  'fdm1'            : 'Galaxy dark matter fraction, defined as f_DM = M_DM / M_tot, both measured within the stellar half mass radius.',
-  'fdm2'            : 'Galaxy dark matter fraction, defined as f_DM = M_DM / M_tot, both measured within twice the stellar half mass radius.',
-  'fdm'             : 'Galaxy dark matter fraction, defined as f_DM = M_DM / M_tot, both measured within the entire subhalo.',
-  'surfdens1_stars' : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, the stellar half mass radius.',
-  'surfdens2_stars' : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, twice the stellar half mass radius.',
-  'surfdens1_dm'    : 'Galaxy dark matter surface density, defined as Sigma = M_DM / (pi R^2), where the DM mass is measured within R, the stellar half mass radius.',
-  'delta_sfms'      : 'Offset from the galaxy star-formation main sequence (SFMS) in dex. Defined as the difference between the sSFR of this galaxy and the median sSFR of galaxies of this mass.',
-  'sfr'             : 'Galaxy star formation rate, instantaneous, integrated over the entire subhalo.',
-  'sfr1'            : 'Galaxy star formation rate, instantaneous, integrated within the stellar half mass radius.',
-  'sfr2'            : 'Galaxy star formation rate, instantaneous, integrated within twice the stellar half mass radius.',
-  'sfr1_surfdens'   : 'Galaxy star formation surface density, defined as Sigma = SFR / (pi R^2), where SFR is measured within R, the stellar half mass radius.',
-  'sfr2_surfdens'   : 'Galaxy star formation surface density, defined as Sigma = SFR / (pi R^2), where SFR is measured within R, twice the stellar half mass radius.',
-  'mstar1'          : 'Galaxy stellar mass, measured within the stellar half mass radius.',
-  'mstar2'          : 'Galaxy stellar mass, measured within twice the stellar half mass radius.',
-  'mgas1'           : 'Galaxy gas mass (all phases), measured within the stellar half mass radius.',
-  'mgas2'           : 'Galaxy gas mass (all phases), measured within twice the stellar half mass radius.',
-  'mstar_30pkpc'    : 'Galaxy stellar mass, measured within a fixed 3D aperture of 30 physical kpc.',
-  'mhi_30pkpc'      : 'Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within a fixed 3D aperture of 30 physical kpc.',
-  'mhi2'            : 'Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within twice the stellar half mass radius.',
-  'mhalo_200'       : 'Total mass of the parent dark matter halo, defined by M_200_Crit. Because satellites have no such measure, they are excluded.',
-  'mhalo_500'       : 'Total mass of the parent dark matter halo, defined by M_500_Crit. Because satellites have no such measure, they are excluded.',
-  'mhalo_subfind'   : 'Parent dark matter (sub)halo total mass, defined by the gravitationally bound mass as determined by Subfind.',
-  'rhalo_200'       : 'Virial radius of the parent dark matter halo, defined by R_200_Crit. Because satellites have no such measure, they are excluded.',
-  'rhalo_500'       : 'The radius R500 of the parent dark matter halo, defined by R_500_Crit. Because satellites have no such measure, they are excluded.',
-  'velmag'          : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
-  'spinmag'         : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
-  'M_V'             : 'Galaxy absolute magnitude in the visible (V) band. Intrisic light, with no consideration of dust or obscuration.',
-  'vcirc'           : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
+  'None'             : 'Count of the number of galaxies in each bin.',
+  'ssfr'             : 'Galaxy specific star formation rate, where sSFR = SFR / M*, both defined within twice the stellar half mass radius.',
+  'Z_stars'          : 'Galaxy stellar metallicity, mass-weighted, measured within twice the stellar half mass radius.',
+  'Z_gas'            : 'Galaxy gas-phase metallicity, mass-weighted, measured within twice the stellar half mass radius.',
+  'Z_gas_sfr'        : 'Galaxy gas-phase metallicity, SFR-weighted (i.e. approximately emission line weighted), measured for all cells within this subhalo.',
+  'size_stars'       : 'Galaxy stellar size (i.e. half mass radius), derived from all stars within this subhalo.',
+  'size_gas'         : 'Galaxy gaseous size (i.e. half mass radius), derived from all gas cells within this subhalo.',
+  'fgas1'            : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within the stellar half mass radius.',
+  'fgas2'            : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within twice the stellar half mass radius.',
+  'fgas'             : 'Galaxy gas fraction, defined as f_gas = M_gas / (M_gas + M_stars), both measured within the entire subhalo.',
+  'fdm1'             : 'Galaxy dark matter fraction, defined as f_DM = M_DM / M_tot, both measured within the stellar half mass radius.',
+  'fdm2'             : 'Galaxy dark matter fraction, defined as f_DM = M_DM / M_tot, both measured within twice the stellar half mass radius.',
+  'fdm'              : 'Galaxy dark matter fraction, defined as f_DM = M_DM / M_tot, both measured within the entire subhalo.',
+  'surfdens1_stars'  : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, the stellar half mass radius.',
+  'surfdens2_stars'  : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, twice the stellar half mass radius.',
+  'surfdens1_dm'     : 'Galaxy dark matter surface density, defined as Sigma = M_DM / (pi R^2), where the DM mass is measured within R, the stellar half mass radius.',
+  'delta_sfms'       : 'Offset from the galaxy star-formation main sequence (SFMS) in dex. Defined as the difference between the sSFR of this galaxy and the median sSFR of galaxies of this mass.',
+  'sfr'              : 'Galaxy star formation rate, instantaneous, integrated over the entire subhalo.',
+  'sfr1'             : 'Galaxy star formation rate, instantaneous, integrated within the stellar half mass radius.',
+  'sfr2'             : 'Galaxy star formation rate, instantaneous, integrated within twice the stellar half mass radius.',
+  'sfr1_surfdens'    : 'Galaxy star formation surface density, defined as Sigma = SFR / (pi R^2), where SFR is measured within R, the stellar half mass radius.',
+  'sfr2_surfdens'    : 'Galaxy star formation surface density, defined as Sigma = SFR / (pi R^2), where SFR is measured within R, twice the stellar half mass radius.',
+  'mstar1'           : 'Galaxy stellar mass, measured within the stellar half mass radius.',
+  'mstar2'           : 'Galaxy stellar mass, measured within twice the stellar half mass radius.',
+  'mgas1'            : 'Galaxy gas mass (all phases), measured within the stellar half mass radius.',
+  'mgas2'            : 'Galaxy gas mass (all phases), measured within twice the stellar half mass radius.',
+  'mstar_30pkpc'     : 'Galaxy stellar mass, measured within a fixed 3D aperture of 30 physical kpc.',
+  'mhi_30pkpc'       : 'Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within a fixed 3D aperture of 30 physical kpc.',
+  'mhi2'             : 'Galaxy atomic HI gas mass (BR06 molecular H2 model), measured within twice the stellar half mass radius.',
+  'mhalo_200'        : 'Total mass of the parent dark matter halo, defined by M_200_Crit. Because satellites have no such measure, they are excluded.',
+  'mhalo_500'        : 'Total mass of the parent dark matter halo, defined by M_500_Crit. Because satellites have no such measure, they are excluded.',
+  'mhalo_subfind'    : 'Parent dark matter (sub)halo total mass, defined by the gravitationally bound mass as determined by Subfind.',
+  'mhalo_200_parent' : 'Total mass of the host/parent dark matter halo, defined by M_200_Crit. Satellites have the value of their host/parent halo.',
+  'rhalo_200'        : 'Virial radius of the parent dark matter halo, defined by R_200_Crit. Because satellites have no such measure, they are excluded.',
+  'rhalo_500'        : 'The radius R500 of the parent dark matter halo, defined by R_500_Crit. Because satellites have no such measure, they are excluded.',
+  'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
+  'velmag'           : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
+  'spinmag'          : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
+  'M_V'              : 'Galaxy absolute magnitude in the visible (V) band. Intrisic light, with no consideration of dust or obscuration.',
+  'vcirc'            : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
+  'distance'         : 'Radial distance of this satellite galaxy from the center of its parent host halo. Central galaxies have zero distance by definition.',
+  'distance_rvir'    : 'Radial distance of this satellite galaxy from the center of its parent host halo, normalized by the virial radius. Central galaxies have zero distance by definition.',
   'mstar2_mhalo200_ratio'      : 'Galaxy stellar mass to halo mass ratio, the former defined as M* within twice the stellar half mass radius, the latter as M_200_Crit.',
   'mstar30pkpc_mhalo200_ratio' : 'Galaxy stellar mass to halo mass ratio, the former defined as M* within 30 physical kpc, the latter as M_200_Crit.',
   'BH_mass'            : 'Black hole mass of this galaxy, a value which starts at the seed mass and increases monotonically as gas is accreted.',
@@ -117,8 +121,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # generally available (groupcat)
     quants1 = ['ssfr','Z_stars','Z_gas','Z_gas_sfr','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',
                'surfdens1_stars','surfdens2_stars','surfdens1_dm','delta_sfms',
-               'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens','velmag','spinmag',
-               'M_V','vcirc']
+               'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens','virtemp','velmag','spinmag',
+               'M_V','vcirc','distance','distance_rvir']
 
     # generally available (want to make available on the online interface)
     quants1b = ['zform_mm5', 'stellarage']
@@ -127,7 +131,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mgas1','mgas2','mstar_30pkpc','mhi_30pkpc','mhi2',
-                   'mhalo_200','mhalo_500','mhalo_subfind','mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
+                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
 
     quants_rad = ['rhalo_200','rhalo_500']
 
@@ -224,31 +228,28 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals, label, minMax, takeLog = sP.data[cacheKey]
         return vals.copy(), label, list(minMax), takeLog
 
+    # TODO: once every field is generalized as "vals = sP.groupCat(sub=quant)", can pull out
+
     # fields:
     quantname = quant.replace('_log','')
 
     if quantname in ['mstar1','mstar2','mgas1','mgas2']:
-        # stellar mass (variations)
+        # stellar/gas mass (within 1 or 2 r1/2stars) [msun or log msun]
+        vals = sP.groupCat(sub=quant)
+
         if 'mstar' in quant:
-            partName = 'star'
             partLabel = '\star'
             minMax = [9.0, 12.0]
         if 'mgas' in quant:
-            partName = 'gas'
             partLabel = 'gas'
             minMax = [8.0, 11.0]
+
         if '1' in quant:
-            fieldName = 'SubhaloMassInHalfRadType'
             radStr = '1'
         if '2' in quant:
-            fieldName = 'SubhaloMassInRadType'
             radStr = '2'
 
         if sP.boxSize < 50000: minMax = np.array(minMax) - 1.0
-
-        # stellar/gas mass (within 1 or 2 r1/2stars), optionally already returned in log
-        gc = sP.groupCat(fieldsSubhalos=[fieldName])
-        vals = sP.units.codeMassToMsun( gc[:,sP.ptNum(partName)] )
 
         label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ log M$_{\\rm sun}$ ]'
@@ -312,72 +313,61 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if sP.boxSize < 50000: minMax = [7.0, 10.5]
         label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr2
 
-    if quantname in ['mhalo_200','mhalo_500','mhalo_subfind']:
+    if quantname in ['mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent']:
         # halo mass
+        vals = sP.groupCat(sub=quant)
+
         if '_200' in quant or '_500' in quant:
-            # M200crit or M500crit values, satellites given naN
-            od = 200 if '_200' in quant else 500
+            mTypeStr = '%d,crit' % (200 if '_200' in quant else 500)
 
-            gc = sP.groupCat(fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-            vals = sP.units.codeMassToMsun( gc['halos']['Group_M_Crit%d'%od][gc['subhalos']] )
-
-            mask = np.zeros( gc['subhalos'].size, dtype='int16' )
-            mask[ gc['halos']['GroupFirstSub'] ] = 1
-            wSat = np.where(mask == 0)
-            vals[wSat] = np.nan
-
-            mTypeStr = '%d,crit' % od
+        if '_parent' in quant:
+            mTypeStr += ",parent"
 
         if '_subfind' in quant:
-            gc = sP.groupCat(fieldsSubhalos=['SubhaloMass'])
-            vals = sP.units.codeMassToMsun( gc )
             mTypeStr = 'Subfind'
 
-        minMax = [11.0, 15.0]
+        minMax = [11.0, 14.0]
+        if sP.boxSize > 200000: minMax = [11.0, 15.0]
         if sP.boxSize < 50000: minMax = [10.5, 13.5]
+
         label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ log M$_{\\rm sun}$ ]'
-        if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
+        #if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
     if quantname in ['rhalo_200','rhalo_500']:
         # R200crit or R500crit
-        od = 200 if '_200' in quant else 500
-
-        gc = sP.groupCat(fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
-        vals = sP.units.codeLengthToKpc( gc['halos']['Group_R_Crit%d'%od][gc['subhalos']] )
-
-        mask = np.zeros( gc['subhalos'].size, dtype='int16' )
-        mask[ gc['halos']['GroupFirstSub'] ] = 1
-        wSat = np.where(mask == 0)
-        vals[wSat] = np.nan
-
-        mTypeStr = '%d,crit' % od
+        vals = sP.groupCat(sub=quant)
 
         minMax = [1.0, 3.0]
-        label = 'R$_{\\rm halo}$ ('+mTypeStr+') [ log kpc ]'
+        label = 'R$_{\\rm halo}$ (%d,crit) [ log kpc ]' % (200 if '_200' in quant else 500)
         if clean: label = 'R$_{\\rm halo}$ [ log kpc ]'
 
     if quantname in ['vhalo','v200']:
         # virial velocity: v200
-        vals = sP.groupCat(fieldsSubhalos=[quant])
-        takeLog = False
-        logStr = ''
-        minMax = [0, 200]
+        vals = sP.groupCat(sub=quant)
 
-        if '_log' in quant:
-            vals = logZeroNaN(vals)
-            logStr = 'log '
-            minMax = [1.0, 2.5]
+        takeLog = False # show linear by default
+
+        logStr = 'log ' if takeLog else ''
+        minMax = [1.0,2.5] if takeLog else [0, 200]
             
         label = 'v$_{\\rm 200,halo}$  [ %skm/s ]' % logStr
         if clean: label = 'v$_{\\rm halo}$ [ %skm/s ]' % logStr
+
+    if quantname in ['virtemp']:
+        # virial temperature [K]
+        vals = sP.groupCat(sub=quant)
+
+        minMax = [4.0, 7.0]
+        if tight: minMax = [4.0, 8.0]
+        label = 'T$_{\\rm vir}$ [ log K ]'
 
     if quantname in ['vmag','velmag','spinmag']:
         # SubhaloVel [physical km/s] or SubhaloSpin [physical kpc km/s]
         if quant == 'spinmag':
             field = 'SubhaloSpin'
             label = '|V|$_{\\rm subhalo}$ [ log kpc km/s ]'
-            minMax = [0.5, 4.5]
-            if tight: minMax = [0.0, 5.0]
+            minMax = [1.5, 4.5]
+            if tight: minMax = [1.0, 5.0]
         else:
             field = 'SubhaloVel'
             label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
@@ -410,18 +400,32 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         assert '_log' not in quant
         takeLog = False
-        label = 'M$_{\\rm %s}$ [ mag, no dust ]' % bandName
+        label = 'M$_{\\rm %s}$ [ abs AB mag, no dust ]' % bandName
 
-        minMax = [-10, -24]
-        if tight: minMax = [-7, -25]
+        minMax = [-24, -16]
+        if tight: minMax = [-25, -14]
 
     if quantname == 'vcirc':
         # circular velocity [km/s] from snapshot
-        vals = sP.groupCat(fieldsSubhalos=['SubhaloVmax'])
+        vals = sP.groupCat(sub=quant)
 
-        label = 'V$_{\\rm circ} [ log km/s ]'
-        minMax = [1.0, 2.5]
-        if tight: minMax = [0.5, 3.0]
+        label = 'V$_{\\rm circ}$ [ log km/s ]'
+        minMax = [1.8, 2.8]
+        if tight: minMax = [1.5, 3.0]
+
+    if quantname in ['distance','distance_rvir']:
+        # radial distance of satellites to the center of the host halo
+        vals = sP.groupCat(sub=quant)
+
+        if quant == 'distance':
+            label = 'Radial Distance [ log kpc ]'
+            minMax = [1.0, 2.5]
+            if tight: minMax = [1.0, 3.0]
+
+        if quant == 'distance_rvir':
+            label = 'R / R$_{\\rm vir,host}$ [ log ]'
+            minMax = [0.0, 1.0]
+            if tight: minMax = [0.0, 1.5]
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo
