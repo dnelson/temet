@@ -123,6 +123,16 @@ ipython
 >>> dm_vel_sub10 = sP.snapshotSubset('dm', 'vel', subhaloID=10)
 ```
 
+In addition to shorthand names for fields such as "pos" (mapping to "Coordinates"), many custom fields at 
+both the particle and group catalog level are defined. Loading data can also be done with shorthands, for example
+
+```python
+>>> sP = simParams(run='tng50-1', redshift=0.0)
+
+>>> subs = sP.subhalos('mstar_30pkpc')
+>>> x = sP.gas('cellsize_kpc')
+```
+
 
 generic exploratory plots
 =========================

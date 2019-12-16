@@ -419,13 +419,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         if quant == 'distance':
             label = 'Radial Distance [ log kpc ]'
-            minMax = [1.0, 2.5]
-            if tight: minMax = [1.0, 3.0]
+            minMax = [1.5, 2.5]
+            if tight: minMax = [1.0, 3.5]
 
         if quant == 'distance_rvir':
-            label = 'R / R$_{\\rm vir,host}$ [ log ]'
+            takeLog = False # show linear by default
+            label = 'R / R$_{\\rm vir,host}$'
             minMax = [0.0, 1.0]
-            if tight: minMax = [0.0, 1.5]
+            if tight: minMax = [0.0, 2.0]
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo

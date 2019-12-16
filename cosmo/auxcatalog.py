@@ -578,7 +578,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     # allocate, NaN indicates not computed except for mass where 0 will do
     dtype = particles[ptProperty].dtype if ptProperty in particles.keys() else 'float32' # for custom
-    assert dtype in ['int16','float32','float64'] # otherwise check, when does this happen?
+    assert dtype in ['float32','float64'] # otherwise check, when does this happen?
 
     if op == 'ufunc': 
         r = np.zeros( allocSize, dtype=dtype )

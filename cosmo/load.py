@@ -699,6 +699,14 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
     return r
 
+def groupCat_subhalos(sP, fields):
+    """ Wrapper for above. """
+    return groupCat(sP, fieldsSubhalos=fields)
+
+def groupCat_halos(sP, fields):
+    """ Wrapper for above. """
+    return groupCat(sP, fieldsHalos=fields)
+
 def groupCatSingle(sP, haloID=None, subhaloID=None):
     """ Return complete group catalog information for one halo or subhalo. """
     assert haloID is None or subhaloID is None, "Cannot specify both haloID and subhaloID."

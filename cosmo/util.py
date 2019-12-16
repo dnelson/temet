@@ -160,8 +160,9 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         w = []
 
         for snap in snaps:
-            fileName = sP.snapPath(snap, checkExists=True)
+            fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
             if fileName is None: continue
+
             with h5py.File(fileName,'r') as f:
                 if 'PartType'+str(sP.ptNum('tracer')) in f:
                     w.append(snap)
@@ -175,7 +176,7 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
         w = []
 
         for snap in snaps:
-            fileName = sP.snapPath(snap, checkExists=True)
+            fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
             if fileName is None: continue
             with h5py.File(fileName,'r') as f:
                 if '/PartType0/MagneticField' in f:
@@ -808,7 +809,6 @@ def subboxSubhaloCat(sP, sbNum):
     from scipy import interpolate
 
     minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.0]
-    if sP.res == 2160: minEdgeDistRedshifts = [100.0, 6.0, 4.0, 3.0, 2.0, 1.0]
 
     def _inSubbox(pos):
         """ Return a vector of True or False entries, if pos (3-vector, or [N,3] vector) is inside subbox. 

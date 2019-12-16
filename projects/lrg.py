@@ -17,6 +17,7 @@ from os.path import isfile
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from util.voronoi import voronoiThresholdSegmentation
+from cosmo.util import subboxSubhaloCat
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3
@@ -733,6 +734,29 @@ def clumpDemographics(sP):
 
     # C: 
 
+def clumpTracerTracks(sP, haloIDs):
+    """ Intersect the LRG halo sample with the subbox catalogs, find which halos are available for high time resolution 
+    tracking, and then make our analysis and plots of the time evolution of clump cell/integral properties vs time. """
+
+    GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
+
+    for sbNum in [0,1,2]:
+        # load catalog
+        cat = subboxSubhaloCat(sP, sbNum)
+
+        # intersect with all haloIDs sets
+        for i, haloIDset in enumerate(haloIDs):
+            subIDset = GroupFirstSub[haloIDset]
+            inds_cat, inds_sample = match3(cat['SubhaloIDs'], subIDset)
+
+            num_matched = inds_cat.size if inds_cat is not None else 0
+
+            print('sb = %d haloIDset = %d, num_matched = %d' % (sbNum,i,num_matched))
+
+            print( np.nanmax(sP.subhalos('mhalo_200_log')) )
+
+    import pdb; pdb.set_trace()
+
 def paperPlots():
     """ Testing. """
     TNG100  = simParams(res=1820,run='tng',redshift=0.0)
@@ -930,10 +954,13 @@ def paperPlots():
     # fig todo: tpcf of single halo (0.15 < r/rvir < 1.0)
 
     # fig 11: clump demographics: size distribution, total mass, average numdens, etc
-    if 1:
+    if 0:
         sP = simParams(run='tng50-1', redshift=redshift)
         clumpDemographics(sP)
 
     # fig todo: individual (or stacked) 'clump' properties, i.e. radial profiles, including pressure/cellsize
 
     # fig todo: time tracks via tracers
+    if 1:
+        sP = simParams(run='tng50-1', redshift=redshift)
+        clumpTracerTracks(sP, haloIDs=_get_halo_ids(sP))
