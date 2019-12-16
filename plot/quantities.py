@@ -228,14 +228,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals, label, minMax, takeLog = sP.data[cacheKey]
         return vals.copy(), label, list(minMax), takeLog
 
-    # TODO: once every field is generalized as "vals = sP.groupCat(sub=quant)", can pull out
+    # TODO: once every field is generalized as "vals = sP.groupCat(sub=quantname)", can pull out (needs to be quantname, i.e. w/o _log, to avoid x2)
 
     # fields:
     quantname = quant.replace('_log','')
 
     if quantname in ['mstar1','mstar2','mgas1','mgas2']:
         # stellar/gas mass (within 1 or 2 r1/2stars) [msun or log msun]
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         if 'mstar' in quant:
             partLabel = '\star'
@@ -315,7 +315,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent']:
         # halo mass
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         if '_200' in quant or '_500' in quant:
             mTypeStr = '%d,crit' % (200 if '_200' in quant else 500)
@@ -335,7 +335,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['rhalo_200','rhalo_500']:
         # R200crit or R500crit
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         minMax = [1.0, 3.0]
         label = 'R$_{\\rm halo}$ (%d,crit) [ log kpc ]' % (200 if '_200' in quant else 500)
@@ -343,7 +343,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['vhalo','v200']:
         # virial velocity: v200
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         takeLog = False # show linear by default
 
@@ -355,7 +355,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['virtemp']:
         # virial temperature [K]
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         minMax = [4.0, 7.0]
         if tight: minMax = [4.0, 8.0]
@@ -407,7 +407,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname == 'vcirc':
         # circular velocity [km/s] from snapshot
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         label = 'V$_{\\rm circ}$ [ log km/s ]'
         minMax = [1.8, 2.8]
@@ -415,7 +415,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['distance','distance_rvir']:
         # radial distance of satellites to the center of the host halo
-        vals = sP.groupCat(sub=quant)
+        vals = sP.groupCat(sub=quantname)
 
         if quant == 'distance':
             label = 'Radial Distance [ log kpc ]'
