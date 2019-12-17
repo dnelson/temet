@@ -2780,7 +2780,6 @@ def verify_results(sP, GrNr=0):
 
 def rewrite_groupcat(sP, GrNr=0):
     """ Rewrite a group catalog which is missing FOF0 subhalos using the phase2 (final) results. """
-    from cosmo.load import gcPath
 
     assert GrNr == 0 # no generalization
     assert 'fof0test' in sP.arepoPath # testing, only modify L35n2160TNG_fof0test/ files
@@ -2803,14 +2802,14 @@ def rewrite_groupcat(sP, GrNr=0):
         Group_Pos   = f['Group_Pos'][()]
 
     # verify first groupcat chunk has no subhalos and has FoF0
-    with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+    with h5py.File(sP.gcPath(sP.snap,chunkNum=0),'r') as f:
         nChunks = f['Header'].attrs['NumFiles']
         assert f['Header'].attrs['Ngroups_ThisFile'] == 1
         assert f['Header'].attrs['Nsubgroups_ThisFile'] == 0
 
     # update GroupFirstSub across all halos of all chunks
     for i in range(nChunks):
-        with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=i),'r+') as f:
+        with h5py.File(sP.gcPath(sP.snap,chunkNum=i),'r+') as f:
             if f['Header'].attrs['Ngroups_ThisFile'] > 0:
                 gfs_loc = f['Group']['GroupFirstSub'][()]
                 w = np.where(gfs_loc >= 0)
@@ -2820,7 +2819,7 @@ def rewrite_groupcat(sP, GrNr=0):
     # update first chunk
     print('Updating groupcat files...')
 
-    with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
+    with h5py.File(sP.gcPath(sP.snap,chunkNum=0),'r+') as f:
         # write all FoF0 subhalo fields
         for key in subs:
             if subs[key].dtype == np.float64:
@@ -2834,14 +2833,14 @@ def rewrite_groupcat(sP, GrNr=0):
         f['Group']['GroupPos'][0,:] = Group_Pos
 
     # update headers of all chunks
-    with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
+    with h5py.File(sP.gcPath(sP.snap,chunkNum=0),'r+') as f:
         f['Header'].attrs['Nsubgroups_ThisFile'] = np.int32(Group_nsubs)
         Nsubs_Total_old = f['Header'].attrs['Nsubgroups_Total']
 
     Nsubgroups_Total = Nsubs_Total_old + Group_nsubs
 
     for i in range(nChunks):
-        with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=i),'r+') as f:
+        with h5py.File(sP.gcPath(sP.snap,chunkNum=i),'r+') as f:
             f['Header'].attrs['Nsubgroups_Total'] = np.int32(Nsubgroups_Total)
 
     print('Done.')
@@ -2870,7 +2869,6 @@ def _find_so_quantities(dists, mass, rhoBack, Deltas):
 def add_so_quantities(sP, GrNr=0):
     """ FoF0 is missing SO quantities (Group_R_Crit200, etc). Need to derive now. """
     import gc
-    from cosmo.load import gcPath
     from util.helper import pSplitRange, reportMemory
 
     assert GrNr == 0 # no generalization for chunkNum
@@ -2950,7 +2948,7 @@ def add_so_quantities(sP, GrNr=0):
     print('M200: ', M200)
 
     if 1:
-        with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r+') as f:
+        with h5py.File(sP.gcPath(sP.snap,chunkNum=0),'r+') as f:
             f['Group']['Group_R_Mean200'][GrNr] = R200[0]
             f['Group']['Group_R_TopHat200'][GrNr] = R200[1]
             f['Group']['Group_R_Crit200'][GrNr] = R200[2]
@@ -2965,7 +2963,6 @@ def add_so_quantities(sP, GrNr=0):
 
 def rewrite_snapshot(sP, GrNr=0):
     """ Rewrite a snapshot which is missing FOF0 subhalos using the phase2 (final) results. """
-    from cosmo.load import snapPath
     from tracer.tracerMC import match3
 
     assert GrNr == 0 # no generalization
@@ -2985,7 +2982,7 @@ def rewrite_snapshot(sP, GrNr=0):
         i = 0
 
         while np.any(nchunks_type[ptTypes] == -1):
-            with h5py.File(snapPath(sP.simPath,sP.snap,chunkNum=i),'r') as f:
+            with h5py.File(sP.snapPath(sP.snap,chunkNum=i),'r') as f:
                 for pt in ptTypes:
                     if nchunks_type[pt] >= 0:
                         continue
@@ -3025,7 +3022,7 @@ def rewrite_snapshot(sP, GrNr=0):
     # list of all fields we will need to rewrite
     fields = {}
 
-    with h5py.File(snapPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+    with h5py.File(sP.snapPath(sP.snap,chunkNum=0),'r') as f:
         for pt in ptTypes:
             fields[pt] = []
             for key in f['PartType%d' % pt]:
@@ -3049,7 +3046,7 @@ def rewrite_snapshot(sP, GrNr=0):
             offset = 0
 
             for i in range(nchunks_type[pt]):
-                file = snapPath(sP.simPath, sP.snap, chunkNum=i)
+                file = sP.snapPath(sP.snap, chunkNum=i)
 
                 num_remaining = fof0['GroupLenType'][pt] - offset
 
@@ -3140,7 +3137,6 @@ def rewrite_particle_level_cat(sP, filename, partType):
 
 def compare_subhalos_all_quantities(snap_start=67):
     """ Plot diagnostic histograms. """
-    from cosmo.load import gcPath
     from util.simParams import simParams
     from matplotlib.backends.backend_pdf import PdfPages
     import matplotlib.pyplot as plt
@@ -3161,7 +3157,7 @@ def compare_subhalos_all_quantities(snap_start=67):
     pdf = PdfPages('compare_subhalos_%s_%d.pdf' % (sPs[0].simName,snap_start))
 
     # get list of subhalo properties
-    with h5py.File(gcPath(sPs[0].simPath,sPs[0].snap,chunkNum=0),'r') as f:
+    with h5py.File(sPs[0].gcPath(sPs[0].snap,chunkNum=0),'r') as f:
         fields = list(f['Subhalo'].keys())
 
     # get GroupNsubs[0] for each sim
@@ -3193,7 +3189,7 @@ def compare_subhalos_all_quantities(snap_start=67):
                     vals = f[field][()]
             else:
                 label = sP.simName + ' snap=%d' % sP.snap
-                with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+                with h5py.File(sP.gcPath(sP.snap,chunkNum=0),'r') as f:
                     if field in f['Subhalo']:
                         vals = f['Subhalo'][field][()]
                     else:
@@ -3234,7 +3230,7 @@ def compare_subhalos_all_quantities(snap_start=67):
                     vals = f[field][()]
             else:
                 label = sP.simName + ' snap=%d' % sP.snap
-                with h5py.File(gcPath(sP.simPath,sP.snap,chunkNum=0),'r') as f:
+                with h5py.File(sP.gcPath(sP.snap,chunkNum=0),'r') as f:
                     vals = f['Subhalo'][field][()]
 
             data.append(vals)

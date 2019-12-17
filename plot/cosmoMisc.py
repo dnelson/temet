@@ -217,8 +217,6 @@ def haloMassesVsDMOMatched():
 
 def plotClumpsEvo():
     """ Plot evolution of clumps (smallest N subhalos in halfmassrad) using SubLink_gal tree. """
-    import cosmo
-
     sP = simParams(res=1820,run='tng',redshift=0.0)
     figsize = (22.4,12.6) # (16,9)*1.4
     treeName = 'SubLink_gal'
@@ -232,7 +230,7 @@ def plotClumpsEvo():
     sort_inds = np.argsort( gc['subhalos'][selectQuant] )
     if reverseSort: sort_inds = sort_inds[::-1]
 
-    snapRedshifts = cosmo.util.snapNumToRedshift(sP, all=True)
+    snapRedshifts = sP.snapNumToRedshift(all=True)
     snapAgeGyr = sP.units.redshiftToAgeFlat( snapRedshifts )
     snapDtGyr = snapAgeGyr - np.roll(snapAgeGyr,1)
     snapDtGyr[0] = snapAgeGyr[0] - sP.units.redshiftToAgeFlat(127.0)
@@ -248,15 +246,15 @@ def plotClumpsEvo():
         # load MPB
         mpbFields = ['SnapNum','SubhaloPos','SubhaloHalfmassRad','SubhaloHalfmassRadType','SubhaloSFR',
                      'SubhaloMass','SubhaloMassType','SubhaloGrNr','Group_M_Crit200','SubhaloParent']
-        mpb = cosmo.mergertree.loadMPB(sP, sort_inds[i], fields=mpbFields, treeName=treeName)
+        mpb = sP.loadMPB(sort_inds[i], fields=mpbFields, treeName=treeName)
 
-        xx = cosmo.util.snapNumToRedshift(sP, mpb['SnapNum'])
+        xx = sP.snapNumToRedshift(mpb['SnapNum'])
 
         # get the MPB of the z=0 parent halo
-        halo = cosmo.load.groupCatSingle(sP, haloID=mpb['SubhaloGrNr'][0])
-        mpbParent = cosmo.mergertree.loadMPB(sP, halo['GroupFirstSub'], fields=mpbFields, treeName=treeName)
+        halo = sP.groupCatSingle(haloID=mpb['SubhaloGrNr'][0])
+        mpbParent = sP.loadMPB(halo['GroupFirstSub'], fields=mpbFields, treeName=treeName)
 
-        xxPar = cosmo.util.snapNumToRedshift(sP, mpbParent['SnapNum'])
+        xxPar = sP.snapNumToRedshift(mpbParent['SnapNum'])
 
         # allocate parent relative properties
         radFromPar = np.zeros( xx.size, dtype='float32')
@@ -276,7 +274,7 @@ def plotClumpsEvo():
             xyzPar = mpbParent['SubhaloPos'][w,:].reshape( (1,3) )
             xyzSub = mpb['SubhaloPos'][j,:].reshape( (1,3) )
 
-            radFromPar[j] = cosmo.util.periodicDists(xyzPar, xyzSub, sP)
+            radFromPar[j] = sP.periodicDists(xyzPar, xyzSub)
 
             # calculate when clump is/isnot within this z=0 parent halo
             if mpbParent['SubhaloGrNr'][w] == mpb['SubhaloGrNr'][j]:

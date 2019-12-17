@@ -1344,7 +1344,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
 
             assert list(binConfig.keys()).index('rad') == 0 # otherwise we normalized along the wrong dimension
 
-    # return quantities for save, as expected by cosmo.load.auxCat()
+    # return quantities for save, as expected by load.auxCat()
     select = 'subhalos, minStellarMass = %.2f (30pkpc values), [%s] only' % (minStellarMass,cenSatSelect)
 
     attrs = {'Description' : desc.encode('ascii'),

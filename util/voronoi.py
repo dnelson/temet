@@ -8,11 +8,9 @@ import time
 from os.path import isfile
 from numba import jit
 
-from cosmo.load import _haloOrSubhaloSubset
-
 def loadSingleHaloVPPP(sP, haloID):
     """ Load Voronoi connectivity information for a single FoF halo. """
-    subset = _haloOrSubhaloSubset(sP, haloID=haloID)
+    subset = sP.haloOrSubhaloSubset(haloID=haloID)
 
     indStart = subset['offsetType'][sP.ptNum('gas')]
     indStop  = indStart + subset['lenType'][sP.ptNum('gas')]

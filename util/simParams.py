@@ -757,10 +757,12 @@ class simParams:
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
                                cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
                                correctPeriodicPosBoxWrap
-        from cosmo.load import snapshotSubset, snapshotHeader, groupCat, groupCatSingle, groupCatHeader, \
-                               gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
-                               auxCat, snapshotSubsetParallel, snapHasField, snapNumChunks, snapPath, \
-                               snapConfigVars, snapParameterVars, groupCat_subhalos, groupCat_halos
+        from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapNumChunks, \
+                                  snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset
+        from load.auxcat import auxCat
+        from load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
+                                  gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
+                                  groupCat_subhalos, groupCat_halos, groupCatSingle_subhalo, groupCatSingle_halo
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity, simParticleQuantity
         from util.helper import periodicDistsN, periodicDistsIndexed
@@ -786,6 +788,7 @@ class simParams:
         self.snapConfigVars     = partial(snapConfigVars, self)
         self.snapParameterVars  = partial(snapParameterVars, self)
         self.snapPath           = partial(snapPath, self.simPath)
+        self.subboxVals         = partial(subboxVals, self.subbox)
         self.gcPath             = partial(gcPath, self.simPath)
         self.groupCatSingle     = partial(groupCatSingle, sP=self)
         self.groupCatHeader     = partial(groupCatHeader, sP=self)
@@ -801,12 +804,17 @@ class simParams:
         self.subhalos           = partial(groupCat_subhalos, self)
         self.halos              = partial(groupCat_halos, self)
         self.groups             = partial(groupCat_halos, self)
+        self.subhalo            = partial(groupCatSingle_subhalo, self)
+        self.halo               = partial(groupCatSingle_halo, self)
+        self.group              = partial(groupCatSingle_halo, self)
+
         self.gas                = partial(snapshotSubsetParallel, self, 'gas')
         self.dm                 = partial(snapshotSubsetParallel, self, 'dm')
         self.stars              = partial(snapshotSubsetParallel, self, 'stars')
         self.bhs                = partial(snapshotSubsetParallel, self, 'bhs')
         self.tracers            = partial(snapshotSubsetParallel, self, 'tracerMC')
 
+        # helpers
         self.cenSatSubhaloIndices       = partial(cenSatSubhaloIndices, sP=self)
         self.correctPeriodicDistVecs    = partial(correctPeriodicDistVecs, sP=self)
         self.correctPeriodicPosVecs     = partial(correctPeriodicPosVecs, sP=self)
@@ -1142,6 +1150,10 @@ class simParams:
         """ Return a sP corresponding to the parent volume, at the same redshift (fullbox for subbox only for now). """
         assert self.subbox is not None
         return simParams(res=self.res, run=self.run, redshift=self.redshift)
+
+    def subboxSim(self, sbNum):
+        assert not self.isSubbox and len(self.subboxSize) > sbNum
+        return simParams(res=self.res, run=self.run, redshift=self.redshift, variant='subbox%d' % sbNum)
 
     @property
     def numMetals(self):

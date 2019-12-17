@@ -730,8 +730,6 @@ def plotPosTempVsRedshift():
         sfr  = f['sfr'][()]
         redshift = f['Redshift'][()]
 
-        #pt = cosmo.load.groupCatSingle(sP, subhaloID=f['SubhaloID'][0])['SubhaloPos']
-
     # plot
     if 0:
         fig = plt.figure(figsize=(10,10))

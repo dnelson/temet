@@ -226,7 +226,6 @@ def concatSubboxFilesAndMinify():
 def groupCutoutFromSnap(run='tng'):
     """ Create a [full] subhalo/fof cutout from a snapshot (as would be done by the Web API). """
     from util.simParams import simParams
-    import cosmo
 
     ptTypes = ['gas','dm','bhs','stars']
 
@@ -259,7 +258,7 @@ def groupCutoutFromSnap(run='tng'):
     # get list of field names
     fields = {}
 
-    fileName = cosmo.load.snapPath(sP.simPath, sP.snap, chunkNum=0)
+    fileName = sP.snapPath(sP.snap, chunkNum=0)
 
     with h5py.File(fileName,'r') as f:
         for partType in ptTypes:
@@ -284,7 +283,7 @@ def groupCutoutFromSnap(run='tng'):
             print(subhaloID,'sub',partType)
             gName = 'PartType' + str(sP.ptNum(partType))
 
-            data[gName] = cosmo.load.snapshotSubset(sP, partType, fields[gName], subhaloID=subhaloID)
+            data[gName] = sP.snapshotSubset(partType, fields[gName], subhaloID=subhaloID)
 
         # write
         with h5py.File(saveFilename,'w') as f:
@@ -304,7 +303,7 @@ def groupCutoutFromSnap(run='tng'):
             print(subhaloID,'fof',partType)
             gName = 'PartType' + str(sP.ptNum(partType))
 
-            data[gName] = cosmo.load.snapshotSubset(sP, partType, fields[gName], haloID=haloID)
+            data[gName] = sP.snapshotSubset(partType, fields[gName], haloID=haloID)
 
         # write
         with h5py.File('cutout_%s_%d_group.hdf5' % (sP.simName,subhaloID),'w') as f:
@@ -670,7 +669,7 @@ def redshiftWikiTable():
             print('|-')
 
     sP = simParams(res=455,run='tng')
-    z = cosmo.util.snapNumToRedshift(sP, all=True)
+    z = sP.snapNumToRedshift(all=True)
 
     w = np.where(z >= 0.0)[0]
     print(len(w))
@@ -769,7 +768,6 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
 
 def export_ovi_phase():
     """ Export raw data points for OVI phase diagram. """
-    from cosmo.load import snapshotSubset
     from cosmo.util import inverseMapPartIndicesToSubhaloIDs, cenSatSubhaloIndices
     from tracer.tracerMC import match3
     from util.simParams import simParams
@@ -784,10 +782,10 @@ def export_ovi_phase():
     haloID = None # if not None, only this fof halo
 
     # load
-    xvals = snapshotSubset(sP, partType, 'hdens', haloID=haloID, haloSubset=fofOnly)
+    xvals = sP.snapshotSubset(partType, 'hdens', haloID=haloID, haloSubset=fofOnly)
     xvals = np.log10(xvals) # log=True
-    yvals = snapshotSubset(sP, partType, 'temp', haloID=haloID, haloSubset=fofOnly)
-    weight = snapshotSubset(sP, partType, 'O VI mass', haloID=haloID, haloSubset=fofOnly)
+    yvals = sP.snapshotSubset(partType, 'temp', haloID=haloID, haloSubset=fofOnly)
+    weight = sP.snapshotSubset(partType, 'O VI mass', haloID=haloID, haloSubset=fofOnly)
     weight = sP.units.codeMassToMsun(weight)
     N_tot = xvals.size
 
@@ -2567,7 +2565,6 @@ def createVirtualSimHDF5():
     Note: dataset details acquired from first chunk of last snapshot! Snapshot must be full, and first chunk must have 
     at least one of every particle type! Note: run in simulation root dir, since we make relative path links. """
     from util.simParams import simParams
-    import cosmo
 
     sP = simParams(run='millennium-2')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
@@ -2590,19 +2587,19 @@ def createVirtualSimHDF5():
         print('Starting [%s]...' % mode)
 
         if mode == 'snaps':
-            chunkPath = cosmo.load.snapPath
-            nChunks = cosmo.load.snapNumChunks(sP.simPath, snaps[-1])
+            chunkPath = sP.snapPath
+            nChunks = sP.snapNumChunks(snaps[-1])
             gNames = ['PartType%d' % i for i in range(6)]
             baseName = 'Snapshots'
 
         if mode == 'groups':
-            chunkPath = cosmo.load.gcPath
-            nChunks = cosmo.load.groupCatNumChunks(sP.simPath, snaps[-1])
+            chunkPath = sP.gcPath
+            nChunks = sP.groupCatNumChunks(snaps[-1])
             gNames = ['Group','Subhalo'] 
             baseName = 'Groups'
 
         # acquire field names, shapes, dtypes, dimensionalities of all datasets from final snapshot
-        filepath = chunkPath(sP.simPath, snaps[-1], 0)
+        filepath = chunkPath(snaps[-1], 0)
         print('Loading all dataset metadata from: %s' % filepath)
 
         shapes = {}
@@ -2709,7 +2706,7 @@ def createVirtualSimHDF5():
                         fSim.create_virtual_dataset(key, layout)
 
             # add local Header attributes
-            with h5py.File(chunkPath(sP.simPath, snap, 0),'r') as f:
+            with h5py.File(chunkPath(snap, 0),'r') as f:
                 if 'Header' in f:
                     grp = fSim.create_group('/%s/%d/Header' % (baseName,snap))
                     for attr in local_attr_include:
@@ -2870,7 +2867,6 @@ def createVirtualSimHDF5():
 def supplementVirtualSimHDF5AddSnapField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
-    import cosmo
 
     sP = simParams(res=2500,run='tng')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
@@ -2880,14 +2876,14 @@ def supplementVirtualSimHDF5AddSnapField():
     snaps = sP.validSnapList()
 
     # start custom
-    chunkPath = cosmo.load.snapPath
-    nChunks  = cosmo.load.snapNumChunks(sP.simPath, snaps[-1])
-    gName    = 'PartType0'
-    field    = 'InternalEnergyOld'
-    baseName = 'Snapshots'
+    chunkPath = sP.snapPath
+    nChunks   = sP.snapNumChunks(snaps[-1])
+    gName     = 'PartType0'
+    field     = 'InternalEnergyOld'
+    baseName  = 'Snapshots'
 
     # acquire field name, shape, dtype of dataset from final snapshot
-    filepath = chunkPath(sP.simPath, snaps[-1], 0)
+    filepath = chunkPath(snaps[-1], 0)
 
     with h5py.File(filepath,'r') as f:
         shape = f['/%s/%s' % (gName,field)].shape
@@ -2966,7 +2962,6 @@ def supplementVirtualSimHDF5AddSnapField():
 def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
-    import cosmo
 
     sP = simParams(res=1820,run='illustris')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
@@ -2976,14 +2971,14 @@ def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
     snaps = sP.validSnapList()
 
     # start custom
-    chunkPath = cosmo.load.gcPath
-    nChunks   = cosmo.load.groupCatNumChunks(sP.simPath, snaps[-1])
+    chunkPath = sP.gcPath
+    nChunks   = sP.groupCatNumChunks(snaps[-1])
     gName     = 'Subhalo'
     field     = 'SubhaloFlag'
     baseName  = 'Groups'
 
     # acquire field name, shape, dtype of dataset from final snapshot
-    filepath = chunkPath(sP.simPath, snaps[-1], 0)
+    filepath = chunkPath(snaps[-1], 0)
 
     with h5py.File(filepath,'r') as f:
         shape = f['/%s/%s' % (gName,field)].shape
@@ -3058,7 +3053,6 @@ def supplementVirtualSimHDF5AddOrUpdateGroupcatField():
 def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
-    import cosmo
 
     sP = simParams(res=1820,run='tng_dark')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful

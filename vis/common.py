@@ -22,11 +22,8 @@ from util.sphMap import sphMap
 from util.treeSearch import calcHsml
 from util.helper import loadColorTable, logZeroMin, logZeroNaN, pSplitRange
 from util.boxRemap import remapPositions
-from cosmo.load import subboxVals
-from cosmo.util import correctPeriodicDistVecs, correctPeriodicPosVecs
 from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
 from cosmo.stellarPop import sps
-from illustris_python.util import partTypeNum
 
 # all frames output here (current directory if empty string)
 savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
@@ -114,7 +111,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
 def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, alsoSFRgasForStars=False, pSplit=None):
     """ Calculate an approximate HSML (smoothing length, i.e. spatial size) for particles of a given 
     type, for the full snapshot, optionally restricted to an input indRange. """
-    _, sbStr, _ = subboxVals(sP.subbox)
+    _, sbStr, _ = sP.subboxVals()
     irStr = '' if indRange is None else '.%d-%d' % (indRange[0],indRange[1])
     shStr = '' if useSnapHsml is False else '.sv'
     ngStr = '' if nNGB == 64 else '.ngb%d' % nNGB
@@ -1096,7 +1093,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
          hsmlFac, str(rotMatrix), optionalStr)
     m = hashlib.sha256(hashstr.encode('utf-8')).hexdigest()[::4]
 
-    _, sbStr, _ = subboxVals(sP.subbox)
+    _, sbStr, _ = sP.subboxVals()
 
     # if loaded/gridded data is the same, just processed differently, don't save twice
     partFieldSave = partField.replace(' fracmass',' mass')
@@ -1191,8 +1188,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             sP.data['nThreads'] = 1 # disable parallel snapshot loading
 
         if indRange is None and sP.subbox is None and not disableChunkLoad:
-            nChunks = np.max( [1, int(h['NumPart'][partTypeNum(partType)]**(1.0/3.0) / 10.0)] )
-            chunkSize = int(h['NumPart'][partTypeNum(partType)] / nChunks)
+            nChunks = np.max( [1, int(h['NumPart'][sP.ptNum(partType)]**(1.0/3.0) / 10.0)] )
+            chunkSize = int(h['NumPart'][sP.ptNum(partType)] / nChunks)
             print(' gridBox(): proceeding for (%s %s) with [%d] chunks...' % (partType,partField,nChunks))
 
         for chunkNum in np.arange(nChunks):
@@ -1264,7 +1261,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # shift pos to boxCenter
                 for i in range(3):
                     pos[:,i] -= boxCenter[i]
-                correctPeriodicDistVecs(pos, sP)
+                sP.correctPeriodicDistVecs(pos)
 
                 # cartesian to spherical coordinates
                 s_rad = np.sqrt(pos[:,0]**2 + pos[:,1]**2 + pos[:,2]**2)
@@ -1374,7 +1371,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # make pos periodic relative to boxCenterMap, and slice in axes[2] dimension
                 for i in range(3):
                     pos[:,i] -= boxCenterMap[i]
-                correctPeriodicDistVecs(pos, sP)
+                sP.correctPeriodicDistVecs(pos)
 
                 zvals = np.squeeze( pos[:,3-axes[0]-axes[1]] )
                 w = np.where( np.abs(zvals) <= boxSizeImgMap[2] * 0.5 )
@@ -1577,7 +1574,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
         while countAdded < numToAdd:
             xyzPos = pos[gcInd,:][ [p['axes'][0], p['axes'][1], 3-p['axes'][0]-p['axes'][1]] ]
             xyzDist = xyzPos - p['boxCenter']
-            correctPeriodicDistVecs(xyzDist, p['sP'])
+            p['sP'].correctPeriodicDistVecs(xyzDist)
             xyzDistAbs = np.abs(xyzDist)
 
             # in bounds?

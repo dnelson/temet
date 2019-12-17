@@ -16,7 +16,6 @@ from os import mkdir, remove
 
 from cosmo import hydrogen
 from util.helper import closest, iterable, logZeroNaN
-from cosmo.load import snapshotSubset, snapHasField
 
 basePath = '/u/dnelson/code/cloudy.run/'
 
@@ -921,19 +920,19 @@ class cloudyIon():
          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
 
         # load required gas properties
-        dens = snapshotSubset(sP, 'gas', 'dens', indRange=indRange)
+        dens = sP.snapshotSubset('gas', 'dens', indRange=indRange)
         dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
 
         if assumeSolarMetallicity:
             metal = np.zeros( dens.size, dtype='float32' ) + self.solar_Z
         else:
-            assert snapHasField(sP, 'gas', 'GFM_Metallicity')
-            metal = snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
+            assert sP.snapHasField('gas', 'GFM_Metallicity')
+            metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = snapshotSubset(sP, 'gas', tempField, indRange=indRange) # log K
+        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # log K
         
         # interpolate for log(abundance) and convert to linear
         # note: doesn't matter if "ionziation fraction" is mass ratio, mass density ratio, or 
@@ -952,11 +951,11 @@ class cloudyIon():
         else:
             # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
-            if snapHasField(sP, 'gas', 'GFM_Metals'):
+            if sP.snapHasField('gas', 'GFM_Metals'):
                 assert self.elementNameToSymbol(element) in sP.metals
 
                 fieldName = "metals_" + self.elementNameToSymbol(element)
-                metal_mass_fraction = snapshotSubset(sP, 'gas', fieldName, indRange=indRange)
+                metal_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
 
                 metal_mass_fraction[metal_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
             else:
@@ -1140,19 +1139,19 @@ class cloudyEmission():
         line = self.resolveLineNames(line, single=True)
 
         # load required gas properties
-        dens = snapshotSubset(sP, 'gas', 'dens', indRange=indRange)
+        dens = sP.snapshotSubset('gas', 'dens', indRange=indRange)
         dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
 
         if assumeSolarMetallicity:
             metal = np.zeros( dens.size, dtype='float32' ) + ion.solar_Z
         else:
-            assert snapHasField(sP, 'gas', 'GFM_Metallicity')
-            metal = snapshotSubset(sP, 'gas', 'metal', indRange=indRange)
+            assert sP.snapHasField('gas', 'GFM_Metallicity')
+            metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
 
         metal_logSolar = sP.units.metallicityInSolar(metal, log=True)
 
         tempField = 'temp_sfcold' if tempSfCold else 'temp' # use cold phase temperature for eEOS gas (by default)
-        temp = snapshotSubset(sP, 'gas', tempField, indRange=indRange) # log K
+        temp = sP.snapshotSubset('gas', tempField, indRange=indRange) # log K
         
         # interpolate for log(emissivity) and convert to linear [erg/cm^3/s]
         emissivity = 10.0**self.emis(line, dens, metal_logSolar, temp, sP.redshift)
@@ -1170,21 +1169,21 @@ class cloudyEmission():
             # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
             sym = ion.elementNameToSymbol(element)
-            if snapHasField(sP, 'gas', 'GFM_Metals'):
+            if sP.snapHasField('gas', 'GFM_Metals'):
                 if sym not in sP.metals:
                     print('WARNING: [%s] not in sP.metals (expected for sulphur), taking solar abunds.' % sym)
                     el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
                 else:
                     assert sym in sP.metals
                     fieldName = "metals_" + sym
-                    el_mass_fraction = snapshotSubset(sP, 'gas', fieldName, indRange=indRange)
+                    el_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
                     el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
             else:
                 print('WARNING: line emission but GFM_Metals not available (mini-snap). Assuming solar abundances.')
                 el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
 
         # load volume and finish calculation
-        volume = snapshotSubset(sP, 'gas', 'vol', indRange=indRange)
+        volume = sP.snapshotSubset('gas', 'vol', indRange=indRange)
         volume = sP.units.codeVolumeToCm3(volume)
 
         el_mass_fraction_rel_solar = el_mass_fraction / ion._solarMetalAbundanceMassRatio(element)

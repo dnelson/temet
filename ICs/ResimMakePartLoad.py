@@ -8,6 +8,7 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 import numpy as np
 import h5py
 import time
+from os import path
 
 from ICs.utilities import write_ic_file
 from numba import jit
@@ -364,7 +365,11 @@ def generate(fofID, EnlargeHighResFactor=None):
 
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
-    saveFilename = 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
+    saveFilename = '/u/dnelson/sims.TNG_zooms/ICs/output/partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
+
+    if path.isfile(saveFilename):
+        print('skip [%s], already exists...' % saveFilename)
+        return
 
     # load halo DM positions and IDs at target snapshot
     sP_snap = sP.snap
@@ -386,7 +391,9 @@ def generate(fofID, EnlargeHighResFactor=None):
     inds_ics = _get_ic_inds(sP, dmIDs_halo, simpleMethod=True)
 
     # for dm particles in ICs, load positions of halo DM particles
-    posInitial = sP.snapshotSubsetP('dm', 'pos', inds=inds_ics)
+    posInitial = sP.snapshotSubsetP('dm', 'pos')
+    posInitial = posInitial[inds_ics,:]
+
     ext_min = np.min(posInitial, axis=0)
     ext_max = np.max(posInitial, axis=0)
     extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
@@ -485,13 +492,10 @@ def generate(fofID, EnlargeHighResFactor=None):
 
 def generate_set():
     #haloIDs = [653, 858, 1244, 1291, 1523, 1544, 1775, 1838, 1890, 1919] # todo: 14.5-14.6 bin of 10
-    #haloIDs = [283, 435, 562, 592, 694, 752, 785, 836, 856, 877] # todo: part 1, increase 14.6-14.7 to 40
-    #haloIDs = [901, 980, 998, 1016, 1039, 1041, 1067, 1071, 1086, 1087] # todo: part 2, increase 14.6-14.7 to 40
-    #haloIDs = [1096, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 to 40
-    #haloIDs = [446, 463, 466, 490, 497, 518, 532, 571, 604, 636] # todo: part 2, increase 14.7-14.8 to 40
-    #haloIDs = [698, 701, 720, 778, 789, 790, 797, 798, 844, 884] # todo: part 3, increase 14.7-14.8 to 40
-    haloIDs = [360, 368, 376, 378, 382, 393, 395, 416, 419, 429] # todo: part 3, increase 14.8-14.9 to 50
-    #haloIDs = [443, 451, 481, 485, 496, 510, 526, 550, 565, 586] # todo: part 4, increase 14.8-14.9 to 50
+    #haloIDs = [1096, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 from 30-40
+    haloIDs = [799, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 from 30-40
+    #haloIDs = [698, 701, 720, 778, 789, 790, 797, 798, 844, 884] # todo: part 3, increase 14.7-14.8 from 30-40
+    #haloIDs = [443, 451, 481, 485, 496, 510, 526, 550, 565, 586] # todo: part 4, increase 14.8-14.9 from 40-50
 
     sizeFacs = [3.0] #[2.0,3.0,4.0]
 

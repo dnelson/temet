@@ -228,6 +228,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
+    print('x start', reportMemory())
     xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
     print('x done', reportMemory())
 
@@ -907,7 +908,7 @@ def oneRun_PhaseDiagram(snaps=None):
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
-    sP = simParams(res=1820,run='tng')
+    sP = simParams(res=1080,run='tng')
     yQuant = 'temp'
     xQuant = 'nh'
 

@@ -873,13 +873,12 @@ class sps():
             mags = stars['GFM_StellarPhotometrics']
         elif '_dustC' in band:
             # view direction dependent dust attenuation calculation on the fly
-            from cosmo.load import _haloOrSubhaloSubset
             from cosmo.hydrogen import hydrogenMass
 
             assert rotMatrix is not None and rotCenter is not None
             assert sP.hInd is not None # use to load gas based on -subhalo- id (e.g. called from within vis)
 
-            subset = _haloOrSubhaloSubset(sP, subhaloID=sP.hInd)
+            subset = sP.haloOrSubhaloSubset(subhaloID=sP.hInd)
             offset = subset['offsetType'][sP.ptNum('gas')]
             length = subset['lenType'][sP.ptNum('gas')]
             indRange_gas = [offset, offset+length-1] # inclusive

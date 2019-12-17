@@ -35,7 +35,8 @@ def pick_halos():
     for i, bin in enumerate(bins):
         print(bin,hInds[i])
 
-    # note: skipped h305 (IC gen failures, replaced with 443 in its mass bin.
+    # note: skipped h305 (IC gen failures, replaced with 443 in its mass bin)
+    # note: skipped h1096 (IC failure, spans box edge, replaced with 799)
     # note: run down to 14.5 mass bin with 10 per bin, then:
     #  increase to 20 for 14.9-15, 50 for 14.8-14.9, 40 each for 14.6-14.8
     return hInds

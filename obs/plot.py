@@ -17,7 +17,6 @@ from datetime import datetime
 from mpl_toolkits.axes_grid.inset_locator import inset_axes
 from obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
 from plot.config import *
-from cosmo.load import auxCat, groupCatSingle, groupCatHeader
 
 from util.loadExtern import loadSDSSFits
 from matplotlib.backends.backend_pdf import PdfPages
@@ -97,9 +96,9 @@ def plotSingleResult(ind, sps=None, doSim=None):
     else:
         velStr = 'Vel' if doSim['withVel'] else 'NoVel'
         acName = mockSpectraAuxcatName % velStr
-        subhaloID = auxCat(doSim['sP'], acName, indRange=[ind,ind+1])['subhaloIDs'][0]
+        subhaloID = doSim['sP'].auxCat(acName, indRange=[ind,ind+1])['subhaloIDs'][0]
 
-        sub = groupCatSingle(doSim['sP'], subhaloID=subhaloID)
+        sub = doSim['sP'].groupCatSingle(subhaloID=subhaloID)
         subMassStars = sub['SubhaloMassInRadType'][doSim['sP'].ptNum('stars')]
         logMassStars = doSim['sP'].units.codeMassToLogMsun( subMassStars )
         logMassTot = doSim['sP'].units.codeMassToLogMsun( sub['SubhaloMass'] )
@@ -252,7 +251,7 @@ def talkPlots():
 
     # what ids are in catalog?
     acName = mockSpectraAuxcatName % 'Vel'
-    ac_ids = auxCat(sP, acName, onlyMeta=True)['subhaloIDs']
+    ac_ids = sP.auxCat(acName, onlyMeta=True)['subhaloIDs']
 
     ind_cen, ind_ac = match3(cen_inds, ac_ids)
 
