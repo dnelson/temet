@@ -1283,7 +1283,6 @@ def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP,
 def benchmark():
     """ Benchmark performance of sphMap(). """
     np.random.seed(424242)
-    from cosmo.load import snapshotSubset
     from util.simParams import simParams
     import time
 
@@ -1306,10 +1305,10 @@ def benchmark():
     if 1:
         # load some gas in a box
         sP = simParams(res=128, run='tracer', redshift=0.0)
-        pos   = snapshotSubset(sP, 'gas', 'pos')
-        hsml  = snapshotSubset(sP, 'gas', 'cellrad')
-        mass  = snapshotSubset(sP, 'gas', 'mass')
-        quant = snapshotSubset(sP, 'gas', 'temp')
+        pos   = sP.snapshotSubset('gas', 'pos')
+        hsml  = sP.snapshotSubset('gas', 'cellrad')
+        mass  = sP.snapshotSubset('gas', 'mass')
+        quant = sP.snapshotSubset('gas', 'temp')
 
     # config imaging
     nPixels    = 100
@@ -1328,8 +1327,6 @@ def benchmark():
 def benchmarkTarget():
     """ Benchmark performance of sphMap with posTargets. """
     np.random.seed(424242)
-    from cosmo.load import snapshotSubset
-    from util.simParams import simParams
     import time
 
     # config imaging

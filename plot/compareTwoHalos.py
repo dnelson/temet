@@ -16,10 +16,7 @@ from util import units
 from util.helper import isUnique, nUnique, iterable, logZeroNaN, sampleColorTable, getWhiteBlackColors
 from cosmo.util import crossMatchSubhalosBetweenRuns, snapNumToRedshift, cenSatSubhaloIndices
 from cosmo.color import loadSimGalColors, gfmBands
-from cosmo.mergertree import loadMPB
-from plot.quantities import simSubhaloQuantity
 from plot.config import *
-from cosmo.load import groupCat, groupCatSingle, snapshotSubset
     
 def matchedUniqueGCIDs(gc1,gc2,matchPath,snapNum):
     """ Return i1,i2 two sets of indices into gc1,gc2 based on matching results, such that
@@ -198,9 +195,9 @@ def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
     shID2 = iterable(shID2)
 
     for shID in shID1:
-        mpbs1.append( loadMPB(sP1, shID) )
+        mpbs1.append( sP1.loadMPB(shID) )
     for shID in shID2:
-        mpbs2.append( loadMPB(sP2, shID) )
+        mpbs2.append( sP2.loadMPB(shID) )
        
     # start figure
     fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*(1+0.1*nPanels)),facecolor=color1)
@@ -314,7 +311,7 @@ def illustrisVsTNG_RedEvoComp(candInd=None):
 
     if 0:
         # load TNG catalog for selection
-        mstar2, _, _, _ = simSubhaloQuantity(sP2, 'mstar_30pkpc_log', clean=clean)
+        mstar2, _, _, _ = sP2.simSubhaloQuantity('mstar_30pkpc_log', clean=clean)
 
         color_gr1, _ = loadSimGalColors(sP1, defSimColorModel, bands=['g','r'])
         color_gr2, _ = loadSimGalColors(sP2, defSimColorModel, bands=['g','r'])

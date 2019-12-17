@@ -18,7 +18,7 @@ from util.helper import closest
 def redshiftToSnapNum(redshifts=None, sP=None):
     """ Convert one or more input redshifts to closest matching snapshot numbers for a given sP. """
     from util.helper import closest
-    from cosmo.load import subboxVals
+    from load.snapshot import subboxVals
 
     assert sP is not None, "Must input sP."
 
@@ -240,7 +240,7 @@ def multiRunMatchedSnapList(runList, method='expand', **kwargs):
 
 def snapNumToRedshift(sP, snap=None, time=False, all=False):
     """ Convert snapshot number(s) to redshift or time (scale factor). """
-    from cosmo.load import subboxVals
+    from load.snapshot import subboxVals
 
     if not all and snap is None:
         snap = sP.snap

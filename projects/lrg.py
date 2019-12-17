@@ -527,7 +527,7 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
     if gallery:
         # multi-panel
         panels = []
-        setInd = 2 # TODO: just choose these manually?
+        setInd = 2 # just choose these manually
         labelZ = False
 
         for haloID in haloIDSets[setInd][0:12]:
@@ -548,7 +548,7 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
 
     else:
         # single image
-        for haloID in [haloIDSets[1][0]]: # list(haloIDSets[1]) + list(haloIDSets[2]):
+        for haloID in [haloIDSets[2][0]]: # list(haloIDSets[1]) + list(haloIDSets[2]):
             hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
             panels = [panel] if not isinstance(panel,list) else panel
@@ -753,7 +753,8 @@ def clumpTracerTracks(sP, haloIDs):
 
             print('sb = %d haloIDset = %d, num_matched = %d' % (sbNum,i,num_matched))
 
-            print( np.nanmax(sP.subhalos('mhalo_200_log')) )
+            masses = sP.subhalos('mhalo_200_log')[cat['SubhaloIDs']]
+            print( np.nanmax(masses) )
 
     import pdb; pdb.set_trace()
 
@@ -764,7 +765,7 @@ def paperPlots():
     TNG50_2 = simParams(res=1080,run='tng',redshift=0.0)
     TNG50_3 = simParams(res=540,run='tng',redshift=0.0)
 
-    haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 13.8]]
+    haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 14.0]]
     redshift = 0.5 # default for analysis
 
     def _get_halo_ids(sP_loc):
@@ -861,8 +862,9 @@ def paperPlots():
         haloIDSets = _get_halo_ids(sP)
 
         # gas metallicity, N_MgII, N_HI, stellar light
-        for conf in [0,1,2,3]:
+        for conf in [1,2,3,4]:
             lrgHaloVisualization(sP, haloIDSets, conf=conf, gallery=True)
+            #lrgHaloVisualization(sP, haloIDSets, conf=conf, gallery=False)
 
         # zoomed in (high res) visualizations of multiple properties of clumps
         for conf in [5,6]:
@@ -958,9 +960,11 @@ def paperPlots():
         sP = simParams(run='tng50-1', redshift=redshift)
         clumpDemographics(sP)
 
-    # fig todo: individual (or stacked) 'clump' properties, i.e. radial profiles, including pressure/cellsize
-
-    # fig todo: time tracks via tracers
+    # fig 12: time tracks via tracers
     if 1:
         sP = simParams(run='tng50-1', redshift=redshift)
         clumpTracerTracks(sP, haloIDs=_get_halo_ids(sP))
+
+    # fig todo: individual (or stacked) 'clump' properties, i.e. radial profiles, including pressure/cellsize
+
+

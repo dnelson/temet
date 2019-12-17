@@ -484,6 +484,10 @@ def addIonColumnPerSystem(sP, sim_sample, config='COS-Halos'):
             with h5py.File(_gridFilePath(),'w') as f:
                 f['grid'] = grid_d
 
+        # TODO: temporary, exit after each snap calculation (to free mem)
+        #print('Quitting now, REMOVE THIS! Re-run to continue with next snap...')
+        #return
+
     # create 2d distance mask and in order to select correct distance 'ring'
     # note: pixel scale is constant in pkpc, variable in code units
     zz = np.indices(nPixels)

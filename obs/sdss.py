@@ -20,7 +20,6 @@ from prospect.sources import CSPSpecBasis
 from prospect.utils import smoothing
 from prospect import fitting
 from util.helper import pSplitRange
-from cosmo.load import auxCat, groupCatSingle
 
 # config (don't change anything...)
 zBin = 'z0.0-0.1'
@@ -160,13 +159,13 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
     acName = mockSpectraAuxcatName % velStr
 
     # load mock spectrum
-    spec = auxCat(sP, acName, indRange=[ind,ind+1])
+    spec = sP.auxCat(acName, indRange=[ind,ind+1])
 
     assert spec['subhaloIDs'].size == 1
     subhaloID = spec['subhaloIDs'][0]
 
     # construct return (identical format as loadSDSSSpectrum)
-    stellarMass = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloMassInRadType'][sP.ptNum('stars')]
+    stellarMass = sP.groupCatSingle(subhaloID=subhaloID)['SubhaloMassInRadType'][sP.ptNum('stars')]
     logMass = sP.units.codeMassToLogMsun(stellarMass)
 
     r = {'ind':ind, 'objid':None, 'specobjid':None, 'logMass':logMass, 'redshift':sP.redshift}
@@ -790,7 +789,7 @@ def fitSingleSpectrum(ind, doSim=None):
 def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
     """ Combine and save all of the individual MCMC hdf5 result files, for either the SDSS spectra 
     sample or for the mock sample of a given sP. Same format as an auxCat. For mock samples, this 
-    file can then be loaded through cosmo.load.auxCat(). Note save size: condensed subhaloIDs only. """
+    file can then be loaded through load.auxCat(). Note save size: condensed subhaloIDs only. """
     import getpass
     import datetime
     from util.helper import curRepoVersion
@@ -926,7 +925,7 @@ def fitMockSpectra(sP, pSplit, withVel=True, addRealism=True):
     # get global list of the number of spectra we have
     velStr = 'Vel' if withVel else 'NoVel'
     acName = mockSpectraAuxcatName % velStr
-    spec = auxCat(sP, acName, onlyMeta=True)
+    spec = sP.auxCat(acName, onlyMeta=True)
     nSpec = spec['subhaloIDs'].size
 
     if pSplit is None:

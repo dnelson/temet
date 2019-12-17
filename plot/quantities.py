@@ -1082,20 +1082,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         takeLog = False
 
-        if 'num_mergers' in quantname: minMax = [0, 40] # all
+        if 'num_mergers' in quantname: minMax = [0, 80] # all
         if 'num_mergers_' in quantname: minMax = [0, 20] # major/minor only
         if 'mergers_mean_' in quantname: minMax = [0.0, 1.0] # fgas, redshift, mu
 
         typeStr = 'All $\mu$'
         timeStr = 'All Time'
 
-        if '_minor' in quantName: typeStr = 'Minor $1/10 < \mu < 1/4$' # 1/10 < mu < 1/4
-        if '_major' in quantName: typeStr = 'Major $\mu > 1/4$' # mu > 1/4
-        if '_250myr' in quantName: timeStr = 'Last 250Myr'
-        if '_500myr' in quantName: timeStr = 'Last 500Myr'
-        if '_gyr' in quantName: timeStr = 'Last Gyr'
-        if '_z1' in quantName: timeStr = 'Since z=1'
-        if '_z2' in quantName: timeStr = 'Since z=2'
+        if '_minor' in quantname: typeStr = 'Minor $1/10 < \mu < 1/4$' # 1/10 < mu < 1/4
+        if '_major' in quantname: typeStr = 'Major $\mu > 1/4$' # mu > 1/4
+        if '_250myr' in quantname: timeStr = 'Last 250Myr'
+        if '_500myr' in quantname: timeStr = 'Last 500Myr'
+        if '_gyr' in quantname: timeStr = 'Last Gyr'
+        if '_z1' in quantname: timeStr = 'Since z=1'
+        if '_z2' in quantname: timeStr = 'Since z=2'
 
         label = 'Number of Mergers (%s, %s)' % (typeStr,timeStr)
         if quantname == 'mergers_mean_fgas': label = 'Mean Cold Gas Fraction of Mergers'

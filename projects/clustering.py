@@ -14,10 +14,8 @@ from matplotlib import gridspec
 from collections import OrderedDict
 
 from util.helper import running_median, logZeroNaN, sampleColorTable
-from cosmo.util import cenSatSubhaloIndices
-from cosmo.load import groupCat, groupCatSingle, groupCatHeader
 from cosmo.clustering import twoPointAutoCorrelationPeriodicCube, conformityRedFrac
-from plot.general import simSubhaloQuantity, getWhiteBlackColors
+from plot.general import getWhiteBlackColors
 from vis.common import setAxisColors
 from tracer.tracerMC import match3
 from plot.config import *

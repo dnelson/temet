@@ -812,7 +812,6 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, treePrec='single
 def benchmark():
     """ Benchmark performance of calcHsml(). """
     np.random.seed(424242)
-    from cosmo.load import snapshotSubset
     from util.simParams import simParams
 
     # config data
@@ -829,7 +828,7 @@ def benchmark():
     if 1:
         # load some gas in a box
         sP = simParams(res=128, run='tng', redshift=0.0, variant='0000')
-        pos = snapshotSubset(sP, 'gas', 'pos')
+        pos = sP.snapshotSubset('gas', 'pos')
 
     # config
     nNGB = 32
@@ -856,8 +855,6 @@ def benchmark():
 def checkVsSubfindHsml():
     """ Compare our result vs SubfindHsml output. """
     from util import simParams
-    from cosmo.load import snapshotSubset
-    from cosmo.util import periodicDists
     import matplotlib.pyplot as plt
 
     nNGB = 64
@@ -865,8 +862,8 @@ def checkVsSubfindHsml():
 
     sP = simParams(res=128,run='tng',redshift=0.0,variant='0000')
 
-    pos = snapshotSubset(sP, 'dm', 'pos')
-    subfind_hsml = snapshotSubset(sP, 'dm', 'SubfindHsml')
+    pos = sP.snapshotSubset('dm', 'pos')
+    subfind_hsml = sP.snapshotSubset('dm', 'SubfindHsml')
 
     N = int(1e5)
     subfind_hsml = subfind_hsml[0:N]
@@ -889,7 +886,7 @@ def checkVsSubfindHsml():
     checkInds = np.hstack( (np.arange(10),w_high[0][0:10],w_low[0][0:10]) )
 
     for i in checkInds:
-        dists = periodicDists(posSearch[i,:],pos,sP)
+        dists = sP.periodicDists(posSearch[i,:],pos)
         dists = np.sort(dists)
         ww = np.where(dists < hsml[i])
         ww2 = np.where(dists < subfind_hsml[i])

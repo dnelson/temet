@@ -17,6 +17,33 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def carlo_dump():
+    sP = simParams(run='tng100-1', redshift=0.0)
+
+    fields = ['id','mhalo_200_parent_log','mstar_30pkpc_log','SubhaloPos','central_flag',
+              'mags_C_u','mags_C_g','mags_C_r','mags_C_i','rhalo_200_parent']
+
+    # load
+    data = sP.subhalos(fields)
+
+    # restrict to M* > 10^9 Msun
+    w = np.where( data['mstar_30pkpc_log'] > 9.0 )
+
+    for key in data:
+        data[key] = data[key][w]
+
+    # flatten SubhaloPos
+    for i in range(3):
+        data['pos_%d'%i] = data['SubhaloPos'][:,i]
+    del data['SubhaloPos']
+
+    # save
+    array = np.vstack( [data[key] for key in data] ).T
+    header = 'id mhalo[logmsun] mstar[logmsun] central_flag u[mag] g[mag] r[mag] i[mag] rhalo[logpkpc] pos_x[ckpc] pos_y[ckpc] pos_z[ckpc]'
+    fmt = ['%.3f' if data[el][0].dtype == np.float32 else '%d' for el in data.keys()]
+
+    np.savetxt('save_%s_z=%.1f.txt' % (sP.simName,sP.redshift), array, fmt=fmt, header=header)
+
 def loadspeed_test():
     # test nvme cache
     sP = simParams(run='tng300-1', redshift=0.0)
