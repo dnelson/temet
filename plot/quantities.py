@@ -77,7 +77,13 @@ quantDescriptions = {
   'massfrac_exsitu'    : 'Ex-situ stellar mass fraction, considering all stars in the entire subhalo. Defined as stellar mass which formed outside the main progenitor branch.',
   'massfrac_exsitu2'   : 'Ex-situ stellar mass fraction, considering stars within twice the stellar half mass radius. Defined as stellar mass which formed outside the main progenitor branch.',
   'massfrac_insitu'    : 'In-situ stellar mass fraction, considering all stars in the entire subhalo. Defined as stellar mass which formed within the main progenitor branch.',
-  'massfrac_insitu2'   : 'In-situ stellar mass fraction, considering stars within twice the stellar half mass radius. Defined as stellar mass which formed within the main progenitor branch.'
+  'massfrac_insitu2'   : 'In-situ stellar mass fraction, considering stars within twice the stellar half mass radius. Defined as stellar mass which formed within the main progenitor branch.',
+  'num_mergers'        : 'Total number of galaxy-galaxy mergers (any mass ratio), since the beginning of time.',
+  'num_mergers_major'  : 'Total number of major mergers, defined as having a stellar mass ratio (at the time when the secondary reached its peak M*) greater than 1/4, since all time.',
+  'num_mergers_minor'  : 'Total number of minor mergers, defined as a stellar mass ratio (at the time when the secondary reached its peak M*) of 1/10 < mu < 1/4, since all time.',
+  'num_mergers_major_gyr' : 'Total number of major mergers (stellar mass ratio mu > 1/4) in the past 1 Gyr.',
+  'mergers_mean_z'        : 'The mean redshift of all the mergers that the galaxy has undergone, weighted by the maximum stellar mass of the secondary progenitors.',
+  'mergers_mean_mu'       : 'THe mean stellar mass ratio of all the mergers that the galaxy has unergone, weighted by the maximum stellar mass of the secondary progenitors.'
 }
 
 def bandMagRange(bands, tight=False):
@@ -127,7 +133,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # generally available (want to make available on the online interface)
     quants1b = ['zform_mm5', 'stellarage']
 
-    quants1c = ['massfrac_exsitu', 'massfrac_exsitu2', 'massfrac_insitu', 'massfrac_insitu2'] # StellarAssembly
+    quants1c = ['massfrac_exsitu','massfrac_exsitu2','massfrac_insitu','massfrac_insitu2', # StellarAssembly, MergerHistory
+                'num_mergers','num_mergers_minor','num_mergers_major','num_mergers_major_gyr', # num_mergers_{minor,major}_{250myr,500myr,gyr,z1,z2}
+                'mergers_mean_z','mergers_mean_mu'] # mergers_mean_fgas
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mgas1','mgas2','mstar_30pkpc','mhi_30pkpc','mhi2',
@@ -254,38 +262,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\\rm '+partLabel+'}(<'+radStr+'r_{\star,1/2})$ [ log M$_{\\rm sun}$ ]'
         if clean: label = 'M$_{\\rm '+partLabel+'}$ [ log M$_{\\rm sun}$ ]'
 
-    if quantname in ['mstar2_mhalo200_ratio']:
+    if quantname in ['mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']:
         # stellar mass / halo mass ratio
-        fieldNames = ['SubhaloMassInRadType','mhalo_200_code']
-        gc = sP.groupCat(fieldsSubhalos=fieldNames)
+        vals = sP.groupCat(sub=quantname)
 
-        with np.errstate(invalid='ignore'):
-            vals = gc['SubhaloMassInRadType'][:,sP.ptNum('stars')] / gc['mhalo_200_code']
         minMax = [-3.0, -1.0]
+        if 'mstar2_' in quantname: distStr = '<2r_{\star,1/2}'
+        if 'mstar_30pkpc' in quantname: distStr = '<30 pkpc'
 
-        label = 'M$_{\star}(<2r_{\star,1/2})$ / $M_{\\rm halo,200crit}$ [ log ]'
-        if clean: label = 'M$_{\star}(<2r_{\star,1/2})$ / $M_{\\rm halo}$ [ log ]'
-
-    if quantname in ['mstar30pkpc_mhalo200_ratio']:
-        # stellar mass / halo mass ratio
-        mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200_code'])
-
-        acField = 'Subhalo_Mass_30pkpc_Stars'
-        mstar = sP.auxCat(fields=[acField])[acField]
-
-        with np.errstate(invalid='ignore'):
-            vals = mstar / mhalo
-        minMax = [-3.0, -1.0]
-
-        label = 'M$_{\star}$ / $M_{\\rm halo,200crit}$ [ log ]'
+        label = 'M$_{\star,%s}$ / $M_{\\rm halo,200crit}$ [ log ]' % distStr
         if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
 
     if quantname in ['mstar_30pkpc']:
         # stellar mass (auxcat based calculations)
-        acField = 'Subhalo_Mass_30pkpc_Stars'
-        ac = sP.auxCat(fields=[acField])
-
-        vals = sP.units.codeMassToMsun(ac[acField])
+        vals = sP.groupCat(sub=quantname)
 
         minMax = [9.0, 12.0]
         if sP.boxSize < 50000: minMax = [8.0, 11.0]
@@ -294,24 +284,18 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['mhi','mhi_30pkpc','mhi2']:
         # HI (atomic hydrogen) mass, either in 30pkpc or 2rhalfstars apertures (auxcat calculations)
-        if quant in ['mhi_30pkpc','mhi_30pkpc_log']:
-            radStr1 = '_30pkpc'
-            radStr2 = '\\rm{30pkpc}'
-        if quant in ['mhi2','mhi2_log']:
-            radStr1 = '_2rstars'
-            radStr2 = '2r_{\\rm \star,1/2}'
-        if quant == 'mhi': 
-            radStr1 = ''
-            radStr2 = '\\rm{sub}'
+        vals = sP.groupCat(sub=quantname)
 
-        acField = 'Subhalo_Mass%s_HI' % radStr1
-
-        ac = sP.auxCat(fields=[acField])
-        vals = sP.units.codeMassToMsun(ac[acField])
+        if quantname == 'mhi_30pkpc':
+            radStr = '\\rm{30pkpc}'
+        if quantname == 'mhi2':
+            radStr = '2r_{\\rm \star,1/2}'
+        if quantname == 'mhi':
+            radStr = '\\rm{sub}'
 
         minMax = [8.0, 11.5]
         if sP.boxSize < 50000: minMax = [7.0, 10.5]
-        label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr2
+        label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr
 
     if quantname in ['mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent']:
         # halo mass
@@ -363,42 +347,21 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['vmag','velmag','spinmag']:
         # SubhaloVel [physical km/s] or SubhaloSpin [physical kpc km/s]
+        vals = sP.groupCat(sub=quantname)
+
         if quant == 'spinmag':
-            field = 'SubhaloSpin'
             label = '|V|$_{\\rm subhalo}$ [ log kpc km/s ]'
             minMax = [1.5, 4.5]
             if tight: minMax = [1.0, 5.0]
         else:
-            field = 'SubhaloVel'
             label = '|V|$_{\\rm subhalo}$ [ log km/s ]'
             minMax = [1.5, 3.5]
             if tight: minMax = [1.0, 3.5]
 
-        gc = sP.groupCat(fieldsSubhalos=[field])
-        if quant == 'spinmag':
-            vals = sP.units.subhaloSpinToKpcKms(gc)
-        else:
-            vals = sP.units.subhaloCodeVelocityToKms(gc)
-
-        vals = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
-
     if quantname in ['M_V', 'M_U']:
         # StellarPhotometrics from snapshot
-        from cosmo.color import gfmBands, vegaMagCorrections
-        bandName = quantname.split('_')[1]
+        vals = sP.groupCat(sub=quantname)
 
-        vals = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])
-        vals = vals[:,gfmBands[bandName]]
-
-        # fix zero values
-        w = np.where(vals > 1e10)
-        vals[w] = np.nan
-
-        # Vega corrections
-        if bandName in vegaMagCorrections:
-            vals += vegaMagCorrections[bandName]
-
-        assert '_log' not in quant
         takeLog = False
         label = 'M$_{\\rm %s}$ [ abs AB mag, no dust ]' % bandName
 
@@ -430,16 +393,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo
+        vals = sP.groupCat(sub=quantname)
+
         speciesStr = quant.split("_")[1].upper()
         label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
-
-        if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
-        if speciesStr == 'O': speciesStr = 'AllGas_Oxygen'
-        fieldName = 'Subhalo_Mass_%s' % speciesStr
-
-        ac = sP.auxCat(fields=[fieldName])
-        if ac[fieldName] is None: return [None]*4
-        vals = sP.units.codeMassToMsun(ac[fieldName])
 
         if speciesStr == 'OVI':
             minMax = [5.0, 6.8]
@@ -450,10 +407,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if speciesStr == 'OVIII':
             minMax = [6.0, 7.4]
             if tight: minMax = [5.4, 8.6]
-        if speciesStr == 'AllGas_Oxygen':
+        if speciesStr == 'O':
             minMax = [6.5, 9.0]
             if tight: minMax = [6.5, 10.5]
-        if speciesStr == 'AllGas_Metal':
+        if speciesStr == 'Z':
             minMax = [7.0, 9.5]
             if tight: minMax = [6.5, 11.0]
 
@@ -1106,41 +1063,44 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['massfrac_exsitu','massfrac_exsitu2','massfrac_insitu','massfrac_insitu2']:
         # load data from ./postprocessing/StellarAssembly/ catalog of Vicente
-        inRadStr = ''
-        if '_inrad' in quant: inRadStr = '_in_rad'
-        filePath = sP.postPath + '/StellarAssembly/galaxies%s_%03d.hdf5' % (inRadStr,sP.snap)
-
-        dNameNorm = 'StellarMassTotal'
+        vals = sP.groupCat(sub=quantname)
 
         if 'massfrac_exsitu' in quant:
-            dName = 'StellarMassExSitu'
             label = 'Ex-Situ Stellar Mass Fraction [log]'
         if 'massfrac_insitu' in quant:
-            dName = 'StellarMassInSitu'
             label = 'In-Situ Stellar Mass Fraction [log]'
 
-        if '_inrad' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
-
-        if not isfile(filePath):
-            return [None]*4
-
-        with h5py.File(filePath,'r') as f:
-            mass_type = f[dName][()]
-            mass_norm = f[dNameNorm][()]
-
-        # take fraction and set Mstar=0 cases to nan silently
-        wZeroMstar = np.where(mass_norm == 0.0)
-        wNonzeroMstar = np.where(mass_norm > 0.0)
-
-        vals = mass_type
-        vals[wNonzeroMstar] /= mass_norm[wNonzeroMstar]
-        vals[wZeroMstar] = np.nan
-
-        assert vals.size == vals.shape[0] == sP.numSubhalos # verify dims
+        if '2' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
 
         minMax = [-2.2,0.0]
         if 'insitu' in quant: minMax = [-0.5, 0.0]
         if tight: minMax[0] -= 0.3
+
+    if 'num_mergers' in quantname or 'mergers_' in quantname:
+        # load data from ./postprocessing/MergerHistory/ catalog of Vicente
+        vals = sP.groupCat(sub=quantname)
+
+        takeLog = False
+
+        if 'num_mergers' in quantname: minMax = [0, 40] # all
+        if 'num_mergers_' in quantname: minMax = [0, 20] # major/minor only
+        if 'mergers_mean_' in quantname: minMax = [0.0, 1.0] # fgas, redshift, mu
+
+        typeStr = 'All $\mu$'
+        timeStr = 'All Time'
+
+        if '_minor' in quantName: typeStr = 'Minor $1/10 < \mu < 1/4$' # 1/10 < mu < 1/4
+        if '_major' in quantName: typeStr = 'Major $\mu > 1/4$' # mu > 1/4
+        if '_250myr' in quantName: timeStr = 'Last 250Myr'
+        if '_500myr' in quantName: timeStr = 'Last 500Myr'
+        if '_gyr' in quantName: timeStr = 'Last Gyr'
+        if '_z1' in quantName: timeStr = 'Since z=1'
+        if '_z2' in quantName: timeStr = 'Since z=2'
+
+        label = 'Number of Mergers (%s, %s)' % (typeStr,timeStr)
+        if quantname == 'mergers_mean_fgas': label = 'Mean Cold Gas Fraction of Mergers'
+        if quantname == 'mergers_mean_z': label = 'Mean Redshift of Mergers'
+        if quantname == 'mergers_mean_mu': label = 'Mean Stellar Mass Ratio of Mergers'
 
     if quantname in ['bmag_sfrgt0_masswt','bmag_sfrgt0_volwt',
                      'bmag_2rhalf_masswt','bmag_2rhalf_volwt',
@@ -1306,21 +1266,17 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if par != 'all': label += ' [%s]' % par
 
     if quantname[0:6] == 'color_':
-        # integrated galaxy colors
-        from plot.color import bandRenamesToFSPS
-        from cosmo.color import loadSimGalColors
+        # integrated galaxy colors, different dust models (e.g. 'color_C_gr')
+        vals = sP.groupCat(sub=quantname)
 
-        # determine which color model/bands are requested
-        _, model, bands = quant.split("_")
-        simColorsModel = colorModelNames[model]
+        from plot.config import bandRenamesToFSPS
+
+        bands = quantname.split("_")[-1]
         bands = [bands[0],bands[1]]
         minMax = bandMagRange(bands,tight=tight)
 
         if bands[0] in bandRenamesToFSPS: bands[0] = bandRenamesToFSPS[bands[0]]
         if bands[1] in bandRenamesToFSPS: bands[1] = bandRenamesToFSPS[bands[1]]
-
-        # load
-        vals, _ = loadSimGalColors(sP, simColorsModel, bands=bands)
 
         takeLog = False
         label = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
