@@ -36,22 +36,22 @@ For example, add the following lines to your `.bashrc` file
         export PYTHONPATH+=:$HOME/python/:$HOME/illustris_release/
         export PYTHONSTARTUP=$HOME/python/.startup.py
 
-4. Load or install python (3.6.x and 3.7.x currently tested). For example, on the MPCDF machines, using a clean anaconda
+4. Load or install python (3.6+, 3.8.x recommended). For example, on the MPCDF machines, using a clean anaconda
 
-        module load anaconda/3_5.3.0
+        module load anaconda/3/2019.03
         mkdir -p ~/.local/envs
-        conda create --prefix=~/.local/envs/myenv python=3.7
+        conda create --prefix=~/.local/envs/myenv python=3.8
         source activate ~/.local/envs/myenv
 
     and add the following lines to your `.bashrc` file for permanence
 
-        module load intel/18.0
-        module load impi/2018.4
-        module load fftw/3.3.6
-        module load hdf5-serial/intel-18.0/1.8.18
-        module load gsl/2.2
+        module load intel/19.0.5
+        module load impi/2019.5
+        module load fftw/3.3.8
+        module load hdf5-serial/intel-18.0/1.8.21
+        module load gsl/2.4
 
-        module load anaconda/3_5.3.0
+        module load anaconda/3/2019.03
         source activate ~/.local/envs/myenv
         export PATH=$HOME/.local/envs/myenv/bin/:$PATH
 

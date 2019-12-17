@@ -18,6 +18,7 @@ from getpass import getuser
 import illustris_python as il
 from illustris_python.util import partTypeNum as ptNum
 from util.helper import iterable, logZeroNaN, curRepoVersion, pSplitRange, numPartToChunkLoadSize
+from cosmo.color import loadColors, gfmBands, vegaMagCorrections
 
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False, expandPartial=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
@@ -420,7 +421,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
     # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Can request >=1 custom fields 
     # and >=1 standard fields simultaneously, as opposed to snapshotSubset().
     if fieldsSubhalos is not None:
-        fieldsSubhalos = iterable(fieldsSubhalos)
+        fieldsSubhalos = list(iterable(fieldsSubhalos))
 
         for i, field in enumerate(fieldsSubhalos):
             quant = field.lower()
@@ -432,6 +433,24 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 continue
 
             quantName = quant.lower().replace("_log","")
+
+            # --- meta ---
+
+            # subhalo ID/index
+            if quantName in ['subhalo_id','subhalo_index','id','index']:
+                assert '_log' not in quant
+                r[field] = np.arange(sP.numSubhalos)
+
+            # central flag (1 if central, 0 if not)
+            if quantName in ['central_flag','cen_flag','is_cen','is_central']:
+                gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
+                gc = gc[ np.where(gc >= 0) ]
+
+                # satellites given zero
+                r[field] = np.zeros( sP.numSubhalos, dtype='int16' )
+                r[field][ gc ] = 1
+
+            # --- group catalog ---
 
             # halo mass (m200 or m500) of parent halo [code, msun, or log msun]
             if quantName in ['mhalo_200','mhalo_200_code','mhalo_500','mhalo_200_code','mhalo_200_parent']:
@@ -455,12 +474,6 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
                 r[field] = sP.units.codeMassToMsun( gc )
 
-            # subhalo stellar mass (<30 pkpc definition, with auxCat) [msun or log msun]
-            if quantName in ['mstar_30pkpc']:
-                acField = 'Subhalo_Mass_30pkpc_Stars'
-                ac = auxCat(sP, fields=[acField])
-                r[field] = sP.units.codeMassToMsun( ac[acField] )
-
             # subhalo stellar mass (<1 or <2 rhalf definition, from groupcat) [msun or log msun]
             if quantName in ['mstar1','mstar2','mgas1','mgas2']:
                 field = 'SubhaloMassInRadType' if '2' in quant else 'SubhaloMassInHalfRadType'
@@ -470,32 +483,21 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 mass = groupCat(sP, fieldsSubhalos=[field])[:,ptNum]
                 r[field] = sP.units.codeMassToMsun(mass)
 
-            # central flag (1 if central, 0 if not)
-            if quantName in ['central_flag','cen_flag','is_cen','is_central']:
-                gc = groupCat(sP, fieldsHalos=['GroupFirstSub'])
-                gc = gc[ np.where(gc >= 0) ]
+            # snapshot: photometric/broadband magnitudes [AB]
+            if quantName in ['m_v','m_u']:
+                assert '_log' not in quant
+                bandName = quantName.split('_')[1].upper()
 
-                # satellites given zero
-                r[field] = np.zeros( sP.numSubhalos, dtype='int16' )
-                r[field][ gc ] = 1
+                vals = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])
+                r[field] = vals[:,gfmBands[bandName]]
 
-            # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
-            if 'isolated3d,' in quantName:
-                from cosmo.clustering import isolationCriterion3D
+                # fix zero values
+                w = np.where(r[field] > 1e10)
+                r[field][w] = np.nan
 
-                # e.g. 'isolated3d,mstar_30pkpc,max,in_300pkpc'
-                _, quant, max_type, dist = quant.split(',')
-                dist = float( dist.split('in_')[1].split('pkpc')[0] )
-
-                ic3d = isolationCriterion3D(sP, dist) #defaults: cenSatSelect='all', mstar30kpc_min=9.0
-
-                r[field] = ic3d['flag_iso_%s_%s' % (quant,max_type)]
-
-            # auxCat: photometric color
-            if 'color_' in quantName:
-                from cosmo.color import loadColors
-
-                r[field] = loadColors(sP, quant)
+                # Vega corrections
+                if bandName in vegaMagCorrections:
+                    r[field] += vegaMagCorrections[bandName]
 
             # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars) (optionally Mstar in 30pkpc)
             if quantName in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr']:
@@ -517,7 +519,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
 
             # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
-            if quantName in ['rhalo_200_code', 'rhalo_200','rhalo_500']:
+            if quantName in ['rhalo_200_code', 'rhalo_200','rhalo_500', 'rhalo_200_parent']:
                 od = 200 if '_200' in quant else 500
 
                 gc = groupCat(sP, fieldsHalos=['Group_R_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
@@ -526,10 +528,11 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 if '_code' not in quant: r[field] = sP.units.codeLengthToKpc( r[field] )
 
                 # satellites given nan
-                mask = np.zeros( gc['subhalos'].size, dtype='int16' )
-                mask[ gc['halos']['GroupFirstSub'] ] = 1
-                wSat = np.where(mask == 0)
-                r[field][wSat] = np.nan
+                if '_parent' not in quantName:
+                    mask = np.zeros( gc['subhalos'].size, dtype='int16' )
+                    mask[ gc['halos']['GroupFirstSub'] ] = 1
+                    wSat = np.where(mask == 0)
+                    r[field][wSat] = np.nan
 
             # virial velocity (v200) of parent halo [km/s]
             if quantName in ['vhalo','v200']:
@@ -539,6 +542,17 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             # circular velocity [km/s]
             if quantName in ['vcirc','vmax']:
                 r[field] = groupCat(sP, sub='SubhaloVmax') # units correct
+
+            # velocity / spin vector magnitudes
+            if quantName in ['velmag','vmag']:
+                vals = groupCat(sP, fieldsSubhalos=['SubhaloVel'])
+                vals = sP.units.subhaloCodeVelocityToKms(vals)
+                r[field] = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
+
+            if quantName in ['spinmag']:
+                vals = groupCat(sP, fieldsSubhalos=['SubhaloSpin'])
+                vals = sP.units.subhaloSpinToKpcKms(vals)
+                r[field] = np.sqrt( vals[:,0]**2 + vals[:,1]**2 + vals[:,2]**2 )
 
             # stellar half mass radii [code, pkpc, log pkpc]
             if quantName in ['size_stars_code','size_stars','rhalf_stars_code','rhalf_stars']:
@@ -566,6 +580,133 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             if quantName in ['tvir','virtemp']:
                 mass = groupCat(sP, fieldsSubhalos=['mhalo_200_code'])
                 r[field] = sP.units.codeMassToVirTemp(mass).astype('float32')
+
+            # --- auxcat ---
+
+            # subhalo stellar mass (<30 pkpc definition, with auxCat) [msun or log msun]
+            if quantName in ['mstar_30pkpc']:
+                acField = 'Subhalo_Mass_30pkpc_Stars'
+                ac = auxCat(sP, fields=[acField])
+                r[field] = sP.units.codeMassToMsun( ac[acField] )
+
+            # stellar mass to halo mass ratio
+            if quantName in ['mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio','mstar_mhalo_ratio']:
+                fields = ['mhalo_200_code']
+                acField = 'Subhalo_Mass_30pkpc_Stars'
+                if 'mstar2_' in quantName: fields.append('SubhaloMassInRadType')
+
+                gc = groupCat(sP, fieldsSubhalos=fields, sq=False)
+
+                if 'mstar2_' in quantName:
+                    mstar = gc['SubhaloMassInRadType'][:,sP.ptNum('stars')]
+                else:
+                    mstar = sP.auxCat(fields=[acField])[acField]
+
+                with np.errstate(invalid='ignore'):
+                    r[field] = mstar / gc['mhalo_200_code']
+
+            # HI (atomic hydrogen) mass
+            if quantName in ['mhi','mhi_30pkpc','mhi2']:
+                radStr = '' # mhi
+                if '_30pkpc' in quantName: radStr = '_30pkpc'
+                if '2' in quantName: radStr = '_2rstars'
+
+                acField = 'Subhalo_Mass%s_HI' % radStr
+
+                ac = sP.auxCat(fields=[acField])
+                r[field] = sP.units.codeMassToMsun(ac[acField])
+
+            # isolated flag (1 if 'isolated' according to criterion, 0 if not, -1 if unprocessed)
+            if 'isolated3d,' in quantName:
+                from cosmo.clustering import isolationCriterion3D
+
+                # e.g. 'isolated3d,mstar_30pkpc,max,in_300pkpc'
+                _, quant, max_type, dist = quant.split(',')
+                dist = float( dist.split('in_')[1].split('pkpc')[0] )
+
+                ic3d = isolationCriterion3D(sP, dist) #defaults: cenSatSelect='all', mstar30kpc_min=9.0
+
+                r[field] = ic3d['flag_iso_%s_%s' % (quant,max_type)]
+
+            # auxCat: photometric/broadband colors (e.g. 'color_C_gr', 'color_A_ur')
+            if 'color_' in quantName:
+                r[field] = loadColors(sP, quant)
+
+            # auxCat: photometric/broadband magnitudes (e.g. 'mag_C_g', 'mag_A_r')
+            if 'mag_' in quantName:
+                r[field] = loadColors(sP, quant)
+
+            # total gas masses in sub-species: metals, per metal/ion abundances (could generalize)
+            if quantName in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
+                speciesStr = quantName.split("_")[1].upper()
+                if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
+                if speciesStr == 'O': speciesStr = 'AllGas_Oxygen'
+
+                acField = 'Subhalo_Mass_%s' % speciesStr
+                ac = sP.auxCat(fields=[acField])
+                r[field] = sP.units.codeMassToMsun(ac[acField])
+
+            # --- postprocessing ---
+
+            # StellarAssembly: in-situ, ex-situ stellar mass fractions
+            if quantName in ['massfrac_exsitu','massfrac_exsitu2','massfrac_insitu','massfrac_insitu2']:
+                inRadStr = '_in_rad' if '2' in quantName else ''
+                filePath = sP.postPath + '/StellarAssembly/galaxies%s_%03d.hdf5' % (inRadStr,sP.snap)
+
+                dNameNorm = 'StellarMassTotal'
+                dNameMass = 'StellarMassInSitu' if '_insitu' in quantName else 'StellarMassExSitu'
+
+                if isfile(filePath):
+                    with h5py.File(filePath,'r') as f:
+                        mass_type = f[dNameMass][()]
+                        mass_norm = f[dNameNorm][()]
+
+                    # take fraction and set Mstar=0 cases to nan silently
+                    wZeroMstar = np.where(mass_norm == 0.0)
+                    wNonzeroMstar = np.where(mass_norm > 0.0)
+
+                    r[field] = mass_type
+                    r[field][wNonzeroMstar] /= mass_norm[wNonzeroMstar]
+                    r[field][wZeroMstar] = np.nan
+                else:
+                    print('WARNING: [%s] does not exist, empty return.' % filePath)
+                    r[field] = np.zeros( sP.numSubhalos, dtype='float32' )
+                    r[field].fill(np.nan)
+
+            # MergerHistory: counts of major/minor mergers and statistics therein
+            # num_mergers, num_mergers_{major,minor}, num_mergers_{major,minor}_{250myr,500myr,gyr,z1,z2}
+            if 'num_mergers' in quantName or 'mergers_' in quantName:
+                bonusStr = 'bonus_' if quantName in ['mergers_mean_fgas','mergers_mean_z','mergers_mean_mu'] else ''
+                filePath = sP.postPath + '/MergerHistory/merger_history_%s%03d.hdf5' % (bonusStr,sP.snap)
+
+                typeStr = ''
+                timeStr = 'Total'
+
+                if '_minor' in quantName: typeStr = 'Minor' # 1/10 < mu < 1/4
+                if '_major' in quantName: typeStr = 'Major' # mu > 1/4
+                if '_250myr' in quantName: timeStr = 'Last250Myr'
+                if '_500myr' in quantName: timeStr = 'Last500Myr'
+                if '_gyr' in quantName: timeStr = 'LastGyr'
+                if '_z1' in quantName: timeStr = 'SinceRedshiftOne'
+                if '_z2' in quantName: timeStr = 'SinceRedshiftTwo'
+
+                field = 'Num%sMergers%s' % (typeStr,timeStr)
+                if quantName == 'mergers_mean_fgas': field = 'MeanGasFraction'
+                if quantName == 'mergers_mean_z': field = 'MeanRedshift'
+                if quantName == 'mergers_mean_mu': field = 'MeanMassRatio'
+
+                if isfile(filePath):
+                    with h5py.File(filePath,'r') as f:
+                        r[field] = f[field][()]
+
+                    w = np.where(r[field] == -1)
+                    r[field][w] = np.nan
+                else:
+                    print('WARNING: [%s] does not exist, empty return.' % filePath)
+                    r[field] = np.zeros( sP.numSubhalos, dtype='float32' )
+                    r[field].fill(np.nan)
+
+            # --- finish ---
 
             # log?
             if quant[-4:] == '_log':
