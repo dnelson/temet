@@ -660,7 +660,7 @@ def binned_stat_2d(x, y, c, bins, range_x, range_y, stat='median'):
     c = c[w]
 
     # in bounds only
-    w = np.where( (x>=range_x[0]) & (x<=range_x[1]) & (y>=range_y[0]) & (y<=range_y[1]) )
+    w = np.where( (x>=range_x[0]) & (x<range_x[1]) & (y>=range_y[0]) & (y<range_y[1]) )
 
     # bin
     inds_x = np.floor( (x[w] - range_x[0]) / binsize_x ).astype('int32')

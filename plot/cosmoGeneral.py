@@ -1038,20 +1038,21 @@ def plots():
     sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
 
-    yQuant = 'mhalo_200_log' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
-    xQuant = 'mstar_30pkpc_log' # #'mstar_30pkpc_log'
+    yQuant = 'massfrac_exsitu2' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
+    xQuant = 'mstar_30pkpc' # #'mstar_30pkpc'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = ['mgas1'] #['sfr'] #[None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
-    clim = [7.5,9.5] #None #[10.0,11.0]
+    quants = ['num_mergers'] #['mgas1'] #['sfr'] #[None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
+    clim = None #[10.0,11.0]
     medianLine = True
     minCount = 0
-    nBins = 20 #40
+    nBins = 40
     cStatistic = 'median_nan'
+    cRel = [0.7,1.3,False] #None
 
-    xlim = [9.0,11.0]
-    ylim = [11.0, 13.0] # None
-    qRestrictions = None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
+    xlim = None #[9.0,11.0]
+    ylim = None #[11.0, 13.0] # None
+    qRestrictions = [['fdm',0.0,1.0]] #None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
 
     for sP in sPs:
         for css in cenSatSelects:
@@ -1061,7 +1062,7 @@ def plots():
             for cQuant in quants:
                 quantHisto2D(sP, pdf, yQuant=yQuant, xQuant=xQuant, xlim=xlim, ylim=ylim, clim=clim, minCount=minCount, 
                              nBins=nBins, qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=css, 
-                             cQuant=cQuant, cStatistic=cStatistic)
+                             cQuant=cQuant, cStatistic=cStatistic, cRel=cRel)
 
             pdf.close()
 
