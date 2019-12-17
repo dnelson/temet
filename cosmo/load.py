@@ -697,10 +697,11 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
                 if isfile(filePath):
                     with h5py.File(filePath,'r') as f:
-                        r[field] = f[field][()]
+                        r[field] = f[field][()].astype('float32') # uint32 for counts
 
                     w = np.where(r[field] == -1)
-                    r[field][w] = np.nan
+                    if len(w[0]):
+                        r[field][w] = np.nan
                 else:
                     print('WARNING: [%s] does not exist, empty return.' % filePath)
                     r[field] = np.zeros( sP.numSubhalos, dtype='float32' )
