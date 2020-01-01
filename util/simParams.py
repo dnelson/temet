@@ -757,6 +757,7 @@ class simParams:
         from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
                                cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
                                correctPeriodicPosBoxWrap
+        from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
         from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapNumChunks, \
                                   snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset
         from load.auxcat import auxCat
@@ -820,7 +821,12 @@ class simParams:
         self.correctPeriodicPosVecs     = partial(correctPeriodicPosVecs, sP=self)
         self.correctPeriodicPosBoxWrap  = partial(correctPeriodicPosBoxWrap, sP=self)
         self.groupCatOffsetListIntoSnap = partial(groupCatOffsetListIntoSnap, self)
+        self.haloOrSubhaloSubset        = partial(haloOrSubhaloSubset, self)
 
+        self.subhaloIDListToBoundingPartIndices = partial(subhaloIDListToBoundingPartIndices, self)
+        self.inverseMapPartIndicesToSubhaloIDs = partial(inverseMapPartIndicesToSubhaloIDs, self)
+        self.inverseMapPartIndicesToHaloIDs = partial(inverseMapPartIndicesToHaloIDs, self)
+        
         # if redshift passed in, convert to snapshot number and save, and attach units(z)
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)

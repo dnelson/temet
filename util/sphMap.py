@@ -1061,6 +1061,11 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     if quant is None:
         quant = np.array([0])
 
+    # numba: handle deprecation for type 'reflected list'
+    axes = np.array(axes)
+    boxSizeSim = np.array(boxSizeSim)
+    nPixels = np.array(nPixels)
+
     # massage mass if single scalar
     if mass.size == 1:
         mass = np.array( [mass,mass], dtype='float32' ) # single element array kills numba type inference

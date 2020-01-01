@@ -17,6 +17,56 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def parse_rur_out():
+    """ Parse the HLRS XC40 resource usage file. """
+    import datetime
+    path = '/u/dnelson/sims.TNG/L35n2160TNG/output/txt-files/rur.out'
+
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    tot_joule = 0
+    count = 0
+    count_big = 0
+    tot_time_hours = 0.0
+
+    earliest_date = datetime.datetime.strptime('2100', '%Y')
+    latest_date = datetime.datetime.strptime('1900', '%Y')
+
+    ncores = 16320
+
+    for line in lines:
+        if 'energy_used' in line and 'min_accel_power' not in line:
+            el = line.split()
+            loc_joule = int(el[-1].replace(']',''))
+            tot_joule += loc_joule
+        if 'energy_used' in line and 'min_accel_power' in line:
+            el = line.split()
+            loc_joule = int(el[21].replace(',',''))
+            tot_joule += loc_joule
+        if 'utime' in line:
+            el = line.split()
+            loc_time_musec = int(el[11].replace(',','')) # user time (summed over all processes)
+            loc_time_hours = loc_time_musec / 1e6 / 60 / 60 / ncores
+            count += 1
+            if loc_time_hours >= 1.0:
+                count_big += 1
+            tot_time_hours += loc_time_hours
+        if 'APP_START' in line:
+            loc_time = line.split()[11].replace('CET','CEST')
+            loc_dt = datetime.datetime.strptime(loc_time, "%Y-%m-%dT%H:%M:%SCEST")
+
+            if loc_dt < earliest_date:
+                earliest_date = loc_dt
+            if loc_dt > latest_date:
+                latest_date = loc_dt
+
+    tot_kwh = tot_joule * 2.7e-7
+    print('total MWH: %g (across %d jobs, %d of them >1 hour)' % (tot_kwh/1e3, count, count_big))
+    print('from [%s] to [%s]' % (earliest_date,latest_date))
+
+    import pdb; pdb.set_trace()
+
 def carlo_dump():
     sP = simParams(run='tng100-1', redshift=0.0)
 

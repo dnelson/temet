@@ -175,7 +175,7 @@ def haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
     groupOffset = groupFileOffsets[fileNum]
 
     # load the length (by type) of this group/subgroup from the group catalog, and its offset within the snapshot
-    with h5py.File(gcPath(sP.simPath,sP.snap,fileNum),'r') as f:
+    with h5py.File(sP.gcPath(sP.snap,fileNum),'r') as f:
         if gcName+'LenType' in f[gcName]:
             subset['lenType'] = f[gcName][gcName+'LenType'][groupOffset,:]
         else:
@@ -326,7 +326,7 @@ def snapshotSubset(sP, partType, fields,
 
           the following four arguments are optional, but at most one can be specified:
             * inds      : known indices requested, optimize the load
-            * indRange  : same, but specify only min and max indices (inclusive)
+            * indRange  : same, but specify only min and max indices (--inclusive--!)
             * haloID    : if input, load particles only of the specified fof halo
             * subhaloID : if input, load particles only of the specified subalo
           mdi : multi-dimensional index slice load (only used in recursive calls, don't input directly)
@@ -1097,6 +1097,19 @@ def snapshotSubset(sP, partType, fields,
                 r[field] = sP.units.particleSpecAngMomMagInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
             if '_vec' in field.lower():
                 r[field] = sP.units.particleAngMomVecInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
+
+        # subhalo or halo ID per particle/cell
+        if field.lower() in ['subid','subhaloid','subhalo_id','haloid','halo_id']:
+            # inverse map indRange to subhaloID list
+            if indRange is not None:
+                inds = np.arange(indRange[0], indRange[1]+1)
+            else:
+                inds = np.arange(0, sP.numPart[sP.ptNum(partType)]+1)
+
+            if field.lower() in ['haloid','halo_id']:
+                r[field] = sP.inverseMapPartIndicesToHaloIDs(inds, partType)
+            else:
+                r[field] = sP.inverseMapPartIndicesToSubhaloIDs(inds, partType)
 
         # done:
         if len(r) >= 1:

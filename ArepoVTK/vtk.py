@@ -438,7 +438,7 @@ def writeColorTable(ctName='inferno'):
         fac = 255.0
 
     # write
-    with file(filename, 'w') as f:
+    with open(filename, 'w') as f:
         f.write('# comment\n')
         f.write('%d\n' % (nVals-start))
 

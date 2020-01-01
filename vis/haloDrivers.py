@@ -22,7 +22,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
     res        = 2160 #1820
     variant    = None #'sf2' # None
 
-    redshift   = 6.0
+    redshift   = 0.0
     #redshift   = simParams(res=2160,run='tng',snap=snap).redshift
     rVirFracs  = [0.5, 1.0] # None
     method     = 'sphMap'
@@ -35,6 +35,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
     relCoords  = True
     rotation   = None
     mpb        = None
+
+    excludeSubhaloFlag = True
 
     sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID, variant=variant)
     

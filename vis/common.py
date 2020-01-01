@@ -1069,7 +1069,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
 def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams, 
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
-            forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, alsoSFRgasForStars=False, **kwargs):
+            forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
+            alsoSFRgasForStars=False, excludeSubhaloFlag=False, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from util.rotation import rotateCoordinateArray
     
@@ -1082,6 +1083,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         optionalStr += '_snapHsmlForStars'
     if alsoSFRgasForStars:
         optionalStr += '_alsoSFRgasForStars'
+    if excludeSubhaloFlag:
+        optionalStr += '_excludeSubhaloFlag'
     if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
         optionalStr += str(rotCenter)
     if len(nPixels) == 3:
@@ -1247,6 +1250,20 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 mask[w] = 1
                 w = np.where(mask == 0)
                 mass[w] = 0.0
+
+            if excludeSubhaloFlag and method == 'sphMap':
+                # exclude any subhalos flagged as clumps, currently for fof-scope renders only
+                from tracer.tracerMC import match3
+
+                SubhaloFlag = sP.subhalos('SubhaloFlag')
+                sub_ids = sP.snapshotSubset(partType, 'subhalo_id', indRange=indRange)
+
+                flagged_ids = np.where(SubhaloFlag == 0)[0] # 0=bad, 1=ok
+                if len(flagged_ids):
+                    # cross-match
+                    inds_flag, inds_snap = match3(flagged_ids, sub_ids)
+                    if len(inds_snap):
+                        mass[inds_snap] = 0.0
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None

@@ -674,6 +674,13 @@ def inverseMapPartIndicesToHaloIDs(sP, indsType, ptName,
     val = np.searchsorted( gcOffsetsType - 1, indsType ) - 1
     val = val.astype('int32')
 
+    # flag all matches where the indices are past the end of the fofs (at end of file)
+    gcOffsetMax = gcOffsetsType[-1] + gcLenType[-1] - 1
+    ww = np.where(indsType > gcOffsetMax)[0]
+
+    if len(ww):
+        val[ww] = -1
+
     if debug:
         # verify directly
         for i in range(len(indsType)):

@@ -11,8 +11,6 @@ from functools import partial
 from os.path import expanduser
 from getpass import getuser
 
-from cosmo.util import snapNumToRedshift, subhaloIDListToBoundingPartIndices, \
-  inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs, correctPeriodicDistVecs
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe, weighted_std_binned
 from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
 from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, \
@@ -71,7 +69,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     haloIDsTodo = np.arange(nGroupsTot, dtype='int32')
 
     # if no task parallelism (pSplit), set default particle load ranges
-    indRange = subhaloIDListToBoundingPartIndices(sP, haloIDsTodo, groups=True)
+    indRange = sP.subhaloIDListToBoundingPartIndices(haloIDsTodo, groups=True)
 
     if pSplit is not None:
         ptSplit = ptType if ptType != 'all' else 'gas'
@@ -80,7 +78,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
         # group IDs which will be better work-load balanced among tasks
         gasSplit = pSplitRange( indRange[ptSplit], pSplit[1], pSplit[0] )
 
-        invGroups = inverseMapPartIndicesToHaloIDs(sP, gasSplit, ptSplit, debug=True)
+        invGroups = sP.inverseMapPartIndicesToHaloIDs(gasSplit, ptSplit, debug=True)
 
         if pSplit[0] == pSplit[1] - 1:
             invGroups[1] = nGroupsTot
@@ -88,7 +86,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
             assert invGroups[1] != -1
 
         haloIDsTodo = np.arange( invGroups[0], invGroups[1] )
-        indRange = subhaloIDListToBoundingPartIndices(sP, haloIDsTodo, groups=True)
+        indRange = sP.subhaloIDListToBoundingPartIndices(haloIDsTodo, groups=True)
 
     nHalosDo = len(haloIDsTodo)
 
@@ -382,7 +380,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
         subhaloIDsTodo = np.intersect1d(subhaloIDsTodo, cssSubIDs)
 
     # if no task parallelism (pSplit), set default particle load ranges
-    indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+    indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
     if isinstance(Nside, int) and Nside > 1:
         # special case: just do a few special case subhalos at high Nside for demonstration
@@ -394,7 +392,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
         # two massive + three MW-mass halos, SubhaloSFR = [0.2, 5.2, 1.7, 5.0, 1.1] Msun/yr
         subhaloIDsTodo = [172649,208781,412332,415496,415628] # gc['halos']['GroupFirstSub'][inds]
 
-        indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+        indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
     invSubs = [0,0]
 
@@ -412,13 +410,13 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
             # that early tasks take all the large halos and all the particles, very imbalanced
             subhaloIDsTodo = pSplitArr( subhaloIDsTodo, pSplit[1], pSplit[0] )
 
-            indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
         else:
             # subdivide the global gas particle set, then map this back into a division of 
             # subhalo IDs which will be better work-load balanced among tasks
             gasSplit = pSplitRange( indRange['gas'], pSplit[1], pSplit[0] )
 
-            invSubs = inverseMapPartIndicesToSubhaloIDs(sP, gasSplit, 'gas', debug=True, flagFuzz=False)
+            invSubs = sP.inverseMapPartIndicesToSubhaloIDs(gasSplit, 'gas', debug=True, flagFuzz=False)
 
             if pSplit[0] == pSplit[1] - 1:
                 invSubs[1] = nSubsTot
@@ -430,7 +428,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
                 return [], {'gas':[0,1],'stars':[0,1]}
 
             subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
-            indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
     if indivStarMags:
         # make subhalo-strict bounding index range and compute number of PT4 particles we will do
@@ -440,12 +438,12 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
             # avoid any gaps for full Pt4 coverage
             subhaloIDsTodo_extended = np.arange( invSubs[0]-1, invSubs[1] )
 
-            indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo_extended, strictSubhalos=True)
+            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo_extended, strictSubhalos=True)
 
             lastPrevSub = sP.groupCatSingle(subhaloID=invSubs[0]-1)
             indRange['stars'][0] += lastPrevSub['SubhaloLenType'][ sP.ptNum('stars') ]
         else:
-            indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo, strictSubhalos=True)
+            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo, strictSubhalos=True)
 
     return subhaloIDsTodo, indRange
 
@@ -672,8 +670,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                     # rectangular aperture in projected (x,y), e.g. slit
                     xDist = vecs_2d[:,0] - pt_2d[0]
                     yDist = vecs_2d[:,1] - pt_2d[1]
-                    correctPeriodicDistVecs(xDist, sP)
-                    correctPeriodicDistVecs(yDist, sP)
+                    sP.correctPeriodicDistVecs(xDist)
+                    sP.correctPeriodicDistVecs(yDist)
 
                     validMask &= (xDist <= np.sqrt( radSqMax[subhaloID,0]) ) 
                     validMask &= (yDist <= np.sqrt( radSqMax[subhaloID,1]) )
@@ -716,9 +714,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                     stars_pos[:,j] -= stars_pos[0,j]
                     stars_vel[:,j] -= sub_stellarCoM_vel[j]
 
-                correctPeriodicDistVecs( stars_pos, sP )
-                stars_pos = sP.units.codeLengthToKpc( stars_pos ) # kpc
-                stars_vel = sP.units.particleCodeVelocityToKms( stars_vel ) # km/s
+                sP.correctPeriodicDistVecs(stars_pos)
+                stars_pos = sP.units.codeLengthToKpc(stars_pos) # kpc
+                stars_vel = sP.units.particleCodeVelocityToKms(stars_vel) # km/s
                 stars_rad_sq = stars_pos[:,0]**2.0 + stars_pos[:,1]**2.0 + stars_pos[:,2]**2.0
 
                 # total kinetic energy
@@ -1279,8 +1277,8 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
                         # rectangular aperture in projected (x,y), e.g. slit
                         xDist = vecs_2d[:,0] - pt_2d[0]
                         yDist = vecs_2d[:,1] - pt_2d[1]
-                        correctPeriodicDistVecs(xDist, sP)
-                        correctPeriodicDistVecs(yDist, sP)
+                        sP.correctPeriodicDistVecs(xDist)
+                        sP.correctPeriodicDistVecs(yDist)
 
                         validMask &= ( (xDist <= (np.sqrt(radSqMax[subhaloID,0])+sigmaPad)) & \
                                        (yDist <= (np.sqrt(radSqMax[subhaloID,1])+sigmaPad)) )
@@ -1520,7 +1518,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
     select = "All Subfind subhalos."
 
     # load snapshot and subhalo information
-    redshifts = snapNumToRedshift(sP, all=True)
+    redshifts = sP.snapNumToRedshift(all=True)
 
     nSubsTot = sP.numSubhalos
     ids = np.arange(nSubsTot, dtype='int32') # currently, always process all
@@ -2341,14 +2339,14 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     if scope in ['subfind','fof']:
         # if no task parallelism (pSplit), set default particle load ranges
-        indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+        indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
         if pSplit is not None:
             # subdivide the global [variable ptType!] particle set, then map this back into a division of 
             # subhalo IDs which will be better work-load balanced among tasks
             gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
 
-            invSubs = inverseMapPartIndicesToSubhaloIDs(sP, gasSplit, ptType, debug=True, flagFuzz=False)
+            invSubs = sP.inverseMapPartIndicesToSubhaloIDs(gasSplit, ptType, debug=True, flagFuzz=False)
 
             if pSplit[0] == pSplit[1] - 1:
                 invSubs[1] = gc['header']['Nsubgroups_Total']
@@ -2358,7 +2356,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # we process a sparse set of subhalo ids, so intersect with the previous (mass/css) selection
             subhaloIDsSpanned = np.arange( invSubs[0], invSubs[1] )
             subhaloIDsTodo = np.intersect1d( subhaloIDsTodo, subhaloIDsSpanned )
-            indRange = subhaloIDListToBoundingPartIndices(sP, subhaloIDsTodo)
+            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
         indRange = indRange[ptType] # choose index range for the requested particle type
 
@@ -2592,7 +2590,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 if proj2Ddepth is not None:
                     dist_projDir = particles_pos[:,p_inds[2]].copy() # careful of view
                     dist_projDir -= gc['SubhaloPos'][subhaloID,p_inds[2]]
-                    correctPeriodicDistVecs(dist_projDir, sP)
+                    sP.correctPeriodicDistVecs(dist_projDir)
                     validMask &= (np.abs(dist_projDir) <= proj2D_halfDepth)
 
             if scope in ['subfind_global']:

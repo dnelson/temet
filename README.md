@@ -23,7 +23,7 @@ installation
 1. Clone the repository into your home directory, here into a `python` directory
 
         cd ~
-        hg clone ssh://hg@bitbucket.org/dnelson86/python
+        git clone git@github.com:dnelson86/python.git
 
 2. Clone the public Illustris data analysis python scripts
 
