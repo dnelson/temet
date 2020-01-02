@@ -29,7 +29,7 @@ installation
 
         mkdir ~/illustris_release
         cd ~/illustris_release
-        hg clone ssh://hg@bitbucket.org/illustris/illustris_python
+        git clone git@github.com:illustristng/illustris_python.git
 
 3. Make sure both are set in the `$PYTHONPATH` environment variable, and set the `$PYTHONSTARTUP`.
 For example, add the following lines to your `.bashrc` file

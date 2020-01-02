@@ -6,6 +6,7 @@ import numpy as np
 import h5py
 import glob
 from os.path import isfile, isdir
+from os import mkdir
 
 import illustris_python as il
 from util.helper import iterable, logZeroNaN

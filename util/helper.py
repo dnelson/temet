@@ -1353,7 +1353,9 @@ def curRepoVersion():
         chdir(expanduser("~") + '/python/')
     else:
         chdir('/var/www/python/')
-    repoRevStr = subprocess.check_output(["hg", "id"], stderr=subprocess.DEVNULL).strip()
+    
+    command = ["git", "rev-parse", "--short", "HEAD"]
+    repoRevStr = subprocess.check_output(command, stderr=subprocess.DEVNULL).strip()
     chdir(oldCwd)
 
     return repoRevStr
