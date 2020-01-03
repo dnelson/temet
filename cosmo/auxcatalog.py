@@ -358,20 +358,33 @@ def _radialRestriction(sP, nSubsTot, rad):
 
     return radRestrictIn2D, radSqMin, radSqMax, slit_code
 
-def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect=None):
+def _pSplitBounds(sP, pSplit, minStellarMass=None, minHaloMass=None, indivStarMags=False, 
+                  partType=None, cenSatSelect=None, equalSubSplit=True):
     """ For a given pSplit = [thisTaskNum,totNumOfTasks], determine an efficient work split and 
     return the required processing for this task, in the form of the list of subhaloIDs to 
-    process and the global snapshot index range required in load to cover these subhalos. """
+    process and the global snapshot index range required in load to cover these subhalos. 
+    If minStellarMass (mstar_30pkpc_log) or minHaloMass (mhalo_200_log), apply these limits.
+    If partType, use this to decide particle-based split, otherwise use 'gas'.
+    If equalSubSplit, subdivide a pSplit based on equal numbers of subhalos, rather than particles. 
+    """
     nSubsTot = sP.numSubhalos
     subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
 
     # stellar mass select
     if minStellarMass is not None:
         masses = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log'])
-        masses = masses[subhaloIDsTodo]
         with np.errstate(invalid='ignore'):
             wSelect = np.where( masses >= minStellarMass )
 
+        subhaloIDsTodo = subhaloIDsTodo[wSelect]
+
+    # m200 halo mass select
+    if minHaloMass is not None:
+        halo_masses = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
+        if minStellarMass is not None:
+            halo_masses = halo_masses[wSelect]
+
+        wSelect = np.where( halo_masses >= minHaloMass )
         subhaloIDsTodo = subhaloIDsTodo[wSelect]
 
     # cen/sat select?
@@ -382,18 +395,6 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
     # if no task parallelism (pSplit), set default particle load ranges
     indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
-    if isinstance(Nside, int) and Nside > 1:
-        # special case: just do a few special case subhalos at high Nside for demonstration
-        assert sP.res == 1820 and sP.run == 'tng' and sP.snap == 99 and pSplit is None
-        #gcDemo = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
-        #massesDemo = sP.units.codeMassToLogMsun( gcDemo['halos']['Group_M_Crit200'] )
-        #ww = np.where( (massesDemo >= 11.9) & (massesDemo < 12.1) ) # ww[0]= [597, 620, 621...]
-        #ww = np.where( (massesDemo >= 13.4) & (massesDemo < 13.5) ) # ww[0]= [34, 52, ...]
-        # two massive + three MW-mass halos, SubhaloSFR = [0.2, 5.2, 1.7, 5.0, 1.1] Msun/yr
-        subhaloIDsTodo = [172649,208781,412332,415496,415628] # gc['halos']['GroupFirstSub'][inds]
-
-        indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
-
     invSubs = [0,0]
 
     if pSplit is not None:
@@ -403,8 +404,7 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
             modSplit = subhaloIDsTodo % pSplit[1]
             subhaloIDsTodo = np.where(modSplit == pSplit[0])[0]
 
-        # already only have a subset of all subhalos? (from minStellarMass)
-        if subhaloIDsTodo.size < nSubsTot:
+        if equalSubSplit:
             # do contiguous subhalo ID division and reduce global haloSubset load 
             # to the particle sets which cover the subhalo subset of this pSplit, but the issue is 
             # that early tasks take all the large halos and all the particles, very imbalanced
@@ -412,11 +412,12 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
 
             indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
         else:
-            # subdivide the global gas particle set, then map this back into a division of 
+            # subdivide the global cell/particle set, then map this back into a division of 
             # subhalo IDs which will be better work-load balanced among tasks
-            gasSplit = pSplitRange( indRange['gas'], pSplit[1], pSplit[0] )
+            ptType = partType if partType is not None else 'gas'
+            gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
 
-            invSubs = sP.inverseMapPartIndicesToSubhaloIDs(gasSplit, 'gas', debug=True, flagFuzz=False)
+            invSubs = sP.inverseMapPartIndicesToSubhaloIDs(gasSplit, ptType, flagFuzz=False)
 
             if pSplit[0] == pSplit[1] - 1:
                 invSubs[1] = nSubsTot
@@ -427,7 +428,8 @@ def _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass, cenSatSelect
                 # split is actually zero size, this is ok
                 return [], {'gas':[0,1],'stars':[0,1]}
 
-            subhaloIDsTodo = np.arange( invSubs[0], invSubs[1] )
+            invSubIDs = np.arange( invSubs[0], invSubs[1] )
+            subhaloIDsTodo = np.intersect1d(subhaloIDsTodo, invSubIDs)
             indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
     if indivStarMags:
@@ -508,7 +510,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         print(' Requested: radRestrictIn2D! Using hard-coded projection direction of [%s]!' % Nside)
 
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
-    subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, None, False, minStellarMass, cenSatSelect)
+    subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, minStellarMass, cenSatSelect=cenSatSelect)
     nSubsDo = len(subhaloIDsTodo)
 
     indRange = indRange[ptType] # choose index range for the requested particle type
@@ -1013,7 +1015,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     nSubsTot = sP.numSubhalos
 
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
-    subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, Nside, indivStarMags, minStellarMass)
+    subhaloIDsTodo, indRange = _pSplitBounds(sP, pSplit, minStellarMass, indivStarMags=True)
 
     nSubsDo = len(subhaloIDsTodo)
     partInds = None
@@ -2236,13 +2238,13 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         radMax = 4.0 # log code units
         radNumBins = 100
         minHaloMass = 10.8 # 11.4 for auroraVoyage2050 # log m200crit
+
     if sP.boxSize in [20000,35000]:
-        radMin = -0.5 # log code units
+        radMin = -1.0 # log code units
         radMax = 3.0 # log code units
         radNumBins = 100
-        minHaloMass = 9.9 # log m200crit
+        minHaloMass = None #9.9 # log m200crit
 
-    assert minHaloMass is not None
     cenSatSelect = 'cen'
 
     # determine ptRestriction
@@ -2254,8 +2256,9 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # config
     ptLoadType = sP.ptNum(ptType)
 
-    desc   = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] with [%d] bins." % \
+    desc = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] log code units, with [%d] bins." % \
       (ptProperty,ptType,radMin,radMax,radNumBins)
+    desc += " Note: first/inner-most bin is extra, and extends from r=0 to r=%.1f." % radMin
     if ptRestrictions is not None:
         desc += " (restriction = %s)." % ','.join([r for r in ptRestrictions])
     if weighting is not None:
@@ -2275,15 +2278,23 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         depthStr = 'fullbox' if proj2Ddepth is None else '%.1f' % proj2Ddepth
         desc += " (2D projection axis = %s, depth = %s)." % (proj2Daxis,depthStr)
 
-    desc  +=" (scope = %s). " % scope
+    desc +=" (scope = %s). " % scope
     if subhaloIDsTodo is None:
-        select = "Subhalos [%s] above a min m200crit halo mass of [%.1f]." % (cenSatSelect,minHaloMass)
+        if minHaloMass is None:
+            select = "Subhalos [%s], no mass restrictions." % cenSatSelect
+        else:
+            select = "Subhalos [%s] above a min m200crit halo mass of [%.1f]." % (cenSatSelect,minHaloMass)
     else:
         select = "Subhalos [%d] specifically input." % len(subhaloIDsTodo)
 
     # load group information and make selection
     gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
     gc['header'] = sP.groupCatHeader()
+
+    # no explicit ID list input, choose subhalos to process now
+    if subhaloIDsTodo is None:
+        subhaloIDsTodo, indRange_scoped = _pSplitBounds(sP, pSplit, 
+            partType='dm', minHaloMass=minHaloMass, cenSatSelect=cenSatSelect, equalSubSplit=False)
 
     nChunks = 1 # chunk load disabled by default
 
@@ -2306,70 +2317,27 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         nChunks = numPartToChunkLoadSize( h['NumPart'][sP.ptNum(ptType)] )
         chunkSize = int(h['NumPart'][sP.ptNum(ptType)] / nChunks)
 
-    nSubsTot = gc['header']['Nsubgroups_Total']
-    
-    # no explicit ID list input, choose subhalos to process now
-    if subhaloIDsTodo is None:
-        subhaloIDsTodo = np.arange(nSubsTot, dtype='int32')
+        assert op in ['sum'] # otherwise check below, not generalized to non-accumulation stats w/ chunk loading
 
-        # css select
-        if cenSatSelect is not None:
-            cssInds = sP.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
-            subhaloIDsTodo = subhaloIDsTodo[cssInds]
-
-        # halo mass select
-        if minHaloMass is not None:
-            halo_masses = sP.groupCat(fieldsSubhalos=['mhalo_200_log'])
-            halo_masses = halo_masses[cssInds]
-            wSelect = np.where( halo_masses >= minHaloMass )
-
-            subhaloIDsTodo = subhaloIDsTodo[wSelect]
-
-    nSubsTot = subhaloIDsTodo.size
-
-    if scope in ['global','global_fof']:
         # default particle load range is set inside chunkLoadLoop
         print(' Total # Snapshot Load Chunks: '+str(nChunks)+' ('+str(chunkSize)+' particles per load)')
         indRange = None
         prevMaskInd = 0
 
-        if pSplit is not None:
-            # subdivide subhaloIDsTodo directly
-            subhaloIDsTodo = pSplitArr(subhaloIDsTodo, pSplit[1], pSplit[0])
-
     if scope in ['subfind','fof']:
-        # if no task parallelism (pSplit), set default particle load ranges
-        indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
-
-        if pSplit is not None:
-            # subdivide the global [variable ptType!] particle set, then map this back into a division of 
-            # subhalo IDs which will be better work-load balanced among tasks
-            gasSplit = pSplitRange( indRange[ptType], pSplit[1], pSplit[0] )
-
-            invSubs = sP.inverseMapPartIndicesToSubhaloIDs(gasSplit, ptType, debug=True, flagFuzz=False)
-
-            if pSplit[0] == pSplit[1] - 1:
-                invSubs[1] = gc['header']['Nsubgroups_Total']
-            else:
-                assert invSubs[1] != -1
-
-            # we process a sparse set of subhalo ids, so intersect with the previous (mass/css) selection
-            subhaloIDsSpanned = np.arange( invSubs[0], invSubs[1] )
-            subhaloIDsTodo = np.intersect1d( subhaloIDsTodo, subhaloIDsSpanned )
-            indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
-
-        indRange = indRange[ptType] # choose index range for the requested particle type
+        # non-global load, use restricted index range covering our input/selected/pSplit subhaloIDsTodo
+        indRange = indRange_scoped[ptType]
 
     nSubsDo = len(subhaloIDsTodo)
 
     # info
     print(' ' + desc)
     print(' ' + select)
-    print(' Total # Subhalos: %d, in mass bin [%d], processing [%d] subhalos now...' % \
-        (gc['header']['Nsubgroups_Total'],nSubsTot,nSubsDo))
+    print(' Total # Subhalos: %d, split processing [%d] subhalos now...' % \
+        (gc['header']['Nsubgroups_Total'],nSubsDo))
 
     # determine radial binning
-    rad_bin_edges = np.linspace(radMin,radMax,radNumBins) # bin edges, including inner and outer boundary
+    rad_bin_edges = np.linspace(radMin,radMax,radNumBins+1) # bin edges, including inner and outer boundary
     rad_bin_edges = np.hstack([radMin-1.0,rad_bin_edges]) # include an inner bin complete to r=0
 
     rbins_sq = np.log10( (10.0**rad_bin_edges)**2 ) # we work in squared distances for speed
@@ -2391,8 +2359,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     numProfTypes = 4 if scope in ['global','global_fof'] else 1 
 
     # allocate, NaN indicates not computed except for mass where 0 will do
-    r = np.zeros( (nSubsDo,radNumBins,numProfTypes), dtype='float32' )
+    r = np.zeros( (nSubsDo,radNumBins+1,numProfTypes), dtype='float32' )
     if numProfTypes == 1: r = np.squeeze(r, axis=2)
+
+    if op not in ['sum']:
+        r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
 
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = ['pos']
@@ -2522,7 +2493,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         # loop over subhalos
         for i, subhaloID in enumerate(subhaloIDsTodo):
             if i % np.max([1,int(nSubsDo/10.0)]) == 0 and i <= nSubsDo:
-                print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+                print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo), flush=True)
 
             # slice starting/ending indices for stars local to this subhalo/FoF
             i0 = 0
@@ -3318,6 +3289,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='fof'),
    'Subhalo_RadProfile2Dz_FoF_Stars_Mass' : \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='mass',op='sum',scope='fof',proj2D=[2,None]),
+   'Subhalo_RadProfile3D_FoF_DM_Mass' : \
+     partial(subhaloRadialProfile,ptType='dm',ptProperty='mass',op='sum',scope='fof'),
 
    'Subhalo_RadProfile3D_FoF_SFR' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='sfr',op='sum',scope='fof'),

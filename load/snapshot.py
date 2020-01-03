@@ -1173,10 +1173,10 @@ def snapshotSubset(sP, partType, fields,
     # inds and indRange based subset
     if inds is not None:
         # load the range which bounds the minimum and maximum indices, then return subset
-        indRange = [inds.min(), inds.max()]
+        indRange = [np.min(inds), np.max(inds)]
 
         val = snapshotSubset(sP, partType, fields, indRange=indRange)
-        return val[ inds-inds.min() ]
+        return val[ inds-np.min(inds) ]
 
     if indRange is not None:
         # load a contiguous chunk by making a subset specification in analogy to the group ordered loads

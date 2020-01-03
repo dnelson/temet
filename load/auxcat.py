@@ -89,7 +89,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         subhaloIDs = np.zeros( allCount, dtype='int32' )
         attrs = {}
 
-        new_r.fill(-1.0) # does validly contain nan
+        new_r.fill(np.nan) # note: will be nan for unprocessed subhalos, and e.g. empty bins in processed subs
         subhaloIDs.fill(-1)
 
         print(' Concatenating into shape: ', new_r.shape)
@@ -106,6 +106,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                 if len(allShape) > 1 and allShape[condAxis] >= condThresh or f[datasetName].ndim > 3:
                     # want to condense, stamp in to dense indices
+                    assert not writSparseCalcFullSize # oops, contradiction, if we really want to condense 
+                    # then disable 'allCount = numSubs' increase above, otherwise change condThresh etc 
+                    # here to avoid 'condensing' back into a smaller size
                     subhaloIDsToSave = f[catIndFieldName][()]
 
                     if f[datasetName].ndim == 2 and 'Subhalo_SDSSFiberSpectra' in field:
@@ -137,7 +140,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
             assert np.count_nonzero(new_r == -1.0) == 0
         else:
-            print('WARNING: Skipping checks that we wrote entries for all subhalos, since we are writing a sparse calc to a full size auxCat.')
+            print(' WARNING: Skipping checks that we wrote data for all subhalos, since we wrote a sparse calc to a full size auxCat.')
 
         # auxCat already exists? only allowed if we are processing multiple fields
         if isfile(auxCatPath):
@@ -188,7 +191,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
 
-    condThresh = 100 # threshold size of any dimension such that we save a condensed auxCat
+    condThresh = 150 # threshold size of any dimension such that we save a condensed auxCat
     condAxis = 1 # currently only implemented for auxCat.shape = [subhaloIDs,*] (i.e. ndim==2)
     largeAttrNames = ['subhaloIDs','partInds','wavelength'] # save these as separate datasets, if present
 
