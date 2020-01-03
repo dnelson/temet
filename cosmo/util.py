@@ -574,7 +574,7 @@ def periodicDistsSq(pt, vecs, sP):
 def periodicPairwiseDists(pts, sP):
     """ Calculate pairwise distances between all 3D points, correctly taking into account periodic B.C. """
     nPts = pts.shape[0]
-    num  = nPts*(nPts-1)/2
+    num  = int(nPts*(nPts-1)/2)
 
     ii = 0
     index0 = np.arange(nPts - 1, dtype='int32') + 1
@@ -582,10 +582,10 @@ def periodicPairwiseDists(pts, sP):
     index2 = np.zeros(num, dtype='int32')
 
     # set up indexing
-    for i in np.arange(nPts-2):
+    for i in np.arange(nPts-1):
         n1 = nPts - (i+1)
         index1[ii:ii+n1] = i
-        index2[ii] = index0[0:n1] + i
+        index2[ii:ii+n1] = index0[0:n1] + i
         ii += n1
 
     # component wise difference
