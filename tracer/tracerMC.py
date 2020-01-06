@@ -22,7 +22,7 @@ debug = False # enable expensive debug consistency checks and verbose output
 defParPartTypes = ['gas','stars','bhs']   # all possible tracer parent types (ordering important)
 
 # helper information for recording different parent properties
-gas_only_fields = ['temp','sfr','entr','hdens'] # tag with NaN for values not in gas parents at some snap
+gas_only_fields = ['temp','sfr','entr','hdens','beta'] # tag with NaN for values not in gas parents at some snap
 n_3d_fields     = ['pos','vel']                 # store [N,3] vector instead of [N] vector
 d_int_fields    = {'subhalo_id':'int32',        # use int dtype to store, otherwise default to float32
                    'halo_id':'int32',
@@ -630,12 +630,6 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         memory allocation, and can be restarted). Otherwise, return for external save. If exitAfterOneSnap, 
         then process only one snapshot and return, mostly for memory efficiency. """
 
-    if 0:
-        # create inverse sort indices for tracerSearchIDs (old method)
-        sortIndsSearch = np.argsort(tracerSearchIDs)
-        revIndsSearch = np.zeros_like( sortIndsSearch )
-        revIndsSearch[sortIndsSearch] = np.arange(sortIndsSearch.size)
-
     # snapshot config
     snaps, redshifts = getEvoSnapList(sP, toRedshift, snapStep)
     startSnap = sP.snap
@@ -709,18 +703,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         # for the tracers we search for: get their indices at this snapshot
         tracerIDsLocal  = sP.snapshotSubsetP('tracer', 'TracerID')
 
-        tracerIndsLocal, _ = match3(tracerIDsLocal, tracerSearchIDs)
+        tracerIndsLocal, tracerSearchIndsLocal = match3(tracerIDsLocal, tracerSearchIDs)
         tracerIDsLocalCheck = tracerIDsLocal[tracerIndsLocal]
-
-        if 0:
-            # old method which is not order preserving
-            tracerIndsLocal = match(tracerIDsLocal, tracerSearchIDs, uniq=True)
-            tracerIDsLocal  = tracerIDsLocal[tracerIndsLocal]
-
-            # shuffle tracer indices at this snapshot to be in the same order as our search order
-            sortIndsLocal   = np.argsort(tracerIDsLocal)
-            tracerIDsLocalCheck = tracerIDsLocal[sortIndsLocal[revIndsSearch]]
-            tracerIndsLocal = tracerIndsLocal[sortIndsLocal[revIndsSearch]]
 
         if not np.array_equal(tracerIDsLocalCheck, tracerSearchIDs) and not sP.isSubbox:
             raise Exception('Failure to match TracerID set between snapshots.')
@@ -728,6 +712,11 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         if sP.isSubbox:
             frac = tracerIndsLocal.size / tracerSearchIDs.size * 100
             print('  subbox: %10d of %10d original tracers inside, %.3f%%' % (tracerIndsLocal.size,tracerSearchIDs.size,frac))
+        else:
+            # only need this for subboxes where we may not find all tracers searched for
+            # in this case, must write to r[] in the correct locations (normally, since 
+            # match3 is order preserving, tracerIndsLocal is in the order of tracerSearchIDs)
+            tracerSearchIndsLocal = None
 
         tracerIDsLocal = None
         tracerIDsLocalCheck = None
@@ -736,7 +725,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         for field in trFields:
             print(' '+field, flush=True)
 
-            r[field][m,:] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
+            if sP.isSubbox:
+                r[field][m,tracerSearchIndsLocal] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
+            else:
+                r[field][m,:] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
 
         # get parent IDs and then indices by-type
         if len(parFields):
@@ -775,12 +767,6 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
             # load anything independent of particle type
             if field == 'subhalo_id':
-                # sims.zooms2/h2_L9: corrupt groups_104 override
-                if sP.run == 'zooms2' and sP.res == 9 and sP.hInd == 2 and sP.snap == 104:
-                    print('WARNING: sims.zooms2/h2_L9: corrupt gc subhalo_id override')
-                    r[field][m,:] = np.zeros( tracerSearchIDs.size, dtype='int32' ) - 1
-                    continue
-
                 SubhaloLenType = sP.groupCat(fieldsSubhalos=['SubhaloLenType'])
                 SnapOffsetsSubhalo = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
 
@@ -807,6 +793,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                 wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
+
+                if sP.isSubbox:
+                    # update stamp indices: handle non-full search returns
+                    wType = tracerSearchIndsLocal[wType]
 
                 if exitAfterOneSnap:
                     # memory optimization, do gas last (largest), and erase things we don't need anymore
@@ -1374,6 +1364,8 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
         selectStr = 'subbox%d' % sP.subbox
 
     saveFilename = savePath + 'tr_all_%s_%d_%s.hdf5' % (selectStr,sP.snap,field)
+    if toRedshift is not None and toRedshift < sP.redshift: # forward in time
+        saveFilename = saveFilename.replace("_%d_" % sP.snap, "_+%d_" % sP.snap)
 
     # single load requested? do now and return
     if isfile(saveFilename):
@@ -1385,7 +1377,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
             if 'done' in f:
                 done = f['done'][()].min()
 
-        if done:
+        if done or indRange is not None:
             # skip all of this and fall through to computation if any snapshots are not yet done
             with h5py.File(saveFilename,'r') as f:
 
@@ -1400,7 +1392,7 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                                 # read full dataset for 1D (e.g. redshifts)
                                 r[k1] = f[k1][()]
                             else:
-                                # read partial dataset for 2D (shape is [Nsnaps,Ntr])
+                                # read partial dataset for 2D/3D (shape is [Nsnaps,Ntr] or [Nsnaps,Ntr,3])
                                 assert len(indRange) in [2,3]
                                 if len(indRange) == 2:
                                     r[k1] = f[k1][:, indRange[0]:indRange[1]]

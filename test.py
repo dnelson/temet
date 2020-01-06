@@ -17,6 +17,41 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_tracer_pos():
+    """ Find a single tracer through some snapshots for debugging. """
+    startSnap = 2912
+    targetID = 102320028362
+    sP = simParams(run='tng50-1', variant='subbox2', snap=startSnap)
+
+    startSnap = 67
+    sP = simParams(run='tng50-1', snap=startSnap)
+
+    for i in range(5):
+        sP.setSnap(startSnap-i-1)
+        print('snap = ', sP.snap, ' redshift = ', sP.redshift)
+
+        # load tracer IDs and find tracer by its ID
+        trIDs = sP.snapshotSubsetP('tracer', 'TracerID')
+
+        trInd = np.where(trIDs == targetID)[0][0]
+
+        # load parent ID of this tracer
+        parID = sP.snapshotSubset('tracer', 'ParentID', inds=[trInd])[0]
+
+        print(' found tracer ind = %d (ParentID = %d)' % (trInd,parID))
+
+        # locate parent
+        for parType in ['gas']:
+            parIDs = sP.snapshotSubsetP(parType, 'id')
+            parInd = np.where(parIDs == parID)[0][0]
+
+            print(' found parent [%s] ind = %d' % (parType, parInd))
+
+            parPos = sP.snapshotSubset(parType, 'pos', inds=[parInd])[0]
+            parTemp = sP.snapshotSubset(parType, 'temp', inds=[parInd])[0]
+            print(' pos = ', parPos)
+            print(' temp = ', parTemp)
+
 def parse_rur_out():
     """ Parse the HLRS XC40 resource usage file. """
     import datetime

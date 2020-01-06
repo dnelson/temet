@@ -20,7 +20,7 @@ from util.voronoi import voronoiThresholdSegmentation
 from cosmo.util import subboxSubhaloCat
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
-from tracer.tracerMC import match3
+from tracer.tracerMC import match3, globalAllTracersTimeEvo
 from vis.halo import renderSingleHalo
 from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
                             ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles
@@ -445,7 +445,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
     plt.close(fig)
 
-def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
+def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, testClumpRemoval=False):
     """ Configure single halo and multi-halo gallery visualizations. """
     run        = sP.run
     res        = sP.res
@@ -466,7 +466,7 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
     sizeType   = 'kpc'
 
     # global with ~appropriate depth (same as in ionColumnsVsImpact2D)
-    if 1:
+    if globalDepth:
         method = 'sphMap_global'
         dv = 500.0 # +/- km/s (Zahedy), or +/- 1000 km/s (Berg)
         depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
@@ -484,7 +484,7 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
 
     if conf == 5:
         # NARROW SLICE! h1
-        haloIDSets = [[],[1]]
+        haloIDSets = [1]
 
         nPixels   = [2000,1500]
         method    = 'sphMap'
@@ -505,7 +505,7 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
 
     if conf == 6:
         # NARROW SLICE! h19
-        haloIDSets = [[],[19]]
+        haloIDs = [19]
 
         nPixels   = [2000,1500]
         method    = 'sphMap'
@@ -527,10 +527,9 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
     if gallery:
         # multi-panel
         panels = []
-        setInd = 2 # just choose these manually
         labelZ = False
 
-        for haloID in haloIDSets[setInd][0:12]:
+        for haloID in haloIDs[0:12]:
             panel_loc = dict(panel)
             panel_loc['hInd'] = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
@@ -541,17 +540,44 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
             rasterPx     = nPixels[0] * 2
             nRows        = 3 # 3x4
             colorbars    = True
-            saveFilename = './vis_%s_%d_gal%d_%s.pdf' % (sP.simName,sP.snap,setInd,panels[0]['partField'].replace(" ","_"))
+            saveFilename = './vis_%s_%d_%s.pdf' % (sP.simName,sP.snap,panels[0]['partField'].replace(" ","_"))
 
         # render
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
     else:
         # single image
-        for haloID in [haloIDSets[2][0]]: # list(haloIDSets[1]) + list(haloIDSets[2]):
+        for haloID in haloIDs:
             hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
             panels = [panel] if not isinstance(panel,list) else panel
+
+        # test: remove single clump visually
+        if len(haloIDs) == 1 and testClumpRemoval:
+            th = {'propName':'Mg II numdens', 'propThreshComp':'gt', 'propThresh':1e-8}
+            objs, props = voronoiThresholdSegmentation(sP, haloID=haloIDs[0], 
+              propName=th['propName'], propThresh=th['propThresh'], propThreshComp=th['propThreshComp'])
+
+            clumpID = np.where(objs['lengths'] == 100)[0][8]
+            print('Testing clump removal [ID = %d].' % clumpID)
+
+            #for prop in props:
+            #    print(prop, props[prop][clumpID])
+
+            # halo-local indices of member cells
+            def _getClumpInds(clumpID):
+                offset = objs['offsets'][clumpID]
+                length = objs['lengths'][clumpID]
+                inds = objs['cell_inds'][offset : offset + length]
+                return inds
+
+            inds1 = _getClumpInds(clumpID)
+            inds2 = _getClumpInds(3416) # close in space
+            inds3 = _getClumpInds(1147) # close in space
+
+            skipCellIndices = np.hstack( (inds1,inds2,inds3) )
+
+            assert method == 'sphMap' # cell_inds to remove must index fof-scope indRange
 
         class plotConfig:
             plotStyle    = 'edged'
@@ -565,14 +591,12 @@ def lrgHaloVisualization(sP, haloIDSets, conf=3, gallery=False):
 def clumpDemographics(sP):
     """ Plot demographics of clump population for a single halo or stacked halos. """
 
-    # TODO: visually verify a ~1.5kpc clump by weighting those indices to zero in vis()
-
     # config
-    haloID = 19
+    haloID = 0
 
     threshSets = []
 
-    for val in [1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]:
+    for val in [1e-6,1e-7,1e-8,1e-9,1e-10]: #[1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]:
         label = "n$_{\\rm Mg II}$ > %s cm$^{-3}$" % val
         threshSets.append( {'propName':'Mg II numdens', 'propThreshComp':'gt', 'propThresh':val, 'label':label})
 
@@ -621,8 +645,6 @@ def clumpDemographics(sP):
                   'temp-size','bmag-size','beta-size','sfr-size','metal-size','rcell1-size','rcell2-size',
                   'mg2_mass-size','hi_mass-size','metal-dist']
 
-    sizefac = 1.0 if not clean else sfclean
-
     # load
     data = []
 
@@ -652,7 +674,7 @@ def clumpDemographics(sP):
 
     # A: 1D histograms of all properties
     for config in lims.keys():
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
 
         lim = lims[config]
@@ -686,9 +708,9 @@ def clumpDemographics(sP):
         fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,config))
         plt.close(fig)
 
-    # B: size vs mass
+    # B: 2d xquant vs yquant plots
     for config in configs_2d:
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
 
         yname, xname = config.split('-')
@@ -732,17 +754,38 @@ def clumpDemographics(sP):
         fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,config))
         plt.close(fig)
 
-    # C: 
+def clumpTracerTracksLoad(sP, haloID, clumpID):
+    """ Load subbox time evolution tracks and make analysis for the time evolution of 
+    clump cell/integral properties vs time. Helper for the plot function below. """
 
-def clumpTracerTracks(sP, haloIDs):
-    """ Intersect the LRG halo sample with the subbox catalogs, find which halos are available for high time resolution 
-    tracking, and then make our analysis and plots of the time evolution of clump cell/integral properties vs time. """
+    saveFilename = 'cache_clump_%s_%d-%d.hdf5' % (sP.simName,haloID,clumpID)
 
+    # check for cache existence
+    if isfile(saveFilename):
+        print('Loading [%s]...' % saveFilename)
+        data = {}
+        with h5py.File(saveFilename,'r') as f:
+            for key in f:
+                data[key] = f[key][()]
+
+        return data
+
+    # config
+    sbNum = 2
+
+    thPropName = 'Mg II numdens'
+    thPropThresh = 1e-8
+    thPropThreshComp = 'gt'
+
+    # load
     GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
 
-    for sbNum in [0,1,2]:
+    for sbNum in []: #[0,1,2]: # disabled (find halo-subbox intersections)
         # load catalog
         cat = subboxSubhaloCat(sP, sbNum)
+
+        masses = sP.subhalos('mhalo_200_log')[cat['SubhaloIDs']]
+        print(sbNum, np.nanmax(masses))
 
         # intersect with all haloIDs sets
         for i, haloIDset in enumerate(haloIDs):
@@ -751,12 +794,258 @@ def clumpTracerTracks(sP, haloIDs):
 
             num_matched = inds_cat.size if inds_cat is not None else 0
 
-            print('sb = %d haloIDset = %d, num_matched = %d' % (sbNum,i,num_matched))
+            print('sb = %d haloIDset = %d, num_matched = %d' % (sbNum,i,num_matched), inds_cat, inds_sample)
 
-            masses = sP.subhalos('mhalo_200_log')[cat['SubhaloIDs']]
-            print( np.nanmax(masses) )
+    # load subbox catalog at z=0, and locate the target subhalo via its descendant tree
+    sP_z0 = sP.copy()
+    sP_z0.setRedshift(0.0)
 
-    import pdb; pdb.set_trace()
+    sbCat = subboxSubhaloCat(sP_z0, sbNum)
+
+    subhaloID = sP.halo(haloID)['GroupFirstSub']
+    subMDB = sP.loadMDB(subhaloID)
+
+    subhaloInd_z0 = np.where(subMDB['SnapNum'] == sP_z0.snap)[0]
+    subhaloID_z0 = subMDB['SubfindID'][subhaloInd_z0][0]
+
+    sbCatInd = np.where(sbCat['SubhaloIDs'] == subhaloID_z0)[0]
+    subhaloCen = np.squeeze(sbCat['SubhaloPos'][sbCatInd,:,:])
+
+    # load segmentation
+    objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
+        propName=thPropName, propThresh=thPropThresh, propThreshComp=thPropThreshComp)
+
+    print('Selected clump [%d], properties:' % clumpID)
+
+    for prop in props:
+        print(' ', prop, props[prop][clumpID])
+
+    offset = objs['offsets'][clumpID]
+    length = objs['lengths'][clumpID]
+    cell_inds = objs['cell_inds'][offset : offset + length]
+
+    # load cell IDs
+    cell_ids = sP.snapshotSubset('gas', 'ids', haloID=haloID)[cell_inds]
+
+    # load tracer tracks meta, starting at this subbox
+    sPsub = sP.subboxSim(sbNum)
+
+    print('Load tracer meta and cross-matching...')
+    tr_meta = globalAllTracersTimeEvo(sPsub, 'meta')
+
+    # cross-match IDs, get tracer catalog indices of the clump member gas cells
+    _, inds_cat = match3(cell_ids, tr_meta['ParentIDs'])
+    indRange = [inds_cat.min(), inds_cat.max()+1]
+    inds_cat -= inds_cat.min()
+
+    print('Found [%d] tracers in [%d] parent cells.' % (inds_cat.size, cell_ids.size))
+
+    # load other tracer property tracks
+    trProps = ['hdens','temp','pos']
+
+    data = {}
+
+    # loop over properties to load
+    for prop in trProps:
+        print('backward: ', prop)
+
+        # load: backwards in time
+        data_loc = globalAllTracersTimeEvo(sPsub, prop, indRange=indRange)
+
+        if prop == trProps[0]:
+            # save snapshots/redshifts
+            data['redshifts'] = data_loc['redshifts']
+            data['snaps'] = data_loc['snaps']
+        else:
+            # should be the same for all properties
+            assert np.array_equal(data['snaps'], data_loc['snaps'])
+
+        w_notdone = np.where(data_loc['done'] == 0)
+        data_loc[prop][w_notdone] = np.nan
+
+        data[prop] = data_loc[prop][:,inds_cat] # subset within indRange
+
+        # load: forwards in time
+        data_loc = globalAllTracersTimeEvo(sPsub, prop, indRange=indRange, toRedshift=sP.redshift-0.1)
+
+        if prop == trProps[0]:
+            # append forward times
+            data['redshifts_full'] = np.hstack( (data['redshifts'], data_loc['redshifts']) )
+            data['snaps_full'] = np.hstack( (data['snaps'], data_loc['snaps']) )
+
+        w_notdone = np.where(data_loc['done'] == 0)
+        data_loc[prop][w_notdone] = np.nan
+
+        data[prop] = np.vstack( (data[prop], data_loc[prop][:,inds_cat]) )
+
+        if prop == 'temp':
+            data[prop] = 10.0**data[prop] # remove log
+
+    # data manipulation
+    for prop in trProps:
+        # time averages across all member cells
+        data[prop+'_avg'] = np.nanmean(data[prop], axis=1)
+
+    nSnaps = data[prop].shape[0]
+    nTr = data[prop].shape[1]
+
+    data['tage'] = sP.units.redshiftToAgeFlat(data['redshifts_full']) * 1e3 # Gyr -> Myr
+    data['dt'] = data['tage'] - data['tage'][0]
+    data['dt'][0] -= 1e-6 # place starting time negative
+
+    # derive center of clump and clump extent(s) from pos
+    data['pos_avg'] = np.mean(data['pos'], axis=1)
+
+    # derive distance of each tracer to center of clump, and clump 'size' as ~half mass radius
+    data['rad']  = np.zeros( (nSnaps,nTr), dtype='float32' )
+    data['dist'] = np.zeros( (nSnaps,nTr), dtype='float32' )
+    data['size_maxseparation'] = np.zeros( nSnaps, dtype='float32' )
+
+    SubhaloPos_trSnaps = subhaloCen[data['snaps_full'],:]
+
+    for i in range(nSnaps):
+        # distance of each tracer to center of clump
+        data['rad'][i,:] = np.sqrt((data['pos'][i,:,0] - data['pos_avg'][i,0])**2 + \
+                                   (data['pos'][i,:,1] - data['pos_avg'][i,1])**2 + \
+                                   (data['pos'][i,:,2] - data['pos_avg'][i,2])**2 )
+
+        # distance of each tracer to center of halo
+        data['dist'][i,:] = np.sqrt((data['pos'][i,:,0] - SubhaloPos_trSnaps[i,0])**2 + \
+                                    (data['pos'][i,:,1] - SubhaloPos_trSnaps[i,1])**2 + \
+                                    (data['pos'][i,:,2] - SubhaloPos_trSnaps[i,2])**2 )
+
+        # maximum pairwise distance between clump members
+        data['size_maxseparation'][i] = sP.periodicPairwiseDists(data['pos'][i,:,:]).max()
+
+    data['size_halfmassrad'] = np.median(data['rad'], axis=1)
+    data['dist_rvir'] = data['dist'] / sP.halo(haloID)['Group_R_Crit200'] # take constant
+
+    # convert dist to dist_avg, i.e. radial distance of clump from interpolated halo center position
+    data['dist_avg'] = np.mean(data['dist'], axis=1)
+    data['dist_rvir_avg'] = np.mean(data['dist_rvir'], axis=1)
+
+    # calculate medians as an alternative to means
+    for key in list(data.keys()):
+        if key+'_avg' in data:
+            data[key+'_median'] = np.nanmedian(data[key], axis=1)
+
+    # save cache
+    with h5py.File(saveFilename,'w') as f:
+        for key in data:
+            f[key] = data[key]
+    print('Saved [%s].' % saveFilename)
+
+    return data
+
+def clumpTracerTracks(sP):
+    """ Intersect the LRG halo sample with the subbox catalogs, find which halos are available for high time resolution 
+    tracking, and then make our analysis and plots of the time evolution of clump cell/integral properties vs time. """
+
+    haloID = 0 # only >10^13 halo which intersects with subboxes
+
+    # testing: pick a clump
+    clumpID = 3851  #np.where(objs['lengths'] == 100)[0][8]
+    #clumpID = 3416 # close in space
+
+    time_xlim = [-500,150]
+
+    trPropsPlot = ['hdens','temp','size_halfmassrad','size_maxseparation','dist','dist_rvir']
+
+    labels = {'size_halfmassrad'   : 'Clump Half-mass Radius [ kpc ]',
+              'size_maxseparation' : 'Clump Size: Max Pairwise Separation [ kpc ]',
+              'dist'               : 'Halocentric Distance [ kpc ]',
+              'dist_rvir'          : 'Halocentric Distance / r$_{\\rm vir}$',
+              'hdens'              : 'Hydrogen Number Density [ log cm$^{-3}$ ]',
+              'temp'               : 'Temperature [ log K ]',
+              'beta'               : '$\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]'}
+
+    # load
+    data = clumpTracerTracksLoad(sP, haloID, clumpID)
+
+    # plot (A) - time series
+    xx = data['dt']
+
+    w_back = np.where(xx < 0)
+    w_forward = np.where(xx > 0)
+
+    for prop in trPropsPlot:
+        print('plot ', prop)
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Time since $z=0.5$ [Myr]')
+        ax.set_ylabel(labels[prop])
+        ax.set_xlim(time_xlim)
+
+        logf = np.log10 if 'dist' not in prop else lambda x: x # identity
+
+        if prop+'_avg' in data:
+            for i in range(data[prop].shape[1]): # individuals
+                yy = logf(data[prop][:,i])
+                ax.plot(xx[w_back], yy[w_back], '-', lw=1, color='black', alpha=0.1)
+                ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
+
+            yy = logf(data[prop+'_avg']) # mean across member cells
+            ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
+            ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
+            ax.legend()
+        else:
+            yy = logf(data[prop]) # quantity is 1 number per snapshot
+            ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw)
+            ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
+
+        fig.tight_layout()
+        fig.savefig('clumpEvo_%s_clumpID=%d_%s.pdf' % (sP.simName,clumpID,prop))
+        plt.close(fig)
+
+    # plot (B) - phase diagram with time track
+    for xval in ['hdens','temp','dist_rvir']:
+        for yval in ['hdens','temp','dist_rvir','size_maxseparation']:
+            if xval == yval: continue
+            print('plot ', xval, yval)
+
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+
+            ax.set_xlabel(labels[xval])
+            ax.set_ylabel(labels[yval])
+
+            logx = np.log10 if 'dist' not in xval else lambda x: x # identity
+            logy = np.log10 if 'dist' not in yval else lambda x: x # identity
+
+            if yval+'_avg' in data:
+                for i in range(data[xval].shape[1]): # individuals
+                    xx = logx(data[xval][:,i])
+                    yy = logy(data[yval][:,i])
+                    ax.plot(xx[w_back], yy[w_back], '-', lw=1, color='black', alpha=0.1)
+                    ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
+
+                xx = logx(data[xval+'_median']) # mean across member cells
+                yy = logy(data[yval+'_median'])
+                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
+                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
+                ax.legend()
+            else:
+                xx = logx(data[xval]) # quantity is 1 number per snapshot
+                yy = logy(data[yval])
+                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw)
+                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
+
+            #for i in range(data[prop].shape[1]): # individuals
+            #    xx = logx(data[xval][:,i])
+            #    yy = logy(data[yval][:,i])
+            #    ax.plot(xx, yy, '-', lw=1, color='black', alpha=0.1)
+
+            #xx = logx(data[xval+'_avg']) # mean across member cells
+            #yy = logy(data[yval+'_avg']) 
+            #ax.plot(xx, yy, 'o-', lw=lw, label='(mean)')
+            #ax.legend()
+
+            fig.tight_layout()
+            fig.savefig('clumpEvo_%s_clumpID=%d_x=%s_y=%s.pdf' % (sP.simName,clumpID,xval,yval))
+            plt.close(fig)
+
+    #import pdb; pdb.set_trace()
 
 def paperPlots():
     """ Testing. """
@@ -856,19 +1145,23 @@ def paperPlots():
                          contours=contours, qRestrictions=qRestrictions)
         pdf.close()
 
-    # fig 4 - vis (single halo large)
+    # fig 4 - vis (single halo large/gallery)
     if 0:
         sP = simParams(run='tng50-1', redshift=redshift)
-        haloIDSets = _get_halo_ids(sP)
+        haloIDs = _get_halo_ids(sP)[2]
 
         # gas metallicity, N_MgII, N_HI, stellar light
         for conf in [1,2,3,4]:
-            lrgHaloVisualization(sP, haloIDSets, conf=conf, gallery=True)
-            #lrgHaloVisualization(sP, haloIDSets, conf=conf, gallery=False)
+            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
+            #lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
 
         # zoomed in (high res) visualizations of multiple properties of clumps
         for conf in [5,6]:
             lrgHaloVisualization(sP, None, conf=conf, gallery=False)
+
+        # vis test - verify a ~1.5kpc clump by weighting those indices to zero in vis()
+        #haloIDs = [0]
+        #lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=False, testClumpRemoval=True)
 
     # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     if 0:
@@ -963,8 +1256,7 @@ def paperPlots():
     # fig 12: time tracks via tracers
     if 1:
         sP = simParams(run='tng50-1', redshift=redshift)
-        clumpTracerTracks(sP, haloIDs=_get_halo_ids(sP))
+        clumpTracerTracks(sP)
 
-    # fig todo: individual (or stacked) 'clump' properties, i.e. radial profiles, including pressure/cellsize
-
+    # fig todo: individual (or stacked) 'clump' radial profiles, including pressure/cellsize
 

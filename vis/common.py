@@ -1070,7 +1070,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams, 
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
-            alsoSFRgasForStars=False, excludeSubhaloFlag=False, **kwargs):
+            alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from util.rotation import rotateCoordinateArray
     
@@ -1085,6 +1085,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         optionalStr += '_alsoSFRgasForStars'
     if excludeSubhaloFlag:
         optionalStr += '_excludeSubhaloFlag'
+    if skipCellIndices is not None:
+        optionalStr += '_skip-%s' % str(skipCellIndices)
     if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
         optionalStr += str(rotCenter)
     if len(nPixels) == 3:
@@ -1241,6 +1243,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=indRange)
             assert mass.size == 1 or (mass.size == hsml.size)
 
+            # load: modify or skip certain cells/particles?
             if 0:
                 print('WARNING: Selectively setting mass=0 based on some particle criterion!')
                 dens = sP.snapshotSubset(partType, 'numdens', indRange=indRange)
@@ -1264,6 +1267,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     inds_flag, inds_snap = match3(flagged_ids, sub_ids)
                     if len(inds_snap):
                         mass[inds_snap] = 0.0
+
+            if skipCellIndices is not None:
+                print('Erasing %.3f%% of cells.' % (skipCellIndices.size/mass.size))
+                mass[skipCellIndices] = 0.0
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None
