@@ -41,6 +41,8 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
                   '/snap_' + sbStr1 + ext + '.' + str(chunkNum) + '.hdf5',
                   # single file per snapshot
                   basePath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5',
+                  # single file per snapshot (swift convention)
+                  basePath + sbStr2 + 'snap_%04d.hdf5' % snapNum,
                   # single file per snapshot, in subdirectory (i.e. Millennium rewrite)
                   basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5',
                   # single groupordered file per snapshot
@@ -82,6 +84,9 @@ def snapshotHeader(sP, fileName=None):
 
     with h5py.File(fileName,'r') as f:
         header = dict( f['Header'].attrs.items() )
+
+        if 'Cosmology' in f:
+            header.update( f['Cosmology'].attrs.items() )
 
     # calculate and include NumPart_Total
     header['NumPart'] = il.snapshot.getNumPart(header)
@@ -423,6 +428,12 @@ def snapshotSubset(sP, partType, fields,
             u  = snapshotSubset(sP, partType, 'u', **kwargs)
             ne = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.UToTemp(u,ne,log=False)
+
+        # ne override to account for runs without cooling, then assume fully ionized primordial
+        if field.lower() in ['ne']:
+            if not sP.snapHasField(partType, 'ElectronAbundance'): # otherwise fall through
+                r[field] = snapshotSubset(sP, partType, 'u', **kwargs)
+                r[field][:] = 1.0 / (1+2*sP.units.helium_massfrac)
 
         # hydrogen number density (from rho) [linear 1/cm^3]
         if field.lower() in ["nh","hdens"]:
@@ -905,7 +916,7 @@ def snapshotSubset(sP, partType, fields,
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
             r[field] = sP.units.coolingTimeGyr(dens, coolrate, u)
 
-        # cooling rate, specific (computed from saved GFM_CoolingRate) [erg/s/g]
+        # cooling rate, specific (computed from saved GFM_CoolingRate, heating=nan) [erg/s/g]
         if field.lower() in ['coolrate','coolingrate']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
@@ -914,7 +925,7 @@ def snapshotSubset(sP, partType, fields,
             coolheat[w] = np.nan # cooling only
             r[field] = -1.0 * coolheat # positive
 
-        # cooling rate, specific (computed from saved GFM_CoolingRate) [erg/s/g]
+        # heating rate, specific (computed from saved GFM_CoolingRate, cooling=nan) [erg/s/g]
         if field.lower() in ['heatrate','heatingrate']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
@@ -922,6 +933,13 @@ def snapshotSubset(sP, partType, fields,
             w = np.where(coolheat <= 0.0)
             coolheat[w] = np.nan # heating only, positive
             r[field] = coolheat
+
+        # net cooling rate, specific (computed from saved GFM_CoolingRate) [erg/s/g]
+        if field.lower() in ['netcoolrate']:
+            dens = snapshotSubset(sP, partType, 'Density', **kwargs)
+            coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
+            r[field] = sP.units.coolingRateToCGS(dens, coolrate) # negative = cooling, positive = heating
+
 
         # 'cooling rate' of Powell source term, specific (computed from saved DivB, GFM_CoolingRate) [erg/s/g]
         if field.lower() in ['coolrate_powell']:
@@ -1170,6 +1188,18 @@ def snapshotSubset(sP, partType, fields,
                 #invNameMappings[toLabel] = fields[i] # save inverse so we can undo
                 fields[i] = toLabel
 
+    # check for snapshots written by other codes which require minor field remappings (SWIFT)
+    swiftRenames = {'Density':'Densities',
+                    'Entropy':'Entropies',
+                    'InternalEnergy':'InternalEnergies',
+                    'Pressure':'Pressures',
+                    'SmoothingLength':'SmoothingLengths'}
+
+    if sP.simCode == 'SWIFT':
+        for i,field in enumerate(fields):
+            if field in swiftRenames:
+                fields[i] = swiftRenames[field]
+
     # inds and indRange based subset
     if inds is not None:
         # load the range which bounds the minimum and maximum indices, then return subset
@@ -1285,6 +1315,22 @@ def snapshotSubset(sP, partType, fields,
             r = sP.units.tracerEntToCGS(r, log=True) # [log cgs] = [log K cm^2]
         if fieldsOrig[0] == 'tracer_maxtemp':
             r = logZeroNaN(r) # [log Kelvin]
+
+    # SWIFT: add little h (and/or little a) units back into particle fields as needed to match TNG/AREPO conventions
+    if sP.simCode == 'SWIFT':
+        swiftFieldsH = {'Coordinates':1,'Masses':1,'Densities':2,'InternalEnergies':0,'SmoothingLengths':1}
+        #,'Velocities':1.0/np.sqrt(sP.scalefac)} # generalize below, pull out first arg of np.power()
+
+        if isinstance(r, np.ndarray) and len(fields) == 1 and fields[0] in swiftFieldsH:
+            r *= np.power(sP.snapshotHeader()['h'][0], swiftFieldsH[fields[0]])
+        else:
+            for field in fields:
+                if field in swiftFieldsH:
+                    r[field] *= np.power(sP.snapshotHeader()['h'][0], swiftFieldsH[field])
+
+        for field in fields:
+            if field not in swiftFieldsH:
+                raise Exception('Should fix h-units for consistency.')
 
     # inverse map multiDimSliceMaps such that return dict has key names exactly as requested
     # todo: could also do for altNames (just uncomment above, but need to refactor codebase)

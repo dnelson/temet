@@ -359,6 +359,8 @@ def generate(fofID, EnlargeHighResFactor=None):
 
     #sP = simParams(res=1820,run='tng',redshift=0.73) # fofID=609 at snap=58 is Saulder object (parent) (fofID=5405 MDB at z=0)
     #ZoomFactor = 1
+    #sP = simParams(run='tng50-1',redshift=0.5) # fofID=23 is our target to test no-MHD
+    #ZoomFactor = 1
 
     Angle = 0.1
     if EnlargeHighResFactor is None: EnlargeHighResFactor = 2.0
@@ -491,13 +493,12 @@ def generate(fofID, EnlargeHighResFactor=None):
     print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
 
 def generate_set():
-    #haloIDs = [653, 858, 1244, 1291, 1523, 1544, 1775, 1838, 1890, 1919] # todo: 14.5-14.6 bin of 10
-    #haloIDs = [1096, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 from 30-40
-    haloIDs = [799, 1152, 1224, 1296, 1332, 1335, 1346, 1384, 1466, 1498] # todo: part 3, increase 14.6-14.7 from 30-40
-    #haloIDs = [698, 701, 720, 778, 789, 790, 797, 798, 844, 884] # todo: part 3, increase 14.7-14.8 from 30-40
-    #haloIDs = [443, 451, 481, 485, 496, 510, 526, 550, 565, 586] # todo: part 4, increase 14.8-14.9 from 40-50
+    #haloIDs = [653, 858, 1096, 1244, 1291, 1523, 1544, 1775, 1838, 1890, 1919] # todo: 14.5-14.6 bin of 10
+    haloIDs = [451, 481, 485, 496, 510, 526, 550, 565, 586] # todo: part 4, increase 14.8-14.9 from 40-50
 
     sizeFacs = [3.0] #[2.0,3.0,4.0]
+
+    # haloIDs = [23], sizeFacs = [4.0] # TNG50-1 no-MHD test (z=0.5)
 
     for haloID in haloIDs:
         for sizeFac in sizeFacs:

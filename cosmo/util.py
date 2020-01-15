@@ -53,31 +53,16 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 
         # attempt load for all snapshots
         for i in range(nSnaps):
-            ext = str(i).zfill(3)
+            fileName = sP.snapPath(snapNum=i, subbox=sP.subbox, checkExists=True)
 
-            # standard: >1 file per snapshot
-            fileName = sP.simPath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.0.hdf5'
+            if fileName is None:
+                # allow for existence of groups only
+                fileName = sP.gcPath(snapNum=i, checkExists=True)
 
-            # single file per snapshot
-            if not isfile(fileName):
-                fileName = sP.simPath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5'
+                if fileName is None:
+                    continue
 
-            # single file per snapshot, in subdirectory (e.g. Millennium rewrite)
-            if not isfile(fileName):
-                fileName = sP.simPath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5'
-
-            # single groupordered file per snapshot
-            if not isfile(fileName):
-                fileName = sP.simPath + sbStr2 + 'snap-groupordered_' + ext + '.hdf5'
-
-            # allow for existence of groups only (e.g. dev.prime)
-            if not isfile(fileName):
-                fileName = sP.simPath + 'groups_' + ext + '/fof_subhalo_tab_' + ext + '.0.hdf5'
-
-            # if file doesn't exist yet, skip (e.g. missing/deleted snapshots are ok)
-            if not isfile(fileName):
-                continue
-
+            # snapshot exists, load redshift and scale factor and save to cache file
             with h5py.File(fileName, 'r') as f:
                 r['redshifts'][i] = f['Header'].attrs['Redshift']
                 r['times'][i]     = f['Header'].attrs['Time']

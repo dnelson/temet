@@ -236,7 +236,6 @@ class simParams:
             self.winds  = 2
             self.BHs    = 2
             
-
             # DM-only runs:
             if '_dm' in run:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
@@ -274,12 +273,17 @@ class simParams:
                     self.omega_b     = 0.0456
                     self.HubbleParam = 0.704
 
+                # vs. swift performance
+                if self.variant in ['NR_arepo','NR_swift']:
+                    dirStr = 'other'
+                    runStr += '_' + self.variant
+
+                # sims.TNG_method variations (e.g. L25n512_1002)
                 if self.variant == '0010':
                     # Illustris model
                     self.winds = 1
                     self.BHs   = 1
 
-                # sims.TNG_method variations (e.g. L25n512_1002)
                 if self.variant.isdigit():
                     if int(self.variant) == 8: self.variant = '0010' # number 0010 interpreted as octal 8! why.
                     assert int(self.variant) >= 0 and int(self.variant) < 9999
@@ -336,6 +340,7 @@ class simParams:
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
                 if '_dm' in run: self.simName += '-Dark'
+                if 'NR' in self.variant: self.simName = 'TNG%d-%d-%s' % (boxSizeName,resInd,self.variant)
 
             if res in res_L25:
                 # override method name
@@ -343,12 +348,13 @@ class simParams:
                     self.simName = method_run_names[self.simName]
 
         # TNG [cluster] zooms based on L680n2048 parent box
-        if run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm']:
+        if run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm','tng50_zoom','tng50_zoom_dm']:
             assert hInd is not None
             self.validResLevels = [11,12,13,14] # first is ZoomLevel==1 (i.e. at parentRes)
             self.groupOrdered   = True
 
-            if run not in ['tng100_zoom', 'tng100_zoom_dm']:
+            if run in ['tng_zoom','tng_zoom_dm']:
+                # TNG1
                 parentRes = 2048
                 self.zoomLevel = self.res # L11 (TNG1-3 or TNG300-3) to L13 (TNG1-1 or TNG300-1) to L14 (i.e. TNG100-1)
                 self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
@@ -356,7 +362,7 @@ class simParams:
                 self.gravSoft = 16.0 / (res/1024)
                 self.targetGasMass = 0.00182873 * (8 ** (13-res))
                 self.boxSize = 680000.0 # ckpc/h unit system
-            else:
+            elif run in ['tng100_zoom', 'tng100_zoom_dm']:
                 # L75* zoom tests
                 parentRes = 1820
                 self.zoomLevel = self.res # L11 (TNG100-1)
@@ -365,6 +371,15 @@ class simParams:
                 self.gravSoft = 1.0 / (res/1820)
                 self.targetGasMass = 0.0000662478 * (8 ** (11-res))
                 self.boxSize = 75000.0 # ckpc/h
+            elif run in ['tng50_zoom','tng50_zoom_dm']:
+                # L35* zoom tests
+                parentRes = 2160
+                self.zoomLevel = self.res # L11 (TNG50-1)
+                self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
+
+                self.gravSoft = 3.12 / (res/270)
+                self.targetGasMas = 5.73879e-6 * (8 ** (11-res))
+                self.boxSize = 35000.0 # ckpc/h
 
             self.numSnaps = 100
 
@@ -398,6 +413,9 @@ class simParams:
 
             dmStr = '_DM' if '_dm' in run else ''
             dirStr = 'L%sn%dTNG_h%d_L%d%s%s' % (bs,parentRes,self.hInd,self.zoomLevel,vStr,dmStr)
+
+            if run in ['tng50_zoom','tng50_zoom_dm']:
+                dirStr = dirStr.replace("h23_L11","h23_z05_L11") # tests stopping at z=0.5
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             self.savPrefix  = 'TZ'
@@ -754,8 +772,8 @@ class simParams:
             self.groupOrdered = False
 
         # attach various functions pre-specialized to this sP, for convenience
-        from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicDistsSq, validSnapList, \
-                               cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
+        from cosmo.util import redshiftToSnapNum, snapNumToRedshift, periodicDists, periodicPairwiseDists, periodicDistsSq, \
+                               validSnapList, cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
                                correctPeriodicPosBoxWrap
         from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
         from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapNumChunks, \
@@ -769,13 +787,14 @@ class simParams:
         from util.helper import periodicDistsN, periodicDistsIndexed
 
         # cosmo helpers
-        self.redshiftToSnapNum    = partial(redshiftToSnapNum, sP=self)
-        self.snapNumToRedshift    = partial(snapNumToRedshift, self)
-        self.periodicDists        = partial(periodicDists, sP=self)
-        self.periodicDistsSq      = partial(periodicDistsSq, sP=self)
-        self.periodicDistsN       = partial(periodicDistsN, BoxSize=self.boxSize)
-        self.periodicDistsIndexed = partial(periodicDistsIndexed, BoxSize=self.boxSize)
-        self.validSnapList        = partial(validSnapList, sP=self)
+        self.redshiftToSnapNum     = partial(redshiftToSnapNum, sP=self)
+        self.snapNumToRedshift     = partial(snapNumToRedshift, self)
+        self.periodicDists         = partial(periodicDists, sP=self)
+        self.periodicDistsSq       = partial(periodicDistsSq, sP=self)
+        self.periodicPairwiseDists = partial(periodicPairwiseDists, sP=self)
+        self.periodicDistsN        = partial(periodicDistsN, BoxSize=self.boxSize)
+        self.periodicDistsIndexed  = partial(periodicDistsIndexed, BoxSize=self.boxSize)
+        self.validSnapList         = partial(validSnapList, sP=self)
 
         # loading
         self.simSubhaloQuantity  = partial(simSubhaloQuantity, self)
@@ -1192,7 +1211,7 @@ class simParams:
     
     @property
     def zoomSubhaloID(self):
-        if self.run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm']:
+        if self.run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm','tng50_zoom','tng50_zoom_dm']:
             print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
             return 0 # hardcoded for now
 
@@ -1245,7 +1264,14 @@ class simParams:
     def numPart(self):
         """ Return number of particles/cells of all types at this sP.snap. """
         return self.snapshotHeader()['NumPart']
-    
+
+    @property
+    def simCode(self):
+        """ Return simulation code used to produce snapshots. Currently only differentiates between AREPO and SWIFT. """
+        h = self.snapshotHeader()
+        if 'Code' in h:
+            return h['Code'].decode('ascii')
+        return 'AREPO'  
 
     # operator overloads
     def __eq__(self, other): 

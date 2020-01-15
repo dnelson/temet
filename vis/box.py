@@ -134,7 +134,7 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, r
                 continue
             p[cName] = cVal
 
-        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
         # add simParams info
         v = p['variant'] if 'variant' in p else None
@@ -252,7 +252,7 @@ def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipEx
                 continue
             p[cName] = cVal
 
-        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
         # add simParams info
         v = p['variant'] if 'variant' in p else None

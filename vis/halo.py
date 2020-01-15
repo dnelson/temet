@@ -239,7 +239,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
                 continue
             p[cName] = cVal
 
-        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
         # add simParams info
         v = p['variant'] if 'variant' in p else None
@@ -359,7 +359,7 @@ def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
                 continue
             p[cName] = cVal
 
-        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'], p['partField'])
+        if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
         # load MPB once per panel
         v = p['variant'] if 'variant' in p else None

@@ -685,6 +685,45 @@ def oneBox_multiQuantCollage(variant=0000):
 
     renderBox(panels, plotConfig, locals())
 
+def multiBoxComparison():
+    """ Compare two boxes, side-by-side, one quantity. """
+    redshift = 0.0
+    sPs = []
+
+    sPs.append( simParams(res=270, run='tng', redshift=redshift, variant='NR_arepo') )
+    sPs.append( simParams(res=270, run='tng', redshift=redshift, variant='NR_swift') )
+
+    partType  = 'gas'
+    partField = 'coldens_msunkpc2' # temp
+    valMinMax = [4.5, 7.0]
+    nPixels   = 1000
+    axes      = [0,1]
+    plotHalos = False
+    labelSim  = False
+
+    # zoom in to FoF 0? show out to 2rvir
+    if 0:
+        halo0 = simParams(run='tng50-1', redshift=redshift).halo(0)
+        relCenPos = None
+        absCenPos = halo0['GroupPos']
+        zoomFac   = (halo0['Group_R_Crit200'] * 4) / sPs[0].boxSize
+        sliceFac  = (halo0['Group_R_Crit200'] * 4) / sPs[0].boxSize
+        valMinMax = [5.0, 7.8]
+
+    # make panels
+    panels = []
+    for sP in sPs:
+        panels.append( {'run':sP.run, 'redshift':sP.redshift, 'res':sP.res, 'variant':sP.variant} )
+
+    class plotConfig:
+        plotStyle  = 'open'
+        rasterPx   = nPixels
+        colorbars  = True
+
+        saveFilename = './boxComparison.png'
+
+    renderBox(panels, plotConfig, locals())
+
 def oneBox_redshiftEvoPanels(redshifts=[6.0,2.0,0.8]):
     """ Create a linear series of redshift evolution panels for one simulation + one quantity. """
     run        = 'tng'

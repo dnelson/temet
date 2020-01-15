@@ -165,16 +165,20 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
 
 def check_contamination():
     """ Check level of low-resolution contamination (DM particles) in zoom run. """
-    hInd = 8
-    zoomRes = 13
-    variant = 'sf2'
+    hInd = 23 #8
+    zoomRes = 11 #13
+    variant = None #'sf2'
+
+    zoomRun = 'tng50_zoom_dm' #'tng_zoom_dm'
+    redshift = 0.5 # 0.0
+    #sP = simParams(res=2048,run='tng_dm',redshift=redshift) # parent box
+    sP = simParams(run='tng50-1', redshift=redshift)
 
     # load parent box: halo
-    sP = simParams(res=2048,run='tng_dm',redshift=0.0)
     halo = sP.groupCatSingle(haloID=hInd)
 
     # load zoom: group catalog
-    sPz = simParams(res=zoomRes, run='tng_zoom_dm', hInd=hInd, redshift=0.0, variant=variant)
+    sPz = simParams(res=zoomRes, run=zoomRun, hInd=hInd, redshift=redshift, variant=variant)
 
     halo_zoom = sPz.groupCatSingle(haloID=0)
     halos_zoom = sPz.groupCat(fieldsHalos=['GroupMass','GroupPos','Group_M_Crit200'])
@@ -371,7 +375,8 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
     """ Make a visual comparison (density projection images) between halos in the parent box and their zoom realizations. """
 
     #sPz = simParams(run='tng_zoom', res=13, hInd=haloID, redshift=0.0, variant=variant)
-    sPz = simParams(run='tng100_zoom_dm', res=11, hInd=haloID, snap=snap, variant='sf4')
+    #sPz = simParams(run='tng100_zoom_dm', res=11, hInd=haloID, snap=snap, variant='sf4')
+    sPz = simParams(run='tng50_zoom_dm', res=11, hInd=haloID, snap=snap, variant=None)
 
     # render config
     rVirFracs  = [1.0] #[0.5, 1.0] # None
@@ -400,9 +405,13 @@ def parentBoxVisualComparison(haloID, variant='sf3', conf=0, snap=99):
     panel_zoom = p.copy()
     panel_parent = p.copy()
 
-    # haloID is always assumed to refer to z=0
-    sP_parent_z0 = sPz.sP_parent.copy()
-    sP_parent_z0.setRedshift(0.0)
+    # haloID refers to z=0?
+    if 0:
+        sP_parent_z0 = sPz.sP_parent.copy()
+        sP_parent_z0.setRedshift(0.0)
+    else:
+        # haloID refers to sPz.snap
+        sP_parent_z0 = sPz.sP_parent
 
     # load MPB of this halo
     haloMPB = sP_parent_z0.loadMPB( sP_parent_z0.groupCatSingle(haloID=haloID)['GroupFirstSub'] )

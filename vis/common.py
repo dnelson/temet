@@ -159,7 +159,12 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
 
         # gas
         if sP.isPartType(partType, 'gas'):
-            hsml = sP.snapshotSubsetP(partType, 'cellrad', indRange=indRange)
+            if sP.simCode == 'SWIFT':
+                # use direcly the SPH smoothing length, instead of the volume derived spherically-equivalent radius
+                hsml = sP.snapshotSubsetP(partType, 'SmoothingLengths', indRange=indRange)
+                hsml /= defaultHsmlFac(partType) # cancel out since we will multiply by this value later
+            else:
+                hsml = sP.snapshotSubsetP(partType, 'cellrad', indRange=indRange)
 
         # stars
         if sP.isPartType(partType, 'stars'):
@@ -212,8 +217,8 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
 
     raise Exception('Unimplemented partType.')
 
-def defaultHsmlFac(partType, partField):
-    """ Helper, set default hsmlFac for a given partType/partField if not input. """
+def defaultHsmlFac(partType):
+    """ Helper, set default hsmlFac for a given partType if not input. """
     if partType == 'gas':
         return 2.5 # times cellsize
     if partType == 'stars':
