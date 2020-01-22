@@ -42,7 +42,7 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
                   # single file per snapshot
                   basePath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5',
                   # single file per snapshot (swift convention)
-                  basePath + sbStr2 + 'snap_%04d.hdf5' % snapNum,
+                  basePath + sbStr2 + 'snap_%s.hdf5' % str(snapNum).zfill(4),
                   # single file per snapshot, in subdirectory (i.e. Millennium rewrite)
                   basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + '/snap_' + sbStr1 + ext + '.hdf5',
                   # single groupordered file per snapshot
@@ -940,7 +940,6 @@ def snapshotSubset(sP, partType, fields,
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
             r[field] = sP.units.coolingRateToCGS(dens, coolrate) # negative = cooling, positive = heating
 
-
         # 'cooling rate' of Powell source term, specific (computed from saved DivB, GFM_CoolingRate) [erg/s/g]
         if field.lower() in ['coolrate_powell']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
@@ -1005,11 +1004,11 @@ def snapshotSubset(sP, partType, fields,
             # get haloID and load halo regardless, even for non-centrals
             # take center position as subhalo center (same as group center for centrals)
             if subhaloID is None:
-                halo = sP.groupCatSingle(sP, haloID=haloID)
+                halo = sP.halo(haloID)
                 haloPos = halo['GroupPos']
             if subhaloID is not None:
-                sub = groupCatSingle(sP, subhaloID=subhaloID)
-                halo = groupCatSingle(sP, haloID=sub['SubhaloGrNr'])
+                sub = sP.subhalo(subhaloID)
+                halo = sP.halo(sub['SubhaloGrNr'])
                 haloID = sub['SubhaloGrNr']
                 haloPos = sub['SubhaloPos']
 
@@ -1034,8 +1033,8 @@ def snapshotSubset(sP, partType, fields,
             pos = snapshotSubset(sP, partType, 'pos', **kwargs)
             if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
             
-            if subhaloID is not None: haloID = groupCatSingle(sP, subhaloID=subhaloID)['SubhaloGrNr']
-            halo = groupCatSingle(sP, haloID=haloID)
+            if subhaloID is not None: haloID = sP.subhalo(subhaloID)['SubhaloGrNr']
+            halo = sP.halo(haloID)
             haloPos = halo['GroupPos'] # note: is identical to SubhaloPos of GroupFirstSub
 
             rad = sP.periodicDists(haloPos, pos)
@@ -1056,8 +1055,8 @@ def snapshotSubset(sP, partType, fields,
                 refPos = sP.refPos
                 refVel = sP.refVel
             else:
-                shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
-                firstSub = groupCatSingle(sP, subhaloID=shID)
+                shID = sP.halo(haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
+                firstSub = sP.subhalo(shID)
                 refPos = firstSub['SubhaloPos']
                 refVel = firstSub['SubhaloVel']
 
@@ -1079,8 +1078,8 @@ def snapshotSubset(sP, partType, fields,
                     (sP.refVel[0],sP.refVel[1],sP.refVel[2],field))
                 refVel = sP.refVel
             else:
-                shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
-                firstSub = groupCatSingle(sP, subhaloID=shID)
+                shID = sP.halo(haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
+                firstSub = sP.subhalo(shID)
                 refVel = firstSub['SubhaloVel']
 
             if sP.refVel is not None:
@@ -1108,8 +1107,8 @@ def snapshotSubset(sP, partType, fields,
 
             if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
-            shID = groupCatSingle(sP, haloID=haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
-            firstSub = groupCatSingle(sP, subhaloID=shID)
+            shID = sP.halo(haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
+            firstSub = sP.subhalo(shID)
 
             if '_mag' in field.lower():
                 r[field] = sP.units.particleSpecAngMomMagInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])

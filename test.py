@@ -17,6 +17,42 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def swift_vs_arepo_performance():
+    """ L35n270TNG_NR test runs (weak scaling) in SWIFT and AREPO. """
+    num_cores = [40, 80, 160, 320, 640]
+
+    # core hours [kH]
+    cputime_swift  = [2.20, 3.52,     5.09, 9.27,   17.25] #CF=0.1 ('required for sph')
+    cputime_swift2 = [np.nan, np.nan, 3.70, np.nan, np.nan] #CF=0.3
+    cputime_arepo  = [2.97, 3.19,     3.56, 4.73,   6.31] #CF=0.3
+
+    # plot
+    fig = plt.figure(figsize=[12, 8])
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('Number of Cores')
+    ax.set_ylabel('CPU Time [kHours]')
+
+    ax.set_title('L35n270TNG_NR (TNG50-4-NR) Strong Scaling Test (to z=0)')
+    ax.set_xlim([10, 1000])
+    ax.set_ylim([2, 11])
+    ax.set_xscale('log')
+
+    ax_top = ax.twiny()
+    ax_top.set_xscale(ax.get_xscale())
+    ax_top.minorticks_off()
+    ax_top.set_xlim(ax.get_xlim())
+    ax_top.set_xticks(num_cores)
+    ax_top.set_xticklabels(num_cores)
+
+    ax.plot(num_cores, cputime_arepo, 'o-', label='AREPO (695f5dedc, public version, TreePM, PMGRID=512, full DP, CF=0.3)')
+    ax.plot(num_cores, cputime_swift, 'o-', label='SWIFT (d9167a957, 11 Jan 2020, SPHENIX SPH/quintic, FMM, CF=0.1)')
+    ax.plot(num_cores, cputime_swift2, 'o-', label='SWIFT (CF=0.3)')
+
+    ax.legend(loc='upper left', fontsize=18)
+    fig.tight_layout()
+    fig.savefig('perf_swift_vs_arepo.pdf')
+    plt.close(fig)
+
 def check_tracer_pos():
     """ Find a single tracer through some snapshots for debugging. """
     startSnap = 2912
@@ -401,6 +437,23 @@ def check_groupcat_snap_rewrite(GrNr=0):
         print( 'bh mdot ', bh_mdot, sub['SubhaloBHMdot'] )
         print( 'cm      ', cm, sub['SubhaloCM'], end='\n\n' )
         #import pdb; pdb.set_trace()
+
+def convert_vicente_infinite_images():
+    """ Resize, extract images only. """
+    import subprocess
+    files = glob.glob('*.png')
+
+    for file in files:
+        print(file)
+
+        # resize crop and rename
+        cmd = "mogrify -resize 900x %s" % file
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+
+        #cmd = "mogrify -crop 296x295+3+24 %s" % file
+        #result = subprocess.run(cmd, stdout=subprocess.PIPE, shell=True)
+
+    print('Done.')
 
 def convert_annalisa_infinite_images():
     """ Convert PDF -> JPG, combine, and resize. """

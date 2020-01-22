@@ -40,6 +40,9 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-2-dark':['tng_dm',10880],
                      'tng50-3-dark':['tng_dm',540],
                      'tng50-4-dark':['tng_dm',270],
+                     #'tng1':['tng':8192],
+                     'tng1-dark':['tng_dm',2048],
+                     'eagle':['eagle',1504],
                      'eagle100-1':['eagle',1504],
                      'millennium-1':['millennium',1],
                      'millennium-2':['millennium',2]}
@@ -224,10 +227,13 @@ class simParams:
             if res in res_L75:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
                 self.trMCPerCell = 2
-            if res in res_L35+res_L205:
+            if res in res_L35 + res_L205 + res_L680:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
                 self.trMCPerCell = 1
-            if res in res_L25+res_L680:
+            if res in res_L680:
+                self.trMCFields  = [0,1,2,-1,-1,-1,-1,-1,-1,3,-1,-1,-1,4] # 5 stored: tmax, tmaxtime, tmaxrho, windc, shockmachmax
+                self.trMCPerCell = 1
+            if res in res_L25:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
                 self.trMCPerCell = 0 # no tracers
 

@@ -433,20 +433,10 @@ def makeSnapSubsetsForMergerTrees():
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
-    # L205 config
-    if 'L205n2500' in pathFrom:
-        nChunks = 600
-        if '_DM' in pathFrom: nChunks = 75
-    if 'L35n2160' in pathFrom:
-        nChunks = 680
-        if '_DM' in pathFrom: nChunks = 128
-    if 'L35n1080' in pathFrom:
-        nChunks = 128
-        if '_DM' in pathFrom: nChunks = 85
-
     # verify number of chunks
     files = glob.glob(fileFrom % (0,0,'*'))
-    assert len(files) == nChunks
+    nChunks = len(files)
+    print('Found [%d] file chunks, copying.' % nChunks)
 
     # loop over snapshots
     for i in range(82,nSnaps):
@@ -456,7 +446,7 @@ def makeSnapSubsetsForMergerTrees():
         # loop over chunks
         for j in range(nChunks):
             # open destination for writing
-            fOut = h5py.File(fileTo % (i,i,j)) # 'w' removed, append to existing file
+            fOut = h5py.File(fileTo % (i,i,j), 'a') # append to existing file, or create new
 
             # open origin file for reading
             assert path.isfile(fileFrom % (i,i,j))

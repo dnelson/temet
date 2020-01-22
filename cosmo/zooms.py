@@ -28,7 +28,7 @@ def pick_halos():
 
     # config
     bins = [ [x+0.0,x+0.1] for x in np.linspace(14.0,15.4,15) ]
-    numPerBin = 50
+    numPerBin = 60
 
     hInds = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
 
@@ -50,6 +50,17 @@ def mass_function():
     sP_tng1 = simParams(res=2048, run='tng_dm', redshift=0.0)
 
     # load halos
+    with open('/u/dnelson/sims.TNG_zooms/runs.txt','r') as f:
+        runs_txt = [line.strip() for line in f.readlines()]
+
+    halo_inds = []
+    for i, line in enumerate(runs_txt):
+        if ' ' in line:
+            line = line.split(' ')[0]
+        if line.isdigit():
+            halo_inds.append(int(line))
+
+    print(halo_inds)
 
     # start figure
     fig = plt.figure(figsize=figsize)
@@ -62,20 +73,27 @@ def mass_function():
     ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
     ax.set_ylabel('N$_{\\rm bin=%.1f}$' % binSize)
     ax.set_yscale('log')
+    #ax.yaxis.tick_right()
+    ax.yaxis.set_ticks_position('both')
 
     yy_max = 1.0
 
     hh = []
     labels = []
 
-    for i in [0,1]:
-        if i == 0:
+    for sP in [sP_tng300,sP_tng1]:
+        if sP == sP_tng300:
             # tng300
             gc = sP_tng300.groupCat(fieldsHalos=['Group_M_Crit200'])
             masses = sP_tng300.units.codeMassToLogMsun(gc)
             label = 'TNG300-1'
+        elif sP == sP_tng1:
+            # tng1 - achieved targets (from runs.txt)
+            gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
+            masses = sP_tng1.units.codeMassToLogMsun(gc[halo_inds])
+            label = 'TNG1-Cluster'
         else:
-            # tng1 parent box for zooms
+            # OLD: tng1 parent box for zooms (planned targets)
             gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
             halo_inds = pick_halos()
             first_bin = 5 # >=14.5
@@ -88,12 +106,14 @@ def mass_function():
         yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
         yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
+        print(xx,yy)
+
         hh.append(masses[w])
         labels.append(label)
 
     ax.hist(hh,bins=nBins,range=mass_range,label=labels,histtype='bar',alpha=0.9,stacked=True)
 
-    ax.set_ylim([1,200])
+    ax.set_ylim([0.8,100])
     ax.legend(loc='upper right')
 
     fig.tight_layout()    
