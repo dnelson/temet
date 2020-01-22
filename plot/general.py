@@ -7,32 +7,37 @@ from builtins import *
 
 import numpy as np
 import matplotlib.pyplot as plt
-from  matplotlib.colors import Normalize
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+import warnings
+
+from matplotlib.colors import Normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from scipy.signal import savgol_filter
 from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from util import simParams
-from util.helper import loadColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable, evenlySample
+from util.helper import loadColorTable, sampleColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable, evenlySample
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
 def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, subhaloIDs=None, haloIDs=None, 
-      ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, pdf=None):
+      ylog=True, ylim=None, xlim=None, qRestrictions=None, nBins=400, medianPDF=False, 
+      legend=True, ctName=None, ctProp=None, colorbar=False, pdf=None):
     """ Simple 1D histogram/PDF of some quantity ptProperty of ptType, either of the whole box (subhaloIDs and haloIDs 
     both None), or of one or more halos/subhalos, where subhaloIDs (or haloIDs) is an ID list with one entry per sPs entry. 
     Alternatively, subhaloIDs/haloIDs can be a list of lists, each sub-list of IDs of objects for that run, which are overplotted.
     If ptWeight is None, uniform weighting, otherwise weight by this quantity.
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
     If ylim is None, then hard-coded typical limits for PDFs. If 'auto', then autoscale. Otherwise, 2-tuple to use as limits. 
-    If medianPDF is True, then add this mean (per sP) on top. If meanPDF is 'only', then skip the individual objects. """
+    If medianPDF is True, then add this mean (per sP) on top. If meanPDF is 'only', then skip the individual objects. 
+    If ctName is not None, sample from this colormap to choose line color per object. Assign based on the property ctProp.
+    If colorbar is not False, then use this field (string) to display a colorbar mapping. """
 
     # config
     if ylog:
         ylabel = 'PDF [ log ]'
         if ylim is None:
-            ylim = [-3.0, 1.0]
+            ylim = [-3.0, 0.5]
         else:
             if ylim == 'auto': ylim = None
     else:
@@ -65,7 +70,7 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     if xlim is None: xlim = xlim_quant
 
     # start plot
-    fig = plt.figure(figsize=(11.2,8.0)) # (14,10)
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel(xlabel)
@@ -81,6 +86,13 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
                 sP_objIDs = objIDs[i] # list
             else:
                 sP_objIDs = [objIDs[i]]
+
+        if ctName is not None:
+            #colors = sampleColorTable(ctName, len(sP_objIDs), bounds=[0.1,0.9])
+            if haloIDs is not None: cmap_props = sP.halos(ctProp)[sP_objIDs]
+            if subhaloIDs is not None: cmap_props = sP.subhalos(ctProp)[sP_objIDs]
+            cmap = loadColorTable(ctName, fracSubset=[0.2,0.9])
+            cmap = plt.cm.ScalarMappable(norm=Normalize(vmin=cmap_props.min(), vmax=cmap_props.max()), cmap=cmap)
 
         yy_save = np.zeros( (nBins,len(sP_objIDs)), dtype='float32' )
 
@@ -145,25 +157,42 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
 
             label = '%s [%d]' % (sP.simName,objID) if len(sPs) > 1 else str(objID)
             ls = ':' if sP.simName == 'L11 (Primordial Only)' else '-'
+            lw_loc = lw-1 if len(sP_objIDs) < 10 else 1
+            color = None if len(sP_objIDs) < 10 else (None if j == 0 else l.get_color())
+            if ctName is not None: color = cmap.to_rgba(cmap_props[j]) #color = colors[j]
+
             if medianPDF != 'only':
-                l, = ax.plot(xx, yy, linestyle=ls, lw=lw-1, label=label)
+                l, = ax.plot(xx, yy, linestyle=ls, lw=lw_loc, color=color, label=label)
 
         # add mean?
         if len(sP_objIDs) > 1 and medianPDF:
-            yy1 = np.nanmean(yy_save, axis=1)
-            yy2 = np.nanmedian(yy_save, axis=1)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning) # 'mean of empty slice'
+                yy1 = np.nanmean(yy_save, axis=1)
+                yy2 = np.nanmedian(yy_save, axis=1)
+                yy3 = yy_save[:,int(yy_save.shape[1]/2)]
 
             if xx.size > sKn:
                 yy1 = savgol_filter(yy1,sKn,sKo)
-                yy2 = savgol_filter(yy2,sKn,sKo)
+                yy2 = savgol_filter(yy2,sKn+4,sKo)
+                yy3 = savgol_filter(yy3,sKn,sKo)
 
-            ax.plot(xx, yy1, linestyle='-', color='black', lw=lw+0.5, alpha=0.7, label='mean')
-            ax.plot(xx, yy2, linestyle='-', color='black', lw=lw+0.5, alpha=1.0, label='median')
+            #ax.plot(xx, yy1, linestyle='-', color='black', lw=lw, alpha=0.8, label='mean')
+            #ax.plot(xx, yy3, linestyle='-', color='black', lw=lw, alpha=0.8, label='middle')
+            ax.plot(xx, yy2, linestyle='-', color='black', lw=lw, alpha=1.0, label='median')
 
     # finish plot
     fig.tight_layout()
-    ax.legend(loc='best', ncol=3)
+    if legend:
+        ax.legend(loc='best', ncol=3)
 
+    if colorbar:
+        #cb_axes = inset_locator.inset_axes(ax, width='40%', height='4%', loc=[0.2,0.8])
+        cb_axes = fig.add_axes([0.2,0.9,0.4,0.04])
+        _, label, _, _ = sP.simSubhaloQuantity(ctProp)
+        plt.colorbar(cmap, label=label, cax=cb_axes, orientation='horizontal')
+
+    # save plot
     sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)
     hStr = 'global'
     if haloIDs is not None: hStr = 'haloIDs-n%d' % len(haloIDs)
@@ -176,14 +205,15 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
     plt.close(fig)
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, 
-                     xlim=None, ylim=None, clim=None, contours=None, normColMax=False, hideBelow=False, smoothSigma=0.0, 
-                     nBins=None, qRestrictions=None, median=False, pdf=None):
+                     xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
+                     smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, pdf=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
     not None, then show the mean value per pixel of these quantities, instead of weighted histograms.
     If xlim,ylim,clim specified, then use these bounds, otherwise use default/automatic bounds.
-    If contours is not None, draw solid contours at these levels on top of the 2D histogram image. 
+    If contours is not None, draw solid contours at these levels on top of the 2D histogram image. If contourQuant is None, 
+    then the histogram itself (or meancolors) is used, otherwise this quantity is used.
     if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
     If hideBelow, then pixel values below clim[0] are left pure white. 
     If smoothSigma is not zero, gaussian smooth contours at this level. 
@@ -228,17 +258,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
-    print('x start', reportMemory())
-    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
-    print('x done', reportMemory())
+    xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
 
     if xlog: xvals = np.log10(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
-    print('y done', reportMemory())
+    yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
 
     if ylog: yvals = np.log10(yvals)
 
@@ -260,14 +287,12 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         yvals = yvals[wRestrict]
 
     # start figure
-    fig = plt.figure(figsize=[figsize[0]*sizefac*len(weights), figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
 
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        print('start wt', reportMemory())
         weight = sP.snapshotSubset(partType, wtProp, haloID=haloID)
-        print(i, wtProp, ' done', reportMemory())
 
         if qRestrictions is not None:
             weight = weight[wRestrict]
@@ -278,7 +303,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         if len(weights) == 1: # title
             hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
             wtStr = partType.capitalize() + ' ' + wtProp.capitalize()
-            ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
+            #ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -302,14 +327,13 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                 yvals[w] = 0.0
 
         if binnedStat:
-            # plot 2D image, each pixel colored by the mean value of a third quantity
-            if 1:
-                # remove NaN weight points prior to binning (default op is mean, not nanmean)
-                w = np.where(np.isfinite(weight))
-                xvals = xvals[w]
-                yvals = yvals[w]
-                weight = weight[w]
+            # remove NaN weight points prior to binning (default op is mean, not nanmean)
+            w_fin = np.where(np.isfinite(weight))
+            xvals = xvals[w_fin]
+            yvals = yvals[w_fin]
+            weight = weight[w_fin]
                 
+            # plot 2D image, each pixel colored by the mean value of a third quantity
             clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloID is not None))
             wtStr = 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
@@ -355,6 +379,17 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                 zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim], 
                                             normed=True, weights=weight)
                 zz = logZeroNaN(zz)
+            if contourQuant is not None:
+                # load a different quantity for the contouring
+                contourq = sP.snapshotSubset(partType, contourQuant, haloID=haloID)
+                contourq = contourq[wRestrict]
+                if binnedStat: contourq = contourq[w_fin]
+
+                zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, contourq, 'mean',
+                                                    bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
+
+                _, _, qlog = simParticleQuantity(sP, partType, contourQuant)
+                if qlog: zz = logZeroNaN(zz)
 
             XX, YY = np.meshgrid(xc[:-1], yc[:-1], indexing='ij')
 
@@ -368,7 +403,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                 zz2 = gaussian_filter(zz2, smoothSigma)
                 zz = zz1/zz2
 
-            c = plt.contour(XX, YY, zz, contours, colors=contoursColor, linestyles='solid')
+            c = plt.contour(XX, YY, zz, contours, colors=contoursColor, linestyles='solid', alpha=0.6)
 
         if len(weights) > 1: # text label inside panel
             wtStr = 'Gas Oxygen Ion Mass'

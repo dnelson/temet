@@ -588,12 +588,10 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
         # render
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def clumpDemographics(sP):
-    """ Plot demographics of clump population for a single halo or stacked halos. """
+def clumpDemographics(sP, haloID):
+    """ Plot demographics of clump population for a single halo. """
 
     # config
-    haloID = 0
-
     threshSets = []
 
     for val in [1e-6,1e-7,1e-8,1e-9,1e-10]: #[1e-5,1e-6,1e-7,1e-8,1e-9,1e-10,1e-15]:
@@ -705,7 +703,7 @@ def clumpDemographics(sP):
         ax.legend()
 
         fig.tight_layout()
-        fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,config))
+        fig.savefig('clumpDemographics_%s_h%d_%s.pdf' % (sP.simName,haloID,config))
         plt.close(fig)
 
     # B: 2d xquant vs yquant plots
@@ -751,7 +749,7 @@ def clumpDemographics(sP):
         ax.legend(loc='lower right')
 
         fig.tight_layout()
-        fig.savefig('clumpDemographics_%s_%s.pdf' % (sP.simName,config))
+        fig.savefig('clumpDemographics_%s_h%d_%s.pdf' % (sP.simName,haloID,config))
         plt.close(fig)
 
 def clumpTracerTracksLoad(sP, haloID, clumpID):
@@ -838,17 +836,20 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     indRange = [inds_cat.min(), inds_cat.max()+1]
     inds_cat -= inds_cat.min()
 
+    loadSize = (indRange[1]-indRange[0]) * 200 * 3 * 8 / 1024**3 # approx GB
+    if loadSize > 10:
+        print(' Load size [%.1f GB], skipping...' % loadSize)
+        return None
+
     print('Found [%d] tracers in [%d] parent cells.' % (inds_cat.size, cell_ids.size))
 
     # load other tracer property tracks
-    trProps = ['hdens','temp','pos']
+    trProps = ['hdens','temp','pos','metal','beta','netcoolrate']
 
     data = {}
 
     # loop over properties to load
     for prop in trProps:
-        print('backward: ', prop)
-
         # load: backwards in time
         data_loc = globalAllTracersTimeEvo(sPsub, prop, indRange=indRange)
 
@@ -873,10 +874,14 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
             data['redshifts_full'] = np.hstack( (data['redshifts'], data_loc['redshifts']) )
             data['snaps_full'] = np.hstack( (data['snaps'], data_loc['snaps']) )
 
-        w_notdone = np.where(data_loc['done'] == 0)
-        data_loc[prop][w_notdone] = np.nan
+        if data_loc is not None:
+            w_notdone = np.where(data_loc['done'] == 0)
+            data_loc[prop][w_notdone] = np.nan
 
-        data[prop] = np.vstack( (data[prop], data_loc[prop][:,inds_cat]) )
+            data[prop] = np.vstack( (data[prop], data_loc[prop][:,inds_cat]) )
+
+            nSnaps = data[prop].shape[0]
+            nTr = data[prop].shape[1]
 
         if prop == 'temp':
             data[prop] = 10.0**data[prop] # remove log
@@ -885,9 +890,6 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     for prop in trProps:
         # time averages across all member cells
         data[prop+'_avg'] = np.nanmean(data[prop], axis=1)
-
-    nSnaps = data[prop].shape[0]
-    nTr = data[prop].shape[1]
 
     data['tage'] = sP.units.redshiftToAgeFlat(data['redshifts_full']) * 1e3 # Gyr -> Myr
     data['dt'] = data['tage'] - data['tage'][0]
@@ -899,6 +901,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     # derive distance of each tracer to center of clump, and clump 'size' as ~half mass radius
     data['rad']  = np.zeros( (nSnaps,nTr), dtype='float32' )
     data['dist'] = np.zeros( (nSnaps,nTr), dtype='float32' )
+    data['pos_rel'] = np.zeros( (nSnaps,nTr,3), dtype='float32' )
     data['size_maxseparation'] = np.zeros( nSnaps, dtype='float32' )
 
     SubhaloPos_trSnaps = subhaloCen[data['snaps_full'],:]
@@ -910,18 +913,24 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
                                    (data['pos'][i,:,2] - data['pos_avg'][i,2])**2 )
 
         # distance of each tracer to center of halo
-        data['dist'][i,:] = np.sqrt((data['pos'][i,:,0] - SubhaloPos_trSnaps[i,0])**2 + \
-                                    (data['pos'][i,:,1] - SubhaloPos_trSnaps[i,1])**2 + \
-                                    (data['pos'][i,:,2] - SubhaloPos_trSnaps[i,2])**2 )
+        data['pos_rel'][i,:,0] = data['pos'][i,:,0] - SubhaloPos_trSnaps[i,0]
+        data['pos_rel'][i,:,1] = data['pos'][i,:,1] - SubhaloPos_trSnaps[i,1]
+        data['pos_rel'][i,:,2] = data['pos'][i,:,2] - SubhaloPos_trSnaps[i,2]
+
+        data['dist'][i,:] = np.sqrt(data['pos_rel'][i,:,0]**2 + \
+                                    data['pos_rel'][i,:,1]**2 + \
+                                    data['pos_rel'][i,:,2]**2 )
 
         # maximum pairwise distance between clump members
         data['size_maxseparation'][i] = sP.periodicPairwiseDists(data['pos'][i,:,:]).max()
 
     data['size_halfmassrad'] = np.median(data['rad'], axis=1)
     data['dist_rvir'] = data['dist'] / sP.halo(haloID)['Group_R_Crit200'] # take constant
+    data['pos_rel'] = sP.units.codeLengthToKpc(data['pos_rel'])
 
     # convert dist to dist_avg, i.e. radial distance of clump from interpolated halo center position
     data['dist_avg'] = np.mean(data['dist'], axis=1)
+    data['pos_rel_avg'] = np.mean(data['pos_rel'], axis=1)
     data['dist_rvir_avg'] = np.mean(data['dist_rvir'], axis=1)
 
     # calculate medians as an alternative to means
@@ -937,19 +946,13 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
 
     return data
 
-def clumpTracerTracks(sP):
+def clumpTracerTracks(sP, clumpID):
     """ Intersect the LRG halo sample with the subbox catalogs, find which halos are available for high time resolution 
     tracking, and then make our analysis and plots of the time evolution of clump cell/integral properties vs time. """
 
     haloID = 0 # only >10^13 halo which intersects with subboxes
 
-    # testing: pick a clump
-    clumpID = 3851  #np.where(objs['lengths'] == 100)[0][8]
-    #clumpID = 3416 # close in space
-
-    time_xlim = [-500,150]
-
-    trPropsPlot = ['hdens','temp','size_halfmassrad','size_maxseparation','dist','dist_rvir']
+    time_xlim = [-500,200]
 
     labels = {'size_halfmassrad'   : 'Clump Half-mass Radius [ kpc ]',
               'size_maxseparation' : 'Clump Size: Max Pairwise Separation [ kpc ]',
@@ -957,10 +960,17 @@ def clumpTracerTracks(sP):
               'dist_rvir'          : 'Halocentric Distance / r$_{\\rm vir}$',
               'hdens'              : 'Hydrogen Number Density [ log cm$^{-3}$ ]',
               'temp'               : 'Temperature [ log K ]',
+              'metal'              : 'Metallicity [ log (not solar) ]',
+              'netcoolrate'        : 'Net Cooling Rate [ erg/s/g ]',
               'beta'               : '$\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]'}
+
+    noForwardData = ['metal','netcoolrate'] # fields without tracer_tracks into the future
 
     # load
     data = clumpTracerTracksLoad(sP, haloID, clumpID)
+
+    if data is None:
+        return
 
     # plot (A) - time series
     xx = data['dt']
@@ -968,8 +978,8 @@ def clumpTracerTracks(sP):
     w_back = np.where(xx < 0)
     w_forward = np.where(xx > 0)
 
-    for prop in trPropsPlot:
-        print('plot ', prop)
+    for prop in labels.keys():
+        print(' plot ', prop)
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
 
@@ -977,22 +987,25 @@ def clumpTracerTracks(sP):
         ax.set_ylabel(labels[prop])
         ax.set_xlim(time_xlim)
 
-        logf = np.log10 if 'dist' not in prop else lambda x: x # identity
+        logf = np.log10 if ('dist' not in prop and 'coolrate' not in prop) else lambda x: x # identity
 
         if prop+'_avg' in data:
             for i in range(data[prop].shape[1]): # individuals
                 yy = logf(data[prop][:,i])
                 ax.plot(xx[w_back], yy[w_back], '-', lw=1, color='black', alpha=0.1)
-                ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
+                if prop not in noForwardData:
+                    ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
 
             yy = logf(data[prop+'_avg']) # mean across member cells
             ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
-            ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
+            if prop not in noForwardData:
+                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
             ax.legend()
         else:
             yy = logf(data[prop]) # quantity is 1 number per snapshot
             ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw)
-            ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
+            if prop not in noForwardData:
+                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
 
         fig.tight_layout()
         fig.savefig('clumpEvo_%s_clumpID=%d_%s.pdf' % (sP.simName,clumpID,prop))
@@ -1000,9 +1013,9 @@ def clumpTracerTracks(sP):
 
     # plot (B) - phase diagram with time track
     for xval in ['hdens','temp','dist_rvir']:
-        for yval in ['hdens','temp','dist_rvir','size_maxseparation']:
+        for yval in labels.keys():
             if xval == yval: continue
-            print('plot ', xval, yval)
+            print(' plot ', xval, yval)
 
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
@@ -1010,65 +1023,105 @@ def clumpTracerTracks(sP):
             ax.set_xlabel(labels[xval])
             ax.set_ylabel(labels[yval])
 
-            logx = np.log10 if 'dist' not in xval else lambda x: x # identity
-            logy = np.log10 if 'dist' not in yval else lambda x: x # identity
+            logx = np.log10 if (('dist' not in xval) and ('coolrate' not in xval)) else lambda x: x # identity
+            logy = np.log10 if (('dist' not in yval) and ('coolrate' not in yval)) else lambda x: x # identity
 
             if yval+'_avg' in data:
                 for i in range(data[xval].shape[1]): # individuals
                     xx = logx(data[xval][:,i])
                     yy = logy(data[yval][:,i])
                     ax.plot(xx[w_back], yy[w_back], '-', lw=1, color='black', alpha=0.1)
-                    ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
+                    if xval not in noForwardData and yval not in noForwardData:
+                        ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
 
                 xx = logx(data[xval+'_median']) # mean across member cells
                 yy = logy(data[yval+'_median'])
                 ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
-                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
+                if xval not in noForwardData and yval not in noForwardData:
+                    ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
                 ax.legend()
             else:
-                xx = logx(data[xval]) # quantity is 1 number per snapshot
+                xx = logx(data[xval]) if data[xval].ndim == 1 else logx(data[xval+'_avg']) # quantity is 1 number per snapshot
                 yy = logy(data[yval])
                 ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw)
-                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
-
-            #for i in range(data[prop].shape[1]): # individuals
-            #    xx = logx(data[xval][:,i])
-            #    yy = logy(data[yval][:,i])
-            #    ax.plot(xx, yy, '-', lw=1, color='black', alpha=0.1)
-
-            #xx = logx(data[xval+'_avg']) # mean across member cells
-            #yy = logy(data[yval+'_avg']) 
-            #ax.plot(xx, yy, 'o-', lw=lw, label='(mean)')
-            #ax.legend()
+                if xval not in noForwardData and yval not in noForwardData:
+                    ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
 
             fig.tight_layout()
             fig.savefig('clumpEvo_%s_clumpID=%d_x=%s_y=%s.pdf' % (sP.simName,clumpID,xval,yval))
             plt.close(fig)
 
-    #import pdb; pdb.set_trace()
+    # plot (C) - spatial tracks
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    axes = [0,1]
+    prop = 'pos_rel'
+
+    ax.set_xlabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
+    ax.set_ylabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
+
+    xylim = [data[prop][:,:,axes].min(), data[prop][:,:,axes].max()]
+    ax.set_xlim(xylim) # square?
+    ax.set_ylim(xylim)
+
+    for i in range(data[prop].shape[1]): # individuals
+        xx = data[prop][:,i,axes[0]]
+        yy = data[prop][:,i,axes[1]]
+        l1, = ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color() if i>0 else None, lw=1, alpha=0.1)
+        l2, = ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color() if i>0 else None, lw=1, alpha=0.1)
+
+    xx = data[prop+'_avg'][:,axes[0]]
+    yy = data[prop+'_avg'][:,axes[1]] # mean across member cells
+    ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color(), lw=lw, label='Clump Mean ($t<0$)')
+    ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color(), lw=lw, label='Clump Mean ($t>0$)')
+    ax.plot([0.0,0.0], 'o', color='black')
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig('clumpEvo_%s_clumpID=%d_%s.pdf' % (sP.simName,clumpID,prop))
+    plt.close(fig)
 
 def paperPlots():
-    """ Testing. """
-    TNG100  = simParams(res=1820,run='tng',redshift=0.0)
-    TNG50   = simParams(res=2160,run='tng',redshift=0.0)
-    TNG50_2 = simParams(res=1080,run='tng',redshift=0.0)
-    TNG50_3 = simParams(res=540,run='tng',redshift=0.0)
-
+    """ Produce all papers for the LRG-MgII (small-scale CGM structure) TNG50 paper. """
     haloMassBins = [[12.3,12.7], [12.8, 13.2], [13.2, 14.0]]
     redshift = 0.5 # default for analysis
 
-    def _get_halo_ids(sP_loc):
-        """ Load and return the set of halo IDs in each haloMassBin. """
+    TNG100  = simParams(res=1820,run='tng',redshift=redshift)
+    TNG50   = simParams(res=2160,run='tng',redshift=redshift)
+    TNG50_2 = simParams(res=1080,run='tng',redshift=redshift)
+    TNG50_3 = simParams(res=540,run='tng',redshift=redshift)
+
+    def _get_halo_ids(sP_loc, bin_inds=None, subhaloIDs=False):
+        """ Load and return the set of halo IDs in each haloMassBin. 
+        if subhaloIDs, then return these rather than haloIDs. """
         mhalo = sP_loc.groupCat(fieldsSubhalos=['mhalo_200_log'])
-        grnr  = sP_loc.groupCat(fieldsSubhalos=['SubhaloGrNr'])
+
+        if subhaloIDs:
+            grnr = np.arange(sP_loc.numHalos) # identity
+        else:
+            grnr  = sP_loc.groupCat(fieldsSubhalos=['SubhaloGrNr'])
+
         haloIDs = []
 
-        for haloMassBin in haloMassBins:
-            with np.errstate(invalid='ignore'):
-                inds = np.where( (mhalo > haloMassBin[0]) & (mhalo < haloMassBin[1]) )[0]
-            haloIDs.append(grnr[inds])
+        if bin_inds is None:
+            # return a list, one entry per haloMassBin
+            for haloMassBin in haloMassBins:
+                with np.errstate(invalid='ignore'):
+                    inds = np.where( (mhalo > haloMassBin[0]) & (mhalo < haloMassBin[1]) )[0]
+
+                haloIDs.append(grnr[inds])
+        else:
+            # return a single array, all haloIDs in the specified haloMassBin(s)
+            for haloMassBin in [haloMassBins[i] for i in bin_inds]:
+                with np.errstate(invalid='ignore'):
+                    inds = np.where( (mhalo > haloMassBin[0]) & (mhalo < haloMassBin[1]) )[0]
+                haloIDs += list(grnr[inds])
+            haloIDs = np.array(haloIDs, dtype='int32')
 
         return haloIDs
+
+    # --- halo scale ---
 
     # figure 1 - cgm resolution
     if 0:
@@ -1083,129 +1136,72 @@ def paperPlots():
             radialResolutionProfiles(sPs, saveName, redshift=redshift, radRelToVirRad=radRelToVirRad, 
                                      cenSatSelect='cen', haloMassBins=haloMassBins)
 
-    # figure 2 - cgm gas density/temp/pressure 1D PDFs
+    # figs 2, 3, 4 - vis (single halo MgII, single halo HI, 3x3 gallery MgII)
     if 0:
-        sP = simParams(res=2160,run='tng',redshift=redshift)
-        qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
-        nBins = 150
+        sP = TNG50
+        haloIDs = _get_halo_ids(sP)[2]
+
+        # gas metallicity, N_MgII, N_HI, stellar light
+        for conf in [1,2,3,4]:
+            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
+            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
+
+    # figure 5a - cgm gas density/temp/pressure 1D PDFs
+    if 0:
+        sP = TNG50
+        qRestrictions = [['rad_rvir',0.1,1.0]] # 0.15<r/rvir<1
+        nBins = 200
         medianPDF = True
 
-        if 1:
+        if 0:
             ptProperty = 'nh'
             xlim = [-6.0, 0.0]
-        if 0:
-            ptProperty = 'temp'
-            qRestrictions.append( ['sfr',0.0,0.0] ) # non-eEOS
-            xlim = [3.5,7.5]
+        if 1:
+            ptProperty = 'temp_sfcold'
+            xlim = [3.8,7.6]
         if 0:
             ptProperty = 'gas_pres'
             qRestrictions.append( ['sfr',0.0,0.0] ) # non-eEOS
             xlim = [0.0, 5.0]
 
-        # testing: one mass bin
-        haloIDs = _get_halo_ids(sP)[1]
+        # all halos in two most massive bins
+        subhaloIDs = _get_halo_ids(sP, bin_inds=[1,2], subhaloIDs=True)
 
         # create density PDF of gas in radRangeRvir
         plotHistogram1D([sP], ptType='gas', ptProperty=ptProperty, xlim=xlim, nBins=nBins, medianPDF=medianPDF, 
-                        qRestrictions=qRestrictions, haloIDs=[haloIDs])
+                        qRestrictions=qRestrictions, subhaloIDs=[subhaloIDs], ctName='plasma', ctProp='mhalo_200_log', 
+                        legend=False, colorbar=True)
 
-    # fig 3 - cgm gas (n,T) 2D phase diagrams
+    # fig 5b - cgm gas (n,T) 2D phase diagrams
     if 0:
-        sP = simParams(res=2160,run='tng',redshift=redshift)
-        qRestrictions = [['rad_rvir',0.15,0.75]] # 0.15<r/rvir<0.5
+        sP = TNG50
+        qRestrictions = [['rad_rvir',0.1,1.0]]
 
         xQuant = 'nh'
         yQuant = 'temp'
         xlim = [-5.5, -1.0]
         ylim = [3.8, 7.8]
 
-        if 0:
-            weights = ['mass']
-            meancolors = None
-            clim = [-4.0,0.0]
-            contours = None
-        if 1:
-            # color by pressure
-            weights = None
-            meancolors = ['gas_pres']
-            clim = [1.0,4.0]
-            contours = [2.5,3.0,3.5]
+        weights = ['mass']
+        meancolors = None
+        clim = [-4.0,0.0]
+        contourQuant = 'gas_pres'
+        contours = [2.5,3.0,3.5] # log K/cm^3
 
         saveStr = weights[0] if weights is not None else meancolors[0]
 
-        # testing: one mass bin, just one halo
-        massBinInd = 1
-        haloIDs = _get_halo_ids(sP)[massBinInd]
+        haloIDs = [8] # single example
+        #haloIDs = _get_halo_ids(sP)[1] # all the halos in a mass bin
 
-        pdf = PdfPages('%s_z-%.1f_%s_massbin%d.pdf' % (sP.simName,sP.redshift,saveStr,massBinInd))
+        pdf = PdfPages('phase2d_%s_%d_h%d_%s_%s_%s.pdf' % (sP.simName,sP.snap,haloIDs[0],xQuant,yQuant,weights[0]))
 
         for haloID in haloIDs:
             plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
                          haloID=haloID, pdf=pdf, xlim=xlim, ylim=ylim, clim=clim, nBins=None, 
-                         contours=contours, qRestrictions=qRestrictions)
+                         contours=contours, contourQuant=contourQuant, qRestrictions=qRestrictions)
         pdf.close()
 
-    # fig 4 - vis (single halo large/gallery)
-    if 0:
-        sP = simParams(run='tng50-1', redshift=redshift)
-        haloIDs = _get_halo_ids(sP)[2]
-
-        # gas metallicity, N_MgII, N_HI, stellar light
-        for conf in [1,2,3,4]:
-            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
-            #lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
-
-        # zoomed in (high res) visualizations of multiple properties of clumps
-        for conf in [5,6]:
-            lrgHaloVisualization(sP, None, conf=conf, gallery=False)
-
-        # vis test - verify a ~1.5kpc clump by weighting those indices to zero in vis()
-        #haloIDs = [0]
-        #lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=False, testClumpRemoval=True)
-
-    # fig 5 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
-    if 0:
-        sP = simParams(res=2160, run='tng', redshift=redshift)
-        haloMassBin = haloMassBins[1]
-        #ion = 'Mg II'
-        ion = 'MHIGK_popping'
-        radRelToVirRad = False
-
-        for ycum in [True,False]:
-            for fullDepth in [True,False]:
-                ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=ycum, fullDepth=fullDepth)
-
-    # fig 6: obs matched samples for COS-LRG and LRG-RDR surveys
-    if 0:
-        sPs = [TNG50, TNG100]
-
-        simNames = '_'.join([sP.simName for sP in sPs])
-        obsSimMatchedGalaxySamples(sPs, 'sample_lrg_rdr_%s.pdf' % simNames, config='LRG-RDR')
-        obsSimMatchedGalaxySamples(sPs, 'sample_cos_lrg_%s.pdf' % simNames, config='COS-LRG')
-
-    # fig 7: run old OVI machinery to derive goodness of fit parameters and associated plots
-    if 0:
-        for sP in [TNG50]: #[TNG50, TNG100]:
-            obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
-            obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
-            obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
-
-    # fig 8: 2pcf
-    if 0:
-        sPs = [TNG50] #[TNG100, TNG300]
-        ions = ['MgII'] #,'Mg','gas']
-
-        # compute time for one split:
-        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
-        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
-        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
-        for order in [0,1,2]:
-            saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
-              (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
-
-            ionTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
-
-    # fig 9: bound ion mass as a function of halo mass
+    # fig 6a: bound ion mass as a function of halo mass
     if 0:
         sPs = [TNG50] #[TNG100,TNG50] #,TNG50_2,TNG50_3] #[TNG300]
         cenSatSelect = 'cen'
@@ -1214,17 +1210,17 @@ def paperPlots():
         for vsHaloMass in [True,False]:
             massStr = '%smass' % ['stellar','halo'][vsHaloMass]
 
-            saveName = 'ions_masses_vs_%s_%s_z%d_%s.pdf' % \
-                (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
+            saveName = 'ions_masses_vs_%s_%s_%d_%s.pdf' % \
+                (massStr,cenSatSelect,sPs[0].snap,'_'.join([sP.simName for sP in sPs]))
             totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
                 redshift=redshift, vsHaloMass=vsHaloMass) # , secondTopAxis=True
 
-            saveName = 'ions_avgcoldens_vs_%s_%s_z%d_%s.pdf' % \
-                (massStr,cenSatSelect,redshift,'_'.join([sP.simName for sP in sPs]))
-            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-                redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
+            #saveName = 'ions_avgcoldens_vs_%s_%s_%d_%s.pdf' % \
+            #    (massStr,cenSatSelect,sPs[0].snap,'_'.join([sP.simName for sP in sPs]))
+            #totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+            #    redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
 
-    # fig 10: radial profiles
+    # fig 6b: radial profiles
     if 0:
         sPs = [TNG50]
         ions = ['MgII']#,'HIGK_popping']
@@ -1239,24 +1235,106 @@ def paperPlots():
             for radRelToVirRad in [False]: #[True,False]:
                 for projDim in projSpecs:
 
-                    saveName = 'radprofiles_%s_%s_%s_z%02d_%s_rho%d_rvir%d.pdf' % \
-                      (projDim,'-'.join(ions),simNames,redshift,cenSatSelect,massDensity,radRelToVirRad)
-                    stackedRadialProfiles(sPs, saveName, ions=ions, redshift=redshift, massDensity=massDensity,
+                    saveName = 'radprofiles_%s_%s_%s_%d_%s_rho%d_rvir%d.pdf' % \
+                      (projDim,'-'.join(ions),simNames,sPs[0].snap,cenSatSelect,massDensity,radRelToVirRad)
+                    stackedRadialProfiles(sPs, saveName, redshift=sPs[0].redshift, ions=ions, massDensity=massDensity,
                                           radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
                                           haloMassBins=haloMassBins, combine2Halo=combine2Halo, median=True)
 
-
-    # fig todo: tpcf of single halo (0.15 < r/rvir < 1.0)
-
-    # fig 11: clump demographics: size distribution, total mass, average numdens, etc
+    # fig X: 2pcf
     if 0:
-        sP = simParams(run='tng50-1', redshift=redshift)
-        clumpDemographics(sP)
+        sPs = [TNG50] #[TNG100, TNG300]
+        ions = ['MgII'] #,'Mg','gas']
 
-    # fig 12: time tracks via tracers
+        # compute time for one split:
+        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
+        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
+        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
+        for order in [0,1,2]:
+            saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
+              (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
+
+            ionTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
+
+        # todo: tpcf of single halo (0.15 < r/rvir < 1.0)
+
+    # --- clump analysis ---
+
+    # fig 7: zoomed in (high res) visualizations of multiple properties of clumps
+    if 0:
+        sP = TNG50
+        haloIDs = _get_halo_ids(sP)[2]
+
+        for conf in [5,6]:
+            lrgHaloVisualization(sP, None, conf=conf, gallery=False)
+
+        # vis test - verify a ~1.5kpc clump by weighting those indices to zero in vis()
+        #haloIDs = [0]
+        #lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=False, testClumpRemoval=True)
+
+    # fig 8: clump demographics: size distribution, total mass, average numdens, etc
     if 1:
-        sP = simParams(run='tng50-1', redshift=redshift)
-        clumpTracerTracks(sP)
+        haloID = 0 # 0, 19
+        clumpDemographics(TNG50, haloID=haloID)
 
-    # fig todo: individual (or stacked) 'clump' radial profiles, including pressure/cellsize
+    # fig 9: time tracks via tracers
+    if 0:
+        # pick a single clump (from np.where(objs['lengths'] == 100))
+        #clumpID = 3851
+        clumpIDs = 3416
 
+        clumpTracerTracks(TNG50, clumpID=clumpID)
+
+        # helper: loop above over many clumps
+        if 0:
+            # load segmentation
+            haloID = 0
+            thPropName = 'Mg II numdens'
+            thPropThresh = 1e-8
+            thPropThreshComp = 'gt'
+            objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
+                propName=thPropName, propThresh=thPropThresh, propThreshComp=thPropThreshComp)
+
+            #clumpIDs = np.where(objs['lengths'] == 100)[0][0:10]
+            clumpIDs = np.where( (objs['lengths'] >= 400) & (objs['lengths'] < 405) )[0]
+            #clumpIDs = np.where(objs['lengths'] == 40)[0][0:10]
+            print('Processing [%d] clumps...' % clumpIDs.size)
+
+            # load tracer tracks, cache, make plots
+            for clumpID in clumpIDs:
+                clumpTracerTracks(sP, clumpID=clumpID)
+
+    # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
+    # TODO
+
+    # --- observational comparison ---
+
+    # fig 11 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
+    if 0:
+        sP = TNG50
+        haloMassBin = haloMassBins[1]
+        #ion = 'Mg II'
+        ion = 'MHIGK_popping'
+        radRelToVirRad = False
+
+        for ycum in [True,False]:
+            for fullDepth in [True,False]:
+                ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=ycum, fullDepth=fullDepth)
+
+    # fig X: obs matched samples for COS-LRG and LRG-RDR surveys
+    if 0:
+        sPs = [TNG50, TNG100]
+
+        simNames = '_'.join([sP.simName for sP in sPs])
+        obsSimMatchedGalaxySamples(sPs, 'sample_lrg_rdr_%s.pdf' % simNames, config='LRG-RDR')
+        obsSimMatchedGalaxySamples(sPs, 'sample_cos_lrg_%s.pdf' % simNames, config='COS-LRG')
+
+    # fig 12: run old OVI machinery to derive goodness of fit parameters and associated plots
+    if 0:
+        for sP in [TNG50]: #[TNG50, TNG100]:
+            obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
+            obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
+            obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
+
+    # fig 13: covering fraction comparison
+    # TODO

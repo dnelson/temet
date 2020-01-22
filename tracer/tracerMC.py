@@ -22,7 +22,7 @@ debug = False # enable expensive debug consistency checks and verbose output
 defParPartTypes = ['gas','stars','bhs']   # all possible tracer parent types (ordering important)
 
 # helper information for recording different parent properties
-gas_only_fields = ['temp','sfr','entr','hdens','beta'] # tag with NaN for values not in gas parents at some snap
+gas_only_fields = ['temp','sfr','entr','hdens','beta','netcoolrate'] # tag with NaN for values not in gas parents at some snap
 n_3d_fields     = ['pos','vel']                 # store [N,3] vector instead of [N] vector
 d_int_fields    = {'subhalo_id':'int32',        # use int dtype to store, otherwise default to float32
                    'halo_id':'int32',

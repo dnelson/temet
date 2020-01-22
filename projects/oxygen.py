@@ -697,9 +697,8 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     radNames = ['total','self (1-halo)','other (2-halo)','diffuse']
 
     # plot setup
-    lw = 3.0
-    sizefac = 1.0 if not clean else sfclean*0.85
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    #lw = 3.0
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     radStr = 'Radius' if '3D' in projDim else 'Impact Parameter'

@@ -314,7 +314,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if sP.boxSize > 200000: minMax = [11.0, 15.0]
         if sP.boxSize < 50000: minMax = [10.5, 13.5]
 
-        label = 'M$_{\\rm halo}$ ('+mTypeStr+') [ log M$_{\\rm sun}$ ]'
+        label = 'M$_{\\rm halo, %s}$ [ log M$_{\\rm sun}$ ]' % mTypeStr
         #if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
     if quantname in ['rhalo_200','rhalo_500']:
@@ -1824,7 +1824,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     #if '_real' in typeStr: typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
 
     # fields:
-    if ptProperty == 'temp':
+    if ptProperty in ['temp', 'temp_sfcold']:
         label = 'Gas Temperature [ log K ]'
         lim = [2.0, 8.0]
         if haloLims: lim = [3.5, 8.0]
