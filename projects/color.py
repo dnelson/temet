@@ -48,15 +48,13 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
     kCorrect = True # True, False
 
     # start plot
-    sizefac = 1.5
-    if clean: sizefac = 1.3
     if len(stellarMassBins) >= 4:
         figsize = (16,9) # 2 rows, N columns
         #figsize = (9,16) # 3 rows, N (2) columns
     else:
         figsize = (5.3, 13.5)
 
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
+    fig = plt.figure(figsize=figsize)
     axes = []
 
     if bands[0] == 'u' and bands[1] == 'i': mag_range = [0.0,4.5]
@@ -373,8 +371,6 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
     eCorrect = True # True, False (for sdss points)
     kCorrect = False # True, False (for sdss points)
 
-    sizefac = 1.0/sfclean if clean else 1.5
-
     def _discreteReSampleMatched(obs_1dhist, sim_1dhist, nBinsDS):
         """ Apply a quasi inverse transform sampling method to draw a Mstar distribution
         from the simulation matching that from SDSS, so we can plot a fair comparison of 
@@ -406,7 +402,7 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
     # create an entire plot PER run, only one 2D sim contour set each
     for sP_target in sPs:
         # start plot
-        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
+        fig = plt.figure(figsize=(figsize[0]/0.8,figsize[1]/0.8))
         axes  = []
         axes2 = []
 
@@ -634,8 +630,7 @@ def viewingAngleVariation():
         modelC_colors[ac_demo], modelC_ids[ac_demo] = loadSimGalColors(sP, ac_demo, bands=bands, projs='all')
 
     # start plot
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     mag_range  = [0.3,0.85] #bandMagRange(bands, tight=True)
@@ -797,8 +792,7 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
 
     # start plot
     if fig_subplot[0] is None:
-        sizefac = sfclean if clean else 1.0
-        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+        fig = plt.figure(figsize=figsize, facecolor=color1)
         ax = fig.add_subplot(111, facecolor=color1)
     else:
         # add requested subplot to existing figure
@@ -1103,7 +1097,6 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     sLabel = '$\sigma_{\\rm red,blue}$ [width in (%s-%s) mag]' % (bands[0],bands[1])
 
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-    sizefac = 1.0 if not clean else 0.7
     alpha = 0.8
     af = 5.0 # reduce alpha by this factor for low-mass red and high-mass blue
 
@@ -1186,7 +1179,7 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         legend2 = ax.legend(sExtra, lExtra, loc=loc)
 
     # start figure
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*2),facecolor=color1)
+    fig = plt.figure(figsize=(figsize[0],figsize[1]*2),facecolor=color1)
 
     # top panel: mu_{red,blue}
     ax = fig.add_subplot(212, facecolor=color1)
@@ -1232,7 +1225,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     xlabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
     ylabel = 'PDF' 
     mlabel = '%.2f < M$_{\\rm \star}$ < %.2f'
-    sizefac = 1.0 if not clean else sfclean
 
     xx = np.linspace(mag_range[0], mag_range[1], 100)
 
@@ -1270,7 +1262,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     nRows = 5 * 0.6 # 0.6=visual adjust fac
 
     for iterNum in [0,1]:
-        fig = plt.figure(figsize=(figsize[0]*nCols*sizefac,figsize[1]*nRows*sizefac),facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0]*nCols,figsize[1]*nRows),facecolor=color1)
 
         # loop over half the mass bins, with a stride of two (one panel per mass bin)
         for i, mass in enumerate(masses[iterNum::2]):
@@ -1329,7 +1321,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
 
     # (B,C,D) start plot, sigma/mu/A vs Mstar
     for iterNum in [0,1,2]:
-        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+        fig = plt.figure(figsize=figsize, facecolor=color1)
 
         ax = fig.add_subplot(111, facecolor=color1)
 
@@ -1385,7 +1377,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         plt.close(fig)
 
     # (E) start plot, red fraction (ratio of counts in red vs red+blue gaussians)
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    fig = plt.figure(figsize=figsize, facecolor=color1)
 
     ax = fig.add_subplot(111, facecolor=color1)
 
@@ -1427,7 +1419,7 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     plt.close(fig)
 
     # (F) 2d histogram of counts given the binning setup
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    fig = plt.figure(figsize=figsize, facecolor=color1)
     ax = fig.add_subplot(1,1,1, facecolor=color1)
 
     setAxisColors(ax, color2)
@@ -1467,8 +1459,6 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
     # visual config
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-    sizefac = 1.0 if not clean else 0.7
-    lw      = 2.5
     alpha   = 0.9
 
     tMinMax    = [0.0, 8.0] # Gyr
@@ -1711,7 +1701,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
     def _fig_helper(fieldName, yscale, saveBase, plotCSS=cenSatSelects, xLabel=None, xMinMax=None, 
                     sizeAdjust=1.0):
         """ Helper for histogram plots with all css combined. """
-        fig = plt.figure(figsize=(figsize[0]*sizefac*sizeAdjust,figsize[1]*sizefac*sizeAdjust),facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0]*sizeAdjust,figsize[1]*sizeAdjust),facecolor=color1)
         ax = fig.add_subplot(111, facecolor=color1)
 
         if xMinMax is None: xMinMax = fieldMinMax[fieldName]
@@ -1877,7 +1867,7 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
     def _fig_helper2(xAxis, yAxis, saveBase='', plotCSS=cenSatSelects, sizeAdjust=1.0):
         """ Helper for histogram plots with all css combined. """
-        fig = plt.figure(figsize=(figsize[0]*sizefac*sizeAdjust,figsize[1]*sizefac*sizeAdjust),facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0]*sizeAdjust,figsize[1]*sizeAdjust),facecolor=color1)
         ax = fig.add_subplot(111, facecolor=color1)
 
         xLabel = fieldLabels[xAxis] if sizeAdjust >= 1.0 else fieldLabelsShort[xAxis]
@@ -2030,7 +2020,6 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
     xlabel = 'Galaxy Stellar Mass [ log Msun ]'
     ylabel = 'Galaxy (%s-%s) Color' % (bands[0],bands[1])
-    sizefac = 0.7
     xSizeFac = 1.1
 
     xTicks = [9, 10, 11, 12]
@@ -2111,7 +2100,7 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
         gal_redshifts[dustModel] = np.around( gal_redshifts[dustModel], decimals=1 )
 
     # start plot
-    fig = plt.figure(figsize=(figsize[0]*sizefac*xSizeFac,figsize[1]*sizefac),facecolor=color1)
+    fig = plt.figure(figsize=(figsize[0]*0.9*xSizeFac,figsize[1]*0.9),facecolor=color1)
     ax = fig.add_subplot(111, facecolor=color1)
     setAxisColors(ax, color2)
 

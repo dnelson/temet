@@ -39,8 +39,7 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen',
 
     # plot setup
     lw = 3.0
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     if radRelToVirRad:
@@ -303,8 +302,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         print('Saved: [%s]' % cacheSaveFile)
 
     # start plot
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     if xlog:

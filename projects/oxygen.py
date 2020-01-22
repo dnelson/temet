@@ -46,8 +46,7 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
         speciesList = ['nOVII_solarz_depth125']#,'nOVII_10_solarz_depth125']
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([12.5, 15.5])
@@ -184,8 +183,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
 
     # plot setup
     lw = 3.0
-    sizefac = 1.0 if not clean else sfclean
-    if len(redshifts) > 1: sizefac *= 0.7
+    sizefac = 0.7 if len(redshifts) > 1 else 1.0
     heightFac = 1.0 if ('main' in saveName or len(redshifts) > 1) else 0.95
     fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac*heightFac])
     ax = fig.add_subplot(111)
@@ -357,9 +355,8 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
     # plot setup
     lw = 3.0
-    sizefac = 1.0 if not clean else sfclean*0.85
     heightFac = 1.1 if secondTopAxis else 1.0
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac*heightFac])
+    fig = plt.figure(figsize=[figsize[0]*0.85*sizefac, figsize[1]*sizefac*0.85*heightFac])
     ax = fig.add_subplot(111)
     
     mHaloLabel = 'M$_{\\rm halo}$ [ < r$_{\\rm 200,crit}$, log M$_{\\rm sun}$ ]'
@@ -1003,8 +1000,7 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
                              'O':'metalmass_O','Z':'metalmass','gas':'mass','bhmass':'BH_Mass'}
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([0.0, 4.0])
@@ -1169,8 +1165,7 @@ def obsSimMatchedGalaxySamples(sPs, saveName, config='COS-Halos'):
     rect_cbar = [left+cbar_pad, bottom+cbar_pad, 0.03, height/2]
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac*0.9, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
 
     ax = fig.add_axes(rect_scatter)
 
@@ -1330,8 +1325,7 @@ def obsColumnsDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
 
     for iter in [0,1]:
         # plot setup
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
 
         ax = fig.add_subplot(111)
 
@@ -1530,8 +1524,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
 
     for iter in [0,1]:
         # plot setup
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac*2.0, figsize[1]*sizefac])
+        fig = plt.figure(figsize=[figsize[0]*2.0, figsize[1]])
         
         ax = fig.add_axes(rect_mainpanel)
 
@@ -1818,9 +1811,8 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
 
     # plot setup
     lw = 3.0
-    sizefac = 1.0 if not clean else sfclean
     heightFac = 1.0 if ('main' in saveName or len(sPs) == 1) else 0.95
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac*heightFac])
+    fig = plt.figure(figsize=[figsize[0], figsize[1]*heightFac])
     ax = fig.add_subplot(111)
     
     if config in ['COS-Halos','SimHalos_115-125']:

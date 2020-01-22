@@ -96,7 +96,7 @@ def sample_comparison_z2_sins_ao(sP):
     fullSubhaloSFR = True # use total SFR in subhalo, otherwise within 2rhalf
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim(xlim)
@@ -176,7 +176,7 @@ def simResolutionVolumeComparison():
         return tng100_ngal * vol_ratio
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*sfclean*0.8, figsize[1]*sfclean])
+    fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
     ax = fig.add_subplot(111)
     
     ax.set_xlim([0.6,1e6])
@@ -384,7 +384,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
     def _plotHelper(vcutIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False,addModelTNG=False):
         """ Plot a radii series, vcut series, or both. """
         # plot setup
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         
         if ylimLoc is None: ylimLoc = ylim
@@ -756,7 +756,7 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
     def _plotHelper(vcutIndsPlot,radIndsPlot,saveName=None,pdf=None,ylimLoc=None,stat='median',skipZeroVals=False):
         """ Plot a radii series, vcut series, or both. """
         # plot setup
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         
         if ylimLoc is None: ylimLoc = ylim
@@ -1007,7 +1007,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         if len(redshifts) > 1: assert len(radIndsPlot) == 1 # otherwise needs generalization
 
         # plot setup
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         
         if ylimLoc is None: ylimLoc = ylim
@@ -1497,7 +1497,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
     def _plotHelper(vcut_ind,rad_ind,quant,mStarBins=None,stat='mean',skipZeroFluxes=False,saveName=None,pdf=None):
         """ Plot a radii series, vcut series, or both. """
         # plot setup
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         
         ax.set_xlim(limits[quant])
@@ -1732,7 +1732,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
 
         if contours is not None:
             # only 1 panel for all M*/redshift variations, make panel now
-            fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+            fig = plt.figure(figsize=figsize)
 
             ax = fig.add_subplot(111)
             lines = []
@@ -1744,7 +1744,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
             nCols = int(np.ceil(len(mStarBins) / nRows))
             nRows, nCols = nCols, nRows
 
-            fig = plt.figure(figsize=[figsize[0]*sfclean*nCols, figsize[1]*sfclean*nRows])
+            fig = plt.figure(figsize=[figsize[0]*nCols, figsize[1]*nRows])
 
         # loop over redshifts
         for j, redshift in enumerate(redshifts):
@@ -2264,7 +2264,7 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
     percs = [16,84]
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     radStr = 'Radius' if '3D' in projDim else 'Projected Distance'

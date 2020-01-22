@@ -522,7 +522,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     lw = 3.0
 
     # start plot
-    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     hStr = 'fullbox' if haloID is None else 'halo%d' % haloID

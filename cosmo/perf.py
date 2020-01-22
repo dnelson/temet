@@ -688,7 +688,7 @@ def plotTimebins():
         data.append( loadTimebinsTxt(sP.arepoPath) )
 
     # (A) actual wall-clock time of the smallest timebin ('machine weather')
-    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_xlim([0.0,1.0])
@@ -746,7 +746,7 @@ def plotTimebins():
     for i, sP in enumerate(sPs):
         # start plot
         print(' (B) ', sP.simName)
-        fig = plt.figure(figsize=[figsize[0]*sfclean*1.2, figsize[1]*sfclean])
+        fig = plt.figure(figsize=[figsize[0]*1.2, figsize[1]])
         ax = fig.add_subplot(111)
 
         ax.set_xlim([0.0,1.0])

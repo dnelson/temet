@@ -207,8 +207,7 @@ def sfrAvgVsRedshift(sPs, pdf):
     massBinColors = ['#333333','#666666','#999999']
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_ylim([8e-3, 5e2])
@@ -357,8 +356,7 @@ def sfrAvgVsRedshift(sPs, pdf):
 def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
     """ Star formation rate density of the universe, vs redshift, vs observational points. """
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_ylim([5e-4, 5e-1])
@@ -439,8 +437,7 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
     assert twiceR or vsHaloMass or vsBulgeMass
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([8.5, 13.0])
@@ -572,8 +569,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -849,8 +845,7 @@ def uvLuminosityFunction(sPs, pdf, centralsOnly=False, use30kpc=False, absoluteM
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -966,8 +961,7 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -1055,8 +1049,7 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -1175,8 +1168,7 @@ def HIvsHaloMass(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -1272,8 +1264,7 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -1461,8 +1452,7 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
     metalFields = ['SubhaloGasMetallicitySfrWeighted','SubhaloGasMetallicitySfr']
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac*1.1, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     if simRedshift == 0.0:
@@ -1589,8 +1579,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     acField = 'Group_Mass_Crit500_Type'
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([11.0, 15.0])
@@ -1744,8 +1733,7 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
         xlim = [17,23]
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim(xlim)
@@ -1893,8 +1881,7 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     log_Z_range = [-3.0, 0.0]
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim(log_Z_range)
@@ -1956,8 +1943,7 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     binSizeLogKms = 0.03
 
     # plot setup
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([50,350])
@@ -2028,8 +2014,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -2199,8 +2184,7 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure
@@ -2324,8 +2308,7 @@ def haloSynchrotronPower(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
 
     # plot setup
     if fig_subplot[0] is None:
-        sizefac = 1.0 if not clean else sfclean
-        fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
     else:
         # add requested subplot to existing figure

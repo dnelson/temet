@@ -247,7 +247,7 @@ def compare_contamination():
     variants = ['sf2','sf3','sf4']
 
     # start plot
-    fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+    fig = plt.figure(figsize=figsize)
     ylim = [-4.0, 0.0]
 
     ax = fig.add_subplot(111)

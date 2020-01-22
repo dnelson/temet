@@ -538,8 +538,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
     ptPlotThresh = 2000
 
     if sizefac is None:
-        sizefac = 1.0 if not clean else sfclean
-        if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
+        sizefac = 0.8 if nCols > 4 else 1.0 # enlarge text for big panel grids
 
     # start plot
     if fig_subplot[0] is None:
@@ -720,8 +719,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     nBins = 60
     legendLoc = 'best'
 
-    sizefac = 1.0 if not clean else sfclean
-    if nCols > 4: sizefac *= 0.8 # enlarge text for big panel grids
+    sizefac = 0.8 if nCols > 4 else 1.0 # enlarge text for big panel grids
 
     # start plot
     if fig_subplot[0] is None:

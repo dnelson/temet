@@ -783,7 +783,7 @@ def check_colors_benedikt():
     plt.close(fig)
 
 def guinevere_mw_sample():
-    from plot.config import figsize, sfclean
+    from plot.config import figsize
 
     # get subhaloIDs
     sP_tng = simParams(res=1820,run='tng',redshift=0.0)
@@ -826,7 +826,7 @@ def guinevere_mw_sample():
 
     for i in [0,1]:
 
-        fig = plt.figure(figsize=[figsize[0]*sfclean*0.9, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(1,1,1)
         ax.set_xlabel('log $M_{\\rm gas} / M_\star$ [ Illustris ]')
         ax.set_ylabel('log $M_{\\rm gas} / M_\star$ [ TNG ]')
@@ -966,7 +966,7 @@ def vis_cholla_snapshot():
              'momentum_z':[0.0, 1.0]}
 
     # start plot
-    from plot.config import figsize, sfclean
+    from plot.config import figsize
     from util.helper import loadColorTable
     from  matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -975,7 +975,7 @@ def vis_cholla_snapshot():
         print('plotting: [%s]' % field)
 
         aspect = float(attrs['dims'][0])/attrs['dims'][1]
-        fig = plt.figure(figsize=[figsize[0]*sfclean*aspect, figsize[1]*sfclean])
+        fig = plt.figure(figsize=[figsize[0]*aspect, figsize[1]])
         ax = fig.add_subplot(1,1,1)
         ax.set_xlabel('x')
         ax.set_ylabel('y')

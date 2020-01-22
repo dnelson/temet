@@ -30,7 +30,7 @@ from util import simParams
 
 def fit_vout():
     """ For text discussion and fit equations relating to outflow velocities. """
-    from plot.config import figsize, sfclean, lw
+    from plot.config import figsize, lw
     import matplotlib.pyplot as plt
     import pickle
     from scipy.optimize import leastsq
@@ -79,7 +79,7 @@ def fit_vout():
         print('params best:', params_best)
 
         # (A) vs. redshift plot
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
 
         ax.set_xlim([0.8+1, 6.2+1])
@@ -118,7 +118,7 @@ def fit_vout():
         plt.close(fig)
 
         # (B) vs M* plot
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         
         ax.set_xlim([7.0, 12.0])
@@ -163,7 +163,7 @@ def fit_vout():
         return vout_fit - vout
 
     # plot
-    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([7.0, 12.0])
@@ -223,7 +223,7 @@ def fit_vout():
                 vout_fit[i] = _error_function_loc(params_z[i], x_mstar, 0.0)
                 
             for iterNum in [0,2]:
-                fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+                fig = plt.figure(figsize=figsize)
                 ax = fig.add_subplot(111)
                 
                 ax.set_ylim([100,400])
@@ -266,7 +266,7 @@ def fit_vout():
     line_fits = []
 
     for i in range(len(params_z[0])):
-        fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         
         ax.set_xlim([1.5,7.5])
@@ -334,7 +334,7 @@ def fit_vout():
           (filename,a_coeffs[0],a_coeffs[1],b_coeffs[0],b_coeffs[1],c_coeffs[0],c_coeffs[1]))
 
     # plot
-    fig = plt.figure(figsize=[figsize[0]*sfclean, figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     ax.set_xlim([7.0, 12.0])

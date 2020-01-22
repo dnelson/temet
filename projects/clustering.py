@@ -43,9 +43,8 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
 
     # start plot
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-    sizefac = sfclean if clean else 1.0
 
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    fig = plt.figure(figsize=figsize, facecolor=color1)
     ax = fig.add_subplot(111, facecolor=color1)
     setAxisColors(ax, color2)
 
@@ -182,9 +181,8 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
     for iterNum in [0,1,2]:
         # start plot
         color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-        sizefac = sfclean if clean else 1.0
 
-        fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac*1.2**ratioSubPlot),facecolor=color1)
+        fig = plt.figure(figsize=(figsize[0],figsize[1]*1.2**ratioSubPlot),facecolor=color1)
         gs = gridspec.GridSpec(1+ratioSubPlot, 1, height_ratios=[3.5,1])
         ax = fig.add_subplot(gs[0], facecolor=color1)
         setAxisColors(ax, color2)
@@ -383,9 +381,8 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
 
     # start plot
     color1, color2, color3, color4 = getWhiteBlackColors(pStyle)
-    sizefac = sfclean if clean else 1.0
 
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac),facecolor=color1)
+    fig = plt.figure(figsize=figsize, facecolor=color1)
     gs = gridspec.GridSpec(1, 1)
     ax = fig.add_subplot(gs[0], facecolor=color1)
     setAxisColors(ax, color2)

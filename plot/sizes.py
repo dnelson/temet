@@ -589,7 +589,7 @@ def characteristicSizes(sP, vsHaloMass=False):
               'rvir'     : 'r$_{\\rm vir,halo}$'}
 
     # plot setup
-    fig = plt.figure(figsize=[figsize[0]*sfclean,figsize[1]*sfclean])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_ylim([0.2,4e2])

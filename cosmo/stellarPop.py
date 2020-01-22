@@ -747,10 +747,10 @@ class sps():
         if 0:
             # DEBUG
             import matplotlib.pyplot as plt
-            from plot.config import figsize, sfclean, linestyles
+            from plot.config import figsize, linestyles
 
             # plot (A)
-            fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+            fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
             ax.set_xlabel('$\lambda$ [ Ang ]')
             ax.set_ylabel('$f_\lambda$ [ L$_\odot$ / hz ]')
@@ -768,7 +768,7 @@ class sps():
             plt.close(fig)
 
             # plot (B)
-            fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+            fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
             ax.set_xlabel('$\lambda$ [ Ang ]')
             ax.set_ylabel('$\Delta \lambda$ [ log Ang ]')
@@ -1369,7 +1369,7 @@ def debug_plot_spectra():
     """ Check mock spectra. """
     import matplotlib.pyplot as plt
     from util import simParams
-    from plot.config import figsize, sfclean, linestyles
+    from plot.config import figsize, linestyles
 
     sP = simParams(res=270,run='tng',redshift=0.8)
     acFields = ['Subhalo_LEGA-C_SlitSpectra_NoVel_NoEm_p07c_cf00dust_res_conv_z',
@@ -1385,7 +1385,7 @@ def debug_plot_spectra():
         data[acField] = ac[acField]
 
     # plot
-    fig = plt.figure(figsize=(figsize[0]*sfclean,figsize[1]*sfclean))
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     ax.set_xlabel('$\lambda$ [ Angstroms, obs-frame ]')
     ax.set_ylabel('$f_\lambda$ [ 10$^{-19}$ erg/cm$^2$/s/Ang ]')
@@ -1408,7 +1408,7 @@ def debug_check_rawspec():
     """ Check spectral tables. """
     import matplotlib.pyplot as plt
     from util import simParams
-    from plot.config import figsize, sfclean, linestyles
+    from plot.config import figsize, linestyles
 
     zInd = 5
     ageInd = 30
@@ -1418,7 +1418,7 @@ def debug_check_rawspec():
              '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5',]
 
     # start plot
-    fig = plt.figure(figsize=(figsize[0]*sfclean*1.8,figsize[1]*sfclean))
+    fig = plt.figure(figsize=(figsize[0]*1.8,figsize[1]))
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
 

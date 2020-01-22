@@ -611,8 +611,7 @@ def mgii_radial_profile():
 
     # plot setup
     lw = 3.0
-    sizefac = 1.0 if not clean else sfclean
-    fig = plt.figure(figsize=[figsize[0]*sizefac, figsize[1]*sizefac])
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     
     radStr = 'Radius' if '3D' in projDim else 'Impact Parameter'
