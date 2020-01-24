@@ -41,15 +41,8 @@ def pick_halos():
     #  increase to 20 for 14.9-15, 50 for 14.8-14.9, 40 each for 14.6-14.8
     return hInds
 
-def mass_function():
-    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
-    mass_range = [14.0, 15.5]
-    binSize = 0.1
-    
-    sP_tng300 = simParams(res=2500,run='tng',redshift=0.0)
-    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=0.0)
-
-    # load halos
+def _halo_ids_run():
+    """ Parse runs.txt and return the list of (all) halo IDs. """
     with open('/u/dnelson/sims.TNG_zooms/runs.txt','r') as f:
         runs_txt = [line.strip() for line in f.readlines()]
 
@@ -59,6 +52,19 @@ def mass_function():
             line = line.split(' ')[0]
         if line.isdigit():
             halo_inds.append(int(line))
+
+    return halo_inds
+
+def mass_function():
+    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
+    mass_range = [14.0, 15.5]
+    binSize = 0.1
+    
+    sP_tng300 = simParams(res=2500,run='tng',redshift=0.0)
+    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=0.0)
+
+    # load halos
+    halo_inds = _halo_ids_run()
 
     print(halo_inds)
 

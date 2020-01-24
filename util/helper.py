@@ -143,7 +143,7 @@ def tail(fileName, nLines):
 
 # --- general algorithms ---
 
-def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, minNumPerBin=10, mean=False, weights=None):
+def running_median(X, Y, nBins=100, binSize=None, binSizeLg=None, skipZeros=False, percs=None, minNumPerBin=10, mean=False, weights=None):
     """ Create a adaptive median line of a (x,y) point set using some number of bins. """
     assert X.shape == Y.shape
     if weights is not None:
@@ -151,6 +151,7 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
         assert weights.size == Y.size
 
     minVal = np.nanmin(X)
+    maxVal = np.nanmax(X)
     if skipZeros:
         minVal = np.nanmin( X[X != 0.0] )
 
@@ -158,11 +159,19 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
         print('Bad inputs, going to fail in linspace.')
 
     if binSize is not None:
-        nBins = round( (np.nanmax(X)-minVal) / binSize )
+        nBins = round( (maxVal-minVal) / binSize )
 
     if nBins <= 0: nBins = 1
-    bins = np.linspace(minVal,np.nanmax(X), nBins)
-    delta = bins[1]-bins[0] if nBins >= 2 else np.inf
+    bins = np.linspace(minVal, maxVal, nBins)
+
+    if binSizeLg is not None:
+        # small bins for low x values (e.g. halo mass)
+        splitX = maxVal - binSizeLg*10 # todo: heuristic could be improved, np.nanpercentile(X,99)
+        nBins0 = int( (splitX-minVal) / binSize )
+        nBins1 = int( (maxVal-splitX) / binSizeLg )
+        bins0 = np.linspace(minVal, splitX, nBins0)
+        bins1 = np.linspace(splitX, maxVal, nBins1)[1:]
+        bins = np.hstack( (bins0,bins1) )
 
     running_median = []
     running_std    = []
@@ -171,8 +180,9 @@ def running_median(X, Y, nBins=100, binSize=None, skipZeros=False, percs=None, m
 
     binLeft = bins[0]
 
-    for i, bin in enumerate(bins):
-        binMax = bin + delta
+    for i in range(bins.size):
+        binMax = bins[i+1] if i+1 < bins.size else np.inf
+
         with np.errstate(invalid='ignore'): # expect X may contain NaN which should not be included
             w = np.where((X >= binLeft) & (X < binMax))
 
@@ -1042,7 +1052,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     if ctName == 'magma_gray':
         # discontinuous colormap: magma on the upper half, grayscale on the lower half, split at 1e-16 (e.g. surface brightness)
         assert valMinMax is not None # need for placing discontinuities at correct physical locations
-        valCut = -15.0 #np.log10(1e14) #-17.0
+        valCut = 14.5 #-15.0 #np.log10(1e14) #-17.0
 
         fCut = (valCut-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
         if fCut <= 0 or fCut >= 1:

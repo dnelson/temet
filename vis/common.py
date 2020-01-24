@@ -762,8 +762,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
-        if partField == 'O VII': config['ctName'] = 'magma_gray' # magma
-        if partField == 'O VIII': config['ctName'] = 'magma_gray' # 'plasma'
+        if partField == 'O VII': config['ctName'] = 'magma_gray' #'magma'
+        if partField == 'O VIII': config['ctName'] = 'magma_gray' #'plasma'
 
     if '_ionmassratio' in partField:
         ion = cloudyIon(sP=None)

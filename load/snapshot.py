@@ -279,7 +279,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                     lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
                     values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sP.redshift
 
-                with h5py.File(cacheFile) as f:
+                with h5py.File(cacheFile,'a') as f:
                     f['field'][indRangeLocal[0]:indRangeLocal[1]+1] = values
 
                 print(' [%2d] saved %d - %d' % (i,indRangeLocal[0],indRangeLocal[1]))

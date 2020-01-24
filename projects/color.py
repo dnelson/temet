@@ -81,14 +81,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         ylabel = 'PDF' 
         Mlabel = '%.1f < M$_{\\rm \star}$ < %.1f'
 
-        if not clean:
-            obsMagStr = 'obs=modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
-            cenSatStr = '' if splitCenSat else ', cen+sat'
-            Mlabel = '%.1f < M$_{\\rm \star}(<2r_{\star,1/2})$ < %.1f'
-
-            xlabel += ' [ %s ]' % obsMagStr
-            ylabel += ' [ sim=%s%s ]' % (simColorsModels[0],cenSatStr)
-
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
@@ -253,9 +245,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                     yy, xx = np.histogram(sdss_color[wObs], bins=nBins[i], range=mag_range, density=True)
                     xx = xx[:-1] + 0.5*binSize[i]
 
-                    if not clean:
-                        axes[i].plot(xx, yy, '-', color=obs_color, alpha=alpha, lw=3.0)
-
                     # obs kde
                     xx = np.linspace(mag_range[0], mag_range[1], 200)
                     bw_scotthalf = sdss_color[wObs].size**(-1.0/(sdss_color.ndim+4.0)) * 0.5
@@ -279,9 +268,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                     yy2 = yy.astype('float32') * normFacs[i]
                     xx = xx[:-1] + 0.5*binSize[i]
 
-                    if not clean:
-                        axes[i].plot(xx, yy2, linestyles[j], label=label, color=c, alpha=alpha, lw=3.0)
-
                     # sim kde
                     if not splitCenSat:
                         xx = np.linspace(mag_range[0], mag_range[1], 200)
@@ -295,13 +281,13 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
                         else:
                             # label by dust model
                             label = simColorsModel if i == iLeg and j == loopInds[0] else ''
-                        if clean:
-                            # replace dust model labels by paper versions
-                            label = label.replace("p07c_cf00dust_res3_conv_ns1_rad30pkpc", "Model D")
-                            label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc_all", "Model C (all)")
-                            label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc", "Model C")
-                            label = label.replace("p07c_cf00dust", "Model B")
-                            label = label.replace("p07c_nodust", "Model A")
+
+                        # replace dust model labels by paper versions
+                        label = label.replace("p07c_cf00dust_res3_conv_ns1_rad30pkpc", "Model D")
+                        label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc_all", "Model C (all)")
+                        label = label.replace("p07c_cf00dust_res_conv_ns1_rad30pkpc", "Model C")
+                        label = label.replace("p07c_cf00dust", "Model B")
+                        label = label.replace("p07c_nodust", "Model A")
 
                         alpha = 0.85 if 'Illustris' in sP.simName else 1.0
                         lw = 2.0 if 'Illustris' in sP.simName else 4.0
@@ -314,15 +300,12 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
 
     # y-ranges
     for i, stellarMassBin in enumerate(stellarMassBins):
-        if clean:  
-            # fix y-axis limits for talk series
-            if len(stellarMassBins) == 6:
-                y_max = [8.0, 6.0, 6.0, 8.0, 10.0, 10.0][i]
-            if len(stellarMassBins) == 3:
-                y_max = [5.0, 6.0, 9.0][i]
-            axes[i].set_ylim([0.0,y_max])
-        else:
-            axes[i].set_ylim([0, 1.2 * pMaxVals[i]])
+        # fix y-axis limits for talk series
+        if len(stellarMassBins) == 6:
+            y_max = [8.0, 6.0, 6.0, 8.0, 10.0, 10.0][i]
+        if len(stellarMassBins) == 3:
+            y_max = [5.0, 6.0, 9.0][i]
+        axes[i].set_ylim([0.0,y_max])
 
     # legend (simulations) (obs)
     legendPos = 'upper right'
@@ -417,16 +400,9 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
             axes.append(ax)
             mag_range = bandMagRange(bands)
             
-            if not clean and 0:
-                obsMagStr = 'modelMag%s%s' % ('-E' if eCorrect else '','+K' if kCorrect else '')
-                cenSatStr = '' if splitCenSat else ', cen+sat'
-                titleStr = '[ obs=%s, sim=%s%s ]' % (obsMagStr,simColorsModel,cenSatStr)
-                ax.set_title(titleStr)
-
-            xlabel2 = '' if clean else '(<2r_{\star,1/2})'
             ax.set_xlim(Mstar_range)
             ax.set_ylim(mag_range)
-            ax.set_xlabel('M$_{\\rm \star}%s$ [ log M$_{\\rm sun}$ ]' % xlabel2)
+            ax.set_xlabel('M$_{\\rm \star}$ [ log M$_{\\rm sun}$ ]')
             ax.set_ylabel('(%s-%s) color [ mag ]' % (bands[0],bands[1]))
 
             # load observational points, restrict colors to mag_range as done for sims (for correct normalization)
@@ -662,7 +638,6 @@ def viewingAngleVariation():
             mstar = sP.units.codeMassToLogMsun(subhalo['SubhaloMassInRadType'][sP.ptNum('star')])
             sSFR = np.log10(subhalo['SubhaloSFR'] / 10.0**mstar)
             label = 'M$_\star$=10$^{%.1f}$ sSFR=%.1f' % (mstar,sSFR)
-            if not clean: label = '[%d] %s' % (sub_id,label)
 
             # keep same color per subhalo, across different Ns demos
             if i == 0:
@@ -739,7 +714,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
           sim_colors_evo, shID_evo, subhalo_ids, snaps
 
     ylabel = '(%s-%s) color [ mag ]' % (bands[0],bands[1])
-    if not clean: ylabel += ' %s' % simColorsModel
 
     # pick initial and final color corresponding to timewindow
     savedRedshifts = sP.snapNumToRedshift(snap=snaps)
@@ -805,9 +779,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
     ax.set_ylim(mag_range)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-
-    if not clean:
-        ax.set_title('select=%s mincount=%s' % (cenSatSelect,minCount))
 
     # 2d bin configuration
     bbox = ax.get_window_extent()
@@ -2179,11 +2150,6 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
     
 def paperPlots():
     """ Construct all the final plots for the paper. """
-    import plot.globalComp
-    plot.globalComp.clean = True
-    import plot.config
-    plot.config.clean = True
-
     L75   = simParams(res=1820,run='tng',redshift=0.0)
     L205  = simParams(res=2500,run='tng',redshift=0.0)
     L75FP = simParams(res=1820,run='illustris',redshift=0.0)

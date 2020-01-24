@@ -54,12 +54,10 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
 
     if moment == 0:
         ax.set_ylim([-17, -11])
-        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm OVI}$)  [ cm$^{2}$ ]')
-        if clean:
-            ax.set_ylabel('log f(N$_{\\rm OVI}$) [ cm$^{2}$ ]')
+        ax.set_ylabel('log f(N$_{\\rm OVI}$) [ cm$^{2}$ ]') # 0th moment
     if moment == 1:
         ax.set_ylim([-0.5, 1.5])
-        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)')
+        ax.set_ylabel('log N$_{\\rm OVI}$ f(N$_{\\rm OVI}$)') # 1st moment
 
     # observational points
     d16  = danforth2016()
@@ -164,10 +162,6 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
     sExtra = [] #[plt.Line2D( (0,1),(0,0),color='black',lw=3.0,marker='',linestyle=ls) for ls in linestyles]
     lExtra = [] #[str(s) for s in speciesList]
 
-    if not clean:
-        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,alpha=0.0,marker='')]
-        lExtra += ['[ sims z=%3.1f ]' % simRedshift]
-
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
 
@@ -195,23 +189,16 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     if moment == 0:
         ax.set_ylim([-18, -12])
         if len(ions) == 1: ax.set_ylim([-19, -11])
-        ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm oxygen}$)  [ cm$^{2}$ ]')
-        if len(ions) == 1: ax.set_ylabel('CDDF (O$^{\\rm th}$ moment):  log f(N$_{\\rm %s}$)  [ cm$^{2}$ ]' % ions[0])
-        if clean:
-            ax.set_ylabel('f(N$_{\\rm oxygen}$) [ log cm$^{2}$ ]')
-            if len(ions) == 1: ax.set_ylabel('f(N$_{\\rm %s}$) [ log cm$^{2}$ ]' % ions[0])
+        ax.set_ylabel('f(N$_{\\rm oxygen}$) [ log cm$^{2}$ ]') # 0th moment
+        if len(ions) == 1: ax.set_ylabel('f(N$_{\\rm %s}$) [ log cm$^{2}$ ]' % ions[0])
     if moment == 1:
         ax.set_ylim([-2.5, 1.5])
-        ax.set_ylabel('CDDF (1$^{\\rm st}$ moment):  log N$_{\\rm oxygen}$ f(N$_{\\rm oxygen}$)')
-        if clean:
-            ax.set_ylabel('N$_{\\rm oxygen}$ $\cdot$ f(N$_{\\rm oxygen}$) [ log ]')
-            if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
+        ax.set_ylabel('N$_{\\rm oxygen}$ $\cdot$ f(N$_{\\rm oxygen}$) [ log ]') # 1st moment
+        if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
     if moment == 2:
         ax.set_ylim([-1.5, 2.2])
-        ax.set_ylabel('CDDF (2$^{\\rm nd}$ moment):  log N$_{\\rm oxygen}^2$ f(N$_{\\rm oxygen}$)')
-        if clean:
-            ax.set_ylabel('[N$_{\\rm oxygen}$$^2$ / 10$^{13}$] $\cdot$ f(N$_{\\rm oxygen}$) [ log ]')
-            if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
+        ax.set_ylabel('[N$_{\\rm oxygen}$$^2$ / 10$^{13}$] $\cdot$ f(N$_{\\rm oxygen}$) [ log ]') # 2nd moment
+        if len(ions) == 1: ax.set_ylabel('N$_{\\rm %s}$ $\cdot$ f(N$_{\\rm %s}$) [ log ]' % (ions[0],ions[0]))
 
     # observational OVI points (not in paper)
     if 0:
@@ -279,11 +266,12 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
 
                 # plot middle line
                 label = '%s %s z=%.1f' % (sP.simName, ion, redshift) if len(redshifts) ==1 else '%s %s' % (sP.simName, ion)
-                if clean:
-                    label = ion
-                    if len(ions) == 1 and not boxDepth10: label = sP.simName
-                    if len(sPs) > 1: label = '%s %s' % (ion,sP.simName)
-                    if len(sPs) > 8: label = '%s (%.1f)' % (sP.simName,boxOmega*1e7)
+
+                label = ion
+                if len(ions) == 1 and not boxDepth10: label = sP.simName
+                if len(sPs) > 1: label = '%s %s' % (ion,sP.simName)
+                if len(sPs) > 8: label = '%s (%.1f)' % (sP.simName,boxOmega*1e7)
+
                 if i > 0: label = ''
                 c = 'black' if (len(sPs) > 5 and sP.variant == '0000') else c
                 lwLoc = lw if not (len(sPs) == 12 and sP.variant == '0000') else 2*lw
@@ -339,11 +327,11 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
     fig.savefig(saveName)
     plt.close(fig)
 
-def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen', redshift=0.0, 
+def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen', redshift=None, 
                            vsHaloMass=True, secondTopAxis=False, toAvgColDens=False, colorOff=2, toyFacs=None):
     """ Plot total [gravitationally bound] mass of various ions, or e.g. cold/hot/total CGM mass, 
-    versus halo or stellar mass at a given redshift. If toAvgColDens, then instead of total mass 
-    plot average column density computed geometrically as (Mtotal/pi/rvir^2). 
+    versus halo or stellar mass at a given redshift (or use sP.redshift if redshift is None). 
+    If toAvgColDens, then instead of total mass plot average column density computed geometrically as (Mtotal/pi/rvir^2). 
     If secondTopAxis, add the other (halo/stellar) mass as a secondary top axis, average relation. """
 
     binSize = 0.2 # log mass
@@ -356,7 +344,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     # plot setup
     lw = 3.0
     heightFac = 1.1 if secondTopAxis else 1.0
-    fig = plt.figure(figsize=[figsize[0]*0.85*sizefac, figsize[1]*sizefac*0.85*heightFac])
+    fig = plt.figure(figsize=[figsize[0], figsize[1]*heightFac])
     ax = fig.add_subplot(111)
     
     mHaloLabel = 'M$_{\\rm halo}$ [ < r$_{\\rm 200,crit}$, log M$_{\\rm sun}$ ]'
@@ -380,7 +368,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     else:
         ax.set_ylim([5.0, 11.0])
         if 'AllGas' in ions: ax.set_ylim([4.0, 12.0])
-        ax.set_ylabel('Total Bound Gas Mass [ log M$_{\\rm sun}$ ]')
+        ax.set_ylabel('Total Halo Gas Mass [ log M$_{\\rm sun}$ ]')
 
     if secondTopAxis:
         # add the other mass value as a secondary x-axis on the top of the panel
@@ -405,7 +393,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     for i, sP in enumerate(sPs):
         # load halo masses and CSS
         txt_sP = []
-        sP.setRedshift(redshift)
+        if redshift is not None: sP.setRedshift(redshift)
         xx = sP.groupCat(fieldsSubhalos=[massField])
 
         cssInds = cenSatSubhaloIndices(sP, cenSatSelect=cenSatSelect)
@@ -501,8 +489,8 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
             if ion == 'AllGas': yy -= 2.0 # offset!
             
             # calculate median and smooth
-            xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,
-                                            skipZeros=True,percs=[10,25,75,90], minNumPerBin=10)
+            xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,binSizeLg=binSize*2,
+                                            skipZeros=True,percs=[10,25,75,90], minNumPerBin=3)
 
             if xm.size > sKn:
                 ym = savgol_filter(ym,sKn,sKo)
@@ -580,17 +568,21 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     sExtra = []
     lExtra = []
 
-    if clean:
+    if len(sPs) > 1:
+        allSameRun = all([sP.simName == sPs[0].simName for sP in sPs])
         for i, sP in enumerate(sPs):
             sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
-            lExtra += ['%s' % sP.simName]
-        if runToyModel:
-            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=':',marker='')]
-            lExtra += ['Toy Model, f$_{\\rm T}$=%.1f, f$_{\\rm \\rho}$=%.1f, f$_{\\rm Z}$=%.1f' % \
-                         (tempFac,densFac,metalFac)]
-        loc = 'upper right' if toAvgColDens else 'lower right'
-        legend1 = ax.legend(sExtra, lExtra, loc=loc)
-        ax.add_artist(legend1)
+            if allSameRun:
+                lExtra += ['z = %.1f' % sP.redshift]
+            else:
+                lExtra += ['%s' % sP.simName]
+    if runToyModel:
+        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=':',marker='')]
+        lExtra += ['Toy Model, f$_{\\rm T}$=%.1f, f$_{\\rm \\rho}$=%.1f, f$_{\\rm Z}$=%.1f' % \
+                     (tempFac,densFac,metalFac)]
+    loc = 'upper right' if toAvgColDens else 'lower right'
+    legend1 = ax.legend(sExtra, lExtra, loc=loc)
+    ax.add_artist(legend1)
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles, labels, loc='upper left')
@@ -963,18 +955,17 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     sExtra = []
     lExtra = []
 
-    if clean:
-        #if len(sPs) > 1: # linestyle by sP
-        #    for i, sP in enumerate(sPs):
-        #        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
-        #        lExtra += ['%s' % sP.simName]
-        if len(sPs) > 1: # color by sP
-            for i, sP in enumerate(sPs):
-                sExtra += [plt.Line2D( (0,1),(0,0),lw=lw,linestyle='-',color=colors[i],marker='')]
-                lExtra += ['%s' % sP.simName]
-        for i in range(nRadTypes - int(combine2Halo)):
-            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
-            lExtra += ['%s' % radNames[i]]
+    #if len(sPs) > 1: # linestyle by sP
+    #    for i, sP in enumerate(sPs):
+    #        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+    #        lExtra += ['%s' % sP.simName]
+    if len(sPs) > 1: # color by sP
+        for i, sP in enumerate(sPs):
+            sExtra += [plt.Line2D( (0,1),(0,0),lw=lw,linestyle='-',color=colors[i],marker='')]
+            lExtra += ['%s' % sP.simName]
+    for i in range(nRadTypes - int(combine2Halo)):
+        sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+        lExtra += ['%s' % radNames[i]]
 
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')

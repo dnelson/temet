@@ -11,7 +11,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import Normalize, colorConverter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
-from scipy.stats import binned_statistic_2d
+from scipy.stats import binned_statistic, binned_statistic_2d
 from os.path import isfile
 
 from util import simParams
@@ -208,6 +208,100 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen',
     fig.savefig(saveName)
     plt.close(fig)
 
+def _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, ConfigLan=False, indiv=False, axesSets=[[0,1]]):
+    """ Return (and cache) a concatenated {N_ion,dist} set of pixels for all halos in the given mass bin. 
+    Helper for the following two functions. """
+
+    # grid config
+    run        = sP.run
+    res        = sP.res
+    redshift   = sP.redshift
+    method     = 'sphMap'
+    nPixels    = [1000,1000]
+    axes       = [0,1]
+    rotation   = 'edge-on'
+    size       = 400.0
+    sizeType   = 'kpc'
+
+    if fullDepth:
+        # global accumulation with appropriate depth along the projection direction
+        method = 'sphMap_global'
+        dv = 500.0 # +/- km/s (Zahedy / COS-LRG config) or +/- 600 km/s (Werk / COS-Halos config)
+        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
+
+    eStr = ''
+    if ConfigLan:
+        size = 2000.0
+        nPixels = [2000,2000]
+        rotation = None # random
+
+        dv = 1000.0 # tbd to match the stacking procedure
+        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
+        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
+
+        eStr = '_2k'
+
+    # quick caching
+    cacheSaveFile = sP.derivPath + 'cache/ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%s_fd=%s%s_a%d.hdf5' % \
+      (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth,eStr,len(axesSets))
+
+    if isfile(cacheSaveFile):
+        # load previous result
+        with h5py.File(cacheSaveFile,'r') as f:
+            dist_global = f['dist_global'][()]
+            grid_global = f['grid_global'][()]
+        print('Loaded: [%s]' % cacheSaveFile)
+    else:
+        # get halo IDs in mass bin (centrals only by definition)
+        gc = sP.groupCat(fieldsSubhalos=['mhalo_200_log','rhalo_200_code'])
+
+        with np.errstate(invalid='ignore'):
+            subInds = np.where( (gc['mhalo_200_log'] > haloMassBin[0]) & (gc['mhalo_200_log'] < haloMassBin[1]) )[0]
+
+        # load grids
+        dist_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)*len(axesSets)), dtype='float32' )
+        grid_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)*len(axesSets)), dtype='float32' )
+
+        for i, hInd in enumerate(subInds):
+            print(i, len(subInds), hInd)
+            class plotConfig:
+                saveFilename = 'dummy'
+
+            # compute impact parameter for every pixel
+            pxSize = size / nPixels[0] # pkpc
+
+            xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
+            xx = xx.astype('float64') - nPixels[0]/2
+            yy = yy.astype('float64') - nPixels[1]/2
+            dist = np.sqrt( xx**2 + yy**2 ) * pxSize
+
+            if radRelToVirRad:
+                dist /= gc['rhalo_200_code'][subInds[i]]
+
+            for j, axes in enumerate(axesSets):
+                # loop over projection directions and render
+                panels = [{'partType':'gas', 'partField':ion, 'valMinMax':[-1.4,0.2]}]
+                grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+
+                # flatten and stamp
+                dist_global[:,i*len(axesSets)+j] = dist.ravel()
+                grid_global[:,i*len(axesSets)+j] = grid.ravel()
+
+        # save cache
+        with h5py.File(cacheSaveFile,'w') as f:
+            f['dist_global'] = dist_global
+            f['grid_global'] = grid_global
+
+        print('Saved: [%s]' % cacheSaveFile)
+
+    if not indiv:
+        # flatten
+        dist_global = dist_global.ravel()
+        grid_global = grid_global.ravel()
+
+    return dist_global, grid_global
+
 def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False, fullDepth=False):
     """ Use gridded N_ion maps to plot a 2D pixel histogram of (N_ion vs impact parameter). """
 
@@ -229,77 +323,8 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         #if 'MHI' in ion: cMinMax = [-3.0, -1.4]
         clabel  = 'Conditional Covering Fraction = N [log]'
 
-    # grid config
-    run        = sP.run
-    res        = sP.res
-    redshift   = sP.redshift
-    method     = 'sphMap'
-    nPixels    = [1000,1000]
-    axes       = [0,1]
-    rotation   = 'edge-on'
-    size       = 400.0
-    sizeType   = 'kpc'
-
-    if fullDepth:
-        # global accumulation with appropriate depth along the projection direction
-        method = 'sphMap_global'
-        dv = 500.0 # +/- km/s (Zahedy / COS-LRG config) or +/- 600 km/s (Werk / COS-Halos config)
-        depth_code_units = (2*dv) / sP.units.H_of_a # ckpc/h
-        depthFac = sP.units.codeLengthToKpc(depth_code_units) / size
-
-    # quick caching
-    cacheSaveFile = sP.derivPath + 'cache/ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%s_fd=%s.hdf5' % \
-      (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth)
-
-    if isfile(cacheSaveFile):
-        # load previous result
-        with h5py.File(cacheSaveFile,'r') as f:
-            dist_global = f['dist_global'][()]
-            grid_global = f['grid_global'][()]
-        print('Loaded: [%s]' % cacheSaveFile)
-    else:
-        # get halo IDs in mass bin (centrals only by definition)
-        gc = sP.groupCat(fieldsSubhalos=['mhalo_200_log','rhalo_200_code'])
-
-        with np.errstate(invalid='ignore'):
-            subInds = np.where( (gc['mhalo_200_log'] > haloMassBin[0]) & (gc['mhalo_200_log'] < haloMassBin[1]) )[0]
-
-        # load grids
-        dist_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
-        grid_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
-
-        for i, hInd in enumerate(subInds):
-            class plotConfig:
-                saveFilename = 'dummy'
-
-            panels = [{'partType':'gas', 'partField':ion, 'valMinMax':[-1.4,0.2]}]
-            grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-            # compute impact parameter for every pixel
-            pxSize = size / nPixels[0] # pkpc
-
-            xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
-            xx = xx.astype('float64') - nPixels[0]/2
-            yy = yy.astype('float64') - nPixels[1]/2
-            dist = np.sqrt( xx**2 + yy**2 ) * pxSize
-
-            if radRelToVirRad:
-                dist /= gc['rhalo_200_code'][subInds[i]]
-
-            # bin
-            dist_global[:,i] = dist.ravel()
-            grid_global[:,i] = grid.ravel()
-
-        # flatten
-        dist_global = dist_global.ravel()
-        grid_global = grid_global.ravel()
-
-        # save cache
-        with h5py.File(cacheSaveFile,'w') as f:
-            f['dist_global'] = dist_global
-            f['grid_global'] = grid_global
-
-        print('Saved: [%s]' % cacheSaveFile)
+    # load projected column density grids of all halos
+    dist_global, grid_global = _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad)
 
     # start plot
     fig = plt.figure(figsize=figsize)
@@ -443,6 +468,119 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
     plt.close(fig)
 
+def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=False, fullDepth=False):
+    """ Use gridded N_ion maps to plot covering fraction f(N_ion>N_thresh) vs impact parameter. """
+
+    nBins = 50
+    xlim  = [1, 3.1] # log pkpc
+    ylim  = [1e-3,1] # Lan MgII LRGs
+    ylog  = True
+
+    # EW ~ 0.4 Ang for MgII is N~4e16 to N~8e16
+    # https://www.aanda.org/articles/aa/full/2004/04/aa0003/aa0003.right.html (Eqn 2)
+    # https://github.com/trident-project/trident/blob/master/trident/data/line_lists/lines.txt
+
+    # load projected column density grids of all halos
+    dist_global, grid_global = _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, 
+        ConfigLan=True, indiv=True, axesSets=[[0,1],[0,2],[1,2]])
+
+    dist_global[dist_global == 0] = dist_global[dist_global > 0].min() / 2
+
+    dist_global = np.log10(dist_global)
+    numHalos = dist_global.shape[1]
+
+    # start plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim([8,1200])
+    ax.set_xscale('log')
+    ax.set_xlabel('Impact Parameter [ log pkpc ]')
+
+    ax.set_ylim(ylim)
+    if ylog: ax.set_yscale('log')
+    ax.set_ylabel('%s Covering Fraction' % (ion))
+
+    # loop over requested column density limits
+    for N in Nthresh:
+        print(N)
+        # loop over individual halos, and one extra iter for all
+        c = next(ax._get_lines.prop_cycler)['color']
+
+        fc = np.zeros( (nBins,numHalos+1), dtype='float32' )
+
+        for i in range(numHalos+1):
+            # derive covering fraction
+            loc_dist = dist_global[:,i] if i < numHalos else dist_global.ravel()
+            loc_grid = grid_global[:,i] if i < numHalos else grid_global.ravel()
+
+            mask = np.zeros( loc_dist.size, dtype='int16' ) # 0 = below, 1 = above
+            w = np.where(loc_grid >= N)
+            mask[w] = 1
+
+            count_above, _, _ = binned_statistic(loc_dist, mask, 'sum', bins=nBins, range=[xlim])
+            count_total, bin_edges, _ = binned_statistic(loc_dist, mask, 'count', bins=nBins, range=[xlim])
+
+            # plot
+            xx = bin_edges[:-1] + (xlim[1]-xlim[0])/nBins/2
+            with np.errstate(invalid='ignore'):
+                fc[:,i] = count_above / count_total
+
+            fc[:,i] = savgol_filter(fc[:,i], sKn, sKo)
+
+        # fill band (1 sigma halo-to-halo variation) for first column threshold only
+        if N == Nthresh[0]:
+            fc_percs = np.percentile(fc[:,:-1], [16,84], axis=1)
+            fc_percs = savgol_filter(fc_percs, sKn, sKo, axis=1)
+
+            ax.fill_between(10**xx, fc_percs[0,:], fc_percs[1,:], color=c, alpha=0.1, interpolate=True)
+
+        # plot global
+        label = 'N$_{\\rm %s}$ > 10$^{%.1f}$ cm$^{-2}$' % (ion,N)
+        ax.plot(10**xx, fc[:,-1], '-', lw=3.0, alpha=1.0, color=c, label=label)
+
+    # add obs data points
+
+    # Bowen+11: LRGs
+    b14_label = 'Bowen+ (2011) LRGs'
+    b14_rp    = [25, 75, 125, 175]
+    b14_fc    = np.array([0.093, 0.089, 1e-5, 1e-5])
+    b14_up    = np.array([0.154, 0.130, 0.02, 0.02])
+    b14_low   = np.array([0.035, 0.050, 1e-6, 1e-6])
+
+    ax.errorbar(b14_rp, b14_fc, yerr=[b14_fc-b14_low,b14_up-b14_fc], markerSize=8, 
+         color='black', ecolor='black', alpha=0.4, capsize=0.0, fmt='D', label=b14_label)
+
+    # Lan+14 Fig 8: fc (W > 1 Ang, "passive" i < 20.6)
+    lan14_label = "Lan+ (2014) W$_{\\rm 0}^{\\rm MgII}$ > 1$\AA$"
+    lan14_rp  = [25.0, 36.0, 50.0, 70.0, 100, 150, 210, 300, 430]
+    lan14_fc  = np.array([0.1, 0.147, 0.093, 0.048, 0.034, 0.019, 0.013, 0.0088, 0.0071])
+    lan14_up  = np.array([0.149, 0.189, 0.118, 0.064, 0.044, 0.026, 0.018, 0.012, 0.010])
+    lan14_low = np.array([0.0508, 0.104, 0.068, 0.033, 0.024, 0.012, 0.008, 0.0052, 0.0042])
+
+    ax.errorbar(lan14_rp, lan14_fc, yerr=[lan14_fc-lan14_low,lan14_up-lan14_fc], markerSize=8, 
+         color='black', ecolor='black', alpha=0.6, capsize=0.0, fmt='s', label=lan14_label)
+
+    # Lan+18: fc (W > 0.4 Ang, LRGs, DR14)
+    lan18_label = "Lan+ (2018) W$_{\\rm 0}^{\\rm MgII}$ > 0.4$\AA$"
+    lan18_rp   = [23, 35, 48, 68, 95, 135, 189, 265, 380, 525, 740, 1.0e3]
+    lan18_fc   = np.array([0.205, 0.187, 0.291, 0.142, 0.196, 0.068, 0.061, 0.047, 0.027, 0.026, 0.014, 0.007])
+    lan18_up   = np.array([0.371, 0.417, 0.383, 0.203, 0.250, 0.097, 0.089, 0.061, 0.038, 0.034, 0.020, 0.011])
+    lan18_down = np.array([0.037, 0.037,  0.201, 0.086, 0.142, 0.039, 0.033, 0.032, 0.016, 0.017, 0.009, 0.004])
+
+    ax.errorbar(lan18_rp, lan18_fc, yerr=[lan18_fc-lan18_down,lan18_up-lan18_fc], markerSize=8, 
+         color='black', ecolor='black', alpha=0.9, capsize=0.0, fmt='p', label=lan18_label)
+
+    # COS-Halos? COS-LRG? COS-RDR? ...
+
+    # finish plot
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig('ionCoveringFracVsImpact2D_%s_%s_%.1f-%.1f_rvir=%d_fd=%d.pdf' % \
+        (sP.simName,ion.replace(" ",""),haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth))
+    plt.close(fig)
+
 def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, testClumpRemoval=False):
     """ Configure single halo and multi-halo gallery visualizations. """
     run        = sP.run
@@ -559,9 +697,6 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
             clumpID = np.where(objs['lengths'] == 100)[0][8]
             print('Testing clump removal [ID = %d].' % clumpID)
 
-            #for prop in props:
-            #    print(prop, props[prop][clumpID])
-
             # halo-local indices of member cells
             def _getClumpInds(clumpID):
                 offset = objs['offsets'][clumpID]
@@ -582,6 +717,56 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
             rasterPx     = nPixels
             colorbars    = True
             saveFilename = saveFilename = './vis_%s_%d_h%d_%s.pdf' % (sP.simName,sP.snap,haloID,panels[0]['partField'].replace(" ","_"))
+
+        # render
+        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def lrgHaloVisResolution(sP, haloIDs, sPs_other):
+    """ Visualization: one halo, for four different resolution runs. """
+
+    # cross match
+    from cosmo.util import crossMatchSubhalosBetweenRuns
+
+    subIDs = [sP.halos('GroupFirstSub')[haloIDs]]
+
+    for sPo in sPs_other:
+        subIDs.append( crossMatchSubhalosBetweenRuns(sP, sPo, subIDs[0], method='Positional') )
+
+    # panel config
+    rVirFracs  = [0.05, 0.1, 0.25]
+    method     = 'sphMap'
+    nPixels    = [800,800]
+    axes       = [1,0] #[0,1]
+    labelZ     = False
+    labelScale = False
+    labelSim   = True
+    labelHalo  = False
+    relCoords  = False
+
+    size       = 200.0
+    sizeType   = 'kpc'
+    cenShift   = [-size/2,+size/2,0] # center on left (half)
+
+    partType   = 'gas'
+    partField  = 'Mg II'
+    valMinMax  = [12.0, 16.5]
+
+
+    # single image per halo
+    for i, haloID in enumerate(haloIDs):
+        panels = []
+
+        for j, sPo in enumerate([sP] + sPs_other):
+            panels.append( {'run':sPo.run, 'res':sPo.res, 'redshift':sPo.redshift, 'hInd':subIDs[j][i]} )
+
+        panels[0]['labelScale'] = 'physical'
+
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = nPixels
+            colorbars    = True
+            nRows        = 1
+            saveFilename = saveFilename = './vis_%s_%d_res_h%d.pdf' % (sP.simName,sP.snap,haloID)
 
         # render
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -1089,6 +1274,7 @@ def paperPlots():
     TNG50   = simParams(res=2160,run='tng',redshift=redshift)
     TNG50_2 = simParams(res=1080,run='tng',redshift=redshift)
     TNG50_3 = simParams(res=540,run='tng',redshift=redshift)
+    TNG50_4 = simParams(res=270,run='tng',redshift=redshift)
 
     def _get_halo_ids(sP_loc, bin_inds=None, subhaloIDs=False):
         """ Load and return the set of halo IDs in each haloMassBin. 
@@ -1201,9 +1387,11 @@ def paperPlots():
 
     # fig 6a: bound ion mass as a function of halo mass
     if 0:
-        sPs = [TNG50] #[TNG100,TNG50] #,TNG50_2,TNG50_3] #[TNG300]
+        TNG50_z0 = simParams(run='tng50-1', redshift=0.0)
+        TNG50_z1 = simParams(run='tng50-1', redshift=1.0)
+        sPs = [TNG50,TNG50_z0,TNG50_z1]
         cenSatSelect = 'cen'
-        ions = ['AllGas_Mg','MgII','HIGK_popping']
+        ions = ['HIGK_popping','AllGas_Metal','AllGas_Mg','MgII']
 
         for vsHaloMass in [True,False]:
             massStr = '%smass' % ['stellar','halo'][vsHaloMass]
@@ -1211,12 +1399,7 @@ def paperPlots():
             saveName = 'ions_masses_vs_%s_%s_%d_%s.pdf' % \
                 (massStr,cenSatSelect,sPs[0].snap,'_'.join([sP.simName for sP in sPs]))
             totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-                redshift=redshift, vsHaloMass=vsHaloMass) # , secondTopAxis=True
-
-            #saveName = 'ions_avgcoldens_vs_%s_%s_%d_%s.pdf' % \
-            #    (massStr,cenSatSelect,sPs[0].snap,'_'.join([sP.simName for sP in sPs]))
-            #totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-            #    redshift=redshift, vsHaloMass=vsHaloMass, toAvgColDens=True)
+                vsHaloMass=vsHaloMass, colorOff=0) # , secondTopAxis=True
 
     # fig 6b: radial profiles
     if 0:
@@ -1271,7 +1454,7 @@ def paperPlots():
         #lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=False, testClumpRemoval=True)
 
     # fig 8: clump demographics: size distribution, total mass, average numdens, etc
-    if 1:
+    if 0:
         haloID = 0 # 0, 19
         clumpDemographics(TNG50, haloID=haloID)
 
@@ -1305,9 +1488,16 @@ def paperPlots():
     # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
     # TODO
 
+    # fig 11: resolution convergence, visual (matched halo)
+    if 0:
+        haloIDs = _get_halo_ids(TNG50)[2]
+        lrgHaloVisResolution(TNG50, haloIDs, [TNG50_2, TNG50_3, TNG50_4])
+
+    # fig 12: resolution convergence, quantitative (?)
+
     # --- observational comparison ---
 
-    # fig 11 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
+    # fig 13 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     if 0:
         sP = TNG50
         haloMassBin = haloMassBins[1]
@@ -1327,12 +1517,17 @@ def paperPlots():
         obsSimMatchedGalaxySamples(sPs, 'sample_lrg_rdr_%s.pdf' % simNames, config='LRG-RDR')
         obsSimMatchedGalaxySamples(sPs, 'sample_cos_lrg_%s.pdf' % simNames, config='COS-LRG')
 
-    # fig 12: run old OVI machinery to derive goodness of fit parameters and associated plots
+    # fig 14: run old OVI machinery to derive goodness of fit parameters and associated plots
     if 0:
         for sP in [TNG50]: #[TNG50, TNG100]:
             obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
-    # fig 13: covering fraction comparison
-    # TODO
+    # fig 15: covering fraction comparison
+    if 1:
+        haloMassBin = haloMassBins[2]
+        ion = 'Mg II'
+        Nthreshs = [15.0, 15.5, 16.0]
+
+        ionCoveringFractionVsImpact2D(TNG50, haloMassBin, ion, Nthreshs, radRelToVirRad=False, fullDepth=True)

@@ -578,8 +578,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
     
     #ax.set_ylim([5e-6,2e-1])
     ax.set_ylim([1e-5,3e-1])
-    ax.set_xlim([7,12.5])
-    if clean: ax.set_xlim([6.5,12.5])
+    ax.set_xlim([6.5,12.5])
     if dataRedshift is not None and dataRedshift >= 3.0: ax.set_ylim([5e-7,6e-2])
 
     if highMassEnd:
@@ -592,11 +591,10 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{\star,1/2}$ ]')
 
     if centralsOnly:
-        ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ] [ only centrals ]')
+        ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ] [ only cen ]')
     else:
-        ax.set_ylabel('$\Phi$ [ Mpc$^{-3}$ dex$^{-1}$ ] [ centrals & satellites ]')
+        ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ] [ cen & sat ]')
     ax.set_yscale('log')
-    if clean: ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ]')
 
     if use30kpc:
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 30 pkpc ]')
