@@ -1525,9 +1525,14 @@ def paperPlots():
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
     # fig 15: covering fraction comparison
-    if 1:
+    if 0:
         haloMassBin = haloMassBins[2]
         ion = 'Mg II'
         Nthreshs = [15.0, 15.5, 16.0]
 
         ionCoveringFractionVsImpact2D(TNG50, haloMassBin, ion, Nthreshs, radRelToVirRad=False, fullDepth=True)
+
+    # fig X: curve of growth for MgII
+    if 0:
+        from plot.cloudy import curveOfGrowth
+        curveOfGrowth(lineName='MgII2803')
