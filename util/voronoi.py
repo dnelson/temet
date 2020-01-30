@@ -115,7 +115,7 @@ def _contiguousVoronoiCells(num_ngb, offset_ngb, ngb_inds, prop_val, identity, m
                 ngb_index = offset_ngb[i] + j
                 cell_index_j = ngb_inds[ngb_index]
 
-                if identity[cell_index_j] < 0:
+                if cell_index_j < 0 or identity[cell_index_j] < 0:
                     continue
 
                 # neighbor belongs to an object with a lower id? merge cell (i) into this object
@@ -127,7 +127,7 @@ def _contiguousVoronoiCells(num_ngb, offset_ngb, ngb_inds, prop_val, identity, m
         if changes_count == 0:
             break
 
-    # debug check: every assigned cells should have neighbors with the same identity, or identity == -1
+    # debug check: every assigned cell should have neighbors with the same identity, or identity == -1
     for i in range(ncells):
         # skip cells which do not below to any object
         if identity[i] < 0:
@@ -139,7 +139,7 @@ def _contiguousVoronoiCells(num_ngb, offset_ngb, ngb_inds, prop_val, identity, m
             ngb_index = offset_ngb[i] + j
             cell_index_j = ngb_inds[ngb_index]
 
-            if identity[cell_index_j] < 0:
+            if cell_index_j < 0 or identity[cell_index_j] < 0:
                 continue
 
             assert identity[i] == identity[cell_index_j]

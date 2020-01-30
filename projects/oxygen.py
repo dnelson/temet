@@ -347,7 +347,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     fig = plt.figure(figsize=[figsize[0], figsize[1]*heightFac])
     ax = fig.add_subplot(111)
     
-    mHaloLabel = 'M$_{\\rm halo}$ [ < r$_{\\rm 200,crit}$, log M$_{\\rm sun}$ ]'
+    mHaloLabel = 'Halo Mass [ log M$_{\\rm sun}$ ]'
     mHaloField = 'mhalo_200_log'
     mStarLabel = 'M$_{\star}$ [ < 30 pkpc, log M$_{\\rm sun}$ ]'
     mStarField = 'mstar_30pkpc_log'

@@ -426,11 +426,12 @@ def _pSplitBounds(sP, pSplit, minStellarMass=None, minHaloMass=None, indivStarMa
 
             if invSubs[1] == invSubs[0]:
                 # split is actually zero size, this is ok
-                return [], {'gas':[0,1],'stars':[0,1]}
+                return [], {'gas':[0,1],'stars':[0,1],'dm':[0,1]}
 
             invSubIDs = np.arange( invSubs[0], invSubs[1] )
             subhaloIDsTodo = np.intersect1d(subhaloIDsTodo, invSubIDs)
             indRange = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
+    
 
     if indivStarMags:
         # make subhalo-strict bounding index range and compute number of PT4 particles we will do
@@ -2233,13 +2234,13 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # config (hard-coded for oxygen/outflows projects at the moment, could be generalized)
     minHaloMass = None
 
-    if sP.boxSize in [67770,75000,205000]:
-        radMin = 0.0 # log code units
-        radMax = 4.0 # log code units
-        radNumBins = 100
-        minHaloMass = 10.8 # 11.4 for auroraVoyage2050 # log m200crit
+    #if sP.boxSize in [67770,75000,205000]:
+    #    radMin = 0.0 # log code units
+    #    radMax = 4.0 # log code units
+    #    radNumBins = 100
+    #    minHaloMass = 10.8 # 11.4 for auroraVoyage2050 # log m200crit
 
-    if sP.boxSize in [20000,35000]:
+    if 1: #sP.boxSize in [20000,35000]:
         radMin = -1.0 # log code units
         radMax = 3.0 # log code units
         radNumBins = 100

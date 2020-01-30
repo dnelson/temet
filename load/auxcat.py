@@ -60,7 +60,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         if not allExist:
             print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
             #r[field] = None
-            return
+            return False
             
         # for full saves we want (auxCat size is groupcat size), assuming we computed a subset of objects
         numSubs = sP.groupCatHeader()['Nsubgroups_Total']
@@ -165,7 +165,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             unlink(auxCatPathSplit_i)
 
         print(' Concatenated new [%s] and saved, split files deleted.' % auxCatPath.split("/")[-1])
-        return
+        return True
 
     def _expand_partial():
         """ Helper, expand a subhalo-partial aC into a subhalo-complete array. """
@@ -226,7 +226,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                 # combine now
                 for readField in readFields:
-                    _concatSplitFiles(field, readField)
+                    ret = _concatSplitFiles(field, readField)
+                    if ret is False:
+                        return # requested, but not all, exist
 
         # just checking for existence? (do not calculate right now if missing)
         if not isfile(auxCatPath) and searchExists:

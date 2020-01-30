@@ -1405,6 +1405,13 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                     for k2 in f[k1]:
                         for k3 in f[k1][k2]:
                             r[k1+'_'+k2+'_'+k3] = f[k1][k2][k3][()]
+
+            # handle TNG temperature correction (for Powell term) in subboxes
+            if 'TNG' in sP.simName and sP.isSubbox and field in ['temp','temp_sfcold']:
+                w = np.where(r[field] < 3.9)
+                r[field][w] = 4.0
+                print(' notice: set [%d] of [%d] subbox tracer temperatures from <3.9 to 4.0.' % (len(w[0]),r[field].size))
+                
             return r
 
     if indRange is not None:

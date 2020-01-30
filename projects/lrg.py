@@ -243,8 +243,8 @@ def _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, ConfigLan=
         eStr = '_2k'
 
     # quick caching
-    cacheSaveFile = sP.derivPath + 'cache/ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%s_fd=%s%s_a%d.hdf5' % \
-      (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth,eStr,len(axesSets))
+    cacheSaveFile = sP.derivPath + 'cache/ionColumnsVsImpact2D_%s_%d_%s_%.1f-%.1f_rvir=%s_fd=%s%s_a%d.hdf5' % \
+      (sP.simName,sP.snap,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth,eStr,len(axesSets))
 
     if isfile(cacheSaveFile):
         # load previous result
@@ -468,7 +468,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
     plt.close(fig)
 
-def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=False, fullDepth=False):
+def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, radRelToVirRad=False, fullDepth=False):
     """ Use gridded N_ion maps to plot covering fraction f(N_ion>N_thresh) vs impact parameter. """
 
     nBins = 50
@@ -476,24 +476,60 @@ def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=
     ylim  = [1e-3,1] # Lan MgII LRGs
     ylog  = True
 
-    # EW ~ 0.4 Ang for MgII is N~4e16 to N~8e16
-    # https://www.aanda.org/articles/aa/full/2004/04/aa0003/aa0003.right.html (Eqn 2)
-    # https://github.com/trident-project/trident/blob/master/trident/data/line_lists/lines.txt
+    def _get_grids(sPs):
+        """ Helper to load grids from a set of runs. """
+        for i, sP in enumerate(sPs):
+            dist_loc, grid_loc = _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, 
+                ConfigLan=True, indiv=True, axesSets=[[0,1],[0,2],[1,2]])
 
-    # load projected column density grids of all halos
-    dist_global, grid_global = _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, 
-        ConfigLan=True, indiv=True, axesSets=[[0,1],[0,2],[1,2]])
+            if i == 0:
+                dist_global = dist_loc
+                grid_global = grid_loc
+            else:
+                dist_global = np.hstack( (dist_global, dist_loc))
+                grid_global = np.hstack( (grid_global, grid_loc))
 
-    dist_global[dist_global == 0] = dist_global[dist_global > 0].min() / 2
+        dist_global[dist_global == 0] = dist_global[dist_global > 0].min() / 2
 
-    dist_global = np.log10(dist_global)
-    numHalos = dist_global.shape[1]
+        dist_global = np.log10(dist_global)
+
+        return dist_global, grid_global
+
+    def _covering_fracs(dist, grid, col_N):
+        """ Helper, compute fc for all halos individually, and also the stack. """
+        numHalos = dist.shape[1]
+
+        fc = np.zeros( (nBins,numHalos+1), dtype='float32' )
+
+        for i in range(numHalos+1):
+            # derive covering fraction
+            loc_dist = dist[:,i] if i < numHalos else dist.ravel()
+            loc_grid = grid[:,i] if i < numHalos else grid.ravel()
+
+            mask = np.zeros( loc_dist.size, dtype='int16' ) # 0 = below, 1 = above
+            w = np.where(loc_grid >= col_N)
+            mask[w] = 1
+
+            count_above, _, _ = binned_statistic(loc_dist, mask, 'sum', bins=nBins, range=[xlim])
+            count_total, bin_edges, _ = binned_statistic(loc_dist, mask, 'count', bins=nBins, range=[xlim])
+
+            # plot
+            xx = bin_edges[:-1] + (xlim[1]-xlim[0])/nBins/2
+            with np.errstate(invalid='ignore'):
+                fc[:,i] = count_above / count_total
+
+            fc[:,i] = savgol_filter(fc[:,i], sKn, sKo)
+
+        return xx, fc
+
+    # load projected column density grids of all halos (possibly across more than one run/redshift)
+    dist_global, grid_global = _get_grids(sPs)
 
     # start plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
-    ax.set_xlim([8,1200])
+    ax.set_xlim([12,1200])
     ax.set_xscale('log')
     ax.set_xlabel('Impact Parameter [ log pkpc ]')
 
@@ -507,26 +543,7 @@ def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=
         # loop over individual halos, and one extra iter for all
         c = next(ax._get_lines.prop_cycler)['color']
 
-        fc = np.zeros( (nBins,numHalos+1), dtype='float32' )
-
-        for i in range(numHalos+1):
-            # derive covering fraction
-            loc_dist = dist_global[:,i] if i < numHalos else dist_global.ravel()
-            loc_grid = grid_global[:,i] if i < numHalos else grid_global.ravel()
-
-            mask = np.zeros( loc_dist.size, dtype='int16' ) # 0 = below, 1 = above
-            w = np.where(loc_grid >= N)
-            mask[w] = 1
-
-            count_above, _, _ = binned_statistic(loc_dist, mask, 'sum', bins=nBins, range=[xlim])
-            count_total, bin_edges, _ = binned_statistic(loc_dist, mask, 'count', bins=nBins, range=[xlim])
-
-            # plot
-            xx = bin_edges[:-1] + (xlim[1]-xlim[0])/nBins/2
-            with np.errstate(invalid='ignore'):
-                fc[:,i] = count_above / count_total
-
-            fc[:,i] = savgol_filter(fc[:,i], sKn, sKo)
+        xx, fc = _covering_fracs(dist_global, grid_global, N)
 
         # fill band (1 sigma halo-to-halo variation) for first column threshold only
         if N == Nthresh[0]:
@@ -539,9 +556,21 @@ def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=
         label = 'N$_{\\rm %s}$ > 10$^{%.1f}$ cm$^{-2}$' % (ion,N)
         ax.plot(10**xx, fc[:,-1], '-', lw=3.0, alpha=1.0, color=c, label=label)
 
-    # add obs data points
+    # second sim set? only do for last column threshold
+    if sPs2 is not None:
+        lines = []
+        for i, sPset in enumerate(sPs2):
+            print(i, sPset[0].simName)
 
-    # Bowen+11: LRGs
+            # load grid
+            dist_global2, grid_global2 = _get_grids(sPset)
+
+            # covering fraction calculation and plot
+            xx, fc = _covering_fracs(dist_global2, grid_global2, Nthresh[-1])
+            l, = ax.plot(10**xx, fc[:,-1], linestyles[i+1], lw=3.0, alpha=1.0, color=c)
+            lines.append(l)
+
+    # observations: Bowen+11: LRGs
     b14_label = 'Bowen+ (2011) LRGs'
     b14_rp    = [25, 75, 125, 175]
     b14_fc    = np.array([0.093, 0.089, 1e-5, 1e-5])
@@ -551,7 +580,7 @@ def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=
     ax.errorbar(b14_rp, b14_fc, yerr=[b14_fc-b14_low,b14_up-b14_fc], markerSize=8, 
          color='black', ecolor='black', alpha=0.4, capsize=0.0, fmt='D', label=b14_label)
 
-    # Lan+14 Fig 8: fc (W > 1 Ang, "passive" i < 20.6)
+    # observations: Lan+14 Fig 8: fc (W > 1 Ang, "passive" i < 20.6)
     lan14_label = "Lan+ (2014) W$_{\\rm 0}^{\\rm MgII}$ > 1$\AA$"
     lan14_rp  = [25.0, 36.0, 50.0, 70.0, 100, 150, 210, 300, 430]
     lan14_fc  = np.array([0.1, 0.147, 0.093, 0.048, 0.034, 0.019, 0.013, 0.0088, 0.0071])
@@ -561,7 +590,7 @@ def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=
     ax.errorbar(lan14_rp, lan14_fc, yerr=[lan14_fc-lan14_low,lan14_up-lan14_fc], markerSize=8, 
          color='black', ecolor='black', alpha=0.6, capsize=0.0, fmt='s', label=lan14_label)
 
-    # Lan+18: fc (W > 0.4 Ang, LRGs, DR14)
+    # observations: Lan+18: fc (W > 0.4 Ang, LRGs, DR14)
     lan18_label = "Lan+ (2018) W$_{\\rm 0}^{\\rm MgII}$ > 0.4$\AA$"
     lan18_rp   = [23, 35, 48, 68, 95, 135, 189, 265, 380, 525, 740, 1.0e3]
     lan18_fc   = np.array([0.205, 0.187, 0.291, 0.142, 0.196, 0.068, 0.061, 0.047, 0.027, 0.026, 0.014, 0.007])
@@ -571,14 +600,16 @@ def ionCoveringFractionVsImpact2D(sP, haloMassBin, ion, Nthresh, radRelToVirRad=
     ax.errorbar(lan18_rp, lan18_fc, yerr=[lan18_fc-lan18_down,lan18_up-lan18_fc], markerSize=8, 
          color='black', ecolor='black', alpha=0.9, capsize=0.0, fmt='p', label=lan18_label)
 
-    # COS-Halos? COS-LRG? COS-RDR? ...
-
     # finish plot
-    ax.legend()
+    if sPs2 is not None:
+        legend2 = ax.legend(lines, [sPset[0].simName for sPset in sPs2], loc='upper right')
+        ax.add_artist(legend2)
+
+    ax.legend(loc='lower left')
 
     fig.tight_layout()
     fig.savefig('ionCoveringFracVsImpact2D_%s_%s_%.1f-%.1f_rvir=%d_fd=%d.pdf' % \
-        (sP.simName,ion.replace(" ",""),haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth))
+        (sPs[0].simName,ion.replace(" ",""),haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth))
     plt.close(fig)
 
 def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, testClumpRemoval=False):
@@ -771,6 +802,57 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
         # render
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
+# clump plot config
+lims = {'size'     : [0, 3.0],    # linear pkpc
+        'mass'     : [4.5, 8.5],  # log msun
+        'ncells'   : [0, 40],     # linear
+        'dist'     : [0, 500],    # linear pkpc
+        'dens'     : [-3.0, 2.5], # log cc
+        'temp'     : [3.5,5.0],   # log K
+        'bmag'     : [-1.0,2.0],  # log G
+        'beta'     : [-2.0, 1.0], # log
+        'sfr'      : [0, 0.01],    # linear msun/yr
+        'metal'    : [-1.4, 0.4], # log solar
+        'rcell1'   : [0, 800],    # linear parsec
+        'rcell2'   : [0, 800],    # linear parsec
+        'mg2_mass' : [0.0, 5.0],  # log msun
+        'hi_mass'  : [2.0, 7.0]}  # log msun
+
+labels = {'size'     : 'Clump Radius [ kpc ]',
+          'mass'     : 'Clump Total Mass [ log M$_{\\rm sun}$ ]',
+          'ncells'   : 'Number of Gas Cells [ linear ]',
+          'dist'     : 'Halocentric Distance [ kpc ]',
+          'dens'     : 'Mean Hydrogen Number Density [ log cm$^{-3}$ ]',
+          'temp'     : 'Mean Clump Temperature [ log K ]',
+          'bmag'     : 'Mean Clump Magnetic Field Strength [ log $\mu$G ]',
+          'beta'     : 'Mean $\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]',
+          'sfr'      : 'Total Clump Star Formation Rate [ M$_{\\rm sun}$ / yr ]',
+          'metal'    : 'Mean Clump Gas Metallicity [ log Z$_{\\rm sun}$ ]',
+          'rcell1'   : 'Average Member Gas r$_{\\rm cell}$ [ parsec ]',
+          'rcell2'   : 'Smallest Member Gas r$_{\\rm cell}$ [ parsec ]',
+          'mg2_mass' : 'Total MgII Mass [ log M$_{\\rm sun}$ ]',
+          'hi_mass'  : 'Total Neutral HI Mass [ log M$_{\\rm sun}$ ]'}
+
+def _clump_values(sP, objs, props):
+    """ Helper: some common unit conversions. """
+    values = {}
+    values['size']   = sP.units.codeLengthToKpc(props['radius'])
+    values['mass']   = sP.units.codeMassToLogMsun(props['mass'])
+    values['ncells'] = objs['lengths']
+    values['dist']   = sP.units.codeLengthToKpc(props['distance'])
+    values['dens']   = np.log10(props['dens_mean'])
+    values['temp']   = np.log10(props['temp_mean'])
+    values['bmag']   = np.log10(props['bmag_mean'] * 1e6)
+    values['beta']   = np.log10(props['beta_mean'])
+    values['sfr']    = props['sfr_tot']
+    values['metal']  = np.log10(props['metal_mean'])
+    values['rcell1'] = sP.units.codeLengthToKpc(props['rcell_mean']) * 1000
+    values['rcell2'] = sP.units.codeLengthToKpc(props['rcell_min']) * 1000
+    values['mg2_mass'] = sP.units.codeMassToLogMsun(props['mg2_mass'])
+    values['hi_mass']  = sP.units.codeMassToLogMsun(props['hi_mass'])
+
+    return values
+
 def clumpDemographics(sP, haloID):
     """ Plot demographics of clump population for a single halo. """
 
@@ -790,36 +872,6 @@ def clumpDemographics(sP, haloID):
     #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.1, 'label':'n$_{\\rm H}$ > 0.1 cm$^{-3}$'})
     #threshSets.append( {'propName':'nh', 'propThreshComp':'gt', 'propThresh':0.5, 'label':'n$_{\\rm H}$ > 0.5 cm$^{-3}$'})
 
-    lims = {'size'     : [0, 3.0],    # linear pkpc
-            'mass'     : [4.5, 8.5],  # log msun
-            'ncells'   : [0, 40],     # linear
-            'dist'     : [0, 500],    # linear pkpc
-            'dens'     : [-3.0, 2.5], # log cc
-            'temp'     : [3.5,5.0],   # log K
-            'bmag'     : [-1.0,2.0],  # log G
-            'beta'     : [-2.0, 1.0], # log
-            'sfr'      : [0, 0.01],    # linear msun/yr
-            'metal'    : [-1.4, 0.4], # log solar
-            'rcell1'   : [0, 800],    # linear parsec
-            'rcell2'   : [0, 800],    # linear parsec
-            'mg2_mass' : [0.0, 5.0],  # log msun
-            'hi_mass'  : [2.0, 7.0]}  # log msun
-
-    labels = {'size'     : 'Clump Radius [ kpc ]',
-              'mass'     : 'Clump Total Mass [ log M$_{\\rm sun}$ ]',
-              'ncells'   : 'Number of Gas Cells [ linear ]',
-              'dist'     : 'Halocentric Distance [ kpc ]',
-              'dens'     : 'Mean Hydrogen Number Density [ log cm$^{-3}$ ]',
-              'temp'     : 'Mean Clump Temperature [ log K ]',
-              'bmag'     : 'Mean Clump Magnetic Field Strength [ log $\mu$G ]',
-              'beta'     : 'Mean $\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]',
-              'sfr'      : 'Total Clump Star Formation Rate [ M$_{\\rm sun}$ / yr ]',
-              'metal'    : 'Mean Clump Gas Metallicity [ log Z$_{\\rm sun}$ ]',
-              'rcell1'   : 'Average Member Gas r$_{\\rm cell}$ [ parsec ]',
-              'rcell2'   : 'Smallest Member Gas r$_{\\rm cell}$ [ parsec ]',
-              'mg2_mass' : 'Total MgII Mass [ log M$_{\\rm sun}$ ]',
-              'hi_mass'  : 'Total Neutral HI Mass [ log M$_{\\rm sun}$ ]'}
-
     nBins1D = 100 # 1d histograms
 
     configs_2d = ['size-mass','ncells-size','size-dist','ncells-dist','dens-size',
@@ -834,21 +886,7 @@ def clumpDemographics(sP, haloID):
             propName=th['propName'], propThresh=th['propThresh'], propThreshComp=th['propThreshComp'])
 
         # some common unit conversions
-        values = {}
-        values['size']   = sP.units.codeLengthToKpc(props['radius'])
-        values['mass']   = sP.units.codeMassToLogMsun(props['mass'])
-        values['ncells'] = objs['lengths']
-        values['dist']   = sP.units.codeLengthToKpc(props['distance'])
-        values['dens']   = np.log10(props['dens_mean'])
-        values['temp']   = np.log10(props['temp_mean'])
-        values['bmag']   = np.log10(props['bmag_mean'] * 1e6)
-        values['beta']   = np.log10(props['beta_mean'])
-        values['sfr']    = props['sfr_tot']
-        values['metal']  = np.log10(props['metal_mean'])
-        values['rcell1'] = sP.units.codeLengthToKpc(props['rcell_mean']) * 1000
-        values['rcell2'] = sP.units.codeLengthToKpc(props['rcell_min']) * 1000
-        values['mg2_mass'] = sP.units.codeMassToLogMsun(props['mg2_mass'])
-        values['hi_mass']  = sP.units.codeMassToLogMsun(props['hi_mass'])
+        values = _clump_values(sP, objs, props)
 
         data.append( [objs,props,values] )
         print(i, 'prop = ', th['propName'], ' ', th['propThreshComp'], ' ', th['propThresh'], ' tot objs = ', objs['count'])
@@ -916,14 +954,6 @@ def clumpDemographics(sP, haloID):
             binSize = (lims[xname][1] - lims[xname][0]) / nBins1D
             if xname == 'ncells': binSize = 1
             xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=[16,50,84])
-
-            #if xm.size > sKn:
-            #    ym2 = savgol_filter(ym,sKn,sKo)
-            #    sm2 = savgol_filter(sm,sKn,sKo)
-            #    pm2 = savgol_filter(pm,sKn,sKo,axis=1)
-
-            #if yname == 'ncells' and xname == 'size':
-            #    import pdb; pdb.set_trace()
 
             l, = ax.plot(xm, ym, '-', lw=lw, alpha=0.8, label=th['label'])
             if i in [0,len(threshSets)-1]:
@@ -1087,6 +1117,9 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     data['pos_rel'] = np.zeros( (nSnaps,nTr,3), dtype='float32' )
     data['size_maxseparation'] = np.zeros( nSnaps, dtype='float32' )
 
+    maxTempsCold = [3e4, 1e5]
+    data['size_maxsep_cold'] = np.zeros( (nSnaps,len(maxTempsCold)), dtype='float32' )
+
     SubhaloPos_trSnaps = subhaloCen[data['snaps_full'],:]
 
     for i in range(nSnaps):
@@ -1106,6 +1139,9 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
 
         # maximum pairwise distance between clump members
         data['size_maxseparation'][i] = sP.periodicPairwiseDists(data['pos'][i,:,:]).max()
+        for j, maxTempCold in enumerate(maxTempsCold):
+            w_cold = np.where(data['temp'][i,:] < maxTempsCold[j])
+            data['size_maxsep_cold'][i,j] = sP.periodicPairwiseDists(np.squeeze(data['pos'][i,w_cold,:])).max()
 
     data['size_halfmassrad'] = np.median(data['rad'], axis=1)
     data['dist_rvir'] = data['dist'] / sP.halo(haloID)['Group_R_Crit200'] # take constant
@@ -1135,7 +1171,9 @@ def clumpTracerTracks(sP, clumpID):
 
     haloID = 0 # only >10^13 halo which intersects with subboxes
 
-    time_xlim = [-500,200]
+    time_xlim = [-500,300]
+    lineAlpha = 0.05 # for individual tracers
+    lineW = 1 # for individual tracers
 
     labels = {'size_halfmassrad'   : 'Clump Half-mass Radius [ kpc ]',
               'size_maxseparation' : 'Clump Size: Max Pairwise Separation [ kpc ]',
@@ -1147,7 +1185,13 @@ def clumpTracerTracks(sP, clumpID):
               'netcoolrate'        : 'Net Cooling Rate [ erg/s/g ]',
               'beta'               : '$\\beta = \\rm{P}_{\\rm gas} / \\rm{P}_{\\rm B}$ [ log ]'}
 
+    lims = {'temp'  : [3.8, 8.2],
+            'hdens' : [-3.5, 2.0],
+            'dist'  : [-20, 300]}
+
     noForwardData = ['metal','netcoolrate'] # fields without tracer_tracks into the future
+
+    circOpts = {'markeredgecolor':'white', 'markerfacecolor':'None', 'markersize':10, 'markeredgewidth':2} # marking t=0
 
     # load
     data = clumpTracerTracksLoad(sP, haloID, clumpID)
@@ -1159,7 +1203,7 @@ def clumpTracerTracks(sP, clumpID):
     xx = data['dt']
 
     w_back = np.where(xx < 0)
-    w_forward = np.where(xx > 0)
+    w_forward = np.where(xx >= 0)
 
     for prop in labels.keys():
         print(' plot ', prop)
@@ -1169,27 +1213,40 @@ def clumpTracerTracks(sP, clumpID):
         ax.set_xlabel('Time since $z=0.5$ [Myr]')
         ax.set_ylabel(labels[prop])
         ax.set_xlim(time_xlim)
+        if prop in lims.keys(): ax.set_ylim(lims[prop])
+        ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
         logf = np.log10 if ('dist' not in prop and 'coolrate' not in prop) else lambda x: x # identity
 
         if prop+'_avg' in data:
             for i in range(data[prop].shape[1]): # individuals
                 yy = logf(data[prop][:,i])
-                ax.plot(xx[w_back], yy[w_back], '-', lw=1, color='black', alpha=0.1)
+                ax.plot(xx[w_back], yy[w_back], '-', lw=lineW, color='black', alpha=lineAlpha, zorder=0)
                 if prop not in noForwardData:
-                    ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
+                    ax.plot(xx[w_forward], yy[w_forward], '-', lw=lineW, color='black', alpha=lineAlpha, zorder=0)
 
             yy = logf(data[prop+'_avg']) # mean across member cells
-            ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
             if prop not in noForwardData:
                 ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
-            ax.legend()
+            ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
+            if prop not in noForwardData:
+                ax.plot(xx[w_forward][0], yy[w_forward][0], 'o', **circOpts)
+
         else:
             yy = logf(data[prop]) # quantity is 1 number per snapshot
-            ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw)
             if prop not in noForwardData:
-                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
+                l2, = ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='($t>0$)')
+            l1, = ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='($t<0)$')
 
+            if prop == 'size_maxseparation': # add _cold
+                #yy = logf(data['size_maxsep_cold'][:,0])
+                #ax.plot(xx[w_forward], yy[w_forward], ':', lw=lw, color=l2.get_color(), label='log(T) < 5.0 ($t>0$)')
+                #ax.plot(xx[w_back], yy[w_back], ':', lw=lw, color=l1.get_color(), label='log(T) < 5.0 ($t<0$)')
+                yy = logf(data['size_maxsep_cold'][:,1])
+                ax.plot(xx[w_forward], yy[w_forward], '--', lw=lw, color=l2.get_color(), label='T < 30,000K ($t>0$)')
+                ax.plot(xx[w_back], yy[w_back], '--', lw=lw, color=l1.get_color(), label='T < 30,000K ($t<0$)')
+
+        ax.legend(loc='upper left' if prop == 'temp' else 'best')
         fig.tight_layout()
         fig.savefig('clumpEvo_%s_clumpID=%d_%s.pdf' % (sP.simName,clumpID,prop))
         plt.close(fig)
@@ -1213,15 +1270,17 @@ def clumpTracerTracks(sP, clumpID):
                 for i in range(data[xval].shape[1]): # individuals
                     xx = logx(data[xval][:,i])
                     yy = logy(data[yval][:,i])
-                    ax.plot(xx[w_back], yy[w_back], '-', lw=1, color='black', alpha=0.1)
+                    ax.plot(xx[w_back], yy[w_back], '-', lw=lineW, color='black', alpha=lineAlpha)
                     if xval not in noForwardData and yval not in noForwardData:
-                        ax.plot(xx[w_forward], yy[w_forward], '-', lw=1, color='black', alpha=0.1)
+                        ax.plot(xx[w_forward], yy[w_forward], '-', lw=lineW, color='black', alpha=lineAlpha)
 
                 xx = logx(data[xval+'_median']) # mean across member cells
                 yy = logy(data[yval+'_median'])
-                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
                 if xval not in noForwardData and yval not in noForwardData:
                     ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
+                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
+                if xval not in noForwardData and yval not in noForwardData:
+                    ax.plot(xx[w_forward][0], yy[w_forward][0], 'o', **circOpts)
                 ax.legend()
             else:
                 xx = logx(data[xval]) if data[xval].ndim == 1 else logx(data[xval+'_avg']) # quantity is 1 number per snapshot
@@ -1237,6 +1296,8 @@ def clumpTracerTracks(sP, clumpID):
     # plot (C) - spatial tracks
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+    aspect = ax.get_window_extent().height / ax.get_window_extent().width
 
     axes = [0,1]
     prop = 'pos_rel'
@@ -1244,26 +1305,106 @@ def clumpTracerTracks(sP, clumpID):
     ax.set_xlabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
     ax.set_ylabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
 
-    xylim = [data[prop][:,:,axes].min(), data[prop][:,:,axes].max()]
-    ax.set_xlim(xylim) # square?
-    ax.set_ylim(xylim)
+    xylim = np.array([data[prop][:,:,axes].min(), data[prop][:,:,axes].max()]) * 0.8
+    ax.set_xlim(xylim)
+    ax.set_ylim(xylim*aspect) # ax is non-square, so make limits reflect the correct aspect ratio
 
     for i in range(data[prop].shape[1]): # individuals
         xx = data[prop][:,i,axes[0]]
         yy = data[prop][:,i,axes[1]]
-        l1, = ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color() if i>0 else None, lw=1, alpha=0.1)
-        l2, = ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color() if i>0 else None, lw=1, alpha=0.1)
+        l1, = ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
+        l2, = ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
 
     xx = data[prop+'_avg'][:,axes[0]]
     yy = data[prop+'_avg'][:,axes[1]] # mean across member cells
-    ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color(), lw=lw, label='Clump Mean ($t<0$)')
-    ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color(), lw=lw, label='Clump Mean ($t>0$)')
+    #ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color(), lw=lw, label='Clump Mean ($t<0$)')
+    #ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color(), lw=lw, label='Clump Mean ($t>0$)')
     ax.plot([0.0,0.0], 'o', color='black')
     ax.legend()
 
     fig.tight_layout()
     fig.savefig('clumpEvo_%s_clumpID=%d_%s.pdf' % (sP.simName,clumpID,prop))
     plt.close(fig)
+
+def clumpAbundanceVsHaloMass(sP):
+    """ Run segmentation on a flat mass-selection of halos, plot number of identified clumps vs halo mass. """
+    from vis.halo import selectHalosFromMassBins
+
+    # config
+    minMaxHaloMass = [11.0, 14.0]
+    numPerBin = 10
+    xQuant = 'mhalo_200_log'
+
+    thPropName = 'Mg II numdens'
+    thPropThresh = 1e-8
+    thPropThreshComp = 'gt'
+
+    minCellsPerClump = 10
+
+    # make halo selection
+    binSize = 0.1
+    numMassBins = int((minMaxHaloMass[1] - minMaxHaloMass[0]) / binSize) + 1
+    bins = [ [x+0.0,x+binSize] for x in np.linspace(minMaxHaloMass[0],minMaxHaloMass[1],numMassBins) ]
+
+    hInds = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
+    hInds = np.hstack( [h for h in hInds] ).astype('int32')
+
+    # allocate
+    clumpProps = {}
+    for prop in labels.keys():
+        clumpProps[prop] = np.zeros( hInds.size, dtype='float32' )
+    clumpProps['number'] = np.zeros( hInds.size, dtype='int32' )
+
+    # load/create segmentations, and accumulate mean properties per halo
+    for i, haloID in enumerate(hInds):
+        objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
+            propName=thPropName, propThresh=thPropThresh, propThreshComp=thPropThreshComp)
+        values = _clump_values(sP, objs, props)
+
+        w = np.where(objs['lengths'] >= minCellsPerClump)[0]
+        clumpProps['number'][i] = len(w)
+
+        for prop in labels.keys():
+            clumpProps[prop][i] = np.median( values[prop][w] )
+
+    # load x-quant and make median
+    x_vals, x_label, minMax, takeLog = sP.simSubhaloQuantity(xQuant)
+    if takeLog: x_vals = np.log10(x_vals)
+
+    x_vals = x_vals[sP.halos('GroupFirstSub')[hInds]]
+
+    # loop over clump properties to plot
+    for prop in ['number'] + list(labels.keys()):
+        # make median
+        print(prop)
+
+        xm, ym, sm, pm = running_median(x_vals,clumpProps[prop],binSize=binSize*2,percs=[16,50,84],minNumPerBin=3)
+        if xm.size > sKn:
+            ym = savgol_filter(ym,sKn,sKo)
+            sm = savgol_filter(sm,sKn,sKo)
+            pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+        # plot
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ylabel = 'Number of Clouds (n$_{\\rm MgII} > 10^{-8}$ cm$^{-3}$)' if prop == 'number' else labels[prop]
+
+        ax.set_xlabel("Halo Mass [ log M$_{\\rm sun}$ ]")
+        ax.set_ylabel(ylabel)
+        ax.set_xlim([10.95, 14.05])
+        if prop == 'number': ax.set_yscale('log')
+
+        l, = ax.plot(x_vals, clumpProps[prop], marker='o', color='tab:green', alpha=0.8, linestyle='None')
+        ax.fill_between(xm, pm[0,:], pm[-1,:], color='#444444', alpha=0.2)
+        ax.plot(xm, ym, '-', color='#444444', lw=lw, label='median ($z=0.5$)')
+
+        # finish plot
+        ax.legend()
+
+        fig.tight_layout()
+        fig.savefig('clumps_%s_vs_%s_%s_%d_min%d.pdf' % (prop,xQuant,sP.simName,sP.snap,minCellsPerClump))
+        plt.close(fig)
 
 def paperPlots():
     """ Produce all papers for the LRG-MgII (small-scale CGM structure) TNG50 paper. """
@@ -1461,20 +1602,15 @@ def paperPlots():
     # fig 9: time tracks via tracers
     if 0:
         # pick a single clump (from np.where(objs['lengths'] == 100))
-        #clumpID = 3851
-        clumpIDs = 3416
+        clumpID = 1592 # 3416, 3851
 
         clumpTracerTracks(TNG50, clumpID=clumpID)
 
         # helper: loop above over many clumps
         if 0:
-            # load segmentation
-            haloID = 0
-            thPropName = 'Mg II numdens'
-            thPropThresh = 1e-8
-            thPropThreshComp = 'gt'
-            objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
-                propName=thPropName, propThresh=thPropThresh, propThreshComp=thPropThreshComp)
+            # load segmentation and select
+            objs, props = voronoiThresholdSegmentation(sP, haloID=0, 
+                propName='Mg II numdens', propThresh=1e-8, propThreshComp='gt')
 
             #clumpIDs = np.where(objs['lengths'] == 100)[0][0:10]
             clumpIDs = np.where( (objs['lengths'] >= 400) & (objs['lengths'] < 405) )[0]
@@ -1487,6 +1623,10 @@ def paperPlots():
 
     # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
     # TODO
+
+    # fig 10: N_clumps vs halo mass, to show they don't exist at below some threshold halo mass
+    if 0:
+        clumpAbundanceVsHaloMass(TNG50)
 
     # fig 11: resolution convergence, visual (matched halo)
     if 0:
@@ -1525,12 +1665,16 @@ def paperPlots():
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
     # fig 15: covering fraction comparison
-    if 0:
+    if 1:
         haloMassBin = haloMassBins[2]
         ion = 'Mg II'
         Nthreshs = [15.0, 15.5, 16.0]
+        sPs  = [ TNG50, simParams(run='tng50-1', redshift=0.4), simParams(run='tng50-1', redshift=0.6) ]
+        sPs2 = [ [TNG50_2,simParams(run='tng50-2', redshift=0.4),simParams(run='tng50-2', redshift=0.6)], 
+                 [TNG50_3,simParams(run='tng50-3', redshift=0.4),simParams(run='tng50-3', redshift=0.6)], 
+                 [TNG50_4,simParams(run='tng50-4', redshift=0.4),simParams(run='tng50-4', redshift=0.6)] ]
 
-        ionCoveringFractionVsImpact2D(TNG50, haloMassBin, ion, Nthreshs, radRelToVirRad=False, fullDepth=True)
+        ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthreshs, sPs2=sPs2, radRelToVirRad=False, fullDepth=True)
 
     # fig X: curve of growth for MgII
     if 0:
