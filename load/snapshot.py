@@ -39,6 +39,8 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
     fileNames = [ # standard: >1 file per snapshot, in subdirectory
                   basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + \
                   '/snap_' + sbStr1 + ext + '.' + str(chunkNum) + '.hdf5',
+                  # auriga, >1 file per snapshot, alternative base
+                  basePath + 'snapdir_%03d/snapshot_%03d.%d.hdf5' % (snapNum,snapNum,chunkNum),
                   # single file per snapshot
                   basePath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5',
                   # single file per snapshot (swift convention)
@@ -71,6 +73,15 @@ def snapNumChunks(basePath, snapNum, subbox=None):
     _, sbStr1, sbStr2 = subboxVals(subbox)
     path = basePath + sbStr2 + 'snapdir_' + sbStr1 + str(snapNum).zfill(3) + '/snap*.*.hdf5'
     nChunks = len(glob.glob(path))
+
+    # check actual header (i.e. extra/duplicate files in the output folder)
+    path = snapPath(basePath, snapNum, chunkNum=0, subbox=subbox, checkExists=True)
+    if path is not None:
+        with h5py.File(path,'r') as f:
+            nChunksCheck = f['Header'].attrs['NumFilesPerSnapshot']
+        if nChunksCheck < nChunks:
+            print('Note: Replacing snapshot nChunks [%d] with [%d] from header.' % (nChunks,nChunksCheck))
+            nChunks = nChunksCheck
 
     if nChunks == 0:
         nChunks = 1 # single file per snapshot

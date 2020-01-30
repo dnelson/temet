@@ -37,7 +37,7 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-3':['tng',540],
                      'tng50-4':['tng',270],
                      'tng50-1-dark':['tng_dm',2160],
-                     'tng50-2-dark':['tng_dm',10880],
+                     'tng50-2-dark':['tng_dm',1080],
                      'tng50-3-dark':['tng_dm',540],
                      'tng50-4-dark':['tng_dm',270],
                      #'tng1':['tng':8192],
@@ -119,8 +119,8 @@ class simParams:
     
     # phyiscal models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
-    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=FinalTNG Model)
-    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=FinalTNG Model)
+    BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model)
+    winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
 
     def __init__(self, res=None, run=None, variant=None, redshift=None, snap=None, hInd=None, 
                        haloInd=None, subhaloInd=None, refPos=None, refVel=None):
@@ -353,7 +353,7 @@ class simParams:
                 if self.simName in method_run_names:
                     self.simName = method_run_names[self.simName]
 
-        # TNG [cluster] zooms based on L680n2048 parent box
+        # TNG [cluster] zooms based on L680n2048 parent box, and other zooms based on the three base TNG boxes
         if run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm','tng50_zoom','tng50_zoom_dm']:
             assert hInd is not None
             self.validResLevels = [11,12,13,14] # first is ZoomLevel==1 (i.e. at parentRes)
@@ -425,6 +425,45 @@ class simParams:
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             self.savPrefix  = 'TZ'
+            self.simName    = dirStr
+
+        # AURIGA
+        if run in ['auriga','auriga_dm']:
+            assert hInd is not None
+            assert self.variant == 'None'
+
+            self.validResLevels = [2,3,4,5,6] # auriga/aquarius levels
+            self.groupOrdered   = True
+
+            self.zoomLevel = self.res
+            self.sP_parent = None # Eagle
+
+            self.gravSoft = 0.0025 * 2**(res-4)
+            self.targetGasMass = 3.65456e-06 / (8 ** (res-4))
+            self.boxSize = 67.77 # cMpc/h unit system
+            self.mpcUnits = True
+            #self.numSnaps = -1 # variable
+
+            self.omega_m     = 0.307
+            self.omega_L     = 0.693
+            self.omega_b     = 0.048
+            self.HubbleParam = 0.6777
+
+            if '_dm' in run:
+                # DMO
+                self.targetGasMass = 0.0
+            else:
+                # baryonic, AURIGA fiducial model
+                self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+                self.winds = 3
+                self.BHs   = 3
+
+            # paths
+            vStr = '_DM' if '_dm' in run else '_MHD'
+            dirStr = 'h%d_L%d%s' % (self.hInd,self.res,vStr)
+
+            self.arepoPath  = self.basePath + 'sims.auriga/' + dirStr + '/'
+            self.savPrefix  = 'AU'
             self.simName    = dirStr
 
         # ILLUSTRIS
