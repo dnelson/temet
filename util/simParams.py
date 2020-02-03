@@ -8,6 +8,7 @@ from builtins import *
 import platform
 import numpy as np
 import getpass
+import h5py
 from os import path, mkdir
 from functools import partial
 
@@ -92,7 +93,7 @@ class simParams:
     hInd           = None # zoom halo index (as in path) (also used in fullboxes as a unique cross-sim ID)
     hIndDisp       = None # zoom halo index to display (in plots)
     zoomShift      = None # Music output = "Domain will be shifted by (X, X, X)"
-    zoomShiftPhys  = None # the domain shift in box units
+    zoomShiftPhys  = None # the domain shift in box/code units (cmInitial for N-GENIC zooms)
     targetHaloPos  = None # position at targetRedshift in fullbox
     targetHaloInd  = 0    # hInd (subhalo index) at targetRedshift in fullbox
     targetHaloRvir = 0.0  # rvir (ckpc/h) at targetRedshift
@@ -367,7 +368,7 @@ class simParams:
 
                 self.gravSoft = 16.0 / (res/1024)
                 self.targetGasMass = 0.00182873 * (8 ** (13-res))
-                self.boxSize = 680000.0 # ckpc/h unit system
+                self.boxSize = 680.0 # cmpc/h unit system
             elif run in ['tng100_zoom', 'tng100_zoom_dm']:
                 # L75* zoom tests
                 parentRes = 1820
@@ -414,14 +415,21 @@ class simParams:
                 self.mpcUnits = True
 
             # paths
-            bs = str(int(self.boxSize/1000.0))
-            if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
+            bs = str(int(self.boxSize/1000.0)) if not self.mpcUnits else str(int(self.boxSize))
+            #if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
 
             dmStr = '_DM' if '_dm' in run else ''
             dirStr = 'L%sn%dTNG_h%d_L%d%s%s' % (bs,parentRes,self.hInd,self.zoomLevel,vStr,dmStr)
 
             if run in ['tng50_zoom','tng50_zoom_dm']:
                 dirStr = dirStr.replace("h23_L11","h23_z05_L11") # tests stopping at z=0.5
+
+            # load cmInitial (box recentering offset) for TNG1 production runs
+            if self.variant == 'sf3':
+                ics_filename = 'ics_zoom_L%sn%dTNG_DM_halo%d_L%d_sf3.0_mpc.hdf5' % (bs,parentRes,self.hInd,self.res) # generalize if not sf3
+                self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/done/' + ics_filename
+                with h5py.File(self.icsPath, 'r') as f:
+                    self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
             self.arepoPath  = self.basePath + 'sims.TNG_zooms/' + dirStr + '/'
             self.savPrefix  = 'TZ'
@@ -896,7 +904,7 @@ class simParams:
         self.setSnap(self.snap)
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
-        """ Fill parameters for individual zooms. """
+        """ Fill parameters for individual (MUSIC-based) zooms. """
         self.levelMax = res
         if self.levelMax >= 64:
             self.levelMax = np.log2(self.levelMax)

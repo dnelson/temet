@@ -40,7 +40,7 @@ def snapPath(basePath, snapNum, chunkNum=0, subbox=None, checkExists=False):
                   basePath + sbStr2 + 'snapdir_' + sbStr1 + ext + \
                   '/snap_' + sbStr1 + ext + '.' + str(chunkNum) + '.hdf5',
                   # auriga, >1 file per snapshot, alternative base
-                  basePath + 'snapdir_%03d/snapshot_%03d.%d.hdf5' % (snapNum,snapNum,chunkNum),
+                  basePath + 'snapdir_%s/snapshot_%s.%s.hdf5' % (ext,ext,chunkNum),
                   # single file per snapshot
                   basePath + sbStr2 + 'snap_' + sbStr1 + ext + '.hdf5',
                   # single file per snapshot (swift convention)

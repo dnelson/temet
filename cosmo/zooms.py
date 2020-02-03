@@ -10,8 +10,8 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 from collections import OrderedDict
-from scipy.spatial import ConvexHull
 from scipy.stats import binned_statistic
+from numba import jit
 
 from cosmo.perf import loadCpuTxt
 from util.simParams import simParams
@@ -28,7 +28,7 @@ def pick_halos():
 
     # config
     bins = [ [x+0.0,x+0.1] for x in np.linspace(14.0,15.4,15) ]
-    numPerBin = 60
+    numPerBin = 30
 
     hInds = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
 
@@ -66,6 +66,7 @@ def mass_function():
     # load halos
     halo_inds = _halo_ids_run()
 
+    print(len(halo_inds))
     print(halo_inds)
 
     # start figure
@@ -75,7 +76,7 @@ def mass_function():
 
     ax = fig.add_subplot(1,1,1)
     ax.set_xlim(mass_range)
-    ax.set_xticks(np.arange(mass_range[0],mass_range[1],binSize))
+    ax.set_xticks(np.arange(mass_range[0],mass_range[1],0.1))
     ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
     ax.set_ylabel('N$_{\\rm bin=%.1f}$' % binSize)
     ax.set_yscale('log')
@@ -519,3 +520,251 @@ def zoomBoxVis(sPz=None, conf=0):
         saveFilename = './zoomBoxVis_%s_%s_snap%d.pdf' % (sPz.simName,p['partType'],sPz.snap)
 
     renderBox(panels, plotConfig, locals(), skipExisting=False)
+
+@jit(nopython=True, nogil=True, cache=True)
+def _mark_mask(mask, pxsize, pos, value):
+    """ Helper. """
+    for i in range(pos.shape[0]):
+        ix = int(np.floor(pos[i,0] / pxsize))
+        iy = int(np.floor(pos[i,1] / pxsize))
+        iz = int(np.floor(pos[i,2] / pxsize))
+
+        cur_val = mask[ix,iy,iz]
+        if cur_val != -1 and cur_val != value:
+            print(cur_val,value)
+        assert cur_val == -1 or cur_val == value
+
+        mask[ix,iy,iz] = value
+
+@jit(nopython=True, nogil=True, cache=True)
+def _volumes_from_mask(mask):
+    """ Compute the 'volume' (number of grid cells) per value in the mask. 
+    Return volumes[i] is the volume of halo ID i. The last entry is the unoccupied space. """
+    maxval = np.max(mask)
+
+    volumes = np.zeros( maxval+2, dtype=np.int32 )
+
+    for i in range(mask.shape[0]):
+        for j in range(mask.shape[1]):
+            for k in range(mask.shape[2]):
+                val = mask[i,j,k]
+                volumes[val] += 1
+
+    return volumes
+
+def maskBoxRegionsByHalo():
+    """ Testing discrete convex hull type approach. """
+    # zoom config
+    res = 13
+    variant = 'sf3'
+    run = 'tng_zoom'
+
+    hInds = [0,10,120,13,877,901,1041] # testing
+
+    snap = 5
+
+    # mask config
+    nGrid = 1024 #2048
+
+    sP = simParams(run=run, res=res, snap=snap, hInd=hInds[0], variant=variant)
+    gridSize = sP.boxSize / nGrid # linear, code units
+    gridVol  = sP.units.codeLengthToMpc(gridSize)**3 # volume, pMpc^3
+    volumeTot = nGrid**3 * gridVol # equals sP.units.codeLengthToMpc(sP.boxSize)**3
+
+    # allocate mask
+    mask = np.zeros( (nGrid,nGrid,nGrid), dtype='int16' ) - 1
+
+    numHalosTot = 0
+    numSubhalosTot = 0
+
+    numHalos14nocontam = 0
+    numHalos12nocontam = 0
+
+    # test
+    for hInd in hInds:
+        # load
+        sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
+        halos = sP.halos(['GroupPos','GroupLenType','Group_M_Crit200'])
+        halo_contam = halos['GroupLenType'][:,2] / halos['GroupLenType'][:,1]
+        halo_m200 = sP.units.codeMassToLogMsun(halos['Group_M_Crit200'])
+
+        # offset
+        halos['GroupPos'] -= sP.boxSize/2
+        halos['GroupPos'] += sP.zoomShiftPhys
+
+        _mark_mask(mask, gridSize, halos['GroupPos'], hInd)
+
+        # diagnostics
+        print(sP.simName, sP.numHalos, sP.numSubhalos, halos['GroupPos'][0,:])
+
+        numHalosTot += sP.numHalos
+        numSubhalosTot += sP.numSubhalos
+
+        with np.errstate(invalid='ignore'):
+            w14 = np.where( (halo_contam == 0) & (halo_m200 >= 14.0) )
+            w12 = np.where( (halo_contam == 0) & (halo_m200 >= 12.0) )
+
+        numHalos14nocontam += len( w14[0] )
+        numHalos12nocontam += len( w12[0] )
+
+    print('\nTotal: targeted halos = %d, nHalos = %d, nSubhalos = %d' % (len(hInds),numHalosTot,numSubhalosTot))
+    print('Number of total halos without contamination: [%d] above 14.0, [%d] above 12.0' % (numHalos14nocontam,numHalos12nocontam))
+
+    # compute volume occupied by each halo
+    totOccupiedVolFrac = 0.0
+    volumes = _volumes_from_mask(mask) * gridVol
+
+    for hInd in hInds + [-1]:
+        frac = volumes[hInd] / volumeTot * 100
+        if hInd != -1: totOccupiedVolFrac += frac
+        print('[%4d] vol = [%8.1f pMpc^3], frac of total = [%8.6f%%]' % (hInd, volumes[hInd], frac))
+
+    assert np.abs( totOccupiedVolFrac - (100-frac) ) < 1e-6 # total occupied should equal 1-(total unoccupied)
+
+def combineZoomGroupCatsIntoVirtualParentBox():
+    """ Add a zoom simulation, at the group catalog level, into a 'virtual' parent 
+    simulation, i.e. concatenate the output/group* of these runs."""
+    outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
+
+    # zoom config
+    res = 13
+    variant = 'sf3'
+    run = 'tng_zoom'
+
+    hInds = [877,901,1041] # testing
+
+    nSnaps = 99
+
+    def _newpartid(old_ids, halo_ind):
+        """ Define convention to offset particle/cell/tracer IDs based on zoom run halo ID. """
+        return halo_ind * 100000000 + old_ids # no halo has more than 100M
+
+    # loop over snapshots
+    for snap in [99]: #range(nSnaps):
+        # load total number of halos and subhalos
+        numHalosTot = 0
+        numSubhalosTot = 0
+
+        for hInd in hInds:
+            sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
+            print(sP.simName, sP.numHalos, sP.numSubhalos)
+            numHalosTot += sP.numHalos
+            numSubhalosTot += sP.numSubhalos
+
+        numFiles = sP.groupCatHeader()['NumFiles']
+        print('[snap = %2d] Total [%d] halos, [%d] subhalos.' % (snap,numHalosTot,numSubhalosTot))
+
+        # TODO: have to choose which... FoFs are in entire box, not just high res region
+        # 877: 10k FoFs, all have high-rs DM, 8k have no low-res DM, dists out to 17 Mpc
+        #  -- mark targeted zoom halos (not all second-most-massive halos are <14.3)
+        #  -- compute contamination fraction for all halos/subhalos
+        import pdb; pdb.set_trace()
+
+        # use first zoom run: allocate
+        data = {}
+        offsets = {}
+        headers = {}
+
+        sP = simParams(run=run, res=res, snap=snap, hInd=hInds[0], variant=variant)
+
+        with h5py.File(sP.gcPath(0), 'r') as f:
+            for gName in f.keys():
+                if len(f[gName]):
+                    # group with datasets, e.g. Group, Subhalo
+                    data[gName] = {}
+                    offsets[gName] = 0
+                else:
+                    # group with no datasets, i.e. only attributes, e.g. Header, Config, Parameters
+                    headers[gName] = dict( f[gName].attrs.items() )
+
+                for field in f[gName].keys():
+                    shape = list(f[gName][field].shape)
+
+                    # replace first dim with total length
+                    if gName == 'Group':
+                        shape[0] = numHalosTot
+                    elif gName == 'Subhalo':
+                        shape[0] = numSubhalosTot
+                    else:
+                        assert 0 # handle
+                    
+                    # allocate
+                    data[gName][field] = np.zeros(shape, dtype=f[gName][field].dtype)
+
+        # add field to save originating zoom run
+        data['Group']['GroupOrigHaloID'] = np.zeros(numHalosTot, dtype='int32')
+        data['Subhalo']['SubhaloOrigHaloID'] = np.zeros(numSubhalosTot, dtype='int32')
+
+        # loop over all zoom runs: load full group cats
+        import pdb; pdb.set_trace()
+
+        for hInd in hInds:
+            sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
+
+            for i in range(numFiles):
+                print(' ',sP.hInd,i,offsets['Group'],offsets['Subhalo'])
+
+                startOffHalo = offsets['Group'] # starting halo index for this zoom run
+                startOffSub  = offsets['Subhalo'] # starting subhalo index for this zoom run
+
+                with h5py.File(sP.gcPath(i), 'r') as f:
+                    for gName in f.keys():
+                        if len(f[gName]) == 0:
+                            continue
+
+                        offset = offsets[gName]
+
+                        # load and stamp
+                        for field in f[gName]:
+                            length = f[gName][field].shape[0]
+
+                            data[gName][field][offset:offset+length,...] = f[gName][field][()]
+
+                        # save originating zoom run halo ID, and make index adjustments
+                        if gName == 'Group':
+                            data['Group']['GroupOrigHaloID'][offset:offset+length] = hInd
+                            data['Group']['GroupFirstSub'][offset:offset+length] += startOffSub
+                        if gName == 'Subhalo':
+                            data['Subhalo']['SubhaloOrigHaloID'][offset:offset+length] = hInd
+                            data['Subhalo']['SubhaloGrNr'][offset:offset+length] += startOffHalo
+                            data['Subhalo']['SubhaloIDMostbound'][offset:offset+length] = \
+                              _newpartid(data['Subhalo']['SubhaloIDMostbound'][offset:offset+length], hInd)
+
+                        # TODO: spatial offset adjustments: GroupPos, SubhaloPos, ...
+
+                        offsets[gName] += length
+
+        # header adjustments
+        headers['Header']['Ngroups_Total'] = numHalosTot
+        headers['Header']['Nsubgroups_Total'] = numSubhalosTot
+
+        import pdb; pdb.set_trace()
+
+        # write into single file
+        savePath = outPath + 'groups_%03d/' % snap
+        outFile  = "fof_subhalo_tab_%03d.hdf5" % snap
+
+        if not path.isdir(savePath):
+            mkdir(savePath)
+
+        with h5py.File(savePath + outFile, 'w') as f:
+            # add header groups
+            for gName in headers:
+                f.create_group(gName)
+                for attr in headers[gName]:
+                    f[gName].attrs[attr] = headers[gName][attr]
+
+            f['Header'].attrs['Ngroups_ThisFile'] = f['Header'].attrs['Ngroups_Total']
+            f['Header'].attrs['Nsubgroups_ThisFile'] = f['Header'].attrs['Nsubgroups_Total']
+            f['Header'].attrs['NumFiles'] = 1
+
+            # add datasets
+            for gName in data:
+                f.create_group(gName)
+                for field in data[gName]:
+                    f[gName][field] = data[gName][field]
+                    assert data[gName][field].shape[0] == offsets[gName]
+
+        print(' Wrote [%s].' % outFile)
+
+    print('Done.')

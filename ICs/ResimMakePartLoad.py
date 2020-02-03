@@ -400,6 +400,8 @@ def generate(fofID, EnlargeHighResFactor=None):
     ext_max = np.max(posInitial, axis=0)
     extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
 
+    cmInitial = _get_center_of_mass(posInitial, sP.boxSize)
+
     print('Initial DM positions extent, x [%.1f - %.1f], y [%.1f - %.1f], z [%.1f - %.1f], max box fraction = %.3f' % \
         (ext_min[0], ext_max[0], ext_min[1], ext_max[1], ext_min[2], ext_max[2], extent_frac))
 
@@ -419,8 +421,6 @@ def generate(fofID, EnlargeHighResFactor=None):
     next_time = time.time()
 
     # mark high resolution region, enlarge, and build parent grid
-    cmInitial = _get_center_of_mass(posInitial, sP.boxSize)
-
     _mark_high_res_cells(Grids, GridsOffset, MaxLevel, sP.boxSize, posInitial, cmInitial)
 
     Radius = _enlarge_high_res_cells(Grids, GridsOffset, MaxLevel, sP.boxSize, EnlargeHighResFactor)
@@ -493,16 +493,27 @@ def generate(fofID, EnlargeHighResFactor=None):
     print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
 
 def generate_set():
-    #haloIDs = [653, 858, 1096, 1244, 1291, 1523, 1544, 1775, 1838, 1890, 1919] # todo: 14.5-14.6 bin of 10
-    haloIDs = [18,22,28,30,20,33,60,69,93,101,5,11,15,24,40] # todo: [15.0-15.1]=6 more [15.1-15.2]=4 more, [15.2-15.3]=the rest(4 more)
-    #haloIDs = [72,117,136,178,262,83,188,208,295,302] # todo: [14.9-15.0]=5 more, [14.8-14.9]=5 more
-    #haloIDs = [343,363,387,433,456,473,494,533,641,648] # todo: [14.7-14.8]=5 more, [14.6-14.7]=5 more
+    # remaining undone above 15.0: 
+    #  [15.0, 15.1] [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231]
+    #  [15.1, 15.2] [2, 16, 25, 37, 38, 46, 53, 56, 58, 74, 75, 81]
+    #haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
+    #           3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
+    #           3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
+    #haloIDs = [861, 1062, 1106, 1254, 1547, 1567, 1673, 1704, 1736, 1766, 
+    #           1863, 1896, 1991, 2037, 2056, 2155, 2167, 2195, 2209, 2264, 
+    #           2341, 2349, 2393, 2468, 2531, 2617, 2681, 2750, 3128, 3372] # todo: 14.4-14.5 bin of 30
+    haloIDs = [278, 460, 653, 858, 1066, 1112, 1179, 1241, 1244, 1248, 
+               1291, 1404, 1419, 1430, 1459, 1523, 1544, 1724, 1759, 1775, 
+               1838, 1856, 1890, 1909, 1919, 1938, 2011, 2054, 2127, 2145] # todo: 14.5-14.6 bin of 30
+    #haloIDs = [343,363,387,433,456,72,117,136,178,262,63,108,121,144] # todo: [14.7-14.8]=5 more, [14.9-15.0]=5 more, [15.0-15.1]=4 more
 
     sizeFacs = [3.0] #[2.0,3.0,4.0]
 
     # haloIDs = [23], sizeFacs = [4.0] # TNG50-1 no-MHD test (z=0.5)
 
+    haloIDs = [877,901,1041] # concat testing
+
     for haloID in haloIDs:
         for sizeFac in sizeFacs:
-            generate(fofID=haloID, EnlargeHighResFactor=sizeFac)
+            generate(fofID=haloID, EnlargeHighResFactor=sizeFac, printOffsetOnly=True)
 
