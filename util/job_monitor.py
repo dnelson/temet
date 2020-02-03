@@ -1,10 +1,9 @@
-# job_monitor.py
-# dnelson
-# may.2014
-
+"""
+job_monitor.py
+  Helpers for working with SLURM jobs.
+"""
 import re
 import os
-#from vtk import expandedJobNums
 
 def checkVisJobs():
     """ Categorize a large job set into running/completed/failed and 
@@ -70,6 +69,8 @@ def checkVisJobs():
     os.remove(tempJobFile)
    
 def submitExpandedJobs(jobNum):
+    from vis.arepovtk import expandedJobNums
+
     # config
     totNumJobs   = 256
     expansionFac = 16

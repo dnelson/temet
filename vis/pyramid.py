@@ -3,12 +3,9 @@ pyramid.py
   ArepoVTK/Web: building image pyramids.
   requires: curl -O https://raw.github.com/drj11/pypng/master/code/png.py
 """
-#from __future__ import (absolute_import,division,print_function,unicode_literals)
-#from builtins import *
-
 import h5py
 import numpy as np
-from .png import Reader as pngReader, Writer as pngWriter
+from util.png import Reader as pngReader, Writer as pngWriter
 import os.path
 from os import mkdir
 

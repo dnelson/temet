@@ -1,7 +1,7 @@
-# vtk.py - processing of ArepoVTK tiled output
-# dnelson
-# jun.2014
-
+"""
+arepovtk.py
+  Processing of ArepoVTK tiled output.
+"""
 from .pyramid import *
 
 def process():
