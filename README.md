@@ -155,8 +155,8 @@ For example, for general particle-level plots:
 
 >>> plot.general.plotParticleMedianVsSecondQuant(sP, 'dm', xQuant='velmag', yQuant='veldisp')
 
->>> plot.general.plotStackedRadialProfiles1D([sP], subhalo=[0], 'gas', ptProperty='entropy', op='median')
->>> plot.general.plotStackedRadialProfiles1D([sP,sP2], subhalo=[[0,1,2],[1,4,5]], 'gas', ptProperty='bmag')
+>>> plot.general.plotStackedRadialProfiles1D([sP], subhaloIDs=[0], 'gas', ptProperty='entropy', op='median')
+>>> plot.general.plotStackedRadialProfiles1D([sP,sP2], subhaloIDs=[[0,1,2],[1,4,5]], 'gas', ptProperty='bmag')
 ```
 
 And for general group catalog-level plots:

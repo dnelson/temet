@@ -1224,6 +1224,14 @@ class simParams:
         return self.subbox is not None
 
     @property
+    def partTypes(self):
+        """ Return a list of particle type names contained in this simulation, excluding tracers. """
+        pt = ['gas','dm','stars','bh']
+        if self.isZoom:
+            pt.append('dm_lowres')
+        return pt
+
+    @property
     def parentBox(self):
         """ Return a sP corresponding to the parent volume, at the same redshift (fullbox for subbox only for now). """
         assert self.subbox is not None

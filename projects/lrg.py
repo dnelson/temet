@@ -489,9 +489,11 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
                 dist_global = np.hstack( (dist_global, dist_loc))
                 grid_global = np.hstack( (grid_global, grid_loc))
 
+        print(i)
         dist_global[dist_global == 0] = dist_global[dist_global > 0].min() / 2
 
         dist_global = np.log10(dist_global)
+        print(i)
 
         return dist_global, grid_global
 
@@ -513,7 +515,7 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
             count_above, _, _ = binned_statistic(loc_dist, mask, 'sum', bins=nBins, range=[xlim])
             count_total, bin_edges, _ = binned_statistic(loc_dist, mask, 'count', bins=nBins, range=[xlim])
 
-            # plot
+            # take ratio and smooth
             xx = bin_edges[:-1] + (xlim[1]-xlim[0])/nBins/2
             with np.errstate(invalid='ignore'):
                 fc[:,i] = count_above / count_total
@@ -558,15 +560,18 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
 
     # second sim set? only do for last column threshold
     if sPs2 is not None:
+        dist_global = None
+        grid_global = None
+
         lines = []
         for i, sPset in enumerate(sPs2):
             print(i, sPset[0].simName)
 
             # load grid
-            dist_global2, grid_global2 = _get_grids(sPset)
+            dist_global, grid_global = _get_grids(sPset)
 
             # covering fraction calculation and plot
-            xx, fc = _covering_fracs(dist_global2, grid_global2, Nthresh[-1])
+            xx, fc = _covering_fracs(dist_global, grid_global, Nthresh[-1])
             l, = ax.plot(10**xx, fc[:,-1], linestyles[i+1], lw=3.0, alpha=1.0, color=c)
             lines.append(l)
 
@@ -599,6 +604,16 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
 
     ax.errorbar(lan18_rp, lan18_fc, yerr=[lan18_fc-lan18_down,lan18_up-lan18_fc], markerSize=8, 
          color='black', ecolor='black', alpha=0.9, capsize=0.0, fmt='p', label=lan18_label)
+
+    # observations: Zahedy+19 COS-LRG: fc (N_MgII > 10^13 cm^-3, poor statistics)
+    z19_label = "Zahedy+ (2019) N$_{\\rm MgII}$ > 10$^{13}$ cm$^{-3}$"
+    z19_rp    = [50, 130] # very rough averages of "d<100kpc" and "d = 100-160kpc"
+    z19_fc    = np.array([0.60, 0.0])
+    z19_up    = np.array([0.85, 0.2])
+    z19_down  = np.array([0.30, 0.0])
+
+    ax.errorbar(z19_rp, z19_fc, yerr=[z19_fc-z19_down,z19_up-z19_fc], markerSize=8, 
+         color='black', ecolor='black', alpha=0.3, capsize=0.0, fmt='s', label=z19_label)    
 
     # finish plot
     if sPs2 is not None:
@@ -648,6 +663,8 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
         panel = {'partType':'gas', 'partField':'Mg II', 'valMinMax':[12.0,16.5]}
     if conf == 4:
         panel = {'partType':'stars', 'partField':'stellarComp'}
+    if conf == 8:
+        panel = {'partType':'gas', 'partField':'tcool_tff', 'valMinMax':[0.0, 2.0]}
 
     if conf == 5:
         # NARROW SLICE! h1
@@ -670,7 +687,7 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
         panel.append( {'partField':'P_B', 'valMinMax':[2.8,5.2]} )
         panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.5,1.5]} )
 
-    if conf == 6:
+    if conf in [6,7]:
         # NARROW SLICE! h19
         haloIDs = [19]
 
@@ -687,9 +704,15 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
 
         panel = []
         panel.append( {'partField':'cellsize_kpc', 'valMinMax':[-0.7,0.0]} )
-        panel.append( {'partField':'P_gas', 'valMinMax':[3.2,4.6]} )
-        panel.append( {'partField':'P_B', 'valMinMax':[2.0,3.8]} )
-        panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]} )
+        if conf == 6:
+            panel.append( {'partField':'P_gas', 'valMinMax':[3.2,4.6]} )
+            panel.append( {'partField':'P_B', 'valMinMax':[2.0,3.8]} )
+            panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]} )
+        if conf == 7:
+        # testing:
+            panel.append( {'partField':'tcool', 'valMinMax':[-1.0,2.0]} )
+            panel.append( {'partField':'tff', 'valMinMax':[-1.5,-0.5]} )
+            panel.append( {'partField':'tcool_tff', 'valMinMax':[0.0,2.0]} ) # midpoint at tcool/tff=10
 
     if gallery:
         # multi-panel
@@ -969,7 +992,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     """ Load subbox time evolution tracks and make analysis for the time evolution of 
     clump cell/integral properties vs time. Helper for the plot function below. """
 
-    saveFilename = 'cache_clump_%s_%d-%d.hdf5' % (sP.simName,haloID,clumpID)
+    saveFilename = sP.derivPath + 'cache/cache_clump_%s_%d-%d.hdf5' % (sP.simName,haloID,clumpID)
 
     # check for cache existence
     if isfile(saveFilename):
@@ -1057,7 +1080,7 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     print('Found [%d] tracers in [%d] parent cells.' % (inds_cat.size, cell_ids.size))
 
     # load other tracer property tracks
-    trProps = ['hdens','temp','pos','metal','beta','netcoolrate']
+    trProps = ['hdens','temp','pos','metal','beta','netcoolrate','parent_indextype']
 
     data = {}
 
@@ -1075,7 +1098,8 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
             assert np.array_equal(data['snaps'], data_loc['snaps'])
 
         w_notdone = np.where(data_loc['done'] == 0)
-        data_loc[prop][w_notdone] = np.nan
+        if len(w_notdone[0]):
+            data_loc[prop][w_notdone] = np.nan
 
         data[prop] = data_loc[prop][:,inds_cat] # subset within indRange
 
@@ -1089,7 +1113,8 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
 
         if data_loc is not None:
             w_notdone = np.where(data_loc['done'] == 0)
-            data_loc[prop][w_notdone] = np.nan
+            if len(w_notdone[0]):
+                data_loc[prop][w_notdone] = np.nan
 
             data[prop] = np.vstack( (data[prop], data_loc[prop][:,inds_cat]) )
 
@@ -1103,6 +1128,11 @@ def clumpTracerTracksLoad(sP, haloID, clumpID):
     for prop in trProps:
         # time averages across all member cells
         data[prop+'_avg'] = np.nanmean(data[prop], axis=1)
+
+    for ptNum in [0,4,5]:
+        mask = ( (data['parent_indextype'] >= ptNum*1e11) & (data['parent_indextype'] < (ptNum+1)*1e11) )
+        data['parent_type_%d' % ptNum] = mask
+        data['parent_frac_%d' % ptNum] = np.sum(mask, axis=1) / mask.shape[1]
 
     data['tage'] = sP.units.redshiftToAgeFlat(data['redshifts_full']) * 1e3 # Gyr -> Myr
     data['dt'] = data['tage'] - data['tage'][0]
@@ -1259,6 +1289,7 @@ def clumpTracerTracks(sP, clumpID):
 
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
+            ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
             ax.set_xlabel(labels[xval])
             ax.set_ylabel(labels[yval])
@@ -1270,9 +1301,9 @@ def clumpTracerTracks(sP, clumpID):
                 for i in range(data[xval].shape[1]): # individuals
                     xx = logx(data[xval][:,i])
                     yy = logy(data[yval][:,i])
-                    ax.plot(xx[w_back], yy[w_back], '-', lw=lineW, color='black', alpha=lineAlpha)
+                    ax.plot(xx[w_back], yy[w_back], '-', lw=lineW, color='black', alpha=lineAlpha, zorder=0)
                     if xval not in noForwardData and yval not in noForwardData:
-                        ax.plot(xx[w_forward], yy[w_forward], '-', lw=lineW, color='black', alpha=lineAlpha)
+                        ax.plot(xx[w_forward], yy[w_forward], '-', lw=lineW, color='black', alpha=lineAlpha, zorder=0)
 
                 xx = logx(data[xval+'_median']) # mean across member cells
                 yy = logy(data[yval+'_median'])
@@ -1312,8 +1343,8 @@ def clumpTracerTracks(sP, clumpID):
     for i in range(data[prop].shape[1]): # individuals
         xx = data[prop][:,i,axes[0]]
         yy = data[prop][:,i,axes[1]]
-        l1, = ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
         l2, = ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
+        l1, = ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
 
     xx = data[prop+'_avg'][:,axes[0]]
     yy = data[prop+'_avg'][:,axes[1]] # mean across member cells
@@ -1467,6 +1498,7 @@ def paperPlots():
         haloIDs = _get_halo_ids(sP)[2]
 
         # gas metallicity, N_MgII, N_HI, stellar light
+        #lrgHaloVisualization(sP, haloIDs, conf=8, gallery=False, globalDepth=False) # haloIDs=[1]
         for conf in [1,2,3,4]:
             lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
             lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
@@ -1508,17 +1540,16 @@ def paperPlots():
         ylim = [3.8, 7.8]
 
         weights = ['mass']
-        meancolors = None
+        meancolors = None # 'tcool_tff'
         clim = [-4.0,0.0]
         contourQuant = 'gas_pres'
         contours = [2.5,3.0,3.5] # log K/cm^3
 
-        saveStr = weights[0] if weights is not None else meancolors[0]
-
         haloIDs = [8] # single example
         #haloIDs = _get_halo_ids(sP)[1] # all the halos in a mass bin
 
-        pdf = PdfPages('phase2d_%s_%d_h%d_%s_%s_%s.pdf' % (sP.simName,sP.snap,haloIDs[0],xQuant,yQuant,weights[0]))
+        saveStr = weights[0] if weights is not None else meancolors[0]
+        pdf = PdfPages('phase2d_%s_%d_h%d_%s_%s_%s.pdf' % (sP.simName,sP.snap,haloIDs[0],xQuant,yQuant,saveStr))
 
         for haloID in haloIDs:
             plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
@@ -1563,6 +1594,34 @@ def paperPlots():
                                           radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
                                           haloMassBins=haloMassBins, combine2Halo=combine2Halo, median=True)
 
+    # fig ?: radial profiles of tcool, tff, tcool/tff (hot gas only)
+    if 0:
+        sP = TNG50
+        subIDs = _get_halo_ids(sP, bin_inds=[2,1], subhaloIDs=True)
+
+        for prop in ['tff','tcool_tff','tcool']:
+            plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty=prop, op='median', subhaloIDs=[subIDs], 
+                xlim=[1.1,3.0], ylim=[-2.2,2.2], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
+                ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
+
+    # fig ? - 'radial profile' of tcool (2D)
+    if 1:
+        sP = TNG50
+
+        xQuant = 'rad_kpc'
+        yQuant = 'tcool_tff' #'tff' #'tcool'
+        xlim = [0.5, 3.0]
+        ylim = [-3.8, 3.0] #[-5.6, 2.9]
+
+        weights = ['mass']
+        meancolors = None # 'tcool_tff'
+        clim = [-4.0,0.0]
+
+        haloID = 8 # single example
+
+        plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
+                     haloID=haloID, pdf=pdf, xlim=xlim, ylim=ylim, clim=clim, nBins=None)
+
     # fig X: 2pcf
     if 0:
         sPs = [TNG50] #[TNG100, TNG300]
@@ -1587,7 +1646,7 @@ def paperPlots():
         sP = TNG50
         haloIDs = _get_halo_ids(sP)[2]
 
-        for conf in [5,6]:
+        for conf in [5,6,7]:
             lrgHaloVisualization(sP, None, conf=conf, gallery=False)
 
         # vis test - verify a ~1.5kpc clump by weighting those indices to zero in vis()
@@ -1621,7 +1680,10 @@ def paperPlots():
             for clumpID in clumpIDs:
                 clumpTracerTracks(sP, clumpID=clumpID)
 
-    # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
+    # fig ?: individual (or stacked) clump radial profiles, including pressure/cellsize
+    # TODO
+
+    # fig ?: visual frames sequence: clump evo (either mark tracer positions, or mean position? or tracks?)
     # TODO
 
     # fig 10: N_clumps vs halo mass, to show they don't exist at below some threshold halo mass
@@ -1632,8 +1694,6 @@ def paperPlots():
     if 0:
         haloIDs = _get_halo_ids(TNG50)[2]
         lrgHaloVisResolution(TNG50, haloIDs, [TNG50_2, TNG50_3, TNG50_4])
-
-    # fig 12: resolution convergence, quantitative (?)
 
     # --- observational comparison ---
 
@@ -1665,7 +1725,7 @@ def paperPlots():
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
     # fig 15: covering fraction comparison
-    if 1:
+    if 0:
         haloMassBin = haloMassBins[2]
         ion = 'Mg II'
         Nthreshs = [15.0, 15.5, 16.0]

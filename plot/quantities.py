@@ -2048,7 +2048,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         assert ptType == 'gas'
         label = 'Gas Cooling Time [ log Gyr ]'
         lim = [-3.0,2.0]
-        if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
+        if haloLims: lim = [-3.0, 2.5]
         log = True
 
     if ptProperty in ['coolrate','coolingrate']:
@@ -2137,6 +2137,24 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     if ptProperty in ['specangmom_mag','specj_mag']:
         label = '%s Specific Angular Momentum [log kpc km/s]' % typeStr
         lim = [2.0, 6.0]
+        if haloLims: pass
+        log = True
+
+    if ptProperty in ['menc','enclosedmass']:
+        label = 'Enclosed Mass [ log 10$^{10}$ M$_{\\rm sun}$ / h ]'
+        lim = [-3.0, 2.0]
+        if haloLims: pass
+        log = True
+
+    if ptProperty in ['tff','tfreefall','freefalltime']:
+        label = 'Gravitational Free-Fall Time [ log Gyr ]'
+        lim = [-2.0, 1.0]
+        if haloLims: pass
+        log = True
+
+    if ptProperty in ['tcool_tff']:
+        label = 'log ( t$_{\\rm cool}$ / t$_{\\rm ff}$ )'
+        lim = [-1.0, 2.0]
         if haloLims: pass
         log = True
 

@@ -1126,6 +1126,62 @@ def snapshotSubset(sP, partType, fields,
             if '_vec' in field.lower():
                 r[field] = sP.units.particleAngMomVecInKpcKmS(pos, vel, mass, firstSub['SubhaloPos'], firstSub['SubhaloVel'])
 
+        # enclosed mass [code units] or [msun]
+        if field.lower() in ['menc','enclosedmass','menc_msun','enclosedmass_msun']:
+            assert haloID is not None or subhaloID is not None
+
+            # allocate for radii and masses of all particle types
+            lenType = sP.halo(haloID)['GroupLenType'] if haloID is not None else sP.subhalo(subhaloID)['SubhaloLenType']
+            numPartTot = np.sum( lenType[sP.ptNum(pt)] for pt in sP.partTypes )
+
+            rad = np.zeros( numPartTot, dtype='float32' )
+            mass = np.zeros( numPartTot, dtype='float32' )
+            mask = np.zeros( numPartTot, dtype='int16' )
+
+            # load
+            offset = 0
+            for pt in sP.partTypes:
+                numPartType = lenType[sP.ptNum(pt)]
+                rad[offset : offset+numPartType] = snapshotSubset(sP, pt, 'rad', **kwargs)
+                mass[offset : offset+numPartType] = snapshotSubset(sP, pt, 'mass', **kwargs)
+
+                if sP.isPartType(pt, partType):
+                    mask[offset : offset+numPartType] = 1
+                offset += numPartType
+
+            # sort and cumulative sum
+            inds = np.argsort(rad)
+            radtype = rad[np.where(mask == 1)]
+            indstype = np.argsort(rad[np.where(mask == 1)])
+            mass = mass[inds]
+            mask = mask[inds]
+            cum_mass = np.cumsum(mass, dtype='float64')
+
+            # extract enclosed mass for our particle type, shuffle back into original order
+            menc = np.zeros( indstype.size, dtype='float32' )
+            menc[indstype] = cum_mass[np.where(mask == 1)]
+
+            r[field] = menc
+
+            if '_msun' in field.lower():
+                r[field] = sP.units.codeMassToMsun(r[field])
+
+        # gravitational free-fall time [linear Gyr]
+        if field.lower() in ['tff','tfreefall','freefalltime']:
+            menc = snapshotSubset(sP, partType, 'menc', **kwargs)
+            rad = snapshotSubset(sP, partType, 'rad', **kwargs)
+
+            enclosed_vol = 4 * np.pi * rad**3 / 3 # code units
+            enclosed_meandens = menc / enclosed_vol
+
+            r[field] = sP.units.avgEnclosedDensityToFreeFallTime(enclosed_meandens)
+
+        # ratio of cooling time to free fall time (tcool/tff) [linear]
+        if field.lower() in ['tcool_tff']:
+            tcool = snapshotSubset(sP, partType, 'tcool', **kwargs)
+            tff = snapshotSubset(sP, partType, 'tff', **kwargs)
+            r[field] = (tcool / tff)
+
         # subhalo or halo ID per particle/cell
         if field.lower() in ['subid','subhaloid','subhalo_id','haloid','halo_id']:
             # inverse map indRange to subhaloID list

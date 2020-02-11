@@ -300,7 +300,7 @@ def celineHIH2RadialProfiles():
     with np.errstate(invalid='ignore'):
         ww = np.where( (mhalo > 11.8) & (mhalo < 11.9) )
 
-    subhalos = [{'11.8 < M$_{\\rm halo}$ < 11.9':ww[0]}]
+    subhaloIDs = [{'11.8 < M$_{\\rm halo}$ < 11.9':ww[0]}]
 
     # select properties
     fields    = ['MHIGK_popping','MH2GK_popping']
@@ -309,7 +309,7 @@ def celineHIH2RadialProfiles():
     proj2D    = [2, None] # z-axis, no depth restriction
 
     for field in fields:
-        plotStackedRadialProfiles1D(sPs, subhalo=subhalos, ptType='gas', ptProperty=field, op=op, 
+        plotStackedRadialProfiles1D(sPs, subhaloIDs=subhaloIDs, ptType='gas', ptProperty=field, op=op, 
                                     weighting=weighting, proj2D=proj2D)
 
 def celineHIDensityVsColumn():

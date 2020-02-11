@@ -36,6 +36,7 @@ colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_
 totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y','bfield_x','bfield_y','bfield_z']
+haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel']
 
 def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
@@ -635,7 +636,13 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
             normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
-        quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
+        if partFieldLoad in haloCentricFields:
+            # temporary override, switch to halo specified load (for halo-centric quantities)
+            haloID = sP.subhalo(sP.hInd)['SubhaloGrNr']
+            quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
+            assert quant.size == indRange[1] - indRange[0] + 1 # should verify fof scope (e.g. method == 'sphMap')
+        else:
+            quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
 
     # quantity pre-processing (need to remove log for means)
     if partField in ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']:
@@ -884,6 +891,18 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid = grid
         config['label'] = 'Gas Cell Size [log kpc]'
         config['ctName'] = 'Spectral'
+
+    if partField in ['tcool']:
+        config['label'] = 'Cooling Time [log Gyr]'
+        config['ctName'] = 'thermal'
+
+    if partField in ['tff']:
+        config['label'] = 'Gravitational Free-Fall Time [log Gyr]'
+        config['ctName'] = 'haline'
+
+    if partField in ['tcool_tff']:
+        config['label'] = 't$_{\\rm cool}$ / t$_{\\rm ff}$ [log]'
+        config['ctName'] = 'curl'
 
     # gas: shock finder
     if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:

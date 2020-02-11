@@ -30,7 +30,7 @@ boxGridSizeMetals = 5.0 # code units, e.g. ckpc/h
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
 # eliminate the entire specialized ufunc logic herein
-userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','shape_ellipsoid_1r']
+userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','shape_ellipsoid_1r','tff','tcool_tff']
 
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -2296,6 +2296,9 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     if subhaloIDsTodo is None:
         subhaloIDsTodo, indRange_scoped = _pSplitBounds(sP, pSplit, 
             partType='dm', minHaloMass=minHaloMass, cenSatSelect=cenSatSelect, equalSubSplit=False)
+    else:
+        assert pSplit is None # otherwise check, don't think we actually subdivide the work
+        indRange_scoped = sP.subhaloIDListToBoundingPartIndices(subhaloIDsTodo)
 
     nChunks = 1 # chunk load disabled by default
 
@@ -2363,8 +2366,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     r = np.zeros( (nSubsDo,radNumBins+1,numProfTypes), dtype='float32' )
     if numProfTypes == 1: r = np.squeeze(r, axis=2)
 
-    if op not in ['sum']:
-        r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
+    #if op not in ['sum']: # does not work with r[i,;] += below!
+    #    r.fill(np.nan) # set NaN value for subhalos with e.g. no particles for op=mean
 
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = ['pos']
@@ -2623,6 +2626,15 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                     loc_val = p_vel - haloVel
                     if ptProperty == 'losvel_abs':
                         loc_val = np.abs(loc_val)
+
+                if ptProperty in ['tff','tcool_tff']:
+                    # do per-halo load (not scalable)
+                    if scope == 'subhalo':
+                        loc_val = sP.snapshotSubset(ptType, ptProperty, subhaloID=subhaloID)
+                    elif scope == 'fof':
+                        haloID = sP.subhalo(subhaloID)['SubhaloGrNr']
+                        loc_val = sP.snapshotSubset(ptType, ptProperty, haloID=haloID)
+                    loc_val = loc_val[wValid]
 
             # weighted histogram (or other op) of rr_log distances
             if scope in ['global','global_fof']:

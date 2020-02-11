@@ -799,7 +799,7 @@ class units(object):
         w = np.where(code_gfmcoolrate >= 0.0)
         t_cool[w] = 0.0
 
-        return t_cool
+        return t_cool.astype('float32')
 
     def tracerEntToCGS(self, ent, log=False):
         """ Fix cosmological/unit system in TRACER_MC[MaxEnt], output in cgs [K cm^2]. """
@@ -1026,6 +1026,19 @@ class units(object):
             v200 = np.sqrt( self.G * m200 / r200 * self._sP.scalefac ) # little h factors cancel
         v200 *= (1.0e5/self.UnitVelocity_in_cm_per_s) # account for non-km/s code units
         return v200
+
+    def avgEnclosedDensityToFreeFallTime(self, rho_code):
+        """ Convert a mass density (code units) to gravitational free-fall time [linear Gyr]. 
+        rho_code Should be the mean density interior to the radius R of a test mass within a halo. """
+
+        # remove little h factors
+        rho = rho_code.astype('float32') * self._sP.HubbleParam**2 / self.scalefac**3 # 1e10 msun / kpc^3
+        rho /= (self.kpc_in_km)**2 # 1e10 msun / (km^2 * kpc)
+
+        t_ff = np.sqrt( 3 * np.pi / (32 * self.G * rho) ) # G is [kpc (km/s)**2 / 1e10 msun] -> t_ff is [s]
+        t_ff /= self.s_in_Gyr
+
+        return t_ff
 
     def metallicityInSolar(self, metal, log=False):
         """ Given a code metallicity (M_Z/M_total), convert to value with respect to solar. """
