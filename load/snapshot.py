@@ -281,9 +281,9 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                     # either ionization fractions, or total mass in the ion
                     values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeLocal)
                     if prop == 'mass':
-                        values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
+                        values *= sP.snapshotSubset(partType, 'Masses', indRange=indRangeLocal)
                     if prop == 'numdens':
-                        values *= sP.snapshotSubset(partType, 'numdens', **kwargs)
+                        values *= sP.snapshotSubset(partType, 'numdens', indRange=indRangeLocal)
                         values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
                 else:
                     # emission flux
@@ -926,6 +926,9 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             coolrate = snapshotSubset(sP, partType, 'GFM_CoolingRate', **kwargs)
             r[field] = sP.units.coolingTimeGyr(dens, coolrate, u)
+            sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
+            w = np.where(sfr > 0.0)
+            r[field][w] = np.nan # eEOS gas
 
         # cooling rate, specific (computed from saved GFM_CoolingRate, heating=nan) [erg/s/g]
         if field.lower() in ['coolrate','coolingrate']:
