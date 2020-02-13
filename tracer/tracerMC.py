@@ -635,6 +635,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
     snaps, redshifts = getEvoSnapList(sP, toRedshift, snapStep)
     startSnap = sP.snap
 
+    sP_start = sP.copy()
+
     # allocate return struct
     r = { 'snaps'     : snaps, 
           'redshifts' : redshifts }
@@ -701,26 +703,32 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             saveSnapInd = m
             m = 0 # write over previous snapshot in r[], and save in this loop
 
+        # try to load pre-existing parent indexes
+        parent_indextype = None
+        if len(trFields) == 0:
+            parent_indextype = globalAllTracersTimeEvo(sP_start, 'parent_indextype', indRange=[saveSnapInd])
+
         # for the tracers we search for: get their indices at this snapshot
-        tracerIDsLocal  = sP.snapshotSubsetP('tracer', 'TracerID')
+        if parent_indextype is None:
+            tracerIDsLocal  = sP.snapshotSubsetP('tracer', 'TracerID')
 
-        tracerIndsLocal, tracerSearchIndsLocal = match3(tracerIDsLocal, tracerSearchIDs)
-        tracerIDsLocalCheck = tracerIDsLocal[tracerIndsLocal]
+            tracerIndsLocal, tracerSearchIndsLocal = match3(tracerIDsLocal, tracerSearchIDs)
+            tracerIDsLocalCheck = tracerIDsLocal[tracerIndsLocal]
 
-        if not np.array_equal(tracerIDsLocalCheck, tracerSearchIDs) and not sP.isSubbox:
-            raise Exception('Failure to match TracerID set between snapshots.')
+            if not np.array_equal(tracerIDsLocalCheck, tracerSearchIDs) and not sP.isSubbox:
+                raise Exception('Failure to match TracerID set between snapshots.')
 
-        if sP.isSubbox:
-            frac = tracerIndsLocal.size / tracerSearchIDs.size * 100
-            print('  subbox: %10d of %10d original tracers inside, %.3f%%' % (tracerIndsLocal.size,tracerSearchIDs.size,frac))
-        else:
-            # only need this for subboxes where we may not find all tracers searched for
-            # in this case, must write to r[] in the correct locations (normally, since 
-            # match3 is order preserving, tracerIndsLocal is in the order of tracerSearchIDs)
-            tracerSearchIndsLocal = None
+            if sP.isSubbox:
+                frac = tracerIndsLocal.size / tracerSearchIDs.size * 100
+                print('  subbox: %10d of %10d original tracers inside, %.3f%%' % (tracerIndsLocal.size,tracerSearchIDs.size,frac))
+            else:
+                # only need this for subboxes where we may not find all tracers searched for
+                # in this case, must write to r[] in the correct locations (normally, since 
+                # match3 is order preserving, tracerIndsLocal is in the order of tracerSearchIDs)
+                tracerSearchIndsLocal = None
 
-        tracerIDsLocal = None
-        tracerIDsLocalCheck = None
+            tracerIDsLocal = None
+            tracerIDsLocalCheck = None
 
         # record tracer properties
         for field in trFields:
@@ -733,10 +741,32 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
         # get parent IDs and then indices by-type
         if len(parFields):
-            tracerParIDsLocal = sP.snapshotSubsetP('tracer', 'ParentID', inds=tracerIndsLocal)
-            tracerIndsLocal = None
-            tracerParsLocal = mapParentIDsToIndsByType(sP, tracerParIDsLocal)
-            tracerParIDsLocal = None
+            if parent_indextype is None:
+                # cross-match to identify parents
+                tracerParIDsLocal = sP.snapshotSubsetP('tracer', 'ParentID', inds=tracerIndsLocal)
+                tracerIndsLocal = None
+                tracerParsLocal = mapParentIDsToIndsByType(sP, tracerParIDsLocal)
+                tracerParIDsLocal = None
+            else:
+                # already have saved parent indices, reconstruct by type
+                assert parent_indextype['snaps'][saveSnapInd] == snap
+                parent_indextype = parent_indextype['parent_indextype']
+
+                tracerParsLocal = { 'partTypes'   : defParPartTypes,
+                                    'parentInds'  : np.zeros( parent_indextype.size, dtype='int64' ),
+                                    'parentTypes' : np.zeros( parent_indextype.size, dtype='int16' ) - 1 } # start at -1
+
+                for parPt in defParPartTypes:
+                    ptNum = sP.ptNum(parPt)
+                    startVal = int(ptNum * 1e11)
+                    endVal = int((ptNum+1) * 1e11)
+                    w = np.where( (parent_indextype >= startVal) & (parent_indextype < endVal) )
+
+                    if len(w[0]) == 0:
+                        continue
+
+                    tracerParsLocal['parentInds'][w] = parent_indextype[w[0]] - startVal
+                    tracerParsLocal['parentTypes'][w] = ptNum
 
             if debug:
                 # go full circle, calculate the tracer children of these parents, and verify
@@ -785,8 +815,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                 gcHalo = sP.groupCat(fieldsSubhalos=fieldsSH, fieldsHalos=fieldsH)
 
-                ac = sP.auxCat('Subhalo_StellarMeanVel')
-                Subhalo_StellarMeanVel = sP.units.particleCodeVelocityToKms(ac['Subhalo_StellarMeanVel'])
+                if 'vel' in halo_rel_fields[field]:
+                    ac = sP.auxCat('Subhalo_StellarMeanVel')
+                    Subhalo_StellarMeanVel = sP.units.particleCodeVelocityToKms(ac['Subhalo_StellarMeanVel'])
 
             # load parent cells/particles by type
             for ptName in tracerParsLocal['partTypes'][::-1]:
@@ -1398,11 +1429,13 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                                 r[k1] = f[k1][()]
                             else:
                                 # read partial dataset for 2D/3D (shape is [Nsnaps,Ntr] or [Nsnaps,Ntr,3])
-                                assert len(indRange) in [2,3]
+                                assert len(indRange) in [1,2,3]
                                 if len(indRange) == 2:
                                     r[k1] = f[k1][:, indRange[0]:indRange[1]]
-                                else:
+                                elif len(indRange) == 3:
                                     r[k1] = f[k1][indRange[2], indRange[0]:indRange[1]]
+                                else:
+                                    r[k1] = f[k1][indRange[0],:]
 
                         continue
 
