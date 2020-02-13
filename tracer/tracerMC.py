@@ -705,7 +705,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
         # try to load pre-existing parent indexes
         parent_indextype = None
-        if len(trFields) == 0:
+        if len(trFields) == 0 and saveFilename is not None:
             parent_indextype = globalAllTracersTimeEvo(sP_start, 'parent_indextype', indRange=[saveSnapInd])
 
         # for the tracers we search for: get their indices at this snapshot
@@ -901,19 +901,20 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 else:
                     # for global catalogs (tracers spanning many/all halos) map groupcat values at 
                     # this snapshot into one [halo pos,vel,virrad,virvel] per tracer
+                    assert mpb['snaps'][saveSnapInd] == snap
 
-                    # get subhalo ID targets at this snapshot (subhaloIDs_target contains -1 values)
+                    # get subhalo ID targets at this snapshot (subhaloIDs_target contains -1 values, handled below)
                     subhaloID_trackIndexByTr = mpb['subhalo_evo_index'][wType]
-                    subhaloIDs_target = mpb['subhalo_ids_evo'][m,subhaloID_trackIndexByTr]
+                    subhaloIDs_target = mpb['subhalo_ids_evo'][saveSnapInd,subhaloID_trackIndexByTr]
                     subhaloID_trackIndexByTr = None
+
+                    # assumed in saveSnapInd indexing above, e.g. we called getEvoSnapList(sP) with no args in the driver
+                    assert toRedshift is None and snapStep == 1 
 
                     if exitAfterOneSnap:
                         # memory optimization, do gas last (largest), and erase things we don't need anymore
                         if tracerParsLocal is None:
                             mpb = None
-
-                    # assumed in m indexing above, e.g. we called getEvoSnapList(sP) with no args in the driver
-                    assert toRedshift is None and snapStep == 1 
 
                     # map (N,3) per-subhalo quantities
                     if field not in ['rad','rad_rvir']: # use periodicDistsIndexed instead to save memory
@@ -1340,6 +1341,7 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
 
     # allocate, -1 indicates untracked at that snapshot
     evoSnaps, _ = getEvoSnapList(sP)
+    mpb['snaps'] = evoSnaps
     mpb['subhalo_ids_evo'] = np.zeros( (len(evoSnaps),uniqSubhaloIDs.size), dtype='int32' ) - 1
 
     # load MPBs of all subhalos
