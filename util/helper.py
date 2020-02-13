@@ -846,7 +846,7 @@ def periodicDistsN(pos1, pos2, BoxSize):
             if xx < -BoxHalf:
                 xx += BoxSize
 
-            dists[i] += xx
+            dists[i] += xx * xx
         dists[i] = np.sqrt( dists[i] )
 
     return dists
@@ -867,7 +867,7 @@ def periodicDistsIndexed(pos1, pos2, indices, BoxSize):
     assert indices.ndim == 1 and indices.size == pos2.shape[0]
 
     for i in range(pos2.shape[0]):
-        pos1_loc = pos2[:,indices[i]]
+        pos1_loc = pos1[indices[i],:]
         for j in range(3):
             xx = pos1_loc[j] - pos2[i,j]
 
@@ -876,7 +876,7 @@ def periodicDistsIndexed(pos1, pos2, indices, BoxSize):
             if xx < -BoxHalf:
                 xx += BoxSize
 
-            dists[i] += xx
+            dists[i] += xx * xx
         dists[i] = np.sqrt( dists[i] )
 
     return dists
