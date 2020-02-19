@@ -52,7 +52,7 @@ quantDescriptions = {
   'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
   'velmag'           : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
   'spinmag'          : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
-  'M_V'              : 'Galaxy absolute magnitude in the visible (V) band. Intrisic light, with no consideration of dust or obscuration.',
+  'M_V'              : 'Galaxy absolute magnitude in the visible (V) band. Intrinsic light, with no consideration of dust or obscuration.',
   'vcirc'            : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
   'distance'         : 'Radial distance of this satellite galaxy from the center of its parent host halo. Central galaxies have zero distance by definition.',
   'distance_rvir'    : 'Radial distance of this satellite galaxy from the center of its parent host halo, normalized by the virial radius. Central galaxies have zero distance by definition.',
@@ -1836,7 +1836,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [3.5, 8.0]
         log = False
 
-    if ptProperty == 'temp_linear':
+    if ptProperty in ['temp_sfcold_linear', 'temp_linear']:
         assert ptType == 'gas'
         label = 'Gas Temperature [ log K ]'
         lim = [3.5, 7.2]
@@ -1907,12 +1907,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         log = True
 
     if ptProperty in ['bmag','bfieldmag']:
-        label = 'Magnetic Field Magnitude [ log Gauss ]'
+        label = 'Magnetic Field Strength [ log Gauss ]'
         lim = [-15.0, -5.0]
         if haloLims: lim = [-9.0, -4.0]
         log = True
-    if ptProperty in ['bmag_uG','bfieldmag_uG']:
-        label = 'Magnetic Field Magnitude [ log $\mu$G ]'
+    if ptProperty.lower() in ['bmag_ug','bfieldmag_ug']:
+        label = 'Magnetic Field Strength [ log $\mu$G ]'
         lim = [-9.0, 3.0]
         if haloLims: lim = [-3.0, 2.0]
         log = True
@@ -1936,7 +1936,15 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-2.0, 1.0]
         log = True
 
-    # todo: csnd, xray, pres_ratio, ub_ke_ratio
+    # todo: csnd, xray, ub_ke_ratio
+    if ptProperty in ['pres_ratio','pressure_ratio','beta']:
+        assert ptType == 'gas'
+        label = '$\\beta^{-1}$ = P$_{\\rm B}$ / P$_{\\rm gas}$ [ log ]'
+        if ptProperty == 'beta':
+            label = '$\\beta$ = P$_{\\rm gas}$ / P$_{\\rm B}$ [ log ]'
+        lim = [-2.5,2.5]
+        if haloLims: lim = [-2.0,2.0]
+        log = True
 
     if ptProperty in ['gas_pres','gas_pressure','p_gas']:
         assert ptType == 'gas'
@@ -1967,29 +1975,40 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     # todo: u_ke, p_tot, p_sync
 
     if ('MHI' in ptProperty or 'MH2' in ptProperty) and '_popping' in ptProperty:
-        label = ptProperty + ' [code]'
-        lim = [5.0,12.0]
-        log = True
+        if '_numdens' in ptProperty:
+            label = 'n$_{\\rm %s} [ log cm$^{-3}$ ]' % ptProperty[1:3]
+            lim = [-10, 0]
+            log = True
+        else:
+            label = ptProperty + ' [code]'
+            lim = [5.0,12.0]
+            log = True
 
     if ' ' in ptProperty: # cloudy based ionic mass (or emission flux), if field name has a space in it
-        if 'flux' in field:
-            lineName, prop = field.rsplit(" ",1) # e.g. "H alpha flux"
+        if 'flux' in ptProperty:
+            lineName, prop = ptProperty.rsplit(" ",1) # e.g. "H alpha flux"
             lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
             label = '%s Line Flux [log photon/s/cm$^2$]' % lineName
             lim = [-30.0, -15.0] # todo
             if haloLims: pass
             log = True
-        elif 'mass' in field:
-            element, ionNum, _ = field.split() # e.g. "O VI mass"
+        elif 'mass' in ptProperty:
+            element, ionNum, _ = ptProperty.split() # e.g. "O VI mass"
             label = '%s %s Ionic Mass [log M$_{\\rm sun}$]' % (element, ionNum)
             lim = [1.0, 7.0]
             if haloLims: [2.0, 6.0]
             log = True
-        elif 'frac' in field:
-            element, ionNum, _ = field.split() # e.g. "Mg II frac"
+        elif 'frac' in ptProperty:
+            element, ionNum, _ = ptProperty.split() # e.g. "Mg II frac"
             label = '%s %s Ionization Fraction [log]' % (element, ionNum)
             lim = [-10.0, -2.0]
             if haloLims: [-10.0, -4.0]
+            log = True
+        elif 'numdens' in ptProperty:
+            element, ionNum, _ = ptProperty.split() # e.g. "Mg II numdens"
+            label = 'n$_{\\rm %s%s}$ [ log cm$^{-3}$ ]' % (element, ionNum)
+            lim = [-14.0, -4.0]
+            if haloLims: [-12.0, -6.0]
             log = True
 
     if '_ionmassratio' in ptProperty: # e.g. 'O6_O8_ionmassratio', ionic mass ratio
@@ -2101,13 +2120,13 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
 
     # halo-centric analysis fields, always relative to SubhaloPos/SubhaloVel
     if ptProperty in ['rad','halo_rad','rad_kpc','halo_rad_kpc']:
-        unitsStr = 'kpc' if '_kpc' in ptProperty else 'ckpc/h'
-        label = 'Distance [ log %s ]' % unitsStr #'%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
+        unitsStr = 'pkpc' if '_kpc' in ptProperty else 'ckpc/h'
+        label = 'Radius [ log %s ]' % unitsStr #'%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
         lim = [0.0, 5.0]
         if haloLims: lim = [0.0, 3.0]
         log = True
     if ptProperty in ['rad_kpc_linear']:
-        label = 'Distance [ kpc ]'
+        label = 'Radius [ pkpc ]'
         lim = [0.0, 5000]
         if haloLims: lim = [0, 800]
         log = False

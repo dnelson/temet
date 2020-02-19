@@ -225,9 +225,19 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
 
     # count number of cells per object
     lengths = np.bincount(identity[w_thresh])
-    assert lengths.size == count and lengths.min() > 0
+    assert lengths.size == count
+
+    # zero objects? early return
+    if count == 0:
+        with h5py.File(saveFilename,'w') as f:
+            f['objects/count'] = 0
+            f['props/dummy'] = 0
+
+        print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
+        return {'count':0}, {'dummy':0}
 
     # create mapping from (assigned cells) -> (parent object index)
+    assert lengths.min() > 0
     bins = np.arange( identity[w_thresh].max()+1 )
     obj_inds = np.searchsorted(bins, identity[w_thresh])
 
@@ -245,13 +255,18 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
     bmag  = sP.snapshotSubset('gas', 'bmag', haloID=haloID)
     rcell = sP.snapshotSubset('gas', 'cellsize_kpc', haloID=haloID)
     vol   = sP.snapshotSubset('gas', 'volume', haloID=haloID)
+    specj = sP.snapshotSubset('gas', 'specj_mag', haloID=haloID)
     pos   = sP.snapshotSubset('gas', 'pos', haloID=haloID)
+    vrel  = sP.snapshotSubset('gas', 'vrel', haloID=haloID)
+    vrad  = sP.snapshotSubset('gas', 'vrad', haloID=haloID)
     sfr   = sP.snapshotSubset('gas', 'sfr', haloID=haloID)
     metal = sP.snapshotSubset('gas', 'z_solar', haloID=haloID)
     beta  = sP.snapshotSubset('gas', 'beta', haloID=haloID)
 
     mg2_mass = sP.snapshotSubset('gas', 'Mg II mass', haloID=haloID)
     hi_mass  = sP.snapshotSubset('gas', 'MHIGK_popping', haloID=haloID)
+    if hi_mass is None:
+        hi_mass = sP.snapshotSubset('gas', 'hi mass', haloID=haloID) # simpler model
 
     props = {'vol'         : np.zeros(count, dtype='float32'), # code units
              'mass'        : np.zeros(count, dtype='float32'), # code units
@@ -265,13 +280,19 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
              'beta_mean'   : np.zeros(count, dtype='float32'), # linear
              'mg2_mass'    : np.zeros(count, dtype='float32'), # code units
              'hi_mass'     : np.zeros(count, dtype='float32'), # code units
+             'specj_tot'   : np.zeros(count, dtype='float32'), # kpc km/s
+             'vrad_mean'   : np.zeros(count, dtype='float32'), # km/s
              'prop_tot'    : np.zeros(count, dtype='float32'), # code
              'prop_mean'   : np.zeros(count, dtype='float32'), # code
              'prop_median' : np.zeros(count, dtype='float32'), # code
              'cen'         : np.zeros( (count,3), dtype='float32'), # code xyz
              'cen_masswt'  : np.zeros( (count,3), dtype='float32'), # code xyz
              'cen_denswt'  : np.zeros( (count,3), dtype='float32'), # code xyz
-             'cen_propwt'  : np.zeros( (count,3), dtype='float32')} # code xyz
+             'cen_propwt'  : np.zeros( (count,3), dtype='float32'), # code xyz
+             'vrel'         : np.zeros( (count,3), dtype='float32'), # km/s xyz
+             'vrel_masswt'  : np.zeros( (count,3), dtype='float32'), # km/s xyz
+             'vrel_denswt'  : np.zeros( (count,3), dtype='float32'), # km/s xyz
+             'vrel_propwt'  : np.zeros( (count,3), dtype='float32')} # km/s xyz
 
     for i in range(count):
         if i % np.max([int(count/10),1]) == 0: print('%d%%' % ((i+1)/count*100))
@@ -290,12 +311,19 @@ def voronoiThresholdSegmentation(sP, haloID, propName, propThresh, propThreshCom
         props['beta_mean'][i]  = beta[loc_inds].mean()
         props['mg2_mass'][i]   = mg2_mass[loc_inds].sum()
         props['hi_mass'][i]    = hi_mass[loc_inds].sum()
+        props['specj_tot'][i]  = specj[loc_inds].sum()
+        props['vrad_mean'][i]  = vrad[loc_inds].mean()
 
         props['cen'][i,:] = np.average( pos[loc_inds,:], axis=0 )
         props['cen_masswt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=mass[loc_inds] )
         props['cen_denswt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=dens[loc_inds] )
         props['cen_propwt'][i,:] = np.average( pos[loc_inds,:], axis=0, weights=prop_val[loc_inds] )
         
+        props['vrel'][i,:] = np.average( vrel[loc_inds,:], axis=0 )
+        props['vrel_masswt'][i,:] = np.average( vrel[loc_inds,:], axis=0, weights=mass[loc_inds] )
+        props['vrel_denswt'][i,:] = np.average( vrel[loc_inds,:], axis=0, weights=dens[loc_inds] )
+        props['vrel_propwt'][i,:] = np.average( vrel[loc_inds,:], axis=0, weights=prop_val[loc_inds] )
+
         props['prop_tot'][i] = prop_val[loc_inds].sum()
         props['prop_mean'][i] = np.nanmean( prop_val[loc_inds] )
         props['prop_median'][i] = np.nanmedian( prop_val[loc_inds] )

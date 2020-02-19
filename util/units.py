@@ -795,9 +795,9 @@ class units(object):
         u_cgs_spec = code_u * self.UnitVelocity_in_cm_per_s**2 # i.e. (km/s)^2 to (cm/s)^2, so specific erg/g
         t_cool = u_cgs_spec / (-1.0*coolrate) / self.s_in_Gyr
 
-        # if lambda_net is positive set t_cool=0 (i.e. actual net heating, perhaps from the background)
+        # if lambda_net is positive set t_cool=nan (i.e. actual net heating, perhaps from the background)
         w = np.where(code_gfmcoolrate >= 0.0)
-        t_cool[w] = 0.0
+        t_cool[w] = np.nan
 
         return t_cool.astype('float32')
 

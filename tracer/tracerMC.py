@@ -767,6 +767,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                     tracerParsLocal['parentInds'][w] = parent_indextype[w[0]] - startVal
                     tracerParsLocal['parentTypes'][w] = ptNum
+                parent_indextype = None
 
             if debug:
                 # go full circle, calculate the tracer children of these parents, and verify
@@ -873,7 +874,8 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 # general properties
                 if field not in halo_rel_fields:
                     # load parent property
-                    data = sP.snapshotSubsetP(ptName, field, inds=indsType)
+                    data = sP.snapshotSubsetP(ptName, field, float32=True)
+                    data = data[indsType]
 
                     # save directly (by dimension) if not calculating further
                     if data.ndim == 1:

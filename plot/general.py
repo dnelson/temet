@@ -208,15 +208,15 @@ def _draw_special_lines(sP, ax, ptProperty):
     """ Helper. Draw some common overlays. """
     if ptProperty in ['tcool','tff']:
         tage = np.log10( sP.units.redshiftToAgeFlat(0.0) )
-        ax.plot(ax.get_xlim(), [tage,tage], ':', lw=lw, alpha=0.3, color='black')
+        ax.plot(ax.get_xlim(), [tage,tage], ':', lw=lw, alpha=0.3, color='#ffffff')
         
     if ptProperty in ['tcool_tff']:
-        ax.plot(ax.get_xlim(), [0.0, 0.0], ':', lw=lw, alpha=0.3, color='black')
-        ax.plot(ax.get_xlim(), [1.0, 1.0], ':', lw=lw, alpha=0.3, color='black')
+        ax.plot(ax.get_xlim(), [0.0, 0.0], ':', lw=lw, alpha=0.3, color='#ffffff')
+        ax.plot(ax.get_xlim(), [1.0, 1.0], ':', lw=lw, alpha=0.3, color='#ffffff')
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, 
                      xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
-                     smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, pdf=None):
+                     ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, pdf=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
@@ -226,10 +226,10 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     then the histogram itself (or meancolors) is used, otherwise this quantity is used.
     if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
     If hideBelow, then pixel values below clim[0] are left pure white. 
+    If colorEmpty, then empty/unoccupied pixels are colored at the bottom of the cmap.
     If smoothSigma is not zero, gaussian smooth contours at this level. 
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
     If median, add a median line of the yQuant as a function of the xQuant. """
-    from util.helper import reportMemory
 
     # config
     nBins2D = None
@@ -260,24 +260,21 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         # one or the other
         assert meancolors is not None
 
-    ctNameHisto = 'viridis'
     contoursColor = 'k' # black
-
-    if meancolors is not None and '_ratio' in meancolors[0]: ctNameHisto = 'RdYlGn_r' # symmetric about clim centerpoint
 
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
     xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
 
-    if xlog: xvals = np.log10(xvals)
+    if xlog: xvals = logZeroNaN(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
     yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
 
-    if ylog: yvals = np.log10(yvals)
+    if ylog: yvals = logZeroNaN(yvals)
 
     # arbitrary property restriction(s)?
     if qRestrictions is not None:
@@ -345,9 +342,9 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
                 
             # plot 2D image, each pixel colored by the mean value of a third quantity
             clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloID is not None))
-            wtStr = 'Mean ' + clabel
+            wtStr = clabel # 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
-                                                         bins=nBins2D, range=[xlim,ylim])
+                                              bins=nBins2D, range=[xlim,ylim])
             zz = zz.T
             if clog: zz = logZeroNaN(zz)
 
@@ -373,8 +370,11 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         if hideBelow:
             w = np.where(zz < clim[0])
             zz[w] = np.nan
+        if colorEmpty:
+            w = np.where(np.isnan(zz))
+            zz[w] = clim[0]
 
-        cmap = loadColorTable(ctNameHisto)
+        cmap = loadColorTable(ctName)
         norm = Normalize(vmin=clim[0], vmax=clim[1], clip=False)
         im = plt.imshow(zz, extent=[xlim[0],xlim[1],ylim[0],ylim[1]], 
                    cmap=cmap, norm=norm, origin='lower', interpolation='nearest', aspect='auto')
@@ -437,18 +437,19 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         # mark virial radius?
         if haloID is not None and xQuant in ['rad','rad_kpc','rad_kpc_linear']:
-            textOpts = {'rotation':90.0, 'horizontalalignment':'left', 'verticalalignment':'top', 'fontsize':18, 'color':'#cccccc'}
+            textOpts = {'rotation':90.0, 'horizontalalignment':'right', 'verticalalignment':'bottom', 'fontsize':18, 'color':'#ffffff'}
             rvir = sP.groupCatSingle(haloID=haloID)['Group_R_Crit200']
             if '_kpc' in xQuant: rvir = sP.units.codeLengthToKpc(rvir)
 
-            for fac in [1,2,4,10,100]:
+            for fac in [1,2,4,10]: #,100]:
                 xx = rvir/fac if '_linear' in xQuant else np.log10(rvir/fac)
-                yy = [ax.get_ylim()[1]*0.80, ax.get_ylim()[1]*0.98]
+                dy = ax.get_ylim()[1] - ax.get_ylim()[0]
+                yy = [ax.get_ylim()[0]+dy*0.1, ax.get_ylim()[0]+dy*0.2] # [1]*0.8, [1]*0.98
                 xoff = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.01
                 if xx >= ax.get_xlim()[1]: continue
 
                 ax.plot( [xx,xx], yy, '-', lw=lw, color=textOpts['color'])
-                ax.text( xx + xoff, yy[1], '$r_{\\rm vir}$/%d'%fac if fac != 1 else '$r_{\\rm vir}$', **textOpts)
+                ax.text( xx - xoff, yy[0], '$r_{\\rm vir}$/%d'%fac if fac != 1 else '$r_{\\rm vir}$', **textOpts)
 
         # special behaviors
         if xQuant in ['rad_kpc','rad_kpc_linear'] and yQuant == 'vrad':
@@ -637,7 +638,7 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     if ylim is None: ylim = ylim2
 
     # start plot
-    fig = plt.figure(figsize=(14,10))
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel('Radius [ log pkpc ]')
@@ -769,7 +770,8 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
 
     if colorbar:
         #cb_axes = inset_locator.inset_axes(ax, width='40%', height='4%', loc=[0.2,0.8])
-        cb_axes = fig.add_axes([0.48,0.2,0.35,0.04])
+        #cb_axes = fig.add_axes([0.48,0.2,0.35,0.04]) # x0, y0, width, height
+        cb_axes = fig.add_axes([0.3,0.3,0.4,0.04]) # x0, y0, width, height
         _, label, _, _ = sP.simSubhaloQuantity(ctProp)
         plt.colorbar(cmap, label=label, cax=cb_axes, orientation='horizontal')
 

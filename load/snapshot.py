@@ -204,6 +204,17 @@ def haloOrSubhaloSubset(sP, haloID=None, subhaloID=None):
 
     return subset
 
+def _haloOrSubhaloIndRange(sP, partType, haloID=None, subhaloID=None):
+    """ Helper. """
+    subset = haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
+
+    indStart = subset['offsetType'][sP.ptNum(partType)]
+    indStop  = indStart + subset['lenType'][sP.ptNum(partType)]
+
+    indRange = [indStart, indStop - 1]
+
+    return indRange
+
 def _ionLoadHelper(sP, partType, field, kwargs):
     """ Helper to load (with particle level caching) ionization fraction, or total ion mass, 
     values values for gas cells. Or, total line flux for emission. """
@@ -322,9 +333,9 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             # either ionization fractions, or total mass in the ion
             values = ion.calcGasMetalAbundances(sP, element, ionNum, indRange=indRangeOrig)
             if prop == 'mass':
-                values *= sP.snapshotSubset(partType, 'Masses', **kwargs)
+                values *= sP.snapshotSubset(partType, 'Masses', indRange=indRangeOrig)
             if prop == 'numdens':
-                values *= sP.snapshotSubset(partType, 'numdens', **kwargs)
+                values *= sP.snapshotSubset(partType, 'numdens', indRange=indRangeOrig)
                 values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
         else:
             # emission flux
@@ -428,11 +439,13 @@ def snapshotSubset(sP, partType, fields,
             r[field] = sP.units.UToTemp(u,ne,log=True)
 
         # temperature (from u,nelec) [log K] (where star forming gas is set to the cold-phase temperature instead of eEOS temperature)
-        if field.lower() in ["temp_sfcold"]:
+        if field.lower() in ["temp_sfcold","temp_sfcold_linear"]:
             r[field] = snapshotSubset(sP, partType, 'temp', **kwargs)
             sfr = snapshotSubset(sP, partType, 'sfr', **kwargs)
             w = np.where(sfr > 0.0)
             r[field][w] = 3.0 # fiducial Illustris/TNG model: T_clouds = 1000 K, T_SN = 5.73e7 K
+            if '_linear' in field.lower():
+                r[field] = 10.0**r[field]
 
         # temperature (from u,nelec) [linear K]
         if field.lower() in ["temp_linear"]:
@@ -764,15 +777,23 @@ def snapshotSubset(sP, partType, fields,
         # cloudy based ionic mass (or emission flux) calculation, if field name has a space in it
         if " " in field:
             # hydrogen model mass calculation (todo: generalize to different molecular models)
-            if field.lower() in ['h i mass', 'hi mass', 'himass', 'h1mass', 'hi_mass']:
-                assert haloID is None and subhaloID is None # otherwise handle, construct indRange
-                from cosmo.hydrogen import hydrogenMass
+            from cosmo.hydrogen import hydrogenMass
+
+            if field.lower() in ['h i mass', 'hi mass', 'h i numdens', 'himass', 'h1mass', 'hi_mass']:
+                if haloID is not None or subhaloID is not None:
+                    indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
+
                 r[field] = hydrogenMass(None, sP, atomic=True, indRange=indRange)
+
+                if 'numdens' in field.lower():
+                    r[field] /= snapshotSubset(sP, partType, 'volume', **kwargs)
+                    r[field] = sP.units.codeDensToPhys(r[field],cgs=True,numDens=True) # linear [H atoms/cm^3]
 
             elif field.lower() in ['h 2 mass', 'h2 mass', 'h2mass'] or 'h2mass_' in field.lower():
                 # todo: we are inside the (" " in field) block, will never catch
-                assert haloID is None and subhaloID is None # otherwise handle, construct indRange
-                from cosmo.hydrogen import hydrogenMass
+                if haloID is not None or subhaloID is not None:
+                    indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
+                
                 if 'h2mass_' in field.lower():
                     molecularModel = field.lower().split('_')[1]
                 else:
@@ -785,20 +806,19 @@ def snapshotSubset(sP, partType, fields,
                 # cloudy-based calculation
                 r[field] = _ionLoadHelper(sP, partType, field, kwargs)
 
-        # pre-computed H2/other particle-level data
+        # pre-computed H2/other particle-level data [linear code mass or density units]
         if '_popping' in field.lower():
             # use Popping+2019 pre-computed results in 'hydrogen' postprocessing catalog
-            # e.g. 'MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping'
+            # e.g. 'MH2BR_popping', 'MH2GK_popping', 'MH2KMT_popping', 'MHIBR_popping', 'MHIGK_popping', 'MHIKMT_popping', 'MHIGK_popping_numdens'
             if haloID is not None or subhaloID is not None:
-                subset = haloOrSubhaloSubset(sP, haloID=haloID, subhaloID=subhaloID)
-
-                indStart = subset['offsetType'][sP.ptNum(partType)]
-                indStop  = indStart + subset['lenType'][sP.ptNum(partType)]
-
-                indRange = [indStart, indStop - 1]
+                indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
 
             path = sP.postPath + 'hydrogen/gas_%03d.hdf5' % sP.snap
-            key = field.split('_popping')[0]
+            key = field.split('_popping')[0].replace('_numdens','')
+
+            if not isfile(path):
+                print('Warning: [%s] from [%s] does not exist, empty return.' % (field,path))
+                return None
 
             with h5py.File(path,'r') as f:
                 if indRange is None:
@@ -806,11 +826,16 @@ def snapshotSubset(sP, partType, fields,
                 else:
                     r[field] = f[key][indRange[0]:indRange[1]+1]
 
+            if 'numdens' in field.lower():
+                r[field] /= snapshotSubset(sP, partType, 'volume', **kwargs)
+                r[field] = sP.units.codeDensToPhys(r[field],cgs=True,numDens=True) # linear [H atoms/cm^3]
+
         if '_diemer' in field.lower():
             # use Diemer+2019 pre-computed results in 'hydrogen' postprocessing catalog
             # e.g. 'MH2_GD14_diemer', 'MH2_GK11_diemer', 'MH2_K13_diemer', 'MH2_S14_diemer'
             # or 'MHI_GD14_diemer', 'MHI_GK11_diemer', 'MHI_K13_diemer', 'MHI_S14_diemer'
-            assert haloID is None and subhaloID is None # otherwise handle, construct indRange
+            if haloID is not None or subhaloID is not None:
+                indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
             
             path = sP.postPath + 'hydrogen/diemer_%03d.hdf5' % sP.snap
             key = 'f_mol_' + field.split('_')[1]
@@ -920,7 +945,7 @@ def snapshotSubset(sP, partType, fields,
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)
             r[field] = sP.units.calcSoundSpeedKmS(u,dens)
 
-        # cooling time (computed from saved GFM_CoolingRate) [Gyr]
+        # cooling time (computed from saved GFM_CoolingRate, nan if net heating) [Gyr]
         if field.lower() in ['tcool','cooltime']:
             dens = snapshotSubset(sP, partType, 'Density', **kwargs)
             u    = snapshotSubset(sP, partType, 'InternalEnergy', **kwargs)

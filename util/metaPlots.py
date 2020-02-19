@@ -430,7 +430,7 @@ def periodic_slurm_status(nosave=False):
 
     # time series data file: store current data
     if not nosave:
-        with h5py.File(saveDataFile) as f:
+        with h5py.File(saveDataFile,'a') as f:
             ind = f.attrs['count']
             f['timestamp'][ind] = stats['req_time']
             for field in saveDataFields:

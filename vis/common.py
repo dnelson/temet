@@ -644,6 +644,13 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
         else:
             quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
 
+        # nan values will corrupt imaging, in general should not have any
+        w = np.where(np.isnan(quant))
+        if len(w[0]): # only expected for tcool, tcool_tff
+            print('Warning: Zeroing mass of [%d] of [%d] particles with NaN quant [%s]' % (len(w[0]),quant.size,partField))
+            quant[w] = 0.0
+            mass[w] = 0.0
+
     # quantity pre-processing (need to remove log for means)
     if partField in ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']:
         quant = 10.0**quant
