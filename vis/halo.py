@@ -212,7 +212,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
         saveFilename = savePathDefault + 'renderHalo_N%d_%s.pdf' % (len(panels),datetime.now().strftime('%d-%m-%Y'))
 
     # skip if final output render file already exists?
-    if skipExisting and isfile(plotConfig.saveFilename):
+    if skipExisting and hasattr(plotConfig,'saveFilename') and isfile(plotConfig.saveFilename):
         print('SKIP: %s' % plotConfig.saveFilename)
         return
 

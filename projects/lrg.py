@@ -23,6 +23,7 @@ from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3, globalAllTracersTimeEvo
 from vis.halo import renderSingleHalo
+from vis.box import renderBox
 from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
                             ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles
 
@@ -667,29 +668,14 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
     if conf == 8:
         panel = {'partType':'gas', 'partField':'tcool_tff', 'valMinMax':[0.0, 2.0]}
         depthFac = 0.01 # test
+    if conf == 9:
+        panel = {'partType':'gas', 'partField':'delta_rho', 'valMinMax':[-0.3, 1.0]}
+        depthFac = 0.01 # test, = 4 kpc
+    if conf == 10:
+        panel = {'partType':'gas', 'partField':'entropy', 'valMinMax':[8.0,9.0]}
+        depthFac = 0.01 # test, = 4 kpc
 
-    if conf == 5:
-        # NARROW SLICE! h1
-        haloIDSets = [1]
-
-        nPixels   = [2000,1500]
-        method    = 'sphMap'
-        rVirFracs = [0.01,0.02,0.05]
-        depthFac  = 0.15
-        partType  = 'gas'
-        size      = 50.0
-        cenShift  = [size/2+4,size/2*(nPixels[1]/nPixels[0])+4,0] # center on upper-right quadrant
-
-        labelZ     = False
-        labelHalo  = False
-
-        panel = []
-        panel.append( {'partField':'cellsize_kpc', 'valMinMax':[-1.0,-0.3]} )
-        panel.append( {'partField':'P_gas', 'valMinMax':[4.4,6.0]} )
-        panel.append( {'partField':'P_B', 'valMinMax':[2.8,5.2]} )
-        panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.5,1.5]} )
-
-    if conf in [6,7]:
+    if conf in [5,6,7]:
         # NARROW SLICE! h19
         haloIDs = [19]
 
@@ -701,17 +687,28 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
         size      = 80.0
         cenShift  = [-size/2,-size/2,0] # center on lower-left
 
+        if 0: # conf == 5
+            # h1 test
+            haloIDs = [1]
+            rVirFracs = [0.01, 0.02, 0.05]
+            depthFac = 0.15
+            size = 50.0
+            cenShift  = [size/2+4,size/2*(nPixels[1]/nPixels[0])+4,0] # center on upper-right quadrant
+
         labelZ     = False
         labelHalo  = False
 
         panel = []
         panel.append( {'partField':'cellsize_kpc', 'valMinMax':[-0.7,0.0]} )
+        if conf == 5:
+            panel.append( {'partField':'P_gas', 'valMinMax':[4.4,6.0]} )
+            panel.append( {'partField':'bmag_uG', 'valMinMax':[-1.0,1.0]} ) # [2.8,5.2] 'P_B' for h1
+            panel.append( {'partField':'metal_solar', 'valMinMax':[-1.0,-0.4]} ) #[-1.5,1.5], 'pressure_ratio' for h1
         if conf == 6:
             panel.append( {'partField':'P_gas', 'valMinMax':[3.2,4.6]} )
             panel.append( {'partField':'P_B', 'valMinMax':[2.0,3.8]} )
             panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]} )
         if conf == 7:
-        # testing:
             panel.append( {'partField':'tcool', 'valMinMax':[-1.0,2.0]} )
             panel.append( {'partField':'tff', 'valMinMax':[-1.5,-0.5]} )
             panel.append( {'partField':'tcool_tff', 'valMinMax':[0.0,2.0]} ) # midpoint at tcool/tff=10
@@ -807,7 +804,6 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
     partField  = 'Mg II'
     valMinMax  = [12.0, 16.5]
 
-
     # single image per halo
     for i, haloID in enumerate(haloIDs):
         panels = []
@@ -826,6 +822,141 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
 
         # render
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def _shrinking_center(sP, xyz, frac_stop=0.1, drop_frac_per_iter=0.05):
+    """ Shrinking center algorithm: iteratively search for a center position given a [N,3] coordinate set. """
+    from util.helper import periodicDistsN
+
+    # starting state
+    mask = np.zeros(xyz.shape[0], dtype='int16') + 1
+
+    # config
+    max_iter = 100
+    num_stop = int(xyz.shape[0] * frac_stop) # until the inner 10% are left
+
+    for i in range(max_iter):
+        # which points remain
+        w = np.where(mask)[0]
+        num_left = len(w)
+
+        # compute center and distances
+        cen = np.mean(xyz[w], axis=0)
+        dists = periodicDistsN(cen, xyz[w], sP.boxSize)
+
+        # sort
+        sort_inds = np.argsort(dists)
+
+        # exclude 5% most distant
+        ind = int(sort_inds.size * (1-drop_frac_per_iter))
+
+        if ind == 0 or ind == sort_inds.size or num_left <= num_stop:
+            break
+
+        exclude_inds = w[sort_inds[ind:]]
+        mask[exclude_inds] = 0
+
+    return cen
+
+def cloudEvoVis(sP, haloID, clumpID, sbNum, constSize=False):
+    """ Visualize a series of time-evolution frames tracking a single cloud. """
+
+    # vis conifg
+    method     = 'sphMap_global' # for subboxes
+    nPixels    = [1100,1100] # [x,y] shape of boxSizeImg must match nPixels aspect ratio
+    axes       = [0,1]
+    labelZ     = False
+    labelScale = True
+    labelSim   = True
+    labelHalo  = False
+    plotHalos  = False
+
+    # subboxes: use snap-based HI since no subboxes are mini and no popping exists
+    # full snaps: use popping catalog which is snap-complete, since many snaps are mini and missing NeutralHydrogenAbundance
+    partType   = 'gas'
+    partField  = 'HI' if sbNum is not None else 'MHIGK_popping'
+    valMinMax  = [16.0, 21.0]
+
+    if constSize:
+        # constant zoomed in size
+        size = 120.0
+        depth = 40.0
+    else:
+        # adaptive, starting at these specifications
+        size  = 60.0 if sbNum is not None else 240.0 # code units
+        depth = 20.0 if sbNum is not None else 80.0 # code units
+
+    indivCircSize = 0.3 if sbNum is not None else 2.0
+
+    # load tracer-based evolution tracks
+    data = clumpTracerTracksLoad(sP, haloID, clumpID, sbNum, posOnly=True)
+
+    nFrames = data['snaps'].size
+
+    if sbNum is None:
+        # full box, get subhalo IDs for fof-scope loads
+        method = 'sphMap'
+        subhaloID = sP.halo(haloID)['GroupFirstSub']
+        mpb = sP.loadMPB(subhaloID)
+    else:
+        variant = 'subbox%d' % sbNum
+
+    for i in range(nFrames):
+        # decide frame center position and size
+        snap = data['snaps'][i]
+        
+        boxSizeImg = [size, size, depth]
+        boxCenter = _shrinking_center(sP, data['pos'][i,:,:]) # track center with shrinking sphere
+        extent = [ boxCenter[0] - 0.5*boxSizeImg[0], boxCenter[0] + 0.5*boxSizeImg[0],
+                   boxCenter[1] - 0.5*boxSizeImg[1], boxCenter[1] + 0.5*boxSizeImg[1]]
+
+        trExtents = np.max(data['pos'][i,:,:], axis=0) - np.min(data['pos'][i,:,:], axis=0)
+
+        if not constSize:
+            if (trExtents[axes[0]] > size or trExtents[axes[1]] > size) and size < 400:
+                size *= 2
+            if (trExtents[3-axes[0]-axes[1]] > depth) and depth < 300:
+                depth *= 2
+
+        print('[%2d] snap = %2d size = %4d depth = %3d' % (i,snap,size,depth))
+
+        if trExtents[axes[0]] > size:
+            print('Warning: Tracers have spread in extent along axes0 more than view size [%.2f]' % trExtents[axes[0]])
+        if trExtents[axes[1]] > size:
+            print('Warning: Tracers have spread in extent along axes1 more than view size [%.2f]' % trExtents[axes[1]])
+        if trExtents[3-axes[0]-axes[1]] > depth:
+            print('Warning: Tracers have spread in extent along LOS-axis more than depth [%.2f]' % trExtents[3-axes[0]-axes[1]])
+
+        # full box snapshots: fof-scope load and render (global render for subbox snaps)
+        hInd = None
+        if sbNum is None:
+            w = np.where(mpb['SnapNum'] == snap)[0][0]
+            hInd = mpb['SubfindID'][w]
+            print(' fullbox, located snap [%d] at ind [%d] with hInd [%d]' % (snap,w,hInd))
+
+        panels = [{'run':sP.run, 'res':sP.res}]
+
+        # mark position of cloud, and member cells
+        customCircles = {}
+        customCircles['pos'] = np.zeros( (data['pos'].shape[1]+1,3), dtype='float32' )
+        customCircles['rad'] = np.zeros( data['pos'].shape[1]+1, dtype='float32' )
+
+        customCircles['pos'][0,:] = data['pos_avg'][i,:]
+        customCircles['pos'][1:,:] = data['pos'][i,:,:]
+
+        customCircles['rad'][0] = data['size_halfmassrad'][0] * 2
+        customCircles['rad'][1:] = indivCircSize # individual cell positions
+
+        labelCustom = ['$\Delta t$ = %.2f Myr' % data['dt'][i]]
+
+        class plotConfig:
+            plotStyle    = 'open' # edged
+            rasterPx     = nPixels
+            colorbars    = True
+            saveFilename = './vis_cloudevo_%s_%s_%d_sb%s_h%d_c%d%s_frame%02d.png' % \
+              (partField,sP.simName,sP.snap,sbNum,haloID,clumpID,'_const' if constSize else '',i)
+
+        # render
+        renderBox(panels, plotConfig, locals(), skipExisting=False)
 
 # clump plot config
 lims = {'size'     : [0, 3.0],    # linear pkpc
@@ -936,7 +1067,7 @@ def clumpDemographics(sP, haloID):
         lim = lims[config]
         ax.set_xlabel(labels[config])
         ax.set_xlim(lim)
-        ax.set_ylabel('Number of Clumps')
+        ax.set_ylabel('Number of Clouds')
 
         nBins = nBins1D if config != 'ncells' else lim[1]
 
@@ -1002,11 +1133,14 @@ def clumpDemographics(sP, haloID):
         fig.savefig('clumpDemographics_%s_h%d_%s.pdf' % (sP.simName,haloID,config))
         plt.close(fig)
 
-def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None):
+def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None, posOnly=False):
     """ Load subbox time evolution tracks and make analysis for the time evolution of 
     clump cell/integral properties vs time. Helper for the plot function below.
     If sbNum is None, then use fullbox snapshot (time spacing), otherwise use specified subbox. """
     saveFilename = sP.derivPath + 'cache/cache_clump_%s_%d-%d_sb%s.hdf5' % (sP.simName,haloID,clumpID,sbNum)
+
+    if posOnly:
+        saveFilename = saveFilename.replace(".hdf5", "_pos.hdf5")
 
     # check for cache existence
     if isfile(saveFilename):
@@ -1098,6 +1232,8 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None):
     trProps = ['hdens','temp','pos']
     if sbNum is not None:
         trProps = ['hdens','temp','pos','metal','beta','tcool','sftime','parent_indextype']
+    if posOnly:
+        trProps = ['pos','parent_indextype']
 
     data = {}
 
@@ -1110,9 +1246,6 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None):
             # save snapshots/redshifts
             data['redshifts'] = data_loc['redshifts']
             data['snaps'] = data_loc['snaps']
-        else:
-            # should be the same for all properties
-            assert np.array_equal(data['snaps'], data_loc['snaps'])
 
         w_notdone = np.where(data_loc['done'] == 0)
         if len(w_notdone[0]):
@@ -1151,10 +1284,11 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None):
             data['parent_type_%d' % ptNum] = mask
             data['parent_frac_%d' % ptNum] = np.sum(mask, axis=1) / mask.shape[1]
 
-        with np.errstate(invalid='ignore'):
-            # data['sftime'] is nan if parent type is not 4, so this is, of star parents, which fraction are actually wind-phase?
-            data['parent_type_wind'] = data['sftime'] < 0.0
-            data['parent_frac_wind'] = np.sum(data['parent_type_wind'], axis=1) / data['parent_type_wind'].shape[1]
+        if not posOnly:
+            with np.errstate(invalid='ignore'):
+                # data['sftime'] is nan if parent type is not 4, so this is, of star parents, which fraction are actually wind-phase?
+                data['parent_type_wind'] = data['sftime'] < 0.0
+                data['parent_frac_wind'] = np.sum(data['parent_type_wind'], axis=1) / data['parent_type_wind'].shape[1]
 
     data['tage'] = sP.units.redshiftToAgeFlat(data['redshifts']) * 1e3 # Gyr -> Myr
     data['dt'] = data['tage'] - data['tage'][0]
@@ -1172,8 +1306,9 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None):
     data['pos_rel'] = np.zeros( (nSnaps,nTr,3), dtype='float32' )
     data['size_maxseparation'] = np.zeros( nSnaps, dtype='float32' )
 
-    maxTempsCold = [3e4, 1e5]
-    data['size_maxsep_cold'] = np.zeros( (nSnaps,len(maxTempsCold)), dtype='float32' )
+    if not posOnly:
+        maxTempsCold = [3e4, 1e5]
+        data['size_maxsep_cold'] = np.zeros( (nSnaps,len(maxTempsCold)), dtype='float32' )
 
     if sbNum is not None:
         # sbCat fields are such that index = subbox snapnum (ascending), take directly
@@ -1210,9 +1345,11 @@ def clumpTracerTracksLoad(sP, haloID, clumpID, sbNum=None):
 
         # maximum pairwise distance between clump members
         data['size_maxseparation'][i] = sP.periodicPairwiseDists(data['pos'][i,:,:]).max()
-        for j, maxTempCold in enumerate(maxTempsCold):
-            w_cold = np.where(data['temp'][i,:] < maxTempsCold[j])
-            data['size_maxsep_cold'][i,j] = sP.periodicPairwiseDists(np.squeeze(data['pos'][i,w_cold,:])).max()
+
+        if not posOnly:
+            for j, maxTempCold in enumerate(maxTempsCold):
+                w_cold = np.where(data['temp'][i,:] < maxTempsCold[j])
+                data['size_maxsep_cold'][i,j] = sP.periodicPairwiseDists(np.squeeze(data['pos'][i,w_cold,:])).max()
 
     data['size_halfmassrad'] = np.median(data['rad'], axis=1)
     data['dist_rvir'] = data['dist'] / sP.halo(haloID)['Group_R_Crit200'] # take constant
@@ -1259,6 +1396,9 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None):
             'hdens' : [-3.5, 2.0] if sbNum else [-4.5, 1.0],
             'dist'  : [-20, 300] if sbNum else [-20, 1000]}
 
+    cBack = 'tab:blue'
+    cForward = 'tab:red'
+
     noForwardData = ['metal','netcoolrate'] # fields without tracer_tracks into the future
 
     circOpts = {'markeredgecolor':'white', 'markerfacecolor':'None', 'markersize':10, 'markeredgewidth':2} # marking t=0
@@ -1297,30 +1437,37 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None):
                 if prop not in noForwardData:
                     ax.plot(xx[w_forward], yy[w_forward], '-', lw=lineW, color='black', alpha=lineAlpha, zorder=0)
 
-            yy = logf(data[prop+'_avg']) # mean across member cells
-            if prop not in noForwardData:
-                ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
-            ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
+            for i in [0,1]:
+                if i == 0:
+                    yy = logf(data[prop+'_avg']) # mean across member cells
+                    s = 'o-'
+                if i == 1:
+                    yy = logf(data[prop+'_median']) # median across member cells
+                    s = ':'
+
+                if prop not in noForwardData:
+                    ax.plot(xx[w_forward], yy[w_forward], s, lw=lw, color=cForward, label='Cloud Mean ($t>0$)' if i==0 else '')
+                ax.plot(xx[w_back], yy[w_back], s, lw=lw, color=cBack, label='Cloud Mean ($t<0$)' if i==0 else '')
             if prop not in noForwardData and len(w_forward[0]):
                 ax.plot(xx[w_forward][0], yy[w_forward][0], 'o', **circOpts)
 
         else:
             yy = logf(data[prop]) # quantity is 1 number per snapshot
             if prop not in noForwardData:
-                l2, = ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='($t>0$)')
-            l1, = ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='($t<0)$')
+                l2, = ax.plot(xx[w_forward], yy[w_forward], 'o-', color=cForward, lw=lw, label='($t>0$)')
+            l1, = ax.plot(xx[w_back], yy[w_back], 'o-', color=cBack, lw=lw, label='($t<0)$')
 
             if prop == 'size_maxseparation': # add _cold
                 #yy = logf(data['size_maxsep_cold'][:,0])
                 #ax.plot(xx[w_forward], yy[w_forward], ':', lw=lw, color=l2.get_color(), label='log(T) < 5.0 ($t>0$)')
                 #ax.plot(xx[w_back], yy[w_back], ':', lw=lw, color=l1.get_color(), label='log(T) < 5.0 ($t<0$)')
                 yy = logf(data['size_maxsep_cold'][:,1])
-                ax.plot(xx[w_forward], yy[w_forward], '--', lw=lw, color=l2.get_color(), label='T < 30,000K ($t>0$)')
-                ax.plot(xx[w_back], yy[w_back], '--', lw=lw, color=l1.get_color(), label='T < 30,000K ($t<0$)')
+                ax.plot(xx[w_forward], yy[w_forward], '--', lw=lw, color=cForward, label='T < 30,000K ($t>0$)')
+                ax.plot(xx[w_back], yy[w_back], '--', lw=lw, color=cBack, label='T < 30,000K ($t<0$)')
 
         ax.legend(loc='upper left' if prop == 'temp' else 'best')
         fig.tight_layout()
-        fig.savefig('clumpEvo_%s_h%d_clumpID=%d_%s.pdf' % (sP.simName,haloID,clumpID,prop))
+        fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_%s.pdf' % (sP.simName,haloID,clumpID,sbNum,prop))
         plt.close(fig)
 
     # plot (B) - phase diagram with time track
@@ -1351,20 +1498,20 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None):
                 xx = logx(data[xval+'_median']) # mean across member cells
                 yy = logy(data[yval+'_median'])
                 if xval not in noForwardData and yval not in noForwardData:
-                    ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, label='Clump Mean ($t>0$)')
-                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, label='Clump Mean ($t<0$)')
+                    ax.plot(xx[w_forward], yy[w_forward], 'o-', color=cForward, lw=lw, label='Cloud Mean ($t>0$)')
+                ax.plot(xx[w_back], yy[w_back], 'o-', color=cBack, lw=lw, label='Cloud Mean ($t<0$)')
                 if xval not in noForwardData and yval not in noForwardData and len(w_forward[0]):
                     ax.plot(xx[w_forward][0], yy[w_forward][0], 'o', **circOpts)
                 ax.legend()
             else:
                 xx = logx(data[xval]) if data[xval].ndim == 1 else logx(data[xval+'_avg']) # quantity is 1 number per snapshot
                 yy = logy(data[yval])
-                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw)
+                ax.plot(xx[w_back], yy[w_back], 'o-', lw=lw, color=cBack)
                 if xval not in noForwardData and yval not in noForwardData:
-                    ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw)
+                    ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, color=cForward)
 
             fig.tight_layout()
-            fig.savefig('clumpEvo_%s_h%d_clumpID=%d_x=%s_y=%s.pdf' % (sP.simName,haloID,clumpID,xval,yval))
+            fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_x=%s_y=%s.pdf' % (sP.simName,haloID,clumpID,sbNum,xval,yval))
             plt.close(fig)
 
     # plot (C) - spatial tracks
@@ -1387,8 +1534,8 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None):
         for i in range(data[prop].shape[1]): # individuals
             xx = data[prop][:,i,axes[0]]
             yy = data[prop][:,i,axes[1]]
-            l2, = ax.plot(xx[w_forward], yy[w_forward], '-', color=l2.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
-            l1, = ax.plot(xx[w_back], yy[w_back], '-', color=l1.get_color() if i>0 else None, lw=lineW, alpha=lineAlpha, zorder=0)
+            l2, = ax.plot(xx[w_forward], yy[w_forward], '-', color=cForward, lw=lineW, alpha=lineAlpha, zorder=0)
+            l1, = ax.plot(xx[w_back], yy[w_back], '-', color=cBack, lw=lineW, alpha=lineAlpha, zorder=0)
 
         xx = data[prop+'_avg'][:,axes[0]]
         yy = data[prop+'_avg'][:,axes[1]] # mean across member cells
@@ -1398,7 +1545,44 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None):
         #ax.legend()
 
         fig.tight_layout()
-        fig.savefig('clumpEvo_%s_h%d_clumpID=%d_%s.pdf' % (sP.simName,haloID,clumpID,prop))
+        fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_%s.pdf' % (sP.simName,haloID,clumpID,sbNum,prop))
+        plt.close(fig)
+
+    # plot (D) - spatial distribution at each snapshot
+    axes = [1,2]
+
+    for i, snap in enumerate(data['snaps'][0:15]):
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+        aspect = ax.get_window_extent().height / ax.get_window_extent().width
+
+        ax.set_xlabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[0]])
+        ax.set_ylabel('$\Delta$ %s [kpc]' % ['x','y','z'][axes[1]])
+
+        # shrinking center, relative coordinates
+        xx = data['pos_rel'][i,:,axes[0]]
+        yy = data['pos_rel'][i,:,axes[1]]
+        cen = _shrinking_center(sP, data['pos_rel'][i,:,:])
+
+        xx -= cen[axes[0]]
+        yy -= cen[axes[1]]
+
+        xylim = np.array([np.vstack((xx,yy)).min(), np.vstack((xx,yy)).max()]) * 1.2
+        #xylim = np.clip(xylim, 10, np.inf)
+        print(i,xylim)
+        ax.set_xlim(xylim)
+        ax.set_ylim(xylim*aspect) # ax is non-square, so make limits reflect the correct aspect ratio
+
+        # plot
+        ax.plot(xx, yy, 'o', markersize=2, linestyle='None', label='$\Delta t$ = %.3f Myr' % data['dt'][i])
+
+        ax.plot([0.0,0.0], ax.get_ylim(), '-', color='#777777', alpha=0.4)
+        ax.plot(ax.get_xlim(), [0.0,0.0], '-', color='#777777', alpha=0.4)
+        ax.legend()
+
+        fig.tight_layout()
+        fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_axes%d-%d_xyz%02d.png' % (sP.simName,haloID,clumpID,sbNum,axes[0],axes[1],i))
         plt.close(fig)
 
 def clumpPropertiesVsHaloMass(sPs):
@@ -1759,10 +1943,11 @@ def paperPlots():
         haloIDs = _get_halo_ids(sP)[2]
 
         # gas metallicity, N_MgII, N_HI, stellar light
-        lrgHaloVisualization(sP, [1], conf=8, gallery=False, globalDepth=False)
-        for conf in [1,2,3,4]:
-            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
-            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
+        for conf in [10]: #[8,9,10]:
+            lrgHaloVisualization(sP, [1], conf=conf, gallery=False, globalDepth=False)
+        #for conf in [1,2,3,4]:
+        #    lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
+        #    lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
 
     # figure 5a - cgm gas density/temp/pressure 1D PDFs
     if 0:
@@ -1860,10 +2045,14 @@ def paperPlots():
         sP = TNG50
         subIDs = _get_halo_ids(sP, bin_inds=[2,1], subhaloIDs=True)
 
-        for prop in ['tcool_tff']: #['tff','tcool_tff','tcool']:
-            plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty=prop, op='median', subhaloIDs=[subIDs], 
-                xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
-                ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
+        #for prop in ['tff','tcool_tff','tcool']:
+        #    plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty=prop, op='median', subhaloIDs=[subIDs], 
+        #        xlim=[1.0,3.0], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
+        #        ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
+
+        plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='tcool_tff', op='median', subhaloIDs=[subIDs], 
+            xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
+            ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
 
     # fig 8b - 'radial profile' of tcool (2D)
     if 0:
@@ -1871,7 +2060,7 @@ def paperPlots():
 
         xQuant = 'rad_kpc'
         yQuant = 'tcool_tff' #'tff' #'tcool'
-        xlim = [1.0, 2.7]
+        xlim = [1.0, 3.0] #2.7]
         ylim = [-3.3, 3.0] #[-5.6, 2.9]
 
         haloID = 8 # 8 # single example, 0, 1, 2, 3, 4, 5, 6, 7, 11, 13
@@ -1921,7 +2110,7 @@ def paperPlots():
         clumpPropertiesVsHaloMass([TNG50,TNG50_2,TNG50_3,TNG50_4])
 
     # fig 9: zoomed in (high res) visualizations of multiple properties of clumps
-    if 0:
+    if 1:
         sP = TNG50
         haloIDs = _get_halo_ids(sP)[2]
 
@@ -1941,7 +2130,8 @@ def paperPlots():
     if 0:
         # pick a single clump (from np.where(objs['lengths'] == 100))
         haloID = 0 # only >10^13 halo which intersects with subboxes
-        sbNum = 2 # if None, then use fullbox time range/spacing
+        #sbNum = None # if None, then use fullbox time range/spacing
+        sbNum = 2 # if integer, use subbox time range/spacing
         clumpID = 1592 # 3416, 3851
 
         clumpTracerTracks(TNG50, haloID=haloID, clumpID=clumpID, sbNum=sbNum)
@@ -1968,8 +2158,14 @@ def paperPlots():
 
         clumpRadialProfiles(TNG50, haloID, selections)
 
-    # fig ?: visual frames sequence: clump evo (either mark tracer positions, or mean position? or tracks?)
-    # TODO
+    # explore: visual frames sequence: clump evo
+    if 0:
+        # pick a single clump
+        haloID = 0 # only >10^13 halo which intersects with subboxes
+        sbNum = 2 # if None, then use fullbox time range/spacing
+        clumpID = 1592 # 3416, 3851
+
+        cloudEvoVis(TNG50, haloID=haloID, clumpID=clumpID, sbNum=sbNum, constSize=True)
 
     # fig 13: resolution convergence, visual (matched halo)
     if 0:

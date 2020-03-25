@@ -830,16 +830,22 @@ def bincount(x, dtype):
 @jit(nopython=True, nogil=True, cache=True)
 def periodicDistsN(pos1, pos2, BoxSize):
     """ Compute periodic distance between each (x,y,z) coordinate in pos1 vs. the 
-    corresponding (x,y,z) point in pos2. """
+    corresponding (x,y,z) point in pos2. Either pos1 and pos2 have the same shapes, 
+    and are matched pairwise, or pos1 is a tuple (i.e. reference position). """
     BoxHalf = BoxSize * 0.5
 
-    dists = np.zeros( pos1.shape[0], dtype=pos1.dtype )
-    assert pos1.shape[0] == pos2.shape[0]
-    assert pos1.shape[1] == 3 and pos2.shape[1] == 3
+    dists = np.zeros( pos2.shape[0], dtype=pos2.dtype )
+    assert pos1.shape[0] == pos2.shape[0] or pos1.size == 3
+    assert pos2.shape[1] == 3
+    if pos1.ndim == 2:
+        assert pos1.shape[1] == 3
 
-    for i in range(pos1.shape[0]):
+    for i in range(pos2.shape[0]):
         for j in range(3):
-            xx = pos1[i,j] - pos2[i,j]
+            if pos1.ndim == 1:
+                xx = pos1[j] - pos2[i,j]
+            else:
+                xx = pos1[i,j] - pos2[i,j]
 
             if xx > BoxHalf:
                 xx -= BoxSize
@@ -1048,6 +1054,27 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
                             (1.0,   color3[2], color3[2])) }
 
         cmap = LinearSegmentedColormap(ctName, cdict, N=512)
+
+    if ctName in ['tarn0','diff0','curl0','delta0','topo0','balance0']:
+        # reshape a diverging colormap, which is otherwise centered at its midpoint, such that the center occurs at value zero
+        valCut = 0.0 # e.g. log10(1) for tcool/tff, delta_rho
+
+        fCut = (valCut-valMinMax[0]) / (valMinMax[1]-valMinMax[0])
+        if fCut <= 0 or fCut >= 1: fCut = 0.5
+
+        # sample from each side of the colormap
+        x1 = np.linspace(0.0, 0.5, int(1024*fCut))
+        x2 = np.linspace(0.5, 1.0, int(1024*(1-fCut)))
+
+        cmap = getattr(cmocean.cm, ctName[:-1]) # acquire object member via string
+        colors1 = cmap(x1)
+        colors2 = cmap(x2)
+
+        # combine them and construct a new colormap
+        colors = np.vstack((colors1, colors2))
+        cmap = LinearSegmentedColormap.from_list('magma_gray', colors)
+
+        return cmap
 
     if ctName == 'magma_gray':
         # discontinuous colormap: magma on the upper half, grayscale on the lower half, split at 1e-16 (e.g. surface brightness)

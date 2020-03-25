@@ -252,7 +252,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     createCache = True if getuser() == 'dnelson' else False
 
     cachePath = sP.derivPath + 'cache/'
-    cacheFile = cachePath + 'cached_%s_%s_%d.hdf5' % (partType,field.replace(" ","-"),sP.snap)
+    sbStr = 'sb%d_' % sP.subbox if sP.subbox is not None else ''
+    cacheFile = cachePath + 'cached_%s_%s_%s%d.hdf5' % (partType,field.replace(" ","-"),sbStr,sP.snap)
     indRangeAll = [0, snapshotHeader(sP)['NumPart'][sP.ptNum(partType)] ]
 
     if useCache:
@@ -1209,6 +1210,27 @@ def snapshotSubset(sP, partType, fields,
             tcool = snapshotSubset(sP, partType, 'tcool', **kwargs)
             tff = snapshotSubset(sP, partType, 'tff', **kwargs)
             r[field] = (tcool / tff)
+
+        # ratio of density to local mean density, delta_rho/<rho> [linear]
+        if field.lower() in ['delta_rho']:
+            # based on spherically symmetric, halo-centric, mass-density profile, derive now
+            from scipy.stats import binned_statistic
+
+            mass = snapshotSubset(sP, partType, 'mass', **kwargs)
+            rad = snapshotSubset(sP, partType, 'rad', **kwargs)
+            rad = logZeroNaN(rad)
+
+            bins = np.linspace(0.0, 3.6, 19) # log code dist, 0.2 dex bins, ~1 kpc - 3 Mpc
+            totvol = 4/3 * np.pi * ((10.0**bins[1:])**3 - (10.0**bins[:-1])**3) # (ckpc/h)^3
+            bin_cens = (bins[1:] + bins[:-1])/2
+
+            totmass, _, _ = binned_statistic(rad, mass, 'sum', bins=bins)
+
+            # interpolate mass-density to the distance of each particle/cell
+            avg_rho = np.interp(rad, bin_cens, totmass/totvol)
+            dens = snapshotSubset(sP, partType, 'dens', **kwargs) # will fail for stars/DM, can generalize
+
+            r[field] = (dens / avg_rho).astype('float32')
 
         # subhalo or halo ID per particle/cell
         if field.lower() in ['subid','subhaloid','subhalo_id','haloid','halo_id']:

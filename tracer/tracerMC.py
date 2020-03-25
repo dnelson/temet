@@ -677,6 +677,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         else:
             r[field] = np.zeros( (numAllocSnaps,tracerSearchIDs.size), dtype=dtype )
 
+        if field == 'parent_indextype' and sP.isSubbox:
+            r[field] -= 1 # mark those tracers with parents no longer in subbox with -1
+
         # file pre-allocation? if we are saving herein, and not restarting
         shape = (len(snaps),tracerSearchIDs.size,3) if field in n_3d_fields else (len(snaps),tracerSearchIDs.size)
 
@@ -688,7 +691,6 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
     # walk through snapshots
     for m, snap in enumerate(snaps):
-
         if onlySnap is not None:
             if snap != onlySnap:
                 continue
@@ -696,16 +698,27 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         sP.setSnap(snap)
         print(' ['+str(sP.snap).zfill(3)+'] z = '+str(sP.redshift), flush=True)
 
+        # saving to file once per snapshot?
         if saveFilename is not None:
             if done[m]:
                 print('  Skip, already in save file.')
                 continue
             saveSnapInd = m
-            m = 0 # write over previous snapshot in r[], and save in this loop
+
+            # write over previous snapshot in r[], and save in this loop
+            assert numAllocSnaps == 1
+            m = 0 
+
+            for field in parFields+trFields:
+                # reset in case we have a sparse overwrite (subboxes)
+                r[field] *= 0 
+
+                if field == 'parent_indextype':
+                    r[field] -= 1 # mark those tracers with parents no longer in subbox with -1
 
         # try to load pre-existing parent indexes
         parent_indextype = None
-        if len(trFields) == 0 and saveFilename is not None:
+        if len(trFields) == 0 and parFields[0] != 'parent_indextype' and saveFilename is not None:
             parent_indextype = globalAllTracersTimeEvo(sP_start, 'parent_indextype', indRange=[saveSnapInd])
 
         # for the tracers we search for: get their indices at this snapshot
@@ -767,7 +780,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                     tracerParsLocal['parentInds'][w] = parent_indextype[w[0]] - startVal
                     tracerParsLocal['parentTypes'][w] = ptNum
-                parent_indextype = None
+                parent_indextype = -1
 
             if debug:
                 # go full circle, calculate the tracer children of these parents, and verify
@@ -827,8 +840,10 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
 
-                if sP.isSubbox:
-                    # update stamp indices: handle non-full search returns
+                assert indsType.max() < sP.snapshotHeader()['NumPart'][sP.ptNum(ptName)]
+
+                if sP.isSubbox and parent_indextype is None:
+                    # update stamp indices: handle non-full search returns (not needed if loading saved parent indices)
                     wType = tracerSearchIndsLocal[wType]
 
                 if exitAfterOneSnap:
@@ -856,7 +871,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 if field in ['parent_indextype']:
                     # encode the snapshot index of the parent (by type) as well as its type in an int64
                     # as parent_indextype = type*1e11 + index
-                    r[field][m,wType] = data = sP.ptNum(ptName)*1e11 + indsType
+                    r[field][m,wType] = sP.ptNum(ptName)*int(1e11) + indsType
                     continue
 
                 if field in ['subhalo_id']:

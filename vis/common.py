@@ -36,7 +36,7 @@ colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_
 totSumFields     = ['mass','sfr']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y','bfield_x','bfield_y','bfield_z']
-haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel']
+haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
 
 def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
@@ -806,7 +806,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['ctName'] = 'viridis' # 'H2_segmented'
         if 'MHI' in partField:
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
-            config['ctName'] = 'HI_segmented' #'viridis'
+            config['ctName'] = 'viridis' #'HI_segmented'
 
     if partField in ['xray','xray_lum']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
@@ -910,6 +910,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['tcool_tff']:
         config['label'] = 't$_{\\rm cool}$ / t$_{\\rm ff}$ [log]'
         config['ctName'] = 'curl'
+
+    if partField in ['delta_rho']:
+        config['label'] = '$\\delta \\rho / <\\rho>$ [log]'
+        config['ctName'] = 'delta0'
 
     # gas: shock finder
     if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:
@@ -1082,6 +1086,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     # failed to find?
     if 'label' not in config:
         raise Exception('Unrecognized field ['+partField+'].')
+
+    # shouldn't have any NaN, and shouldn't be all uniformly zero
+    assert np.count_nonzero(np.isnan(grid)) == 0, 'ERROR: Final grid contains NaN.'
+    assert np.min(grid) != 0 or np.max(grid) != 0, 'ERROR: Final grid is uniformly zero.'
 
     # compute a guess for an adaptively clipped heuristic [min,max] bound
     if logMin:
@@ -1609,13 +1617,13 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 def addBoxMarkers(p, conf, ax, pExtent):
     """ Factor out common annotation/markers to overlay. """
 
-    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None):
+    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
         color     = '#ffffff'
         fontsize  = 16 # for text only
         alpha     = 0.3
 
-        circOpts = {'color':color, 'alpha':alpha, 'linewidth':1.5, 'fill':False}
+        circOpts = {'color':color, 'alpha':alpha, 'linewidth':lw, 'fill':False}
         textOpts = {'color':color, 'alpha':alpha, 'fontsize':fontsize, 
                     'horizontalalignment':'left', 'verticalalignment':'center'}
 
@@ -1682,7 +1690,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
                     ax.text( xPosText, yPosText, text, **textOpts)
 
             gcInd += 1
-            if gcInd >= radii.size:
+            if gcInd >= radii.size and countAdded < numToAdd:
                 print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,numToAdd))
                 break
 
@@ -1755,6 +1763,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
             gc['SubhaloHalfmassRad'] = gc['SubhaloHalfmassRad'][subInds]
 
             _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
+
+    if 'customCircles' in p:
+        # plotting custom list of (x,y,z),(rad) inputs as circles, inputs in simdata coordinates
+         _addCirclesHelper(p, ax, p['customCircles']['pos'], p['customCircles']['rad'], p['customCircles']['rad'].size, lw=0.5)
 
     if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius
@@ -2386,7 +2398,7 @@ def renderMultiPanel(panels, conf):
             barAreaHeight = 0.055 / aspect
             if conf.fontsize == min_fontsize:
                 barAreaHeight += 0.03
-        if nRows == 1 and nCols in [2,3]: barAreaHeight = 0.07 / aspect
+        if nRows == 1 and nCols >= 3: barAreaHeight += 0.01*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
         

@@ -1061,9 +1061,10 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
     if quant is None:
         quant = np.array([0])
 
-    # numba: handle deprecation for type 'reflected list'
+    # numba: handle deprecation for type 'reflected list' (or convert into typed Lists)
     axes = np.array(axes)
     boxSizeSim = np.array(boxSizeSim)
+    boxSizeImg = np.array(boxSizeImg)
     nPixels = np.array(nPixels)
 
     # massage mass if single scalar

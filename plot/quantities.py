@@ -2177,6 +2177,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: pass
         log = True
 
+    if ptProperty in ['delta_rho']:
+      label = 'log ( $\\delta \\rho / </rho>$ )'
+      lim = [-1.0, 1.0]
+      if haloLims: pass
+      log = True
+
     # non-custom fields (units are correct out of snapshot / code units)
     if ptProperty == 'sfr':
         assert ptType == 'gas'
