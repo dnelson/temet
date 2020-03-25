@@ -367,7 +367,9 @@ def generate(fofID, EnlargeHighResFactor=None):
 
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
-    saveFilename = '/u/dnelson/sims.TNG_zooms/ICs/output/partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
+
+    basePath = path.expanduser("~") + "/sims.TNG_zooms/ICs/output/"
+    saveFilename = basePath + 'partload_%s_halo%d_L%d_sf%.1f.hdf5' % (sP.simName, fofID, MaxLevel+(ZoomFactor-1), EnlargeHighResFactor)
 
     if path.isfile(saveFilename):
         print('skip [%s], already exists...' % saveFilename)
@@ -499,21 +501,15 @@ def generate_set():
     #haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
     #           3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
     #           3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
-    #haloIDs = [861, 1062, 1106, 1254, 1547, 1567, 1673, 1704, 1736, 1766, 
-    #           1863, 1896, 1991, 2037, 2056, 2155, 2167, 2195, 2209, 2264, 
-    #           2341, 2349, 2393, 2468, 2531, 2617, 2681, 2750, 3128, 3372] # todo: 14.4-14.5 bin of 30
-    haloIDs = [278, 460, 653, 858, 1066, 1112, 1179, 1241, 1244, 1248, 
-               1291, 1404, 1419, 1430, 1459, 1523, 1544, 1724, 1759, 1775, 
-               1838, 1856, 1890, 1909, 1919, 1938, 2011, 2054, 2127, 2145] # todo: 14.5-14.6 bin of 30
-    #haloIDs = [343,363,387,433,456,72,117,136,178,262,63,108,121,144] # todo: [14.7-14.8]=5 more, [14.9-15.0]=5 more, [15.0-15.1]=4 more
+    haloIDs = [861, 1062, 1106, 1254, 1547, 1567, 1673, 1704, 1736, 1766, 
+               1863, 1896, 1991, 2037, 2056, 2155, 2167, 2195, 2209, 2264, 
+               2341, 2349, 2393, 2468, 2531, 2617, 2681, 2750, 3128, 3372] # todo: 14.4-14.5 bin of 30
 
     sizeFacs = [3.0] #[2.0,3.0,4.0]
 
     # haloIDs = [23], sizeFacs = [4.0] # TNG50-1 no-MHD test (z=0.5)
 
-    haloIDs = [877,901,1041] # concat testing
-
     for haloID in haloIDs:
         for sizeFac in sizeFacs:
-            generate(fofID=haloID, EnlargeHighResFactor=sizeFac, printOffsetOnly=True)
+            generate(fofID=haloID, EnlargeHighResFactor=sizeFac)
 

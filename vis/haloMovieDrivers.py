@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 from os.path import isfile
 
-from vis.common import savePathDefault
+from vis.common import savePathDefault, savePathBase
 from vis.halo import renderSingleHalo, renderSingleHaloFrames, selectHalosFromMassBin
 from util import simParams
 from util.rotation import rotationMatrixFromAngleDirection
@@ -341,6 +341,6 @@ def static_halo_rotation_fullbox(objInd=10, conf='one'):
         rotCenter = subhalo['SubhaloPos']
         rotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, dirVec)
 
-        plotConfig.saveFilename = '/u/dnelson/data/frames/%s_s%d_sh%d/frame_%s_%d.png' % (sP.simName,sP.snap,hInd,conf,frame)
+        plotConfig.saveFilename = savePathBase + '%s_s%d_sh%d/frame_%s_%d.png' % (sP.simName,sP.snap,hInd,conf,frame)
 
         renderSingleHalo(panels, plotConfig, locals())

@@ -525,7 +525,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
 
     # info
     username = getuser()
-    if username == 'dnelson':
+    if username != 'wwwrun':
         print(' ' + desc)
         print(' Total # Subhalos: %d, processing [%d] subhalos...' % (nSubsTot,nSubsDo))
 
@@ -627,7 +627,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     printFac = 100.0 if (sP.res > 512 or scope == 'global') else 10.0
 
     for i, subhaloID in enumerate(subhaloIDsTodo):
-        if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo and username == 'dnelson':
+        if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo and username != 'wwwrun':
             print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo)) 
 
         # slice starting/ending indices for stars local to this FoF

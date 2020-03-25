@@ -128,9 +128,8 @@ class simParams:
         """ Fill parameters based on inputs. """
         self.basePath = path.expanduser("~") + '/'
 
-        if getpass.getuser() != 'dnelson':
+        if getpass.getuser() == 'wwwrun': # freyator
             self.basePath = '/u/dnelson/'
-            #print('Warning: for user [%s] setting hard-coded basePath [%s]' % (getpass.getuser(),self.basePath))
 
         # general validation
         if not run:
@@ -799,7 +798,7 @@ class simParams:
             self.derivPath = self.postPath
 
         # if wwwrun user, override derivPath with a local filesystem cache location
-        if getpass.getuser() != 'dnelson':
+        if getpass.getuser() == 'wwwrun':
             #self.derivPath = '/var/www/cache/backend_freyator/%s/' % self.simName
             self.derivPath = '/freya/ptmp/mpa/dnelson/cache/%s/' % self.simName
             if not path.isdir(self.derivPath):

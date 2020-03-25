@@ -7,9 +7,9 @@ from builtins import *
 
 import numpy as np
 from datetime import datetime
-from os.path import isfile
+from os.path import isfile, expanduser
 
-from vis.common import savePathDefault
+from vis.common import savePathBase
 from vis.box import renderBox, renderBoxFrames
 from util import simParams
 from cosmo.util import subboxSubhaloCat
@@ -36,7 +36,7 @@ def subbox_4x2_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath = '/u/dnelson/data/frames/%s_sb0/' % run
+        savePath = savePathBase + '%s_sb0/' % run
         plotStyle = 'edged_black'
         rasterPx  = 960
         colorbars = True
@@ -67,7 +67,7 @@ def subbox_2x1_movie(curTask=0, numTasks=1):
     axes    = [1,2] # x,y
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames/%s_%s/' % (run,variant)
+        savePath  = savePathBase + '%s_%s/' % (run,variant)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False #True
@@ -99,7 +99,7 @@ def subbox_movie_tng300fof0_6panel(curTask=0, numTasks=1):
     #zoomFac = 0.1 # testing
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames/%s%d_%s/' % (run,res,variant)
+        savePath  = savePathBase + '%s%d_%s/' % (run,res,variant)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = True
@@ -128,7 +128,7 @@ def subbox_movie_tng300fof0(curTask=0, numTasks=1):
     labelScale = 'physical'
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames/%s_%s/' % (run,variant)
+        savePath  = savePathBase + '%s_%s/' % (run,variant)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False #True
@@ -180,7 +180,7 @@ def subbox_movie_tng50(curTask=0, numTasks=1, conf='one', render8k=False):
         saveStr += '_8k'
 
     class plotConfig:
-        savePath = '/u/dnelson/data/frames/%s%s_%s/' % (res,variant,saveStr)
+        savePath = savePathBase + '%s%s_%s/' % (res,variant,saveStr)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
@@ -594,7 +594,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     # render
     frameSaveNum = sbSnapNum if frameNum is None else frameNum
     class plotConfig:
-        saveFilename = '/u/dnelson/data/frames/%ssb%d_s%d_sh%d/frame_%s_%d%s.png' % (sP.res,sbNum,sP.snap,subhaloID,conf,frameSaveNum,rotStr)
+        saveFilename = savePathBase + '%ssb%d_s%d_sh%d/frame_%s_%d%s.png' % (sP.res,sbNum,sP.snap,subhaloID,conf,frameSaveNum,rotStr)
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
@@ -626,7 +626,7 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     # normal render
     for i, sbSnapNum in enumerate(sbSnapNums):
-        if isfile('/u/dnelson/data/frames/2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
+        if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
             print('skip ', i)
             continue
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
@@ -654,8 +654,8 @@ def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):
     axes     = [0,1] # x,y
 
     class plotConfig:
-        #savePath  = '/u/dnelson/data/frames/comp_gasdens_sb0/'
-        savePath  = '/u/dnelson/data/frames/1820subbox0_highz_gasdens/'
+        #savePath  = savePathBase + 'comp_gasdens_sb0/'
+        savePath  = savePathBase + '1820subbox0_highz_gasdens/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = True
@@ -688,7 +688,7 @@ def subbox_highz_gasdens(curTask=0, numTasks=1):
     textcolor  = 'black'
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames/1820subbox0_highz_gasdens/'
+        savePath  = savePathBase + '1820subbox0_highz_gasdens/'
         plotStyle = 'edged_black'
         rasterPx  = nPixels
         colorbars = False
@@ -722,7 +722,7 @@ def Illustris_vs_TNG_subbox0_4x2_movie(curTask=0, numTasks=1):
     axes    = [0,1] # x,y
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames/comp_4x2_sb0/'
+        savePath  = savePathBase + 'comp_4x2_sb0/'
         plotStyle = 'edged_black'
         rasterPx  = 960
         colorbars = True
@@ -802,7 +802,7 @@ def planetarium_TychoBrahe_frames(curTask=0, numTasks=1, conf=0):
         panels.append( {'partType':'gas',   'partField':'O VI', 'valMinMax':[10,16], 'labelZ':True} )
 
     class plotConfig:
-        savePath  = '/u/dnelson/data/frames_tycho/'
+        savePath  = savePathBase + 'tycho/'
         plotStyle = 'edged_black'
         rasterPx  = 1920
         colorbars = False

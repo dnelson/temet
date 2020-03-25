@@ -10,8 +10,9 @@ def checkVisJobs():
         automatically re-submit jobs which have failed."""
     startJob = 0
     endJob   = 3976 #3976
+    username = 'dnelson'
     
-    slurmJobPath = '/n/home07/dnelson/ArepoVTK/run.subbox0/'
+    slurmJobPath = os.path.expanduser("~") + '/ArepoVTK/run.subbox0/'
     slurmJobFile = 'job_8k.slurm'
     
     jobOutputPath = slurmJobPath + 'output/frames_8192/'
@@ -41,7 +42,7 @@ def checkVisJobs():
             jobsCompleted.append( res.group(1).lstrip("0") )
     
     # query slurm for list of running jobs
-    slurmText = os.popen('squeue -h --array -u dnelson -o "%j %K %T"').read()
+    slurmText = os.popen('squeue -h --array -u %s -o "\%j \%K \%T"' % username).read()
     slurmText = slurmText.split('\n')
     
     for i,jobText in enumerate(slurmText):

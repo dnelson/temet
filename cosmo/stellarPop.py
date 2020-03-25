@@ -9,7 +9,8 @@ import numpy as np
 import h5py
 import time
 from numba import jit
-from os.path import isfile, expanduser
+from os import mkdir
+from os.path import isfile, isdir, expanduser
 from scipy.ndimage import map_coordinates
 from scipy.interpolate import interp1d
 from getpass import getuser
@@ -270,7 +271,7 @@ def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_
 
 class sps():
     """ Use pre-computed FSPS stellar photometrics tables to derive magnitudes for simulation stars. """
-    basePath = '/u/dnelson/code/fsps.run/'
+    basePath = expanduser("~") + '/code/fsps.run/'
 
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
     isoTracks  = ['mist','padova07','parsec','basti','geneva']
@@ -309,7 +310,7 @@ class sps():
         assert imf in self.imfTypes
         assert dustModel in self.dustModels
 
-        if not redshifted and sP.redshift > 0.0 and getuser() == 'dnelson':
+        if not redshifted and sP.redshift > 0.0 and getuser() != 'wwwrun':
             print(' WARNING: sP redshift = %.2f, but not redshifting SPS calculations!' % sP.redshift)
 
         self.sP    = sP
@@ -333,6 +334,9 @@ class sps():
             zStr += '_em'
 
         saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d%s.hdf5' % (iso,imf,self.dust,len(self.bands),zStr)
+
+        if not isdir(basePath):
+            mkdir(basePath)
 
         # no saved table? compute now
         if not isfile(saveFilename):
@@ -468,7 +472,7 @@ class sps():
 
         # loop over metallicites, compute band magnitudes (and full spectra) over an age grid for each
         for i in range(pop.zlegend.size):
-            if getuser() == 'dnelson': print('  [%2d of %2d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
+            if getuser() != 'wwwrun': print('  [%2d of %2d] Z = %g' % (i,pop.zlegend.size,pop.zlegend[i]))
 
             # update metallicity step
             pop.params['zmet'] = i + 1 # 1-indexed
@@ -498,7 +502,7 @@ class sps():
 
         # loop again, this time compute nebular line emission luminosities (modify pop each time)
         for i in range(pop.zlegend.size):
-            if getuser() == 'dnelson': print('  [%2d of %2d] Z = %g (nebular)' % (i,pop.zlegend.size,pop.zlegend[i]))
+            if getuser() != 'wwwrun': print('  [%2d of %2d] Z = %g (nebular)' % (i,pop.zlegend.size,pop.zlegend[i]))
 
             pop = fsps.StellarPopulation(sfh = 0, # SSP
                                          zmet = i+1,
@@ -1414,8 +1418,8 @@ def debug_check_rawspec():
     ageInd = 30
     redshift = 0.8
 
-    paths = ['/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5',
-             '/u/dnelson/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5',]
+    paths = [expanduser("~") + '/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5',
+             expanduser("~") + '/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5',]
 
     # start plot
     fig = plt.figure(figsize=(figsize[0]*1.8,figsize[1]))

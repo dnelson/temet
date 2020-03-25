@@ -57,25 +57,26 @@ For example, add the following lines to your `.bashrc` file
 
 5. The FSPS stellar population synthesis package is required
 
-        cd ~/
+        mkdir ~/code
+        cd ~/code/
         git clone https://github.com/cconroy20/fsps
 
     edit the `src/sps_vars.f90` file and switch the defaults spectral and isochrone libraries to
 
         MILES 1
-        PADOVA 1
+        PADOVA 1 (and so MIST 0)
 
-    compile FSPS
+    for most people, edit `src/Makefile` and add to the F90FLAGS line `-fPIC`, then compile FSPS
 
         make
 
     add the following line to your `.bashrc` file
 
-        export SPS_HOME=$HOME/fsps/
+        export SPS_HOME=$HOME/code/fsps/
 
 6. Install all python dependencies as required
 
-        pip install -r ~/python/requirements.txt
+        pip install --user -r ~/python/requirements.txt
 
 7. Point `matplotlib` to the default settings file
 
@@ -131,6 +132,9 @@ both the particle and group catalog level are defined. Loading data can also be 
 
 >>> subs = sP.subhalos('mstar_30pkpc')
 >>> x = sP.gas('cellsize_kpc')
+
+>>> fof10 = sP.halo(10) # all fields
+>>> sub_sat1 = sP.subhalo( fof10['GroupFirstSub']+1 ) # all fields
 ```
 
 
@@ -190,7 +194,48 @@ There are broadly two types of visualizations: box-based and halo-based, spannin
 
 All such driver functions generally set a large number of configurable options, which are then passed into the 
 extremely general `vis.box.renderBox()` or `vis.halo.renderSingleHalo()` functions, which accept a large number of 
-arguments.
+arguments (see code for details).
+
+One could in theory call these functions directly:
+
+```python
+>>> panels = []
+>>> panels.append( {'partType':'dm', 'partField':'coldens_msunkpc2'} )
+>>> panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2'} )
+>>>
+>>> commonVars = {'run':'tng', 'res':270, 'redshift':0.0}
+>>>
+>>> class plotConfig:
+>>>     pass
+>>>
+>>> vis.box.renderBox(panels, plotConfig, commonVars)
+```
+
+each entry in `panels` will add one image/view/panel to the figure, and these can differ in any way possible by 
+setting different parameters. The `plotConfig` class holds settings which affect the overall figure as a whole, 
+and `commonVars` (which is usually all local variables in the driver functions) are shared between all panels.
+
+For a halo-based render, the process is the same, and `hInd` specifies the subhalo ID:
+
+```python
+>>> run = 'tng50-3'
+>>> redshift = 0.0
+>>>
+>>> sP = simParams(run=run, redshift=redshift)
+>>> fof10 = sP.halo(10)
+>>> fof11 = sP.halo(11)
+>>>
+>>> panels = []
+>>> panels.append( {'hInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
+>>> panels.append( {'hInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'temp'} )
+>>> panels.append( {'hInd':fof11['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
+>>> panels.append( {'hInd':fof11['GroupFirstSub'], 'partType':'gas', 'partField':'temp'} )
+>>>
+>>> class plotConfig:
+>>>     plotStyle = 'edged'
+>>>
+>>> vis.halo.renderSingleHalo(panels, plotConfig, locals())
+```
 
 
 data catalogs
@@ -210,7 +255,20 @@ gives the generating function of this catalog. A large number of catalogs are pr
 and field with different statistical reductions, aperture definitions, weighting, particle restrictions, and so on.
 
 These functions implement the `pSplit` parallelization scheme, meaning that all such computations can be chunked and partial 
-subsets of the full group catalog can be operated on at once, to reduce memory usage and distribute computational cost.
+subsets of the full group catalog can be operated on at once, to reduce memory usage and distribute computational cost. 
+For example:
+
+```python
+>>> sP = simParams(run='tng100-1', redshift=2.0)
+>>> for i in range(8):
+>>>     x = sP.auxCat('Subhalo_Mass_30pkpc_Stars', pSplit=[i,8])
+```
+
+In general, loading an auxCat which has already been created:
+
+```python
+>>> x = sP.auxCat('Subhalo_Mass_30pkpc_Stars')
+```
 
 
 reproducing published papers
@@ -226,3 +284,5 @@ version, tagged on the date near the finalization of the paper.
 [Nelson et al. (2018b) - TNG oxygen](http://arxiv.org/abs/1712.00016) - `projects.oxygen.paperPlots()`
 
 [Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.outflows.paperPlots()`
+
+[Nelson et al. (in prep) - TNG50 small-scale CGM](#) - `projects.lrg.paperPlots()`

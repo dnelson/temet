@@ -18,7 +18,7 @@ def concatSubboxFilesAndMinify():
     from util.helper import pSplitRange
 
     # config
-    outputPath = '/home/extdylan/sims.TNG/L35n2160TNG/output/'
+    outputPath = path.expanduser("~") + '/sims.TNG/L35n2160TNG/output/'
     sbNum = 2
     sbSnapRange = [1200,1201]
     numChunksSave = 8
@@ -387,8 +387,8 @@ def makeSnapHeadersForLHaloTree():
     """ Copy chunk 0 of each snapshot only and the header only (for LHaloTree B-HaloTree). """
     nSnaps = 59 #100
 
-    pathFrom = '/home/extdylan/data/out/L35n2160TNG/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/data/out/L35n2160TNG/output/snapdir_%03d/'
+    pathFrom = path.expanduser("~") + '/sims.TNG/L35n2160TNG/output/snapdir_%03d/'
+    pathTo   = path.expanduser("~") + '/sims.TNG/L35n2160TNG/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -428,8 +428,8 @@ def makeSnapSubsetsForMergerTrees():
     #copyFields = {'PartType4':['Coordinates','ParticleIDs']}
     #copyFields = {'PartType0':['Masses','Coordinates','Density','GFM_Metals','GFM_Metallicity']}
 
-    pathFrom = '/home/extdylan/sims.TNG/L35n1080TNG_DM/output/snapdir_%03d/'
-    pathTo   = '/home/extdylan/data/out/L35n1080TNG_DM/output/snapdir_%03d/'
+    pathFrom = path.expanduser("~") + '/sims.TNG/L35n1080TNG_DM/output/snapdir_%03d/'
+    pathTo   = path.expanduser("~") + '/data/L35n1080TNG_DM/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -502,7 +502,7 @@ def makeSdssSpecObjIDhdf5():
 
 def createEmptyMissingGroupCatChunk():
     nChunks = 64
-    basePath = '/u/dnelson/sims.TNG_method/L25n512_4503/output/groups_004/'
+    basePath = path.expanduser("~") + '/sims.TNG_method/L25n512_4503/output/groups_004/'
     fileBase = basePath + 'fof_subhalo_tab_004.%d.hdf5'
     fileMake = fileBase % 60
 
@@ -560,7 +560,7 @@ def combineAuxCatSubdivisions():
     """ Combine a subdivision of a pSplit auxCat calculation. """
     from os.path import isfile
 
-    basePath = '/n/home07/dnelson/sims.TNG/L205n2500TNG/data.files/auxCat/'
+    basePath = path.expanduser("~") + '/sims.TNG/L205n2500TNG/data.files/auxCat/'
     field    = 'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1' # _rad30pkpc
     fileBase = field + '_099-split-%d-%d.hdf5'
 
@@ -614,7 +614,7 @@ def combineAuxCatSubdivisions():
     assert np.count_nonzero(np.isnan(subhaloIDs)) == 0
     assert np.count_nonzero(new_r == -1.0) == 0
 
-    outPath = '/n/home07/dnelson/data7/' + fileBase % (pSplitSm[0],pSplitSm[1])
+    outPath = path.expanduser("~") + '/data/' + fileBase % (pSplitSm[0],pSplitSm[1])
     print('Write to: [%s]' % outPath)
 
     assert not isfile(outPath)
@@ -642,7 +642,7 @@ def combineAuxCatSubdivisions():
 
 def redshiftWikiTable():
     """ Output wiki-syntax table of snapshot spacings. """
-    fname = '/n/home07/dnelson/sims.TNG/outputs.txt'
+    fname = path.expanduser("~") + '/sims.TNG/outputs.txt'
     with open(fname,'r') as f:
         lines = f.readlines()
 
@@ -699,7 +699,7 @@ def tngVariantsLatexOrWikiTable(variants='all', fmt='wiki'):
     """ Output latex-syntax table describing the TNG model variations runs. """
     import csv
 
-    run_file = '/home/extdylan/sims.TNG_method/runs.csv'
+    run_file = path.expanduser("~") + '/sims.TNG_method/runs.csv'
 
     with open(run_file) as f:
         lines = f.readlines()
@@ -761,6 +761,7 @@ def export_ovi_phase():
     from cosmo.util import inverseMapPartIndicesToSubhaloIDs, cenSatSubhaloIndices
     from tracer.tracerMC import match3
     from util.simParams import simParams
+    from getpass import getuser
     
     sP = simParams(res=1820,run='tng',redshift=0.0)
     N = int(1e7) # None for all
@@ -812,7 +813,7 @@ def export_ovi_phase():
         h = f.create_group('Header')
         h.attrs['num_pts'] = N if haloID is None else N_tot
         h.attrs['num_pts_total'] = N_tot
-        h.attrs['written_by'] = 'dnelson'
+        h.attrs['written_by'] = getuser()
         h.attrs['selection'] = selection
         h.attrs['sim_name'] = sP.simName
         h.attrs['sim_redshift'] = sP.redshift
@@ -861,7 +862,7 @@ def convertMillenniumSubhaloCatalog(snap=63):
     """ Convert a subhalo catalog ('sub_tab_NNN.X' files), custom binary format of Millennium simulation to Illustris-like HDF5. """
     from tracer.tracerMC import match3
 
-    savePath = '/u/dnelson/data/sims.other/Millennium-1/output/'
+    savePath = path.expanduser("~") + '/sims.other/Millennium-1/output/'
     loadPath = '/virgo/simulations/Millennium/'
 
     dm_particle_mass = 0.0860657 # ~10^9 msun
@@ -1223,7 +1224,7 @@ def convertMillennium2SubhaloCatalog(snap=67):
     """ Convert a subhalo catalog ('subhalo_tab_NNN.X' files), custom binary format of Millennium-2 simulation to TNG-like HDF5. """
     from tracer.tracerMC import match3
 
-    savePath = '/u/dnelson/data/sims.other/Millennium-2/output/'
+    savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
 
     header_bytes = 32
@@ -1494,7 +1495,7 @@ def convertMillenniumSnapshot(snap=63):
     from tracer.tracerMC import match3
     from util.helper import isUnique
 
-    savePath = '/u/dnelson/data/sims.millennium/Millennium1/output/'
+    savePath = path.expanduser("~") + '/sims.other/Millennium-1/output/'
     loadPath = '/virgo/simulations/Recovered_Millennium/' 
     #loadPath = '/virgo/simulations/MilliMillennium/'
 
@@ -1752,7 +1753,7 @@ def convertMillennium2Snapshot(snap=67):
     from tracer.tracerMC import match3
     from util.helper import isUnique
 
-    savePath = '/u/dnelson/data/sims.other/Millennium-2/output/'
+    savePath = path.expanduser("~") + '/sims.other/Millennium-2/output/'
     loadPath = '/virgo/simulations/Millennium2/BigRun/'
 
     saveFile = savePath + 'snapdir_%03d/snap_%03d.hdf5' % (snap,snap)
@@ -1983,8 +1984,8 @@ def convertMillennium2Snapshot(snap=67):
 
 def convertGadgetICsToHDF5():
     """ Convert a Gadget-1 binary format ICs (dm-only, 8 byte IDs, 4 byte pos/vel) into HDF5 format (keep original ordering). """
-    loadPath = '/u/dnelson/sims.TNG/InitialConditions/L35n2160TNG/output/ICs.%s' 
-    savePath = '/u/dnelson/sims.TNG/L35n2160TNG/output/snap_ics.hdf5'
+    loadPath = '/virgo/simulations/IllustrisTNG/InitialConditions/L35n2160TNG/output/ICs.%s' 
+    savePath = '/virgo/simulations/IllustrisTNG/L35n2160TNG/output/snap_ics.hdf5'
 
     ptNum = 1
     longids = True # 64 bit, else 32 bit
@@ -2097,7 +2098,7 @@ def convertGadgetICsToHDF5():
 def splitSingleHDF5IntoChunks():
     """ Split a single-file snapshot/catalog/etc HDF5 into a number of roughly equally sized chunks. """
     from util.helper import pSplitRange
-    basePath = '/u/dnelson/sims.millennium/Millennium1/output/snapdir_063/'
+    basePath = path.expanduser("~") + '/sims.other/Millennium-1/output/snapdir_063/'
     fileName = 'milli_063.hdf5'
     numChunksSave = 16
 
@@ -2179,7 +2180,7 @@ def combineMultipleHDF5FilesIntoSingle():
     simName = 'L35n2160TNG'
     snap    = 33
 
-    loadPath = '/u/dnelson/sims.TNG/%s/output/groups_%03d/' % (simName,snap)
+    loadPath = path.expanduser("~") + '/sims.TNG/%s/output/groups_%03d/' % (simName,snap)
     savePath = '/mnt/nvme/cache/%s/output/groups_%03d/' % (simName,snap)
     fileBase = "fof_subhalo_tab_%03d.%s.hdf5"
     outFile  = "fof_subhalo_tab_%03d.hdf5" % snap
@@ -2269,7 +2270,7 @@ def convertEagleSnapshot(snap=20):
     #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
     savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
 
-    gfmPhotoPath = '/u/dnelson/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
+    gfmPhotoPath = path.expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
 
     sP = simParams(res=1504,run='eagle') # for units only
 
@@ -3113,8 +3114,8 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
     file1 = basepath + ".bin.nb"
     file2 = basepath + ".bin.nb2"
 
-    outfile1 = "/u/dnelson/sims.TNG/L35n1080TNG/data.files/voronoi/mesh_spatialorder_%02d.hdf5" % sP.snap
-    outfile2 = "/u/dnelson/sims.TNG/L35n1080TNG/data.files/voronoi/mesh_%02d.hdf5" % sP.snap
+    outfile1 = path.expanduser("~") + "/sims.TNG/L35n1080TNG/data.files/voronoi/mesh_spatialorder_%02d.hdf5" % sP.snap
+    outfile2 = path.expanduser("~") + "/sims.TNG/L35n1080TNG/data.files/voronoi/mesh_%02d.hdf5" % sP.snap
 
     dtype_nb = np.dtype([
         ("x", np.float64),

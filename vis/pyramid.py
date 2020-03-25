@@ -257,7 +257,7 @@ def saveImageToPNG(filename, array_rgb):
     img.close()
     
 def getColorTableParams(fieldName):
-    ctBase = '/n/home07/dnelson/idl/mglib/vis/cpt-city/'
+    ctBase = os.path.expanduser("~") + '/idl/mglib/vis/cpt-city/'
     
     if fieldName == "Density":
         ct = { 'file'    : ctBase + 'ncl/WhiteBlueGreenYellowRed-dnA.cpt',

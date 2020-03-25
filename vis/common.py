@@ -26,7 +26,8 @@ from cosmo.cloudy import cloudyIon, cloudyEmission, getEmissionLines
 from cosmo.stellarPop import sps
 
 # all frames output here (current directory if empty string)
-savePathDefault = expanduser("~") + '/' #+ '/Dropbox/odyssey/'
+savePathDefault = expanduser("~") + '/' # for testing/quick outputs
+savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 
 # configure certain behavior types
 volDensityFields = ['density']
@@ -1173,7 +1174,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # load if already made
         with h5py.File(saveFilename,'r') as f:
             grid_master = f['grid'][...]
-        if getuser() == 'dnelson':
+        if getuser() != 'wwwrun':
             print('Loaded: [%s]' % saveFilename.split(sP.derivPath)[1])
     else:
         # will we use a complete load or a subset particle load?
@@ -1512,7 +1513,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         # save
         with h5py.File(saveFilename,'w') as f:
             f['grid'] = grid_master
-        if getuser() == 'dnelson':
+        if getuser() != 'wwwrun':
             print('Saved: [%s]' % saveFilename.split(sP.derivPath)[1])
 
     # smooth down to some resolution by convolving with a Gaussian? (before log if applicable)

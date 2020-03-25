@@ -38,7 +38,7 @@ def plotUsersData():
     convertfunc = lambda x: datetime.strptime(x.decode('utf8'), '%Y-%m-%d')    
     #dd = [(col_headers[0], 'object')] + [(a, 'd') for a in col_headers[1:]]
     dd = [object] + ['d' for a in col_headers[1:]]
-    data_load = np.genfromtxt('/u/dnelson/plot_stats.txt', delimiter=',',\
+    data_load = np.genfromtxt(expanduser("~") + '/plot_stats.txt', delimiter=',',\
                         names=col_headers,dtype=dd,converters={'Date':convertfunc},skip_header=50)
     
     data = {}

@@ -1053,7 +1053,8 @@ def subhalosTracersTimeEvo(sP,subhaloIDs,toRedshift,trFields,parFields,parPartTy
         offset += trCounts[i]
 
     # follow tracer and tracer parent properties over the requested snapshot range
-    tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift, saveFilename='/u/dnelson/data/temp.hdf5', onlySnap=onlySnap)
+    saveFilename = expanduser("~") + '/data/temp.hdf5' # temporary cache only
+    tracerProps = tracersTimeEvo(sP, trSearchIDs, trFields, parFields, toRedshift, saveFilename=saveFilename, onlySnap=onlySnap)
 
     # separate back out by subhalo and save one data file per subhalo
     offset = 0

@@ -17,7 +17,7 @@ from os import mkdir, remove
 from cosmo import hydrogen
 from util.helper import closest, iterable, logZeroNaN
 
-basePath = '/u/dnelson/code/cloudy.run/'
+basePath = expanduser("~") + "/code/cloudy.run/"
 
 # proposed emission lines to record:
 lineList = """

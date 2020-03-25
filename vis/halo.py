@@ -33,7 +33,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         sh = sP.groupCatSingle(subhaloID=shID)
         gr = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
 
-        if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial' and getuser() == 'dnelson':
+        if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial' and getuser() != 'wwwrun':
             print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
 
         sP.subhaloInd = shID # attach for use later

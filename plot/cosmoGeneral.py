@@ -222,11 +222,11 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-    if getuser() == 'dnelson':
+    if getuser() != 'wwwrun':
         print(' ',xQuant,yQuant,cQuant,sP.simName,cenSatSelect)
 
     cssStrings = {'all':'all galaxies', 'cen':'centrals only', 'sat':'satellites'}
-    if getuser() != 'dnelson':
+    if getuser() == 'wwwrun':
         ax.set_title(sP.simName + ': ' + cssStrings[cenSatSelect])
 
     # 2d histogram

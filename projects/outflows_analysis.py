@@ -10,7 +10,7 @@ import numpy as np
 import h5py
 import time
 import hashlib
-from os.path import isfile, isdir
+from os.path import isfile, isdir, expanduser
 from os import mkdir
 
 from collections import OrderedDict
@@ -369,7 +369,7 @@ def halo_selection(sP, minM200=11.5):
     r = {}
 
     # quick caching
-    saveFilename = '/u/dnelson/temp_haloselect_%d_%.1f.hdf5' % (sP.snap,minM200)
+    saveFilename = expanduser("~") + '/temp_haloselect_%d_%.1f.hdf5' % (sP.snap,minM200)
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
             for key in f:

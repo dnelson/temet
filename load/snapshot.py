@@ -249,7 +249,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
     useCache = True
-    createCache = True if getuser() == 'dnelson' else False
+    createCache = True if getuser() != 'wwwrun' else False
 
     cachePath = sP.derivPath + 'cache/'
     sbStr = 'sb%d_' % sP.subbox if sP.subbox is not None else ''
@@ -311,7 +311,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
         # load from existing cache if it exists
         if isfile(cacheFile):
-            if getuser() == 'dnelson':
+            if getuser() != 'wwwrun':
                 print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
 
             with h5py.File(cacheFile, 'r') as f:

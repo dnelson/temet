@@ -559,9 +559,10 @@ def maskBoxRegionsByHalo():
     variant = 'sf3'
     run = 'tng_zoom'
 
-    hInds = [0,10,120,13,877,901,1041] # testing
+    #hInds = [0,10,120,13,877,901,1041] # testing
+    hInds = _halo_ids_run()[0:50] # 184 for all complete until now
 
-    snap = 5
+    snap = 99
 
     # mask config
     nGrid = 1024 #2048
@@ -592,11 +593,11 @@ def maskBoxRegionsByHalo():
         halos['GroupPos'] -= sP.boxSize/2
         halos['GroupPos'] += sP.zoomShiftPhys
 
+        print(sP.simName, sP.numHalos, sP.numSubhalos, halos['GroupPos'][0,:])
+
         _mark_mask(mask, gridSize, halos['GroupPos'], hInd)
 
         # diagnostics
-        print(sP.simName, sP.numHalos, sP.numSubhalos, halos['GroupPos'][0,:])
-
         numHalosTot += sP.numHalos
         numSubhalosTot += sP.numSubhalos
 

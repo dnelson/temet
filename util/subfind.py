@@ -2557,7 +2557,9 @@ def set_softenings(P, SphP, sP, snapLoaded=False):
 
 def load_gfm_stellar_photometrics():
     """ Load photometrics table for interpolation later. """
-    gfmPhotoPath = '/u/dnelson/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
+    from os.path import expanduser
+    
+    gfmPhotoPath = expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
     photoBandsOrdered = ['U','B','V','K','g','r','i','z']
 
     gfm_photo = {}
