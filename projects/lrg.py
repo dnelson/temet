@@ -18,6 +18,7 @@ from os.path import isfile
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from util.voronoi import voronoiThresholdSegmentation
+from util.loadExtern import werk2013, berg2019, chen2018zahedy2019
 from cosmo.util import subboxSubhaloCat
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
@@ -309,17 +310,23 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
 
     ylim = [11.0, 17.0] # N_ion
     if 'MHI' in ion:
-        ylim = [16.0, 22.0]
+        ylim = [13.0, 22.0]
+
+    minVals = [-np.inf, ylim[0]] if ion == 'Mg II' else [-np.inf]
+    percs   = [16,50,84]
 
     xlog       = False
     nBins      = 100
     ctName     = 'viridis'
     medianLine = True
-    colorMed   = 'black'
+    colorMed   = 'white'
+
+    ionName = ion
+    if ionName == 'MHIGK_popping': ionName = 'HI'
 
     if ycum:
         cMinMax = [-2.0, 0.0] # log fraction
-        clabel  = "Fraction of Sightlines (at this b) with >= N"
+        clabel  = "Covering Fraction $\,\kappa\,$(N$_{\\rm %s} \geq$ N)" % ionName
     else:
         cMinMax = [-3.0, -1.8] # log fraction
         #if 'MHI' in ion: cMinMax = [-3.0, -1.4]
@@ -350,7 +357,7 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
             ax.set_xlabel('Impact Parameter [ pkpc ]')
 
     ax.set_ylim(ylim)
-    ax.set_ylabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ion)
+    ax.set_ylabel('N$_{\\rm %s}$ [ log cm$^{-2}$ ]' % ionName)
 
     # plot
     w = np.where( (dist_global > 0) & np.isfinite(grid_global) )
@@ -411,53 +418,108 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
                cmap=cmap, norm=norm)
 
     if medianLine:
-        binSizeMed = (xlim[1]-xlim[0]) / nBins * 2
+        # show a second median for MgII, restricting to detectable columns
+        for minVal in minVals:
+            binSizeMed = (xlim[1]-xlim[0]) / nBins * 2
 
-        xm, ym, sm, pm = running_median(dist_global,grid_global,binSize=binSizeMed,percs=[16,50,84])
-        if xm.size > sKn:
-            ym = savgol_filter(ym,sKn,sKo)
-            sm = savgol_filter(sm,sKn,sKo)
-            pm = savgol_filter(pm,sKn,sKo,axis=1)
+            w = np.where(grid_global >= minVal)
+            xm, ym, sm, pm = running_median(dist_global[w],grid_global[w],binSize=binSizeMed,percs=percs)
+            if xm.size > sKn:
+                ym = savgol_filter(ym,sKn,sKo)
+                sm = savgol_filter(sm,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-        ax.plot(xm, ym, '-', color=colorMed, lw=lw, label='median')
-        ax.plot(xm, pm[0,:], ':', color=colorMed, lw=lw, label='P[10,90]')
-        ax.plot(xm, pm[-1,:], ':', color=colorMed, lw=lw)
+            ls = '-' if (len(minVals) == 1 or np.isfinite(minVal)) else '--'
+            ax.plot(xm, ym, ls, color=colorMed, lw=lw, alpha=0.9)
+            #if ~np.isfinite(minVal) and len(minVals) == 1:
+            #    ax.plot(xm, pm[0,:], ':', color=colorMed, lw=lw)
+            #    ax.plot(xm, pm[-1,:], ':', color=colorMed, lw=lw)
+            if len(minVals) == 1 or np.isfinite(minVal):
+                ax.fill_between(xm, pm[0,:], pm[-1,:], color=colorMed, alpha=0.05)
+                ax.plot(xm, pm[0,:], '-', color=colorMed, lw=1, alpha=0.2 if len(minVals) == 2 else 0.5)
+                ax.plot(xm, pm[-1,:], '-', color=colorMed, lw=1, alpha=0.2 if len(minVals) == 2 else 0.5)
 
     # add obs data points
-    if 'Mg II' in ion:
-        zahedy_lower_d = [18.13, 83.17, 91.08, 91.08]
-        zahedy_lower_N = [13.61, 13.95, 14.07, 13.73]
-        zahedy_upper_d = [18.82, 31.79, 76.86, 78.00, 115.88, 148.98]
-        zahedy_upper_N = [12.38, 11.88, 12.00, 12.24, 11.97,  12.50]
-        zahedy_detection_d = [45.89, 102.03, 134.85]
-        zahedy_detection_N = [12.38, 12.71, 13.01]
+    colors = ['white', 'tab:orange', '#d34d29']
+    markersize = 8.0
+    off = 0.2 # force all obs points to be within plot limits
 
-        coshalos_upper_d = [78.5, 125.8]
-        coshalos_upper_N = [11.84, 11.70]
-        coshalos_detection_d = [83.6, 93.6, 98.6, 108.5, 106.6, 140.0, 156.0, 160.1]
-        coshalos_detection_N = [13.97, 13.80, 12.39, 12.43, 12.70, 12.85, 12.22, 12.60]
-        coshalos_bar_d = [47.1, 47.1]
-        coshalos_bar_N = [13.45, 15.92]
+    if 'HI' in ion:
+        # COS-Halos, only red/massive? maybe Werk+14 Fig 14(b)
+        _, logM, _, sfr, _, _, d, N_HI, N_HI_err, N_HI_lim = werk2013(ionName='H I')
 
-        markerColor  = 'white'
-        markerColor2 = 'orange'
-        markersize   = 6.0
+        ssfr = sfr / 10.0**logM
+        w = np.where(ssfr < 1e-11)
+        d = d[w]
+        N_HI = N_HI[w]
+        N_HI_err = N_HI_err[w]
+        N_HI_lim = N_HI_lim[w] # 0=exact, 1=upper, 2=lower
 
-        ax.plot(zahedy_detection_d, zahedy_detection_N, 'o', color=markerColor, markersize=markersize)
-        ax.plot(zahedy_upper_d, zahedy_upper_N, 'v', color=markerColor, markersize=markersize)
-        ax.plot(zahedy_lower_d, zahedy_lower_N, '^', color=markerColor, markersize=markersize)
+        w = np.where(N_HI_lim == 0)
+        ax.plot(d[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), 'o', color=colors[1], markersize=markersize, label='COS-Halos (red)')
+        w = np.where(N_HI_lim == 1)
+        ax.plot(d[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), 'v', color=colors[1], markersize=markersize)
+        w = np.where(N_HI_lim == 2)
+        ax.plot(d[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), '^', color=colors[1], markersize=markersize)
 
-        ax.plot(coshalos_detection_d, coshalos_detection_N, 'o', color=markerColor2, markersize=markersize)
-        ax.plot(coshalos_upper_d, coshalos_upper_N, 'v', color=markerColor2, markersize=markersize)
-        ax.plot(coshalos_bar_d, coshalos_bar_N, '-', color=markerColor2, lw=lw-1, alpha=0.3)
+        # COS-LRG
+        _, _, _, _, _, _, d, N_HI, N_HI_err, N_MgII, N_MgII_err = chen2018zahedy2019()
+
+        w = np.where((N_HI_err != '-') & (N_HI_err != '>') & (N_HI_err != '<'))
+        ax.plot(d[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), 'o', color=colors[0], markersize=markersize, label='COS-LRG')
+        w = np.where(N_HI_err == '>')
+        ax.plot(d[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), '^', color=colors[0], markersize=markersize)
+        w = np.where(N_HI_err == '<')
+        ax.plot(d[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), 'v', color=colors[0], markersize=markersize)
+
+        # LRG-RDR
+        _, _, _, _, _, _, b, N_HI, N_HI_err, N_HI_lim = berg2019() # RDR survey
+
+        w = np.where(N_HI_lim == 0)
+        ax.plot(b[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), 'o', color=colors[2], markersize=markersize, label='LRG-RDR')
+        w = np.where(N_HI_lim == 1)
+        ax.plot(b[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), 'v', color=colors[2], markersize=markersize) # visual offset
+        w = np.where(N_HI_lim == 2)
+        ax.plot(b[w], np.clip(N_HI[w],ylim[0]+off,ylim[1]-off), '^', color=colors[2], markersize=markersize)
 
         # legend
-        handles = [plt.Line2D( (0,0),(0,0),color=markerColor,lw=lw-1,linestyle='-',marker='o'),
-                   plt.Line2D( (0,0),(0,0),color=markerColor2,lw=lw-1,linestyle='-',marker='o'),]
-        labels  = ['COS-LRG (Zahedy+ 2019)', 'COS-Halos (Werk+ 2013)']
-        legend = ax.legend(handles, labels, loc='upper right', handlelength=0)
-        legend.get_texts()[0].set_color(markerColor)
-        legend.get_texts()[1].set_color(markerColor2)
+        legend = ax.legend(loc='upper right')
+        for handle, text in zip(legend.legendHandles, legend.get_texts()):
+            text.set_color(handle.get_color())
+
+    if 'Mg II' in ion:
+        # COS-Halos
+        _, logM, _, sfr, _, _, d, N_MgII, N_MgII_err, N_MgII_lim = werk2013(ionName='Mg II')
+
+        # restrict to 'red'
+        ssfr = sfr / 10.0**logM
+        w = np.where(ssfr < 1e-11)
+        d = d[w]
+        N_MgII = N_MgII[w]
+        N_MgII_err = N_MgII_err[w]
+        N_MgII_lim = N_MgII_lim[w] # 0=exact, 1=upper, 2=lower
+
+        w = np.where(N_MgII_lim == 0)
+        ax.plot(d[w], np.clip(N_MgII[w],ylim[0]+off,ylim[1]-off), 'o', color=colors[1], markersize=markersize, label='COS-Halos (red)')
+        w = np.where(N_MgII_lim == 1)
+        ax.plot(d[w], np.clip(N_MgII[w],ylim[0]+off,ylim[1]-off), 'v', color=colors[1], markersize=markersize)
+        w = np.where(N_MgII_lim == 2)
+        ax.plot(d[w], np.clip(N_MgII[w],ylim[0]+off,ylim[1]-off), '^', color=colors[1], markersize=markersize)
+
+        # COS-LRG
+        _, _, _, _, _, _, d, N_HI, N_HI_err, N_MgII, N_MgII_err = chen2018zahedy2019()
+
+        w = np.where((N_MgII_err != '-') & (N_MgII_err != '>') & (N_MgII_err != '<'))
+        ax.plot(d[w], np.clip(N_MgII[w],ylim[0]+off,ylim[1]-off), 'o', color=colors[0], markersize=markersize, label='COS-LRG')
+        w = np.where(N_MgII_err == '>')
+        ax.plot(d[w], np.clip(N_MgII[w],ylim[0]+off,ylim[1]-off), '^', color=colors[0], markersize=markersize)
+        w = np.where(N_MgII_err == '<')
+        ax.plot(d[w], np.clip(N_MgII[w],ylim[0]+off,ylim[1]-off), 'v', color=colors[0], markersize=markersize)
+
+        # legend
+        legend = ax.legend(loc='upper right')
+        for handle, text in zip(legend.legendHandles, legend.get_texts()):
+            text.set_color(handle.get_color())
 
     # colorbar and finish plot
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
@@ -1943,13 +2005,50 @@ def paperPlots():
         haloIDs = _get_halo_ids(sP)[2]
 
         # gas metallicity, N_MgII, N_HI, stellar light
-        for conf in [10]: #[8,9,10]:
+        for conf in [8,9,10]:
             lrgHaloVisualization(sP, [1], conf=conf, gallery=False, globalDepth=False)
-        #for conf in [1,2,3,4]:
-        #    lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
-        #    lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
+        for conf in [1,2,3,4]:
+            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
+            lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=False)
 
-    # figure 5a - cgm gas density/temp/pressure 1D PDFs
+    # fig 5a: bound ion mass as a function of halo mass
+    if 0:
+        TNG50_z0 = simParams(run='tng50-1', redshift=0.0)
+        TNG50_z1 = simParams(run='tng50-1', redshift=1.0)
+        sPs = [TNG50,TNG50_z0,TNG50_z1]
+        cenSatSelect = 'cen'
+        ions = ['HIGK_popping','AllGas_Metal','AllGas_Mg','MgII']
+
+        for vsHaloMass in [True,False]:
+            massStr = '%smass' % ['stellar','halo'][vsHaloMass]
+
+            saveName = 'ions_masses_vs_%s_%s_%d_%s.pdf' % \
+                (massStr,cenSatSelect,sPs[0].snap,'_'.join([sP.simName for sP in sPs]))
+            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
+                vsHaloMass=vsHaloMass, colorOff=0) # , secondTopAxis=True
+
+    # fig 5b: radial profiles
+    if 0:
+        sPs = [TNG50]
+        ions = ['MgII']#,'HIGK_popping']
+        cenSatSelect = 'cen'
+        haloMassBins = [[11.4,11.6], [11.9,12.1], [12.4,12.6], [12.8, 13.2], [13.2, 13.8]]
+        projSpecs = ['2Dz_6Mpc','3D']
+        combine2Halo = True
+
+        simNames = '_'.join([sP.simName for sP in sPs])
+
+        for massDensity in [False]: #[True,False]:
+            for radRelToVirRad in [False]: #[True,False]:
+                for projDim in projSpecs:
+
+                    saveName = 'radprofiles_%s_%s_%s_%d_%s_rho%d_rvir%d.pdf' % \
+                      (projDim,'-'.join(ions),simNames,sPs[0].snap,cenSatSelect,massDensity,radRelToVirRad)
+                    stackedRadialProfiles(sPs, saveName, redshift=sPs[0].redshift, ions=ions, massDensity=massDensity,
+                                          radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
+                                          haloMassBins=haloMassBins, combine2Halo=combine2Halo, median=True)
+
+    # figure 6a - cgm gas density/temp/pressure 1D PDFs
     if 0:
         sP = TNG50
         qRestrictions = [['rad_rvir',0.1,1.0]] # 0.15<r/rvir<1
@@ -1975,7 +2074,7 @@ def paperPlots():
                         qRestrictions=qRestrictions, subhaloIDs=[subhaloIDs], ctName='plasma', ctProp='mhalo_200_log', 
                         legend=False, colorbar=True)
 
-    # fig 5b - cgm gas (n,T) 2D phase diagrams
+    # fig 6b - cgm gas (n,T) 2D phase diagrams
     if 0:
         sP = TNG50
         qRestrictions = [['rad_rvir',0.1,1.0]]
@@ -2003,44 +2102,8 @@ def paperPlots():
                          contours=contours, contourQuant=contourQuant, qRestrictions=qRestrictions)
         pdf.close()
 
-    # fig 6a: bound ion mass as a function of halo mass
-    if 0:
-        TNG50_z0 = simParams(run='tng50-1', redshift=0.0)
-        TNG50_z1 = simParams(run='tng50-1', redshift=1.0)
-        sPs = [TNG50,TNG50_z0,TNG50_z1]
-        cenSatSelect = 'cen'
-        ions = ['HIGK_popping','AllGas_Metal','AllGas_Mg','MgII']
 
-        for vsHaloMass in [True,False]:
-            massStr = '%smass' % ['stellar','halo'][vsHaloMass]
-
-            saveName = 'ions_masses_vs_%s_%s_%d_%s.pdf' % \
-                (massStr,cenSatSelect,sPs[0].snap,'_'.join([sP.simName for sP in sPs]))
-            totalIonMassVsHaloMass(sPs, saveName, ions=ions, cenSatSelect=cenSatSelect, 
-                vsHaloMass=vsHaloMass, colorOff=0) # , secondTopAxis=True
-
-    # fig 6b: radial profiles
-    if 0:
-        sPs = [TNG50]
-        ions = ['MgII']#,'HIGK_popping']
-        cenSatSelect = 'cen'
-        haloMassBins = [[11.4,11.6], [11.9,12.1], [12.4,12.6], [12.8, 13.2], [13.2, 13.8]]
-        projSpecs = ['2Dz_6Mpc','3D']
-        combine2Halo = True
-
-        simNames = '_'.join([sP.simName for sP in sPs])
-
-        for massDensity in [False]: #[True,False]:
-            for radRelToVirRad in [False]: #[True,False]:
-                for projDim in projSpecs:
-
-                    saveName = 'radprofiles_%s_%s_%s_%d_%s_rho%d_rvir%d.pdf' % \
-                      (projDim,'-'.join(ions),simNames,sPs[0].snap,cenSatSelect,massDensity,radRelToVirRad)
-                    stackedRadialProfiles(sPs, saveName, redshift=sPs[0].redshift, ions=ions, massDensity=massDensity,
-                                          radRelToVirRad=radRelToVirRad, cenSatSelect='cen', projDim=projDim, 
-                                          haloMassBins=haloMassBins, combine2Halo=combine2Halo, median=True)
-
-    # fig 8a: radial profiles of tcool, tff, tcool/tff (hot gas only)
+    # fig 11a: radial profiles of tcool, tff, tcool/tff (hot gas only)
     if 0:
         sP = TNG50
         subIDs = _get_halo_ids(sP, bin_inds=[2,1], subhaloIDs=True)
@@ -2054,7 +2117,7 @@ def paperPlots():
             xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
             ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
 
-    # fig 8b - 'radial profile' of tcool (2D)
+    # fig 11b - 'radial profile' of tcool (2D)
     if 0:
         sP = TNG50
 
@@ -2086,15 +2149,11 @@ def paperPlots():
                          haloID=haloID, xlim=xlim, ylim=ylim, clim=clim, nBins=200, ctName=ctName, 
                          normColMax=True, colorEmpty=False)
 
-    # fig X: 2pcf
+    # explore: 2pcf
     if 0:
         sPs = [TNG50] #[TNG100, TNG300]
         ions = ['MgII'] #,'Mg','gas']
 
-        # compute time for one split:
-        # TNG100 [days] = (1820^3/256^3)^2 * (1148/60/60/60) * (8*100/nSplits) * (16/nThreads)
-        # for nSplits=200000, should finish each in 1.5 days (nThreads=32) (each has 60,000 cells)
-        # for TNG300, nSplits=500000, should finish each in 4 days (nThreads=32)
         for order in [0,1,2]:
             saveName = 'tpcf_order%d_%s_%s_z%02d.pdf' % \
               (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
@@ -2105,12 +2164,8 @@ def paperPlots():
 
     # --- clump analysis ---
 
-    # fig 7: N_clumps vs halo mass, to show they are significantly more abundant towards larger halo masses
+    # fig 7: zoomed in (high res) visualizations of multiple properties of clumps
     if 0:
-        clumpPropertiesVsHaloMass([TNG50,TNG50_2,TNG50_3,TNG50_4])
-
-    # fig 9: zoomed in (high res) visualizations of multiple properties of clumps
-    if 1:
         sP = TNG50
         haloIDs = _get_halo_ids(sP)[2]
 
@@ -2121,12 +2176,23 @@ def paperPlots():
         #haloIDs = [0]
         #lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=False, testClumpRemoval=True)
 
-    # fig 10: clump demographics: size distribution, total mass, average numdens, etc
+    # fig 8: N_clumps vs halo mass, to show they are significantly more abundant towards larger halo masses
+    if 0:
+        clumpPropertiesVsHaloMass([TNG50,TNG50_2,TNG50_3,TNG50_4])
+
+    # fig 9: clump demographics: size distribution, total mass, average numdens, etc
     if 0:
         haloID = 0 # 0, 8, 19
         clumpDemographics(TNG50, haloID=haloID)
 
-    # fig 11: time tracks via tracers (subbox)
+    # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
+    if 0:
+        haloID = 8
+        selections = [ {'size':[0.5,0.55]}, {'size':[1.0,1.1]}, {'size':[1.5,1.6]}, {'size':[2.0,2.1]} ]
+
+        clumpRadialProfiles(TNG50, haloID, selections)
+
+    # fig 12: time tracks via tracers (subbox)
     if 0:
         # pick a single clump (from np.where(objs['lengths'] == 100))
         haloID = 0 # only >10^13 halo which intersects with subboxes
@@ -2151,13 +2217,6 @@ def paperPlots():
             for clumpID in clumpIDs:
                 clumpTracerTracks(sP, haloID=haloID, clumpID=clumpID, sbNum=sbNum)
 
-    # fig 12: individual (or stacked) clump radial profiles, including pressure/cellsize
-    if 0:
-        haloID = 8
-        selections = [ {'size':[0.5,0.55]}, {'size':[1.0,1.1]}, {'size':[1.5,1.6]}, {'size':[2.0,2.1]} ]
-
-        clumpRadialProfiles(TNG50, haloID, selections)
-
     # explore: visual frames sequence: clump evo
     if 0:
         # pick a single clump
@@ -2167,24 +2226,13 @@ def paperPlots():
 
         cloudEvoVis(TNG50, haloID=haloID, clumpID=clumpID, sbNum=sbNum, constSize=True)
 
-    # fig 13: resolution convergence, visual (matched halo)
+    # fig 16: resolution convergence, visual (matched halo)
     if 0:
         haloIDs = _get_halo_ids(TNG50)[2]
         lrgHaloVisResolution(TNG50, haloIDs, [TNG50_2, TNG50_3, TNG50_4])
 
     # --- observational comparison ---
 
-    # fig 14 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
-    if 0:
-        sP = TNG50
-        haloMassBin = haloMassBins[1]
-        #ion = 'Mg II'
-        ion = 'MHIGK_popping'
-        radRelToVirRad = False
-
-        for ycum in [True,False]:
-            for fullDepth in [True,False]:
-                ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=ycum, fullDepth=fullDepth)
 
     # fig X: obs matched samples for COS-LRG and LRG-RDR surveys
     if 0:
@@ -2194,14 +2242,28 @@ def paperPlots():
         obsSimMatchedGalaxySamples(sPs, 'sample_lrg_rdr_%s.pdf' % simNames, config='LRG-RDR')
         obsSimMatchedGalaxySamples(sPs, 'sample_cos_lrg_%s.pdf' % simNames, config='COS-LRG')
 
-    # fig 15: run old OVI machinery to derive goodness of fit parameters and associated plots
+    # fig 13: quantitative lambda comparisons for LRG-RDR and COS-LRG, associated plots
     if 0:
         for sP in [TNG50]: #[TNG50, TNG100]:
             obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
 
-    # fig 16: covering fraction comparison
+    # fig 14 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
+    if 0:
+        sP = TNG50
+        haloMassBin = [13.2, 13.8]
+        radRelToVirRad = False
+
+        for ion in ['Mg II','MHIGK_popping']:
+            ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, ycum=True, fullDepth=True)
+
+            for ycum in [True,False]:
+                for fullDepth in [True,False]:
+                    ionColumnsVsImpact2D(sP, haloMassBin, ion=ion, radRelToVirRad=radRelToVirRad, \
+                                         ycum=ycum, fullDepth=fullDepth)
+
+    # fig 15: covering fraction comparison
     if 0:
         haloMassBin = haloMassBins[2]
         ion = 'Mg II'

@@ -1657,7 +1657,7 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             # KDE is heavily skewed/flattened if there are any distant outliers
             # note: important impact on MgII (no impact on HI) where the majority of grid samples are effectively N_MgII==0
             if 1:
-                #print('WARNING: clipping sim columns to column limit range (consider implications.)') # we label
+                print('WARNING: clipping sim columns to column limit range (consider implications.)') # we label
                 wColLim = np.where( (sim_cols >= collim[0]) & (sim_cols < collim[1]) )
                 frac_above = len(wColLim[0]) / sim_cols.size * 100
 
@@ -1698,39 +1698,40 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
                 if col_limit[sort_ind] == 2: pvals[i] = z2 # lower limit, PDF area which is consistent
                 plims[i] = col_limit[sort_ind]
 
-                print(gals[sort_ind]['name'], col_logN[sort_ind], pvals[i])
+                if iter == 1: print(gals[sort_ind]['name'], col_logN[sort_ind], pvals[i])
             else:
-                print(gals[sort_ind]['name'], ' no obs column')
+                if iter == 1: print(gals[sort_ind]['name'], ' no obs column')
                 marker = 's'
                 ax_right.plot( xx[i] + kde_y[-1], collim[1], markersize=8, marker=marker, color=l.get_color(), alpha=0.5 )
 
         # print summary of pvals statistic
-        percs = np.nanpercentile(pvals, [16,50,84])
-        print('all percentiles: ',percs)
-        print('NOTE: for p-values for MgII, should take with the KDE clipping removed (to preserve the statistical meaning)')
-        for lim in [0,1,2]:
-            w = np.where(plims == lim)
-            percs = np.nanpercentile(pvals[w], [16,50,84])
-            print('limit [%d] percs:' % lim, percs)
-        print('counts: ',np.count_nonzero(pvals < 0.05),np.count_nonzero(pvals < 0.01),pvals.size)
+        if iter == 1:
+            percs = np.nanpercentile(pvals, [16,50,84])
+            print('all percentiles: ',percs)
+            print('NOTE: for p-values for MgII, should take with the KDE clipping removed (to preserve the statistical meaning)')
+            for lim in [0,1,2]:
+                w = np.where(plims == lim)
+                percs = np.nanpercentile(pvals[w], [16,50,84])
+                print('limit [%d] percs:' % lim, percs)
+            print('counts: ',np.count_nonzero(pvals < 0.05),np.count_nonzero(pvals < 0.01),pvals.size)
 
-        # print summary of sim vs. obs mean/1sigma column densities
-        percs = np.nanpercentile(col_logN, [16,50,84])
-        print('obs logN: %.2f (-%.2f +%.2f)' % (percs[1],percs[1]-percs[0],percs[2]-percs[1]))
-        percs = np.nanpercentile(sim_sample['column'].ravel(), [16,50,84])
-        print('sim logN: %.2f (-%.2f +%.2f)' % (percs[1],percs[1]-percs[0],percs[2]-percs[1]))
+            # print summary of sim vs. obs mean/1sigma column densities
+            percs = np.nanpercentile(col_logN, [16,50,84])
+            print('obs logN: %.2f (-%.2f +%.2f)' % (percs[1],percs[1]-percs[0],percs[2]-percs[1]))
+            percs = np.nanpercentile(sim_sample['column'].ravel(), [16,50,84])
+            print('sim logN: %.2f (-%.2f +%.2f)' % (percs[1],percs[1]-percs[0],percs[2]-percs[1]))
 
-        if config in ['COS-Halos','eCGM','eCGMfull']:
-            w_sf = np.where(yvals >= -11.0)
-            w_qq = np.where(yvals < -11.0)
-            percs_sf = np.nanpercentile(col_logN[w_sf], [16,50,84])
-            percs_qq = np.nanpercentile(col_logN[w_qq], [16,50,84])
-            print('obs SF logN: %.2f (-%.2f +%.2f)' % (percs_sf[1],percs_sf[1]-percs_sf[0],percs_sf[2]-percs_sf[1]))
-            print('obs QQ logN: %.2f (-%.2f +%.2f)' % (percs_qq[1],percs_qq[1]-percs_qq[0],percs_qq[2]-percs_qq[1]))
-            percs_sf = np.nanpercentile(sim_sample['column'][w_sf,:].ravel(), [16,50,84])
-            percs_qq = np.nanpercentile(sim_sample['column'][w_qq,:].ravel(), [16,50,84])
-            print('sim SF logN: %.2f (-%.2f +%.2f)' % (percs_sf[1],percs_sf[1]-percs_sf[0],percs_sf[2]-percs_sf[1]))
-            print('sim QQ logN: %.2f (-%.2f +%.2f)' % (percs_qq[1],percs_qq[1]-percs_qq[0],percs_qq[2]-percs_qq[1]))
+            if config in ['COS-Halos','eCGM','eCGMfull']:
+                w_sf = np.where(yvals >= -11.0)
+                w_qq = np.where(yvals < -11.0)
+                percs_sf = np.nanpercentile(col_logN[w_sf], [16,50,84])
+                percs_qq = np.nanpercentile(col_logN[w_qq], [16,50,84])
+                print('obs SF logN: %.2f (-%.2f +%.2f)' % (percs_sf[1],percs_sf[1]-percs_sf[0],percs_sf[2]-percs_sf[1]))
+                print('obs QQ logN: %.2f (-%.2f +%.2f)' % (percs_qq[1],percs_qq[1]-percs_qq[0],percs_qq[2]-percs_qq[1]))
+                percs_sf = np.nanpercentile(sim_sample['column'][w_sf,:].ravel(), [16,50,84])
+                percs_qq = np.nanpercentile(sim_sample['column'][w_qq,:].ravel(), [16,50,84])
+                print('sim SF logN: %.2f (-%.2f +%.2f)' % (percs_sf[1],percs_sf[1]-percs_sf[0],percs_sf[2]-percs_sf[1]))
+                print('sim QQ logN: %.2f (-%.2f +%.2f)' % (percs_qq[1],percs_qq[1]-percs_qq[0],percs_qq[2]-percs_qq[1]))
 
         # main panel: legend
         loc = ['upper right','upper left'][iter]

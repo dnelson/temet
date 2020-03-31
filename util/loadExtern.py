@@ -1191,7 +1191,7 @@ def anderson2015(sP):
 
     return r
 
-def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False):
+def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False, ionName='O VI'):
     """ Load observational COS-Halos data from Werk+ (2013). """
     if coveringFractions:
         # obs data points (werk 2013 table 6)
@@ -1206,7 +1206,7 @@ def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False):
     path1 = dataBasePath + 'werk/galaxies_werk13.txt'
     path2 = dataBasePath + 'werk/lines_werk13.txt'
 
-    if tumlinsonOVI: # use OVI columns from Tumlinson+ (2011)
+    if tumlinsonOVI and ionName == 'O VI': # use OVI columns from Tumlinson+ (2011)
         path2 = dataBasePath + 'tumlinson/ovi_tumlinson11.txt'
 
     with open(path1,'r') as f:
@@ -1250,7 +1250,7 @@ def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False):
                                         'flag':int(flag)} 
 
     # pull out some flat numpy arrays
-    gals = [g for _, g in galaxies.items() if 'O VI' in g['lines']]
+    gals = [g for _, g in galaxies.items() if ionName in g['lines']]
 
     logM = np.array( [gal['logM'] for gal in gals] )
     z = np.array( [gal['z'] for gal in gals] )
@@ -1259,14 +1259,14 @@ def werk2013(onlydict=False, tumlinsonOVI=True, coveringFractions=False):
     sfr_limit = np.array( [gal['sfr_limit'] for gal in gals] ) # True=upper
     R = np.array( [gal['R'] for gal in gals] )
 
-    ovi_logN = np.array( [gal['lines']['O VI']['logN'] for gal in gals] )
-    ovi_err = np.array( [gal['lines']['O VI']['err'] for gal in gals] )
-    ovi_limit = np.array( [gal['lines']['O VI']['line_limit'] for gal in gals] ) # 0=exact, 1=upper, 2=lower
+    ion_logN = np.array( [gal['lines'][ionName]['logN'] for gal in gals] )
+    ion_err = np.array( [gal['lines'][ionName]['err'] for gal in gals] )
+    ion_limit = np.array( [gal['lines'][ionName]['line_limit'] for gal in gals] ) # 0=exact, 1=upper, 2=lower
 
     if onlydict:
         return gals
 
-    return gals, logM, z, sfr, sfr_err, sfr_limit, R, ovi_logN, ovi_err, ovi_limit
+    return gals, logM, z, sfr, sfr_err, sfr_limit, R, ion_logN, ion_err, ion_limit
 
 def johnson2015(surveys=['IMACS','SDSS'], coveringFractions=False):
     """ Load observational data/compendium from Johnson+ (2015). Only the given surveys, i.e. 
@@ -1434,7 +1434,7 @@ def berg2019(coveringFractions=False):
     b        = np.array( [gal['b'] for gal in gals] )
     NHI      = np.array( [gal['NHI'] for gal in gals] )
     NHI_err  = np.array( [gal['NHI_err'] for gal in gals] )
-    NHI_lim  = np.array( [gal['NHI_lim'] for gal in gals] ) # '<' or '>' or False (=detection, use NHI_err)
+    NHI_lim  = np.array( [gal['NHI_lim'] for gal in gals] ) # 0 (=detection, use NHI_err), 1 (upper), 2 (lower)
 
     return gals, logM, z, ssfr, ssfr_err, ssfr_lim, b, NHI, NHI_err, NHI_lim
 
