@@ -335,8 +335,8 @@ class sps():
 
         saveFilename = self.basePath + 'mags_%s_%s_%s_bands-%d%s.hdf5' % (iso,imf,self.dust,len(self.bands),zStr)
 
-        if not isdir(basePath):
-            mkdir(basePath)
+        if not isdir(self.basePath):
+            mkdir(self.basePath)
 
         # no saved table? compute now
         if not isfile(saveFilename):

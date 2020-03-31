@@ -18,7 +18,7 @@ from plot.config import *
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
 
-def singleHaloImage_CelineMuseProposal(conf=6):
+def singleHaloImage_CelineMuseProposal(conf=4):
     """ Metallicity distribution in CGM image for 2019 MUSE proposal. """
     run        = 'tng'
     res        = 2160
@@ -30,7 +30,7 @@ def singleHaloImage_CelineMuseProposal(conf=6):
     labelZ     = True
     labelScale = 'physical'
     labelSim   = False
-    labelHalo  = True
+    labelHalo  = False
     relCoords  = True
     rotation   = 'edge-on'
 
@@ -55,7 +55,7 @@ def singleHaloImage_CelineMuseProposal(conf=6):
                          'nPixels'    : [800,250]}
     else:
         # celine muse proposal figure
-        size = 100
+        size = 200 #100
         hInds = [440839] # for muse proposal
 
     # which halo?
@@ -66,11 +66,12 @@ def singleHaloImage_CelineMuseProposal(conf=6):
         massBin = [10.48,10.5] # size = 100
         #massBin = [10.0, 10.02] # size = 80
         #massBin = [9.5,9.52] # size = 60
-        size = 100.0
+        #size = 100.0
         
         gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
         w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
         hInds = w[0]
+        print(hInds)
 
     for hInd in hInds:
         panels = []
@@ -83,6 +84,8 @@ def singleHaloImage_CelineMuseProposal(conf=6):
 
         if conf == 4:
             panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]} )
+            #panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[13.0,16.0]} )
+            #panels.append( {'partType':'gas', 'partField':'Mg II', 'valMinMax':[10.0,16.0]} )
 
         if conf == 5:
             panels.append( {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]} )
@@ -96,11 +99,11 @@ def singleHaloImage_CelineMuseProposal(conf=6):
 
         class plotConfig:
             plotStyle    = 'edged'
-            rasterPx     = 800 #nPixels[0] 
+            rasterPx     = nPixels[0] 
             colorbars    = True
-            nCols        = 1
-            nRows        = 2
-            fontsize     = 32
+            #nCols        = 1
+            #nRows        = 2
+            #fontsize     = 24
             saveStr = panels[0]['partField'].replace("_lum","").replace("_kpc","")
             saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,hInd,saveStr,size)
 
@@ -126,15 +129,21 @@ def celineMuseProposalMetallicityVsTheta():
     size      = 250.0
     sizeType  = 'kpc'
 
+    dataField = 'metal_solar' # 'Mg II' #'O VI' #'Mg II'
+    dataLabel = 'Gas Metallicity [log Z$_\odot$]' # 'Median O VI Column Density [log cm$^{-2}$]'
+    #dataRange = [-2.25, -0.25] # with obs and/or with illustris #[10.5, 15.0] #[14.0, 15.2] #[10.5, 15.0]
+    dataRange = [-1.3, -0.6] # when just TNG and EAGLE, no obs
+
     #massBins = [ [8.50, 8.51]]
     #massBins = [ [9.00, 9.02] ]
-    #massBins = [ [9.50, 9.54] ] # log mstar
+    #massBins = [[9.495,9.505]] # illustris-1 exploration for proposal v2
+    massBins = [ [9.45, 9.55] ] # proposal v2
+    #massBins = [ [9.50, 9.54] ] # proposal v1, log mstar
     #massBins = [ [10.00, 10.05] ]
-    #massBins = [ [10.5, 10.6] ]
-    massBins = [ [11.0, 11.1] ]
+    #massBins = [ [10.45, 10.55] ] # proposal v2
     assert len(massBins) == 1 # otherwise generalize below
 
-    distBins = [ [20,30], [45,55], [95,105] ]
+    distBins = [ [90,110] ] #[ [20,30], [45,55], [95,105] ]
     nThetaBins = 90
 
     # which halos?
@@ -163,7 +172,7 @@ def celineMuseProposalMetallicityVsTheta():
             class plotConfig:
                 saveFilename = 'dummy'
 
-            panels = [{'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}]
+            panels = [{'partType':'gas', 'partField':dataField, 'valMinMax':dataRange}]
             grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
 
             # compute impact parameter and angle for every pixel
@@ -196,29 +205,60 @@ def celineMuseProposalMetallicityVsTheta():
     grid_global = grid_global.ravel()
 
     # start the plot
-    figsize = np.array([14,10]) * 0.7
+    figsize = np.array([15,10]) * 0.55
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
-    ax.set_xlabel('Azimuthal Angle [deg, 0$^\circ$ = major axis, 90$^\circ$ = minor axis]')
+    ax.set_xlabel('Galaxy-Absorber Azimuthal Angle')
     ax.set_xlim([-2,92])
-    ax.set_ylim([-1.4,-0.2])
+    ax.set_ylim(dataRange)
     ax.set_xticks([0,15,30,45,60,75,90])
-    ax.set_ylabel('Median Gas Metallicity [log Z$_\odot$]')
+    ax.set_ylabel(dataLabel)
+    lw = 2.5
 
     # bin on the global concatenated grids
     for distBin in distBins:
         w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) )
 
         # median metallicity as a function of theta, 1 degree bins
-        theta_vals, hist, hist_std = running_median(theta_global[w], grid_global[w], nBins=nThetaBins)
+        theta_vals, hist, hist_std, percs = running_median(theta_global[w], grid_global[w], nBins=nThetaBins, percs=[38,50,62])
 
-        ax.plot(theta_vals, hist, '-', lw=2.5, label='b = %d kpc' % np.mean(distBin))
+        label = 'Theory: IllustrisTNG' #'b = %d kpc' % np.mean(distBin)
+        l, = ax.plot(theta_vals, hist, '-', lw=lw, label=label)
+        ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
+
+    # EAGLE: load and plot (from Freeke)
+    fname = '/u/dnelson/plots/celine.Ztheta/Z_Mhalo9p5.txt' # or 10p5
+    with open(fname,'r') as f:
+        lines = f.readlines()
+
+    eagle_theta = [float(line.split()[0]) for line in lines]
+    eagle_z = [np.log10(float(line.split()[1])) for line in lines]
+    eagle_z_down = [np.log10(float(line.split()[2])) for line in lines]
+    eagle_z_up = [np.log10(float(line.split()[3])) for line in lines]
+
+    l, = ax.plot(eagle_theta, eagle_z, '-', lw=lw, label='Theory: EAGLE')
+
+    ax.fill_between(eagle_theta, eagle_z_down, eagle_z_up, color=l.get_color(), alpha=0.1)
+
+    # observational data from Glenn
+    if 0:
+        opts = {'color':'#000000', 'ecolor':'#000000', 'alpha':0.9, 'capsize':0.0, 'fmt':'o'}
+
+        theta = [85.2, 30.4, 8.2, 16.6, 5.8, 86.6]
+        theta_errdown = [3.7,0.4,5.0,0.1,0.5,1.2]
+        theta_errup   = [3.7,0.3,3.0,0.1,0.4,1.5]
+        metal = [-1.32,-1.33,-1.69,-1.48,-0.35,-2.18]
+        metal_errdown = [0.15,0.71,2.0,0.02,0.07,0.04]
+        metal_errup   = [0.15,0.66,0.0,0.04,0.03,0.03]
+
+        ax.errorbar(theta, metal, yerr=[metal_errdown,metal_errup], xerr=[theta_errdown,theta_errup], **opts, 
+            label='Existing Data')
 
     # finish and save plot
-    ax.legend(loc='lower right')
+    ax.legend(loc='upper left')
     fig.tight_layout()
-    fig.savefig('z_vs_theta_Mstar=%.1f.pdf' % (massBins[0][0]))
+    fig.savefig('%s_vs_theta_Mstar=%.1f.pdf' % (dataField.replace(" ",""),massBins[0][0]))
     plt.close(fig)
 
 def celineWriteH2CDDFBand():
