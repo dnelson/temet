@@ -441,8 +441,10 @@ def pSplit(array, numProcs, curProc):
 
     return arraySplit
 
-def pSplitRange(indrange, numProcs, curProc):
-    """ As pSplit(), but accept a 2-tuple of [start,end] indices and return a new range subset. """
+def pSplitRange(indrange, numProcs, curProc, inclusive=False):
+    """ As pSplit(), but accept a 2-tuple of [start,end] indices and return a new range subset. 
+    If inclusive==True, then assume the range subset will be used e.g. as input to snapshotSubseet(), 
+    which unlike numpy convention is inclusive in the indices."""
     assert len(indrange) == 2 and indrange[1] > indrange[0]
 
     if numProcs == 1:
@@ -458,6 +460,10 @@ def pSplitRange(indrange, numProcs, curProc):
     # for last split, make sure it takes any leftovers
     if curProc == numProcs-1:
         end = indrange[1]
+
+    if inclusive and curProc < numProcs-1:
+        # not for last split/final index, because this should be e.g. NumPart[0]-1 already
+        end -= 1
 
     return [start,end]
 

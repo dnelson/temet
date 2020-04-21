@@ -275,95 +275,151 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
     from os.path import isfile
     from sys import stdout
 
+    start_time = time.time()
+
     if simpleMethod:
-        # OLD: non-caching method, identical return
-        start_time = time.time()
+        # OLD: non-caching method, memory heavy and slow, but identical return
         sP.setSnap('ics')
         dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')
+
         print(' load done, took [%g] sec.' % (time.time()-start_time))
         next_time = time.time()
 
         inds_ics, inds_halo = match3(dmIDs_ics, dmIDs_halo)
+
         assert inds_ics.size == inds_halo.size == dmIDs_halo.size
         print(' match done, took [%g] sec.' % (time.time()-next_time))
 
         return inds_ics
 
     # NEW method
-    assert 0 # needs to be debugged
     idCacheFile = sP.derivPath + 'cache/sorted_dm_ids_ics.hdf5'
     if not isfile(idCacheFile):
         # make new
         sP.setSnap('ics')
         dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')
-        print(' load done, took [%g] sec.' % (time.time()-start_time))
+
+        print(' making cache: load done, took [%g] sec.' % (time.time()-start_time))
         next_time = time.time()
 
         # sort and save
         sort_inds = np.argsort(dmIDs_ics)
         ids_sorted = dmIDs_ics[sort_inds]
-        dmIDs_ics = None
 
         with h5py.File(idCacheFile,'w') as f:
             f['sort_inds'] = sort_inds
             f['ids_sorted'] = ids_sorted
 
-        print('Wrote [%s], quit and restart for memory.')
-        return
+        print(' cache done, took [%g] sec' % (time.time()-next_time))
+        dmIDs_ics = None
+        sort_inds = None
+        ids_sorted = None
 
     # load sorted IDs chunk by chunk, run an independent match() on each
-    print('Using cache file: [%s]' % idCacheFile)
-    nDMPart = sP.snapshotHeader()['NumPart'][sP.ptNum('dm')]
+    next_time = time.time()
+
+    print(' using cache file: [%s]' % idCacheFile)
     nChunks = 10
 
     nMatched = 0
     inds_ics = np.zeros( dmIDs_halo.size, dtype='int64' )
 
     for i in range(nChunks):
-        range_loc = pSplitRange([0,nDMPart], nChunks, i)
-        print(' %d%%' % (float(i)/nChunks*100), end='')
-        stdout.flush()
+        range_loc = pSplitRange([0,sP.numPart[sP.ptNum('dm')]], nChunks, i)
+        print(' %d%%' % (float(i)/nChunks*100), end='', flush=True)
 
         with h5py.File(idCacheFile,'r') as f:
             sort_inds = f['sort_inds'][range_loc[0]:range_loc[1]]
             ids_sorted = f['ids_sorted'][range_loc[0]:range_loc[1]]
 
-        next_time = time.time()
         inds_ics_loc, inds_halo = match3(ids_sorted, dmIDs_halo, firstSorted=True)
 
         if inds_halo is None:
             continue # no matches in current chunk
 
         # unsort indices and stamp
-        inds_ics[nMatched : nMatched+inds_ics_loc.size] = sort_inds[inds_ics_loc]
-        nMatched += inds_ics_loc.size
+        inds_ics[inds_halo] = sort_inds[inds_ics_loc]
 
-        if nMatched > dmIDs_halo.size:
-            raise Exception('Not expected.')
+        nMatched += inds_ics_loc.size
         if nMatched == dmIDs_halo.size:
             break # done early
 
     assert nMatched == dmIDs_halo.size
-    print(' done.')
+    print(' load/match done, took [%g] sec.' % (time.time()-next_time))
     return inds_ics
 
-def generate(fofID, EnlargeHighResFactor=None):
-    """ Create zoom particle load and save. """
-    from util.simParams import simParams
+def _chunked_snapshot_index_load(sP, partType, partField, inds):
+    """ Test. If we only want to load a set of inds, and this is a small fraction of the 
+    total snapshot, then we do not ever need to do a global load or allocation, thus 
+    reducing the peak memory usage during load by a factor of nChunks or 
+    sP.numPart[partType]/inds.size, whichever is smaller."""
+    from util.helper import pSplitRange
+
+    numPartTot = sP.numPart[sP.ptNum(partType)]
+    ind_frac = inds.size / numPartTot
+    print('Loading [%s, %s], indices cover %.3f%% of snapshot total.' % (partType,partField,ind_frac))
+
+    nChunks = 20
+
+    # get shape and dtype by loading one element
+    sample = sP.snapshotSubset(partType, partField, indRange=[0,0], sq=True)
+
+    shape = [inds.size] if sample.ndim == 1 else [inds.size,sample.shape[1]] # [N] or e.g. [N,3]
+
+    data = np.zeros(shape, dtype=sample.dtype)
+
+    # sort requested indices, to ease intersection with each indRange_loc
+    sort_inds = np.argsort(inds)
+    sorted_inds = inds[sort_inds]
+
+    mask = np.zeros(inds.size) # debugging only
+
+    # chunk load
+    for i in range(nChunks):
+        indRange_loc = pSplitRange([0,numPartTot-1], nChunks, i, inclusive=True)
+        print(' %d%%' % (float(i)/nChunks*100), end='', flush=True)
+
+        if indRange_loc[0] > sorted_inds.max() or indRange_loc[1] < sorted_inds.min():
+            continue
+
+        data_loc = sP.snapshotSubsetP(partType, partField, indRange=indRange_loc)
+
+        # which of the input indices are covered by this local indRange?
+        ind0 = np.searchsorted(sorted_inds, indRange_loc[0], side='left')
+        ind1 = np.searchsorted(sorted_inds, indRange_loc[1], side='right')
+
+        # sort_inds[ind0:ind1] gives us which inds are in this data_loc
+        # the entires in data_loc are sorted_inds[ind0:ind1]-indRange_loc[0]
+        stamp_inds = sort_inds[ind0:ind1]
+        take_inds = sorted_inds[ind0:ind1] - indRange_loc[0]
+
+        data[stamp_inds] = data_loc[take_inds]
+
+        mask[stamp_inds] += 1 # debugging only
+
+    assert mask.min() == 1 and mask.max() == 1
+    print('')
+
+    return data
+
+def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
+    """ Create zoom particle set (Coordinates) and save. 
+    After this file is done, create ICs as: srun -n 8 ./N-GenICResim param.txt partload_file.hdf5
+    sP: simParams object, with redshift corresponding to the selected fofID.
+    fofID: the target halo (fof) ID to zoom on.
+    ZoomFactor: resolution boost of high-res region, if one no increase beyond original, if two then x8 mass, etc.
+    EnlargeHighResFactor: set spatial size of high-res region, multiplicative factor on FoF volume."""
 
     # config
-    sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-    MaxLevel = 11 # e.g. 9=512^3, 11=2048^3, should match closest to res of original run
-    MinLevel = 6 # 2^5=32 coarsest background, 2^6=64
-    ZoomFactor = 3 # if one, then no increase beyond original, if two then x8 mass, etc
+    MaxLevel = 11 # 2^N, should match closest to res of original run, 9=512^3, 11=2048^3
+    MinLevel = 6 # 2^N coarsest background at large distance away from the edge of the zoom region, 2^6=64
 
-    #sP = simParams(res=1820,run='tng',redshift=0.73) # fofID=609 at snap=58 is Saulder object (parent) (fofID=5405 MDB at z=0)
-    #ZoomFactor = 1
-    #sP = simParams(run='tng50-1',redshift=0.5) # fofID=23 is our target to test no-MHD
-    #ZoomFactor = 1
+    MaxLevel_ideal = int(np.round(np.log2(sP.res)))
+    if MaxLevel_ideal != MaxLevel:
+        print('WARNING: Changing MaxLevel from [%d] to [%d] for sP.res = %d!' % (MaxLevel,MaxLevel_ideal,sP.res))
+        MaxLevel = MaxLevel_ideal
 
     Angle = 0.1
-    if EnlargeHighResFactor is None: EnlargeHighResFactor = 2.0
 
     floatType = 'float64' # float64 == DOUBLEPRECISION, otherwise float32
     idType = 'int64' # int64 == LONGIDS, otherwise int32
@@ -385,22 +441,29 @@ def generate(fofID, EnlargeHighResFactor=None):
     haloVirRad = sP.units.codeLengthToMpc(halo['Group_R_Crit200'])
     haloM200   = sP.units.codeMassToLogMsun(halo['Group_M_Crit200'])
 
-    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], m200 [%.2f] rvir [%.2f pMpc], loading IDs and crossmatching for positions...' % \
+    print('Halo [%d] pos: %.1f %.1f %.1f, length: [%d], m200 [%.2f] rvir [%.2f pMpc], finding positions...' % \
         (fofID,haloPos[0],haloPos[1],haloPos[2],haloLen,haloM200,haloVirRad))
 
     dmIDs_halo = sP.snapshotSubset('dm', 'ids', haloID=fofID)
     assert haloLen == dmIDs_halo.size
 
     # locate dm particle indices in ICs of this halo
-    inds_ics = _get_ic_inds(sP, dmIDs_halo, simpleMethod=True)
+    inds_ics = _get_ic_inds(sP, dmIDs_halo)
 
     # for dm particles in ICs, load positions of halo DM particles
-    posInitial = sP.snapshotSubsetP('dm', 'pos')
-    posInitial = posInitial[inds_ics,:]
+    #posInitial = _chunked_snapshot_index_load(sP, 'dm', 'pos', inds=inds_ics) # memory efficient
+
+    loadSizeGB = (inds_ics.max() - inds_ics.min()) * 8 * 3 / 1024**3
+    print('Loading positions of DM in ICs [memory required: %.1f GB]' % loadSizeGB)
+
+    posInitial = sP.snapshotSubsetP('dm', 'pos', inds=inds_ics)
 
     ext_min = np.min(posInitial, axis=0)
     ext_max = np.max(posInitial, axis=0)
     extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
+
+    if extent_frac > 0.5:
+        print('WARNING! Large box extent covered by Lagrangian region, possibly wraps the box? Not allowed.')
 
     cmInitial = _get_center_of_mass(posInitial, sP.boxSize)
 
@@ -495,21 +558,38 @@ def generate(fofID, EnlargeHighResFactor=None):
     print(' Done (starting z = %.1f, a = %f) (total: %.1f sec).' % (sP.redshift, sP.scalefac, time.time()-start_time))
 
 def generate_set():
-    # remaining undone above 15.0: 
-    #  [15.0, 15.1] [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231]
-    #  [15.1, 15.2] [2, 16, 25, 37, 38, 46, 53, 56, 58, 74, 75, 81]
-    #haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
-    #           3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
-    #           3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
-    haloIDs = [861, 1062, 1106, 1254, 1547, 1567, 1673, 1704, 1736, 1766, 
-               1863, 1896, 1991, 2037, 2056, 2155, 2167, 2195, 2209, 2264, 
-               2341, 2349, 2393, 2468, 2531, 2617, 2681, 2750, 3128, 3372] # todo: 14.4-14.5 bin of 30
+    """ Driver. """
+    from util.simParams import simParams
 
-    sizeFacs = [3.0] #[2.0,3.0,4.0]
+    if 0:
+        # TNG1-Cluster
+        sP = simParams(res=2048,run='tng_dm',redshift=0.0)
+        zoomFac = 3 # effective 8192^3 in L680 is ~TNG300-1 resolution
 
-    # haloIDs = [23], sizeFacs = [4.0] # TNG50-1 no-MHD test (z=0.5)
+        # remaining undone above 15.0: 
+        # add ~10 or so in [14.9,15.0] as well
+        #  [15.0, 15.1] [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231]
+        #  [15.1, 15.2] [2, 16, 25, 37, 38, 46, 53, 56, 58, 74, 75, 81]
+        haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
+                   3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
+                   3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
+        
+        sizeFac = 3.0 #[2.0,3.0,4.0]
 
+    if 0:
+        # LRG-CGM paper: TNG50-1 no-MHD test (z=0.5)
+        sP = simParams(run='tng50-1', redshift=0.5)
+        zoomFac = 1
+        haloIDs = [23]
+        sizeFac = 4.0
+
+    if 1:
+        # TNG50 zooms
+        sP = simParams(run='tng50-1', redshift=0.0)
+        zoomFac = 1
+        haloIDs = [184]
+        sizeFac = 4.0
+
+    # run
     for haloID in haloIDs:
-        for sizeFac in sizeFacs:
-            generate(fofID=haloID, EnlargeHighResFactor=sizeFac)
-
+        generate(sP, fofID=haloID, ZoomFactor=zoomFac, EnlargeHighResFactor=sizeFac)

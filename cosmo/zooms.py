@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from os.path import isfile, isdir
 from matplotlib.ticker import MultipleLocator
 from collections import OrderedDict
 from scipy.stats import binned_statistic
@@ -59,9 +60,10 @@ def mass_function():
     """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
     mass_range = [14.0, 15.5]
     binSize = 0.1
+    redshift = 0.0
     
-    sP_tng300 = simParams(res=2500,run='tng',redshift=0.0)
-    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=0.0)
+    sP_tng300 = simParams(res=2500,run='tng',redshift=redshift)
+    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=redshift)
 
     # load halos
     halo_inds = _halo_ids_run()
@@ -118,6 +120,31 @@ def mass_function():
         hh.append(masses[w])
         labels.append(label)
 
+    # 'bonus': halos above 14.0 in the high-res regions of more massive zoom targets
+    cacheFile = 'cache_mass_function_bonus.hdf5'
+    if isfile(cacheFile):
+        with h5py.File(cacheFile,'r') as f:
+            masses = f['masses'][()]
+    else:
+        masses = []
+        for i, hInd in enumerate(halo_inds):
+            if not isdir('sims.TNG_zooms/L680n2048TNG_h%d_L13_sf3' % hInd):
+                print(' skip')
+                continue
+            sP = simParams(res=13, run='tng_zoom', redshift=redshift, hInd=hInd, variant='sf3')
+            loc_masses = sP.groupCat(fieldsHalos=['Group_M_Crit200'])
+            loc_masses = sP.units.codeMassToLogMsun(loc_masses[1:]) # skip FoF 0 (assume is target)
+            w = np.where(loc_masses >= mass_range[0])
+            if len(w[0]):
+                masses = np.hstack( (masses,loc_masses[w]) )
+            print('[%3d of %3d] ' % (i,len(halo_inds)), hInd, len(w[0]), len(masses))
+        with h5py.File(cacheFile,'w') as f:
+            f['masses'] = masses
+
+    hh.append(masses)
+    labels.append('TNG1 Bonus')
+
+    # plot
     ax.hist(hh,bins=nBins,range=mass_range,label=labels,histtype='bar',alpha=0.9,stacked=True)
 
     ax.set_ylim([0.8,100])

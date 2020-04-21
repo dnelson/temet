@@ -1089,7 +1089,7 @@ def snapshotSubset(sP, partType, fields,
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
             if haloID is None and subhaloID is None:
-                assert sP.refVel is not None
+                assert sP.refPos is not None and sP.refVel is not None
                 print('WARNING: snapshotSubset() using refVel [%.1f %.1f %.1f] as non-zoom run to compute [%s]!' % \
                     (sP.refVel[0],sP.refVel[1],sP.refVel[2],field))
                 refPos = sP.refPos
@@ -1502,8 +1502,8 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         return {'count':0}
     if numPartTot < nThreads*2:
         # low particle count, use serial
-        return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange,
-                              sq=sq, haloSubset=haloSubset, float32=float32)
+        return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
+                              subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
 
     # set indRange to load
     if inds is not None:
@@ -1552,11 +1552,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         processes = []
 
         for i in range(nThreads):
-            indRangeLoad = pSplitRange(indRange, nThreads, i)
-            if i < nThreads-1:
-                # pSplitRange() returns overlap as per np indexing convention, but snapshotSubset()
-                # indRange is inclusive of the last index
-                indRangeLoad[1] -= 1
+            indRangeLoad = pSplitRange(indRange, nThreads, i, inclusive=True)
 
             numLoadLoc   = indRangeLoad[1] - indRangeLoad[0] + 1
             indRangeSave = [offset, offset + numLoadLoc]
