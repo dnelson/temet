@@ -1765,6 +1765,15 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
 
+    if 'plotSubhaloIDs' in p:
+        # plotting child subhalos specified by ID, in visible area
+        subInds = p['plotSubhaloIDs']
+        gc = p['sP'].groupCat(fieldsSubhalos=['SubhaloPos','SubhaloHalfmassRadType'])
+        gc['SubhaloPos'] = gc['SubhaloPos'][subInds,:]
+        rad = 20.0*gc['SubhaloHalfmassRadType'][subInds,4]
+
+        _addCirclesHelper(p, ax, gc['SubhaloPos'], rad, len(p['plotSubhaloIDs']), p['plotSubhaloIDs'])
+
     if 'customCircles' in p:
         # plotting custom list of (x,y,z),(rad) inputs as circles, inputs in simdata coordinates
          _addCirclesHelper(p, ax, p['customCircles']['pos'], p['customCircles']['rad'], p['customCircles']['rad'].size, lw=0.5)
