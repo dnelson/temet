@@ -275,11 +275,12 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
     from os.path import isfile
     from sys import stdout
 
+    assert sP.snap == 'ics'
+
     start_time = time.time()
 
     if simpleMethod:
         # OLD: non-caching method, memory heavy and slow, but identical return
-        sP.setSnap('ics')
         dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')
 
         print(' load done, took [%g] sec.' % (time.time()-start_time))
@@ -296,7 +297,6 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
     idCacheFile = sP.derivPath + 'cache/sorted_dm_ids_ics.hdf5'
     if not isfile(idCacheFile):
         # make new
-        sP.setSnap('ics')
         dmIDs_ics = sP.snapshotSubsetP('dm', 'ids')
 
         print(' making cache: load done, took [%g] sec.' % (time.time()-start_time))
@@ -432,9 +432,6 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
         return
 
     # load halo DM positions and IDs at target snapshot
-    sP_snap = sP.snap
-    start_time = time.time()
-
     halo = sP.groupCatSingle(haloID=fofID)
     haloLen    = halo['GroupLenType'][sP.ptNum('dm')]
     haloPos    = halo['GroupPos']
@@ -447,7 +444,12 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     dmIDs_halo = sP.snapshotSubset('dm', 'ids', haloID=fofID)
     assert haloLen == dmIDs_halo.size
 
-    # locate dm particle indices in ICs of this halo
+    start_time = time.time()
+
+    # locate dm particle indices in ICs of this halo (sP.snap set to ics!)
+    sP_snap = sP.snap
+    sP.setSnap('ics')
+
     inds_ics = _get_ic_inds(sP, dmIDs_halo)
 
     # for dm particles in ICs, load positions of halo DM particles
@@ -458,14 +460,17 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
 
     posInitial = sP.snapshotSubsetP('dm', 'pos', inds=inds_ics)
 
-    ext_min = np.min(posInitial, axis=0)
-    ext_max = np.max(posInitial, axis=0)
-    extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
-
-    if extent_frac > 0.5:
-        print('WARNING! Large box extent covered by Lagrangian region, possibly wraps the box? Not allowed.')
+    sP.setSnap(sP_snap)
 
     cmInitial = _get_center_of_mass(posInitial, sP.boxSize)
+
+    # what is linear extent of Lagrangian region in ICs?
+    posInitial_wrapped = posInitial.copy()
+    sP.correctPeriodicPosBoxWrap(posInitial_wrapped)
+
+    ext_min = np.min(posInitial_wrapped, axis=0)
+    ext_max = np.max(posInitial_wrapped, axis=0)
+    extent_frac = np.max( ext_max - ext_min ) / sP.boxSize
 
     print('Initial DM positions extent, x [%.1f - %.1f], y [%.1f - %.1f], z [%.1f - %.1f], max box fraction = %.3f' % \
         (ext_min[0], ext_max[0], ext_min[1], ext_max[1], ext_min[2], ext_max[2], extent_frac))
@@ -561,18 +566,19 @@ def generate_set():
     """ Driver. """
     from util.simParams import simParams
 
-    if 0:
+    if 1:
         # TNG1-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
         zoomFac = 3 # effective 8192^3 in L680 is ~TNG300-1 resolution
 
         # remaining undone above 15.0: 
-        # add ~10 or so in [14.9,15.0] as well
-        #  [15.0, 15.1] [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231]
-        #  [15.1, 15.2] [2, 16, 25, 37, 38, 46, 53, 56, 58, 74, 75, 81]
-        haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
-                   3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
-                   3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
+        # todo: add ~10 or so in [14.9,15.0] as well
+        # haloIDs = [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 
+        #            111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231] # 15.0-15.1 remaining
+        haloIDs = [2, 16, 25, 37, 38, 46, 53, 56, 58, 74, 75, 81] # 15.1-15.2 remaining
+        #haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
+        #           3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
+        #           3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
         
         sizeFac = 3.0 #[2.0,3.0,4.0]
 
@@ -583,7 +589,7 @@ def generate_set():
         haloIDs = [23]
         sizeFac = 4.0
 
-    if 1:
+    if 0:
         # TNG50 zooms
         sP = simParams(run='tng50-1', redshift=0.0)
         zoomFac = 1
