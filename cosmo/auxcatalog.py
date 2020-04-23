@@ -2231,21 +2231,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             std = weighted_std_binned(x, values, weights, bins)
             return std, None, None
 
-    # config (hard-coded for oxygen/outflows projects at the moment, could be generalized)
-    minHaloMass = None
-
-    #if sP.boxSize in [67770,75000,205000]:
-    #    radMin = 0.0 # log code units
-    #    radMax = 4.0 # log code units
-    #    radNumBins = 100
-    #    minHaloMass = 10.8 # 11.4 for auroraVoyage2050 # log m200crit
-
-    if 1: #sP.boxSize in [20000,35000]:
-        radMin = -1.0 # log code units
-        radMax = 3.0 # log code units
-        radNumBins = 100
-        minHaloMass = None #9.9 # log m200crit
-
+    # config (hard-coded/changed per project at the moment, could be generalized)
+    minHaloMass = None # 10.8 9.9 # log m200crit
+    radMin = -1.0 # log code units
+    radMax = 3.7 # log code units
+    radNumBins = 100
     cenSatSelect = 'cen'
 
     # determine ptRestriction

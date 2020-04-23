@@ -216,7 +216,8 @@ def _draw_special_lines(sP, ax, ptProperty):
 
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, 
                      xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
-                     ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, pdf=None):
+                     ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, 
+                     normContourQuantColMax=False, pdf=None):
     """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
     (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
@@ -225,6 +226,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     If contours is not None, draw solid contours at these levels on top of the 2D histogram image. If contourQuant is None, 
     then the histogram itself (or meancolors) is used, otherwise this quantity is used.
     if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
+    If normContourQuantColMax, same but for a specified contourQuant.
     If hideBelow, then pixel values below clim[0] are left pure white. 
     If colorEmpty, then empty/unoccupied pixels are colored at the bottom of the cmap.
     If smoothSigma is not zero, gaussian smooth contours at this level. 
@@ -321,20 +323,10 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             bbox = ax.get_window_extent()
             nBins2D = np.array([nBins, int(nBins*(bbox.height/bbox.width))])
 
-        # oxygen paper manual fix: remove interpolation wiggles near sharp dropoff
-        if xQuant == 'hdens' and yQuant == 'temp' and len(weights) == 3:
-            if wtProp == 'O VI mass':
-                w = np.where( ((xvals > -3.7) & (yvals < 5.0)) | ((xvals > -3.1) & (yvals < 5.15)) )
-                yvals[w] = 0.0
-            if wtProp == 'O VII mass':
-                w = np.where( ((xvals > -4.0) & (yvals < 5.0)) | ((xvals > -3.5) & (yvals < 5.15)) )
-                yvals[w] = 0.0
-            if wtProp == 'O VIII mass':
-                w = np.where( ((xvals > -4.8) & (yvals < 5.1)) | ((xvals > -4.4) & (yvals < 5.3)) )
-                yvals[w] = 0.0
-
         if binnedStat:
             # remove NaN weight points prior to binning (default op is mean, not nanmean)
+            assert not normColMax
+
             w_fin = np.where(np.isfinite(weight))
             xvals = xvals[w_fin]
             yvals = yvals[w_fin]
@@ -383,25 +375,40 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
         # plot contours?
         if contours is not None:
-            if binnedStat:
-                zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, weight, 'mean',
-                                                    bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
-                if clog: zz = logZeroNaN(zz)
-            else:
-                zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim], 
-                                            normed=True, weights=weight)
-                zz = logZeroNaN(zz)
+
             if contourQuant is not None:
                 # load a different quantity for the contouring
                 contourq = sP.snapshotSubset(partType, contourQuant, haloID=haloID)
-                contourq = contourq[wRestrict]
+                if qRestrictions is not None: contourq = contourq[wRestrict]
                 if binnedStat: contourq = contourq[w_fin]
 
-                zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, contourq, 'mean',
-                                                    bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
+                if contourQuant == 'mass':
+                    zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/2, nBins2D[1]/2], range=[xlim,ylim], 
+                                              normed=True, weights=contourq)
+                else:
+                    zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, contourq, 'mean',
+                                                        bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
 
                 _, _, qlog = simParticleQuantity(sP, partType, contourQuant)
+
+                if normContourQuantColMax:
+                    assert contourQuant == 'mass' # otherwise does it make sense?
+                    colMax = np.nanmax(zz, axis=0)
+                    w = np.where(colMax == 0)
+                    colMax[w] = 1.0 # entire column is zero, will be log->nan anyways then not shown
+                    zz /= colMax[np.newaxis,:]
+
                 if qlog: zz = logZeroNaN(zz)
+            else:
+                # contour the same quantity
+                if binnedStat:
+                    zz, xc, yc, _ = binned_statistic_2d(xvals, yvals, weight, 'mean',
+                                                        bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim])
+                    if clog: zz = logZeroNaN(zz)
+                else:
+                    zz, xc, yc = np.histogram2d(xvals, yvals, bins=[nBins2D[0]/4, nBins2D[1]/4], range=[xlim,ylim], 
+                                                normed=True, weights=weight)
+                    zz = logZeroNaN(zz)
 
             XX, YY = np.meshgrid(xc[:-1], yc[:-1], indexing='ij')
 

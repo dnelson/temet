@@ -840,6 +840,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                 wType = np.where( tracerParsLocal['parentTypes'] == sP.ptNum(ptName) )[0]
                 indsType = tracerParsLocal['parentInds'][wType]
 
+                if not indsType.size:
+                    continue # no parents of this type
+
                 assert indsType.max() < sP.snapshotHeader()['NumPart'][sP.ptNum(ptName)]
 
                 if sP.isSubbox and parent_indextype is None:
@@ -850,9 +853,6 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     # memory optimization, do gas last (largest), and erase things we don't need anymore
                     if ptName == tracerParsLocal['partTypes'][0]:
                         tracerParsLocal = None
-
-                if not indsType.size:
-                    continue # no parents of this type
 
                 # does this property exist for parents of this type? flag NaN if not
                 if field in gas_only_fields and ptName != 'gas':

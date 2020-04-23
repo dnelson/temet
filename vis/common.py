@@ -510,7 +510,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
     config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands), 'vMM_guess':None}
     return grid_master_u, config, grid_master
 
-def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=None):
+def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
     if partType in ['dm']:
@@ -638,10 +638,14 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
         if partFieldLoad in haloCentricFields:
-            # temporary override, switch to halo specified load (for halo-centric quantities)
-            haloID = sP.subhalo(sP.hInd)['SubhaloGrNr']
-            quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
-            assert quant.size == indRange[1] - indRange[0] + 1 # should verify fof scope (e.g. method == 'sphMap')
+            if method == 'sphMap_global':
+                # likely in chunked load, will use refPos and refVel as set in haloImgSpecs
+                quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
+            else:
+                # temporary override, switch to halo specified load (for halo-centric quantities)
+                haloID = sP.subhalo(sP.hInd)['SubhaloGrNr']
+                quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
+                assert quant.size == indRange[1] - indRange[0] + 1 # should verify fof scope (e.g. method == 'sphMap')
         else:
             quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
 
@@ -1280,7 +1284,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
 
             # load: mass/weights, quantity, and render specifications required
-            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, indRange=indRange)
+            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, indRange=indRange)
             assert mass.size == 1 or (mass.size == hsml.size)
 
             # load: modify or skip certain cells/particles?
@@ -1618,11 +1622,10 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 def addBoxMarkers(p, conf, ax, pExtent):
     """ Factor out common annotation/markers to overlay. """
 
-    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5):
+    def _addCirclesHelper(p, ax, pos, radii, numToAdd, labelVals=None, lw=1.5, alpha=0.3, marker='o'):
         """ Helper function to add a number of circle markers for halos/subhalos, within the panel. """
         color     = '#ffffff'
         fontsize  = 16 # for text only
-        alpha     = 0.3
 
         circOpts = {'color':color, 'alpha':alpha, 'linewidth':lw, 'fill':False}
         textOpts = {'color':color, 'alpha':alpha, 'fontsize':fontsize, 
@@ -1630,6 +1633,11 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         countAdded = 0
         gcInd = 0
+
+        if pos.ndim == 1 and pos.size == 3:
+            assert radii.size == 1
+            pos = np.reshape(pos, (1,3))
+            radii = np.array([radii])
 
         # remap? transform coordinates
         if 'remapRatio' in p and p['remapRatio'] is not None:
@@ -1674,8 +1682,12 @@ def addBoxMarkers(p, conf, ax, pExtent):
                     rad  = p['sP'].units.codeLengthToMpc(rad)
                 assert p['axesUnits'] not in ['deg','arcmin'] # todo
 
-                c = plt.Circle((xPos,yPos), rad, **circOpts)
-                ax.add_artist(c)
+                if marker == 'o':
+                    c = plt.Circle((xPos,yPos), rad, **circOpts)
+                    ax.add_artist(c)
+                elif marker == 'x':
+                    # note: markeredgewidth = 0 is matplotlibrc default, need to override
+                    ax.plot(xPos, yPos, marker='x', markersize=lw*4, markeredgecolor=color, markeredgewidth=lw, alpha=alpha)
 
                 # add text annotation?
                 if labelVals is not None:
@@ -1691,7 +1703,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
                     ax.text( xPosText, yPosText, text, **textOpts)
 
             gcInd += 1
-            if gcInd >= radii.size and countAdded < numToAdd:
+            if gcInd >= pos.shape[0] and countAdded < numToAdd:
                 print('Warning: Ran out of halos to add, only [%d of %d]' % (countAdded,numToAdd))
                 break
 
@@ -1765,9 +1777,23 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
 
+    if 'plotSubhaloIDs' in p:
+        # plotting child subhalos specified by ID, in visible area
+        subInds = p['plotSubhaloIDs']
+        gc = p['sP'].groupCat(fieldsSubhalos=['SubhaloPos','SubhaloHalfmassRadType'])
+        gc['SubhaloPos'] = gc['SubhaloPos'][subInds,:]
+        rad = 20.0*gc['SubhaloHalfmassRadType'][subInds,4]
+
+        _addCirclesHelper(p, ax, gc['SubhaloPos'], rad, len(p['plotSubhaloIDs']), p['plotSubhaloIDs'])
+
     if 'customCircles' in p:
         # plotting custom list of (x,y,z),(rad) inputs as circles, inputs in simdata coordinates
-         _addCirclesHelper(p, ax, p['customCircles']['pos'], p['customCircles']['rad'], p['customCircles']['rad'].size, lw=0.5)
+         _addCirclesHelper(p, ax, p['customCircles']['pos'], p['customCircles']['rad'], p['customCircles']['rad'].size, lw=1.0, alpha=0.7)
+
+    if 'customCrosses' in p:
+        # plotting custom list of (x,y,z) inputs as crosses, inputs in simdata coordinates
+        nPoints = p['customCrosses']['pos'].shape[0]
+        _addCirclesHelper(p, ax, p['customCrosses']['pos'], np.ones(nPoints), nPoints, lw=1.0, alpha=0.8, marker='x')
 
     if 'rVirFracs' in p and p['rVirFracs']:
         # plot circles for N fractions of the virial radius
@@ -1998,7 +2024,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
         legend_lines = [plt.Line2D((0,0),(0,0), linestyle='') for _ in legend_labels]
         loc = p['legendLoc'] if 'legendLoc' in p else 'lower left'
         legend = ax.legend(legend_lines, legend_labels, fontsize=conf.fontsize, loc=loc, 
-                           handlelength=0, handletextpad=0)
+                           handlelength=0, handletextpad=0, borderpad=0)
 
         color = 'white' if 'textcolor' not in p else p['textcolor']
         for text in legend.get_texts(): text.set_color(color)
@@ -2399,7 +2425,7 @@ def renderMultiPanel(panels, conf):
             barAreaHeight = 0.055 / aspect
             if conf.fontsize == min_fontsize:
                 barAreaHeight += 0.03
-        if nRows == 1 and nCols >= 3: barAreaHeight += 0.01*nCols
+        if nRows == 1 and nCols >= 3: barAreaHeight += 0.014*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
         
@@ -2567,7 +2593,7 @@ def renderMultiPanel(panels, conf):
         if oneGlobalColorbar:
             widthFrac = 0.4
             hOffset = None
-            heightFac = np.max([1.0/nRows, 0.35])
+            heightFac = np.clip(1.0*np.sqrt(nCols/nRows), 0.35, 2.5)
 
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
