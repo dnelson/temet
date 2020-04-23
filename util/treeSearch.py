@@ -511,7 +511,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
     for num_iter in range(10):
         # allocate
-        MaxNodes = np.int( (num_iter+1.1)*NumPart ) + 1
+        MaxNodes = np.int( (num_iter+0.7)*NumPart ) + 1
         if MaxNodes < 1000: MaxNodes = 1000
 
         length   = np.zeros( MaxNodes, dtype=treePrec )     # NODE struct member
@@ -531,6 +531,12 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
     assert numNodes > 0, 'Tree: construction failed!'
     if verbose:
         print(' tree: construction took [%g] sec.' % (time.time()-start_time))
+
+    # memory optimization: subset arrays to used portions
+    length = length[0:numNodes]
+    center = center[0:numNodes]
+    sibling = sibling[0:numNodes]
+    nextnode = nextnode[0:numNodes]
 
     return NextNode, length, center, sibling, nextnode
 
@@ -680,8 +686,12 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
     assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
     assert pos.shape[1] in treeDims, 'Invalid ndims specification (3D only).'
     assert quant.ndim == 1 and quant.size == pos.shape[0], 'Strange quant shape.'
-    assert hsml.size == 1 or hsml.size == quant.size, 'Strange hsml shape.'
     assert op in ops.keys(), 'Unrecognized reduction operation.'
+    
+    if posSearch is None:
+        assert hsml.size in [1,quant.size], 'Strange hsml shape.'
+    else:
+        assert hsml.size in [1,posSearch.shape[0]], 'Strange hsml shape.'
 
     # build tree
     if tree is None:

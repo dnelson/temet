@@ -8,4 +8,5 @@ from . import outflows_vis
 from . import outflows_analysis
 from . import outflows
 from . import oxygen
+from . import rshock
 from . import zooming2

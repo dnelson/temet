@@ -1,7 +1,7 @@
 """
 projects/outflows_analysis.py
   Analysis: Outflows paper (TNG50 presentation).
-  in prep.
+  https://arxiv.org/abs/1902.05554
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *
@@ -1236,7 +1236,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         rad2d = np.sqrt(sP.periodicDistsSq(pt_2d, vecs_2d)) # handles 2D
         p_local['rad2d'] = sP.units.codeLengthToKpc( rad2d )
         vel_los = p_local['Velocities'][:,p_ind3]
-        # [physical km/s], relative to systemtic, positive = towards observer (outflow), in contrast to typical
+        # [physical km/s], relative to systemic, positive = towards observer (outflow), in contrast to typical
         # blueshifted absorption observational convention, in order to keep reasonable vrad bins the same
         p_local['vlos'] = haloVel[p_ind3] - sP.units.particleCodeVelocityToKms(vel_los)
 
