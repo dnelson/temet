@@ -17,6 +17,50 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def lgal_cat_check():
+    """ Check Reza's L-Galaxies catalog. """
+    from plot.config import figsize
+    from util.helper import running_median
+
+    sP = simParams(run='tng100-1', redshift=0.0) # tng300-1
+
+    # DMO positional
+    pos1 = sP.dmoBox.subhalos('SubhaloPos')
+    pos2 = sP.subhalos('LGal_Pos_Dark') * 1000 # mpc->kpc
+    gal_type = sP.subhalos('LGal_Type_Dark')
+
+    w = np.where(gal_type == 0)
+    dists = sP.periodicDists(pos1[w], pos2[w])
+    print('Max dist (should be small): ', dists.max(), ' ckpc/h')
+
+    # stellar mass
+    mstar1 = sP.subhalos('SubhaloMassInRadType')[:,sP.ptNum('stars')]
+    mstar2 = sP.subhalos('LGal_StellarMass')
+    gal_type = sP.subhalos('LGal_Type')
+
+    w = np.where( (gal_type == 0) & (mstar2 > 0) )
+    print('Mean stellar mass ratio: ', np.mean(mstar1[w]/mstar2[w]))
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Stellar Mass (LGal) [ log Msun ]')
+    ax.set_ylabel('Stellar Mass Ratio (TNG/LGal) [ log ]')
+    ax.set_xlim([8.5,12.0])
+    ax.set_ylim([-0.8, 0.6])
+
+    xx = sP.units.codeMassToLogMsun(mstar2[w])
+    yy = np.log10(mstar1[w] / mstar2[w])
+
+    ax.plot(xx, yy, '.', markersize=1.0)
+
+    xm, ym, sm = running_median(xx,yy,binSize=0.2)
+    ax.plot(xm, ym, '-', lw=3.0, alpha=0.7)
+
+    fig.tight_layout()
+    fig.savefig('out.pdf')
+    plt.close(fig)
+
 def swift_vs_arepo_performance():
     """ L35n270TNG_NR test runs (weak scaling) in SWIFT and AREPO. """
     num_cores = [40, 80, 160, 320, 640]

@@ -1236,6 +1236,12 @@ class simParams:
         assert self.subbox is not None
         return simParams(res=self.res, run=self.run, redshift=self.redshift)
 
+    @property
+    def dmoBox(self):
+        """ Return a sP corresponding to the DMO/Dark analog volume, at the same redshift. """
+        assert not self.isDMO and not self.isSubbox
+        return simParams(res=self.res, run=self.run + '_dm', redshift=self.redshift)
+
     def subboxSim(self, sbNum):
         assert not self.isSubbox and len(self.subboxSize) > sbNum
         return simParams(res=self.res, run=self.run, redshift=self.redshift, variant='subbox%d' % sbNum)

@@ -1350,8 +1350,6 @@ def plotxy(x, y, filename='plot.pdf'):
         if i == 3:
             ax.plot(xx_log, yy_log, 'o-', lw=2.5)
 
-        #if i in [2,3]: ax.set_yscale('log')        
-
     fig.tight_layout()
     fig.savefig(filename)
     plt.close(fig)

@@ -371,6 +371,45 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                     r[field] = np.zeros( sP.numSubhalos, dtype='float32' )
                     r[field].fill(np.nan)
 
+            # L-Galaxies (H15) run on dark matter only analog, automatically cross-matched to the
+            # TNG run such that return has the same shape as sP.numSubhalos (unmatched TNG subs = NaN)
+            # LGal_StellarMass, LGal_HotGas, LGal_Type, LGal_XrayLum, ...
+            # if '_orig' appended, e.g. LGal_StellarMass_orig, then no matching, full LGal return
+            if quantName[0:5] == 'lgal_':
+                fieldName = field.split("_")[1]
+                filePath = sP.postPath + '/LGalaxies/LGalaxies_%03d.hdf5' % sP.snap
+
+                if isfile(filePath):
+                    # load
+                    with h5py.File(filePath,'r') as f:
+                        data = f['/Subhalo/%s/' % fieldName][()]
+                        if '_orig' not in quant:
+                            if '_dark' in quant:
+                                match_ids = f['Subhalo/SubhaloIndex_TNG-Dark'][()]
+                                numSubhalos = sP.dmoBox.numSubhalos
+                            else:
+                                match_ids = f['Subhalo/SubhaloIndex_TNG'][()]
+                                numSubhalos = sP.numSubhalos
+
+                    # optionally cross-match
+                    if '_orig' in quant:
+                        r[field] = data
+                    else:
+                        w = np.where(match_ids >= 0)
+                        shape = [numSubhalos] if data.ndim == 1 else [numSubhalos,data.shape[1]]
+                        r[field] = np.zeros( shape, dtype=data.dtype )
+
+                        if data.dtype in ['float32','float64']:
+                            r[field].fill(np.nan)
+                        else:
+                            r[field].fill(-1) # Len, DisruptOn, Type
+
+                        r[field][match_ids[w]] = data[w]
+                else:
+                    print('WARNING: [%s] does not exist, empty return.' % filePath)
+                    r[field] = np.zeros( sP.numSubhalos, dtype='float32' )
+                    r[field].fill(np.nan)
+
             # --- finish ---
 
             # log?
