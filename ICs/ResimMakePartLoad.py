@@ -407,7 +407,9 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     After this file is done, create ICs as: srun -n 8 ./N-GenICResim param.txt partload_file.hdf5
     sP: simParams object, with redshift corresponding to the selected fofID.
     fofID: the target halo (fof) ID to zoom on.
-    ZoomFactor: resolution boost of high-res region, if one no increase beyond original, if two then x8 mass, etc.
+    ZoomFactor: resolution boost of high-res region, in linear particle spacing, so total highres particles
+      increases as ZoomFactor**3 while mass decreases by ZoomFactor**3 (1 = no increase beyond original, 
+      2 = x8 mass resolution, 3 = x27 mass resolution, 4 = x64 mass resolution)
     EnlargeHighResFactor: set spatial size of high-res region, multiplicative factor on FoF volume."""
 
     # config
@@ -579,7 +581,7 @@ def generate_set():
         #haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
         #           3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
         #           3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
-        
+
         sizeFac = 3.0 #[2.0,3.0,4.0]
 
     if 0:
