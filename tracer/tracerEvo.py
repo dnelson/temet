@@ -472,7 +472,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
 
     # make a mapping from snapshot number -> data[index]
     dataIndexMap = np.zeros( data['snaps'].max()+1, dtype='int32' ) - 1
-    dataIndexMap[ data['snaps'] ] = np.arange(data['snaps'].max())
+    dataIndexMap[ data['snaps'] ] = np.arange(data['snaps'].size)
 
     # start loop to determine each tracer
     for i in range(nTr):
@@ -501,7 +501,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
 
             # create new mapping into MPB for this tracer
             mpbIndexMap.fill(-1)
-            mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].max())
+            mpbIndexMap[ mpb['SnapNum'] ] = np.arange(mpb['SnapNum'].size)
 
         # pull out indices
         mpbIndAcc  = mpbIndexMap[accSnap[i]]
