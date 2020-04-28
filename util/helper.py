@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import collections
 from scipy.optimize import leastsq, least_squares, curve_fit
+from scipy.stats import binned_statistic
 from numba import jit
 
 # --- utility functions ---
@@ -738,6 +739,27 @@ def binned_stat_2d(x, y, c, bins, range_x, range_y, stat='median'):
         result = np.reshape( result, bins )
 
     return result, np.reshape(count,bins)
+
+def binned_statistic_weighted(x, values, statistic, bins, weights=None, weights_w=None):
+    """ If weights == None, straight passthrough to scipy.stats.binned_statistic(). Otherwise, 
+    compute once for values*weights, again for weights alone, then normalize and return. 
+    If weights_w is not None, apply this np.where() result to the weights array. """
+    if weights is None:
+        return binned_statistic(x, values, statistic=statistic, bins=bins)
+
+    weights_loc = weights[weights_w] if weights_w is not None else weights
+
+    if statistic == 'mean':
+        # weighted mean (nan for bins where wt_sum == 0)
+        valwt_sum, bin_edges, bin_number = binned_statistic(x, values*weights_loc, statistic='sum', bins=bins)
+        wt_sum, _, _ = binned_statistic(x, weights_loc, statistic='sum', bins=bins)
+
+        return (valwt_sum/wt_sum), bin_edges, bin_number
+
+    if statistic == np.std:
+        # weighted standard deviation (note: numba accelerated)
+        std = weighted_std_binned(x, values, weights, bins)
+        return std, None, None
 
 # --- numba accelerated ---
 

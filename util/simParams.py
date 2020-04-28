@@ -829,7 +829,8 @@ class simParams:
                                correctPeriodicPosBoxWrap
         from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
         from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapNumChunks, \
-                                  snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset
+                                  snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset, \
+                                  snapshotSubsetLoadIndicesChunked
         from load.auxcat import auxCat
         from load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
                                   gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
@@ -852,6 +853,7 @@ class simParams:
         self.simSubhaloQuantity  = partial(simSubhaloQuantity, self)
         self.simParticleQuantity = partial(simParticleQuantity, self)
 
+        self.snapshotSubsetC    = partial(snapshotSubsetLoadIndicesChunked, self)
         self.snapshotSubsetP    = partial(snapshotSubsetParallel, self)
         self.snapshotSubset     = partial(snapshotSubset, self)
         self.snapshotHeader     = partial(snapshotHeader, sP=self)

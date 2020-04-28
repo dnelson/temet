@@ -484,7 +484,7 @@ def snapshotSubset(sP, partType, fields,
         # catch DM particle mass request [code units]
         if field.lower() in ['mass','masses'] and sP.isPartType(partType,'dm'):
             dummy = snapshotSubset(sP, partType, 'pos_x', **kwargs)
-            r[field] = dummy*0.0 + sP.snapshotHeader()['MassTable'][sP.ptNum('dm')]
+            r[field] = dummy*0.0 + sP.dmParticleMass
 
         # entropy (from u,dens) [log cgs] == [log K cm^2]
         if field.lower() in ["ent", "entr", "entropy"]:
@@ -1591,4 +1591,73 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         return r[list(r.keys())[0]]
 
     r['count'] = numPartTot
+    return r
+
+def snapshotSubsetLoadIndicesChunked(sP, partType, field, inds, sq=True, verbose=True):
+    """ Test: if we only want to load a set of inds, and this is a small fraction of the 
+    total snapshot, then we do not ever need to do a global load or allocation, thus 
+    reducing the peak memory usage during load by a factor of nChunks or 
+    sP.numPart[partType]/inds.size, whichever is smaller. Note: currently only for 
+    a single field, could be generalized to multiple fields. """
+    numPartTot = sP.numPart[sP.ptNum(partType)]
+
+    if verbose:
+        ind_frac = inds.size / numPartTot * 100
+        mask = np.zeros(inds.size) # debugging only
+        print('Loading [%s, %s], indices cover %.3f%% of snapshot total.' % (partType,field,ind_frac))
+
+    nChunks = 20
+
+    # get shape and dtype by loading one element
+    sample = sP.snapshotSubset(partType, field, indRange=[0,0], sq=False)
+
+    fieldName = list(sample.keys())[-1]
+    assert fieldName != 'count' # check order guarantee
+
+    sample = sample[fieldName]
+
+    shape = [inds.size] if sample.ndim == 1 else [inds.size,sample.shape[1]] # [N] or e.g. [N,3]
+
+    # allocate
+    data = np.zeros(shape, dtype=sample.dtype)
+
+    # sort requested indices, to ease intersection with each indRange_loc
+    sort_inds = np.argsort(inds)
+    sorted_inds = inds[sort_inds]
+
+    # chunk load
+    for i in range(nChunks):
+        indRange_loc = pSplitRange([0,numPartTot-1], nChunks, i, inclusive=True)
+        
+        if indRange_loc[0] > sorted_inds.max() or indRange_loc[1] < sorted_inds.min():
+            continue
+
+        data_loc = sP.snapshotSubsetP(partType, field, indRange=indRange_loc)
+
+        # which of the input indices are covered by this local indRange?
+        ind0 = np.searchsorted(sorted_inds, indRange_loc[0], side='left')
+        ind1 = np.searchsorted(sorted_inds, indRange_loc[1], side='right')
+
+        # sort_inds[ind0:ind1] gives us which inds are in this data_loc
+        # the entires in data_loc are sorted_inds[ind0:ind1]-indRange_loc[0]
+        stamp_inds = sort_inds[ind0:ind1]
+        take_inds = sorted_inds[ind0:ind1] - indRange_loc[0]
+
+        data[stamp_inds] = data_loc[take_inds]
+
+        if verbose:
+            print(' %d%%' % (float(i)/nChunks*100), end='', flush=True)
+            mask[stamp_inds] += 1 # debugging only
+
+    if verbose:
+        assert mask.min() == 1 and mask.max() == 1
+        print('')
+
+    if sq: # raw ndarray
+        return data
+
+    # wrap in dictionary with key equal to snapshot field name
+    r = {fieldName : data}
+    r['count'] = inds.size
+
     return r

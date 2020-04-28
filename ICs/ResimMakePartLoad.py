@@ -348,60 +348,6 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
     print(' load/match done, took [%g] sec.' % (time.time()-next_time))
     return inds_ics
 
-def _chunked_snapshot_index_load(sP, partType, partField, inds):
-    """ Test. If we only want to load a set of inds, and this is a small fraction of the 
-    total snapshot, then we do not ever need to do a global load or allocation, thus 
-    reducing the peak memory usage during load by a factor of nChunks or 
-    sP.numPart[partType]/inds.size, whichever is smaller."""
-    from util.helper import pSplitRange
-
-    numPartTot = sP.numPart[sP.ptNum(partType)]
-    ind_frac = inds.size / numPartTot
-    print('Loading [%s, %s], indices cover %.3f%% of snapshot total.' % (partType,partField,ind_frac))
-
-    nChunks = 20
-
-    # get shape and dtype by loading one element
-    sample = sP.snapshotSubset(partType, partField, indRange=[0,0], sq=True)
-
-    shape = [inds.size] if sample.ndim == 1 else [inds.size,sample.shape[1]] # [N] or e.g. [N,3]
-
-    data = np.zeros(shape, dtype=sample.dtype)
-
-    # sort requested indices, to ease intersection with each indRange_loc
-    sort_inds = np.argsort(inds)
-    sorted_inds = inds[sort_inds]
-
-    mask = np.zeros(inds.size) # debugging only
-
-    # chunk load
-    for i in range(nChunks):
-        indRange_loc = pSplitRange([0,numPartTot-1], nChunks, i, inclusive=True)
-        print(' %d%%' % (float(i)/nChunks*100), end='', flush=True)
-
-        if indRange_loc[0] > sorted_inds.max() or indRange_loc[1] < sorted_inds.min():
-            continue
-
-        data_loc = sP.snapshotSubsetP(partType, partField, indRange=indRange_loc)
-
-        # which of the input indices are covered by this local indRange?
-        ind0 = np.searchsorted(sorted_inds, indRange_loc[0], side='left')
-        ind1 = np.searchsorted(sorted_inds, indRange_loc[1], side='right')
-
-        # sort_inds[ind0:ind1] gives us which inds are in this data_loc
-        # the entires in data_loc are sorted_inds[ind0:ind1]-indRange_loc[0]
-        stamp_inds = sort_inds[ind0:ind1]
-        take_inds = sorted_inds[ind0:ind1] - indRange_loc[0]
-
-        data[stamp_inds] = data_loc[take_inds]
-
-        mask[stamp_inds] += 1 # debugging only
-
-    assert mask.min() == 1 and mask.max() == 1
-    print('')
-
-    return data
-
 def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     """ Create zoom particle set (Coordinates) and save. 
     After this file is done, create ICs as: srun -n 8 ./N-GenICResim param.txt partload_file.hdf5
@@ -455,7 +401,7 @@ def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     inds_ics = _get_ic_inds(sP, dmIDs_halo)
 
     # for dm particles in ICs, load positions of halo DM particles
-    #posInitial = _chunked_snapshot_index_load(sP, 'dm', 'pos', inds=inds_ics) # memory efficient
+    #posInitial = sP.snapshotSubsetC('dm', 'pos', inds=inds_ics) # memory efficient
 
     loadSizeGB = (inds_ics.max() - inds_ics.min()) * 8 * 3 / 1024**3
     print('Loading positions of DM in ICs [memory required: %.1f GB]' % loadSizeGB)
