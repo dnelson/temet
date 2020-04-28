@@ -207,7 +207,6 @@ def radialResolutionProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen',
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, ncol=2, loc='upper left')
 
-    fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 
@@ -527,7 +526,6 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
     cb.ax.set_ylabel(clabel)
     #ax.set_title('%.1f < M$_{\\rm halo}$ [log M$_\odot$] < %.1f' % (haloMassBin[0],haloMassBin[1]))
 
-    fig.tight_layout()
     fig.savefig('ionColumnsVsImpact2D_%s_%s_%.1f-%.1f_rvir=%d_xlog=%d_ycum=%d_fd=%d.pdf' % \
         (sP.simName,ion,haloMassBin[0],haloMassBin[1],radRelToVirRad,xlog,ycum,fullDepth))
     plt.close(fig)
@@ -686,7 +684,6 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
 
     ax.legend(loc='lower left')
 
-    fig.tight_layout()
     fig.savefig('ionCoveringFracVsImpact2D_%s_%s_%.1f-%.1f_rvir=%d_fd=%d.pdf' % \
         (sPs[0].simName,ion.replace(" ",""),haloMassBin[0],haloMassBin[1],radRelToVirRad,fullDepth))
     plt.close(fig)
@@ -1289,7 +1286,6 @@ def clumpDemographics(sP, haloID, stackHaloIDs=None):
         ax.set_ylim([0,ax.get_ylim()[1]])
         ax.legend()
 
-        fig.tight_layout()
         fig.savefig('clumpDemographics_%s_h%d_%s.pdf' % (sP.simName,haloID,config))
         plt.close(fig)
 
@@ -1327,7 +1323,6 @@ def clumpDemographics(sP, haloID, stackHaloIDs=None):
 
         ax.legend(loc='lower right')
 
-        fig.tight_layout()
         fig.savefig('clumpDemographics_%s_h%d_%s.pdf' % (sP.simName,haloID,config))
         plt.close(fig)
 
@@ -1665,7 +1660,6 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
                 ax.plot(xx[w_back], yy[w_back], '--', lw=lw, color=cBack, label='T < 30,000K ($t<0$)')
 
         ax.legend(loc='upper left' if prop == 'temp' else 'best')
-        fig.tight_layout()
         fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_%s.pdf' % (sP.simName,haloID,clumpID,sbNum,prop))
         plt.close(fig)
 
@@ -1699,7 +1693,6 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
         ax.plot([0.0,0.0], 'o', color='black')
         #ax.legend()
 
-        fig.tight_layout()
         fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_%s.pdf' % (sP.simName,haloID,clumpID,sbNum,prop))
         plt.close(fig)
 
@@ -1745,7 +1738,6 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
                 if xval not in noForwardData and yval not in noForwardData:
                     ax.plot(xx[w_forward], yy[w_forward], 'o-', lw=lw, color=cForward)
 
-            fig.tight_layout()
             fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_x=%s_y=%s.pdf' % (sP.simName,haloID,clumpID,sbNum,xval,yval))
             plt.close(fig)
 
@@ -1782,7 +1774,6 @@ def clumpTracerTracks(sP, haloID, clumpID, sbNum=None, posOnly=False):
         ax.plot(ax.get_xlim(), [0.0,0.0], '-', color='#777777', alpha=0.4)
         ax.legend()
 
-        fig.tight_layout()
         fig.savefig('clumpEvo_%s_h%d_clumpID=%d_sb%s_axes%d-%d_xyz%02d.png' % (sP.simName,haloID,clumpID,sbNum,axes[0],axes[1],i))
         plt.close(fig)
 
@@ -1909,7 +1900,6 @@ def clumpPropertiesVsHaloMass(sPs):
         # finish plot
         ax.legend()
 
-        fig.tight_layout()
         fig.savefig('clumps_%s_vs_%s_sP%d_%d_min%d.pdf' % (prop,xQuant,len(sPs),sP.snap,minCellsPerClump))
         plt.close(fig)
 
@@ -2091,7 +2081,6 @@ def clumpRadialProfiles(sP, haloID, selections):
 
         # finish plot
         ax.legend()
-        fig.tight_layout()
         fig.savefig('clumps_radprof_%s_%s_%d_%d.pdf' % (prop,sP.simName,sP.snap,haloID))
         plt.close(fig)
 

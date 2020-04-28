@@ -921,7 +921,6 @@ def checkVsSubfindHsml():
     ax.scatter(subfind_hsml,hsml)
     ax.plot([0,45],[0,45],'r')
 
-    fig.tight_layout()    
     fig.savefig('hsml.png')
     plt.close(fig)
 

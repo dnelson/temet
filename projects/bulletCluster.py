@@ -474,7 +474,6 @@ def barnes_check1():
     ax.plot(zz, med_data, '-', marker='o', label='Planck Sample')
     ax.legend(loc='best')
 
-    fig.tight_layout()    
     fig.savefig('check_halomass.pdf')
     plt.close(fig)
 
@@ -514,7 +513,6 @@ def barnes_check2():
     ax.set_ylabel('Cool Core Fraction (Planck Obs, Rossetti+ 17 definition)')
     ax.plot(mass, cc_frac, '-', marker='o', label=data['label'])
 
-    fig.tight_layout()    
     fig.savefig('check_ccfrac_vs_mass.pdf')
     plt.close(fig)
 
@@ -601,6 +599,5 @@ def barnes_check3():
     #ax.plot(xx, result6[0]*xx + result6[1], '-', label='linfit (%.3f)' % result6[0])
 
     ax.legend()
-    fig.tight_layout()    
     fig.savefig('check_linfit_Figure9_right.pdf')
     plt.close(fig)

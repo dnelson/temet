@@ -175,7 +175,6 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -349,7 +348,6 @@ def sfrAvgVsRedshift(sPs, pdf):
     # legend
     ax.legend(loc='upper left')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -427,7 +425,6 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
     # second legend
     legend2 = ax.legend(loc='lower left')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -555,7 +552,6 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
     # second legend
     legend2 = ax.legend(loc='lower right')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -794,7 +790,6 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -949,7 +944,6 @@ def uvLuminosityFunction(sPs, pdf, centralsOnly=False, use30kpc=False, absoluteM
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1037,7 +1031,6 @@ def HIMassFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1156,7 +1149,6 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1240,7 +1232,6 @@ def HIvsHaloMass(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1437,7 +1428,6 @@ def massMetallicityStars(sPs, pdf, simRedshift=0.0, sdssFiberFits=False, fig_sub
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1563,7 +1553,6 @@ def massMetallicityGas(sPs, pdf, simRedshift=0.0):
 
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -1701,7 +1690,6 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -1863,7 +1851,6 @@ def nHIcddf(sPs, pdf, moment=0, simRedshift=3.0, molecular=False):
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -1932,7 +1919,6 @@ def dlaMetallicityPDF(sPs, pdf, simRedshift=3.0):
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -1994,7 +1980,6 @@ def velocityFunction(sPs, pdf, centralsOnly=True, simRedshift=0.0):
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles, labels, loc='lower left')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -2171,7 +2156,6 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -2294,7 +2278,6 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -2393,7 +2376,6 @@ def haloSynchrotronPower(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 

@@ -103,7 +103,6 @@ def plotUsersData():
     for text in l.get_texts():
         text.set_color(color2)
     fig.autofmt_xdate()
-    fig.tight_layout()
     
     fig.savefig('userstats_all.pdf', facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -143,7 +142,6 @@ def plotUsersData():
     for text in l.get_texts():
         text.set_color(color2)
     fig.autofmt_xdate(which='both')
-    fig.tight_layout()
     
     fig.savefig('userstats_users.pdf', facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -259,7 +257,6 @@ def plotCpuTimeEstimates():
     ax.legend()
     fig.autofmt_xdate()
 
-    fig.tight_layout()
     fig.savefig(fName1)
     plt.close(fig)
 
@@ -517,7 +514,6 @@ def periodic_slurm_status(nosave=False):
                 real_name = real_name[:16]+'...' if len(real_name) > 16 else real_name # truncate
                 ax.text(xmax+0.14+padx*10, j, real_name, color='#333333', **textOpts)
 
-    fig.tight_layout()
     fig.subplots_adjust(left=0.005, right=0.995, bottom=0.005, top=0.92, wspace=0.05)
 
     # time series data load

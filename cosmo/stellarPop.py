@@ -767,7 +767,6 @@ class sps():
             ax.plot(output_wave[::n]/shift_back, np.log10(flux_origwave[::n]-7e-15), ls='-', marker='o', label='flux shifted')
 
             ax.legend()
-            fig.tight_layout()
             fig.savefig('debug_redshiftSpectrum.pdf')
             plt.close(fig)
 
@@ -787,7 +786,6 @@ class sps():
             ax.plot(output_wave[::n], np.log10(dwave_output[::n]), ls='-', marker='o', markersize=1.0, label='OUTPUT')
 
             ax.legend()
-            fig.tight_layout()
             fig.savefig('debug_redshiftSpectrum_dwave.pdf')
             plt.close(fig)
 
@@ -1365,7 +1363,6 @@ def debug_dust_plots():
         if pop.lambda_nm[band].size != 1:
             ax.set_xlim(master_lambda_range)
 
-        fig.tight_layout()    
         fig.savefig('debug_%s_%s.pdf' % (dust,band))
         plt.close(fig)
 
@@ -1404,7 +1401,6 @@ def debug_plot_spectra():
             ax.plot(ac['wavelength'], data[acField][subInd,:], color=c, ls=linestyles[i], marker='o', markersize=1.5, label=label)
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('debug_spec_obs.pdf')
     plt.close(fig)
 
@@ -1456,6 +1452,5 @@ def debug_check_rawspec():
 
     # finish plot
     ax1.legend()
-    fig.tight_layout()
     fig.savefig('debug_rawspec.pdf')
     plt.close(fig)

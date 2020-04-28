@@ -257,7 +257,6 @@ def celineMuseProposalMetallicityVsTheta():
 
     # finish and save plot
     ax.legend(loc='upper left')
-    fig.tight_layout()
     fig.savefig('%s_vs_theta_Mstar=%.1f.pdf' % (dataField.replace(" ",""),massBins[0][0]))
     plt.close(fig)
 
@@ -313,7 +312,6 @@ def celineWriteH2CDDFBand():
     ax.set_ylim([-30,-14])
     ax.fill_between(N_H2, fN_H2_low, fN_H2_high, alpha=0.8)
 
-    fig.tight_layout()
     fig.savefig('h2_CDDF_%s_band-%d.pdf' % (sP.simName,len(speciesList)))
     plt.close(fig)
 
@@ -423,7 +421,6 @@ def celineHIDensityVsColumn():
     ax.fill_between(N_HI_vals, nh2_percs[0,:], nh2_percs[-1,:], alpha=0.5, color=l.get_color())
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('N_HI_vs_n_H_HI_H2_%s.pdf' % sP.simName)
     plt.close(fig)
 
@@ -543,7 +540,6 @@ def amyDIGzProfiles():
 
     # finish and save plot
     ax.legend(loc='upper right')
-    fig.tight_layout()
     fig.savefig('sb_vs_z_Mstar=%.1f.pdf' % (massBin[0]))
     plt.close(fig)
 
@@ -645,7 +641,6 @@ def martinSubboxProj3DGrid():
 
     # finish and save plot
     ax.legend(loc='upper right')
-    fig.tight_layout()
     fig.savefig('px_comp.pdf')
     plt.close(fig)
 

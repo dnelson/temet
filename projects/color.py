@@ -338,7 +338,6 @@ def galaxyColorPDF(sPs, pdf, bands=['u','i'], simColorsModels=[defSimColorModel]
         handles, labels = axes[0].get_legend_handles_labels()
         legend3 = axes[0].legend(handles+sExtra, labels+lExtra, loc='upper right')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -575,7 +574,6 @@ def galaxyColor2DPDFs(sPs, pdf, simColorsModel=defSimColorModel, splitCenSat=Fal
 
             legend2 = axes[1].legend(sExtra, lExtra, loc='upper left')
 
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -669,7 +667,6 @@ def viewingAngleVariation():
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper left')
 
     # finish plot and save
-    fig.tight_layout()
     fig.savefig('appendix1_viewing_angle_variation.pdf')
     plt.close(fig)
 
@@ -975,7 +972,6 @@ def colorFluxArrows2DEvo(sP, pdf, bands, toRedshift, cenSatSelect='cen', minCoun
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         if pdf is not None:
             pdf.savefig(facecolor=fig.get_facecolor())
         else:
@@ -1176,7 +1172,6 @@ def colorMassPlaneFitSummary(sPs, bands=['g','r'], simColorsModel=defSimColorMod
 
     # finish plot and save
     zStr = '_z=%.1f' % sP.redshift if sP.redshift > 0.0 else ''
-    fig.tight_layout()
     fig.savefig('figure4_colorMassPlaneFits-%s_%s_%s_%s_%s%s_mcmc%d.pdf' % \
         (method,'-'.join([sP.simName for sP in sPs]),'-'.join(bands),cenSatSelect,simColorsModel,zStr,nBurnIn))
     plt.close(fig)
@@ -1285,7 +1280,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
             legend2 = ax.legend(sExtra, lExtra, loc='best', prop={'size':11})
 
         # finish plot and save
-        fig.tight_layout()
         fig.savefig('colorMassPlaneFits%d_%s_%s_%s_%s.pdf' % \
             (iterNum,sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
         plt.close(fig)
@@ -1342,7 +1336,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
         legend2 = ax.legend(sExtra, lExtra, loc='best')
 
         # finish plot and save
-        fig.tight_layout()
         fig.savefig('colorMassPlane-%s_%s_%s_%s_%s.pdf' % \
             (saveStr,sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
         plt.close(fig)
@@ -1384,7 +1377,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     legend2 = ax.legend(sExtra, lExtra, loc='best')
 
     # finish plot and save
-    fig.tight_layout()
     fig.savefig('colorMassPlane-RedFrac_%s_%s_%s_%s.pdf' % \
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
@@ -1409,7 +1401,6 @@ def colorMassPlaneFits(sP, bands=['g','r'], cenSatSelect='all', simColorsModel=d
     plt.imshow(h2d_rgb, extent=extent, origin='lower', interpolation='nearest', aspect='auto', 
                cmap=cmap, norm=norm)
 
-    fig.tight_layout()
     fig.savefig('colorMassPlane2DHist_%s_%s_%s_%s.pdf' % \
         (sP.simName,'-'.join(bands),cenSatSelect,simColorsModel))
     plt.close(fig)
@@ -1827,7 +1818,6 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         ax.add_artist(legend1)
 
         # finish plot and save
-        fig.tight_layout()
         cssStr = '_css-%s' % '-'.join(plotCSS)
         reqStr = '_req' if reqPosDtGreen else ''
         msStr = '_mstar-%.1f-%.1f' % (mStarRange[0],mStarRange[1]) if mStarRange is not None else ''
@@ -1922,7 +1912,6 @@ def colorTransitionTimescale(sPs, bands=['g','r'], simColorsModel=defSimColorMod
         ax.add_artist(legend1)
 
         # finish plot and save
-        fig.tight_layout()
         cssStr = 'css-%s' % '-'.join(plotCSS)
         reqStr = '_req' if reqPosDtGreen else ''
         msStr = '_mstar-%.1f-%.1f' % (mStarRange[0],mStarRange[1]) if mStarRange is not None else ''
@@ -2140,7 +2129,6 @@ def colorTracksSchematic(sP, bands, simColorsModel=defSimColorModel, pageNum=Non
     ax.legend(loc='upper left', prop={'size':8})
 
     # finish plot and save
-    fig.tight_layout()
     oStr = '_page-%d' % pageNum if pageNum is not None else ''
     fig.savefig('figure16_schematic_%s_%s%s.pdf' % (sP.simName,'-'.join(bands),oStr), 
         facecolor=fig.get_facecolor())

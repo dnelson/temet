@@ -229,7 +229,6 @@ def plotMultiSpectra(doSim, simInds, sdssInds):
         ax.plot( spec['wavelength'], spec['spectrum']*1e6, '-', label='%s %d' % (doSim['sP'].simName,ind))
 
     # finish figure
-    plt.tight_layout()
     ax.legend(loc='upper left')
     fig.savefig('fig_plotMultiSpectra.pdf')
     plt.close(fig)
@@ -305,7 +304,6 @@ def sdssFitsVsMstar():
         ax.fill_between(sdss[quantName]['xm'], sdss[quantName]['pm'][5,:], sdss[quantName]['pm'][6,:], 
                         color='green', interpolate=True, alpha=0.2)
 
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 

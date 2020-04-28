@@ -2413,7 +2413,6 @@ def renderMultiPanel(panels, conf):
                 cb.ax.yaxis.label.set_size(conf.fontsize)
                 cb.ax.tick_params(axis='both', which='major', pad=padding)
 
-        fig.tight_layout()
         if nRows == 1 and nCols == 3: plt.subplots_adjust(top=0.97,bottom=0.06) # fix degenerate case
 
     if conf.plotStyle in ['edged','edged_black']:

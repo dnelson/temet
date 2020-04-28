@@ -352,7 +352,6 @@ def tracer_ambient_hot_halo():
         ax.plot( redshifts, temp_prev[i,:], '-', lw=2.0, label=label)
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('temp_evo_rvir=%.2f-%.2f.pdf' % (rad_min,rad_max))
     plt.close(fig)
 
@@ -370,7 +369,6 @@ def tracer_ambient_hot_halo():
         ax.plot( redshifts, frac_prev[i,:], '-', lw=2.0, label=label)
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('tempfrac_evo_rvir=%.2f-%.2f.pdf' % (rad_min,rad_max))
     plt.close(fig)
 
@@ -478,7 +476,6 @@ def gas_components_time_evo():
         ax.plot(z, data[i]['mass_cgm_non'], linestyles[i], color=colors[4], lw=lw, label='CGM (not cool+dense)' if i == 0 else '')
 
     ax.legend(loc='lower right')
-    fig.tight_layout()
     fig.savefig('figure_4.pdf')
     plt.close(fig)
 
@@ -586,7 +583,6 @@ def gas_components_radial_profiles():
     # finish plot
     ax1.legend(loc='upper right')
     ax2.legend(loc='upper right')
-    fig.tight_layout()
     fig.savefig('figure_5.pdf')
     plt.close(fig)
 
@@ -739,7 +735,6 @@ def mgii_radial_profile():
     # legend
     legend2 = ax.legend(loc='upper right')
 
-    fig.tight_layout()
     fig.savefig('figure_9.pdf')
     plt.close(fig)
 
@@ -820,6 +815,5 @@ def hi_covering_frac():
         legend = ax.legend(loc='upper right')
 
     # finish
-    fig.tight_layout()
     fig.savefig('figure_8.pdf')
     plt.close(fig)

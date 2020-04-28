@@ -514,7 +514,6 @@ def vis():
                 cb = plt.colorbar(cax=cax)
                 cb.ax.set_ylabel('Surface Brightness [ log W m$^{-2}$ arcsec$^{-2}$ ]')
 
-                fig.tight_layout()
                 fig.savefig('image_%s_sh%d_%s_%s_%s.pdf' % (sP.simName,subhaloID,outType,instName,filterName))
                 plt.close(fig)
 
@@ -564,7 +563,6 @@ def plot_sed():
             ax.plot(xx, logZeroNaN(data[:,col]), '-', lw=lw, label=label)
 
         ax.legend(loc='best')
-        fig.tight_layout()
         fig.savefig('sed_%s_sh%d_%s.pdf' % (sP.simName,subhaloID,instName))
         plt.close(fig)
 
@@ -585,6 +583,5 @@ def plot_sed():
             ax.plot(xx, logZeroNaN(data[ww[0],col]), '-', lw=lw, label=label)
 
         ax.legend(loc='best')
-        fig.tight_layout()
         fig.savefig('sed_optical_%s_sh%d_%s.pdf' % (sP.simName,subhaloID,instName))
         plt.close(fig)

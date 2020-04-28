@@ -167,7 +167,6 @@ def globalCatComparison(sP1,sP22,matchPath):
         ax[2].set_title('satellites')
         
         # finalize
-        fig.tight_layout()        
         fig.savefig('test_' + fieldName + '.pdf')
         plt.close(fig)    
 
@@ -291,7 +290,6 @@ def timeSeriesMultiPanelComp(sP1, shID1, sP2, shID2):
         ax.legend(loc='best')#, prop={'size':11})
 
     # finish plot and save
-    fig.tight_layout()
     fig.savefig('timeSeriesMultiPanelComp_%s_%s_%s.pdf' % (sP1.run,sP2.run,'-'.join([str(s) for s in shID2])))
     plt.close(fig)
 

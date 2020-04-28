@@ -182,7 +182,6 @@ def plotHistogram1D(sPs, ptType='gas', ptProperty='temp_linear', ptWeight=None, 
             ax.plot(xx, yy2, linestyle='-', color='black', lw=lw, alpha=1.0, label='median')
 
     # finish plot
-    fig.tight_layout()
     if legend:
         ax.legend(loc='best', ncol=3)
 
@@ -509,8 +508,6 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             ax.plot(xx, yy, '-', lw=lw, color='#000000', alpha=0.7, label='Torrey+12 ISM cut')
 
     # colorbar and save
-    fig.tight_layout()
-    
     if xQuant == 'hdens' and yQuant == 'temp' and len(weights) == 3:
         # TNG colors paper
         fig.subplots_adjust(right=0.93)
@@ -602,7 +599,6 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
             ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
 
     ax.legend(loc='best')
-    fig.tight_layout()
 
     # finish plot
     sStr = '%s_z-%.1f' % (sPs[0].simName,sPs[0].redshift) if len(sPs) == 1 else 'sPn%d' % len(sPs)
@@ -772,7 +768,6 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
                     f.write(out)
 
     # finish plot
-    fig.tight_layout()
     ax.legend(loc='best')
 
     if colorbar:
@@ -910,7 +905,6 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
             ax.text( xlim_p[0]+0.1, val+0.03, label, color='black', fontsize=20, alpha=0.1, verticalalignment='bottom', horizontalalignment='center' )
 
     # finish plot
-    fig.tight_layout()
     ax.legend(loc='best')
 
     sPstr = sP.simName if len(sPs) == 1 else 'nSp-%d' % len(sPs)

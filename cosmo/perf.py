@@ -601,7 +601,6 @@ def plotCpuTimes():
         handles, labels = ax.get_legend_handles_labels()
         ax.legend(handles+pColors, labels+pLabels, loc='best') #, prop={'size':13})
 
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -661,7 +660,6 @@ def plotCpuTimes():
         pColors = [plt.Line2D( (0,1), (0,0), color='white', marker='', linestyle='-')]
         ax.legend(handles+pColors, labels+pLabels, loc='best') #, prop={'size':13})
 
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -738,7 +736,6 @@ def plotTimebins():
     # make redshift axis, legend and finish
     _redshiftAxisHelper(ax)
     ax.legend(loc='best')
-    fig.tight_layout()    
     fig.savefig(saveBase % 'smallest_msec')
     plt.close(fig)
 
@@ -800,7 +797,6 @@ def plotTimebins():
 
         # make redshift axis, legend and finish
         axTop = _redshiftAxisHelper(ax)
-        fig.tight_layout()
 
         # shrink current axis by 12%, put a legend to the right of the current axis
         box = ax.get_position()
@@ -930,7 +926,6 @@ def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
         for text in legend.get_texts(): text.set_color(color2)
 
         fig.savefig('timebins_%s_%04d.png' % (sP.simName,i), facecolor=color1)
-        fig.tight_layout()
         plt.close(fig)
 
 def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
@@ -1054,7 +1049,6 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
         ax.legend(loc='lower left')
 
         _addTopAxisStrong(ax, nCores)
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1084,7 +1078,6 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
         ax.legend(loc='lower left')
 
         _addTopAxisStrong(ax, nCores)
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -1131,7 +1124,6 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
     # legend and finish plot
     ax.legend(loc='upper left')
     _addTopAxisWeak(ax, nCores, data['boxSize'], data['nPartCubeRoot'])
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -1167,7 +1159,6 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
     # legend and finish plot
     ax.legend(loc='lower left')
     _addTopAxisWeak(ax, nCores, data['boxSize'], data['nPartCubeRoot'])
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 

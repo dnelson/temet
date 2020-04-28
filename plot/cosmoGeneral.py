@@ -498,7 +498,6 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         if pdf is not None:
             pdf.savefig(facecolor=fig.get_facecolor())
         else:
@@ -679,7 +678,6 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         if pdf is not None:
             pdf.savefig()
         else:
@@ -1020,7 +1018,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         if pdf is not None:
             pdf.savefig()
         else:

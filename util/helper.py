@@ -1323,7 +1323,6 @@ def plothist(x, filename='out.pdf', nBins=50, norm=False, skipzeros=True):
         ax.plot(x_plot,y_plot, '-', lw=2.5)
         ax.step(x_plot,y_plot, lw=2.5, where='mid',color='black',alpha=0.5)
 
-    fig.tight_layout()
     fig.savefig(filename)
     plt.close(fig)
 
@@ -1350,7 +1349,6 @@ def plotxy(x, y, filename='plot.pdf'):
         if i == 3:
             ax.plot(xx_log, yy_log, 'o-', lw=2.5)
 
-    fig.tight_layout()
     fig.savefig(filename)
     plt.close(fig)
 
@@ -1376,7 +1374,6 @@ def plot2d(grid, label='', filename='plot.pdf'):
     cb = plt.colorbar(cax=cax)
     cb.ax.set_ylabel(label)   
 
-    fig.tight_layout()
     fig.savefig(filename)
     plt.close(fig)
 

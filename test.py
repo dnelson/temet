@@ -57,7 +57,6 @@ def lgal_cat_check():
     xm, ym, sm = running_median(xx,yy,binSize=0.2)
     ax.plot(xm, ym, '-', lw=3.0, alpha=0.7)
 
-    fig.tight_layout()
     fig.savefig('out.pdf')
     plt.close(fig)
 
@@ -93,7 +92,6 @@ def swift_vs_arepo_performance():
     ax.plot(num_cores, cputime_swift2, 'o-', label='SWIFT (CF=0.3)')
 
     ax.legend(loc='upper left', fontsize=18)
-    fig.tight_layout()
     fig.savefig('perf_swift_vs_arepo.pdf')
     plt.close(fig)
 
@@ -268,7 +266,6 @@ def francesca_voversigma():
         print(mstar_bin, (v/sigma)[w].mean(), np.median( (v/sigma)[w] ), np.std( (v/sigma)[w] ) )
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('voversigma_%s_z=%d.pdf' % (sP.simName,sP.redshift))
     plt.close(fig)
 
@@ -317,7 +314,6 @@ def plot_dist256():
     ax.plot(xm,ym,'-',label='median')
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('check_dist256.pdf')
     plt.close(fig)
 
@@ -822,7 +818,6 @@ def check_colors_benedikt():
     cb = plt.colorbar(cax=cax)
     cb.ax.set_ylabel('log Num gal')
 
-    fig.tight_layout()
     fig.savefig('mag_comp.pdf')
     plt.close(fig)
 
@@ -891,13 +886,10 @@ def guinevere_mw_sample():
         ax.plot(fgas_ill[wsat], fgas_tng[wsat], 'o', markersize=msize, color='red', alpha=0.7, label='Sat in %s' % label)
 
         ax.legend(loc='upper left')
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
     pdf.close()
-
-    import pdb; pdb.set_trace()
 
 def check_reza_vrel():
     #sub_id = 24462
@@ -1036,7 +1028,6 @@ def vis_cholla_snapshot():
         cb = plt.colorbar(im, cax=cbar_ax)
         cb.ax.set_ylabel(field)
 
-        fig.tight_layout()
         fig.savefig('cholla_%d_%s.pdf' % (num,field))
         plt.close(fig)
 
@@ -1124,7 +1115,6 @@ def bh_details_check():
         ax.set_yscale('log')
         ax.plot(redshift,mdot,lw=0.5)
 
-        fig.tight_layout()    
         fig.savefig('check_details.pdf')
         plt.close(fig)
 
@@ -1138,10 +1128,8 @@ def bh_details_check():
         ax.set_yscale('log')
         ax.plot(redshift,mdot,lw=0.5)
 
-        fig.tight_layout()    
         fig.savefig('check_details_zoom.pdf')
         plt.close(fig)
-    import pdb; pdb.set_trace()
 
 def bh_mdot_subbox_test():
     """ Check that BH accretion rate equals mass increase. """
@@ -1437,7 +1425,6 @@ def checkStellarAssemblyMergerMass():
     vals = vals[np.isfinite(vals)]
     ax.hist(vals, bins=100)
 
-    fig.tight_layout()    
     fig.savefig('check_stellarassembly_supp_%s_%d.pdf' % (sP.simName,sP.snap))
     plt.close(fig)
 
@@ -1536,10 +1523,8 @@ def checkInfallTime():
     ax.plot([my_answer_gyr,my_answer_gyr],[10,2000],':',label='My Answer')
     ax.legend()
 
-    fig.tight_layout()    
     fig.savefig('check_%s_snap-%d_subhalo-%d.pdf' % (sP.simName,sP.snap,subhaloID))
     plt.close(fig)
-
 
 def lagrangeMatching():
     """ Test L75n1820TNG -> L75n1820FP matching. """
@@ -1896,7 +1881,6 @@ def checkIllustrisMetalRatioVsSolar():
     plt.hist(metal_mass_fraction_2, nBins, facecolor='green', alpha=0.8)
     plt.plot([metal_mass_fraction_3,metal_mass_fraction_3], [1e1,1e4], color='blue', alpha=0.8)
 
-    fig.tight_layout()    
     fig.savefig('checkIllustrisMetalRatioVsSolar_12.pdf')
     plt.close(fig)
 
@@ -1912,11 +1896,8 @@ def checkIllustrisMetalRatioVsSolar():
     plt.hist(metal_2b, nBins, facecolor='green', alpha=0.8)
     plt.hist(metal_3b, nBins, facecolor='blue', alpha=0.8)
 
-    fig.tight_layout()    
     fig.savefig('checkIllustrisMetalRatioVsSolar_34.pdf')
     plt.close(fig)
-
-    import pdb; pdb.set_trace()
 
 def checkTracerLoad():
     """ Check new code to load tracers from snapshots. """
@@ -2082,7 +2063,6 @@ def checkLastStarTimeIllustris():
     nBins = 400
     plt.hist(x, nBins, range=hRange, facecolor='red', alpha=0.8)
 
-    fig.tight_layout()    
     fig.savefig('tracer_laststartime.pdf')
     plt.close(fig)
 
@@ -2120,7 +2100,6 @@ def enrichChecks():
         plt.hist(ec2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -2147,7 +2126,6 @@ def enrichChecks():
         ax.plot([sP2.targetGasMass,sP2.targetGasMass],[1,1e8],':',color='black',alpha=0.7,label='target2')
 
         ax.legend(loc='upper right')
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -2172,7 +2150,6 @@ def enrichChecks():
         plt.hist(mstar2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -2197,7 +2174,6 @@ def enrichChecks():
         plt.hist(zgas2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -2225,7 +2201,6 @@ def enrichChecks():
         plt.hist(ratio2, nBins, range=hRange, facecolor='green', alpha=0.7, label=sP2.simName)
 
         ax.legend(loc='upper right')
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -2261,7 +2236,6 @@ def ipIOTest():
 
             plt.hist(x, 50)
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -2279,7 +2253,6 @@ def ipIOTest():
 
                     plt.hist(x[:,i], 50)
 
-                    fig.tight_layout()
                     pdf.savefig()
                     plt.close(fig)
 

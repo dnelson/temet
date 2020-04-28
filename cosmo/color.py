@@ -273,7 +273,6 @@ def compareOldNewMags():
 
     ax.plot([-1,5],[-1,5],'-',color='orange')
 
-    fig.tight_layout()    
     fig.savefig('colors_%s.png' % ''.join(bands))
     plt.close(fig)
 
@@ -301,7 +300,6 @@ def compareOldNewMags():
 
     ax.plot([-22,-12],[-22,-12],'-',color='orange')
 
-    fig.tight_layout()  
     fig.savefig('mags_%s.png' % bands[0])
     plt.close(fig)
 
@@ -327,7 +325,5 @@ def plotDifferentUPassbands():
     ax.plot(Johnson_lambda, Johnson_f, label='Johnson U')
 
     ax.legend()
-
-    fig.tight_layout()    
     fig.savefig('filters_U.pdf')
     plt.close(fig)

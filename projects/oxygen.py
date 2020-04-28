@@ -165,7 +165,6 @@ def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='upper right')
 
-    fig.tight_layout()
     pdf.savefig()
     plt.close(fig)
 
@@ -323,7 +322,6 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
         loc = 'upper right' if len(ions) > 1 else 'lower left'
         legend2 = ax.legend(handles+sExtra, labels+lExtra, loc=loc)
 
-    fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 
@@ -587,7 +585,6 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles, labels, loc='upper left')
 
-    fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 
@@ -970,7 +967,6 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='lower left')
 
-    fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 
@@ -1082,7 +1078,6 @@ def ionTwoPointCorrelation(sPs, saveName, ions=['OVI'], redshift=0.0, order=0, c
     handles, labels = ax.get_legend_handles_labels()
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='best')
 
-    fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 
@@ -1395,8 +1390,6 @@ def obsColumnsDataPlot(sP, saveName, radRelToVirRad=False, config='COS-Halos'):
 
         # legend
         legend2 = ax.legend(loc='upper right')
-
-        fig.tight_layout()
 
         # colorbar
         fig.subplots_adjust(right=0.84)
@@ -1971,7 +1964,6 @@ def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos',
             if config in ['eCGM','eCGMfull']: prop['size'] = 15
             legend2 = ax.legend(handles, labels, loc=loc, ncol=1, prop=prop)
 
-    fig.tight_layout()
     fig.savefig(saveName)
     plt.close(fig)
 

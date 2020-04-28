@@ -179,8 +179,6 @@ def visualize_result_2d(basePath):
             cb = plt.colorbar(cax=cax)
             cb.ax.set_ylabel('Density')
 
-            fig.tight_layout()
-
         fig.savefig('density_%d.png' % i)
         plt.close(fig)
 
@@ -228,6 +226,5 @@ def histogram_result_2d(basePath):
         ax.plot(bins[:-1][w], np.log10(hist[w]), alpha=0.7)
 
     # finish plot
-    fig.tight_layout()
     fig.savefig('density_hists.pdf')
     plt.close(fig)

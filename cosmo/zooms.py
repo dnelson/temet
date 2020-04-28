@@ -150,7 +150,6 @@ def mass_function():
     ax.set_ylim([0.8,100])
     ax.legend(loc='upper right')
 
-    fig.tight_layout()    
     fig.savefig('mass_functions.pdf')
     plt.close(fig)
 
@@ -270,7 +269,6 @@ def check_contamination():
     ax2.xaxis.set_minor_locator(MultipleLocator(1))
 
     ax.legend(loc='lower right')
-    fig.tight_layout()    
     fig.savefig('contamination_profile_%s_%d.pdf' % (sPz.simName,sPz.snap))
     plt.close(fig)
 
@@ -320,7 +318,6 @@ def compare_contamination():
     ax.plot([2.0,2.0], ylim, '-', color='#bbbbbb', lw=lw-1.0, alpha=0.2)
 
     ax.legend(loc='upper left')
-    fig.tight_layout()    
     fig.savefig('contamination_comparison_L%d_h%s_%s.pdf' % (zoomRes,'-'.join([str(h) for h in hInds]),'-'.join(variants)))
     plt.close(fig)
 
@@ -421,7 +418,6 @@ def sizefacComparison():
         ax.legend(handles, ['%s' % variant for variant in colors.keys()], loc='best')
 
     # finish
-    fig.tight_layout()    
     fig.savefig('sizefac_comparison.pdf')
     plt.close(fig)
 

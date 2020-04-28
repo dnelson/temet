@@ -534,7 +534,6 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
             for walkerInd in range(nWalkers):
                 ax.plot(np.arange(nProdSteps), sampler.chain[walkerInd,:,i],lw=0.8,alpha=0.5,color='black')
 
-        fig.tight_layout()
         fig.savefig('debug_methodC_%s_sigma.pdf' % saveStr)
         plt.close(fig)
 
@@ -553,7 +552,6 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
             for walkerInd in range(nWalkers):
                 ax.plot(np.arange(nProdSteps), sampler.chain[walkerInd,:,i],lw=0.8,alpha=0.5,color='black')
 
-        fig.tight_layout()
         fig.savefig('debug_methodC_%s_mu.pdf' % saveStr)
         plt.close(fig)
 
@@ -568,7 +566,6 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
                 for walkerInd in range(nWalkers):
                     ax.plot(np.arange(nProdSteps), sampler.chain[walkerInd,:,i],lw=0.8,alpha=0.5,color='black')
 
-            fig.tight_layout()
             fig.savefig('debug_methodC_%s_Aset%d_blue.pdf' % (saveStr,iterNum))
             plt.close(fig)
 
@@ -584,7 +581,6 @@ def _fitCMPlaneMCMC(masses, colors, chain_start, xMinMax, mag_range, skipNBinsRe
                     for walkerInd in range(nWalkers):
                         ax.plot(np.arange(nProdSteps), sampler.chain[walkerInd,:,i],lw=0.8,alpha=0.5,color='black')
 
-                fig.tight_layout()
                 fig.savefig('debug_methodC_%s_Aset%d_red.pdf' % (saveStr,iterNum))
                 plt.close(fig)
 
@@ -1028,7 +1024,6 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
             ax.legend(loc='best')
 
             # finish plot and save
-            fig.tight_layout()
             fig.savefig('cmPlaneParamEvoWithFit_%s_%s_%s.pdf' % (sP.simName,fit_method,pName))
             plt.close(fig)
 
@@ -1104,7 +1099,6 @@ def colorTransitionTimes(sP, f_red, f_blue, maxRedshift, nBurnIn,
     ax.legend(loc='best')
 
     # finish plot and save
-    fig.tight_layout()
     fig.savefig('cmPlaneBoundariesEvo_%s_%s_mcmc%d.pdf' % (sP.simName,fit_method,nBurnIn))
     plt.close(fig)
 

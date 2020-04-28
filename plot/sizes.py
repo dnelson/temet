@@ -219,7 +219,6 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -305,7 +304,6 @@ def galaxyHISizeMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
         if digits[2] == digits[0] * digits[1]: finishFlag = True
 
     if fig_subplot[0] is None or finishFlag:
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -418,7 +416,6 @@ def sizeModelsRatios():
 
         # finish
         ax.legend(loc='best',prop={'size':13})
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -501,7 +498,6 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
 
         # finish page (for one redshift)
         ax.legend(loc='best',prop={'size':13})
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -570,7 +566,6 @@ def clumpSizes(sP):
     ax.plot(xm_stars[1:-1], ym_stars[1:-1], '-', lw=3.0, label=sP.simName)
 
     # finish figure
-    fig.tight_layout()
     plt.savefig('sizes_diagnostic_cenOnly=%s_vsMstar=%s_%s_z=%.1f.png' % (centralsOnly,vsMstarXaxis,sP.simName,sP.redshift))
     plt.close(fig)
 
@@ -699,6 +694,5 @@ def characteristicSizes(sP, vsHaloMass=False):
     ax.legend(loc='upper left', ncol=2)
 
     # finish figure
-    fig.tight_layout()
     fig.savefig('characteristic_sizes_%s_%d.pdf' % (sP.simName,sP.snap))
     plt.close(fig)

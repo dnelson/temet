@@ -58,7 +58,6 @@ def plotRedshiftSpacings():
     # redshift axis
     addRedshiftAxis(ax, sP)
 
-    fig.tight_layout()    
     fig.savefig(sP.plotPath + 'redshift_spacing.pdf')
     plt.close(fig)
 
@@ -119,7 +118,6 @@ def plotMassFunctions():
         ax.set_ylim([1,yy_max*1.4])
         ax.legend(loc='upper right')
 
-    fig.tight_layout()    
     fig.savefig('mass_functions.pdf')
     plt.close(fig)
 
@@ -211,7 +209,6 @@ def haloMassesVsDMOMatched():
     ax.plot(xrange, [1.0,1.0], '-', color='black', alpha=0.2)
 
     ax.legend()
-    fig.tight_layout()    
     fig.savefig('haloMassRatioVsDMO_L75.pdf')
     plt.close(fig)
 
@@ -389,7 +386,6 @@ def plotClumpsEvo():
                     ax.plot(snapRedshifts, logZeroNaN(sfh), '-', lw=lw, color='red', label='from star ages')
                     ax.legend()
 
-        fig.tight_layout()    
         pdf.savefig()
         plt.close(fig)
 
@@ -467,7 +463,6 @@ def compareEOSFiles(doTempNotPres=False):
 
     ax.set_xlabel('Density [log physical 1/cm^3]')
 
-    fig.tight_layout()
     ax.legend(loc='best')
     if doTempNotPres:
         plt.savefig('compareTwoEosFiles_temp.pdf')
@@ -600,7 +595,6 @@ def depletionVsDynamicalTimescale():
         cb = plt.colorbar(cax=cax)
         cb.ax.set_ylabel('Number of Galaxies [ log ]')
 
-        fig.tight_layout()
         fig.savefig('tdyn_vs_tdep_%s_a.pdf' % sP.simName)
         plt.close(fig)
 
@@ -638,7 +632,6 @@ def depletionVsDynamicalTimescale():
         cb = plt.colorbar(cax=cax)
         cb.ax.set_ylabel('Number of Galaxies [ log ]')
 
-        fig.tight_layout()
         fig.savefig('tdyn_vs_tdep_%s_b.pdf' % sP.simName)
         plt.close(fig)
 
@@ -676,6 +669,5 @@ def depletionVsDynamicalTimescale():
         cb = plt.colorbar(cax=cax)
         cb.ax.set_ylabel('Number of Galaxies [ log ]')
 
-        fig.tight_layout()
         fig.savefig('tdyn_vs_tdep_%s_c.pdf' % sP.simName)
         plt.close(fig)

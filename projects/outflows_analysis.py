@@ -113,7 +113,6 @@ def fit_vout():
             ax.plot(1+x_redshift, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
 
         ax.legend()
-        fig.tight_layout()
         fig.savefig('%s_vs_redshift.pdf' % filename)
         plt.close(fig)
 
@@ -139,7 +138,6 @@ def fit_vout():
             ax.plot(x_mstar, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
 
         ax.legend()
-        fig.tight_layout()
         fig.savefig('%s_vs_mstar.pdf' % filename)
         plt.close(fig)
 
@@ -204,7 +202,6 @@ def fit_vout():
         ax.plot(x_mstar, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('%s_vs_mstar_z_indiv.pdf' % filename)
     plt.close(fig)
 
@@ -258,7 +255,6 @@ def fit_vout():
                 ax.plot(xx, _error_function_plaw(params_best,xx,0.0), ':', lw=lw, marker='d')
 
                 # finish
-                fig.tight_layout()
                 fig.savefig('%s_vs_time_%d.pdf' % (filename,iterNum))
                 plt.close(fig)
 
@@ -284,7 +280,6 @@ def fit_vout():
         ax.plot(xx, np.poly1d(line_fit)(xx), ':', lw=lw, marker='s')
         line_fits.append( line_fit )
 
-        fig.tight_layout()
         fig.savefig('%s_param_%d_vs_z.pdf' % (filename,i))
         plt.close(fig)
 
@@ -356,7 +351,6 @@ def fit_vout():
         ax.plot(x_mstar, vout_fit, ':', lw=lw-1, alpha=1.0, color=l.get_color())
 
     ax.legend()
-    fig.tight_layout()
     fig.savefig('%s_vs_mstar_z_result.pdf' % filename)
     plt.close(fig)
 

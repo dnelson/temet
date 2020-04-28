@@ -73,7 +73,6 @@ def galaxyTwoPoint(sPs, saveBase='', cenSatSelects=['all','cen','sat'],
 
     # finish plot
     ax.legend()
-    fig.tight_layout()
     fig.savefig('%stpcf_%s.pdf' % (saveBase,'_'.join([sP.simName for sP in sPs])), 
         facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -221,16 +220,12 @@ def galaxyTwoPointQuantBounds(sPs, saveBase='', cenSatSelect='all', ratioSubPlot
             #yticks[-1].label1.set_visible(False)
 
             # remove vertical space
-            gs.tight_layout(fig)
-
             ax_points = ax.get_position().get_points()
             ax_sub_pos = ax_sub.get_position()
             ax_sub_points = ax_sub_pos.get_points()
             ax_sub_points[1][1] = ax_points[0][1] - ratioSubPlotHSpace
             ax_sub_pos.set_points(ax_sub_points)
             ax_sub.set_position(ax_sub_pos)
-        else:
-            fig.tight_layout()
 
         yy_max = 0.0
         yy_max_sub = 0.0
@@ -391,8 +386,6 @@ def conformityWithRedFrac(sP, saveBase='', cenSatSelectSec='all'):
     ax.set_xlabel(rLabel)
     ax.set_ylim(yMinMax)
     ax.set_ylabel(yLabel)
-
-    fig.tight_layout()
 
     cm = None
 

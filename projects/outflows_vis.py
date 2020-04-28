@@ -581,7 +581,6 @@ def visHaloTimeEvo(sP, data, haloPos, snapTimes, haloInd, extended=False, pStyle
             _lineplot_helper(gs,i=14,conf=1)
 
         # finish
-        fig.tight_layout()
         fig.savefig('vis_%s%s_h%s_%04d.png' % (sP.simName,'_extended' if extended else '',haloInd,snap), 
             dpi=(75 if extended else 100),facecolor=color1)
         plt.close(fig)

@@ -262,7 +262,6 @@ def testDoubleGauss():
         #ax.plot( x_plot, func(x_plot, params_best_rawamp), '-', lw=2.5, label='Bestfit Raw w/ Amp')
         ax.legend()
 
-        fig.tight_layout()
         fig.savefig('test_A.pdf')
         plt.close(fig)
 

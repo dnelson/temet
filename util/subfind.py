@@ -3211,7 +3211,6 @@ def compare_subhalos_all_quantities(snap_start=67):
 
         # finish plot
         ax.legend(loc='best')
-        fig.tight_layout()
         pdf.savefig()
         plt.close(fig)
 
@@ -3257,7 +3256,6 @@ def compare_subhalos_all_quantities(snap_start=67):
 
             # finish plot
             ax.legend(loc='best')
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 

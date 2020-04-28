@@ -109,7 +109,6 @@ def plotUVB(uvbName='fg11'):
     cb.ax.set_ylabel('log J$_{\\nu}(\\nu)$ [ 4 $\pi$ erg / s / cm$^2$ / Hz ]')
 
     # finish
-    fig.tight_layout()    
     fig.savefig('uvb_%s.pdf' % uvbName)
     plt.close(fig)
 
@@ -159,7 +158,6 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 
             ax.legend(loc='upper right')
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -191,7 +189,6 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 
             ax.legend(loc='upper right')
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -229,7 +226,6 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
                 cb = plt.colorbar()
                 cb.ax.set_ylabel('log Abundance Fraction')
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -261,7 +257,6 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 
             ax.legend(loc='upper right')
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -292,7 +287,6 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
 
             ax.legend(loc='upper right')
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -344,8 +338,6 @@ def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=
         ax.text(y[-1]-0.6, x[0]+0.3,labelText, va='bottom', ha='right', color='white', fontsize='40')
 
     # colorbar on last panel only
-    fig.tight_layout()
-
     fig.subplots_adjust(right=0.93)
     cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.821])
     cb = fig.colorbar(c, cax=cbar_ax)
@@ -447,8 +439,6 @@ def curveOfGrowth(lineName='MgII2803'):
             ax.plot(dvel, flux, lw=lw, linestyle=linestyles[j], label='N = %f b = %d' % (N,b))
 
     ax.legend()
-    fig.tight_layout()
-
     fig.savefig('flux_%s.pdf' % lineName)
     plt.close(fig)
 
@@ -482,9 +472,6 @@ def curveOfGrowth(lineName='MgII2803'):
         ax.plot(cols, EW, lw=lw, label='b = %d km/s' % b)
 
     ax.legend()
-    fig.tight_layout()
-
     fig.savefig('cog_%s.pdf' % lineName)
     plt.close(fig)
 
-    #import pdb; pdb.set_trace()

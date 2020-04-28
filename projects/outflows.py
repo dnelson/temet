@@ -152,7 +152,6 @@ def sample_comparison_z2_sins_ao(sP):
     # second legend
     legend2 = ax.legend(loc='upper left')
 
-    fig.tight_layout()
     fig.savefig('sample_comparison_%s_sfrFullSub=%s.pdf' % (sP.simName,fullSubhaloSFR))
     plt.close(fig)
 
@@ -329,7 +328,6 @@ def simResolutionVolumeComparison():
     legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':fs3, 'markerscale':0.6} #, 'frameon':1, 'framealpha':0.9, 'fancybox':False}
     legend = ax.legend(loc='lower left', **legParams)
 
-    fig.tight_layout()
     fig.savefig('sim_comparison_meta.pdf')
     plt.close(fig)
 
@@ -617,7 +615,6 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
             legend1 = ax.legend(loc='lower right' if eta else 'upper left')
             for handle in legend1.legendHandles: handle.set_color('black')
 
-        fig.tight_layout()
         if saveName is not None:
             fig.savefig(saveName)
         if pdf is not None:
@@ -885,7 +882,6 @@ def gasOutflowRatesVsRedshift(sP, ptType, eta=False, config=None, massField='Mas
             legend1 = ax.legend(loc='lower right' if eta else 'upper left')
             for handle in legend1.legendHandles: handle.set_color('black')
 
-        fig.tight_layout()
         if saveName is not None:
             fig.savefig(saveName)
         if pdf is not None:
@@ -1363,7 +1359,6 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
         else:
             legend1 = ax.legend(handles, labels, loc=loc2)
 
-        fig.tight_layout()
         if saveName is not None:
             fig.savefig(saveName)
         if pdf is not None:
@@ -1647,7 +1642,6 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
 
         legend1 = ax.legend(loc='upper right' if quant not in ['temp','temp_sfcold'] else 'upper left') # M* bins
 
-        fig.tight_layout()
         if saveName is not None:
             fig.savefig(saveName)
         if pdf is not None:
@@ -2074,7 +2068,6 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                 ax.add_artist(legend4)
 
         # finish plot
-        fig.tight_layout()
         if saveName is not None:
             fig.savefig(saveName)
         if pdf is not None:
@@ -2637,7 +2630,6 @@ def stackedRadialProfiles(sPs, field, cenSatSelect='cen', projDim='3D', xaxis='l
     if '_Fraction' in field: legendLoc = 'lower right' # typically rising not falling with radius
     legend2 = ax.legend(handles+sExtra, labels+lExtra, loc=legendLoc)
 
-    fig.tight_layout()
     if pdf is not None:
         pdf.savefig()
     else:

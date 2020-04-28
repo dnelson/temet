@@ -371,7 +371,6 @@ def debugPlot():
             #    axs[i].plot( xx, yy, linestyle='-', label='poly '+str(deg))
 
         axs[0].legend(loc='upper right')
-        fig.tight_layout()    
         fig.savefig('tree_debug_pos_'+str(sP.res)+'.pdf')
         plt.close(fig)
 
@@ -396,7 +395,6 @@ def debugPlot():
             #    linestyle=':', label='n2 sigma' )
 
         axs[0].legend(loc='upper right')
-        fig.tight_layout()    
         fig.savefig('tree_debug_vel_'+str(sP.res)+'.pdf')
         plt.close(fig)
 
@@ -446,7 +444,6 @@ def debugPlot():
         axs[1,1].plot( mpb['Redshift'], yy2, linestyle='-', label=label )
 
         # finish
-        fig.tight_layout()    
         fig.savefig('tree_debug_props_'+str(sP.res)+'.pdf')
         plt.close(fig)    
 
@@ -794,7 +791,6 @@ def stellarMergerContributionPlot():
     ax.add_artist(legend1)
 
     # finish plot
-    fig.tight_layout()    
     fig.savefig('merger_progmass_%s_%d.pdf' % ('-'.join([sP.simName for sP in sPs]),sP.snap))
     plt.close(fig)
 
@@ -989,8 +985,6 @@ def plot_tree(sP, subhaloID, saveFilename, treeName=treeName_default, dpi=100, c
     ax.add_collection(lc)
 
     # colorbar
-    fig.tight_layout()
-
     cax = inset_axes(ax, width='4%', height='40%', borderpad=1.0, loc='upper left')
     cb = ColorbarBase(cax, cmap=cmap, norm=norm, orientation='vertical')
     cb.ax.set_ylabel(clabel)

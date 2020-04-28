@@ -348,7 +348,6 @@ def plotEvo2D(ii):
                 addRedshiftAgeImageAxes(ax, sP, evo[modeName]['snaps'])
 
                 # finish
-                fig.tight_layout()
                 pdf.savefig()
                 plt.close(fig)
 
@@ -376,7 +375,6 @@ def plotEvo2D(ii):
                 addRedshiftAgeImageAxes(ax, sP, evo[modeName]['snaps'])
 
                 # finish
-                fig.tight_layout()
                 pdf.savefig()
                 plt.close(fig)
 
@@ -436,7 +434,6 @@ def plotEvo1D():
             #ax.legend(loc='upper right')
 
             # finish
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -598,7 +595,6 @@ def plotValHistos():
                 # finish plot
                 ax.legend(loc='best')
 
-                fig.tight_layout()
                 pdf.savefig()
                 plt.close(fig)
 
@@ -637,7 +633,6 @@ def plotValHistos():
                 # finish plot
                 ax.legend(loc='best')
 
-                fig.tight_layout()
                 pdf.savefig()
                 plt.close(fig)
 
@@ -699,7 +694,6 @@ def plotValHistos():
             handles, labels = ax.get_legend_handles_labels()
             legend2 = ax.legend(handles+sExtra, labels+lExtra, loc='best')
 
-            fig.tight_layout()
             pdf.savefig()
             plt.close(fig)
 
@@ -749,7 +743,6 @@ def plotPosTempVsRedshift():
         for i in np.arange(10000):
             ax.plot(pos[:,i,axis1], pos[:,i,axis2], '-', color='#333333', alpha=alpha, lw=1.0)
 
-        fig.tight_layout()
         plt.savefig('trMC_checkPos_'+sP.simName+'_sh'+str(shNum)+'.pdf')
         plt.close(fig)
 
@@ -792,7 +785,6 @@ def plotPosTempVsRedshift():
         # test
         ax.legend()
 
-        fig.tight_layout()
         plt.savefig('trMC_checkTempB_'+sP.simName+'_sh'+str(shNum)+'.pdf')
         plt.close(fig)
 
@@ -829,6 +821,5 @@ def plotStarFracVsRedshift():
 
         ax.plot(redshift, fracInStars, '-', color='#333333', alpha=alpha, lw=1.0)
 
-    fig.tight_layout()
     plt.savefig('trMC_starFracs_'+sP.simName+'.pdf')
     plt.close(fig)
