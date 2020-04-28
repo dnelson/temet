@@ -2224,11 +2224,16 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         radNumBins: number of radial bins for profiles.
         cenSatSelect: all, cen, sat.
     """
+    from util.treeSearch import calcParticleIndices, buildFullTree
+
     assert op in ['sum','mean','median','min','max','count',np.std] # todo: or is a lambda
     assert scope in ['global','global_fof','global_spatial','subfind','fof','subfind_global']
 
     if scope in ['global','global_fof']:
         assert op in ['sum'] # not generalized to non-accumulation stats w/ chunk loading
+
+    useTree = True if scope == 'global_spatial' else False # can be generalized, or made a parameter
+    useTree = False
 
     # determine ptRestriction
     if ptType == 'stars':
@@ -2390,6 +2395,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
     rad_bins_pkpc = sP.units.codeLengthToKpc( 10.0**rad_bins_code )
 
+    radMaxCode = 10.0**radMax
     radMaxSqCode = (10.0**radMax)**2
 
     # bin (spherical shells in 3D, circular annuli in 2D) volumes/areas [code units]
@@ -2480,7 +2486,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         if weighting is not None:
             particles['weights'] = sP.snapshotSubsetC(partType=ptType, field=weighting, inds=load_inds)
 
-            assert particles['weights'].ndim == 1 and particles['weights'].size == particles['count']
+            assert particles['weights'].ndim == 1 and particles['weights'].size == particles['count'] 
 
     # chunk load: loop (possibly just once if chunk load is disabled)
     for chunkNum in range(nChunks):
@@ -2523,6 +2529,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # based on ac['subhaloIDs'], e.g. for a subhaloRadialReduction(..., scope='fof', css='cen')
             assert particles['count'] == gc['header']['Nsubgroups_Total']
         
+        # construct a global octtree to accelerate searching?
+        tree = None
+        if useTree:
+            tree = buildFullTree(particles['Coordinates'], boxSizeSim=sP.boxSize, treePrec='float32', verbose=True)
+
         if scope in ['global','global_fof','subfind','fof']:
             indRangeSize = indRange[1] - indRange[0] + 1 # size of load
 
@@ -2573,6 +2584,15 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 if op == np.std and i1 - i0 == 1:
                     continue # need at least 2 of this type
 
+            # tree based search?
+            if tree is not None:
+                loc_inds = calcParticleIndices(particles['Coordinates'], gc['SubhaloPos'][subhaloID,:], 
+                                               radMaxCode, boxSizeSim=sP.boxSize, tree=tree)
+                particles_pos = particles['Coordinates'][loc_inds]
+
+            else:
+                particles_pos = particles['Coordinates'][i0:i1] # view
+
             # rotation?
             rotMatrix = None
 
@@ -2597,14 +2617,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 rotMatrix = rots[proj2Daxis]
 
                 # rotate coordinates (velocities handled below)
-                particles_pos = particles['Coordinates'][i0:i1,:].copy()
+                particles_pos = particles_pos.copy()
                 particles_pos, _ = rotateCoordinateArray(sP, particles_pos, rotMatrix, shPos)
 
-            else:
-                particles_pos = particles['Coordinates'][i0:i1,:]
-
             # use squared radii and sq distance function
-            validMask = np.ones( i1-i0, dtype=np.bool )
+            validMask = np.ones( particles_pos.shape[0], dtype=np.bool )
 
             if proj2D is None:
                 # apply in 3D
@@ -2613,7 +2630,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 # apply in 2D projection, along the specified axis
                 pt_2d = gc['SubhaloPos'][subhaloID,:]
                 pt_2d = [ pt_2d[p_inds[0]], pt_2d[p_inds[1]] ]
-                vecs_2d = np.zeros( (i1-i0, 2), dtype=particles['Coordinates'].dtype )
+                vecs_2d = np.zeros( (particles_pos.shape[0], 2), dtype=particles_pos.dtype )
                 vecs_2d[:,0] = particles_pos[:,p_inds[0]]
                 vecs_2d[:,1] = particles_pos[:,p_inds[1]]
 
