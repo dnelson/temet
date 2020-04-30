@@ -1500,8 +1500,9 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
 
     if numPartTot == 0:
         return {'count':0}
-    if numPartTot < nThreads*2:
-        # low particle count, use serial
+
+    # low particle count, use serial
+    if numPartTot < nThreads*10 or (inds is not None and inds.size < nThreads*10):
         return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
                               subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
 
@@ -1517,7 +1518,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
 
     if numPartTot == 0:
         return {'count':0}
-    
+
     # haloSubset only? update indRange and continue
     if haloSubset:
         offsets_pt = groupCatOffsetListIntoSnap(sP)['snapOffsetsGroup']
@@ -1593,12 +1594,15 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     r['count'] = numPartTot
     return r
 
-def snapshotSubsetLoadIndicesChunked(sP, partType, field, inds, sq=True, verbose=True):
-    """ Test: if we only want to load a set of inds, and this is a small fraction of the 
+def snapshotSubsetLoadIndicesChunked(sP, partType, field, inds, sq=True, verbose=False):
+    """ If we only want to load a set of inds, and this is a small fraction of the 
     total snapshot, then we do not ever need to do a global load or allocation, thus 
     reducing the peak memory usage during load by a factor of nChunks or 
     sP.numPart[partType]/inds.size, whichever is smaller. Note: currently only for 
-    a single field, could be generalized to multiple fields. """
+    a single field, could be generalized to multiple fields. Note: this effectively 
+    captures the multiblock I/O strategy of the previous codebase as well, with only 
+    a small efficiency loss since we do not exactly compute bounding local indRanges 
+    for contiguous index subsets, but rather process nChunks discretely. """
     numPartTot = sP.numPart[sP.ptNum(partType)]
 
     if verbose:
@@ -1627,16 +1631,23 @@ def snapshotSubsetLoadIndicesChunked(sP, partType, field, inds, sq=True, verbose
 
     # chunk load
     for i in range(nChunks):
+        if verbose:
+            print(' %d%%' % (float(i)/nChunks*100), end='', flush=True)
+
         indRange_loc = pSplitRange([0,numPartTot-1], nChunks, i, inclusive=True)
         
         if indRange_loc[0] > sorted_inds.max() or indRange_loc[1] < sorted_inds.min():
             continue
 
-        data_loc = sP.snapshotSubsetP(partType, field, indRange=indRange_loc)
-
         # which of the input indices are covered by this local indRange?
         ind0 = np.searchsorted(sorted_inds, indRange_loc[0], side='left')
         ind1 = np.searchsorted(sorted_inds, indRange_loc[1], side='right')
+
+        if ind0 == ind1:
+            continue
+
+        # parallel load
+        data_loc = sP.snapshotSubsetP(partType, field, indRange=indRange_loc)
 
         # sort_inds[ind0:ind1] gives us which inds are in this data_loc
         # the entires in data_loc are sorted_inds[ind0:ind1]-indRange_loc[0]
@@ -1646,7 +1657,6 @@ def snapshotSubsetLoadIndicesChunked(sP, partType, field, inds, sq=True, verbose
         data[stamp_inds] = data_loc[take_inds]
 
         if verbose:
-            print(' %d%%' % (float(i)/nChunks*100), end='', flush=True)
             mask[stamp_inds] += 1 # debugging only
 
     if verbose:
