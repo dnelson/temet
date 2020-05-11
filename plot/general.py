@@ -607,7 +607,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
 
 def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas', ptProperty='temp_linear', op='mean', weighting=None, 
                                 ptRestrictions=None, proj2D=None, xlim=None, ylim=None, plotMedian=True, plotIndiv=False, 
-                                ctName=None, ctProp=None, colorbar=False):
+                                ctName=None, ctProp=None, colorbar=False, figsize=figsize):
     """ Radial profile(s) of some quantity ptProperty of ptType vs. radius from halo centers 
     (parent FoF particle restricted, using non-caching auxCat functionality). 
     subhaloIDs is a list, one entry per sPs entry. For each entry of subhaloIDs:

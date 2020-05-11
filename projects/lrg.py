@@ -23,12 +23,13 @@ from cosmo.util import subboxSubhaloCat
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
 from tracer.tracerMC import match3, globalAllTracersTimeEvo
+from tracer import tracerEvo
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
 from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
                             ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles
 
-def radialResolutionProfiles(sPs, saveName, redshift=0.3, cenSatSelect='cen', 
+def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen', 
                              radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
     """ Plot average/stacked radial gas cellsize profiles in stellar mass bins. Specify one of 
     haloMassBins or stellarMassBins. If radRelToVirRad, then [r/rvir] instead of [pkpc]. """
@@ -215,15 +216,12 @@ def _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, ConfigLan=
     Helper for the following two functions. """
 
     # grid config
-    run        = sP.run
-    res        = sP.res
-    redshift   = sP.redshift
-    method     = 'sphMap'
-    nPixels    = [1000,1000]
-    axes       = [0,1]
-    rotation   = 'edge-on'
-    size       = 400.0
-    sizeType   = 'kpc'
+    method   = 'sphMap'
+    nPixels  = [1000,1000]
+    axes     = [0,1]
+    rotation = 'edge-on'
+    size     = 400.0
+    sizeType = 'kpc'
 
     if fullDepth:
         # global accumulation with appropriate depth along the projection direction
@@ -690,10 +688,6 @@ def ionCoveringFractionVsImpact2D(sPs, haloMassBin, ion, Nthresh, sPs2=None, rad
 
 def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, testClumpRemoval=False):
     """ Configure single halo and multi-halo gallery visualizations. """
-    run        = sP.run
-    res        = sP.res
-    redshift   = sP.redshift
-
     rVirFracs  = [0.25]
     method     = 'sphMap'
     nPixels    = [1000,1000]
@@ -703,7 +697,8 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
     labelSim   = False
     labelHalo  = True
     relCoords  = False
-    rotation   = 'edge-on'
+    if not sP.isZoom:
+        rotation = 'edge-on'
 
     size       = 400.0
     sizeType   = 'kpc'
@@ -720,6 +715,7 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
         panel = {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]}
     if conf == 2:
         panel = {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[15.0,21.0]}
+        if sP.isZoom: panel['partField'] = 'HI'
     if conf == 3:
         panel = {'partType':'gas', 'partField':'Mg II', 'valMinMax':[12.0,16.5]}
     if conf == 4:
@@ -729,10 +725,12 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
         depthFac = 0.01 # test
     if conf == 9:
         panel = {'partType':'gas', 'partField':'delta_rho', 'valMinMax':[-0.3, 1.0]}
-        depthFac = 0.01 # test, = 4 kpc
+        #depthFac = 0.01 # test, = 4 kpc
     if conf == 10:
         panel = {'partType':'gas', 'partField':'entropy', 'valMinMax':[8.0,9.0]}
         depthFac = 0.01 # test, = 4 kpc
+    if conf == 11:
+        panel = {'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,9.5]}
 
     if conf in [5,6,7]:
         # NARROW SLICE! h19
@@ -765,7 +763,8 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
             panel.append( {'partField':'metal_solar', 'valMinMax':[-1.0,-0.4]} ) #[-1.5,1.5], 'pressure_ratio' for h1
         if conf == 6:
             panel.append( {'partField':'P_gas', 'valMinMax':[3.2,4.6]} )
-            panel.append( {'partField':'P_B', 'valMinMax':[2.0,3.8]} )
+            #panel.append( {'partField':'P_B', 'valMinMax':[2.0,3.8]} )
+            panel.append( {'partField':'metal_solar', 'valMinMax':[-1.0,-0.4]} )
             panel.append( {'partField':'pressure_ratio', 'valMinMax':[-1.0,1.0]} )
         if conf == 7:
             panel.append( {'partField':'tcool', 'valMinMax':[-1.0,2.0]} )
@@ -1186,8 +1185,9 @@ def _clump_values(sP, objs, props):
 
     return values
 
-def clumpDemographics(sP, haloID, stackHaloIDs=None):
+def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
     """ Plot demographics of clump population for a single halo. """
+    if not isinstance(sPs,list): sPs = [sPs]
 
     # config
     threshSets = []
@@ -1213,30 +1213,172 @@ def clumpDemographics(sP, haloID, stackHaloIDs=None):
 
     # load
     data = []
+    data_stack = []
 
-    for i, th in enumerate(threshSets):
-        objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
-            propName=th['propName'], propThresh=th['propThresh'], propThreshComp=th['propThreshComp'])
-
-        # some common unit conversions
-        values = _clump_values(sP, objs, props)
-
-        data.append( [objs,props,values] )
-        print(i, 'prop = ', th['propName'], ' ', th['propThreshComp'], ' ', th['propThresh'], ' tot objs = ', objs['count'])
-
-    if stackHaloIDs is not None:
-        data_stack = []
-
-        # load all requested halos and combine, just for one threshold
-        th = threshSets[2] # 1e-8
-
-        for hID in stackHaloIDs:
-            print('load stack: ', hID)
-            objs, props = voronoiThresholdSegmentation(sP, haloID=hID, 
+    for sP in sPs:
+        for i, th in enumerate(threshSets):
+            if len(sPs) > 1: continue # only multiple thresholds for a single sP
+            objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
                 propName=th['propName'], propThresh=th['propThresh'], propThreshComp=th['propThreshComp'])
 
+            # some common unit conversions
             values = _clump_values(sP, objs, props)
-            data_stack.append( [objs,props,values] )
+
+            data.append( [objs,props,values] )
+            print(i, 'prop = ', th['propName'], ' ', th['propThreshComp'], ' ', th['propThresh'], ' tot objs = ', objs['count'])
+
+        if stackHaloIDs is not None:
+            # load all requested halos and combine, just for one threshold
+            th = threshSets[2] # 1e-8
+
+            for sP in sPs:
+                data_stack_loc = []
+
+                for hID in stackHaloIDs:
+                    print('load stack: ', sP.simName, hID)
+                    objs, props = voronoiThresholdSegmentation(sP, haloID=hID, 
+                        propName=th['propName'], propThresh=th['propThresh'], propThreshComp=th['propThreshComp'])
+
+                    values = _clump_values(sP, objs, props)
+                    data_stack_loc.append( [objs,props,values] )
+
+                data_stack.append( data_stack_loc )
+
+    # tracer-analysis of accretion origin
+    if trAnalysis:
+        # load tracer catalogs for this halo
+        sP = sPs[0]
+        sP.haloInd = haloID # specifies halo index in fullbox simulation
+
+        print('Loading tracer data...')
+        accTime = tracerEvo.accTime(sP)
+        accMode = tracerEvo.accMode(sP)
+
+        parIDs = tracerEvo.tracersMetaOffsets(sP, parIDs='gas') # come first in concat'ed trIDs
+        parIDs4 = tracerEvo.tracersMetaOffsets(sP, parIDs='stars') # second
+        parIDs5 = tracerEvo.tracersMetaOffsets(sP, parIDs='bhs') # third
+
+        assert accTime.size == parIDs.size+parIDs4.size+parIDs5.size
+        assert accTime.size == accMode.size
+
+        accTime = accTime[0:parIDs.size] # gas comes first
+        accMode = accMode[0:parIDs.size]
+
+        # get child gas IDs in cloud
+        print('Loading gas IDs and properties...')
+
+        gasIDs = sP.snapshotSubset('gas', 'ids', haloID=haloID)
+        gasRad = sP.snapshotSubset('gas', 'rad_rvir', haloID=haloID)
+        gasTemp = sP.snapshotSubset('gas', 'temp', haloID=haloID)
+        
+        clumpIDs = [1592,3416,3851,430,797,2165,2438,4087]
+
+        rr = [0.5,1.0] # radial restriction
+
+        for i in range(len(clumpIDs)+4):
+            # single cloud analysis
+            if i < len(clumpIDs):
+                clumpID = clumpIDs[i]
+                print('single cloud [%d]:' % clumpID)
+
+                start_ind = objs['offsets'][clumpID]
+                end_ind = objs['offsets'][clumpID]+objs['lengths'][clumpID]
+
+                inds = objs['cell_inds'][start_ind:end_ind]
+
+            # global 'all clouds' tracer analysis
+            if i == len(clumpIDs)+0:
+                print('global all clouds (rad_slice):')
+
+                inds = objs['cell_inds']
+                inds = inds[np.where( (gasRad[inds]>rr[0]) & (gasRad[inds]<=rr[1]) )]
+
+            # global 'halo' tracer analysis: all gas cells >0.15<1.0 rvir
+            if i == len(clumpIDs)+1:
+                print('global halo gas (rad_slice):')
+                inds = np.where( (gasRad>rr[0]) & (gasRad<=rr[1]) )[0]
+
+            # hot halo only
+            if i == len(clumpIDs)+2:
+                print('global hot halo gas (rad_slice >5e5K):')
+                inds = np.where( (gasRad>rr[0]) & (gasRad<=rr[1]) & (gasTemp>=np.log10(5e5)) )[0]
+
+            # cold gas selection only
+            if i == len(clumpIDs)+3:
+                print('global cold halo gas (rad_slice <1e5K):')
+                inds = np.where( (gasRad>rr[0]) & (gasRad<=rr[1]) & (gasTemp < 4.5) )[0]
+
+            # common: cross-match all gas-parent tracers in this halo with the target cells
+            gasIDs_loc = gasIDs[inds]
+
+            print(' matching [%d cells]...' % inds.size)
+            _, trInds = match3(gasIDs_loc, parIDs)
+
+            accTime_loc = accTime[trInds]
+            accMode_loc = accMode[trInds]
+
+            print(' median acc redshift: ', np.nanmedian(accTime_loc))
+
+            for accModeName, accModeVal in tracerEvo.ACCMODES.items():
+                w = np.where(accMode_loc == accModeVal)
+                frac = len(w[0]) / accMode_loc.size * 100
+                print(' [%3d of %3d] tracers [%.3f%%] = %s' % (len(w[0]),accMode_loc.size,frac,accModeName))
+
+        return
+
+    # C: 1D histograms of all properties (stacked), versus resolution
+    for config in ['size']:
+        if len(sPs) == 1: continue # skip for a single sP
+
+        figsize_loc = (7,5) if config == 'size' else figsize
+        fig = plt.figure(figsize=figsize_loc)
+        ax = fig.add_subplot(111)
+
+        lim = lims[config]
+        ax.set_xlabel(labels[config])
+        ax.set_ylabel('Number of Clouds')
+
+        nBins = nBins1D if config != 'ncells' else lim[1]
+
+        if config == 'size': # paper figure
+            ax.set_yscale('log')
+            lim = [0, 6] # pkpc
+            nBins = nBins / 2
+
+        ax.set_xlim(lim)
+
+        binsize = (lim[1] - lim[0]) / nBins
+        bins = np.linspace( lim[0]-binsize, lim[1]+binsize, nBins+3 )
+
+        # stacked
+        if stackHaloIDs is not None:
+            valuesInd = 2
+            for i, sP in enumerate(sPs):
+                print(i,sP.simName)
+                num_vals = np.sum( [d[valuesInd][config].size for d in data_stack[i]] )
+                vals = np.zeros( num_vals, dtype=data_stack[i][0][valuesInd][config].dtype )
+                offset = 0
+                for d in data_stack[i]:
+                    count = d[2][config].size
+                    vals[offset:offset+count] = d[valuesInd][config][:]
+                    offset += count
+
+                yy, xx = np.histogram(vals, bins=bins)
+                xx = xx[:-1] + binsize/2 # mid
+                yy = np.array(yy) * 2 / len(data_stack[i]) # mean*2
+
+                l, = ax.plot(xx, yy, '-', lw=lw, drawstyle='steps-mid', label=sP.simName)
+
+        # finish
+        ymin = 1 if config == 'size' else 0
+        ax.set_ylim([ymin,ax.get_ylim()[1]])
+        ax.legend()
+
+        fig.savefig('clumpDemographics_sP%d_%s.pdf' % (len(sPs),config))
+        plt.close(fig)
+
+    if len(sPs) > 1:
+        return # skip remaining plots for multiple sPs
 
     # A: 1D histograms of all properties
     for config in lims.keys():
@@ -1268,19 +1410,21 @@ def clumpDemographics(sP, haloID, stackHaloIDs=None):
             ax.fill_between(xx, np.zeros(yy.size), yy, step='mid', color=l.get_color(), alpha=0.05)
 
         # stacked
-        num_vals = np.sum( [d[2][config].size for d in data_stack] )
-        vals = np.zeros( num_vals, dtype=data_stack[0][2][config].dtype )
-        offset = 0
-        for d in data_stack:
-            count = d[2][config].size
-            vals[offset:offset+count] = d[2][config][:]
-            offset += count
+        if stackHaloIDs is not None:
+            valuesInd = 2
+            num_vals = np.sum( [d[valuesInd][config].size for d in data_stack] )
+            vals = np.zeros( num_vals, dtype=data_stack[0][valuesInd][config].dtype )
+            offset = 0
+            for d in data_stack:
+                count = d[2][config].size
+                vals[offset:offset+count] = d[valuesInd][config][:]
+                offset += count
 
-        yy, xx = np.histogram(vals, bins=bins)
-        xx = xx[:-1] + binsize/2 # mid
-        yy = np.array(yy) * 2 / len(data_stack) # mean*2
+            yy, xx = np.histogram(vals, bins=bins)
+            xx = xx[:-1] + binsize/2 # mid
+            yy = np.array(yy) * 2 / len(data_stack) # mean*2
 
-        l, = ax.plot(xx, yy, ':', lw=lw, drawstyle='steps-mid', color='black')
+            l, = ax.plot(xx, yy, ':', lw=lw, drawstyle='steps-mid', color='black')
 
         # finish
         ax.set_ylim([0,ax.get_ylim()[1]])
@@ -2079,6 +2223,17 @@ def clumpRadialProfiles(sP, haloID, selections):
             #if i in [3]:
             #    ax.fill_between(bin_cens, yy[:,0], yy[:,-1], color=l.get_color(), interpolate=True, alpha=0.1)
 
+            if prop == 'p_tot':
+                # compute a 'ram pressure' of the radial inflow and add it to the total pressure
+                dens = results[i]['hdens'] * sP.units.mass_proton # g/cm^3
+                vel = results[i]['vrel'] * sP.units.km_in_cm # cm/s
+                P_ram = dens * vel**2 # g/cm/s^2 = erg/cm^3
+                P_ram /= sP.units.boltzmann # K/cm^3
+
+                yy2 = logZeroNaN(results[i]['p_tot'] + P_ram) # sum radial profiles together
+                yy2 = savgol_filter(yy2,sKn+4,sKo,axis=0)
+                ax.plot(bin_cens, yy2[:,1], ':', lw=lw, color=l.get_color())
+
         # finish plot
         ax.legend()
         fig.savefig('clumps_radprof_%s_%s_%d_%d.pdf' % (prop,sP.simName,sP.snap,haloID))
@@ -2145,7 +2300,7 @@ def paperPlots():
         haloIDs = _get_halo_ids(sP)[2]
 
         # gas metallicity, N_MgII, N_HI, stellar light
-        for conf in [8,9,10]:
+        for conf in [8,9,10,11]:
             lrgHaloVisualization(sP, [1], conf=conf, gallery=False, globalDepth=False)
         for conf in [1,2,3,4]:
             lrgHaloVisualization(sP, haloIDs, conf=conf, gallery=True)
@@ -2159,7 +2314,7 @@ def paperPlots():
         cenSatSelect = 'cen'
         ions = ['HIGK_popping','AllGas_Metal','AllGas_Mg','MgII']
 
-        for vsHaloMass in [True,False]:
+        for vsHaloMass in [True]: #[True,False]:
             massStr = '%smass' % ['stellar','halo'][vsHaloMass]
 
             saveName = 'ions_masses_vs_%s_%s_%d_%s.pdf' % \
@@ -2178,8 +2333,8 @@ def paperPlots():
 
         simNames = '_'.join([sP.simName for sP in sPs])
 
-        for massDensity in [False]: #[True,False]:
-            for radRelToVirRad in [False]: #[True,False]:
+        for massDensity in [True,False]:
+            for radRelToVirRad in [True,False]:
                 for projDim in projSpecs:
 
                     saveName = 'radprofiles_%s_%s_%s_%d_%s_rho%d_rvir%d.pdf' % \
@@ -2248,14 +2403,13 @@ def paperPlots():
         sP = TNG50
         subIDs = _get_halo_ids(sP, bin_inds=[2,1], subhaloIDs=True)
 
-        #for prop in ['tff','tcool_tff','tcool']:
-        #    plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty=prop, op='median', subhaloIDs=[subIDs], 
-        #        xlim=[1.0,3.0], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
-        #        ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
-
         plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='tcool_tff', op='median', subhaloIDs=[subIDs], 
             xlim=[1.0,3.0], ylim=[-0.3,2.5], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
             ctName='plasma', ctProp='mhalo_200_log', colorbar=True)
+
+        plotStackedRadialProfiles1D([sP], ptType='gas', ptProperty='entr', op='median', subhaloIDs=[subIDs], 
+            xlim=[1.0,3.0], ylim=[7.2,9.05], plotIndiv=True, ptRestrictions={'temp':['gt',5.5]},
+            ctName='plasma', ctProp='mhalo_200_log', figsize=[7,5]) # inset
 
     # fig 11b - 'radial profile' of tcool (2D)
     if 0:
@@ -2294,7 +2448,7 @@ def paperPlots():
                          contours=contours, contourQuant='mass', normColMax=normColMax, 
                          normContourQuantColMax=True, smoothSigma=1.0, colorEmpty=False)
 
-    # explore: 2pcf
+    # explore: 2pcf (todo: tpcf of single halo (0.15 < r/rvir < 1.0)
     if 0:
         sPs = [TNG50] #[TNG100, TNG300]
         ions = ['MgII'] #,'Mg','gas']
@@ -2304,8 +2458,6 @@ def paperPlots():
               (order,'-'.join(ions),'_'.join([sP.simName for sP in sPs]),redshift)
 
             ionTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
-
-        # todo: tpcf of single halo (0.15 < r/rvir < 1.0)
 
     # --- clump analysis ---
 
@@ -2329,7 +2481,14 @@ def paperPlots():
     if 0:
         haloID = 0 # 0, 8, 19
         stackHaloIDs = _get_halo_ids(TNG50)[2]
-        clumpDemographics(TNG50, haloID=haloID, stackHaloIDs=stackHaloIDs)
+        clumpDemographics([TNG50], haloID=haloID)#, stackHaloIDs=stackHaloIDs)
+
+        # convergence of N_clump histogram with resolution (inset)
+        sPs = [TNG50,TNG50_2,TNG50_3,TNG50_4]
+        clumpDemographics(sPs, haloID=None, stackHaloIDs=[0]) # halo 0 for all res levels
+
+        # explore tracer origins:
+        #clumpDemographics([TNG50], haloID=haloID, stackHaloIDs=None, trAnalysis=True)
 
     # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
     if 0:
@@ -2379,6 +2538,17 @@ def paperPlots():
         #clumpID = 4087 # finished explorations: 430, 797, 2165, 2438, 4087
         #for sizeParam in [0,1]:
         #    cloudEvoVis(TNG50, haloID=haloID, clumpID=clumpID, sbNum=sbNum, sizeParam=sizeParam)
+
+    # fig X: visual comparison of MHD vs noMHD zoom test run of h23 down to z=0.5
+    if 0:
+        # no_mhd run: snaps 63-69 (z=0.594 to z=0.506), with_mhd run: snaps up to 67 (z=0.520)
+        # MHD was disabled in restart at z=0.601 roughly (500 Myr from snap 63 to 67)
+        for snap in [63,64,65,66,67]:
+            zoom_with_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap)
+            zoom_no_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap,variant='nob_z06')
+
+            conf = 3 # 2=HI, 3=MgII, 9=delta_rho
+            lrgHaloVisualization(zoom_with_mhd, [0], conf=conf, gallery=False, globalDepth=False)
 
     # fig 17: resolution convergence, visual (matched halo)
     if 0:

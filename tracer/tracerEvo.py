@@ -23,7 +23,10 @@ ACCMODE_SMOOTH   = 1
 ACCMODE_MERGER   = 2
 ACCMODE_STRIPPED = 3
 
-ACCMODES = OrderedDict( [('NONE',-1),('SMOOTH',1),('MERGER',2),('STRIPPED',3)] ) # same as above
+ACCMODES = OrderedDict( [('NONE', ACCMODE_NONE),
+                         ('SMOOTH', ACCMODE_SMOOTH),
+                         ('MERGER', ACCMODE_MERGER),
+                         ('STRIPPED', ACCMODE_STRIPPED)] ) # same as above
 
 # types of extrema which we know how to calculate
 allowedExtTypes = ['min','min_b015','max','max_b015']
@@ -41,33 +44,21 @@ def zoomDataDriver(sP, fields, snapStep=1):
 
     subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=snapStep)
 
-def guinevereData(snap=None):
-    """ Data for Guinevere (tracer cutouts for Illustris subhalos). """
+def boxTracerDataCutout(snap=None):
+    """ Extract cutout tracer data for individual subhalos from a full box. """
     from util.simParams import simParams
 
-    sP    = simParams(res=1820, run='illustris', redshift=0.0)
-    sPtng = simParams(res=1820, run='tng', redshift=0.0)
+    sP = simParams(res=1820, run='illustris', redshift=0.0)
 
     # config
     parPartTypes = ['gas','stars']
     toRedshift   = 2.0
     trFields     = ['tracer_windcounter'] 
     parFields    = ['pos','vel','temp','sfr']
-    outPath      = sP.postPath + '/guinevere_cutouts/tracers_%s' % sP.simName
-    txtCatPath   = sPtng.postPath + '/guinevere_cutouts/new_mw_sample_fgas_sat.txt'
+    outPath      = sP.postPath + '/tracer_tracks/cutout_%s' % sP.simName
 
-    # subhalo list (TNG, new Lagrangian matching 2018) (Apr/May: with satellites)
-    subhaloIDs = np.genfromtxt(txtCatPath,comments='#',delimiter=',',dtype='int32')
-    subhaloIDs = list(set(subhaloIDs[:,1]).union(set(subhaloIDs[:,2])))
-    subhaloIDs.remove(-1) # all unique successful matches, both methods, in Illustris-1
-    
-    # check for existence already, and skip if so
-    for subID in subhaloIDs:
-        path = sPtng.postPath + '/guinevere_cutouts/tracers_%s_subhalo_%d.hdf5' % (sP.simName,subID)
-        if(isfile(path)):
-            subhaloIDs.remove(subID)
-
-    subhaloIDs = np.array(subhaloIDs)
+    # subhalo list
+    subhaloIDs = np.array([]) # specify
 
     subhalosTracersTimeEvo(sP, subhaloIDs, toRedshift, trFields, parFields, parPartTypes, outPath, onlySnap=snap)
 
@@ -136,11 +127,14 @@ def tracersTimeEvo(sP, fieldName, snapStep=None, all=True, pSplit=None):
     # global load requested?
     return r
 
-def tracersMetaOffsets(sP, all=None, getPath=False):
+def tracersMetaOffsets(sP, all=None, parIDs=None, trIDs=None, getPath=False):
     """ For a fullbox sP and either sP.haloInd or sP.subhaloInd specified, load and return the needed 
-    offsets to load a [halo/subhalo]-restricted part of any of the tracer_tracks data. """
+    offsets to load a [halo/subhalo]-restricted part of any of the tracer_tracks data. 
+    If all == 'Halo' or 'Subhalo', then return all respective offsets and lengths. 
+    If parIDs or trIDs is not None, then a ptName to load and return these IDs for directly. """
     assert ((sP.haloInd is not None) ^ (sP.subhaloInd is not None)) or (all is not None or getPath is True)
     if all is not None: assert all == 'Halo' or all == 'Subhalo'
+    if parIDs or trIDs: assert all is None
     assert not sP.isZoom
 
     saveFilename = sP.postPath + '/tracer_tracks/tr_all_groups_%d_meta.hdf5' % (sP.snap)
@@ -170,6 +164,11 @@ def tracersMetaOffsets(sP, all=None, getPath=False):
                 # single subhalo/halo
                 r[ptName]['length'] = f[gName]['TracerLength'][ptName][dInd]
                 r[ptName]['offset'] = f[gName]['TracerOffset'][ptName][dInd]
+
+        if parIDs:
+            return f['ParentIDs'][ r[parIDs]['offset'] : r[parIDs]['offset']+r[parIDs]['length'] ]
+        if trIDs:
+            return f['TracerIDs'][ r[parIDs]['offset'] : r[parIDs]['offset']+r[parIDs]['length'] ]
 
     nTracerTot = np.sum([r[ptName]['length'] for ptName in r])
 

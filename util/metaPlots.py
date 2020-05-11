@@ -443,7 +443,7 @@ def periodic_slurm_status(nosave=False):
             maxNodesPerRack = len(rackNodes)
 
     # start node figure
-    fig = plt.figure(figsize=(18.9,9.2))
+    fig = plt.figure(figsize=(18.9,9.2), tight_layout=False)
 
     for i, rackNum in enumerate(rackNumberList):
         rack = topo[rackPrefix + '%d' % (rackNum+1)]

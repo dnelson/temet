@@ -28,7 +28,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
             shID = sP.hInd # assume direct input of subhalo ID
 
         if shID == -1 or shID is None: # e.g. a blank panel
-            return None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None
 
         sh = sP.groupCatSingle(subhaloID=shID)
         gr = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
@@ -157,11 +157,10 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
 
     # defaults (all panel fields that can be specified)
-
-    hInd        = 0             # zoom halo index, or subhalo (subfind) index in periodic box
-    run         = 'illustris'   # run name
-    res         = 1820          # run resolution
-    redshift    = 0.0           # run redshift
+    #hInd        = 0            # subhalo (subfind) index, or zoom run ID (todo: remove this ambiguity)
+    #run         = 'illustris'  # run name
+    #res         = 1820         # run resolution
+    #redshift    = 0.0          # run redshift
     partType    = 'gas'         # which particle type to project
     partField   = 'temp'        # which quantity/field to project for that particle type
     valMinMax   = None          # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
@@ -241,12 +240,22 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
 
         if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
-        # add simParams info
-        v = p['variant'] if 'variant' in p else None
-        s = p['snap'] if 'snap' in p else None
-        z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
+        # add simParams info if not directly input
+        if 'run' in p:
+            v = p['variant'] if 'variant' in p else None
+            s = p['snap'] if 'snap' in p else None
+            z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
 
-        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
+            if 'sP' in p:
+                print('Warning: Overriding common sP with specified run,snap,redshift.')
+
+            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
+
+        if 'hInd' in p and p['sP'].hInd is None:
+            # todo: cleanup in migration from hInd to subhaloInd throughout vis!
+            p['sP'] = p['sP'].copy()
+            print('Warning: Copying sP and attaching hInd [%d] to sP.hInd for vis.' % p['hInd'])
+            p['sP'].hInd = p['hInd']
 
         # add imaging config for single halo view
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]

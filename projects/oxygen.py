@@ -530,6 +530,11 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
 
         txt.append(txt_sP) # one list per sim
 
+    # add linear scaling line for reference
+    #xx = ax.get_xlim()
+    #yy = [8.0, 8.0+(xx[1]-xx[0])]
+    #ax.plot(xx, yy, '-', color='black', alpha=0.8, lw=lw)
+
     # print
     massAxis = 'mhalo' if vsHaloMass else 'mstar'
     for i, txt_sP in enumerate(txt): # loop over runs
