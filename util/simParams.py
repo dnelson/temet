@@ -363,11 +363,13 @@ class simParams:
             if run in ['tng_zoom','tng_zoom_dm']:
                 # TNG1
                 parentRes = 2048
-                self.zoomLevel = self.res # L11 (TNG1-3 or TNG300-3) to L13 (TNG1-1 or TNG300-1) to L14 (i.e. TNG100-1)
+                self.zoomLevel = self.res # L11 (L680n2048 or ~TNG300-3) to L13 (~TNG300-1.3) to L14 (~TNG300-1)
                 self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
 
-                self.gravSoft = 16.0 / (res/1024)
-                self.targetGasMass = 0.00182873 * (8 ** (13-res)) # TODO: FIX!
+                if res == 11: self.gravSoft = 8.0 # L680n2048
+                if res == 12: self.gravSoft = 4.0
+                if res in [13,14]: self.gravSoft = 2.0 # L13 set to TNG300-1 softening parameters
+                self.targetGasMass = 0.00182873 / (res-10)**3
                 self.boxSize = 680.0 # cmpc/h unit system
             elif run in ['tng100_zoom', 'tng100_zoom_dm']:
                 # L75* zoom tests
@@ -375,17 +377,18 @@ class simParams:
                 self.zoomLevel = self.res # L11 (TNG100-1)
                 self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
 
-                self.gravSoft = 1.0 / (res/1820)
-                self.targetGasMass = 0.0000662478 * (8 ** (11-res))
+                self.gravSoft = 1.0 / (res-10)
+                self.targetGasMass = 9.43950e-5 / (res-10)**3
                 self.boxSize = 75000.0 # ckpc/h
             elif run in ['tng50_zoom','tng50_zoom_dm']:
                 # L35* zoom tests
                 parentRes = 2160
+                self.validResLevels = [11]
                 self.zoomLevel = self.res # L11 (TNG50-1)
                 self.sP_parent = simParams(res=parentRes, run='tng', redshift=self.redshift, snap=self.snap)
 
-                self.gravSoft = 3.12 / (res/270)
-                self.targetGasMas = 5.73879e-6 * (8 ** (11-res))
+                self.gravSoft = 0.390 / (res-10)
+                self.targetGasMas = 5.73879e-6 / (res-10)**3
                 self.boxSize = 35000.0 # ckpc/h
 
             self.numSnaps = 100
@@ -576,7 +579,7 @@ class simParams:
             self.omega_b     = 0.0441
             self.HubbleParam = 0.712
 
-            self.levelMin = 7 # uniform box @ 128
+            self.levelMin = 7 # MUSIC: uniform box @ 128
             self.levelMax = 7 # default, replaced later
 
             if hInd is not None:
@@ -615,7 +618,7 @@ class simParams:
             self.omega_b     = 0.0441
             self.HubbleParam = 0.712
 
-            self.levelMin = 7 # uniform box @ 128
+            self.levelMin = 7 # MUSIC: uniform box @ 128
             self.levelMax = 7 # default, replaced later
 
             if hInd is None:
