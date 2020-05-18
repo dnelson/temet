@@ -2263,14 +2263,14 @@ def convertEagleSnapshot(snap=20):
     from util.simParams import simParams
     from cosmo.hydrogen import neutral_fraction
     from scipy.ndimage.interpolation import map_coordinates
-    from os.path import isdir
+    from os.path import isdir, expanduser
     from os import mkdir
 
     loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
     #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
     savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
 
-    gfmPhotoPath = path.expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
+    gfmPhotoPath = expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
 
     sP = simParams(res=1504,run='eagle') # for units only
 
@@ -2316,7 +2316,7 @@ def convertEagleSnapshot(snap=20):
 
     # loop over input chunks
     for chunkNum in range(nChunks):
-        print(chunkNum)
+        print(chunkNum, flush=True)
 
         # load full file
         data = {}
@@ -2397,8 +2397,8 @@ def convertEagleSnapshot(snap=20):
         for pt in data.keys():
             if 'Coordinates' in data[pt]:
                 data[pt]['Coordinates'] *= 1e3 # cMpc/h -> cKpc/h
-            if 'Velocities' in data[pt]:
-                data[pt]['Velocities'] /= np.sqrt(header['Time']) # peculiar -> sqrt(a) units
+            #if 'Velocities' in data[pt]: # wrong (in release paper)! also in sqrt(a) units like TNG, as per aexp-scale-exponent attr
+            #    data[pt]['Velocities'] /= np.sqrt(header['Time']) # peculiar -> sqrt(a) units
             if 'GFM_Metallicity' in data[pt]:
                 w = np.where(data[pt]['GFM_Metallicity'] < 1e-20)
                 data[pt]['GFM_Metallicity'][w] = 1e-20 # GFM_MIN_METAL
@@ -2442,24 +2442,30 @@ def convertEagleSnapshot(snap=20):
         
         # BHs: bondi and eddington mdot (should be checked more carefully)
         if 'BH_SurroundingGasVel' in data['PartType5']:
-            vrel = data['PartType5']['BH_SurroundingGasVel']
-            vrel_mag = np.sqrt(vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2)
-            vel_term = (data['PartType5']['BH_SoundSpeed']**2 + vrel_mag**2)**(3.0/2.0)
-            mdot_bondi = 4 * np.pi * sP.units.G**2 * data['PartType5']['BH_Mass']**2 * data['PartType5']['BH_Density'] / vel_term
-            data['PartType5']['BH_MdotBondi'] = mdot_bondi / 10.22
+            UnitMass_over_UnitTime = 10.22
 
-            data['PartType5']['BH_MdotEddington'] = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) / 10.22
+            vrel = data['PartType5']['BH_SurroundingGasVel'] / header['Time'] # km/s
+            vrel_mag = np.sqrt(vrel[:,0]**2 + vrel[:,1]**2 + vrel[:,2]**2) # km/s
+            vel_term = (data['PartType5']['BH_SoundSpeed']**2 + vrel_mag**2)**(3.0/2.0) # (km/s)^3
+            bh_mass = data['PartType5']['BH_Mass'] / header['HubbleParam'] # 10^10 msun
+            dens = data['PartType5']['BH_Density'] * header['HubbleParam']**2 / header['Time']**3 # 10^10 msun/kpc^3
+
+            mdot_bondi = 4 * np.pi * sP.units.G**2 * bh_mass**2 * dens / vel_term # (km/kpc) * (10^10 msun/s)
+            mdot_bondi = mdot_bondi / sP.units.kpc_in_km * 1e10 * sP.units.s_in_yr # msun/yr
+            data['PartType5']['BH_MdotBondi'] = mdot_bondi / UnitMass_over_UnitTime # put into TNG units
+
+            mdot_edd = sP.units.codeBHMassToMdotEdd(data['PartType5']['BH_Mass'], eps_r=0.1) # msun/yr
+            data['PartType5']['BH_MdotEddington'] = mdot_edd / UnitMass_over_UnitTime # put into TNG units
 
             # BHs: cum egy injection
-            bh_E = 0.15 * 0.1 * sP.units.codeMassToMsun(data['PartType5']['BH_CumMassGrowth_QM']) * header['HubbleParam']**2  / header['Time']**2
-            bh_E *= sP.units.c_kpc_Gyr**2 * sP.units.redshiftToAgeFlat(header['Redshift']) * 1e9 # (msun/yr) (ckpc/h)^2
-            #data['PartType5']['BH_CumEgyInjection_QM'] = bh_E / 10.22 # (msun/yr) -> (1e10 Msun/h)/(0.978 Gyr/h) # needs fix
-            data['PartType5']['BH_CumEgyInjection_QM'] = np.zeros( data['PartType5']['BH_Mass'].size, dtype='float32' )
+            bh_mass = sP.units.codeMassToMsun(data['PartType5']['BH_CumMassGrowth_QM'])
 
-        # debug
-        #for pt in data.keys():
-        #    for field in data[pt].keys():
-        #        print(pt,field,data[pt][field].min(), data[pt][field].max(), data[pt][field].mean())
+            bh_E = 0.15 * 0.1 * bh_mass * sP.units.c_kpc_Gyr**2 # msun kpc^2/Gyr^2
+            bh_E /= 1e9 # msun/yr kpc^2 / Gyr
+            bh_E = bh_E * header['HubbleParam']**2 / header['Time']**2 # msun/yr (ckpc/h)^2 / Gyr
+            bh_E = bh_E * header['HubbleParam'] / 0.978 # msun/yr (ckpc/h)^2 / (0.978Gyr/h)
+
+            data['PartType5']['BH_CumEgyInjection_QM'] = bh_E / 10.22 # put into TNG units
 
         # write
         with h5py.File(writePath(chunkNum), 'w') as f:

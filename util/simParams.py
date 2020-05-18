@@ -44,6 +44,7 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      #'tng1':['tng':8192],
                      'tng1-dark':['tng_dm',2048],
                      'eagle':['eagle',1504],
+                     'eagle-dark':['eagle_dm',1504],
                      'eagle100-1':['eagle',1504],
                      'millennium-1':['millennium',1],
                      'millennium-2':['millennium',2]}
@@ -366,7 +367,7 @@ class simParams:
                 self.sP_parent = simParams(res=parentRes, run='tng_dm', redshift=self.redshift, snap=self.snap)
 
                 self.gravSoft = 16.0 / (res/1024)
-                self.targetGasMass = 0.00182873 * (8 ** (13-res))
+                self.targetGasMass = 0.00182873 * (8 ** (13-res)) # TODO: FIX!
                 self.boxSize = 680.0 # cmpc/h unit system
             elif run in ['tng100_zoom', 'tng100_zoom_dm']:
                 # L75* zoom tests
@@ -414,8 +415,7 @@ class simParams:
                 self.mpcUnits = True
 
             # paths
-            bs = str(int(self.boxSize/1000.0)) if not self.mpcUnits else str(int(self.boxSize))
-            #if int(self.boxSize/1000.0) != self.boxSize/1000.0: bs = str(self.boxSize/1000.0)
+            bs = str(int(self.boxSize/1000.0)) if self.boxSize != 680.0 else str(int(self.boxSize))
 
             dmStr = '_DM' if '_dm' in run else ''
             dirStr = 'L%sn%dTNG_h%d_L%d%s%s' % (bs,parentRes,self.hInd,self.zoomLevel,vStr,dmStr)
