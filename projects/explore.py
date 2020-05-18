@@ -118,55 +118,93 @@ def singleHaloImage_CelineMuseProposal(conf=4):
 
 def celineMuseProposalMetallicityVsTheta():
     """ Use some projections to create the Z_gas vs. theta plot. """
-    run        = 'tng'
-    res        = 2160
-    redshift   = 0.5 # z=1.0 for paper figure
-    method     = 'sphMap' # sphMap_global for paper figure
-    nPixels    = [1000,1000]
-    axes       = [0,1]
-    rotation   = 'edge-on'
 
+    sP = simParams(run='tng50-1', redshift=0.5) # z=1.0 for paper figure
+
+    method    = 'sphMap' # sphMap_global for paper figure
+    nPixels   = [1000,1000]
+    axes      = [0,1]
+    rotation  = 'edge-on'
     size      = 250.0
     sizeType  = 'kpc'
 
-    dataField = 'metal_solar' # 'Mg II' #'O VI' #'Mg II'
-    dataLabel = 'Gas Metallicity [log Z$_\odot$]' # 'Median O VI Column Density [log cm$^{-2}$]'
-    #dataRange = [-2.25, -0.25] # with obs and/or with illustris #[10.5, 15.0] #[14.0, 15.2] #[10.5, 15.0]
-    dataRange = [-1.3, -0.6] # when just TNG and EAGLE, no obs
+    # grid config
+    min_NHI = None
+
+    if 0:
+        dataField = 'metal_solar' # #'O VI'
+        dataLabel = 'Gas Metallicity [log Z$_\odot$]'
+        dataRange = [-1.3, -0.5] # proposalv2, when just TNG and EAGLE, no obs
+        #dataRange = [-2.25, -0.25] # with obs and/or with illustris
+
+        min_NHI = 18.0
+        dataLabel = 'Gas Metallicity [log Z$_\odot$] (N$_{\\rm HI} > 10^{%d}$)' % min_NHI
+    if 0:
+        dataField = 'Mg II'
+        dataLabel = 'Median Mg II Column Density [log cm$^{-2}$]'
+        dataRange = [6.0, 14.0]
+    if 0:
+        dataField = 'O VI'
+        dataLabel = 'Median O VI Column Density [log cm$^{-2}$]'
+        dataRange = [12.6, 15.0]
+    if 0:
+        dataField = 'metals_Mg'
+        dataLabel = 'Mg Column Density [log M$_\odot$ / kpc$^2$]'
+        dataRange = [-2.0, 2.0]
+    if 0:
+        dataField = 'metals_O'
+        dataLabel = 'O Column Density [log M$_\odot$ / kpc$^2$]'
+        dataRange = [-1.0, 3.0]
+    if 0:
+        dataField = 'HI'
+        dataLabel = 'HI Column Density [log cm$^{-2}$]'
+        dataRange = [12.0, 19.0]
+    if 1:
+        dataField = 'temp_sfcold'
+        dataLabel = 'Gas Temperature [log K]'
+        dataRange = [5.2, 5.6] #[5.0, 5.3]
 
     #massBins = [ [8.50, 8.51]]
     #massBins = [ [9.00, 9.02] ]
-    #massBins = [[9.495,9.505]] # illustris-1 exploration for proposal v2
-    massBins = [ [9.45, 9.55] ] # proposal v2
-    #massBins = [ [9.50, 9.54] ] # proposal v1, log mstar
-    #massBins = [ [10.00, 10.05] ]
-    #massBins = [ [10.45, 10.55] ] # proposal v2
-    assert len(massBins) == 1 # otherwise generalize below
+    #massBins = [[9.495,9.505]] # illustris-1/eagle exploration for proposal v2
+    #massBins = [ [9.45, 9.55] ] # proposal v2
+    massBins = [ [9.95, 10.05] ]
+    #massBins = [ [10.4, 10.6] ]
 
-    distBins = [ [90,110] ] #[ [20,30], [45,55], [95,105] ]
+    #distBins = [ [90,110] ] # proposalv2
+    distBins = [ [20,30], [45,55], [95,105] ] # exploration
     nThetaBins = 90
 
-    # which halos?
-    sP = simParams(res=res, run=run, redshift=redshift)
-
-    gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
-    subInds = []
-
-    for massBin in massBins:
-        with np.errstate(invalid='ignore'):
-            w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
-        subInds.append( w[0] )
-
-        print('[%.2f - %.2f] Processing [%d] halos...' % (massBin[0],massBin[1],len(w[0])))
-    
     # load
+    gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
+
+    # start fiugre
+    fig = plt.figure(figsize=figsize) # np.array([15,10]) * 0.55 # proposalv2
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Galaxy-Absorber Azimuthal Angle')
+    ax.set_xlim([-2,92])
+    ax.set_ylim(dataRange)
+    ax.set_xticks([0,15,30,45,60,75,90])
+    ax.set_ylabel(dataLabel)
+    
+    # loop over mass bins
     for i, massBin in enumerate(massBins):
 
-        dist_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds[i])), dtype='float32' )
-        theta_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds[i])), dtype='float32' )
-        grid_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds[i])), dtype='float32' )
+        with np.errstate(invalid='ignore'):
+            w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
+        subInds = w[0]
 
-        for j, hInd in enumerate(subInds[i]):
+        print('[%.2f - %.2f] Processing [%d] halos...' % (massBin[0],massBin[1],len(w[0])))
+
+        dist_global  = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
+        theta_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
+        grid_global  = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
+
+        if min_NHI is not None:
+            nhi_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
+
+        for j, hInd in enumerate(subInds):
             #haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
 
             class plotConfig:
@@ -199,47 +237,50 @@ def celineMuseProposalMetallicityVsTheta():
             theta_global[:,j] = theta.ravel()
             grid_global[:,j] = grid.ravel()
 
-    # flatten (ignore which halo each pixel came from)
-    dist_global = dist_global.ravel()
-    theta_global = theta_global.ravel()
-    grid_global = grid_global.ravel()
+            # enforce minimum HI column? then load now
+            if min_NHI is not None:
+                panels = [{'partType':'gas', 'partField':'HI', 'valMinMax':[10.0,25.0]}]
+                grid_nhi, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+                nhi_global[:,j] = grid_nhi.ravel()
 
-    # start the plot
-    figsize = np.array([15,10]) * 0.55
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+        # flatten (ignore which halo each pixel came from)
+        dist_global = dist_global.ravel()
+        theta_global = theta_global.ravel()
+        grid_global = grid_global.ravel()
 
-    ax.set_xlabel('Galaxy-Absorber Azimuthal Angle')
-    ax.set_xlim([-2,92])
-    ax.set_ylim(dataRange)
-    ax.set_xticks([0,15,30,45,60,75,90])
-    ax.set_ylabel(dataLabel)
-    lw = 2.5
+        if min_NHI is not None:
+            nhi_global = nhi_global.ravel()
 
-    # bin on the global concatenated grids
-    for distBin in distBins:
-        w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) )
+        # bin on the global concatenated grids
+        for distBin in distBins:
+            if min_NHI is None:
+                w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) )
+            else:
+                w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) & (nhi_global >= min_NHI) )
 
-        # median metallicity as a function of theta, 1 degree bins
-        theta_vals, hist, hist_std, percs = running_median(theta_global[w], grid_global[w], nBins=nThetaBins, percs=[38,50,62])
+            # median metallicity as a function of theta, 1 degree bins
+            theta_vals, hist, hist_std, percs = running_median(theta_global[w], grid_global[w], nBins=nThetaBins, percs=[38,50,62])
 
-        label = 'Theory: IllustrisTNG' #'b = %d kpc' % np.mean(distBin)
-        l, = ax.plot(theta_vals, hist, '-', lw=lw, label=label)
-        ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
+            #label = 'Theory: IllustrisTNG'
+            label = 'b = %d kpc' % np.mean(distBin) if i == 0 else ''
+            l, = ax.plot(theta_vals, hist, linestyles[i], lw=lw, label=label)
+            ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
 
-    # EAGLE: load and plot (from Freeke)
-    fname = '/u/dnelson/plots/celine.Ztheta/Z_Mhalo9p5.txt' # or 10p5
-    with open(fname,'r') as f:
-        lines = f.readlines()
+        # EAGLE: load and plot (from Freeke) (distBin == [95,105])
+        if 0:
+            if np.mean(massBin) == 9.5: fname = '/u/dnelson/plots/celine.Ztheta/Z_Mhalo9p5.txt'
+            if np.mean(massBin) == 10.5: fname = '/u/dnelson/plots/celine.Ztheta/Z_Mhalo10p5.txt'
+            with open(fname,'r') as f:
+                lines = f.readlines()
 
-    eagle_theta = [float(line.split()[0]) for line in lines]
-    eagle_z = [np.log10(float(line.split()[1])) for line in lines]
-    eagle_z_down = [np.log10(float(line.split()[2])) for line in lines]
-    eagle_z_up = [np.log10(float(line.split()[3])) for line in lines]
+            eagle_theta = [float(line.split()[0]) for line in lines]
+            eagle_z = [np.log10(float(line.split()[1])) for line in lines]
+            eagle_z_down = [np.log10(float(line.split()[2])) for line in lines]
+            eagle_z_up = [np.log10(float(line.split()[3])) for line in lines]
 
-    l, = ax.plot(eagle_theta, eagle_z, '-', lw=lw, label='Theory: EAGLE')
+            l, = ax.plot(eagle_theta, eagle_z, linestyles[i], lw=lw, label='Theory: EAGLE')
 
-    ax.fill_between(eagle_theta, eagle_z_down, eagle_z_up, color=l.get_color(), alpha=0.1)
+            ax.fill_between(eagle_theta, eagle_z_down, eagle_z_up, color=l.get_color(), alpha=0.1)
 
     # observational data from Glenn
     if 0:
@@ -256,8 +297,9 @@ def celineMuseProposalMetallicityVsTheta():
             label='Existing Data')
 
     # finish and save plot
-    ax.legend(loc='upper left')
-    fig.savefig('%s_vs_theta_Mstar=%.1f.pdf' % (dataField.replace(" ",""),massBins[0][0]))
+    ax.legend(loc='best')
+    mstarStr = 'Mstar=%.1f' % np.mean(massBins[0]) if len(massBins) == 1 else 'Mstar=%dbins' % len(massBins)
+    fig.savefig('%s_vs_theta_%s.pdf' % (dataField.replace(" ",""),mstarStr))
     plt.close(fig)
 
 def celineWriteH2CDDFBand():

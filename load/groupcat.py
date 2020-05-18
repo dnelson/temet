@@ -382,13 +382,13 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 if isfile(filePath):
                     # load
                     with h5py.File(filePath,'r') as f:
-                        data = f['/Subhalo/%s/' % fieldName][()]
+                        data = f['/Galaxy/%s/' % fieldName][()]
                         if '_orig' not in quant:
                             if '_dark' in quant:
-                                match_ids = f['Subhalo/SubhaloIndex_TNG-Dark'][()]
+                                match_ids = f['Galaxy/SubhaloIndex_TNG-Dark'][()]
                                 numSubhalos = sP.dmoBox.numSubhalos
                             else:
-                                match_ids = f['Subhalo/SubhaloIndex_TNG'][()]
+                                match_ids = f['Galaxy/SubhaloIndex_TNG'][()]
                                 numSubhalos = sP.numSubhalos
 
                     # optionally cross-match

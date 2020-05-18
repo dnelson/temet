@@ -1326,6 +1326,18 @@ def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
 
         return
 
+    # print cumulative mass by size statistics
+    if 0:
+        size = data[2][2]['size']
+        mass = data[2][2]['mass']
+        sort_inds = np.argsort(size)[::-1] # descending
+        size = size[sort_inds]
+        mass = mass[sort_inds] / np.sum(mass)
+        mass_cum = np.cumsum(mass)
+        for mass_perc in [50,90]:
+            ww = np.where(mass_cum >= mass_perc)[0].min()
+            print(mass_perc, size[ww])
+
     # C: 1D histograms of all properties (stacked), versus resolution
     for config in ['size']:
         if len(sPs) == 1: continue # skip for a single sP

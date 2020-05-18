@@ -1568,6 +1568,7 @@ def mergerTreeQuant(sP, pSplit, treeName, quant, smoothing=None):
         # we also need group properties, at all snapshots, so load now
         cacheKey = 'mtq_%s' % quant
         if cacheKey in sP.data:
+            # if computing these auxcats over many snapshots, use sP.setSnap() to preserve mtq_* cache
             print('Loading [%s] from sP.data cache...' % cacheKey)
             groups = sP.data[cacheKey]
         else:
@@ -2279,7 +2280,8 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         else:
             select = "Subhalos [%s] above a min m200crit halo mass of [%s]." % (cenSatSelect,minHaloMass)
     else:
-        select = "Subhalos [%d] specifically input." % len(subhaloIDsTodo)
+        nSubsSelected = len(subhaloIDsTodo)
+        select = "Subhalos [%d] specifically input." % nSubsSelected
 
     # load group information and make selection
     gc = sP.groupCat(fieldsSubhalos=['SubhaloPos','SubhaloLenType'])
@@ -2384,7 +2386,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # info
     print(' ' + desc)
     print(' ' + select)
-    print(' Total # Subhalos: %d, [%d] in selection, split processing [%d] subhalos now...' % \
+    print(' Total # Subhalos: %d, [%d] in selection, processing [%d] subhalos now...' % \
         (gc['header']['Nsubgroups_Total'],nSubsSelected,nSubsDo))
 
     # determine radial binning

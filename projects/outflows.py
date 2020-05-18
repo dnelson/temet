@@ -658,6 +658,27 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
     if xlabel is None: xlabel = xlabel2 # use suggestions if not hard-coded above
     if xlim is None: xlim = xlim2
 
+    if 1:
+        # data-dump
+        sfr,_,_,_ = sP.simSubhaloQuantity('sfr_30pkpc_100myr') # msun/yr
+        sfr2,_,_,_ = sP.simSubhaloQuantity('sfr_30pkpc_instant')
+        sfr = sfr[sub_ids]
+        sfr2 = sfr2[sub_ids]
+        rad_vals = sP.auxCat(acField)[acField+'_attrs']['rad']
+
+        print(etaM.shape, mdot['total'].shape, mstar_30pkpc_log.shape, sfr.shape, sfr2.shape, vcut_vals.shape)
+        w = np.where(mstar_30pkpc_log > 7.5)[0]
+        print(len(w))
+        with h5py.File('outflows_%s_%d.hdf5' % (sP.simName,sP.snap),'w') as f:
+            f['vcut_vals'] = vcut_vals
+            f['rad_vals'] = rad_vals
+            f['eta_mass'] = etaM[w,:,:]
+            f['mdot_outflow'] = mdot['total'][w,:,:]
+            f['mstar'] = xvals[w]
+            f['sfr_100myr'] = sfr[w]
+            f['sfr_instant'] = sfr2[w]
+            f['sfr_deriv'] = mdot['total'][w,0,0,] / etaM[w,0,0]
+
     # one specific plot requested? make now and exit
     if config is not None:
         v200str = '_v200norm' if v200norm else ''
@@ -2695,7 +2716,7 @@ def paperPlots(sPs=None):
         galaxyMosaic_topN(numHalosInd=1, panelNum=4, redshift=2.0, hIDsPlot=[9], rotation='edge-on')
         galaxyMosaic_topN(numHalosInd=1, panelNum=4, redshift=2.0, hIDsPlot=[9], rotation='face-on')
 
-    if 0:
+    if 1:
         # fig 5: mass loading as a function of M* at one redshift, three v_rad values with individual markers
         config = {'vcutInds':[0,2,3], 'radInds':[1], 'stat':'mean', 'ylim':[-0.55,2.05], 'skipZeros':False, 'markersize':4.0, 'addModelTNG':True}
         gasOutflowRatesVsQuant(TNG50, xQuant='mstar_30pkpc', ptType='total', eta=True, config=config)

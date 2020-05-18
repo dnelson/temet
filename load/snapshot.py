@@ -311,8 +311,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
         # load from existing cache if it exists
         if isfile(cacheFile):
-            if getuser() != 'wwwrun':
-                print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
+            #if getuser() != 'wwwrun':
+            #    print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
 
             with h5py.File(cacheFile, 'r') as f:
                 assert f['field'].size == indRangeAll[1]
@@ -1485,7 +1485,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     # sanity checks
     if indRange is not None:
         assert indRange[0] >= 0 and indRange[1] >= indRange[0]
-    if haloSubset and (not sP.groupOrdered or (indRange is not None)):
+    if haloSubset and (not sP.groupOrdered or (indRange is not None) or (inds is not None)):
         raise Exception('haloSubset only for groupordered snapshots, and not with indRange subset.')
     if haloID is not None or subhaloID is not None:
         raise Exception('Not yet supported.')
