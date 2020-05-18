@@ -517,16 +517,15 @@ def generate_set():
     if 1:
         # TNG1-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-        zoomFac = 3 # effective 8192^3 in L680 is ~TNG300-1 resolution
+        zoomFac = 3 # effective 6144^3 in L680 is 2.37 lower times mass res than TNG300-1
 
         # remaining undone above 15.0: 
-        # todo: add ~10 or so in [14.9,15.0] as well
-        # haloIDs = [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 
-        #            111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231] # 15.0-15.1 remaining
-        haloIDs = [2, 16, 25, 37, 38, 46, 53, 56, 58, 74, 75, 81] # 15.1-15.2 remaining
+        haloIDs = [44, 49, 61, 68, 70, 71, 73, 91, 94, 97, 99, 100, 101, 105, 
+                   111, 113, 115, 118, 125, 128, 140, 143, 149, 203, 231] # 15.0-15.1 remaining
         #haloIDs = [997, 1891, 2023, 2191, 2724, 2766, 2791, 3022, 3025, 
         #           3085, 3169, 3232, 3297, 3337, 3425, 3693, 3775, 3859, 
         #           3909, 3934, 4274, 4369, 4394, 4414, 5122, 5711] # todo: 14.3-14.4 bin of 26
+        #haloIDs = [4, 79, 84, 102, 107, 136, 155, 156, 179, 202, 205, 210, 217, 224, 239, 280, 282, 361, 390] # todo: 14.9-15.0: fifteen more
 
         sizeFac = 3.0 #[2.0,3.0,4.0]
 

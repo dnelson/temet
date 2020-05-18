@@ -8,13 +8,13 @@ from builtins import *
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-from os.path import isfile, isdir
+from os.path import isfile, isdir, expanduser
 from matplotlib.ticker import MultipleLocator
 from collections import OrderedDict
 from scipy.stats import binned_statistic
 from numba import jit
 
-from cosmo.perf import loadCpuTxt
+from cosmo.perf import loadCpuTxt, getCpuTxtLastTimestep
 from util.simParams import simParams
 from util.helper import logZeroNaN
 from vis.halo import renderSingleHalo
@@ -42,9 +42,11 @@ def pick_halos():
     #  increase to 20 for 14.9-15, 50 for 14.8-14.9, 40 each for 14.6-14.8
     return hInds
 
-def _halo_ids_run():
+def _halo_ids_run(onlyDone=False):
     """ Parse runs.txt and return the list of (all) halo IDs. """
-    with open('/u/dnelson/sims.TNG_zooms/runs.txt','r') as f:
+    path = expanduser("~") + "/sims.TNG_zooms/"
+
+    with open(path + 'runs.txt','r') as f:
         runs_txt = [line.strip() for line in f.readlines()]
 
     halo_inds = []
@@ -53,6 +55,11 @@ def _halo_ids_run():
             line = line.split(' ')[0]
         if line.isdigit():
             halo_inds.append(int(line))
+
+    if onlyDone:
+        # restrict to completed runs
+        halo_inds_done = [hInd for hInd in halo_inds if isdir(path+'L680n2048TNG_h%d_L13_sf3' % hInd)]
+        return halo_inds_done
 
     return halo_inds
 
@@ -80,7 +87,7 @@ def mass_function():
     ax.set_xlim(mass_range)
     ax.set_xticks(np.arange(mass_range[0],mass_range[1],0.1))
     ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
-    ax.set_ylabel('N$_{\\rm bin=%.1f}$' % binSize)
+    ax.set_ylabel('Number of Halos [%.1f dex$^{-1}$]' % binSize)
     ax.set_yscale('log')
     #ax.yaxis.tick_right()
     ax.yaxis.set_ticks_position('both')
@@ -121,28 +128,37 @@ def mass_function():
         labels.append(label)
 
     # 'bonus': halos above 14.0 in the high-res regions of more massive zoom targets
-    cacheFile = 'cache_mass_function_bonus.hdf5'
-    if isfile(cacheFile):
-        with h5py.File(cacheFile,'r') as f:
-            masses = f['masses'][()]
-    else:
-        masses = []
-        for i, hInd in enumerate(halo_inds):
-            if not isdir('sims.TNG_zooms/L680n2048TNG_h%d_L13_sf3' % hInd):
-                print(' skip')
-                continue
-            sP = simParams(res=13, run='tng_zoom', redshift=redshift, hInd=hInd, variant='sf3')
-            loc_masses = sP.groupCat(fieldsHalos=['Group_M_Crit200'])
-            loc_masses = sP.units.codeMassToLogMsun(loc_masses[1:]) # skip FoF 0 (assume is target)
-            w = np.where(loc_masses >= mass_range[0])
-            if len(w[0]):
-                masses = np.hstack( (masses,loc_masses[w]) )
-            print('[%3d of %3d] ' % (i,len(halo_inds)), hInd, len(w[0]), len(masses))
-        with h5py.File(cacheFile,'w') as f:
-            f['masses'] = masses
+    if 0:
+        cacheFile = 'cache_mass_function_bonus.hdf5'
+        if isfile(cacheFile):
+            with h5py.File(cacheFile,'r') as f:
+                masses = f['masses'][()]
+        else:
+            masses = []
+            for i, hInd in enumerate(halo_inds):
+                # only runs with existing data
+                if not isdir('sims.TNG_zooms/L680n2048TNG_h%d_L13_sf3' % hInd):
+                    print('[%3d of %3d]  skip' % (i,len(halo_inds)))
+                    continue
 
-    hh.append(masses)
-    labels.append('TNG1 Bonus')
+                # load FoF catalog, record clusters with zero contamination
+                sP = simParams(res=13, run='tng_zoom', redshift=redshift, hInd=hInd, variant='sf3')
+                loc_masses = sP.halos('Group_M_Crit200')
+                loc_masses = sP.units.codeMassToLogMsun(loc_masses[1:]) # skip FoF 0 (assume is target)
+
+                loc_length = sP.halos('GroupLenType')[1:,:]
+                contam_frac = loc_length[:,sP.ptNum('dm_lowres')] / loc_length[:,sP.ptNum('dm')]
+
+                w = np.where( (loc_masses >= mass_range[0]) & (contam_frac == 0) )
+
+                if len(w[0]):
+                    masses = np.hstack( (masses,loc_masses[w]) )
+                print('[%3d of %3d] ' % (i,len(halo_inds)), hInd, len(w[0]), len(masses))
+            with h5py.File(cacheFile,'w') as f:
+                f['masses'] = masses
+
+        hh.append(masses)
+        labels.append('TNG1 Bonus')
 
     # plot
     ax.hist(hh,bins=nBins,range=mass_range,label=labels,histtype='bar',alpha=0.9,stacked=True)
@@ -157,10 +173,22 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     """ Calculate number of low-res DM within each rVirFac*rVir distance, as well 
     as the minimum distance to any low-res DM particle, and a radial profile of 
     contaminating particles. """
+    cacheFile = sPzoom.derivPath + 'contamination_stats.hdf5'
+
+    # check for existence of cache
+    fields = ['min_dist_lr','rVirFacs','counts','fracs','massfracs','rr','r_frac','r_massfrac']
+
+    if isfile(cacheFile):
+        r = {}
+        with h5py.File(cacheFile,'r') as f:
+            for key in fields:
+                r[key] = f[key][()]
+        return [r[key] for key in fields]
+
+    # load and calculate now
     halo = sPzoom.groupCatSingle(haloID=0)
     r200 = halo['Group_R_Crit200']
 
-    # load
     h = sPzoom.snapshotHeader()
 
     pos_hr  = sPzoom.snapshotSubset('dm', 'pos')
@@ -173,7 +201,7 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     dists_hr = sPzoom.periodicDists( halo['GroupPos'], pos_hr )
 
     min_dist_lr = dists_lr.min() # code units
-    min_dist_lr = sPzoom.units.codeLengthToMpc(min_dist_lr)
+    min_dist_lr = sPzoom.units.codeLengthToMpc(min_dist_lr) # pMpc
     if verbose:
         print('min dists from halo to closest low-res DM [pMpc]: ', min_dist_lr)
 
@@ -213,6 +241,12 @@ def calculate_contamination(sPzoom, rVirFacs=[1,2,3,4,5,10], verbose=False):
     r_massfrac = r_mass_lr / r_mass_hr
 
     rr = rr[:-1] + (rlim[1]-rlim[0])/nbins # bin midpoints
+
+    # save cache
+    with h5py.File(cacheFile,'w') as f:
+        for key in fields:
+            f[key] = locals()[key]
+    print('Saved: [%s]' % cacheFile)
 
     return min_dist_lr, rVirFacs, counts, fracs, massfracs, rr, r_frac, r_massfrac
 
@@ -305,7 +339,7 @@ def compare_contamination():
             # load contamination statistics and plot
             min_dist_lr, _, _, _, _, rr, r_frac, r_massfrac = calculate_contamination(sPz)
             rr /= halo_zoom['Group_R_Crit200']
-            min_dist_lr /= halo_zoom['Group_R_Crit200']
+            min_dist_lr /= sPz.units.codeLengthToMpc( halo_zoom['Group_R_Crit200'] )
 
             l, = ax.plot(rr, logZeroNaN(r_frac), linestyles[j], color=c, lw=lw, label='h%d_%s' % (hInd,variant))
             #l, = ax.plot(rr, logZeroNaN(r_massfrac), '--', lw=lw, color=c)
@@ -325,19 +359,25 @@ def sizefacComparison():
     """ Compare SizeFac 2,3,4 runs (contamination and CPU times) in the testing set. """
 
     # config
-    #hInds    = [8,50,51,90]
-    #variants = ['sf2','sf3','sf4']
-    #run      = 'tng_zoom_dm'
-
-    #hInds    = [50]
-    #variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
-
-    hInds = [8,9,12,19,21,23,29,31,34,35,50,51,52,65,85,90,109,245,553,3232] # h54: no txt files
-    variants = ['sf3']
-
-    run      = 'tng_zoom'
     zoomRes  = 13
     redshift = 0.0
+
+    if 0:
+        # testing contam/CPU time scalings with size fac
+        hInds    = [8,50,51,90]
+        variants = ['sf2','sf3','sf4']
+        run      = 'tng_zoom_dm'
+
+    if 0:
+        # testing CPU time scaling with core count and unit systems
+        hInds    = [50]
+        variants = ['sf2_n160s','sf2_n160s_mpc','sf2_n320s','sf2_n640s','sf3']
+
+    if 1:
+        # main TNG1-Cluster sample
+        hInds    = _halo_ids_run(onlyDone=True)
+        variants = ['sf3']
+        run      = 'tng_zoom'
 
     # load
     results = []
@@ -346,20 +386,39 @@ def sizefacComparison():
         for variant in variants:
             sP = simParams(run=run, res=zoomRes, hInd=hInd, redshift=redshift, variant=variant)
 
-            cpu = loadCpuTxt(sP.arepoPath, keys=['total'])
-            cpuHours = cpu['total'][0,-1,2] / (60.0*60.0) * cpu['numCPUs']
+            #cpu = loadCpuTxt(sP.arepoPath, keys=['total'])
+            #cpuHours = cpu['total'][0,-1,2] / (60.0*60.0) * cpu['numCPUs']
+            _, _, _, cpuHours = getCpuTxtLastTimestep(sP.simPath + '/txt-files/cpu.txt')
 
             min_dist_lr, rVirFacs, counts, fracs, massfracs, _, _, _ = calculate_contamination(sP)
 
             halo = sP.groupCatSingle(haloID=0)
             haloMass = sP.units.codeMassToLogMsun( halo['Group_M_Crit200'] )
-            haloRvir = halo['Group_R_Crit200']
+            haloRvir = sP.units.codeLengthToMpc( halo['Group_R_Crit200'] )
 
-            print('Load hInd=%2d variant=%s minDist=%.2f' % (hInd,variant,min_dist_lr))
+            print('Load hInd=%4d variant=%s minDist=%5.2f' % (hInd,variant,min_dist_lr))
 
             r = {'hInd':hInd, 'variant':variant, 'cpuHours':cpuHours, 'haloMass':haloMass, 'haloRvir':haloRvir, 
                  'contam_min':min_dist_lr, 'contam_rvirfacs':rVirFacs, 'contam_counts':counts}
             results.append(r)
+
+    # print some stats
+    print('Median contam [pMpc]: ', np.median([result['contam_min'] for result in results]))
+    print('Median contam [rVir]: ', np.median([result['contam_min']/result['haloRvir'] for result in results]))
+    print('Mean CPU hours: ', np.mean([result['cpuHours'] for result in results]))
+
+    num_lowres = []
+    for result in results:
+        contam_rel = result['contam_min']/result['haloRvir']
+        num = result['contam_counts'][0] # 0=1rvir, 1=2rvir
+
+        if contam_rel > 1.0:
+            continue
+
+        num_lowres.append(num)
+        print(' [h = %4d] min contamination = %.2f rvir, num inside rvir = %d' % (result['hInd'],contam_rel,num))
+
+    print(' within 1rvir, numhalos, mean median number of low-res dm: ', len(num_lowres), np.mean(num_lowres), np.median(num_lowres))
 
     # start plot
     fig = plt.figure(figsize=(22,12))

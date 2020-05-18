@@ -21,30 +21,34 @@ from vis.common import setAxisColors
 from plot.config import *
 
 def getCpuTxtLastTimestep(filePath):
-    """ Parse cpu.txt for last timestep number and number of CPUs/tasks. """
+    """ Parse cpu.txt for last timestep number and number of CPUs/tasks and total CPU hours. """
     # hardcode Illustris-1 finalized data and complicated txt-files
     if 'L75n1820FP/' in filePath:
-        return 1.0, 912915, 8192
+        return 1.0, 912915, 8192, 0
     if filePath == expanduser('~') + '/sims.illustris/L75n910FP/output/cpu.txt':
-        return 1.0, 876580, 4096
+        return 1.0, 876580, 4096, 0
     if filePath == expanduser('~') + '/sims.illustris/L75n455FP/output/cpu.txt':
-        return 1.0, 268961, 128
+        return 1.0, 268961, 128, 0
     if filePath == expanduser('~') + '/sims.TNG/L75n1820TNG/output/cpu.txt':
-        return 1.0, 11316835, 10752
+        return 1.0, 11316835, 10752, 0
     if filePath == expanduser('~') + '/sims.TNG/L205n2500TNG/output/cpu.txt':
-        return 1.0, 6203063, 24000
+        return 1.0, 6203063, 24000, 0
     if filePath == expanduser('~') + '/sims.TNG/L35n2160TNG_halted/output/cpu.txt':
-        return 0.149494, 2737288, 16320
+        return 0.149494, 2737288, 16320, 0
 
-    lines = tail(filePath, 100)
-    for line in lines.split('\n')[::-1]:
+    if not isfile(filePath):
+        return 0, 0, 0, 0
+
+    lines = tail(filePath, 100).split('\n')[::-1]
+    for i, line in enumerate(lines):
         if 'Step ' in line:
             maxSize = int( line.split(', ')[0].split(' ')[1] ) + 1
             maxTime = float( line.split(', ')[1].split(' ')[1] )
             numCPUs = np.int32( line.split(', ')[2].split(' ')[1] )
+            cpuHours = float( lines[i-2].split()[3] ) * numCPUs / 60**2
             break
 
-    return maxTime, maxSize, numCPUs
+    return maxTime, maxSize, numCPUs, cpuHours
 
 def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
     """ Load and parse Arepo cpu.txt, save into hdf5 format. If hatbMin>0, then save only timesteps 
@@ -60,7 +64,8 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
     if not isfile(filePath):
         filePath = basePath + 'cpu.txt'
     if not isfile(filePath):
-        raise Exception('Failed to find cpu.txt')
+        print('WARNING: Failed to find [%s].' % filePath)
+        return Noned
 
     r = {}
 
@@ -74,7 +79,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
             # check size and ending time
             maxTimeSaved = f['time'][()].max()
             maxStepSaved = f['step'][()].max()
-            maxTimeAvail, maxStepAvail, _ = getCpuTxtLastTimestep(filePath)
+            maxTimeAvail, maxStepAvail, _, _ = getCpuTxtLastTimestep(filePath)
 
             if maxTimeAvail > maxTimeSaved*1.001:
                 # recalc for new data
@@ -90,7 +95,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
             r['numCPUs'] = f['numCPUs'][()]
     else:
         # determine number of timesteps in file, and number of CPUs
-        _, maxSize, r['numCPUs'] = getCpuTxtLastTimestep(filePath)
+        _, maxSize, r['numCPUs'], _ = getCpuTxtLastTimestep(filePath)
 
         maxSize = int(maxSize*1.2) # since we filter empties out anyways, let file grow as we read
 
