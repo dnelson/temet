@@ -722,18 +722,18 @@ class units(object):
         return colDensPhys.astype('float32')
 
     def UToTemp(self, u, nelec, log=False):
-        """ Convert (U,Ne) pair in code units to temperature in Kelvin. """
+        """ Convert (U,Ne) pair in code units to temperature in Kelvin. """ 
         # hydrogen mass fraction default
         hmassfrac = self.hydrogen_massfrac
 
         # calculate mean molecular weight
-        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float32')) 
+        meanmolwt = 4.0/(1.0 + 3.0 * hmassfrac + 4.0* hmassfrac * nelec.astype('float32'))
         meanmolwt *= self.mass_proton
 
         # calculate temperature (K)
         temp = u.astype('float32')
-        temp *= (self.gamma-1.0) / self.boltzmann * \
-                self.UnitEnergy_in_cgs / self.UnitMass_in_g * meanmolwt
+        temp *= (self.gamma-1.0) / self.boltzmann * (self.UnitEnergy_in_cgs / self.UnitMass_in_g)
+        temp *= meanmolwt
 
         if log:
             temp = logZeroSafe(temp)

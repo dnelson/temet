@@ -128,49 +128,26 @@ def celineMuseProposalMetallicityVsTheta():
     size      = 250.0
     sizeType  = 'kpc'
 
+    labels = {'metal_solar' : 'Gas Metallicity [log Z$_\odot$]',
+              'Mg II'       : 'Median Mg II Column Density [log cm$^{-2}$]',
+              'O VI'        : 'Median O VI Column Density [log cm$^{-2}$]',
+              'metals_O'    : 'O Column Density [log M$_\odot$ / kpc$^2$]',
+              'metals_Mg'   : 'O Column Density [log M$_\odot$ / kpc$^2$]',
+              'HI'          : 'HI Column Density [log cm$^{-2}$]',
+              'temp_sfcold' : 'Gas Temperature [log K]'}
+
     # grid config
-    min_NHI = None
+    dataField = 'metal_solar' # Mg II, O VI, metals_Mg, metals_O, HI, temp_sfcold
 
-    if 0:
-        dataField = 'metal_solar' # #'O VI'
-        dataLabel = 'Gas Metallicity [log Z$_\odot$]'
-        dataRange = [-1.3, -0.5] # proposalv2, when just TNG and EAGLE, no obs
-        #dataRange = [-2.25, -0.25] # with obs and/or with illustris
+    min_NHI = None # 18.0, enforce minimum HI column?
+    #ptRestrictions = {'NeutralHydrogenAbundance':['gt',1e-3]}
 
-        min_NHI = 18.0
-        dataLabel = 'Gas Metallicity [log Z$_\odot$] (N$_{\\rm HI} > 10^{%d}$)' % min_NHI
-    if 0:
-        dataField = 'Mg II'
-        dataLabel = 'Median Mg II Column Density [log cm$^{-2}$]'
-        dataRange = [6.0, 14.0]
-    if 0:
-        dataField = 'O VI'
-        dataLabel = 'Median O VI Column Density [log cm$^{-2}$]'
-        dataRange = [12.6, 15.0]
-    if 0:
-        dataField = 'metals_Mg'
-        dataLabel = 'Mg Column Density [log M$_\odot$ / kpc$^2$]'
-        dataRange = [-2.0, 2.0]
-    if 0:
-        dataField = 'metals_O'
-        dataLabel = 'O Column Density [log M$_\odot$ / kpc$^2$]'
-        dataRange = [-1.0, 3.0]
-    if 0:
-        dataField = 'HI'
-        dataLabel = 'HI Column Density [log cm$^{-2}$]'
-        dataRange = [12.0, 19.0]
-    if 1:
-        dataField = 'temp_sfcold'
-        dataLabel = 'Gas Temperature [log K]'
-        dataRange = [5.2, 5.6] #[5.0, 5.3]
-
-    #massBins = [ [8.50, 8.51]]
-    #massBins = [ [9.00, 9.02] ]
+    # galaxy binning config
     #massBins = [[9.495,9.505]] # illustris-1/eagle exploration for proposal v2
     #massBins = [ [9.45, 9.55] ] # proposal v2
-    massBins = [ [9.95, 10.05] ]
-    #massBins = [ [10.4, 10.6] ]
+    massBins = [ [8.99, 9.01], [9.45,9.55] , [9.95,10.05] ] # [8.49,8.51], [10.4,10.6]
 
+    # azimuthal angle binning config
     #distBins = [ [90,110] ] # proposalv2
     distBins = [ [20,30], [45,55], [95,105] ] # exploration
     nThetaBins = 90
@@ -178,17 +155,42 @@ def celineMuseProposalMetallicityVsTheta():
     # load
     gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
 
+    # compute impact parameter and angle for every pixel
+    pxSize = size / nPixels[0] # pkpc
+
+    xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
+    xx = xx.astype('float64') - nPixels[0]/2
+    yy = yy.astype('float64') - nPixels[1]/2
+    dist = np.sqrt( xx**2 + yy**2 ) * pxSize
+    theta = np.rad2deg(np.arctan2(xx,yy)) # 0 and +/- 180 is major axis, while +/- 90 is minor axis
+    theta = np.abs(theta) # 0 -> 90 -> 180 is major -> minor -> major
+
+    w = np.where(theta >= 90.0)
+    theta[w] = 180.0 - theta[w] # 0 is major, 90 is minor
+
+    if 0:
+        # debug plots
+        from util.helper import plot2d
+        plot2d(grid, label='metallicity [log zsun]', filename='test_z.pdf')
+        plot2d(dist, label='distance [pkpc]', filename='test_dist.pdf')
+        plot2d(theta, label='theta [deg]', filename='test_theta.pdf')
+
     # start fiugre
     fig = plt.figure(figsize=figsize) # np.array([15,10]) * 0.55 # proposalv2
     ax = fig.add_subplot(111)
 
+    dataLabel = labels[dataField]
+    if min_NHI is not None:
+        dataLabel += ' (N$_{\\rm HI} > 10^{%d}$)' % min_NHI
+
     ax.set_xlabel('Galaxy-Absorber Azimuthal Angle')
     ax.set_xlim([-2,92])
-    ax.set_ylim(dataRange)
     ax.set_xticks([0,15,30,45,60,75,90])
     ax.set_ylabel(dataLabel)
     
     # loop over mass bins
+    colors = []
+
     for i, massBin in enumerate(massBins):
 
         with np.errstate(invalid='ignore'):
@@ -210,27 +212,8 @@ def celineMuseProposalMetallicityVsTheta():
             class plotConfig:
                 saveFilename = 'dummy'
 
-            panels = [{'partType':'gas', 'partField':dataField, 'valMinMax':dataRange}]
+            panels = [{'partType':'gas', 'partField':dataField}]
             grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-            # compute impact parameter and angle for every pixel
-            pxSize = size / nPixels[0] # pkpc
-
-            xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
-            xx = xx.astype('float64') - nPixels[0]/2
-            yy = yy.astype('float64') - nPixels[1]/2
-            dist = np.sqrt( xx**2 + yy**2 ) * pxSize
-            theta = np.rad2deg(np.arctan2(xx,yy)) # 0 and +/- 180 is major axis, while +/- 90 is minor axis
-            theta = np.abs(theta) # 0 -> 90 -> 180 is major -> minor -> major
-
-            w = np.where(theta >= 90.0)
-            theta[w] = 180.0 - theta[w] # 0 is major, 90 is minor
-
-            # debug plots
-            #from util.helper import plot2d
-            #plot2d(grid, label='metallicity [log zsun]', filename='test_z.pdf')
-            #plot2d(dist, label='distance [pkpc]', filename='test_dist.pdf')
-            #plot2d(theta, label='theta [deg]', filename='test_theta.pdf')
 
             # bin
             dist_global[:,j] = dist.ravel()
@@ -252,7 +235,7 @@ def celineMuseProposalMetallicityVsTheta():
             nhi_global = nhi_global.ravel()
 
         # bin on the global concatenated grids
-        for distBin in distBins:
+        for j, distBin in enumerate(distBins):
             if min_NHI is None:
                 w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) )
             else:
@@ -263,8 +246,12 @@ def celineMuseProposalMetallicityVsTheta():
 
             #label = 'Theory: IllustrisTNG'
             label = 'b = %d kpc' % np.mean(distBin) if i == 0 else ''
-            l, = ax.plot(theta_vals, hist, linestyles[i], lw=lw, label=label)
-            ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
+            c = next(ax._get_lines.prop_cycler)['color'] if i == 0 else colors[j]
+            if i == 0: colors.append(c)
+
+            l, = ax.plot(theta_vals, hist, linestyles[i], lw=lw, label=label, color=c)
+            if i == 0:
+                ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
 
         # EAGLE: load and plot (from Freeke) (distBin == [95,105])
         if 0:
@@ -295,6 +282,16 @@ def celineMuseProposalMetallicityVsTheta():
 
         ax.errorbar(theta, metal, yerr=[metal_errdown,metal_errup], xerr=[theta_errdown,theta_errup], **opts, 
             label='Existing Data')
+
+    # second legend?
+    if len(massBins) > 1:
+        sExtra = []
+        lExtra = []
+        for i, massBin in enumerate(massBins):
+            sExtra.append( plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[i]) )
+            lExtra.append( '%4.1f < M$_\\star$ < %4.1f' % (massBin[0],massBin[1]))
+        legend2 = ax.legend(sExtra, lExtra, loc='best')
+        ax.add_artist(legend2)
 
     # finish and save plot
     ax.legend(loc='best')

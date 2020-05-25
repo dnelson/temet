@@ -495,8 +495,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
                 sm = savgol_filter(sm,sKn,sKo)
                 pm = savgol_filter(pm,sKn,sKo,axis=1) # P[10,90]
 
-            if ion in ['OVI','OVII','OVIII','AllGas_Mg','MgII','HIGK_popping']:
-                txt_sP.append([xm,ym,pm[0,:],pm[-1,:]])
+            txt_sP.append([ion,xm,ym,pm[0,:],pm[-1,:]])
 
             # determine color
             if i == 0:
@@ -538,31 +537,32 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     # print
     massAxis = 'mhalo' if vsHaloMass else 'mstar'
     for i, txt_sP in enumerate(txt): # loop over runs
-        filename = 'figN_%s_%s_%s.txt' % (sPs[i].simName,'ionmasses' if not toAvgColDens else 'avgcoldens',massAxis)
+        filename = 'figN_%s_z%.1f_%s_%s.txt' % (sPs[i].simName,sPs[i].redshift,'ionmasses' if not toAvgColDens else 'avgcoldens',massAxis)
         
         out = '# Nelson+ (2020) http://arxiv.org/abs/xxxx.xxxxx\n'
         if toAvgColDens:
             out += '# Figure N Right Panel (Average <N_ion> = M_ion / (pi*rvir^2)) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
             out += '# columns: %s' % massAxis
-            for ion in ions: out += ' <N_%s>, p10, p90,' % ion
+            for ion in ions: out += ', <N_%s>, p10, p90' % ion
         else:
             out += '# Figure N Left Panel (Total bound %s masses) (%s z=%.1f)\n' % (', '.join(ions),sPs[i].simName, sPs[i].redshift)
             out += '# columns: %s' % massAxis
-            for ion in ions: out += 'M_%s, p10, p90, ' % ion
+            for ion in ions: out += ', M_%s, p10, p90' % ion
         out += "\n# all masses in [log msun], column densities in [log cm^-2], p10 and p90 denote 10th and 90th percentiles of previous field\n"
 
-        ion1_x, ion1_y, ion1_p10, ion1_p90 = txt_sP[0]
-        ion2_x, ion2_y, ion2_p10, ion2_p90 = txt_sP[1]
-        ion3_x, ion3_y, ion3_p10, ion3_p90 = txt_sP[2]
+        for j, ionData in enumerate(txt_sP):
+            ion_name, ion_x, ion_y, ion_p10, ion_p90 = ionData
+            if j == 0: ion1_x = ion_x
+            assert np.array_equal(ion1_x,ion_x) # same mass bins for all ions
 
-        assert np.array_equal(ion1_x,ion2_x) and np.array_equal(ion1_x,ion3_x) # same mass bins for all ions
         nMassBins = ion1_x.size
 
         for k in range(nMassBins):
             out += '%5.2f' % ion1_x[k]
-            out += ', %5.2f, %5.2f, %5.2f' % (ion1_y[k], ion1_p10[k], ion1_p90[k])
-            out += ', %5.2f, %5.2f, %5.2f\n' % (ion2_y[k], ion2_p10[k], ion2_p90[k])
-            out += ', %5.2f, %5.2f, %5.2f\n' % (ion3_y[k], ion3_p10[k], ion3_p90[k])
+            for j, ionData in enumerate(txt_sP):
+                ion_name, ion_x, ion_y, ion_p10, ion_p90 = ionData
+                out += ', %5.2f, %5.2f, %5.2f' % (ion_y[k], ion_p10[k], ion_p90[k])
+            out += '\n'
 
         with open(filename, 'w') as f:
             f.write(out)
@@ -893,6 +893,7 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
                         txt_loc['bin'] = massBin
                         txt_loc['rr'] = rr
                         txt_loc['yy'] = yy_mean
+                        if median: txt_loc['yy'] = yp[1,:]
                         txt_loc['yy_0'] = yp[0,:]
                         txt_loc['yy_1'] = yp[-1,:]
                         txt_mb.append(txt_loc)
@@ -935,15 +936,15 @@ def stackedRadialProfiles(sPs, saveName, ions=['OVI'], redshift=0.0, cenSatSelec
 
     # print
     for k in range(len(txt)): # loop over mass bins (separate file for each)
-        filename = 'fig9_%sdens_rad%s_m-%.2f.txt' % \
+        filename = 'figN_%sdens_rad%s_m-%.2f.txt' % \
           ('num' if projDim=='3D' else 'col', 'rvir' if radRelToVirRad else 'kpc', np.mean(txt[k][0]['bin']))
-        out = '# Nelson+ (2018) http://arxiv.org/abs/1712.00016\n'
-        out += '# Figure 9 Left Panel n_OVI [log cm^-3] (%s z=%.1f)\n' % (sP.simName, sP.redshift)
+        out = '# Nelson+ (2020) http://arxiv.org/abs/xxxx.xxxxx\n'
+        out += '# Figure N Right Panel N_%s [log cm^-2] (%s z=%.1f)\n' % (ions[0],sP.simName, sP.redshift)
         out += '# Halo Mass Bin [%.1f - %.1f]\n' % (txt[k][0]['bin'][0], txt[k][0]['bin'][1])
         out += '# rad_logpkpc'
         for j in range(len(txt[k])): # loop over rad types
             radName = radNames[j].split(" ")[0]
-            out += ' n_%s n_%s_err0 n_%s_err1' % (radName,radName,radName)
+            out += ' N_%s N_%s_err0 N_%s_err1' % (radName,radName,radName)
         out += '\n'
         for i in range(1,txt[k][0]['rr'].size): # loop over radial bins
             out += '%8.4f ' % txt[k][j]['rr'][i]

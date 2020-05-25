@@ -1114,7 +1114,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams, 
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
-            alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, **kwargs):
+            alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
+            ptRestrictions=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from util.rotation import rotateCoordinateArray
     
@@ -1131,6 +1132,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         optionalStr += '_excludeSubhaloFlag'
     if skipCellIndices is not None:
         optionalStr += '_skip-%s' % str(skipCellIndices)
+    if ptRestrictions is not None:
+        optionalStr += '_restrict-%s' % str(ptRestrictions)
     if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
         optionalStr += str(rotCenter)
     if len(nPixels) == 3:
@@ -1287,16 +1290,31 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, indRange=indRange)
             assert mass.size == 1 or (mass.size == hsml.size)
 
-            # load: modify or skip certain cells/particles?
-            if 0:
-                print('WARNING: Selectively setting mass=0 based on some particle criterion!')
-                dens = sP.snapshotSubset(partType, 'numdens', indRange=indRange)
-                temp = sP.snapshotSubset(partType, 'temp', indRange=indRange)
-                w = np.where( (temp>5.5) & (dens>1e-3) )
-                mask = np.zeros( dens.size, dtype='int16' )
-                mask[w] = 1
+            # load: skip certain cells/particles?
+            if ptRestrictions is not None:
+                mask = np.ones(quant.size, dtype='bool')
+
+                for restrictionField in ptRestrictions:
+                    # load
+                    restriction_vals = sP.snapshotSubset(partType, restrictionField, indRange=indRange)
+
+                    # process
+                    inequality, val = ptRestrictions[restrictionField]
+
+                    if inequality == 'gt':
+                        mask &= (restriction_vals > val)
+                    if inequality == 'lt':
+                        mask &= (restriction_vals <= val)
+                    if inequality == 'eq':
+                        mask &= (restriction_vals == val)
+
+                # zero mass/weight of excluded particles/cells
                 w = np.where(mask == 0)
                 mass[w] = 0.0
+
+            if skipCellIndices is not None:
+                print('Erasing %.3f%% of cells.' % (skipCellIndices.size/mass.size))
+                mass[skipCellIndices] = 0.0
 
             if excludeSubhaloFlag and method == 'sphMap':
                 # exclude any subhalos flagged as clumps, currently for fof-scope renders only
@@ -1311,10 +1329,6 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     inds_flag, inds_snap = match3(flagged_ids, sub_ids)
                     if len(inds_snap):
                         mass[inds_snap] = 0.0
-
-            if skipCellIndices is not None:
-                print('Erasing %.3f%% of cells.' % (skipCellIndices.size/mass.size))
-                mass[skipCellIndices] = 0.0
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None

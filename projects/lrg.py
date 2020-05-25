@@ -2217,6 +2217,8 @@ def clumpRadialProfiles(sP, haloID, selections):
         if prop == 'cellsize_kpc':
             ax.plot(ax.get_xlim(), np.log10([0.5,0.5]), ':', lw=lw, color='#555555', alpha=0.6)
 
+        yy_txt = []
+
         for i, selection in enumerate(selections):
             if ylog:
                 yy = logZeroNaN(results[i][prop])
@@ -2225,6 +2227,8 @@ def clumpRadialProfiles(sP, haloID, selections):
 
             if yy.size > sKn:
                 yy = savgol_filter(yy,sKn+4,sKo,axis=0)
+
+            yy_txt.append(yy)
 
             # plot median and percentile band
             label = ', '.join(['%.1f < %s < %.1f' % (bound[0],key,bound[1]) for key,bound in selection.items()])
@@ -2250,6 +2254,25 @@ def clumpRadialProfiles(sP, haloID, selections):
         ax.legend()
         fig.savefig('clumps_radprof_%s_%s_%d_%d.pdf' % (prop,sP.simName,sP.snap,haloID))
         plt.close(fig)
+
+        # write data file
+        filename = 'fig10_%s_z%.1f_h%d_%s.txt' % (sP.simName,sP.redshift,haloID,prop)
+
+        out = "# Nelson+ (2020) http://arxiv.org/abs/xxxx.xxxxx\n"
+        out += "# Figure 10: stacked radial profiles of cloud property [%s = %s]\n" % (prop,ylabel)
+        out += "# %s (z = %.1f) haloID = %d (nClouds stacked = 924, 764, 303, 133)\n" % (sP.simName,sP.redshift,haloID)
+        out += "radius [pkpc]"
+        for i, selection in enumerate(selections):
+            out += ", quantity [r_cloud=%.1f] p%d, p%d, p%d" % (selection['size'][0],percs[1],percs[0],percs[2])
+        out += "\n\n"
+        for i, bin_cen in enumerate(bin_cens):
+            out += "%.2f" % bin_cen
+            for j, selection in enumerate(selections):
+                out += " %.3f %.3f %.3f" % (yy_txt[j][i,1], yy_txt[j][i,0], yy_txt[j][i,2])
+            out += "\n"
+
+        with open(filename, 'w') as f:
+            f.write(out)
 
 def paperPlots():
     """ Produce all papers for the LRG-MgII (small-scale CGM structure) TNG50 paper. """
