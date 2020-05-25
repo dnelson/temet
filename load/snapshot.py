@@ -1456,18 +1456,18 @@ def snapshotSubset(sP, partType, fields,
 
     return r
 
-def _func(sP,partType,field,indRangeLoad,indRangeSave,float32,array):
+def _parallel_load_func(sP,partType,field,indRangeLoad,indRangeSave,float32,shared_mem_array,dtype,shape):
     """ Multiprocessing target, which simply calls snapshotSubset() and writes the result 
-    directly into a shared memory array. Always called with only one field. """
+    directly into a shared memory array. Always called with only one field. 
+    NOTE: sP has been pickled and shared between sub-processes (sP.data is likely common, careful!)."""
     data = sP.snapshotSubset(partType, field, indRange=indRangeLoad, sq=True, float32=float32)
-    array[ indRangeSave[0]:indRangeSave[1], ... ] = data
+
+    numpy_array_view = np.frombuffer(shared_mem_array, dtype).reshape(shape)
+
+    numpy_array_view[ indRangeSave[0]:indRangeSave[1] ] = data
 
     # note: could move this into il.snapshot.loadSubset() following the strategy of the 
     # parallel groupCat() load, to actually avoid this intermediate memory usage
-
-#enable global logging of multiprocessing to stderr:
-#logger = mp.log_to_stderr()
-#logger.setLevel(mp.SUBDEBUG)
 
 def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, 
                            sq=True, haloSubset=False, float32=False, nThreads=8):
@@ -1475,6 +1475,10 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     concurrent python+h5py reader processes and gather the result. """
     import ctypes
     from functools import partial
+
+    #enable global logging of multiprocessing to stderr:
+    #logger = mp.log_to_stderr()
+    #logger.setLevel(mp.SUBDEBUG)
 
     # method to disable parallel loading, which does not work with custom-subset cached fields 
     # inside sP.data since indRange as computed below cannot know about this
@@ -1559,18 +1563,20 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
             indRangeSave = [offset, offset + numLoadLoc]
             offset += numLoadLoc
 
-            #_func(sP,partType,k,indRangeLoad,indRangeSave,float32,numpy_array_view) # debugging only
-            args = (sP,partType,k,indRangeLoad,indRangeSave,float32,numpy_array_view)
-            p = mp.Process(target=_func, args=args)
+            args = (sP,partType,k,indRangeLoad,indRangeSave,float32,shared_mem_array,sample[k].dtype,shape)
+
+            p = mp.Process(target=_parallel_load_func, args=args)
             processes.append(p)
 
         # wrap in try, to help avoid zombie processes and system issues
         try:
-            for p in processes:
+            for i, p in enumerate(processes):
                 p.start()
         finally:
-            for p in processes:
+            for i, p in enumerate(processes):
                 p.join()
+                # if exitcode == -9, then a sub-process was killed by the oom-killer, not good (return will be corrupt/incompleted)
+                assert p.exitcode == 0, 'Insufficient memory for requested parallel load.'
 
         # memory nightmare is this (python 3.8x fix): https://bugs.python.org/issue32759 https://github.com/python/cpython/pull/5827
         # see also this for python 3.8: https://bugs.python.org/issue35813
@@ -1580,6 +1586,13 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
             print('WARNING: Erasing global _heap of mp and recreating!')
             mp.heap.BufferWrapper._heap = mp.heap.Heap()
             gc.collect()
+        if 0:
+            # diagnostic
+            nMallocs = mp.heap.BufferWrapper._heap._n_mallocs
+            nFrees = mp.heap.BufferWrapper._heap._n_frees
+            print('mp heap: nMallocs = %d, nFrees = %d' % (nMallocs,nFrees))
+            for i, arena in enumerate(mp.heap.BufferWrapper._heap._arenas):
+                print('mp arena[%d] size = %d (%.1f GB)' % (i,arena.size,arena.size/1024**3))
 
         # add into dict
         if inds is not None:
