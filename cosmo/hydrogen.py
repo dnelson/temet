@@ -184,7 +184,7 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
 
     # load here?
     if gas is None:
-        gas = sP.snapshotSubsetP('gas', list(reqFields), indRange=indRange)
+        gas = sP.snapshotSubset('gas', list(reqFields), indRange=indRange)
         
     if not all( [f in gas for f in reqFields] ):
         raise Exception('Need [' + ','.join(reqFields) + '] fields for gas cells.')

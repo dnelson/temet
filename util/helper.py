@@ -856,7 +856,7 @@ def bincount(x, dtype):
     return c
 
 @jit(nopython=True, nogil=True, cache=True)
-def periodicDistsN(pos1, pos2, BoxSize):
+def periodicDistsN(pos1, pos2, BoxSize, squared=False):
     """ Compute periodic distance between each (x,y,z) coordinate in pos1 vs. the 
     corresponding (x,y,z) point in pos2. Either pos1 and pos2 have the same shapes, 
     and are matched pairwise, or pos1 is a tuple (i.e. reference position). """
@@ -881,7 +881,10 @@ def periodicDistsN(pos1, pos2, BoxSize):
                 xx += BoxSize
 
             dists[i] += xx * xx
-        dists[i] = np.sqrt( dists[i] )
+
+    if not squared:
+        for i in range(pos2.shape[0]):
+            dists[i] = np.sqrt( dists[i] )
 
     return dists
 

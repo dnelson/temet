@@ -18,287 +18,6 @@ from plot.config import *
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
 
-def singleHaloImage_CelineMuseProposal(conf=4):
-    """ Metallicity distribution in CGM image for 2019 MUSE proposal. """
-    run        = 'tng'
-    res        = 2160
-    redshift   = 0.5
-    rVirFracs  = [0.5, 1.0] # None
-    method     = 'sphMap' # sphMap_global for paper figure
-    nPixels    = [800,800] # for celinemuse figure
-    axes       = [0,1]
-    labelZ     = True
-    labelScale = 'physical'
-    labelSim   = False
-    labelHalo  = False
-    relCoords  = True
-    rotation   = 'edge-on'
-
-    sizeType  = 'kpc'
-
-    if conf == 7:
-        # Klitsch+ (2019) paper figure
-        rVirFracs = None
-        size = 40
-        hInds = [564218] # for Klitsch+ (2019) paper
-
-        faceOnOptions = {'rotation'   : 'face-on',
-                         'labelScale' : 'physical',
-                         'labelHalo'  : 'mstar,sfr',
-                         'labelZ'     : True,
-                         'nPixels'    : [800,800]}
-
-        edgeOnOptions = {'rotation'   : 'edge-on',
-                         'labelScale' : False,
-                         'labelHalo'  : False,
-                         'labelZ'     : False,
-                         'nPixels'    : [800,250]}
-    else:
-        # celine muse proposal figure
-        size = 200 #100
-        hInds = [440839] # for muse proposal
-
-    # which halo?
-    sP = simParams(res=res, run=run, redshift=redshift)
-
-    if 0:
-        # exploration
-        massBin = [10.48,10.5] # size = 100
-        #massBin = [10.0, 10.02] # size = 80
-        #massBin = [9.5,9.52] # size = 60
-        #size = 100.0
-        
-        gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
-        w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
-        hInds = w[0]
-        print(hInds)
-
-    for hInd in hInds:
-        panels = []
-        haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
-
-        if conf == 0:
-            lines = ['H-alpha','H-beta','O--2-3728.81A','O--3-5006.84A','N--2-6583.45A','S--2-6730.82A']
-            partField_loc = 'sb_%s_lum_kpc' % lines[0] # + '_sf0' to set SFR>0 cells to zero
-            panels.append( {'partType':'gas', 'partField':partField_loc, 'valMinMax':[34,41]} )
-
-        if conf == 4:
-            panels.append( {'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-1.4,0.2]} )
-            #panels.append( {'partType':'gas', 'partField':'O VI', 'valMinMax':[13.0,16.0]} )
-            #panels.append( {'partType':'gas', 'partField':'Mg II', 'valMinMax':[10.0,16.0]} )
-
-        if conf == 5:
-            panels.append( {'partType':'gas', 'partField':'MHIGK_popping', 'valMinMax':[16.0,22.0]} )
-
-        if conf == 6:
-            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[16.0,22.0]} )
-
-        if conf == 7:
-            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **faceOnOptions} )
-            panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **edgeOnOptions} )
-
-        class plotConfig:
-            plotStyle    = 'edged'
-            rasterPx     = nPixels[0] 
-            colorbars    = True
-            #nCols        = 1
-            #nRows        = 2
-            #fontsize     = 24
-            saveStr = panels[0]['partField'].replace("_lum","").replace("_kpc","")
-            saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,hInd,saveStr,size)
-
-        # get data for inspection
-        #x, _ = renderSingleHalo(panels, plotConfig, locals(), skipExisting=True, returnData=True)
-        #with h5py.File('save_%d.hdf5' % hInd,'w') as f:
-        #    f['grid'] = x
-        #print('Saved.')
-
-        # render
-        renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
-def celineMuseProposalMetallicityVsTheta():
-    """ Use some projections to create the Z_gas vs. theta plot. """
-
-    sP = simParams(run='tng50-1', redshift=0.5) # z=1.0 for paper figure
-
-    method    = 'sphMap' # sphMap_global for paper figure
-    nPixels   = [1000,1000]
-    axes      = [0,1]
-    rotation  = 'edge-on'
-    size      = 250.0
-    sizeType  = 'kpc'
-
-    labels = {'metal_solar' : 'Gas Metallicity [log Z$_\odot$]',
-              'Mg II'       : 'Median Mg II Column Density [log cm$^{-2}$]',
-              'O VI'        : 'Median O VI Column Density [log cm$^{-2}$]',
-              'metals_O'    : 'O Column Density [log M$_\odot$ / kpc$^2$]',
-              'metals_Mg'   : 'O Column Density [log M$_\odot$ / kpc$^2$]',
-              'HI'          : 'HI Column Density [log cm$^{-2}$]',
-              'temp_sfcold' : 'Gas Temperature [log K]'}
-
-    # grid config
-    dataField = 'metal_solar' # Mg II, O VI, metals_Mg, metals_O, HI, temp_sfcold
-
-    min_NHI = None # 18.0, enforce minimum HI column?
-    #ptRestrictions = {'NeutralHydrogenAbundance':['gt',1e-3]}
-
-    # galaxy binning config
-    #massBins = [[9.495,9.505]] # illustris-1/eagle exploration for proposal v2
-    #massBins = [ [9.45, 9.55] ] # proposal v2
-    massBins = [ [8.99, 9.01], [9.45,9.55] , [9.95,10.05] ] # [8.49,8.51], [10.4,10.6]
-
-    # azimuthal angle binning config
-    #distBins = [ [90,110] ] # proposalv2
-    distBins = [ [20,30], [45,55], [95,105] ] # exploration
-    nThetaBins = 90
-
-    # load
-    gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag'])
-
-    # compute impact parameter and angle for every pixel
-    pxSize = size / nPixels[0] # pkpc
-
-    xx, yy = np.mgrid[0:nPixels[0], 0:nPixels[1]]
-    xx = xx.astype('float64') - nPixels[0]/2
-    yy = yy.astype('float64') - nPixels[1]/2
-    dist = np.sqrt( xx**2 + yy**2 ) * pxSize
-    theta = np.rad2deg(np.arctan2(xx,yy)) # 0 and +/- 180 is major axis, while +/- 90 is minor axis
-    theta = np.abs(theta) # 0 -> 90 -> 180 is major -> minor -> major
-
-    w = np.where(theta >= 90.0)
-    theta[w] = 180.0 - theta[w] # 0 is major, 90 is minor
-
-    if 0:
-        # debug plots
-        from util.helper import plot2d
-        plot2d(grid, label='metallicity [log zsun]', filename='test_z.pdf')
-        plot2d(dist, label='distance [pkpc]', filename='test_dist.pdf')
-        plot2d(theta, label='theta [deg]', filename='test_theta.pdf')
-
-    # start fiugre
-    fig = plt.figure(figsize=figsize) # np.array([15,10]) * 0.55 # proposalv2
-    ax = fig.add_subplot(111)
-
-    dataLabel = labels[dataField]
-    if min_NHI is not None:
-        dataLabel += ' (N$_{\\rm HI} > 10^{%d}$)' % min_NHI
-
-    ax.set_xlabel('Galaxy-Absorber Azimuthal Angle')
-    ax.set_xlim([-2,92])
-    ax.set_xticks([0,15,30,45,60,75,90])
-    ax.set_ylabel(dataLabel)
-    
-    # loop over mass bins
-    colors = []
-
-    for i, massBin in enumerate(massBins):
-
-        with np.errstate(invalid='ignore'):
-            w = np.where( (gc['mstar_30pkpc_log']>massBin[0])  & (gc['mstar_30pkpc_log']<massBin[1]) & gc['central_flag'] )
-        subInds = w[0]
-
-        print('[%.2f - %.2f] Processing [%d] halos...' % (massBin[0],massBin[1],len(w[0])))
-
-        dist_global  = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
-        theta_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
-        grid_global  = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
-
-        if min_NHI is not None:
-            nhi_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
-
-        for j, hInd in enumerate(subInds):
-            #haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
-
-            class plotConfig:
-                saveFilename = 'dummy'
-
-            panels = [{'partType':'gas', 'partField':dataField}]
-            grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-
-            # bin
-            dist_global[:,j] = dist.ravel()
-            theta_global[:,j] = theta.ravel()
-            grid_global[:,j] = grid.ravel()
-
-            # enforce minimum HI column? then load now
-            if min_NHI is not None:
-                panels = [{'partType':'gas', 'partField':'HI', 'valMinMax':[10.0,25.0]}]
-                grid_nhi, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-                nhi_global[:,j] = grid_nhi.ravel()
-
-        # flatten (ignore which halo each pixel came from)
-        dist_global = dist_global.ravel()
-        theta_global = theta_global.ravel()
-        grid_global = grid_global.ravel()
-
-        if min_NHI is not None:
-            nhi_global = nhi_global.ravel()
-
-        # bin on the global concatenated grids
-        for j, distBin in enumerate(distBins):
-            if min_NHI is None:
-                w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) )
-            else:
-                w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) & (nhi_global >= min_NHI) )
-
-            # median metallicity as a function of theta, 1 degree bins
-            theta_vals, hist, hist_std, percs = running_median(theta_global[w], grid_global[w], nBins=nThetaBins, percs=[38,50,62])
-
-            #label = 'Theory: IllustrisTNG'
-            label = 'b = %d kpc' % np.mean(distBin) if i == 0 else ''
-            c = next(ax._get_lines.prop_cycler)['color'] if i == 0 else colors[j]
-            if i == 0: colors.append(c)
-
-            l, = ax.plot(theta_vals, hist, linestyles[i], lw=lw, label=label, color=c)
-            if i == 0:
-                ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
-
-        # EAGLE: load and plot (from Freeke) (distBin == [95,105])
-        if 0:
-            if np.mean(massBin) == 9.5: fname = '/u/dnelson/plots/celine.Ztheta/Z_Mhalo9p5.txt'
-            if np.mean(massBin) == 10.5: fname = '/u/dnelson/plots/celine.Ztheta/Z_Mhalo10p5.txt'
-            with open(fname,'r') as f:
-                lines = f.readlines()
-
-            eagle_theta = [float(line.split()[0]) for line in lines]
-            eagle_z = [np.log10(float(line.split()[1])) for line in lines]
-            eagle_z_down = [np.log10(float(line.split()[2])) for line in lines]
-            eagle_z_up = [np.log10(float(line.split()[3])) for line in lines]
-
-            l, = ax.plot(eagle_theta, eagle_z, linestyles[i], lw=lw, label='Theory: EAGLE')
-
-            ax.fill_between(eagle_theta, eagle_z_down, eagle_z_up, color=l.get_color(), alpha=0.1)
-
-    # observational data from Glenn
-    if 0:
-        opts = {'color':'#000000', 'ecolor':'#000000', 'alpha':0.9, 'capsize':0.0, 'fmt':'o'}
-
-        theta = [85.2, 30.4, 8.2, 16.6, 5.8, 86.6]
-        theta_errdown = [3.7,0.4,5.0,0.1,0.5,1.2]
-        theta_errup   = [3.7,0.3,3.0,0.1,0.4,1.5]
-        metal = [-1.32,-1.33,-1.69,-1.48,-0.35,-2.18]
-        metal_errdown = [0.15,0.71,2.0,0.02,0.07,0.04]
-        metal_errup   = [0.15,0.66,0.0,0.04,0.03,0.03]
-
-        ax.errorbar(theta, metal, yerr=[metal_errdown,metal_errup], xerr=[theta_errdown,theta_errup], **opts, 
-            label='Existing Data')
-
-    # second legend?
-    if len(massBins) > 1:
-        sExtra = []
-        lExtra = []
-        for i, massBin in enumerate(massBins):
-            sExtra.append( plt.Line2D( (0,1), (0,0), color='black', lw=lw, marker='', linestyle=linestyles[i]) )
-            lExtra.append( '%4.1f < M$_\\star$ < %4.1f' % (massBin[0],massBin[1]))
-        legend2 = ax.legend(sExtra, lExtra, loc='best')
-        ax.add_artist(legend2)
-
-    # finish and save plot
-    ax.legend(loc='best')
-    mstarStr = 'Mstar=%.1f' % np.mean(massBins[0]) if len(massBins) == 1 else 'Mstar=%dbins' % len(massBins)
-    fig.savefig('%s_vs_theta_%s.pdf' % (dataField.replace(" ",""),mstarStr))
-    plt.close(fig)
-
 def celineWriteH2CDDFBand():
     """ Use H2 CDDFs with many variations (TNG100) to derive an envelope band, f(N_H2) vs. N_H2, and write a text file. """
     sP = simParams(res=1820, run='tng', redshift=0.2) # z=0.2, z=0.8
@@ -362,6 +81,55 @@ def celineWriteH2CDDFBand():
         out += '%.3f %.3f %.3f\n' % (N_H2[i], fN_H2_low[i], fN_H2_high[i])
     with open(filename, 'w') as f:
         f.write(out)
+
+def celineH2GalaxyImage():
+    """ Metallicity distribution in CGM image: Klitsch+ (2019) paper figure """
+    run        = 'tng'
+    res        = 2160
+    redshift   = 0.5
+    rVirFracs  = [0.5, 1.0] # None
+    method     = 'sphMap_global'
+    axes       = [0,1]
+    labelSim   = False
+    relCoords  = True
+    rotation   = 'edge-on'
+    sizeType   = 'kpc'
+    rVirFracs  = None
+
+    size = 40
+    hInd = 564218 # for Klitsch+ (2019) paper
+
+    faceOnOptions = {'rotation'   : 'face-on',
+                     'labelScale' : 'physical',
+                     'labelHalo'  : 'mstar,sfr',
+                     'labelZ'     : True,
+                     'nPixels'    : [800,800]}
+
+    edgeOnOptions = {'rotation'   : 'edge-on',
+                     'labelScale' : False,
+                     'labelHalo'  : False,
+                     'labelZ'     : False,
+                     'nPixels'    : [800,250]}
+
+    # which halo?
+    sP = simParams(res=res, run=run, redshift=redshift)
+    haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
+
+    panels = []
+    panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **faceOnOptions} )
+    panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **edgeOnOptions} )
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = faceOnOptions['nPixels'][0] 
+        colorbars    = True
+        nCols        = 1
+        nRows        = 2
+        fontsize     = 24
+        saveFilename = './%s.%d.%d.%dkpc.pdf' % (sP.simName,sP.snap,hInd,size)
+
+    # render
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def celineHIH2RadialProfiles():
     """ Compute stacked radial profiles of N_HI(b) and N_H2(b). """
@@ -478,7 +246,6 @@ def celineHIDensityVsColumn():
         out += '%7.3f %7.3f %7.3f\n' % (nh2_percs[1,i], nh2_percs[0,i], nh2_percs[2,i])
     with open(filename, 'w') as f:
         f.write(out)
-
 
 def amyDIGzProfiles():
     """ Use some projections to create the SB(em lines) vs z plot. """

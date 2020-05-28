@@ -510,13 +510,16 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
     config = {'ctName':'gray', 'label':'Stellar Composite [%s]' % ', '.join(bands), 'vMM_guess':None}
     return grid_master_u, config, grid_master
 
-def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, indRange=None):
+def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, weightField, indRange=None):
     """ Load the field(s) needed to make a projection type grid, with any unit preprocessing. """
     # mass/weights
+    if weightField != 'mass':
+        print('NOTE: Weighting by particle property [%s] instead of mass!' % weightField)
+
     if partType in ['dm']:
         mass = sP.dmParticleMass
     else:
-        mass = sP.snapshotSubsetP(partType, 'mass', indRange=indRange).astype('float32')
+        mass = sP.snapshotSubsetP(partType, weightField, indRange=indRange).astype('float32')
 
     # neutral hydrogen mass model (do column densities)
     if partField in ['HI','HI_segmented']:
@@ -1009,7 +1012,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['vrad','halo_vrad','radvel','halo_radvel']:
         grid = grid
         config['label']  = '%s Radial Velocity [km/s]' % ptStr
-        config['ctName'] = 'PRGn' # brewer purple-green diverging
+        config['ctName'] = 'curl' #'PRGn' # brewer purple-green diverging
         logMin = False
 
     if partField == 'vrad_vvir':
@@ -1115,7 +1118,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
             alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
-            ptRestrictions=None, **kwargs):
+            ptRestrictions=None, weightField='mass', **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from util.rotation import rotateCoordinateArray
     
@@ -1134,6 +1137,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         optionalStr += '_skip-%s' % str(skipCellIndices)
     if ptRestrictions is not None:
         optionalStr += '_restrict-%s' % str(ptRestrictions)
+    if weightField != 'mass':
+        optionalStr += '_wt-%s' % weightField
     if rotCenter is not None: # need to add rotCenter, post 17 Sep 2018
         optionalStr += str(rotCenter)
     if len(nPixels) == 3:
@@ -1287,7 +1292,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     hsml = clipStellarHSMLs(hsml, sP, pxScale, nPixels, indRange, method=3) # custom age-based clipping
 
             # load: mass/weights, quantity, and render specifications required
-            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, indRange=indRange)
+            mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, 
+                                                       weightField, indRange=indRange)
             assert mass.size == 1 or (mass.size == hsml.size)
 
             # load: skip certain cells/particles?

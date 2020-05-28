@@ -884,7 +884,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
 
         # global pre-cache of selected fields into memory        
         if 0:
-            fieldsToCache = ['pos','mass','O VI mass']
+            fieldsToCache = ['Coordinates','Masses','O VI mass']
             dataCache = {}
             for field in fieldsToCache:
                 cache_key = 'snap%d_%s_%s' % (sP.snap,partType,field.replace(" ","_"))

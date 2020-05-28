@@ -1410,10 +1410,11 @@ def snapshotSubset(sP, partType, fields,
         if cache_key in sP.data:
             # global? (or rather, whatever is in sP.data... be careful)
             if indRange is None:
-                indRange = [0,sP.data[cache_key].shape[0]-1]
-                #print('CAUTION: Cached return, and indRange is None, returning all of sP.data field.')
+                print('CAUTION: Cached return, and indRange is None, returning all of sP.data field.')
+                if sq: return sP.data[cache_key]
+                else: return {fields[0]:sP.data[cache_key]}
 
-            #print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % (cache_key,indRange[0],indRange[1]))
+            print('NOTE: Returning [%s] from cache, indRange [%d - %d]!' % (cache_key,indRange[0],indRange[1]))
             if sq:
                 return sP.data[cache_key][indRange[0]:indRange[1]+1]
             else:
