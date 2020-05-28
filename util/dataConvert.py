@@ -2266,9 +2266,9 @@ def convertEagleSnapshot(snap=20):
     from os.path import isdir, expanduser
     from os import mkdir
 
-    loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
-    #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
-    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
+    #loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
+    loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
+    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504DM/output/'
 
     gfmPhotoPath = expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
 
@@ -2321,20 +2321,20 @@ def convertEagleSnapshot(snap=20):
         # load full file
         data = {}
 
-        for gName in ['PartType0','PartType1','PartType4','PartType5']:
+        gNames = ['PartType0','PartType1','PartType4','PartType5'] if 'DMONLY' not in loadPath else ['PartType1']
+        for gName in gNames:
             data[gName] = {}
 
         with h5py.File(snapPath(chunkNum), 'r') as f:
             header = dict(f['Header'].attrs)
+            config = dict(f['Config'].attrs)
+            params = dict(f['RuntimePars'].attrs)
 
             # dm
             print(' dm')
             if 'PartType1' in f:
                 for key in ['Coordinates','ParticleIDs','Velocity']:
                     data['PartType1'][key] = f['PartType1'][key][()]
-
-            if 'DMONLY' in loadPath:
-                continue
 
             # gas
             print(' gas')
@@ -2383,7 +2383,7 @@ def convertEagleSnapshot(snap=20):
         header['UnitLength_in_cm'] = 3.08568e+21
         header['UnitMass_in_g'] = 1.989e+43
         header['UnitVelocity_in_cm_per_s'] = 100000
-        header['Flag_DoublePrecision'] = 1 if data['PartType0']['Coordinates'].itemsize == 8 else 0
+        header['Flag_DoublePrecision'] = 1 if data['PartType1']['Coordinates'].itemsize == 8 else 0
 
         # field renames
         for pt in data.keys():
@@ -2391,7 +2391,8 @@ def convertEagleSnapshot(snap=20):
                 if from_name in data[pt]:
                     data[pt][to_name] = data[pt].pop(from_name)
 
-        data['PartType0']['CenterOfMass'] = data['PartType0']['Coordinates']
+        if 'PartType0' in data:
+            data['PartType0']['CenterOfMass'] = data['PartType0']['Coordinates']
 
         # unit conversions
         for pt in data.keys():
@@ -2406,25 +2407,27 @@ def convertEagleSnapshot(snap=20):
                 w = np.where(data[pt]['GFM_MetalsTagged'] < 0.0)
                 data[pt]['GFM_MetalsTagged'][w] = 0.0 # enforce >=0
 
-        data['PartType0']['Density'] /= 1e9 # Mpc^-3 -> Kpc^-3
-        if 'BH_Density' in data['PartType5']:
+        if 'PartType0' in data and 'Density' in data['PartType0']:
+            data['PartType0']['Density'] /= 1e9 # Mpc^-3 -> Kpc^-3
+        if 'PartType5' in data and 'BH_Density' in data['PartType5']:
             data['PartType5']['BH_Density'] /= 1e9
 
+        if 'PartType0' in data:
         # gas: ne
-        x_h = data['PartType0']['GFM_Metals'][:,0]
-        mean_mol_wt = data['PartType0']['Temperature'] * sP.units.boltzmann / ((5.0/3.0-1) * data['PartType0']['InternalEnergy'] * 1e10)
-        nelec = (sP.units.mass_proton * 4.0 / mean_mol_wt - 1.0 - 3.0*x_h) / (4*x_h)
-        data['PartType0']['ElectronAbundance'] = nelec
+            x_h = data['PartType0']['GFM_Metals'][:,0]
+            mean_mol_wt = data['PartType0']['Temperature'] * sP.units.boltzmann / ((5.0/3.0-1) * data['PartType0']['InternalEnergy'] * 1e10)
+            nelec = (sP.units.mass_proton * 4.0 / mean_mol_wt - 1.0 - 3.0*x_h) / (4*x_h)
+            data['PartType0']['ElectronAbundance'] = nelec
 
-        # gas: nH
-        sP.redshift = header['Redshift']
-        sP.units.scalefac = header['Time']
-        nH = sP.units.codeDensToPhys(data['PartType0']['Density'], cgs=True, numDens=True) * data['PartType0']['GFM_Metals'][:,0]
-        frac_nH0 = neutral_fraction(nH, sP=None, redshift=header['Redshift'])
-        data['PartType0']['NeutralHydrogenAbundance'] = frac_nH0
+            # gas: nH
+            sP.redshift = header['Redshift']
+            sP.units.scalefac = header['Time']
+            nH = sP.units.codeDensToPhys(data['PartType0']['Density'], cgs=True, numDens=True) * data['PartType0']['GFM_Metals'][:,0]
+            frac_nH0 = neutral_fraction(nH, sP=None, redshift=header['Redshift'])
+            data['PartType0']['NeutralHydrogenAbundance'] = frac_nH0
 
         # stars: photometrics
-        if 'Masses' in data['PartType4']:
+        if 'PartType4' in data and 'Masses' in data['PartType4']:
             data['PartType4']['GFM_StellarPhotometrics'] = np.zeros( (data['PartType4']['Masses'].size,8), dtype='float32' )
 
             stars_formz = 1/data['PartType4']['GFM_StellarFormationTime'] - 1
@@ -2441,7 +2444,7 @@ def convertEagleSnapshot(snap=20):
                 data['PartType4']['GFM_StellarPhotometrics'][:,i] = mags_1msun - 2.5 * stars_masslogmsun
         
         # BHs: bondi and eddington mdot (should be checked more carefully)
-        if 'BH_SurroundingGasVel' in data['PartType5']:
+        if 'PartType5' in data and 'BH_SurroundingGasVel' in data['PartType5']:
             UnitMass_over_UnitTime = 10.22
 
             vrel = data['PartType5']['BH_SurroundingGasVel'] / header['Time'] # km/s
@@ -2469,10 +2472,18 @@ def convertEagleSnapshot(snap=20):
 
         # write
         with h5py.File(writePath(chunkNum), 'w') as f:
-            # header
+            # headers
             h = f.create_group('Header')
             for key in header:
                 h.attrs[key] = header[key]
+            c = f.create_group('Config')
+            for key in config:
+                vals = config[key].decode('ascii').split(" ")
+                if key == 'SVN_Version': vals = ['SVN_Version',config[key]]
+                c.attrs[vals[0]] = vals[1]
+            p = f.create_group('Parameters')
+            for key in params:
+                p.attrs[key] = params[key]
 
             # particle groups
             for gName in data:
