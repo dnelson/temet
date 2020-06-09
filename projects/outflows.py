@@ -1697,11 +1697,14 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
             pdf.close()
 
 def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[None], 
-      clims=[[-3.0,2.0]], config=None, eta=False, discreteColors=False, contours=None, v200norm=False):
+      clims=[[-3.0,2.0]], config=None, eta=False, rawMass=False, rawDens=False, 
+      discreteColors=False, contours=None, v200norm=False):
     """ Explore radial mass flux data, 2D panels where color indicates Mdot_out. 
     Give clims as a list, one per mStarBin, or if just one element, use the same for all bins.
     If config is None, generate many exploration plots, otherwise just create the single desired plot. 
     If eta is True, plot always mass-loadings instead of mass-outflow rates. 
+    if rawMass is True, plot always total mass, instead of mass-outflow rates.
+    if rawDens i True, plot always total mass density, instead of mass-outflow rates.
     If discreteColors is True, split the otherwise continuous colormap into discrete segments. """
 
     sP = simParams(res=sP_in.res, run=sP_in.run, redshift=sP_in.redshift, variant=sP_in.variant) # copy
@@ -1721,6 +1724,18 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
         cbarlabel2 = '%s Inflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType
         saveBase = 'outflowRate2D'
         contourlabel = 'log $\dot{M}_{\\rm out}$'
+    if rawMass:
+        assert not eta and not rawDens
+        cbarlabel = '%s Mass [ log M$_{\\rm sun}$ ]' % ptType
+        cbarlabel2 = '%s Mass [ log ]' % ptType
+        saveBase = 'mass2D'
+        contourlabel = 'log $M_{\\rm %s}$' % ptType
+    if rawDens:
+        assert not eta and not rawMass
+        cbarlabel = '%s $\delta \\rho / <\\rho>$ [ log ]' % ptType
+        cbarlabel2 = '%s $\delta \\rho / <\\rho>$ [ log ]' % ptType
+        saveBase = 'densityRelative2D'
+        contourlabel = 'log $\delta \\rho / <\\rho>$'
 
     if len(clims) == 1: clims = [clims[0]] * len(mStarBins) # one for each
     assert yAxis != 'rad' # keep on x-axis if wanted
@@ -1793,7 +1808,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                 ax.set_ylim(ylim)
 
                 if mdot_2d.shape[1] == binConfig[xAxis].size and xAxis == 'rad':
-                    print('NOTE: TRUNCATING mdot_2d for v200norm.')
+                    # remove new r=rall bin at the end
                     mdot_2d = mdot_2d[:,:-1,:]
 
                 assert mdot_2d.shape[1] == binConfig[xAxis].size - 1
@@ -1827,6 +1842,11 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                     h2d = np.nanmedian(mdot_local, axis=0) # median on subhalo axis
                 if stat == 'mean':
                     h2d = np.nanmean(mdot_local, axis=0) # mean
+
+                if rawDens:
+                    # relative to azimuthal average in each radial bin: delta_rho/<rho>
+                    radial_means = np.nanmean(h2d, axis=1)
+                    h2d /= radial_means[:, np.newaxis]
 
                 # handle negative values (inflow) so they exist post-log, by separating the matrix into positive and negative components
                 h2d_pos = h2d.copy()
@@ -1890,7 +1910,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                 
                 if j > 0: label1 = '' # only label on first redshift
 
-                if vcut_ind[i] is not None:
+                if vcut_ind[i] is not None and np.isfinite(vcut_vals[vcut_ind[i]]):
                     label2 = 'v$_{\\rm rad}$ > %3d km/s' % vcut_vals[vcut_ind[i]]
                     if v200norm: label2 = 'v$_{\\rm rad}$ > %.1f v$_{\\rm 200}$' % vcut_vals[vcut_ind[i]]
                 if rad_ind[i] is not None:
@@ -2048,7 +2068,7 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
                         lastIndPlot = 8 if i == 0 else 9 # stop before noise dominates
                         rad_vals = np.arange(binConfig['rad'].size-1) + 0.5
                         opening_angle = np.rad2deg(y_upper - y_lower)
-                        print(mStarBin,iternum,rad_vals[:lastIndPlot],opening_angle[:lastIndPlot])
+                        #print(mStarBin,iternum,rad_vals[:lastIndPlot],opening_angle[:lastIndPlot])
 
                         ax.plot(rad_vals[:lastIndPlot], y_lower[:lastIndPlot], '-', color='white', alpha=0.3, lw=lw)
                         ax.plot(rad_vals[:lastIndPlot], y_upper[:lastIndPlot], '-', color='white', alpha=0.3, lw=lw)
@@ -2116,11 +2136,13 @@ def gasOutflowRates2DStackedInMstar(sP_in, xAxis, yAxis, mStarBins, redshifts=[N
             fourthQuant = None
 
             mdot, mstar, subids, binConfig, numBins, vcut_vals = \
-              loadRadialMassFluxes(sP, scope, ptType, secondQuant=secondQuant, thirdQuant=thirdQuant, v200norm=v200norm)
+              loadRadialMassFluxes(sP, scope, ptType, secondQuant=secondQuant, thirdQuant=thirdQuant, 
+                                   v200norm=v200norm, rawMass=(rawMass or rawDens))
         else:
             # default behavior
             mdot, mstar, subids, binConfig, numBins, vcut_vals = \
-              loadRadialMassFluxes(sP, scope, ptType, thirdQuant=thirdQuant, fourthQuant=fourthQuant, v200norm=v200norm)
+              loadRadialMassFluxes(sP, scope, ptType, thirdQuant=thirdQuant, fourthQuant=fourthQuant, 
+                                   v200norm=v200norm, rawMass=(rawMass or rawDens))
 
         binConfig['vcut'] = vcut_vals
         numBins['vcut'] = vcut_vals.size
@@ -2710,13 +2732,13 @@ def paperPlots(sPs=None):
     if 0:
         # fig 4: large mosaic of many galaxies (stellar light + gas density)
         galaxyMosaic_topN(numHalosInd=3, panelNum=1)
-        galaxyMosaic_topN(numHalosInd=3, panelNum=1)
+        galaxyMosaic_topN(numHalosInd=3, panelNum=4)
         galaxyMosaic_topN(numHalosInd=1, panelNum=1, redshift=1.0, hIDsPlot=[20], rotation='face-on')
         galaxyMosaic_topN(numHalosInd=1, panelNum=1, redshift=1.0, hIDsPlot=[20], rotation='edge-on')
         galaxyMosaic_topN(numHalosInd=1, panelNum=4, redshift=2.0, hIDsPlot=[9], rotation='edge-on')
         galaxyMosaic_topN(numHalosInd=1, panelNum=4, redshift=2.0, hIDsPlot=[9], rotation='face-on')
 
-    if 1:
+    if 0:
         # fig 5: mass loading as a function of M* at one redshift, three v_rad values with individual markers
         config = {'vcutInds':[0,2,3], 'radInds':[1], 'stat':'mean', 'ylim':[-0.55,2.05], 'skipZeros':False, 'markersize':4.0, 'addModelTNG':True}
         gasOutflowRatesVsQuant(TNG50, xQuant='mstar_30pkpc', ptType='total', eta=True, config=config)
@@ -2821,6 +2843,35 @@ def paperPlots(sPs=None):
         config    = {'stat':'mean', 'skipZeros':False, 'vcutInd':[3,5]}
 
         gasOutflowRates2DStackedInMstar(TNG50_z1, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, config=config)
+
+    if 0:
+        # explore: fig 11 variant (for Martin Navarro+20)
+        sP = simParams(run='tng100-1',redshift=0.0)
+        mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]]
+
+        v200norm = False
+        rawMass  = False
+        rawDens  = False
+
+        if 0:
+            clims  = [[-1.8,-1.1],[-1.8,-0.9],[-2.0,-0.9],[-2.0,-0.4]]
+            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[1,2,5,5]}
+        if 0:
+            v200norm = True
+            clims  = [[-1.8,-1.1],[-1.4,-0.8],[-1.4,-0.4],[-1.4,0.0]]
+            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[3,3,3,3]}
+        if 0:
+            rawMass  = True
+            clims  = [[6,8],[6,8.5],[6.5,9],[6.5,10]]
+            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[0,0,0,0]} # only 0 is all mass (no vcut)
+        if 1:
+            rawDens  = True
+            clims  = [[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]]
+            #clims  = [[-0.1,0.1],[-0.1,0.1],[-0.1,0.1],[-0.1,0.1]]
+            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[0,0,0,0]} # only 0 is all mass (no vcut)
+
+        gasOutflowRates2DStackedInMstar(sP, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, 
+                                        v200norm=v200norm, rawMass=rawMass, rawDens=rawDens, config=config)
 
     if 0:
         # fig 12: visualization of bipolar SN-wind driven outflow, gas density LIC-convolved with vel field, overlaid with streamlines

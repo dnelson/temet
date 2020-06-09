@@ -873,7 +873,7 @@ def haloTimeEvoDataFullbox(sP, haloInds):
     return haloTimeEvoData(sP, haloInds, sP.snap, centerPos, minSnap, maxSnap, largeLimits=largeLimits)
 
 def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz', massField='Masses', 
-                            rawMass=False, fluxMass=True, fluxKE=False, fluxP=False, proj2D=False, v200norm=True):
+                            rawMass=False, fluxMass=True, fluxKE=False, fluxP=False, proj2D=False, v200norm=False):
     """ For every subhalo, use the instantaneous kinematics of gas to derive radial mass, energy, or 
     momemtum flux rates (outflowing/inflowing), and compute high dimensional histograms of this gas 
     mass/energy/mom flux as a function of (rad,vrad,dens,temp,metallicity), as well as a few particular 
@@ -1354,7 +1354,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     return rr, attrs
 
 def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, firstQuant='rad', secondQuant='vrad', 
-                         massField='Masses', selNum=None, fluxKE=False, fluxP=False, v200norm=False):
+                         massField='Masses', selNum=None, fluxKE=False, fluxP=False, rawMass=False, v200norm=False):
     """ Helper to load RadialMassFlux aux catalogs and compute the total mass flux rate (msun/yr), energy 
     flux rate (10^30 erg/s), or momentum flux rate (10^30 g*cm/s^2), according ro fluxKE/fluxP. Do so in radial and 
     radial velocity bins, independent of any other properties of the gas. If thirdQuant is not None, then 
@@ -1376,6 +1376,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
     propStr = 'MassFlux'
     if fluxKE: propStr = 'EnergyFlux'
     if fluxP:  propStr = 'MomentumFlux'
+    if rawMass: propStr = 'Mass'
 
     # line-of-sight projected velocities?
     if thirdQuant == 'vlos':
@@ -1478,6 +1479,8 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
         # now have a [nSubhalos,nRad,nVRad] shaped array, derive scalar quantities for each subhalo in auxCat
         #  --> in each radial shell, sum massflux over all temps, for vrad > vcut, taking vcut as all >= 0 vrad bins
         vcut_inds = np.where(binConfig['vrad'] >= 0.0)[0][:-1] # last is np.inf
+
+        if rawMass: vcut_inds = np.arange(binConfig['vrad'].size-1) # first is -inf (all), last is inf (not useful)
         vcut_vals = binConfig['vrad'][vcut_inds]
 
         # allocate

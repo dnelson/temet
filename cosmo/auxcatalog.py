@@ -2126,7 +2126,7 @@ def wholeBoxColDensGrid(sP, pSplit, species, gridSize=None, onlySFR=False, allSF
         rr = sP.units.codeColDensToPhys(r, cgs=True, numDens=True)
 
         if species in zDensSpecies:
-            ion = cosmo.cloudy.cloudyIon(None)
+            ion = cloudyIon(None)
             rr /= ion.atomicMass(species.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
         if 'MH2' in species:
@@ -3451,6 +3451,7 @@ fieldComputeFunctionMapping = \
                                                              rawMass=True,fluxMass=False,proj2D=True),
    'Subhalo_RadialMass2DProj_SubfindWithFuzz_Gas_SiII' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',
                                                              rawMass=True,fluxMass=False,proj2D=True,massField='Si II mass'),
+   'Subhalo_RadialMass_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',rawMass=True,fluxMass=False),
 
    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous'),
    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous'),

@@ -66,7 +66,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         numSubs = sP.groupCatHeader()['Nsubgroups_Total']
         writeSparseCalcFullSize = False
         if numSubs > allCount:
-            print('Note: Increasing save size from [%d] computed, to full groupcat size [%d].' % (allCount,numSubs))
+            print('Note: Increasing save size from [%d], shape = %s computed, to full groupcat size [%d].' % (allCount,allShape,numSubs))
             allCount = numSubs
             writeSparseCalcFullSize = True
 

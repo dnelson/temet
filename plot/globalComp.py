@@ -586,10 +586,7 @@ def stellarMassFunction(sPs, pdf, highMassEnd=False, centralsOnly=False, use30kp
         #ax.set_xlim([7,11.5])
         ax.set_xlabel('Galaxy Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{\star,1/2}$ ]')
 
-    if centralsOnly:
-        ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ] [ only cen ]')
-    else:
-        ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ] [ cen & sat ]')
+    ax.set_ylabel('Stellar Mass Function [ Mpc$^{-3}$ dex$^{-1}$ ]')
     ax.set_yscale('log')
 
     if use30kpc:
@@ -2225,7 +2222,7 @@ def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig
         if use30kpc:
             # load auxcat
             field = 'Subhalo_Mass_30pkpc_Stars'
-            xx_code = auxCat(sP, fields=[field])[field]
+            xx_code = sP.auxCat(fields=[field])[field]
 
         xx = sP.units.codeMassToLogMsun( xx_code[w] )
 
@@ -2394,7 +2391,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(res=1820, run='tng', redshift=0.0) )
+    sPs.append( simParams(run='tng100-1', redshift=0.0) )
     #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
@@ -2415,7 +2412,7 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
-    #sPs.append( simParams(res=1504, run='eagle', redshift=0.0) )
+    sPs.append( simParams(run='eagle', redshift=0.0) )
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=128, run='tng', variant='6003') )
@@ -2427,7 +2424,7 @@ def plots():
     #sPs.append( simParams(res=512, run='tng', variant='0000') )
     #sPs.append( simParams(res=512, run='tng', variant='5008') )
 
-    if 1:
+    if 0:
         # testing
         pdf = PdfPages('cddfh2_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
         nHIcddf(sPs, pdf, simRedshift=None, molecular=True)
@@ -2498,10 +2495,6 @@ def plots():
     # todo: SFR main sequence (Schaye Fig 11)
     # todo: active/passive fraction vs Mstar (Schaye Fig 11) (or red/blue Vog Fig ?)
     # todo: SFRD decomposed into contribution by halo mass bin (Genel Fig ?)
-
-    # with additional modeling:
-    # todo: M_HI vs Mstar (Vog 14a Fig 3), HI-vs-halo mass relation
-    # todo: R_HI vs Mstar
     # todo: other metal CDDFs (e.g. Schaye Fig 17) (Bird 2016 Fig 6 Carbon) (HI z=0.1 Gurvich2016)
     # todo: Omega_X(z) (e.g. Bird? Fig ?)
     # todo: B/T distributions in Mstar bins, early/late fraction vs Mstar (kinematic)

@@ -97,7 +97,7 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
         if panelNum == 3:
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-3.0,1.0]} )
         if panelNum == 4: 
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[7.5,8.6]} )
+            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'gasdens_tng5', 'valMinMax':[7.0,8.6]} ) # 7.5,8.6
             if rotation == 'edge-on': panels[-1]['valMinMax'] = [8.0, 9.5]
         if panelNum == 5:
             panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
@@ -117,7 +117,7 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
             if i == 2: # upper right
                 panels[-1]['labelZ'] = True
 
-    plotConfig.saveFilename = 'renderHalos_%s-%d_N%d_%s-%s_%s.pdf' % \
+    plotConfig.saveFilename = 'renderHalos_%s-%d_N%d_%s-%s_%s.png' % \
       (sP.simName,sP.snap,len(hIDs),panels[0]['partType'],panels[0]['partField'],rotation)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)

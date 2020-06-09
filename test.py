@@ -13,13 +13,385 @@ from os import path, mkdir, rename
 import matplotlib.pyplot as plt
 
 import cosmo
+from plot.config import figsize
 from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def rewrite_sfrs_eagle(snap=28):
+    """ Rewrite particle-level SFR values from original EAGLE snaps into new snaps. """
+    from tracer.tracerMC import match3
+
+    loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
+    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
+
+    nChunks = 256
+
+    # find path and number of gas particles
+    dirName = glob.glob(loadPath + 'snapshot_%03d_*' % snap)[0].split('/')[-1]
+
+    def fileNameLoad(chunkNum):
+        zStr = dirName.split("_")[-1]
+        return loadPath + dirName + '/snap_%03d_%s.%d.hdf5' % (snap,zStr,chunkNum)
+
+    def fileNameSave(chunkNum):
+        return savePath + 'snapdir_%03d/snap_%03d.%d.hdf5' % (snap,snap,chunkNum)
+
+    with h5py.File(fileNameLoad(0),'r') as f:
+        nGas = f['Header'].attrs['NumPart_Total'][0]
+
+    # load ids from EAGLE
+    ids = np.zeros(nGas, dtype='int64')
+
+    offset = 0
+    for i in range(nChunks):
+        print('load a: ',i,offset,flush=True)
+        with h5py.File(fileNameLoad(i),'r') as f:
+            ids_loc = f['PartType0']['ParticleIDs'][()]
+            ids[offset:offset+ids_loc.size] = ids_loc
+            offset += ids_loc.size
+
+    assert offset == nGas
+
+    # load existing IDs
+    ids_new = np.zeros(nGas, dtype='int64')
+
+    offset = 0
+    for i in range(nChunks):
+        print('load b: ',i,offset,flush=True)
+        with h5py.File(fileNameSave(i),'r') as f:
+            ids_loc = f['PartType0']['ParticleIDs'][()]
+            ids_new[offset:offset+ids_loc.size] = ids_loc
+            offset += ids_loc.size
+
+    assert offset == nGas
+
+    # cross-match
+    print('Matching...',flush=True)
+
+    inds, _ = match3(ids, ids_new)
+    assert inds.size == ids.size
+
+    ids = ids[inds]
+    assert np.array_equal(ids,ids_new)
+    ids = None
+    ids_new = None
+
+    # load SFRs and shuffle
+    sfr = np.zeros(nGas, dtype='float32')
+
+    offset = 0
+    for i in range(nChunks):
+        print('load c: ',i,offset,flush=True)
+        with h5py.File(fileNameLoad(i),'r') as f:
+            sfr_loc = f['PartType0']['StarFormationRate'][()]
+            sfr[offset:offset+sfr_loc.size] = sfr_loc
+            offset += sfr_loc.size
+
+    assert offset == nGas
+
+    sfr = sfr[inds]
+
+    # now can write shuffled sfr values
+    offset = 0
+
+    for i in range(nChunks):
+        print('write: ',i,offset,flush=True)
+        with h5py.File(fileNameSave(i),'a') as f:
+            loc_size = f['PartType0']['StarFormationRate'].size
+            f['PartType0']['StarFormationRate'][:] = sfr[offset:offset+loc_size]
+            offset += loc_size
+
+    assert offset == sfr.size
+    print('Done.')
+
+def eagle_fix_group_sfr(snap=28):
+    """ Recompute GroupSFR from particles. """
+    sP = simParams(run='eagle', snap=snap)
+
+    # gc
+    gc = sP.groupCat(fieldsHalos=['GroupLen','GroupLenType'])
+    gc['GroupOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup']
+
+    nGroupsTot = sP.numHalos
+    haloIDsTodo = np.arange(nGroupsTot, dtype='int32')
+    print(nGroupsTot)
+
+    pt = 'gas'
+    ptNum = 0
+
+    # load/allocate
+    sfr = sP.gas('sfr')
+
+    GroupSFR = np.zeros(nGroupsTot, dtype='float32')
+
+    # loop over halos
+    for i, haloID in enumerate(haloIDsTodo):
+        if i % int(nGroupsTot/20) == 0 and i <= nGroupsTot:
+            print('  %4.1f%%' % (float(i+1)*100.0/nGroupsTot))
+
+        # slice starting/ending indices for gas local to this FoF
+        i0 = gc['GroupOffsetType'][haloID,ptNum]
+        i1 = i0 + gc['GroupLenType'][haloID,ptNum]
+        assert i0 >= 0
+
+        if i1 == i0:
+            continue # zero length of this type
+
+        GroupSFR[i] = np.sum( sfr[i0:i1] )
+
+    # update groupcat
+    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
+    nChunks = 256
+    offset = 0
+
+    for i in range(nChunks):
+        print('write: ',i,offset,flush=True)
+
+        filename = 'groups_%03d/fof_subhalo_tab_%03d.%d.hdf5' % (snap,snap,i)
+        with h5py.File(savePath + filename,'a') as f:
+            if 'GroupSFR' not in f['Group']:
+                continue
+            loc_size = f['Group']['GroupSFR'].size
+            if loc_size == 0:
+                continue
+
+            f['Group']['GroupSFR'][:] = GroupSFR[offset:offset+loc_size]
+            offset += loc_size
+
+    assert offset == GroupSFR.size
+    print('Done.')
+
+def eagle_fix_subhalo_sfr_fields(snap=28):
+    """ Recompute Subhalo*Sfr fields from particles. """
+    sP = simParams(run='eagle', snap=snap)
+
+    # gc
+    fields = ['SubhaloLen','SubhaloLenType','SubhaloPos','SubhaloHalfmassRadType','SubhaloVmaxRad']
+              #'SubhaloGasMetalFractionsSfr','SubhaloGasMetalFractionsSfrWeighted',
+              #'SubhaloGasMetallicitySfr','SubhaloGasMetallicitySfrWeighted',
+              #'SubhaloSFR','SubhaloSFRinRad','SubhaloSFRinMaxRad','SubhaloSFRinHalfRad']
+
+    gc = sP.groupCat(fieldsSubhalos=fields)
+    gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
+    gc['RhalfStarsSq'] = gc['SubhaloHalfmassRadType'][:,4]**2
+    gc['2RhalfStarsSq'] = (2.0*gc['SubhaloHalfmassRadType'][:,4])**2
+    gc['VmaxRadSq'] = gc['SubhaloVmaxRad']**2
+
+    nSubhalosTot = sP.numSubhalos
+    print(nSubhalosTot)
+
+    pt = 'gas'
+    ptNum = 0
+
+    # load/allocate
+    loadFields = ['Coordinates','GFM_Metals','GFM_Metallicity','Masses','StarFormationRate']
+
+    gas = sP.snapshotSubsetP(pt, loadFields)
+    nMetals = gas['GFM_Metals'].shape[1]
+
+    SubhaloGasMetalFractionsSfr = np.zeros((nSubhalosTot,nMetals), dtype='float32')
+    SubhaloGasMetalFractionsSfrWeighted = np.zeros((nSubhalosTot,nMetals), dtype='float32')
+    SubhaloGasMetallicitySfr = np.zeros(nSubhalosTot, dtype='float32')
+    SubhaloGasMetallicitySfrWeighted = np.zeros(nSubhalosTot, dtype='float32')
+
+    SubhaloSFR = np.zeros(nSubhalosTot, dtype='float32')
+    SubhaloSFRinHalfRad = np.zeros(nSubhalosTot, dtype='float32')
+    SubhaloSFRinMaxRad = np.zeros(nSubhalosTot, dtype='float32')
+    SubhaloSFRinRad = np.zeros(nSubhalosTot, dtype='float32')
+
+    # loop over subhalos
+    for i in range(nSubhalosTot):
+        if i % int(nSubhalosTot/20) == 0 and i <= nSubhalosTot:
+            print('  %4.1f%%' % (float(i+1)*100.0/nSubhalosTot))
+
+        # slice starting/ending indices for gas local to this subhalo
+        i0 = gc['SubhaloOffsetType'][i,ptNum]
+        i1 = i0 + gc['SubhaloLenType'][i,ptNum]
+        assert i0 >= 0
+
+        if i1 == i0:
+            continue # zero length of this type
+
+        # distances and selections
+        rr = sP.periodicDistsSq( gc['SubhaloPos'][i,:], gas['Coordinates'][i0:i1,:] )
+
+        w_2rhalf = np.where(rr < gc['2RhalfStarsSq'][i])
+        w_1rhalf = np.where(rr < gc['RhalfStarsSq'][i])
+        w_maxrad = np.where(rr < gc['VmaxRadSq'][i])
+
+        w_sfr = np.where(gas['StarFormationRate'][i0:i1] > 0.0)
+
+        # derive quantities
+        GasMassSfr = np.sum(gas['Masses'][i0:i1][w_sfr])
+        Sfr = np.sum(gas['StarFormationRate'][i0:i1])
+
+        GasMassMetalsSfr = np.sum(gas['GFM_Metals'][i0:i1][w_sfr] * gas['Masses'][i0:i1,np.newaxis][w_sfr], axis=0)
+        GasMassMetalsSfrWeighted = np.sum(gas['GFM_Metals'][i0:i1] * gas['StarFormationRate'][i0:i1,np.newaxis], axis=0)
+        GasMassMetallicitySfr = np.sum(gas['GFM_Metallicity'][i0:i1][w_sfr] * gas['Masses'][i0:i1][w_sfr])
+        GasMassMetallicitySfrWeighted = np.sum(gas['GFM_Metallicity'][i0:i1] * gas['StarFormationRate'][i0:i1])
+
+        if GasMassSfr > 0.0:
+            SubhaloGasMetalFractionsSfr[i,:] = GasMassMetalsSfr / GasMassSfr
+            SubhaloGasMetallicitySfr[i] = GasMassMetallicitySfr / GasMassSfr
+        if Sfr > 0.0:
+            SubhaloGasMetalFractionsSfrWeighted[i,:] = GasMassMetalsSfrWeighted / Sfr
+            SubhaloGasMetallicitySfrWeighted[i] = GasMassMetallicitySfrWeighted / Sfr
+
+        SubhaloSFR[i] = np.sum(gas['StarFormationRate'][i0:i1])
+        SubhaloSFRinHalfRad[i] = np.sum(gas['StarFormationRate'][i0:i1][w_1rhalf])
+        SubhaloSFRinRad[i] = np.sum(gas['StarFormationRate'][i0:i1][w_2rhalf])
+        SubhaloSFRinMaxRad[i] = np.sum(gas['StarFormationRate'][i0:i1][w_maxrad])
+
+        if 0:
+            print(gc['SubhaloGasMetalFractionsSfr'][i,:])
+            print(SubhaloGasMetalFractionsSfr[i,:])
+
+            print(gc['SubhaloGasMetalFractionsSfrWeighted'][i,:])
+            print(SubhaloGasMetalFractionsSfrWeighted[i,:])
+
+            print(gc['SubhaloGasMetallicitySfr'][i], SubhaloGasMetallicitySfr[i])
+            print(gc['SubhaloGasMetallicitySfrWeighted'][i], SubhaloGasMetallicitySfrWeighted[i])
+
+            print(gc['SubhaloSFR'][i], SubhaloSFR[i])
+            print(gc['SubhaloSFRinHalfRad'][i], SubhaloSFRinHalfRad[i])
+            print(gc['SubhaloSFRinRad'][i], SubhaloSFRinRad[i])
+            print(gc['SubhaloSFRinMaxRad'][i], SubhaloSFRinMaxRad[i])
+
+    # update groupcat
+    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504FP/output/'
+    nChunks = 256
+    offset = 0
+
+    for i in range(nChunks):
+        print('write: ',i,offset,flush=True)
+
+        filename = 'groups_%03d/fof_subhalo_tab_%03d.%d.hdf5' % (snap,snap,i)
+        with h5py.File(savePath + filename,'a') as f:
+            if 'SubhaloSFR' not in f['Subhalo']:
+                continue
+            loc_size = f['Subhalo']['SubhaloSFR'].size
+            if loc_size == 0:
+                continue
+
+            f['Subhalo']['SubhaloGasMetalFractionsSfr'][:] = SubhaloGasMetalFractionsSfr[offset:offset+loc_size,:]
+            f['Subhalo']['SubhaloGasMetalFractionsSfrWeighted'][:] = SubhaloGasMetalFractionsSfrWeighted[offset:offset+loc_size,:]
+
+            f['Subhalo']['SubhaloGasMetallicitySfr'][:] = SubhaloGasMetallicitySfr[offset:offset+loc_size]
+            f['Subhalo']['SubhaloGasMetallicitySfrWeighted'][:] = SubhaloGasMetallicitySfrWeighted[offset:offset+loc_size]
+
+            f['Subhalo']['SubhaloSFR'][:]          = SubhaloSFR[offset:offset+loc_size]
+            f['Subhalo']['SubhaloSFRinHalfRad'][:] = SubhaloSFRinHalfRad[offset:offset+loc_size]
+            f['Subhalo']['SubhaloSFRinRad'][:]     = SubhaloSFRinRad[offset:offset+loc_size]
+            f['Subhalo']['SubhaloSFRinMaxRad'][:]  = SubhaloSFRinMaxRad[offset:offset+loc_size]
+            offset += loc_size
+
+    assert offset == SubhaloSFR.size
+    print('Done.')
+
+def compare_subhalos_all_quantities(snap=28):
+    """ Plot diagnostic histograms. """
+    nBins = 50
+
+    sPs = []
+    sPs.append( simParams(run='eagle', snap=snap) )
+    sPs.append( simParams(run='tng100-1', redshift=sPs[0].redshift) ) # closest matching
+
+    for sP in sPs:
+        print(sP.simName, sP.redshift, sP.snap)
+    
+    # start pdf book
+    pdf = PdfPages('compare_subhalos_%s_%d.pdf' % ('-'.join(sP.simName for sP in sPs),snap))
+
+    # get list of subhalo properties
+    with h5py.File(sPs[-1].gcPath(sPs[-1].snap,chunkNum=0),'r') as f:
+        fields_group = list(f['Group'].keys())
+        fields_sub = list(f['Subhalo'].keys())
+
+    for field in fields_sub + fields_group:
+        # start plot
+        if 'Bfld' in field or field == 'SubhaloFlag':
+            continue
+        print(field)
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel(field + ' [log]')
+        ax.set_ylabel('log N')
+
+        # loop over runs
+        for i, sP in enumerate(sPs):
+            # load
+            if field in fields_sub:
+                vals = sP.subhalos(field)
+            else:
+                vals = sP.halos(field)
+
+            # histogram and plot
+            vals = vals.ravel() # 1D for all multi-D
+
+            if field not in ['SubhaloCM','SubhaloGrNr','SubhaloIDMostbound']:
+                vals = np.log10(vals)
+            vals = vals[np.isfinite(vals)]
+
+            label = sP.simName + ' snap=%d (z=%.1f)' % (sP.snap,sP.redshift)
+            ax.hist(vals, bins=nBins, alpha=0.6, label=label)
+
+        # finish plot
+        ax.legend(loc='best')
+        pdf.savefig()
+        plt.close(fig)
+
+    # by type
+    for field in fields_sub + fields_group:
+        if field[-4:] != 'Type':
+            continue
+        print(field)
+
+        # load
+        data = []
+        labels = []
+
+        for i, sP in enumerate(sPs):
+            
+            if field in fields_sub:
+                vals = sP.subhalos(field)
+            else:
+                vals = sP.halos(field)
+
+            label = sP.simName + ' snap=%d (z=%.1f)' % (sP.snap,sP.redshift)
+
+            data.append(vals)
+            labels.append(label)
+
+        # separate plot for each type
+        for pt in [0,1,4,5]:
+            fig = plt.figure(figsize=figsize)
+            ax = fig.add_subplot(111)
+
+            ax.set_xlabel(field + ' [Type=%d] [log]' % pt)
+            ax.set_ylabel('log N')
+
+            for i, sP in enumerate(sPs):
+                vals = np.squeeze(data[i][:,pt])
+                w = np.where(vals == 0)
+                print(field,pt,' number of zeros: ',len(w[0]),' of ',vals.size)
+                vals = np.log10(vals)
+                vals = vals[np.isfinite(vals)]
+
+                ax.hist(vals, bins=nBins, alpha=0.6, label=labels[i])
+
+            # finish plot
+            ax.legend(loc='best')
+            pdf.savefig()
+            plt.close(fig)
+
+    # finish
+    pdf.close()
+
 def lgal_cat_check():
     """ Check Reza's L-Galaxies catalog. """
-    from plot.config import figsize
     from util.helper import running_median
 
     sP = simParams(run='tng100-1', redshift=0.0) # tng300-1
@@ -822,8 +1194,6 @@ def check_colors_benedikt():
     plt.close(fig)
 
 def guinevere_mw_sample():
-    from plot.config import figsize
-
     # get subhaloIDs
     sP_tng = simParams(res=1820,run='tng',redshift=0.0)
     sP_ill = simParams(res=1820,run='illustris',redshift=0.0)
@@ -1002,7 +1372,6 @@ def vis_cholla_snapshot():
              'momentum_z':[0.0, 1.0]}
 
     # start plot
-    from plot.config import figsize
     from util.helper import loadColorTable
     from  matplotlib.colors import Normalize
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -2068,7 +2437,6 @@ def checkLastStarTimeIllustris():
 
 def enrichChecks():
     """ Check GFM_WINDS_DISCRETE_ENRICHMENT comparison runs. """
-    from util import simParams
 
     # config
     #sP1 = simParams(res=256, run='L12.5n256_discrete_dm0.0', redshift=0.0)

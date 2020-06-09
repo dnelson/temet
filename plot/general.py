@@ -266,14 +266,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
     if xlim is None: xlim = xlim_quant
-    xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
+    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
 
     if xlog: xvals = logZeroNaN(xvals)
 
     # load: y-axis
     ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
+    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
 
     if ylog: yvals = logZeroNaN(yvals)
 

@@ -2266,9 +2266,10 @@ def convertEagleSnapshot(snap=20):
     from os.path import isdir, expanduser
     from os import mkdir
 
-    #loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
-    loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
-    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504DM/output/'
+    loadPath = '/virgo/simulations/Eagle/L0100N1504/REFERENCE/data/'
+    #loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
+    #savePath = '/virgo/simulations/Illustris/Eagle-L68n1504DM/output/'
+    savePath = '/u/dnelson/data/test/'
 
     gfmPhotoPath = expanduser("~") + '/data/Arepo_GFM_Tables_TNG/Photometrics/stellar_photometrics.hdf5'
 

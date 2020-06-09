@@ -1,7 +1,7 @@
 """
 projects/lrg.py
   Plots: LRG CGM paper (TNG50).
-  in prep.
+  https://arxiv.org/abs/2005.09654
 """
 import numpy as np
 import h5py

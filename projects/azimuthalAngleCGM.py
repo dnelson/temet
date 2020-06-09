@@ -144,7 +144,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
         gc = sP.groupCat(fieldsSubhalos=['mstar_30pkpc_log','central_flag','SubhaloPos'])
 
         # global pre-cache of selected fields into memory
-        if 1 and fullbox:
+        if 0 and fullbox:
             # restrict to sub-volumes around targets
             print('Caching [Coordinates] now...', flush=True)
             pos = sP.snapshotSubsetP('gas', 'pos', float32=True)
@@ -172,7 +172,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
             # insert into cache, load other fields
             dataCache = {}
             dataCache['snap%d_gas_Coordinates' % sP.snap] = pos
-            for key in ['Masses','GFM_Metallicity']:
+            for key in ['Masses','GFM_Metallicity','Density','NeutralHydrogenAbundance']:
                 print('Caching [%s] now...' % key, flush=True)
                 dataCache['snap%d_gas_%s' % (sP.snap,key)] = sP.snapshotSubsetP('gas', key, inds=pInds)
             dataCache['snap%d_gas_GFM_Metallicity' % sP.snap] = sP.snapshotSubsetP('gas', 'GFM_Metallicity', inds=pInds)
@@ -327,7 +327,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
         ax.add_artist(legend2)
 
     # finish and save plot
-    ax.legend(loc='best')
+    ax.legend(ncol=(1 if len(distBins)==1 else 2), loc='best')
     sPstr = "-".join(sP.simName for sP in sPs)
     mstarStr = 'Mstar=%.1f' % np.mean(massBins[0]) if len(massBins) == 1 else 'Mstar=%dbins' % len(massBins)
     distStr = 'b=%d' % np.mean(distBins[0]) if len(distBins) == 1 else 'b=%dbins' % len(distBins)
@@ -339,11 +339,6 @@ def paperPlots():
     """ Driver. """
     redshift = 0.5
     TNG50 = simParams(run='tng50-1', redshift=redshift)
-
-    # TODO: rvir=70-90 for M*=9.0, rvir=90-130 for M*=9.5
-    #  -- for b=100 need global grids at these masses
-
-    # TODO: can do metal_solar grids weighting by neutralfrac instead of gas cell mass?
 
     if 0:
         # figure 1: schematic visual
@@ -362,25 +357,24 @@ def paperPlots():
         # figure 3a: subplots for variation of (Z,theta) with M*
         field = 'metal_solar'
         massBins = [ [8.49,8.51], [8.99, 9.01], [9.46,9.54] , [9.95,10.05], [10.44,10.56] ]
-        distBins = [[45,55]]#[ [95,105] ] # TODO: for low M* and b=100 may need global?
+        distBins = [ [95,105]]
 
-        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=0.8, ylim=[-2.0,0.0])
+        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=0.8, 
+            ylim=[-1.8,-0.2], fullbox=True)
 
     if 0:
         # figure 3b: subplots for variation of (Z,theta) with b
         field = 'metal_solar'
         massBins = [ [8.98, 9.02] ]
-        distBins = [ [20,30], [45,55], [95,105] ] # TODO: would like b=200, need global
+        distBins = [ [20,30], [45,55], [95,105], [195,205] ]
 
-        sP = simParams(run='tng50-2', redshift=0.5)
-
-        metallicityVsTheta([sP], field, massBins=massBins, distBins=distBins, sizefac=0.8, fullbox=True)
+        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=0.8, ylim=[-1.8,-0.6], fullbox=True)
 
     if 0:
         # figure 3c: subplots for variation of (Z,theta) with redshift
         field = 'metal_solar'
         massBins = [ [8.98, 9.02] ]
-        distBins = [[45,55]] #[ [95,105] ] # TODO: for b=100 may need global?
+        distBins = [ [95,105] ]
         redshifts = [0.5, 1.5, 2.5]
         ylim = None #[-2.2,-1.0]
 
@@ -388,17 +382,17 @@ def paperPlots():
         for redshift in redshifts:
             sPs.append( simParams(run='tng50-1',redshift=redshift))
 
-        metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=0.8, ylim=ylim)
+        metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=0.8, ylim=ylim, fullbox=True)
 
-    if 0:
+    if 1:
         # figure 3d: subplots for variation of (Z,theta) with minimum N_HI
         field = 'metal_solar'
-        massBins = [ [8.97, 9.03] ]
-        distBins = [[45,55]] #[ [85,115] ] # TODO: for b=100 may need global?
-        min_NHI = [13, 16, 17, 18]
+        massBins = [ [8.95, 9.05] ]
+        distBins = [[ 180,220]] #[ [80,120] ]
+        min_NHI = [13, 15, 16, 17, 18]
 
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, min_NHI=min_NHI, 
-                           sizefac=0.8, nThetaBins=45)
+                           sizefac=0.8, nThetaBins=45, ylim=[-1.8,-0.8], fullbox=True)
 
     if 0:
         # figure 3x: resolution convergence
