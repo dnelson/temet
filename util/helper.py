@@ -88,6 +88,9 @@ def logZeroSafe(x, zeroVal=1.0):
 
 def logZeroMin(x):
     """ Take log10 of input variable, setting zeros to 100 times less than the minimum. """
+    if isinstance(x,np.number) and not isinstance(x,np.ndarray) and x.size == 1:
+        x = np.array([x])
+
     with np.errstate(invalid='ignore'):
         w = np.where(x > 0.0)
 

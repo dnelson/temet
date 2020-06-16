@@ -499,6 +499,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     gc['SubhaloOffsetType'] = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo']
     nSubsTot = sP.numSubhalos
 
+    if nSubsTot == 0:
+        return np.nan, {} # e.g. snapshots so early there are no subhalos
+
     if scope == 'fof':
         # replace 'SubhaloLenType' and 'SubhaloOffsetType' by parent FoF group values (for both cen/sat)
         GroupLenType = sP.groupCat(fieldsHalos=['GroupLenType'])
@@ -518,6 +521,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
     subhaloIDsTodo, indRange, nSubsSelected = _pSplitBounds(sP, pSplit, minStellarMass, cenSatSelect=cenSatSelect)
     nSubsDo = len(subhaloIDsTodo)
+
+    if ptType not in indRange:
+        return np.nan, {} # e.g. snapshots so early there are no stars
 
     indRange = indRange[ptType] # choose index range for the requested particle type
 
@@ -590,7 +596,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     if op == 'ufunc': 
         r = np.zeros( allocSize, dtype=dtype )
     else:
-        if particles[ptProperty].ndim == 1:
+        if particles[ptProperty].ndim in [0,1]:
             r = np.zeros( nSubsDo, dtype=dtype )
         else:
             r = np.zeros( (nSubsDo,particles[ptProperty].shape[1]), dtype=dtype )
@@ -2987,6 +2993,19 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
    'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
+
+   'Subhalo_StellarAge_2rhalf_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarAge_30pkpc_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=30.0,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarAge_NoRadCut_rBandLumWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='bandLum-sdss_r'),
+   'Subhalo_StellarAge_2rhalf_MassWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='2rhalfstars',weighting='mass'),
+   'Subhalo_StellarAge_30pkpc_MassWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=30.0,weighting='mass'),
+   'Subhalo_StellarAge_NoRadCut_MassWt'    : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad=None,weighting='mass'),
 
    'Subhalo_StellarZform_VIMOS_Slit'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='z_form',op='mean',rad='legac_slit',weighting='mass'),

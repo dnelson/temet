@@ -2575,7 +2575,7 @@ def createVirtualSimHDF5():
     at least one of every particle type! Note: run in simulation root dir, since we make relative path links. """
     from util.simParams import simParams
 
-    sP = simParams(run='millennium-2')
+    sP = simParams(run='eagle')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     global_attr_skip = ['Ngroups_ThisFile','Ngroups_Total','Nids_ThisFile','Nids_Total','Nsubgroups_ThisFile','Nsubgroups_Total',
@@ -3063,7 +3063,7 @@ def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
 
-    sP = simParams(res=1820,run='tng_dark')
+    sP = simParams(run='eagle')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -3071,7 +3071,7 @@ def supplementVirtualSimHDF5():
     snaps = sP.validSnapList()
 
     # start custom
-    if 1:
+    if 0:
         # add missing Offsets
         for snap in snaps:
             # load snapshot and group catalog headers
@@ -3081,6 +3081,19 @@ def supplementVirtualSimHDF5():
             baseName = 'Offsets/%d' % snap
             gNames = ['Group','Subhalo']
 
+            _addPostprocessingCat(fSim,filepath,baseName,gNames)
+
+    if 0:
+        # add StellarAssembly (subhalo) catalogs
+        for snap in snaps:
+            #filepath = 'postprocessing/StellarAssembly/galaxies_%03d.hdf5' % snap
+            #baseName = 'Groups/%d/Subhalo/StellarAssembly' % snap
+            #gNames = ['/']
+            #_addPostprocessingCat(fSim,filepath,baseName,gNames)
+
+            filepath = 'postprocessing/StellarAssembly/galaxies_in_rad_%03d.hdf5' % snap
+            baseName = 'Groups/%d/Subhalo/StellarAssemblyInRad' % snap
+            gNames = ['/']
             _addPostprocessingCat(fSim,filepath,baseName,gNames)
 
     if 0:

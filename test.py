@@ -18,6 +18,41 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def copy_eagle_config_param_attrs(snap=28):
+    loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
+    savePath = '/virgo/simulations/Illustris/Eagle-L68n1504DM/output/'
+
+    nChunks = 40 # 256
+
+    # find path
+    dirName = glob.glob(loadPath + 'snapshot_%03d_*' % snap)[0].split('/')[-1]
+
+    def fileNameLoad(chunkNum):
+        zStr = dirName.split("_")[-1]
+        return loadPath + dirName + '/snap_%03d_%s.%d.hdf5' % (snap,zStr,chunkNum)
+
+    def fileNameSave(chunkNum):
+        return savePath + 'snapdir_%03d/snap_%03d.%d.hdf5' % (snap,snap,chunkNum)
+
+    # load attributes
+    with h5py.File(fileNameLoad(0),'r') as f:
+        config = dict(f['Config'].attrs)
+        params = dict(f['RuntimePars'].attrs)
+
+    # write attributes
+    for i in range(nChunks):
+        print('write: ',snap,i,flush=True)
+        with h5py.File(fileNameSave(i),'a') as f:
+            config_eagle = f.create_group('Config_Eagle')
+            params_eagle = f.create_group('Parameters_Eagle')
+
+            for key in config:
+                config_eagle.attrs[key] = config[key]
+            for key in params:
+                params_eagle.attrs[key] = params[key]
+
+    print('Done.')
+
 def rewrite_sfrs_eagle(snap=28):
     """ Rewrite particle-level SFR values from original EAGLE snaps into new snaps. """
     from tracer.tracerMC import match3
