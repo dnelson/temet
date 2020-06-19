@@ -14,7 +14,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
 
 from util import simParams
-from util.helper import loadColorTable, logZeroNaN, running_median
+from util.helper import loadColorTable, logZeroNaN, running_median, sampleColorTable
 from plot.config import *
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
@@ -61,7 +61,8 @@ def singleHaloImage(sP, conf=0):
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRestrictions=None, 
-                       fullbox=False, nThetaBins=90, addObs=False, addEagle=False, sizefac=1.0, ylim=None):
+                       fullbox=False, nThetaBins=90, addObs=False, addEagle=False, sizefac=1.0, 
+                       ylim=None, percs=[38,50,62]):
     """ Use some projections to create the Z_gas vs. theta plot. 
     dataField : what to plot on y-axis
     massBins: list of 2-tuples, one or more M* bins
@@ -81,6 +82,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     assert isinstance(massBins,list) and len(massBins) >= 1
     assert isinstance(distBins,list) and len(distBins) >= 1
     assert isinstance(min_NHI,list) and len(min_NHI) >= 1
+    assert percs[1] == 50
 
     # grid config (must recompute grids)
     method    = 'sphMap' # sphMap_global for paper figure
@@ -137,7 +139,10 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     
     # loop over mass/distance/sP bins
     loadHI = not all(NHI is None for NHI in min_NHI)
-    colors = []
+    #colors = [] # old
+    ls_massbins = []
+    colors = sampleColorTable('plasma', len(massBins)*len(distBins)*len(min_NHI)*len(sPs), bounds=[0.1,0.8])
+    #colors = sampleColorTable('plasma', 5, bounds=[0.1,0.8])
 
     for k, sP in enumerate(sPs):
         # load
@@ -258,7 +263,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                     w = np.where( (dist_global >= distBin[0]) & (dist_global < distBin[1]) & (nhi_global >= NHI) )
 
                 # median metallicity as a function of theta, 1 degree bins
-                theta_vals, hist, hist_std, percs = running_median(theta_global[w], grid_global[w], nBins=nThetaBins, percs=[38,50,62])
+                theta_vals, hist, hist_std, hist_percs = running_median(theta_global[w], grid_global[w], nBins=nThetaBins, percs=percs)
 
                 # label and color
                 label = 'b = %d kpc' % np.mean(distBin) if i == 0 else ''
@@ -266,6 +271,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                 if addEagle: label = sP.simName
                 #if len(massBins) > 1: label += '($M_\\star = %.1f$' % np.mean(massBin)
                 if NHI is not None: label += ' N$_{\\rm HI} > 10^{%d}$ cm$^{-2}$' % NHI
+                if NHI is None and len(min_NHI)>1: label += ' N$_{\\rm HI}$ > 0'
                 if len(sPs) > 1 and sPs[1].res != sPs[0].res: label += ' (%s)' % sP.simName
                 if len(sPs) > 1 and sPs[1].redshift != sPs[0].redshift: label += 'z = %.1f' % sP.redshift
 
@@ -274,15 +280,26 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                 #    colors.append(next(ax._get_lines.prop_cycler)['color'])
                 #c = colors[j+k + (i if len(distBins)==1 else 0)]
                 # always vary color with each line:
-                colors.append( next(ax._get_lines.prop_cycler)['color'] )
-                c = colors[-1]
 
-                ls = linestyles[(i+k) if len(massBins)==1 and len(sPs)==1 else (j)]
+                if 0:
+                    # old
+                    colors.append( next(ax._get_lines.prop_cycler)['color'] )
+                    c = colors[-1]
+                    ls = linestyles[(i+k) if len(massBins)==1 and len(sPs)==1 else (j)]
+                if 1:
+                    # new
+                    c = colors[i+j+k]
+                    ls = ':'
+                    if np.mean(massBin) == 9.0 and np.mean(distBin) == 100 and \
+                       np.abs(sP.redshift-0.5)<0.01 and NHI is None: # fiducial
+                        ls = '-'
+
+                ls_massbins.append(ls)
 
                 # plot line and shaded band
                 l, = ax.plot(theta_vals, hist, linestyle=ls, lw=lw, label=label, color=c)
                 if i == 0 or k == 0:
-                    ax.fill_between(theta_vals, percs[0,:], percs[-1,:], color=l.get_color(), alpha=0.1)
+                    ax.fill_between(theta_vals, hist_percs[0,:], hist_percs[-1,:], color=l.get_color(), alpha=0.1)
 
             # EAGLE: load and plot (from Freeke) (distBin == [95,105])
             if addEagle:
@@ -296,7 +313,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                 eagle_z_down = [np.log10(float(line.split()[2])) for line in lines]
                 eagle_z_up = [np.log10(float(line.split()[3])) for line in lines]
 
-                l, = ax.plot(eagle_theta, eagle_z, linestyles[i], lw=lw, label='EAGLE')
+                l, = ax.plot(eagle_theta, eagle_z, ls, lw=lw, label='EAGLE')
 
                 ax.fill_between(eagle_theta, eagle_z_down, eagle_z_up, color=l.get_color(), alpha=0.1)
 
@@ -319,7 +336,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
         sExtra = []
         lExtra = []
         for i, massBin in enumerate(massBins):
-            ls = linestyles[i] if len(distBins) > 1 else '-'
+            ls = ls_massbins[i] #if len(distBins) > 1 else '-'
             c = colors[i] if len(distBins) == 1 else 'black'
             sExtra.append( plt.Line2D( (0,1), (0,0), color=c, lw=lw, marker='', linestyle=ls) )
             lExtra.append( 'M$_\\star$ = %.1f' % np.mean(massBin) )
@@ -327,7 +344,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
         ax.add_artist(legend2)
 
     # finish and save plot
-    ax.legend(ncol=(1 if len(distBins)==1 else 2), loc='best')
+    ax.legend(ncol=(1 if len(distBins)==1 and len(sPs)==1 else 2), loc='best')
     sPstr = "-".join(sP.simName for sP in sPs)
     mstarStr = 'Mstar=%.1f' % np.mean(massBins[0]) if len(massBins) == 1 else 'Mstar=%dbins' % len(massBins)
     distStr = 'b=%d' % np.mean(distBins[0]) if len(distBins) == 1 else 'b=%dbins' % len(distBins)
@@ -340,6 +357,10 @@ def paperPlots():
     redshift = 0.5
     TNG50 = simParams(run='tng50-1', redshift=redshift)
 
+    ylim = [-2.0, -0.4] #[-1.3,-0.6]
+    sf = 0.8
+    percs = [38,50,62] #[16,50,84]
+
     if 0:
         # figure 1: schematic visual
         singleHaloImage(sP, conf=0)
@@ -351,7 +372,7 @@ def paperPlots():
         massBins = [ [9.46, 9.54] ]
         distBins = [ [95, 105] ]
 
-        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, addEagle=True)
+        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, addEagle=True, ylim=ylim)
 
     if 0:
         # figure 3a: subplots for variation of (Z,theta) with M*
@@ -359,8 +380,7 @@ def paperPlots():
         massBins = [ [8.49,8.51], [8.99, 9.01], [9.46,9.54] , [9.95,10.05], [10.44,10.56] ]
         distBins = [ [95,105]]
 
-        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=0.8, 
-            ylim=[-1.8,-0.2], fullbox=True)
+        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
     if 0:
         # figure 3b: subplots for variation of (Z,theta) with b
@@ -368,31 +388,30 @@ def paperPlots():
         massBins = [ [8.98, 9.02] ]
         distBins = [ [20,30], [45,55], [95,105], [195,205] ]
 
-        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=0.8, ylim=[-1.8,-0.6], fullbox=True)
+        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
     if 0:
         # figure 3c: subplots for variation of (Z,theta) with redshift
         field = 'metal_solar'
         massBins = [ [8.98, 9.02] ]
         distBins = [ [95,105] ]
-        redshifts = [0.5, 1.5, 2.5]
-        ylim = None #[-2.2,-1.0]
+        redshifts = [0.0, 0.5, 1.5, 2.5]
 
         sPs = []
         for redshift in redshifts:
             sPs.append( simParams(run='tng50-1',redshift=redshift))
 
-        metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=0.8, ylim=ylim, fullbox=True)
+        metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
-    if 1:
+    if 0:
         # figure 3d: subplots for variation of (Z,theta) with minimum N_HI
         field = 'metal_solar'
         massBins = [ [8.95, 9.05] ]
-        distBins = [[ 180,220]] #[ [80,120] ]
-        min_NHI = [13, 15, 16, 17, 18]
+        distBins = [ [70,130] ]
+        min_NHI = [None, 13, 15, 17] # 16, 18
 
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, min_NHI=min_NHI, 
-                           sizefac=0.8, nThetaBins=45, ylim=[-1.8,-0.8], fullbox=True)
+                           sizefac=sf, nThetaBins=45, ylim=ylim, fullbox=True, percs=percs)
 
     if 0:
         # figure 3x: resolution convergence
@@ -405,4 +424,4 @@ def paperPlots():
         for run in runs:
             sPs.append( simParams(run=run, redshift=redshift) )
 
-        metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=0.8)
+        metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=sf)

@@ -2059,11 +2059,11 @@ def clumpPropertiesVsHaloMass(sPs):
         fig.savefig('clumps_%s_vs_%s_sP%d_%d_min%d.pdf' % (prop,xQuant,len(sPs),sP.snap,minCellsPerClump))
         plt.close(fig)
 
-def clumpRadialProfiles(sP, haloID, selections):
+def clumpRadialProfiles(sP, haloID, selections, norm=False):
     """ For all the clumps satisfying selection in haloID, plot a number of radial profiles of their resolved, internal 
     structure, e.g. density, temperture. """
 
-    xlim = [0.0, 5.0]
+    xlim = [0.0, 10.0]
     xlabel = "Cloud-centric Distance [ pkpc ]"
 
     partType = 'gas'
@@ -2078,6 +2078,12 @@ def clumpRadialProfiles(sP, haloID, selections):
     bin_cens = bins[:-1] + (xlim[1]-xlim[0])/nBins/2
     maxAllocNumElem = int(1e9) # one billion entries, 8 bytes per, 8 GB
 
+    if sP.snap != 67: raise Exception('Should convert bin_cens to pkpc, check!.')
+
+    if norm:
+        props = ['z_solar']
+        assert len(props) == 1 # otherwise generalize
+
     # load segmentation
     objs, obj_props = voronoiThresholdSegmentation(sP, haloID=haloID, 
         propName=thPropName, propThresh=thPropThresh, propThreshComp=thPropThreshComp)
@@ -2089,6 +2095,8 @@ def clumpRadialProfiles(sP, haloID, selections):
 
     for selection in selections:
         selStr = '-'.join(['%s-%g-%g' % (key,bound[0],bound[1]) for key,bound in selection.items()])
+        if xlim[1] != 5.0: selStr += '_xmax=%d' % xlim[1]
+        if norm: selStr += '_normT5'
         saveFilename = sP.derivPath + 'cache/cache_clumpprofs_%s_%d_%s_props%d.hdf5' % (sP.simName,haloID,selStr,len(props))
 
         result = {}
@@ -2118,11 +2126,20 @@ def clumpRadialProfiles(sP, haloID, selections):
 
         print('Processing [%d] clouds...' % len(w_cloud[0]))
 
-        # allocate (per particle dist/)
-        dists  = np.zeros( maxAllocNumElem, dtype='float32' )
-        p_inds = np.zeros( maxAllocNumElem, dtype='int32' )
-        c_inds = np.zeros( maxAllocNumElem, dtype='int32' )
-        offset = 0
+        # allocate (per particle dist)
+        if not norm:
+            dists  = np.zeros( maxAllocNumElem, dtype='float32' )
+            p_inds = np.zeros( maxAllocNumElem, dtype='int32' )
+            c_inds = np.zeros( maxAllocNumElem, dtype='int32' )
+            offset = 0
+        else:
+            prop = sP.snapshotSubset(partType, props[0], haloID=haloID)
+            temp = sP.snapshotSubset(partType, 'temp', haloID=haloID)
+
+            profs = np.zeros( (nBins-1,nClouds), dtype='float32' )
+            profs.fill(np.nan)
+
+            assert percs[1] == 50 # we only do median
 
         # load fof-scope particle data
         pos = sP.snapshotSubset(partType, 'pos', haloID=haloID)
@@ -2135,56 +2152,82 @@ def clumpRadialProfiles(sP, haloID, selections):
 
             w = np.where(dists_loc <= xlim[1])
 
-            dists[offset:offset+len(w[0])] = dists_loc[w]
-            p_inds[offset:offset+len(w[0])] = w[0]
-            c_inds[offset:offset+len(w[0])] = w_cloud[0][j]
+            if norm:
+                # compute profile per cloud, normalize to its value at the largest distances considered
+                prop_loc = prop[w]
+                temp_loc = temp[w]
+                dists_loc = dists_loc[w]
 
-            offset += len(w[0])
+                # restrict to hot gas beyond size
+                w_zero = np.where( (dists_loc>bounds[1]) & (temp_loc<5.0) )
+                dists_loc[w_zero] = xlim[0] - 1 # move outside any bin
 
-        dists = dists[0:offset]
-        p_inds = p_inds[0:offset]
-        c_inds = c_inds[0:offset]
+                # profile
+                prof, _, _ = binned_statistic(dists_loc, prop_loc, 'mean', bins=nBins-1, range=[xlim])
+                norm_val = np.mean(prof[-int(nBins/10):])
 
-        # loop over each requested property
-        for j, prop in enumerate(props):
-            # allocate
-            print(prop)
-            result[prop] = np.zeros( (nBins-1,len(percs)), dtype='float32' )
-            result[prop].fill(np.nan)
+                profs[:,j] = prof / norm_val
+            else:
+                # save distances and indices, we will compute mean stacked profiles all together later
+                dists[offset:offset+len(w[0])] = dists_loc[w]
+                p_inds[offset:offset+len(w[0])] = w[0]
+                c_inds[offset:offset+len(w[0])] = w_cloud[0][j]
 
-            # load particle data, and sort on distance
-            vals = sP.snapshotSubset(partType, prop, haloID=haloID)
-            vals = vals[p_inds]
+                offset += len(w[0])
 
-            if prop == 'vrel':
-                # use this to compute radial velocity with respect to the cloud
-                refVel = obj_props['vrel'][c_inds]
-                refPos = obj_props[cenfield][c_inds]
-                # sP.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
+        if norm:
+            # save and skip the rest
+            result[props[0]] = np.zeros( (nBins-1,len(percs)), dtype='float32' )
+            result[props[0]].fill(np.nan)
 
-                loc_pos = sP.snapshotSubset(partType, 'pos', haloID=haloID)
-                loc_pos = loc_pos[p_inds]
+            result[props[0]][:,1] = np.nanmedian(profs, axis=1)
 
-                # calculate position, relative to subhalo center (pkpc)
-                for i in range(3):
-                    loc_pos[:,i] -= refPos[:,i]
+        else:
+            # truncate
+            dists = dists[0:offset]
+            p_inds = p_inds[0:offset]
+            c_inds = c_inds[0:offset]
 
-                loc_pos = sP.units.codeLengthToKpc(loc_pos)
-                rad = np.linalg.norm(loc_pos, 2, axis=1)
+            # loop over each requested property
+            for j, prop in enumerate(props):
+                # allocate
+                print(prop)
+                result[prop] = np.zeros( (nBins-1,len(percs)), dtype='float32' )
+                result[prop].fill(np.nan)
 
-                # correct velocities for cloud CM motion
-                for i in range(3):
-                    vals[:,i] -= refVel[:,i]
+                # load particle data, and sort on distance
+                vals = sP.snapshotSubset(partType, prop, haloID=haloID)
+                vals = vals[p_inds]
 
-                # overwrite vals with radial velocity (km/s), negative=inwards
-                vals = ( vals[:,0] * loc_pos[:,0] + vals[:,1] * loc_pos[:,1] + vals[:,2] * loc_pos[:,2] ) / rad 
+                if prop == 'vrel':
+                    # use this to compute radial velocity with respect to the cloud
+                    refVel = obj_props['vrel'][c_inds]
+                    refPos = obj_props[cenfield][c_inds]
+                    # sP.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
 
-            # binned statistic, and stamp
-            for i in range(nBins-1):
-                w = np.where( (dists > bins[i]) & (dists <= bins[i+1]) )
-                if len(w[0]) == 0:
-                    continue
-                result[prop][i,:] = np.nanpercentile(vals[w], percs)
+                    loc_pos = sP.snapshotSubset(partType, 'pos', haloID=haloID)
+                    loc_pos = loc_pos[p_inds]
+
+                    # calculate position, relative to subhalo center (pkpc)
+                    for i in range(3):
+                        loc_pos[:,i] -= refPos[:,i]
+
+                    loc_pos = sP.units.codeLengthToKpc(loc_pos)
+                    rad = np.linalg.norm(loc_pos, 2, axis=1)
+
+                    # correct velocities for cloud CM motion
+                    for i in range(3):
+                        vals[:,i] -= refVel[:,i]
+
+                    # overwrite vals with radial velocity (km/s), negative=inwards
+                    vals = ( vals[:,0] * loc_pos[:,0] + vals[:,1] * loc_pos[:,1] + vals[:,2] * loc_pos[:,2] ) / rad 
+
+                # binned statistic, and stamp
+                for i in range(nBins-1):
+                    w = np.where( (dists > bins[i]) & (dists <= bins[i+1]) )
+                    if len(w[0]) == 0:
+                        continue
+                    result[prop][i,:] = np.nanpercentile(vals[w], percs)
 
         # save
         with h5py.File(saveFilename,'w') as f:
@@ -2197,7 +2240,7 @@ def clumpRadialProfiles(sP, haloID, selections):
     # plot
     for prop in props:
         print('plot: ', prop)
-
+ 
         sizefac = 0.8 # since we will three per row
         fig = plt.figure(figsize=[figsize[0]*sizefac,figsize[1]*sizefac])
         ax = fig.add_subplot(111)
@@ -2206,16 +2249,22 @@ def clumpRadialProfiles(sP, haloID, selections):
 
         if prop == 'vrel': ylabel = 'Local Radial Velocity [ km/s ]'
 
+        if norm:
+            ylog = False
+            ylabel = 'Z$_{\\rm gas}$ / Z$_{\\rm gas,10kpc}$ [linear]'
+
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.set_xlim(xlim)
         #ax.set_ylim(ylim)
         ax.xaxis.set_minor_locator(AutoMinorLocator(2))
 
-        if prop in ['beta','z_solar','pres_ratio','tcool_tff','vrel']:
+        if prop in ['beta','pres_ratio','tcool_tff','vrel']: #'z_solar',
             ax.plot(ax.get_xlim(), [0.0, 0.0], ':', lw=lw, color='#555555', alpha=0.6)
         if prop == 'cellsize_kpc':
             ax.plot(ax.get_xlim(), np.log10([0.5,0.5]), ':', lw=lw, color='#555555', alpha=0.6)
+        if prop in ['z_solar'] and norm:
+            ax.plot(ax.get_xlim(), [1.0, 1.0], ':', lw=lw, color='#555555', alpha=0.6)
 
         yy_txt = []
 
@@ -2528,9 +2577,10 @@ def paperPlots():
     # fig 10: individual (or stacked) clump radial profiles, including pressure/cellsize
     if 0:
         haloID = 8
+        norm = False
         selections = [ {'size':[0.5,0.55]}, {'size':[1.0,1.1]}, {'size':[1.5,1.6]}, {'size':[2.0,2.1]} ]
 
-        clumpRadialProfiles(TNG50, haloID, selections)
+        clumpRadialProfiles(TNG50, haloID, selections, norm=norm)
 
     # fig 12: time tracks via tracers (subbox)
     if 0:
