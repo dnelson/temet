@@ -541,7 +541,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
     return NextNode, length, center, sibling, nextnode
 
 def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
-             treePrec='single', tree=None, nThreads=40):
+             treePrec='single', tree=None, nThreads=40, verbose=False):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
@@ -579,14 +579,14 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         NextNode, length, center, sibling, nextnode = tree # split out list
         
     build_done_time = time.time()
-    print(' calcHsml(): tree build took [%g] sec (serial).' % (time.time()-build_start_time))
+    #print(' calcHsml(): tree build took [%g] sec (serial).' % (time.time()-build_start_time))
 
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
 
     if posSearch.shape[0] < nThreads:
         nThreads = 1
-        print('WARNING: Less particles than requested threads. Just running in serial.') 
+        #print('WARNING: Less particles than requested threads. Just running in serial.') 
 
     # single threaded?
     # ----------------
@@ -655,7 +655,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         # after each has finished, add its result array to the global
         hsml[thread.ind0 : thread.ind1 + 1] = thread.hsml
 
-    print(' calcHsml(): search took [%g] sec (nThreads=%d).' % (time.time()-build_done_time, nThreads))
+    #print(' calcHsml(): search took [%g] sec (nThreads=%d).' % (time.time()-build_done_time, nThreads))
     return hsml
 
 def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec='single', tree=None, nThreads=16):
@@ -719,7 +719,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
         result = _treeSearchQuantReduction(posSearch,hsml,ind0,ind1,boxSizeSim,pos,quant,opnum,
                                            NextNode,length,center,sibling,nextnode)
 
-        print(' calcQuantReduction(): took [%g] sec (serial).' % (time.time()-build_done_time))
+        #print(' calcQuantReduction(): took [%g] sec (serial).' % (time.time()-build_done_time))
         return result
 
     # else, multithreaded

@@ -104,6 +104,13 @@ def logZeroNaN(x):
     r[~np.isfinite(r)] = 0.0
     return logZeroSafe(r, np.nan)
 
+def last_nonzero(array, axis, invalid_val=-1):
+    """ Return the indices of the last nonzero entries of the array, along the given axis. """
+    mask = (array != 0)
+
+    val = array.shape[axis] - np.flip(mask, axis=axis).argmax(axis=axis) - 1
+    return np.where(mask.any(axis=axis), val, invalid_val)
+
 def iterable(x):
     """ Protect against non-list/non-tuple (e.g. scalar or single string) value of x, to guarantee that 
         a for loop can iterate over this object correctly. """

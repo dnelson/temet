@@ -492,6 +492,12 @@ def snapshotSubset(sP, partType, fields,
             dens = snapshotSubset(sP, partType, 'dens', **kwargs)
             r[field] = sP.units.calcEntropyCGS(u,dens,log=True)
 
+        # entropy (from u,dens) [linear cgs] == [K cm^2]
+        if field.lower() in ["ent_linear", "entr_linear", "entropy_linear"]:
+            u    = snapshotSubset(sP, partType, 'u', **kwargs)
+            dens = snapshotSubset(sP, partType, 'dens', **kwargs)
+            r[field] = sP.units.calcEntropyCGS(u,dens,log=False)
+
         # velmag (from 3d velocity) [physical km/s]
         if field.lower() in ["vmag", "velmag"]:
             vel = snapshotSubset(sP, partType, 'vel', **kwargs)

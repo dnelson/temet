@@ -10,16 +10,20 @@ from getpass import getuser
 
 from util.helper import iterable, curRepoVersion
 
-def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, onlyMeta=False, expandPartial=False):
+def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, 
+           subhaloIDs=None, onlyMeta=False, expandPartial=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
       reCalculate  : force redo of computation now, even if data is already saved in catalog
       searchExists : return None if data is not already computed, i.e. do not calculate right now 
       indRange     : if a tuple/list, load only the specified range of data (field and e.g. subhaloIDs)
+      subhaloIDs   : if a tuple/list, load only the requests subhaloIDs (assumed sparse)
       onlyMeta     : load only attributes and coverage information 
       expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
+    assert np.sum([el is not None for el in [indRange,subhaloIDs]]) in [0,1] # specify at most one
 
     epStr = '_ep' if expandPartial else ''
-    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0]+epStr in sP.data and not reCalculate:
+    if len(iterable(fields)) == 1 and 'ac_'+iterable(fields)[0]+epStr in sP.data \
+      and not reCalculate and not onlyMeta and not searchExists and indRange is None and subhaloIDs is None:
         return sP.data['ac_'+iterable(fields)[0]+epStr].copy() # cached, avoid view
 
     def _comparatorListInds(fieldName):
@@ -43,15 +47,21 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             with h5py.File(auxCatPathSplit_i,'r') as f:
                 allShape = f[datasetName].shape
 
-                if len(allShape) > 1 and allShape[condAxis] > condThresh:
-                    # very high dimensionality auxCat (e.g. full spectra), save only non-nan
-                    assert f[datasetName].ndim == 2
+                nElemPerSub = np.prod(allShape) / allShape[0]
+
+                if len(allShape) > 1 and nElemPerSub > condThresh:
+                    # high dimensionality auxCat, save condensed
                     assert 'partInds' not in f or f['partInds'][()] == -1
 
-                    temp_r = f[datasetName][()]
-                    w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )
-                    allCount += len(w[0])
-                    print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
+                    # sparse large data (e.g. full spectra), save only non-nan
+                    if 'Subhalo_SDSSFiberSpectra' in field:
+                        temp_r = f[datasetName][()]
+                        w = np.where( np.isfinite(np.sum(temp_r,axis=1)) )
+                        allCount += len(w[0])
+                        print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
+                    else:
+                        allCount += allShape[0]
+                        print(' [%2d] saving all %d elements condensed.' % (i,allShape[0]))
                 else:
                     # normal, save full Subhalo size
                     allCount += f['subhaloIDs'].size
@@ -65,7 +75,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
         # for full saves we want (auxCat size is groupcat size), assuming we computed a subset of objects
         numSubs = sP.groupCatHeader()['Nsubgroups_Total']
         writeSparseCalcFullSize = False
-        if numSubs > allCount:
+        if numSubs > allCount and nElemPerSub <= condThresh:
             print('Note: Increasing save size from [%d], shape = %s computed, to full groupcat size [%d].' % (allCount,allShape,numSubs))
             allCount = numSubs
             writeSparseCalcFullSize = True
@@ -104,17 +114,13 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                 if length == 0: continue
 
-                if len(allShape) > 1 and allShape[condAxis] >= condThresh or f[datasetName].ndim > 3:
-                    # want to condense, stamp in to dense indices
-                    assert not writSparseCalcFullSize # oops, contradiction, if we really want to condense 
-                    # then disable 'allCount = numSubs' increase above, otherwise change condThresh etc 
-                    # here to avoid 'condensing' back into a smaller size
+                if len(allShape) > 1 and nElemPerSub > condThresh:
+                    # want to condense, saving only a subset of subhalos, stamp in to dense indices
                     subhaloIDsToSave = f[catIndFieldName][()]
 
-                    if f[datasetName].ndim == 2 and 'Subhalo_SDSSFiberSpectra' in field:
+                    if 'Subhalo_SDSSFiberSpectra' in field:
                         # splits saved all subhalos (sdss spectra)
-                        #assert 'Subhalo_SDSSFiberSpectra' in field # otherwise check
-                        w = np.where( np.isfinite(np.sum(temp_r,axis=condAxis)) )[0]
+                        w = np.where( np.isfinite(np.sum(temp_r,axis=1)) )[0]
                         length = len(w)
                         temp_r = temp_r[w,:]
                         subhaloIDsToSave = subhaloIDsToSave[w]
@@ -122,7 +128,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     subhaloIDs[offset : offset+length] = subhaloIDsToSave
                     subhaloIndsStamp = np.arange(offset,offset+length)
                 else:
-                    # full, stamp in to indices corresponding to subhalo indices
+                    # full, save all subhalos, stamp in to indices corresponding to subhalo indices
                     subhaloIndsStamp = f[catIndFieldName][()]
                     subhaloIDs[subhaloIndsStamp] = subhaloIndsStamp
 
@@ -191,8 +197,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
 
-    condThresh = 150 # threshold size of any dimension such that we save a condensed auxCat
-    condAxis = 1 # currently only implemented for auxCat.shape = [subhaloIDs,*] (i.e. ndim==2)
+    condThresh = 50 # threshold size of elements per subhalo such that we save a condensed (non-full) auxCat
     largeAttrNames = ['subhaloIDs','partInds','wavelength'] # save these as separate datasets, if present
 
     pathStr1 = sP.derivPath + 'auxCat/%s_%03d.hdf5'
@@ -245,18 +250,33 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                     assert field+'_0' in f # list of ndarrays
                     readFields = sorted([key for key in f.keys() if field in key], key=_comparatorListInds)
 
+                # load specific subhalos?
+                if subhaloIDs is not None:
+                    from tracer.tracerMC import match3
+                    
+                    subhaloIDs = iterable(subhaloIDs)
+                    subIDs_file = f['subhaloIDs'][()]
+                    subInds_file, _ = match3(subIDs_file, subhaloIDs)
+                    assert subInds_file.size == len(subhaloIDs), 'Failed to find all subhaloIDs in auxCat!'
+
+                # load data
                 if not onlyMeta:
-                    # read 1 or more datasets, keep list only if >1
                     rr = []
 
                     for readField in readFields:
-                        if indRange is None:
-                            data = f[readField][()]
-                        else:
+                        # read subset or entire dataset
+                        if indRange is not None:
                             data = f[readField][indRange[0]:indRange[1],...]
                             data = np.squeeze(data) # remove any degenerate dimensions
+                        elif subhaloIDs is not None:
+                            data = f[readField][subInds_file,...]
+                            data = np.squeeze(data)
+                        else:
+                            data = f[readField][()]
+
                         rr.append(data)
 
+                    # read 1 or more datasets, keep list only if >1
                     if len(rr) == 1:
                         r[field] = rr[0]
                     else:
@@ -270,11 +290,13 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 # load subhaloIDs, partInds if present
                 for attrName in largeAttrNames:
                     if attrName in f:
-                        if indRange is None:
-                            r[attrName] = f[attrName][()]
-                        else:
+                        if indRange is not None:
                             r[attrName] = f[attrName][indRange[0]:indRange[1]]
-
+                        elif subhaloIDs is not None:
+                            r[attrName] = f[attrName][subInds_file]
+                        else:
+                            r[attrName] = f[attrName][()]
+                            
             # subhaloIDs indicates computation only for partial set of subhalos?
             if expandPartial:
                 assert len(readFields) == 1
