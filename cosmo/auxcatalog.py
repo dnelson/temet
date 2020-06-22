@@ -20,6 +20,7 @@ from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOf
 
 # generative functions
 from projects.outflows_analysis import instantaneousMassFluxes, massLoadingsSN, outflowVelocities
+from projects.rshock import healpixThresholdedRadius
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
 # eliminate the entire specialized ufunc logic herein
@@ -3582,6 +3583,13 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='stars',ptProperty='radvel',minHaloMass='10000dm',**sphericalSamplesOpts),
    'Subhalo_SphericalSamples_Global_DM_RadVel_5rvir_400rad_16ns' : \
      partial(subhaloRadialProfile,ptType='dm',ptProperty='radvel',minHaloMass='10000dm',**sphericalSamplesOpts),
+
+   'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_8ns' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_linear',minHaloMass='10000dm',**{**sphericalSamplesOpts,'Nside':8}),
+
+   # shock/splashback radii
+   'Subhalo_VirShockRad_Temp_400rad_16ns' : partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=16),
+   'Subhalo_VirShockRad_Temp_400rad_8ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=8),
 
    # outflows/inflows
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),

@@ -509,7 +509,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
     NextNode = np.zeros( NumPart, dtype='int32' )
 
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
-    for num_iter in range(10):
+    for num_iter in range(20):
         # allocate
         MaxNodes = np.int( (num_iter+0.7)*NumPart ) + 1
         if MaxNodes < 1000: MaxNodes = 1000
@@ -526,7 +526,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
         if numNodes > 0:
             break
 
-        print(' tree: increase alloc %g to %g and redo...' % (num_iter+1.1,num_iter+2.1))
+        print(' tree: increase alloc %g to %g and redo...' % (num_iter+0.7,num_iter+1.7))
 
     assert numNodes > 0, 'Tree: construction failed!'
     if verbose:

@@ -86,7 +86,7 @@ def healpix_shells_points(nRad, Nside, radMin=0.0, radMax=5.0):
 
     return pts, nProj, radPts, radBinSize
 
-def healpix_thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=None):
+def _thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=None):
     """ Derive a radius (rshock) by a thresholded histogramming/voting of a healpix sampling input. 
     If saveBase is not None, then also dump debug plots. """
     assert inequality in ['<','>']
@@ -157,12 +157,13 @@ def healpix_thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=No
     # rshock: answer 5, median of all ray-satisfying pixels
     rshock5 = np.nanmedian( rad_thresh_ray )
 
-    print(' thresh: [%4.1f = %6.3f] rshock [%.2f %.2f] ray: [%.2f %.2f %.2f peak=%.2f]' % \
-        (thresh_perc,thresh,rshock1,rshock2,rshock3,rshock4,rshock5,xx[ind_raymax]))
-
     rshock_vals = [rshock1, rshock2, rshock3, rshock4, rshock5]
 
     if saveBase is not None:
+        # verbose print
+        print(' thresh: [%4.1f = %6.3f] rshock [%.2f %.2f] ray: [%.2f %.2f %.2f peak=%.2f]' % \
+            (thresh_perc,thresh,rshock1,rshock2,rshock3,rshock4,rshock5,xx[ind_raymax]))
+
         # plot 2d mask
         label = 'Quantity %s Threshold' % (inequality)
         plotHealpixShells(radPts, result_mask, label=label, clim=[0,1], ctName='gray', rads=rshock_vals, \
@@ -207,9 +208,104 @@ def healpix_thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=No
 
     return rshock_vals
 
+def _get_threshold_config(quantName):
+    """ Helper to hold config used by more than one analysis function. """
+    percs_low = [0.1,0.5,1,2,5,10]
+    percs_high = [90,95,98,99,99.5,99.9]
+
+    if quantName == 'Temp':
+        percs = percs_low
+        ineq = '<'
+        log = True
+        useDeriv = True
+
+    if quantName == 'Entropy':
+        percs = percs_low
+        ineq = '<'
+        log = True
+        useDeriv = False
+
+    if quantName == 'RadVel':
+        percs = percs_low
+        ineq = '<'
+        log = False
+        useDeriv = False
+
+    if quantName == 'ShocksEnergyDiss':
+        percs = percs_high
+        ineq = '>'
+        log = True
+        useDeriv = False
+
+    if quantName == 'ShocksMachNum':
+        percs = percs_high
+        ineq = '>'
+        log = False
+        useDeriv = False
+
+    return useDeriv, percs, ineq, log
+
+def healpixThresholdedRadius(sP, pSplit=None, ptType='Gas', quant='Temp', radNumBins=400, Nside=16):
+    """ Derive virial shock radius for every subhalo using a given algorithm and a pre-existing
+    auxCat of healpix spherical samples around each subhalo. (AuxCat) """
+    assert pSplit is None # not supported
+    assert quant in ['Temp','Entropy','ShocksMachNum','ShocksEnergyDiss','RadVel']
+
+    # load
+    acField = "Subhalo_SphericalSamples_Global_%s_%s_5rvir_%drad_%dns" % (ptType,quant,radNumBins,Nside)
+    ac = sP.auxCat(acField)
+
+    attrs = ac[acField + '_attrs']
+    radPts = attrs['rad_bins_rvir']
+    radBinSize = (radPts[1] - radPts[0]) # r/rvir
+    subhaloIDs = ac['subhaloIDs']
+
+    subhalo_r200 = sP.subhalos('rhalo_200_code')
+
+    # config and unit conversions
+    useDeriv, percs, ineq, log = _get_threshold_config(quant)
+
+    if log:
+        ac[acField] = logZeroNaN(ac[acField])
+
+    # allocate
+    dummy_results = _thresholded_radius(radPts, ac[acField][0,:,:], 50, '<')
+
+    r = np.zeros( (subhaloIDs.size,len(dummy_results), len(percs)), dtype='float32')
+    r.fill(np.nan)
+
+    # loop over all subhalos
+    printFac = 100.0 if (sP.res > 512) else 10.0
+
+    for i, subhaloID in enumerate(subhaloIDs):
+        if i % np.max([1,int(subhaloIDs.size/printFac)]) == 0 and i <= subhaloIDs.size:
+            print('   %4.1f%%' % (float(i+1)*100.0/subhaloIDs.size))
+
+        # prepare
+        vals = ac[acField][i,:,:]
+
+        # partial derivative of quantity with respect to radius
+        # sign: negative if quantity decreases moving outwards (from r=0)
+        if useDeriv:
+            radBinSize = sP.units.codeLengthToKpc(radBinSize * subhalo_r200[subhaloID]) # pkpc
+            vals = np.gradient(vals, radBinSize, axis=1)
+
+        # calculate
+        for j, perc in enumerate(percs):
+            rshock_vals = _thresholded_radius(radPts, vals, perc, ineq)
+            r[i,:,j] = rshock_vals
+
+    # return
+    desc = "Virial shock (or splashback) radius identified by [%s,%s] algorithm." % (ptType,quant)
+    attrs['Description'] = desc.encode('ascii')
+    attrs['subhaloIDs'] = subhaloIDs
+    attrs['percs'] = percs
+
+    return r, attrs
+
 def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     """ Obtain and cache a set of gas cells in the vicinity of a halo.
-    Temporary, move into auxCat with tree. """
+    Debugging only, independent of the auxCat-based sampling. """
     from util.helper import reportMemory
 
     gas_local = {}
@@ -296,19 +392,19 @@ def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     gas_local['rad'] /= halo['Group_R_Crit200']
 
     # shocks_dedt, temp, entr
-    gas_local['shocks_dedt'] = sP.snapshotSubsetC('gas', 'shocks_dedt', inds=loc_inds)
-    gas_local['shocks_dedt'] = sP.units.codeEnergyRateToErgPerSec(gas_local['shocks_dedt'])
-    gas_local['shocks_mach'] = sP.snapshotSubsetC('gas', 'shocks_machnum', inds=loc_inds)
+    gas_local['ShocksEnergyDiss'] = sP.snapshotSubsetC('gas', 'shocks_dedt', inds=loc_inds)
+    gas_local['ShocksEnergyDiss'] = sP.units.codeEnergyRateToErgPerSec(gas_local['ShocksEnergyDiss'])
+    gas_local['ShocksMachNum'] = sP.snapshotSubsetC('gas', 'shocks_machnum', inds=loc_inds)
 
-    gas_local['temp'] = sP.snapshotSubsetC('gas', 'temp', inds=loc_inds)
-    gas_local['entr'] = sP.snapshotSubsetC('gas', 'entr', inds=loc_inds)
+    gas_local['Temp'] = sP.snapshotSubsetC('gas', 'temp_linear', inds=loc_inds)
+    gas_local['Entropy'] = sP.snapshotSubsetC('gas', 'entr_linear', inds=loc_inds)
 
     # vrad
     sub = sP.subhalo(halo['GroupFirstSub'])
     sP.refPos = sub['SubhaloPos']
     sP.refVel = sub['SubhaloVel']
 
-    gas_local['vrad'] = sP.snapshotSubsetC('gas', 'vrad', inds=loc_inds)
+    gas_local['RadVel'] = sP.snapshotSubsetC('gas', 'vrad', inds=loc_inds)
 
     # save cache
     with h5py.File(cacheFilename,'w') as f:
@@ -319,8 +415,8 @@ def local_gas_subset(sP, haloID=0, maxRadR200=5.2, useTree=True):
     # run algorithm
     return gas_local
 
-def virialShockRadius(sP, haloID):
-    """ Given input gas cell set of required properties, extending at least beyond the 
+def virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True):
+    """ Exploration: given input gas cell set of required properties, extending at least beyond the 
     virial shock radius in extent (i.e. beyond fof-scope), derive rshock. 
     Use healpix shell sampling of gas quantities, and also generate debug plots. """    
 
@@ -330,75 +426,87 @@ def virialShockRadius(sP, haloID):
 
     clim_percs = [5,99] # colorbar range
 
-    # get sample points, shift to box coords, halo centered (handle periodic boundaries)
-    pts, nProj, radPts, radBinSize = healpix_shells_points(nRad=nRad, Nside=Nside)
-
     halo = sP.halo(haloID)
-    pts *= halo['Group_R_Crit200']
-    pts += halo['GroupPos'][np.newaxis, :]
 
-    sP.correctPeriodicPosVecs(pts)
+    if not useExistingAuxCat:
+        # get sample points, shift to box coords, halo centered (handle periodic boundaries)
+        pts, nProj, radPts, radBinSize = healpix_shells_points(nRad=nRad, Nside=Nside)
 
-    # load a particle subset
-    p = local_gas_subset(sP, haloID=haloID)
+        pts *= halo['Group_R_Crit200']
+        pts += halo['GroupPos'][np.newaxis, :]
 
-    # construct tree
-    print('build tree...')
-    tree = buildFullTree(p['pos'], boxSizeSim=sP.boxSize, treePrec='float32')
+        sP.correctPeriodicPosVecs(pts)
 
-    # derive hsml (one per sample point)
-    nNGB = 20
-    nNGBDev = 1
+        # load a particle subset
+        p = local_gas_subset(sP, haloID=haloID)
 
-    print('calc hsml...')
-    hsml = calcHsml(p['pos'], sP.boxSize, posSearch=pts, nNGB=nNGB, nNGBDev=nNGBDev, tree=tree)
+        # construct tree
+        print('build tree...')
+        tree = buildFullTree(p['pos'], boxSizeSim=sP.boxSize, treePrec='float32')
+
+        # derive hsml (one per sample point)
+        nNGB = 20
+        nNGBDev = 1
+
+        print('calc hsml...')
+        hsml = calcHsml(p['pos'], sP.boxSize, posSearch=pts, nNGB=nNGB, nNGBDev=nNGBDev, tree=tree)
 
     # sample and plot different quantiites
-    for field in ['shocks_mach']: #['shocks_dedt','temp','entr','vrad']:
-        print('Total number of samples [%d], running [%s]...' % (pts.shape[0],field))
-
+    for field in ['Temp','Entropy','RadVel','ShocksMachNum','ShocksEnergyDiss']:
         saveBase = 'healpix_%s_z%d_h%d_ns%d_nr%d_%s' % (sP.simName,sP.redshift,haloID,Nside,nRad,field)
 
-        if field == 'shocks_dedt':
-            op = 'kernel_mean' # 'mean' # kernel_mean
-            quant = p[field] / 1e30
+        if field == 'ShocksEnergyDiss':
             label = 'Shock Energy Dissipation [ log $10^{30}$ erg/s ]'
             label2 = 'log( $\dot{E}_{\\rm shock}$ / <$\dot{E}_{\\rm shock}$> )'
             label3 = '$\partial$$\dot{E}_{\\rm shock}$/$\partial$r [ log $10^{30}$ erg/s kpc$^{-1}$ ]'
 
-        if field == 'shocks_mach':
-            op = 'kernel_mean'
-            quant = p[field]
+        if field == 'ShocksMachNum':
             label = 'Shock Mach Number [ linear ]'
             label2 = 'log( $\mathcal{M}_{\\rm shock}$ / <$\mathcal{M}_{\\rm shock}$> )'
             label3 = '$\partial$$\mathcal{M}_{\\rm shock}$/$\partial$r [ linear kpc$^{-1}$ ]'
 
-        if field == 'temp':
-            op = 'kernel_mean'
-            quant = 10.0**p[field]
+        if field == 'Temp':
             label = 'Temperature [ log K ]'
             label2 = 'log( $\delta$T / <T> )'
             label3 = '$\partial$T/$\partial$r [ log K kpc$^{-1}$ ]'
 
-        if field == 'entr':
-            op = 'kernel_mean'
-            quant = 10.0**p[field]
+        if field == 'Entropy':
             label = 'Entropy [ log K cm$^2$ ]'
             label2 = 'log( $\delta$S / <S> )'
             label3 = '$\partial$S/$\partial$r [ log K cm$^2$ kpc$^{-1}$ ]'
 
-        if field == 'vrad':
-            op = 'kernel_mean'
-            quant = p[field]
+        if field == 'RadVel':
             label = 'Radial Velocity [ km/s ]'
             label2 = 'log( v$_{\\rm rad}$ / <v$_{\\rm rad}$> )'
             label3 = '$\partial$v$_{\\rm rad}$/$\partial$r [ km/s kpc$^{-1}$ ]'
 
-        result = calcQuantReduction(p['pos'], quant, hsml, op, sP.boxSize, posSearch=pts, tree=tree)
-        result = np.reshape(result, (nProj,nRad))
+        # load existing or calculate now?
+        if useExistingAuxCat:
+            ptType = 'Gas'
+            acField = "Subhalo_SphericalSamples_Global_%s_%s_5rvir_%drad_%dns" % (ptType,field,nRad,Nside)
+            print('Loading existing [%s]...' % acField)
+
+            # load
+            ac = sP.auxCat(acField, subhaloIDs=halo['GroupFirstSub'])
+            result = ac[acField]
+
+            radPts = ac[acField + '_attrs']['rad_bins_rvir']
+            radBinSize = (radPts[1] - radPts[0]) # r/rvir
+        else:
+            op = 'kernel_mean' # mean
+            print('Total number of samples [%d], running [%s]...' % (pts.shape[0],field))
+
+            quant = p[field]
+            if field in ['ShocksEnergyDiss']:
+                quant /= 1e30 # avoid float32 overflow
+
+            result = calcQuantReduction(p['pos'], quant, hsml, op, sP.boxSize, posSearch=pts, tree=tree)
+            result = np.reshape(result, (nProj,nRad))
 
         # unit conversions
-        if field in ['temp','entr','shocks_dedt']:
+        useDeriv, percs, ineq, log = _get_threshold_config(field)
+
+        if log:
             #result = logZeroSafe(result, zeroVal=result[result>0].min()) # for shocks_dedt
             result = logZeroNaN(result)
 
@@ -409,13 +517,13 @@ def virialShockRadius(sP, haloID):
         plotHealpixShells(radPts, result, label=label, clim=clim, saveFilename=saveBase+'.pdf')
 
         # plot quantity relative to its average at that radius (subtract out radial profile)
-        if field in ['shocks_dedt','temp','entr']:
+        if field in ['ShocksEnergyDiss','Temp','Entropy']:
             if np.isfinite(result[:,0]).sum() == 0: result[:,0] = 1.0 # avoid all nan slice
             rad_mean = np.nanmean( 10.0**result, axis=0 )
             rad_mean[np.where(rad_mean == 0)] = 1.0 # avoid division by zero (first, r=0 bin)
             result_norm = logZeroNaN(10.0**result / rad_mean)
 
-        if field in ['vrad','shocks_mach']:
+        if field in ['RadVel','ShocksMachNum']:
             rad_mean = np.nanmean(result,axis=0)
             rad_mean[np.where(rad_mean == 0)] = 1.0 # avoid division by zero (first, r=0 bin)
             result_norm = logZeroNaN(result / rad_mean)
@@ -441,26 +549,13 @@ def virialShockRadius(sP, haloID):
         plotHealpixShells(radPts, result_deriv, label=label3, clim=clim, ctName='curl', saveFilename=saveBase+'_deriv.pdf')
 
         # flag dquant/dr pixels below a threshold, and plot 1d histogram of their radii
-        if field in ['temp','entr','vrad']:
-            percs = [1,2,5,10] #[0.1,0.5,
-            ineq = '<'
-            vals = result_deriv
-
-        if field in ['shocks_dedt']:
-            percs = [80,85,90,95] #,98,99,99.5,99.9]
-            ineq = '>'
-            vals = result
-
-        if field in ['shocks_mach']:
-            percs = [85,90,95,98,99,99.5,99.9]
-            ineq = '>'
-            vals = result
+        vals = result if not useDeriv else result_deriv
 
         for perc in percs:
             # derive rshock and save debug plots
             base = saveBase+'_thresh%g' % perc
 
-            rshock_vals = healpix_thresholded_radius(radPts, vals, perc, ineq, saveBase=base)
+            rshock_vals = _thresholded_radius(radPts, vals, perc, ineq, saveBase=base)
 
 def visualizeHaloVirialShock(sP, haloID, conf=0):
     """ Driver for a single halo vis example, highlighting the virial shock structure. """
@@ -525,11 +620,9 @@ def paperPlots():
             #for haloID in [0, 10,20,110,120,200,300]:    
             visualizeHaloVirialShock(sP, haloID=haloID, conf=conf)
 
-    # figure 2: testing rshock detection
+    # figure 2: testing rshock detection method, associated plots
     if 1:
         haloID = 20 # 0,10,20,110,120,200,300
-        sP = simParams(run='tng50-2', redshift=2.0)
+        sP = simParams(run='tng50-2', redshift=0.0)
 
-        virialShockRadius(sP, haloID)
-
-    # TODO: stars vrad and BH vrad = 'splashback'
+        virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True)

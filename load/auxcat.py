@@ -144,10 +144,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
         if not writeSparseCalcFullSize:
             assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
-            assert np.count_nonzero(new_r == -1.0) == 0
-        else:
-            print(' WARNING: Skipping checks that we wrote data for all subhalos, since we wrote a sparse calc to a full size auxCat.')
-
+        
         # auxCat already exists? only allowed if we are processing multiple fields
         if isfile(auxCatPath):
             with h5py.File(auxCatPath,'r') as f:
