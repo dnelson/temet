@@ -310,6 +310,35 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 ac = sP.auxCat(fields=[acField])
                 r[field] = sP.units.codeMassToMsun(ac[acField])
 
+            # auxCat: virial shock radii: fiducial model choice [pkpc]
+            if quantName == 'rshock':
+                r[field] = groupCat(sP, fieldsSubhalos=['rshock_ShocksMachNum_m2p2_kpc'])
+            # auxCat: virial shock radii: fiducial model choice [pkpc]
+            elif quantName == 'rshock_rvir':
+                r[field] = groupCat(sP, fieldsSubhalos=['rshock_ShocksMachNum_m2p2'])
+            # auxCat: virial shock radii [pkpc or rvir]
+            # "rshock_{Temp,Entropy,RadVel,ShocksMachNum,ShocksEnergyDiss}_mXpY_{kpc,rvir}"
+            elif 'rshock_' in quantName:
+                fieldName = field.split("_")[1]
+                methodPerc = field.split("_")[2]
+
+                acField = 'Subhalo_VirShockRad_%s_400rad_16ns' % fieldName
+                methodInd = int(methodPerc[1])
+                percInd = int(methodPerc[3])
+
+                # load and expand
+                ac = sP.auxCat(acField)
+
+                vals = ac[acField][:,methodInd,percInd] # rvir units, linear
+
+                r[field] = np.zeros( sP.numSubhalos, dtype='float32' )
+                r[field].fill(np.nan)
+                r[field][ac['subhaloIDs']] = vals
+
+                if '_kpc' in quant:
+                    r200 = groupCat(sP, fieldsSubhalos=['rhalo_200']) # pkpc
+                    r[field] *= r200
+
             # --- postprocessing ---
 
             # StellarAssembly: in-situ, ex-situ stellar mass fractions

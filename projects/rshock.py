@@ -8,6 +8,7 @@ import h5py
 import time
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import Normalize
 from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
@@ -20,6 +21,7 @@ from util.helper import running_median, logZeroNaN, logZeroSafe, loadColorTable,
 from util.treeSearch import calcParticleIndices, buildFullTree, calcHsml, calcQuantReduction
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
+from plot.cosmoGeneral import quantHisto2D
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
 
@@ -589,7 +591,7 @@ def plotRshockVsMass(sPs, quants=['Temp_400rad_16ns'], vsHaloMass=True, kpc=Fals
     mStarField = 'mstar_30pkpc_log'
 
     if vsHaloMass:
-        ax.set_xlim([9.8, 15.2])
+        ax.set_xlim([10.5, 15.1])
         ax.set_xlabel(mHaloLabel)
         massField = mHaloField
     else:
@@ -805,8 +807,10 @@ def plotRshockVsMass(sPs, quants=['Temp_400rad_16ns'], vsHaloMass=True, kpc=Fals
 
     qStr = quants[0] if len(quants) == 1 else '%dquants' % len(quants)
     sStr = '-'.join([sP.simName for sP in sPs])
-    fig.savefig("rshock_vs_%s_%s_z%.1f_%s_%s.pdf" % \
-      (massAxis,sStr,sPs[0].redshift,'kpc' if kpc else 'rvir',qStr))
+    mStr = 'm%d' % methodInds[0] if len(methodInds) == 1 else 'm-all'
+    pStr = 'p%d' % percInds[0] if len(percInds) == 1 else 'p-all'
+    fig.savefig("rshock_vs_%s_%s_z%.1f_%s_%s_%s_%s.pdf" % \
+      (massAxis,sStr,sPs[0].redshift,'kpc' if kpc else 'rvir',qStr,mStr,pStr))
     plt.close(fig)
 
 def visualizeHaloVirialShock(sP, haloID, conf=0, depthFac=1.0, dataCache=None):
@@ -900,16 +904,36 @@ def paperPlots():
     # figure 2: rshock vs mass
     if 0:
         quants = ['ShocksMachNum_400rad_16ns']
-        percInds = [3]
-        methodInds = [3]
+        percInds = [2]
+        methodInds = [2]
         kpc = False
+        redshift = 2.0
+        runs = ['tng50-1', 'tng100-1', 'tng300-1']
 
-        TNG100 = simParams(run='tng100-1',redshift=2.0)
-        TNG50 = simParams(run='tng50-2', redshift=2.0)
+        sPs = [simParams(run=run,redshift=redshift) for run in runs]
 
         for vsHaloMass in [True,False]:
-            plotRshockVsMass([TNG50,TNG100], quants=quants, vsHaloMass=vsHaloMass, kpc=kpc,
+            plotRshockVsMass(sPs, quants=quants, vsHaloMass=vsHaloMass, kpc=kpc,
                              percInds=percInds, methodInds=methodInds)
+
+    # figure 3: 2d plot explore
+    if 0:
+        sP = simParams(run='tng300-1',redshift=2.0)
+
+        xQuant = 'mhalo_200_log'
+        cQuant = 'fgas2'
+        yQuant = 'rshock_ShocksMachNum_m2p2'
+        xlim   = [11.8, 14.0]
+        ylim   = [0.0, 5.0]
+        clim   = [-2.0, 0.0]
+        cRel   = None #[0.65,1.35,False] # [cMin,cMax,cLog] #None
+        params = {'cenSatSelect':'cen', 'cStatistic':'median_nan', 'cQuant':cQuant, 'xQuant':xQuant, 
+                  'xlim':xlim, 'ylim':ylim, 'clim':clim, 'cRel':cRel}
+
+        pdf = PdfPages('histo2d_x=%s_y=%s_c=%s_%s_%d.pdf' % (xQuant,yQuant,cQuant,sP.simName,sP.snap))
+        fig = plt.figure(figsize=figsize)
+        quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
+        pdf.close()
 
     # figure X: explore rshock vs mass (percs, methods, runs, ...)
     if 0:

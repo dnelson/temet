@@ -168,6 +168,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                    'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi',
                    'stellar_zform_vimos','size_halpha']
 
+    quants_rshock = ['rshock', 'rshock_rvir', 'rshock_ShocksMachNum_m2p2']
+
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur','color_nodust_UV','color_nodust_VJ','color_C-30kpc-z_UV','color_C-30kpc-z_VJ']
 
     quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms','etaM_100myr_0kpc_50kms',
@@ -207,7 +209,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     if wCounts: quants1 = [None] + quants1
 
     quantList = quants1 + quants1b + quants1c + quants2 + quants2_mhd + quants_bh + quants4 + quants5b #+ quants5
-    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad
+    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad + quants_rshock
     if wTr: quantList += trQuants
     if wMasses: quantList += quants_mass
     if onlyTr: quantList = trQuants
@@ -390,6 +392,21 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'R / R$_{\\rm vir,host}$'
             minMax = [0.0, 1.0]
             if tight: minMax = [0.0, 2.0]
+
+    if quantname[0:6] == 'rshock':
+        # virial shock radius: rshock, rshock_rvir, or full model selection:
+        # "rshock_{Temp,Entropy,RadVel,ShocksMachNum,ShocksEnergyDiss}_mXpY_{kpc,rvir}"
+        vals = sP.groupCat(sub=quantname)
+
+        if '_kpc' in quantname or quantname == 'rshock':
+            label = 'R$_{\\rm shock}$ [ log kpc ]'
+            minMax = [1.5, 3.5]
+            if tight: minMax = [1.5, 4.0]
+        else:
+            label = 'R$_{\\rm shock}$ / R$_{\\rm vir}$'
+            takeLog = False
+            minMax = [0.0, 5.0]
+            if tight: minMax = [0.0, 5.0]
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
         # total OVI/OVII/metal mass in subhalo
