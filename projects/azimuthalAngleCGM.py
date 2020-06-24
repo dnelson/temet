@@ -180,7 +180,6 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
             for key in ['Masses','GFM_Metallicity','Density','NeutralHydrogenAbundance']:
                 print('Caching [%s] now...' % key, flush=True)
                 dataCache['snap%d_gas_%s' % (sP.snap,key)] = sP.snapshotSubsetP('gas', key, inds=pInds)
-            dataCache['snap%d_gas_GFM_Metallicity' % sP.snap] = sP.snapshotSubsetP('gas', 'GFM_Metallicity', inds=pInds)
 
             print('All caching done.', flush=True)
 

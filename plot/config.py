@@ -13,6 +13,7 @@ sfclean = 0.8 if clean else 1.0 # sizefac to multiply figsize by if clean == Tru
 pStyle  = 'white' # white or black background
 
 figsize = [figsize[0] * sfclean, figsize[1] * sfclean]
+figsize_lg = [figsize[0] * sfclean, figsize[1] * sfclean]
 
 lw = 2.5 # default line width
 

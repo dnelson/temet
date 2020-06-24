@@ -497,9 +497,11 @@ def _treeSearchQuantReduction(posSearch,hsml,ind0,ind1,boxSizeSim,pos,quant,opnu
 
     return result
 
-def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
+def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     """ Helper. See below. """
-    treePrecs = {'single':'float32','double':'float64'}
+    treePrecs = {'single':'float32','double':'float64','np32':np.float32,'np64':np.float64}
+
+    if treePrec is None: treePrec = pos.dtype
     if treePrec in treePrecs.keys(): treePrec = treePrecs[treePrec]
     assert treePrec in treePrecs.values()
 
@@ -509,7 +511,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
     NextNode = np.zeros( NumPart, dtype='int32' )
 
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
-    for num_iter in range(20):
+    for num_iter in range(10):
         # allocate
         MaxNodes = np.int( (num_iter+0.7)*NumPart ) + 1
         if MaxNodes < 1000: MaxNodes = 1000
@@ -526,7 +528,7 @@ def buildFullTree(pos, boxSizeSim, treePrec, verbose=False):
         if numNodes > 0:
             break
 
-        print(' tree: increase alloc %g to %g and redo...' % (num_iter+0.7,num_iter+1.7))
+        print(' tree: increase alloc %g to %g and redo...' % (num_iter+0.7,num_iter+1.7), flush=True)
 
     assert numNodes > 0, 'Tree: construction failed!'
     if verbose:

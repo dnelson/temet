@@ -182,7 +182,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
                 if '_gyr' in quant: r[field] *= 1e9 # 1/yr to 1/Gyr
 
-            # virial radius (r200 or r500) of parent halo [code, pkpc, log pkpc]
+            # virial radius (r200 or r500) of parent halo [code, pkpc]
             if quantName in ['rhalo_200_code', 'rhalo_200','rhalo_500', 'rhalo_200_parent']:
                 od = 200 if '_200' in quant else 500
 

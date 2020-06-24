@@ -177,7 +177,7 @@ def running_median(X, Y, nBins=100, binSize=None, binSizeLg=None, skipZeros=Fals
 
     if binSizeLg is not None:
         # small bins for low x values (e.g. halo mass)
-        splitX = maxVal - binSizeLg*10 # todo: heuristic could be improved, np.nanpercentile(X,99)
+        splitX = np.nanpercentile(X,90) # rough heuristic
         nBins0 = int( (splitX-minVal) / binSize )
         nBins1 = int( (maxVal-splitX) / binSizeLg )
         bins0 = np.linspace(minVal, splitX, nBins0)

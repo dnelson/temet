@@ -165,44 +165,50 @@ def _thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=None):
             (thresh_perc,thresh,rshock1,rshock2,rshock3,rshock4,rshock5,xx[ind_raymax]))
 
         # plot 2d mask
-        label = 'Quantity %s Threshold' % (inequality)
-        plotHealpixShells(radPts, result_mask, label=label, clim=[0,1], ctName='gray', rads=rshock_vals, \
+        label = '%s Thresh [P$_{\\rm %d}$ = %.2f]' % (inequality,thresh_perc,thresh)
+        label2d = 'Quantity [%s] %s' % (saveBase.split("_")[-2],label)
+        plotHealpixShells(radPts, result_mask, label=label2d, clim=[0,1], ctName='gray', rads=rshock_vals, \
             saveFilename=saveBase+'_mask2d.pdf')
 
         # plot 1d histo
-        fig = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=figsize_lg)
         ax = fig.add_subplot(111)
         ax.minorticks_on()
         ax.xaxis.grid(which='major', linestyle='-', linewidth=1.0, alpha=0.3, color='black')
-        ax.xaxis.grid(which='minor', linestyle='-', linewidth=0.5, alpha=0.1, color='black')
+        ax.xaxis.grid(which='minor', linestyle='-', linewidth=0.5, alpha=0.05, color='black')
         
+        ax.set_xlim([0,radPts.max()])
         ax.set_xlabel('r / r$_{\\rm vir}$')
-        ax.set_ylabel('Count of Pixels %s Thresh' % inequality)
+        ax.set_ylabel('Pixel Fraction %s' % label)
 
-        l, = ax.plot(radPtsHist, hist1d, '-', lw=lw, drawstyle='steps-mid')
+        yy = hist1d / hist1d.sum()
+        l, = ax.plot(radPtsHist, yy, '-', color='black', lw=lw+1, drawstyle='steps-mid')
 
         for i, rshock in enumerate(rshock_vals):
-            ax.plot([rshock,rshock],[0,ax.get_ylim()[1]], '-', lw=lw, label='#%d'%i)
+            ax.plot([rshock,rshock],[0,yy.max()*1.15], '-', lw=lw, label='#%d'%i)
 
         ax.legend(loc='upper right')
         fig.savefig(saveBase+'_1d.pdf')
         plt.close(fig)
 
         # plot 1d ray histo
-        fig = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=figsize_lg)
         ax = fig.add_subplot(111)
         ax.minorticks_on()
         ax.xaxis.grid(which='major', linestyle='-', linewidth=1.0, alpha=0.3, color='black')
-        ax.xaxis.grid(which='minor', linestyle='-', linewidth=0.5, alpha=0.1, color='black')
+        ax.xaxis.grid(which='minor', linestyle='-', linewidth=0.5, alpha=0.05, color='black')
         
+        ax.set_xlim([0,radPts.max()])
         ax.set_xlabel('r / r$_{\\rm vir}$')
-        ax.set_ylabel('Count of Rays Voting Here')
+        ax.set_ylabel('Ray Fraction %s' % label)
 
-        l, = ax.plot(radPtsHist, hist1dray, '-', lw=lw, drawstyle='steps-mid')
+        yy = hist1dray / hist1dray.sum()
+        l, = ax.plot(radPtsHist, yy, '-', color='black', lw=lw+1, drawstyle='steps-mid')
 
         for i, rshock in enumerate(rshock_vals):
-            ax.plot([rshock,rshock],[0,ax.get_ylim()[1]], '-', lw=lw, label='#%d'%i)
+            ax.plot([rshock,rshock],[0,yy.max()*1.15], '-', lw=lw, label='#%d'%i)
 
+        ax.legend(loc='upper right')
         fig.savefig(saveBase+'_ray1d.pdf')
         plt.close(fig)
 
@@ -245,14 +251,14 @@ def _get_threshold_config(quantName):
 
     return useDeriv, percs, ineq, log
 
-def healpixThresholdedRadius(sP, pSplit=None, ptType='Gas', quant='Temp', radNumBins=400, Nside=16):
+def healpixThresholdedRadius(sP, pSplit=None, ptType='Gas', quant='Temp', radMax=5, radNumBins=400, Nside=16):
     """ Derive virial shock radius for every subhalo using a given algorithm and a pre-existing
     auxCat of healpix spherical samples around each subhalo. (AuxCat) """
     assert pSplit is None # not supported
     assert quant in ['Temp','Entropy','ShocksMachNum','ShocksEnergyDiss','RadVel']
 
     # load
-    acField = "Subhalo_SphericalSamples_Global_%s_%s_5rvir_%drad_%dns" % (ptType,quant,radNumBins,Nside)
+    acField = "Subhalo_SphericalSamples_Global_%s_%s_%drvir_%drad_%dns" % (ptType,quant,radMax,radNumBins,Nside)
     ac = sP.auxCat(acField)
 
     attrs = ac[acField + '_attrs']
@@ -265,9 +271,6 @@ def healpixThresholdedRadius(sP, pSplit=None, ptType='Gas', quant='Temp', radNum
     # config and unit conversions
     useDeriv, percs, ineq, log = _get_threshold_config(quant)
 
-    if log:
-        ac[acField] = logZeroNaN(ac[acField])
-
     # allocate
     dummy_results = _thresholded_radius(radPts, ac[acField][0,:,:], 50, '<')
 
@@ -279,16 +282,18 @@ def healpixThresholdedRadius(sP, pSplit=None, ptType='Gas', quant='Temp', radNum
 
     for i, subhaloID in enumerate(subhaloIDs):
         if i % np.max([1,int(subhaloIDs.size/printFac)]) == 0 and i <= subhaloIDs.size:
-            print('   %4.1f%%' % (float(i+1)*100.0/subhaloIDs.size))
+            print('   %4.1f%%' % (float(i+1)*100.0/subhaloIDs.size), flush=True)
 
         # prepare
         vals = ac[acField][i,:,:]
+        if log:
+            vals = logZeroNaN(vals)
 
         # partial derivative of quantity with respect to radius
         # sign: negative if quantity decreases moving outwards (from r=0)
         if useDeriv:
-            radBinSize = sP.units.codeLengthToKpc(radBinSize * subhalo_r200[subhaloID]) # pkpc
-            vals = np.gradient(vals, radBinSize, axis=1)
+            binsize_pkpc = sP.units.codeLengthToKpc(radBinSize * subhalo_r200[subhaloID]) # pkpc
+            vals = np.gradient(vals, binsize_pkpc, axis=1)
 
         # calculate
         for j, perc in enumerate(percs):
@@ -516,6 +521,12 @@ def virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True):
 
         plotHealpixShells(radPts, result, label=label, clim=clim, saveFilename=saveBase+'.pdf')
 
+        if 0:
+            # plot with hard-coded answers
+            rshock_vals = [2.41, 2.49, 2.41, 2.44, 2.52] # TNG50-1 z=2 h20 ShocksMachNum P95
+            plotHealpixShells(radPts, result, label=label, clim=clim, rads=rshock_vals, 
+                              saveFilename=saveBase+'_Mach95_vals.pdf')
+
         # plot quantity relative to its average at that radius (subtract out radial profile)
         if field in ['ShocksEnergyDiss','Temp','Entropy']:
             if np.isfinite(result[:,0]).sum() == 0: result[:,0] = 1.0 # avoid all nan slice
@@ -530,10 +541,10 @@ def virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True):
 
         clim_val = np.abs(np.nanpercentile(result_norm, clim_percs)).min()
         clim_val = np.clip(clim_val, 0.001, np.inf)
-        clim = np.array([-clim_val, clim_val])
-        if clim[0] < 10.0: clim = np.round(clim * 10) / 10
+        clim2 = np.array([-clim_val, clim_val])
+        if clim2[0] < 10.0: clim2 = np.round(clim2 * 10) / 10
 
-        plotHealpixShells(radPts, result_norm, label=label2, clim=clim, saveFilename=saveBase+'_norm.pdf')
+        plotHealpixShells(radPts, result_norm, label=label2, clim=clim2, saveFilename=saveBase+'_norm.pdf')
 
         # plot partial derivative of quantity with respect to radius
         radBinSize = sP.units.codeLengthToKpc(radBinSize * halo['Group_R_Crit200']) # pkpc
@@ -543,10 +554,10 @@ def virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True):
 
         clim_val = np.abs(np.nanpercentile(result_deriv, clim_percs)).min()
         clim_val = np.clip(clim_val, 0.001, np.inf)
-        clim = np.array([-clim_val, clim_val])
-        if clim[0] < 10.0: clim = np.round(clim * 100) / 100
+        clim3 = np.array([-clim_val, clim_val])
+        if clim3[0] < 10.0: clim3 = np.round(clim3 * 100) / 100
 
-        plotHealpixShells(radPts, result_deriv, label=label3, clim=clim, ctName='curl', saveFilename=saveBase+'_deriv.pdf')
+        plotHealpixShells(radPts, result_deriv, label=label3, clim=clim3, ctName='curl', saveFilename=saveBase+'_deriv.pdf')
 
         # flag dquant/dr pixels below a threshold, and plot 1d histogram of their radii
         vals = result if not useDeriv else result_deriv
@@ -557,72 +568,374 @@ def virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True):
 
             rshock_vals = _thresholded_radius(radPts, vals, perc, ineq, saveBase=base)
 
-def visualizeHaloVirialShock(sP, haloID, conf=0):
+def plotRshockVsMass(sPs, quants=['Temp_400rad_16ns'], vsHaloMass=True, kpc=False, secondTopAxis=False,
+                     percInds=None, methodInds=None):
+    """ Plot a particular virial shock radius measurement vs halo/stellar mass. """
+    binSize = 0.1 # log mass
+
+    if percInds is None and methodInds is None:
+        assert len(sPs) == 1 and len(quants) == 1
+    if percInds is None or methodInds is None:
+        assert len(sPs) == 1 or len(quants) == 1
+
+    # plot setup
+    heightFac = 1.1 if secondTopAxis else 1.0
+    fig = plt.figure(figsize=[figsize[0], figsize[1]*heightFac])
+    ax = fig.add_subplot(111)
+    
+    mHaloLabel = 'Halo Mass [ log M$_{\\rm sun}$ ]'
+    mHaloField = 'mhalo_200_log'
+    mStarLabel = 'Galaxy Stellar Mass [ log M$_{\\rm sun}$ ]'
+    mStarField = 'mstar_30pkpc_log'
+
+    if vsHaloMass:
+        ax.set_xlim([9.8, 15.2])
+        ax.set_xlabel(mHaloLabel)
+        massField = mHaloField
+    else:
+        ax.set_xlim([7.5, 12.0])
+        ax.set_xlabel(mStarLabel)
+        massField = mStarField
+
+    if kpc:
+        ax.set_ylim([1.5,3.5])
+        ax.set_ylabel('Virial Shock Radius [ log pkpc ]')
+        ax.plot(ax.get_xlim(), [2.0,2.0], '-', color='black', alpha=0.1, lw=lw)
+        ax.plot(ax.get_xlim(), [3.0,3.0], '-', color='black', alpha=0.1, lw=lw)
+    else:
+        ax.set_ylim([0.5,5.0])
+        ax.set_ylabel('R$_{\\rm shock}$ / R$_{\\rm vir}$')
+        ax.plot(ax.get_xlim(), [1.0,1.0], '-', color='black', alpha=0.1, lw=lw)
+
+    if secondTopAxis:
+        # add the other mass value as a secondary x-axis on the top of the panel
+        axTop = ax.twiny()
+
+        if vsHaloMass: # x=halo, top=stellar
+            topMassVals = [8.0, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0]
+            axTop.set_xlabel(mStarLabel)
+            topMassField = mStarField
+        else: # x=stellar, top=halo
+            topMassVals = [11.0, 11.5, 12.0, 13.0, 14.0, 15.0]
+            axTop.set_xlabel(mHaloLabel)
+            topMassField = mHaloField
+
+        axTop.set_xlim(ax.get_xlim())
+        axTop.set_xscale(ax.get_xscale())
+
+    # helper for quant labels
+    p1 = [quant.split("_")[0] for quant in quants]
+    p2 = [quant.split("_")[1] for quant in quants]
+    p3 = [quant.split("_")[2] for quant in quants]
+
+    allQuantsSame = (p1.count(p1[0]) == len(p1))
+    allnRadSame = (p2.count(p2[0]) == len(p2))
+    allNsideSame = (p3.count(p3[0]) == len(p3))
+
+    # loop over each fullbox run
+    txt = []
+    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(10)]
+
+    for i, sP in enumerate(sPs):
+        # load halo/stellar masses, rshock auxcat
+        txt_sP = []
+        gc = sP.subhalos([massField,'rhalo_200'])
+
+        # loop over auxCats (e.g. 'Temp_400rad_16ns' can vary quant, nRad, and/or Nside)
+        for j, quant in enumerate(quants):
+            print('[%s]: %s' % (sP.simName, quant))
+
+            # load auxCat
+            acField = "Subhalo_VirShockRad_" + quant
+            ac = sP.auxCat(acField)
+
+            xx = gc[massField][ac['subhaloIDs']]
+
+            # unit conversions
+            yy_kpc = ac[acField] * gc['rhalo_200'][ac['subhaloIDs'],np.newaxis,np.newaxis] # [rvir] -> [pkpc]
+            yy_kpc = logZeroNaN(yy_kpc) # log pkpc
+
+            yy_rvir = ac[acField] # [rvir]
+
+            # determine percs and methods to show (specified in input, or all)
+            if methodInds is None:
+                methodInds = np.arange(ac[acField].shape[1]) # all
+
+            if percInds is None:
+                percInds = np.arange(ac[acField].shape[2]) # all
+
+            # loop over all combinations of {perc,method}
+            for k, percInd in enumerate(percInds):
+                for l, methodInd in enumerate(methodInds):
+
+                    print(' p = %d m = %d' % (percInd,methodInd))
+                    perc = ac[acField+'_attrs']['percs'][percInd]
+
+                    yy_loc_kpc = np.squeeze(yy_kpc[:,methodInd,percInd])
+                    yy_loc_rvir = np.squeeze(yy_rvir[:,methodInd,percInd])
+
+                    # calculate median and smooth
+                    percs = [10,50,90]
+
+                    xm, _, _, pm_kpc = running_median(xx,yy_loc_kpc,binSize=binSize,
+                                                    skipZeros=True,percs=percs, minNumPerBin=10)
+                    xm2, _, _, pm_rvir = running_median(xx,yy_loc_rvir,binSize=binSize,
+                                                    skipZeros=True,percs=percs, minNumPerBin=10)
+                    assert np.array_equal(xm,xm2)
+
+                    if xm.size > sKn:
+                        pm_kpc = savgol_filter(pm_kpc,sKn,sKo,axis=1)
+                        pm_rvir = savgol_filter(pm_rvir,sKn,sKo,axis=1)
+
+                    # select
+                    pm = pm_kpc if kpc else pm_rvir
+
+                    txt_sP.append([xm,pm_kpc[1,:],pm_kpc[0,:],pm_kpc[-1,:],pm_rvir[1,:],pm_rvir[0,:],pm_rvir[-1,:]])
+
+                    # determine quantName for label
+                    quantName = quant 
+                    quantName, nRad, Nside = quant.split("_") # e.g. 'Temp_400rad_16ns'
+                    nRad = "$N_{\\rm rad} = %d$" % int(nRad.replace('rad',''))
+                    Nside = "$N_{\\rm side} = %d$" % int(Nside.replace('ns',''))
+                    quantLabel = ''
+
+                    if not allQuantsSame: quantLabel += quantName
+                    if not allnRadSame: quantLabel += ' ' + nRad
+                    if not allNsideSame: quantLabel += ' ' + Nside
+
+                    # determine color, linestyle, and label
+                    label = None
+
+                    if len(sPs) == 1:
+                        # one run, color varies by quant or perc
+                        ind = j
+                        if len(percInds) > 1: ind = k
+                        c = colors[ind]
+
+                        # linestyle varies by quant or perc or method
+                        ls = linestyles[j+l]
+
+                        label = quantLabel
+                        if len(percInds) > 1 and l == 0: label += ' p=%s' % perc
+                    else:
+                        # multiple runs/redshifts, color varies by run
+                        c = colors[i]
+
+                        # linestyle varies by quant or perc
+                        if len(percInds) > 1: ls = linestyles[j+k]
+                        if len(percInds) == 1: ls = linestyles[j+l]
+
+                        if k == 0 and l == 0: label = sP.simName
+                        if sPs[1].redshift != sPs[0].redshift: label += ' (z=%.1f)' % sP.redshift
+                        if len(quants) > 1: label += ' %s' % quantLabel
+                        if len(percInds) > 1 and len(sPs) == 1: label += ' p=%s' % perc
+                        if len(methodInds) > 1 and len(sPs) == 1: label += ' m=%d' % methodInd
+
+                    # plot median line
+                    ax.plot(xm, pm[1,:], lw=lw, color=c, linestyle=ls, label=label)
+
+                    if k == 0 and l == 0:
+                        # show percentile scatter (for all runs/quants)
+                        ax.fill_between(xm, pm[0,:], pm[-1,:], color=c, interpolate=True, alpha=0.2)
+
+        if secondTopAxis and i == 0:
+            # load mass values for top x-axis, construct median relation interpolant, assign values
+            xx_top = sP.groupCat(fieldsSubhalos=[topMassField])
+            xx_top = xx_top[cssInds]
+            xm, ym, _ = running_median(xx_top,xx,binSize=binSize,skipZeros=True,minNumPerBin=10)
+            f = interp1d(xm, ym, kind='linear', bounds_error=False, fill_value='extrapolate')
+
+            axTickVals = f(topMassVals) # values of bottom x-axis for each topMassVals
+
+            axTop.set_xticks(axTickVals)
+            axTop.set_xticklabels(topMassVals)
+
+        txt.append(txt_sP) # one list per sim
+
+    # print
+    massAxis = 'mhalo' if vsHaloMass else 'mstar'
+        
+    for i, txt_sP in enumerate(txt): # loop over runs
+        filename = 'figN_%s_z%.1f_%s.txt' % (sPs[i].simName,sPs[i].redshift,massAxis)
+        
+        out = '# Nelson+ (2020) http://arxiv.org/abs/xxxx.xxxxx\n'
+        out += '# Figure N (Rshock) (%s z=%.1f)\n' % (sPs[i].simName, sPs[i].redshift)
+        out += '# columns: %s [log Msun], Rshock [log pkpc], Rshock_p10, Rshock_p90' % massAxis
+        out += ', Rshock [rvir], Rshock_p10, Rshock_p90\n\n'
+
+        for j, radData in enumerate(txt_sP):
+            if j == 0: mass1 = radData[0]
+            assert np.array_equal(mass1,radData[0]) # same mass bins for all runs
+
+        for k in range(mass1.size): # loop over mass bins, one row per
+            out += '%5.2f' % mass1[k]
+            for j, radData in enumerate(txt_sP):
+                _, r_kpc_p50, r_kpc_p10, r_kpc_p90, r_rvir_p50, r_rvir_p10, r_rvir_p90 = radData
+                out += ', %5.3f, %5.3f, %5.3f' % (r_kpc_p50[k], r_kpc_p10[k], r_kpc_p90[k])
+                out += ', %5.3f, %5.3f, %5.3f' % (r_rvir_p50[k], r_rvir_p10[k], r_rvir_p90[k])
+            out += '\n'
+
+        with open(filename, 'w') as f:
+            f.write(out)
+
+    # legends
+    sExtra = []
+    lExtra = []
+
+    if len(percInds) > 1 and len(methodInds) == 1 and len(quants) == 1:
+        for i, percInd in enumerate(percInds):
+            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+            lExtra += ['perc=%s' % ac[acField+'_attrs']['percs'][percInd]]
+
+    if len(methodInds) > 1:
+        for i, methodInd in enumerate(methodInds):
+            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[i],marker='')]
+            lExtra += ['method #%d' % methodInd]
+
+    if len(quants) == 1 and len(percInds) == 1 and len(methodInds) == 1:
+        if len(sPs) > 1 and sPs[1].redshift == sPs[0].redshift:
+            sExtra += [plt.Line2D( (0,1),(0,0),color='black',lw=0,linestyle='-',marker='')]
+            lExtra += ['z = %.1f' % sPs[0].redshift]
+
+    legend1 = ax.legend(sExtra, lExtra, loc='upper right')
+    ax.add_artist(legend1)
+
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles, labels, loc='upper left')
+
+    qStr = quants[0] if len(quants) == 1 else '%dquants' % len(quants)
+    sStr = '-'.join([sP.simName for sP in sPs])
+    fig.savefig("rshock_vs_%s_%s_z%.1f_%s_%s.pdf" % \
+      (massAxis,sStr,sPs[0].redshift,'kpc' if kpc else 'rvir',qStr))
+    plt.close(fig)
+
+def visualizeHaloVirialShock(sP, haloID, conf=0, depthFac=1.0, dataCache=None):
     """ Driver for a single halo vis example, highlighting the virial shock structure. """
     run        = sP.run
     res        = sP.res
     redshift   = sP.redshift
     hInd       = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
-    rVirFracs  = [1.0] #[1.0, 2.0, 3.0, 4.0]
+    rVirFracs  = [1.0, 2.0, 3.0, 4.0]
     method     = 'sphMap_global'
     nPixels    = [1000,1000]
-    axes       = [0,1]
+    axes       = [0,2] # TODO: change back [0,1]
 
     labelZ     = False
     labelScale = 'physical'
     labelSim   = False
     labelHalo  = True
 
-    size       = 4.5 #9.0 # TODO CHANGE BACK
+    size       = 9.0
     sizeType   = 'rVirial'
-    depthFac   = 1.0 # todo
+
+    # global pre-cache of selected fields into memory
+    if 1 and dataCache is None:
+        dataCache = {}
+        cacheKeys = ['Coordinates','Masses'] + ['EnergyDissipation']
+        for key in cacheKeys:
+            print('Caching [%s] now...' % key, flush=True)
+            dataCache['snap%d_gas_%s' % (sP.snap,key)] = sP.snapshotSubsetP('gas', key, float32=True)
+        print('All caching done.', flush=True)
 
     # panel
-    partType   = 'gas'
+    partType = 'gas'
 
     if conf == 0:
-        partField  = 'shocks_dedt'
-        valMinMax  = [34.0, 38.0]
+        partField = 'shocks_dedt'
+        valMinMax = [34.0, 38.0]
     if conf == 1:
-        partField  = 'temp'
-        valMinMax  = [4.0, 7.2]
+        partField = 'shocks_machnum'
+        valMinMax = [0.0, 5.0]
     if conf == 2:
-        partField  = 'vrad'
-        valMinMax  = [-350,350]
-        depthFac   = 0.1 # todo
+        partField = 'temp'
+        valMinMax = [4.0, 7.2]
     if conf == 3:
-        nPixels = [1920,1080]
-        partField  = 'xray'
-        valMinMax  = [30.0, 39.0]
+        partField = 'entropy'
+        valMinMax = [3.0, 6.0]
+    if conf == 4:
+        partField = 'vrad'
+        valMinMax = [-350,350]
+        depthFac  = 0.1 # todo
+
+    if conf == 5:
+        # widescreen image
+        nPixels   = [1920,1080]
+        partField = 'xray'
+        valMinMax = [30.0, 39.0]
+        rVirFracs = [1.0]
+        size      = 4.5
 
     class plotConfig:
         plotStyle    = 'edged'
         rasterPx     = nPixels
-        colorbars    = False #True
+        colorbars    = True
         saveFilename = './vis_virshock_%s_%d_%s_h%d.pdf' % (sP.simName,sP.snap,partField,haloID)
 
     # render
     renderSingleHalo([{}], plotConfig, locals(), skipExisting=False)
 
+    return dataCache
+
 def paperPlots():
     #TNG50_z0 = simParams(run='tng50-1', redshift=0.0)
     #TNG50_2_z0 = simParams(run='tng50-2', redshift=0.0)
-    #TNG50_z2 = simParams(run='tng50-1', redshift=2.0)
 
     # figure 1: single-halo visualization of the virial shock
     if 0:
-        sP = simParams(run='tng50-1',redshift=0.5)
-        #sP = simParams(run='tng300-1',redshift=2.0)
+        sP = simParams(run='tng50-1',redshift=2.0)
 
-        haloID = 0
-        for conf in [0,1,2]:
-            #for haloID in [0, 10,20,110,120,200,300]:    
-            visualizeHaloVirialShock(sP, haloID=haloID, conf=conf)
+        for conf in [0]:
+            for haloID in [0,10,20,110,120,200,300]:
+                for depthFac in [1.0,0.5,0.22]:
+                    visualizeHaloVirialShock(sP, haloID=haloID, conf=conf, depthFac=depthFac)
 
-    # figure 2: testing rshock detection method, associated plots
-    if 1:
+    # figure X: testing rshock detection method, associated plots
+    if 0:
         haloID = 20 # 0,10,20,110,120,200,300
-        sP = simParams(run='tng50-2', redshift=0.0)
+        sP = simParams(run='tng50-2', redshift=2.0)
 
         virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True)
+
+    # figure 2: rshock vs mass
+    if 0:
+        quants = ['ShocksMachNum_400rad_16ns']
+        percInds = [3]
+        methodInds = [3]
+        kpc = False
+
+        TNG100 = simParams(run='tng100-1',redshift=2.0)
+        TNG50 = simParams(run='tng50-2', redshift=2.0)
+
+        for vsHaloMass in [True,False]:
+            plotRshockVsMass([TNG50,TNG100], quants=quants, vsHaloMass=vsHaloMass, kpc=kpc,
+                             percInds=percInds, methodInds=methodInds)
+
+    # figure X: explore rshock vs mass (percs, methods, runs, ...)
+    if 0:
+        quants = ['ShocksMachNum_400rad_16ns']
+        percInds = None #[3]
+        methodInds = None #[3]
+
+        TNG100 = simParams(run='tng100-1',redshift=2.0)
+        #TNG50 = simParams(run='tng50-2', redshift=1.0)
+
+        for vsHaloMass in [True]:
+            for kpc in [True,False]:
+                plotRshockVsMass([TNG100], quants=quants, vsHaloMass=vsHaloMass, kpc=kpc,
+                                 percInds=percInds, methodInds=methodInds)
+
+    # figure X: explore rshock vs mass (different quants)
+    if 0:
+        quantNames = ['Temp','Entropy','ShocksMachNum','ShocksEnergyDiss','RadVel']
+        quants = ['%s_400rad_16ns' % q for q in quantNames]
+
+        percInds = [2]
+        methodInds = [2]
+        vsHaloMass = True
+
+        sP = simParams(run='tng100-1',redshift=2.0)
+
+        for kpc in [True,False]:
+            plotRshockVsMass([sP], quants=quants, vsHaloMass=vsHaloMass, kpc=kpc,
+                             percInds=percInds, methodInds=methodInds)

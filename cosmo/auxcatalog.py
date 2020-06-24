@@ -2583,7 +2583,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         # construct a global octtree to accelerate searching?
         tree = None
         if useTree:
-            tree = buildFullTree(particles['Coordinates'], boxSizeSim=sP.boxSize, treePrec='float32', verbose=True)
+            tree = buildFullTree(particles['Coordinates'], boxSizeSim=sP.boxSize, treePrec='float64', verbose=True)
 
         if ptProperty in userCustomFields and Nside is not None: # allocate for local halocentric calculations
             loc_val = np.zeros( particles['count'], dtype='float32' )
@@ -3586,10 +3586,19 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_8ns' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_linear',minHaloMass='10000dm',**{**sphericalSamplesOpts,'Nside':8}),
+   'Subhalo_SphericalSamples_Global_Gas_ShocksMachNum_10rvir_800rad_16ns' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='shocks_machnum',minHaloMass='10000dm',**{**sphericalSamplesOpts,'radMax':10.0,'radNumBins':800}),
 
    # shock/splashback radii
    'Subhalo_VirShockRad_Temp_400rad_16ns' : partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=16),
    'Subhalo_VirShockRad_Temp_400rad_8ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='Temp',radNumBins=400, Nside=8),
+   'Subhalo_VirShockRad_Entropy_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='Entropy',radNumBins=400, Nside=16),
+   'Subhalo_VirShockRad_ShocksMachNum_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksMachNum',radNumBins=400, Nside=16),
+   'Subhalo_VirShockRad_ShocksMachNum_10rvir_800rad_16ns' : partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksMachNum',radNumBins=800, radMax=10, Nside=16),
+   'Subhalo_VirShockRad_ShocksEnergyDiss_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='ShocksEnergyDiss',radNumBins=400, Nside=16),
+   'Subhalo_VirShockRad_RadVel_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Gas',quant='RadVel',radNumBins=400, Nside=16),
+   'Subhalo_SplashbackRad_DM_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='DM',quant='RadVel',radNumBins=400, Nside=16),
+   'Subhalo_SplashbackRad_Stars_400rad_16ns'  : partial(healpixThresholdedRadius,ptType='Stars',quant='RadVel',radNumBins=400, Nside=16),
 
    # outflows/inflows
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz'),
