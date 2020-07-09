@@ -500,6 +500,7 @@ def _treeSearchQuantReduction(posSearch,hsml,ind0,ind1,boxSizeSim,pos,quant,opnu
 def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     """ Helper. See below. """
     treePrecs = {'single':'float32','double':'float64','np32':np.float32,'np64':np.float64}
+    intType = 'int64' # can be int64, or could be made automatic if MaxNodes is too large
 
     if treePrec is None: treePrec = pos.dtype
     if treePrec in treePrecs.keys(): treePrec = treePrecs[treePrec]
@@ -508,7 +509,7 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     start_time = time.time()
 
     NumPart = pos.shape[0]
-    NextNode = np.zeros( NumPart, dtype='int32' )
+    NextNode = np.zeros( NumPart, dtype=intType )
 
     # tree allocation and construction (iterate in case we need to re-allocate for larger number of nodes)
     for num_iter in range(10):
@@ -516,11 +517,13 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
         MaxNodes = np.int( (num_iter+0.7)*NumPart ) + 1
         if MaxNodes < 1000: MaxNodes = 1000
 
+        assert MaxNodes < np.iinfo(intType).max, 'Too many points to make tree with int32 dtype.'
+
         length   = np.zeros( MaxNodes, dtype=treePrec )     # NODE struct member
         center   = np.zeros( (3,MaxNodes), dtype=treePrec ) # NODE struct member
-        suns     = np.zeros( (8,MaxNodes), dtype='int32' )   # NODE.u first union member
-        sibling  = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
-        nextnode = np.zeros( MaxNodes, dtype='int32' )       # NODE.u second union member (NODE.u.d member)
+        suns     = np.zeros( (8,MaxNodes), dtype=intType )   # NODE.u first union member
+        sibling  = np.zeros( MaxNodes, dtype=intType )       # NODE.u second union member (NODE.u.d member)
+        nextnode = np.zeros( MaxNodes, dtype=intType )       # NODE.u second union member (NODE.u.d member)
 
         # construct: call JIT compiled kernel
         numNodes = _constructTree(pos,boxSizeSim,NextNode,length,center,suns,sibling,nextnode)
