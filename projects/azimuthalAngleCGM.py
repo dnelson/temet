@@ -141,7 +141,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
     loadHI = not all(NHI is None for NHI in min_NHI)
     #colors = [] # old
     ls_massbins = []
-    colors = sampleColorTable('plasma', len(massBins)*len(distBins)*len(min_NHI)*len(sPs), bounds=[0.1,0.8])
+    colors = sampleColorTable('plasma', len(massBins)*len(distBins)*len(min_NHI)*len(sPs), bounds=[0.1,0.7])
     #colors = sampleColorTable('plasma', 5, bounds=[0.1,0.8])
 
     for k, sP in enumerate(sPs):
@@ -289,7 +289,7 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                     # new
                     c = colors[i+j+k]
                     ls = ':'
-                    if np.mean(massBin) == 9.0 and np.mean(distBin) == 100 and \
+                    if np.mean(massBin) == 9.5 and np.mean(distBin) == 100 and \
                        np.abs(sP.redshift-0.5)<0.01 and NHI is None: # fiducial
                         ls = '-'
 
@@ -384,15 +384,15 @@ def paperPlots():
     if 0:
         # figure 3b: subplots for variation of (Z,theta) with b
         field = 'metal_solar'
-        massBins = [ [8.98, 9.02] ]
+        massBins = [ [9.46,9.54] ]
         distBins = [ [20,30], [45,55], [95,105], [195,205] ]
 
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
-    if 0:
+    if 1:
         # figure 3c: subplots for variation of (Z,theta) with redshift
         field = 'metal_solar'
-        massBins = [ [8.98, 9.02] ]
+        massBins = [ [9.46,9.54] ] # [8.98, 9.02]
         distBins = [ [95,105] ]
         redshifts = [0.0, 0.5, 1.5, 2.5]
 
@@ -405,7 +405,7 @@ def paperPlots():
     if 0:
         # figure 3d: subplots for variation of (Z,theta) with minimum N_HI
         field = 'metal_solar'
-        massBins = [ [8.95, 9.05] ]
+        massBins = [ [9.46,9.54] ] # [8.95, 9.05]
         distBins = [ [70,130] ]
         min_NHI = [None, 13, 15, 17] # 16, 18
 
