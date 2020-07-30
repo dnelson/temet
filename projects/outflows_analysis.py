@@ -1354,7 +1354,7 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     return rr, attrs
 
 def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, firstQuant='rad', secondQuant='vrad', 
-                         massField='Masses', selNum=None, fluxKE=False, fluxP=False, rawMass=False, v200norm=False):
+                         massField='Masses', selNum=None, fluxKE=False, fluxP=False, rawMass=False, inflow=False, v200norm=False):
     """ Helper to load RadialMassFlux aux catalogs and compute the total mass flux rate (msun/yr), energy 
     flux rate (10^30 erg/s), or momentum flux rate (10^30 g*cm/s^2), according ro fluxKE/fluxP. Do so in radial and 
     radial velocity bins, independent of any other properties of the gas. If thirdQuant is not None, then 
@@ -1389,6 +1389,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
 
     massStr = '_'+massField if massField != 'Masses' else ''
     v200Str = '_v200norm' if v200norm else ''
+    flowStr = '_inflow' if inflow else ''
     acField = 'Subhalo_Radial%s_%s_%s%s%s' % (propStr,scope,ptType,massStr,v200Str)
 
     if ptType == 'Gas':
@@ -1404,7 +1405,7 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             dsetName = '%s.%s.%s' % (firstQuant,secondQuant,thirdQuant)
 
     selStr = '' if selNum is None else '_sel%d' % selNum
-    cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,sP.snap)
+    cacheFile = sP.derivPath + 'cache/%s_%s-%s-%s-%s%s%s_%d.hdf5' % (acField,firstQuant,secondQuant,thirdQuant,fourthQuant,selStr,flowStr,sP.snap)
 
     # overrides (after cache filename)
     dsetNameOrig = dsetName
@@ -1477,8 +1478,13 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             dset = np.sum( dset, axis=(3,) )
 
         # now have a [nSubhalos,nRad,nVRad] shaped array, derive scalar quantities for each subhalo in auxCat
-        #  --> in each radial shell, sum massflux over all temps, for vrad > vcut, taking vcut as all >= 0 vrad bins
-        vcut_inds = np.where(binConfig['vrad'] >= 0.0)[0][:-1] # last is np.inf
+        #  --> in each radial shell, sum massflux over all temps
+        if inflow:
+            # inflow: sum for vrad <= vcut, taking vcut as all <= 0 vrad bins
+            vcut_inds = np.where(binConfig['vrad'] <= 0.0)[0][1:] # first is -np.inf
+        else:
+            # outflow: sum for vrad > vcut, taking vcut as all >= 0 vrad bins
+            vcut_inds = np.where(binConfig['vrad'] >= 0.0)[0][:-1] # last is np.inf
 
         if rawMass: vcut_inds = np.arange(binConfig['vrad'].size-1) # first is -inf (all), last is inf (not useful)
         vcut_vals = binConfig['vrad'][vcut_inds]
@@ -1496,17 +1502,24 @@ def loadRadialMassFluxes(sP, scope, ptType, thirdQuant=None, fourthQuant=None, f
             # sum over all vrad > vcut bins for this vcut value
             if thirdQuant is None:
                 # return is 3D
-                dset_local = np.sum( dset[:,:,vcut_ind:], axis=2 ) 
-                flux[:,:,i] = dset_local
+                if inflow:
+                    flux[:,:,i] = np.sum( dset[:,:,:vcut_ind], axis=2 )
+                    import pdb; pdb.set_trace()
+                else:
+                    flux[:,:,i] = np.sum( dset[:,:,vcut_ind:], axis=2 )
             else:
                 if fourthQuant is None:
                     # return is 4D
-                    dset_local = np.sum( dset[:,:,vcut_ind:,:], axis=2 ) 
-                    flux[:,:,i,:] = dset_local
+                    if inflow:
+                        flux[:,:,i,:] = np.sum( dset[:,:,:vcut_ind,:], axis=2 )
+                    else:
+                        flux[:,:,i,:] = np.sum( dset[:,:,vcut_ind:,:], axis=2 )
                 else:
                     # return is 5D
-                    dset_local = np.sum( dset[:,:,vcut_ind:,:,:], axis=2 ) 
-                    flux[:,:,i,:,:] = dset_local
+                    if inflow:
+                        flux[:,:,i,:,:] = np.sum( dset[:,:,:vcut_ind,:,:], axis=2 )
+                    else:
+                        flux[:,:,i,:,:] = np.sum( dset[:,:,vcut_ind:,:,:], axis=2 )
 
     else:
         # non-standard case, no manipulation or accumulation for vcut values

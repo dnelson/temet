@@ -1477,7 +1477,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
             saveName = '%s%s_%s_C_%s_%s_%s_skipzeros-%s.pdf' % (saveBase,ptStr,xQuant,sP.simName,zStr,stat,skipZeros)
             _plotHelper(percIndsPlot,radIndsPlot,saveName,ylimLoc=ylimLoc,stat=stat,skipZeroVals=skipZeros)
 
-def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[None], config=None):
+def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[None], config=None, inflow=False):
     """ Explore radial mass flux data, as a function of one of the histogrammed quantities (x-axis), for single 
     galaxies or stacked in bins of stellar mass. Optionally at multiple redshifts. """
     import warnings
@@ -1519,10 +1519,12 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
         ax.set_xlim(limits[quant])
         ax.set_ylim(ylim)
 
+        ylabel = '%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType
+        if inflow: ylabel = ylabel.replace("Outflow","Inflow")
         ax.set_xlabel(labels[quant])
-        ax.set_ylabel('%s Outflow Rate [ log M$_{\\rm sun}$ / yr ]' % ptType)
+        ax.set_ylabel(ylabel)
 
-        if quant == 'theta':
+        if quant == 'theta': #and (config is None or 'sterNorm' not in config):
             # special x-axis labels for angle theta
             ax.set_xticks([-np.pi, -np.pi/2, 0.0, np.pi/2, np.pi])
             ax.set_xticklabels(['$-\pi$','$-\pi/2$ (minor axis)','$0$','$+\pi/2$ (minor axis)','$+\pi$'])
@@ -1560,6 +1562,15 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                     w_zero = np.where(mdot_local == 0.0)
                     mdot_local[w_zero] = np.nan
 
+                # normalize by angular units: convert from [Msun/yr] to [Msun/yr/ster]
+                if 'sterNorm' in config and config['sterNorm']:
+                    ax.set_ylabel(ylabel.replace("/ yr","/ yr / ster"))
+                    ax.set_xlim([0,np.pi/2])
+                    ax.set_yscale('symlog')
+
+                    ster_per_bin = 4 * np.pi / mdot_local.shape[-1]
+                    mdot_local /= ster_per_bin
+
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=RuntimeWarning)
                     # avoid RuntimeWarning: Mean of empty slice (single galaxies with only zero values)
@@ -1576,7 +1587,8 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                 if not isinstance(yy,np.ndarray):
                     continue # single number
 
-                yy = logZeroNaN(yy) # zero flux -> nan
+                if 'sterNorm' not in config or (not config['sterNorm']):
+                    yy = logZeroNaN(yy) # zero flux -> nan
 
                 # label and color
                 xx = 0.5*(binConfig[quant][:-1] + binConfig[quant][1:])
@@ -1592,7 +1604,7 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
 
                 label = 'M$^\star$ = %.1f' % mStarMidPoint if j == 0 else '' # label M* only once
 
-                yy = savgol_filter(yy,sKn,sKo)
+                #yy = savgol_filter(yy,sKn,sKo)
                 if pm.ndim > 1:
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
                 sm = savgol_filter(sm,sKn,sKo)
@@ -1621,27 +1633,44 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
                         ax.plot( [xx[w],xx[w]], [-3.0,ymax], color=l.get_color(), lw=lw-0.5, linestyle=ls, alpha=0.5)
 
         # print text file
-        filename = 'fig8_outflowrate_vs_vout_%dkpc.txt' % radMidPoint
-        out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
-        out += '# Figure 8 Gas Outflow Rate decomposed into Outflow Velocity (%s r = %d kpc)\n' % (sP.simName, radMidPoint)
-        out += '# Multiple stellar mass bins and redshifts for every entry\n'
-        out += '# vel [km/s]'
-        for entry in txt: out += ', M*=%.1f_z=%.1f' % (entry['mstar'],entry['redshift'])
-        out += '\n# (all values after vel are gas mass outflow rate [log msun/yr]) (all masses [log msun])\n'
+        if 0:
+            filename = 'fig8_outflowrate_vs_vout_%dkpc.txt' % radMidPoint
+            out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
+            out += '# Figure 8 Gas Outflow Rate decomposed into Outflow Velocity (%s r = %d kpc)\n' % (sP.simName, radMidPoint)
+            out += '# Multiple stellar mass bins and redshifts for every entry\n'
+            out += '# vel [km/s]'
+            for entry in txt: out += ', M*=%.1f_z=%.1f' % (entry['mstar'],entry['redshift'])
+            out += '\n# (all values after vel are gas mass outflow rate [log msun/yr]) (all masses [log msun])\n'
 
-        for i in range(len(txt)): # make sure all vel values are the same
-            assert np.array_equal(txt[i]['vout'], txt[0]['vout'])
+            for i in range(len(txt)): # make sure all vel values are the same
+                assert np.array_equal(txt[i]['vout'], txt[0]['vout'])
 
-        for i in range(txt[0]['vout'].size):
-            if txt[0]['vout'][i] < 0:
-                continue
-            out += '%4d' % txt[0]['vout'][i]
-            for j in range(len(txt)): # loop over M* bins and redshifts
-                out += ' %6.3f' % txt[j]['outflowrate'][i]
+            for i in range(txt[0]['vout'].size):
+                if txt[0]['vout'][i] < 0:
+                    continue
+                out += '%4d' % txt[0]['vout'][i]
+                for j in range(len(txt)): # loop over M* bins and redshifts
+                    out += ' %6.3f' % txt[j]['outflowrate'][i]
+                out += '\n'
+
+            with open(filename, 'w') as f:
+                f.write(out)
+        if 1:
+            out = '# Nelson+ (2019) http://arxiv.org/abs/1902.05554\n'
+            out += '# theta [deg], outflow rate [msun/yr/ster]\n'
+
+            txt = txt[0]
+            w = np.where( (txt['vout'] >= 0) & (txt['vout'] <= np.pi/2) )
+            theta = np.rad2deg(txt['vout'][w])
+            mdot = txt['outflowrate'][w]
+
+            for i in range(theta.size):
+                out += '%5.2f ' % theta[i]
             out += '\n'
-
-        with open(filename, 'w') as f:
-            f.write(out)
+            for i in range(mdot.size):
+                out += '%5.2f ' % mdot[i]
+            with open('rate_inflow=%s.txt' % inflow, 'w') as f:
+                f.write(out)
 
         # legends and finish plot
         if len(redshifts) > 1:
@@ -1675,10 +1704,11 @@ def gasOutflowRatesVsQuantStackedInMstar(sP_in, quant, mStarBins, redshifts=[Non
     for redshift in redshifts:
         if redshift is not None:
             sP.setRedshift(redshift)
-        data.append( loadRadialMassFluxes(sP, scope, ptType, thirdQuant=quant) )
+        data.append( loadRadialMassFluxes(sP, scope, ptType, thirdQuant=quant, inflow=inflow) )
 
     if config is not None:
         saveName = 'outflowRate_%s_%s_mstar_%s_%s_%s_skipzeros-%s.pdf' % (ptType,quant,sP.simName,zStr,config['stat'],config['skipZeros'])
+        if inflow: saveName = saveName.replace("outflowRate","inflowRate")
         if 'vcutInd' not in config: config['vcutInd'] = None # quant == vrad
         _plotHelper(config['vcutInd'],config['radInd'],quant,mStarBins,config['stat'],skipZeroFluxes=config['skipZeros'],saveName=saveName)
         return
