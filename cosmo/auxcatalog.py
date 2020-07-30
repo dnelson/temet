@@ -861,12 +861,13 @@ def _findHalfLightRadius(rad,mags,vals=None):
         # take input values unchanged (assume e.g. linear masses or light quantities already)
         assert vals.size == rad.size
         lums = vals.copy()
-
+   
+    radii = rad.copy()
     totalLum = np.nansum( lums )
 
-    sort_inds = np.argsort(rad)
+    sort_inds = np.argsort(radii)
 
-    rad = rad[sort_inds]
+    radii = radii[sort_inds]
     lums = lums[sort_inds]
 
     # cumulative sum luminosities in radial-distance order
@@ -883,9 +884,9 @@ def _findHalfLightRadius(rad,mags,vals=None):
     if w1 == 0:
         # half of total luminosity could be within the radius of the first star
         r1 = lums_cum[w1]
-        halfLightRad = (0.5*totalLum - 0.0)/(r1-0.0) * (rad[w1]-0.0) + 0.0
+        halfLightRad = (0.5*totalLum - 0.0)/(r1-0.0) * (radii[w1]-0.0) + 0.0
 
-        assert (halfLightRad >= 0.0 and halfLightRad <= rad[w1]) or np.isnan(halfLightRad)
+        assert (halfLightRad >= 0.0 and halfLightRad <= radii[w1]) or np.isnan(halfLightRad)
     else:
         # more generally valid case
         w0 = w1 - 1
@@ -893,9 +894,9 @@ def _findHalfLightRadius(rad,mags,vals=None):
         
         r0 = lums_cum[w0]
         r1 = lums_cum[w1]
-        halfLightRad = (0.5*totalLum - r0)/(r1-r0) * (rad[w1]-rad[w0]) + rad[w0]
+        halfLightRad = (0.5*totalLum - r0)/(r1-r0) * (radii[w1]-radii[w0]) + radii[w0]
 
-        assert halfLightRad >= rad[w0] and halfLightRad <= rad[w1]
+        assert halfLightRad >= radii[w0] and halfLightRad <= radii[w1]
 
     return halfLightRad
 
@@ -1109,7 +1110,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
             # loop over subhalos
             for i, subhaloID in enumerate(subhaloIDsTodo):
                 if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
-                    print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+                    print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo), flush=True)
 
                 # slice starting/ending indices for stars local to this subhalo
                 i0 = gc['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]

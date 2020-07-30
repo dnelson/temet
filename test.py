@@ -18,6 +18,56 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def half_Kband_radii():
+    """ Test for Hannah's paper. """
+    sP = simParams(run='tng50-1',redshift=2.0)
+    from cosmo.auxcatalog import _findHalfLightRadius
+
+    subhaloIDs = [25821,39745,55106,60750,79350,92271,99303]
+
+    mstar = sP.subhalos('mstar_30pkpc_log')
+    subhaloIDs = np.where( (mstar>9.5) & (mstar<9.51) )[0]
+
+    import pdb; pdb.set_trace()
+
+    for subhaloID in subhaloIDs:
+        # groupcat vals
+        rhalf_mass = sP.subhalo(subhaloID)['SubhaloHalfmassRadType']
+        rhalf_mass = sP.units.codeLengthToKpc(rhalf_mass)
+
+        # stars
+        rad = sP.snapshotSubset('stars_real','rad_kpc', subhaloID=subhaloID)
+        mags = sP.snapshotSubset('stars_real', 'phot_K', subhaloID=subhaloID)
+        mass = sP.snapshotSubset('stars_real', 'mass', subhaloID=subhaloID)
+
+        rhalf_mass2 = _findHalfLightRadius(rad,mags=None,vals=mass)
+        rhalf = _findHalfLightRadius(rad,mags)
+
+        print(subhaloID,'stars: ',rhalf_mass[4],rhalf_mass2,rhalf)
+
+        # gas
+        rad_gas = sP.snapshotSubset('gas', 'rad_kpc', subhaloID=subhaloID)
+        mass_gas = sP.snapshotSubset('gas', 'mass', subhaloID=subhaloID)
+        sfr_gas = sP.snapshotSubset('gas', 'sfr', subhaloID=subhaloID)
+
+        rhalf_gas2 = _findHalfLightRadius(rad_gas,mags=None,vals=mass_gas)
+
+        w = np.where(sfr_gas > 0)
+        rad_gas_sfr = rad_gas[w]
+        mass_gas_sfr = mass_gas[w]
+
+        rhalf_gas_sfr = _findHalfLightRadius(rad_gas_sfr,mags=None,vals=mass_gas_sfr)
+
+        print(subhaloID,'gas: ',rhalf_mass[0],rhalf_gas2,rhalf_gas_sfr)
+
+        # baryon (stars + SFRing gas)
+        baryon_rad = np.hstack( (rad,rad_gas_sfr) )
+        baryon_mass = np.hstack( (mass,mass_gas_sfr) )
+
+        rhalf_baryon = _findHalfLightRadius(baryon_rad,mags=None,vals=baryon_mass)
+
+        print(subhaloID,'baryon: ',rhalf_baryon,end='\n\n')
+
 def copy_eagle_config_param_attrs(snap=28):
     loadPath = '/virgo/simulations/EagleDM/L0100N1504/DMONLY/data/'
     savePath = '/virgo/simulations/Illustris/Eagle-L68n1504DM/output/'
