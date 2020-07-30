@@ -405,6 +405,7 @@ class simParams:
             else:
                 # baryonic, TNG fiducial models
                 self.trMCFields  = [0,1,2,-1,-1,-1,-1,-1,-1,3,-1,-1,-1,4]
+                self.metals = ['H','He','C','N','O','Ne','Mg','Si','Fe','total']
                 self.winds = 2
                 self.BHs   = 2
 

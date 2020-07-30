@@ -27,7 +27,7 @@ from tracer import tracerEvo
 from vis.halo import renderSingleHalo
 from vis.box import renderBox
 from projects.oxygen import obsSimMatchedGalaxySamples, obsColumnsDataPlot, obsColumnsDataPlotExtended, \
-                            ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles
+                            ionTwoPointCorrelation, totalIonMassVsHaloMass, stackedRadialProfiles, obsColumnsLambdaVsR
 
 def radialResolutionProfiles(sPs, saveName, redshift=0.5, cenSatSelect='cen', 
                              radRelToVirRad=False, haloMassBins=None, stellarMassBins=None):
@@ -697,11 +697,15 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
     labelSim   = False
     labelHalo  = True
     relCoords  = False
-    if not sP.isZoom:
-        rotation = 'edge-on'
-
     size       = 400.0
     sizeType   = 'kpc'
+
+    if not sP.isZoom:
+        rotation = 'edge-on'
+    else:
+        # MHD vs noMHD comparison
+        nPixels = [1000,500]
+        cenShift = [0,+size/4,0] # center on upper half, 2x1 aspect ratio
 
     # global with ~appropriate depth (same as in ionColumnsVsImpact2D)
     if globalDepth:
@@ -2628,12 +2632,12 @@ def paperPlots():
     if 0:
         # no_mhd run: snaps 63-69 (z=0.594 to z=0.506), with_mhd run: snaps up to 67 (z=0.520)
         # MHD was disabled in restart at z=0.601 roughly (500 Myr from snap 63 to 67)
-        for snap in [63,64,65,66,67]:
+        for snap in [67]: #[63,64,65,66,67]:
             zoom_with_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap)
             zoom_no_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap,variant='nob_z06')
 
             conf = 3 # 2=HI, 3=MgII, 9=delta_rho
-            lrgHaloVisualization(zoom_with_mhd, [0], conf=conf, gallery=False, globalDepth=False)
+            lrgHaloVisualization(zoom_no_mhd, [0], conf=conf, gallery=False, globalDepth=False)
 
     # fig 17: resolution convergence, visual (matched halo)
     if 0:
@@ -2656,6 +2660,12 @@ def paperPlots():
             obsColumnsDataPlotExtended(sP, saveName='obscomp_lrg_rdr_hi_%s_ext.pdf' % sP.simName, config='LRG-RDR')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_hi_%s_ext.pdf' % sP.simName, config='COS-LRG HI')
             obsColumnsDataPlotExtended(sP, saveName='obscomp_cos_lrg_mgii_%s_ext.pdf' % sP.simName, config='COS-LRG MgII')
+
+    # fig 14 (inset): lambda versus R
+    if 0:
+        sP = TNG50
+        configs = ['LRG-RDR','COS-LRG HI','COS-LRG MgII']
+        obsColumnsLambdaVsR(sP, saveName='obscomp_composite_lambda_vs_R.pdf', configs=configs)
 
     # fig 15 - N_MgII or N_HI vs. b (map-derived): 2D histo of N_px/N_px_tot_annuli (normalized independently by column)
     if 0:

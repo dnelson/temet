@@ -1577,7 +1577,6 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
             if iter == 1:
                 x_vals = yvals[w]
                 c_vals = logM[w]
-
                 
                 if clipObsColorsToExtrema:
                     c_vals[c_vals <= logM.mean()] = colorMinMax[0]
@@ -1767,6 +1766,147 @@ def obsColumnsDataPlotExtended(sP, saveName, config='COS-Halos'):
 
         fig.savefig(saveName.split('.pdf')[0] + '_v%d.pdf' % iter)
         plt.close(fig)
+
+        if iter == 1:
+            continue
+
+        # supplementary figure: lambda vs R
+        fig = plt.figure(figsize=[figsize[0]*0.7, figsize[1]*0.5])
+        ax = fig.add_subplot(111)
+
+        ax.set_xlim([0,550])
+        ax.set_ylim([0.0,1])
+        ax.set_xlabel('b [ pkpc ]')
+        ax.set_ylabel('$\\lambda$')
+
+        cnum = 1
+        if config == 'LRG-RDR': cnum = 2
+        if config == 'COS-LRG HI': cnum = 3
+        for _ in range(cnum):
+            c = next(ax._get_lines.prop_cycler)['color']
+
+        #ax.plot(blim, [0.0,0.0], '-', lw=lw-1, color='black', alpha=0.1)
+        #ax.plot(blim, [0.5,0.5], '-', lw=lw-1, color='black', alpha=0.1)
+        ax.fill_between([0,550], [0.0,0.0], [0.5,0.5], color='#cccccc', alpha=0.2)
+
+        ax.plot(R, pvals, 'o', color=c, label=config)
+
+        ax.legend(loc='upper left')
+        fig.savefig(saveName.replace('_ext','_lambdaVsR'))
+        plt.close(fig)
+
+def obsColumnsLambdaVsR(sP, saveName, configs='COS-Halos'):
+    """ Plot statistical lambda value(s) as a function of impact parameter. """
+    blim = [0, 550]
+
+    # start plot
+    fig = plt.figure(figsize=[figsize[0]*0.7, figsize[1]*0.5])
+    ax = fig.add_subplot(111)
+
+    ax.set_xlim(blim)
+    ax.set_ylim([0,1])
+    ax.set_xlabel('b [ pkpc ]')
+    ax.set_ylabel('$\\lambda$')
+
+    #ax.plot(blim, [0.0,0.0], '-', lw=lw-1, color='black', alpha=0.1)
+    #ax.plot(blim, [0.5,0.5], '-', lw=lw-1, color='black', alpha=0.1)
+    ax.fill_between(blim, [0.0,0.0], [0.5,0.5], color='#cccccc', alpha=0.2)
+
+    # loop over requested configs
+    colors = [next(ax._get_lines.prop_cycler)['color'] for _ in range(len(configs))]
+
+    for config_num, config in enumerate(configs):
+        # load data
+        if config == 'COS-Halos': datafunc = werk2013
+        if config == 'eCGM': datafunc = johnson2015
+        if config == 'eCGMfull': datafunc = partial(johnson2015, surveys=['IMACS','SDSS','COS-Halos'])
+
+        if config in ['COS-Halos', 'eCGM', 'eCGMfull']:
+            gals, logM, z, sfr, _, yvals_limit, R, col_logN, col_err, col_limit = datafunc()
+            yvals = np.log10(sfr/10.0**logM)
+
+        if config == 'LRG-RDR':
+            collim = [12.0, 21.0]
+            gals, logM, z, yvals, _, yvals_limit, R, col_logN, col_err, col_limit = berg2019()
+
+        if config in ['COS-LRG HI', 'COS-LRG MgII']:
+            gals, logM, z, yvals, _, yvals_limit, R, N_HI, N_HI_err, N_MgII, N_MgII_err = chen2018zahedy2019()
+
+        if config == 'COS-LRG HI':
+            collim = [12.0, 21.0]
+            col_logN = N_HI
+            col_err  = N_HI_err
+
+        if config in ['COS-LRG MgII']:
+            collim = [10.0, 17.0]
+            col_logN = N_MgII
+            col_err  = N_MgII_err
+
+        if config in ['COS-LRG HI','COS-LRG MgII']:
+            # generate col_limit, including '-' (missing data) cases
+            col_limit = np.zeros( col_logN.size, dtype='int32' )
+            col_limit[col_err == '<'] = 1
+            col_limit[col_err == '>'] = 2
+            col_limit[col_err == '-'] = 3 # missing data
+            col_err[col_limit != 0] = '0.0'
+            col_err = np.array(col_err, dtype='float32')
+
+        sim_sample = obsMatchedSample(sP, datasetName=config.split(" ")[0]) # e.g. "COS-LRG HI" -> "COS-LRG"
+        sim_sample = addIonColumnPerSystem(sP, sim_sample, config=config)
+
+        for ind in range(sim_sample['impact_parameter'].shape[0]):
+            x_vals = sim_sample['impact_parameter'][ind,:].ravel()
+            diff = x_vals.mean() - R[ind]
+            assert np.abs(diff) < 1.0 # make sure we are matched and not mixed up
+
+        # right panel: sort by order along x-axis of main panel
+        sort_inds = np.argsort( R )
+
+        # save some data for later
+        pvals = np.zeros(R.size, dtype='float32')
+        plims = np.zeros(R.size, dtype='int32') - 1
+        pvals.fill(np.nan)
+
+        for i, sort_ind in enumerate(sort_inds):
+            # plot sim 1D KDE
+            sim_cols = np.squeeze( sim_sample['column'][sort_ind,:] )
+            sim_cols = sim_cols[np.isfinite(sim_cols)]
+
+            if len(sim_cols) == 0:
+                print(gals[sort_ind]['name'], ' skipped, all NaN values...')
+                continue
+
+            # KDE is heavily skewed/flattened if there are any distant outliers
+            # note: important impact on MgII (no impact on HI) where the majority of grid samples are effectively N_MgII==0
+            if 1:
+                print('WARNING: clipping sim columns to column limit range (consider implications.)') # we label
+                wColLim = np.where( (sim_cols >= collim[0]) & (sim_cols < collim[1]) )
+            else:
+                wColLim = np.where( np.isfinite(sim_cols) ) # all
+
+            kde = gaussian_kde(sim_cols[wColLim], bw_method='scott')
+
+            # if we have an observed column
+            if col_limit[sort_ind] in [0,1,2]:
+                # calculate and print a quantitative probability number
+                z1 = kde.integrate_box_1d(-np.inf, col_logN[sort_ind])
+                z2 = kde.integrate_box_1d(col_logN[sort_ind], np.inf)
+
+                if col_limit[sort_ind] == 0: pvals[i] = 2*np.min([z1,z2]) # detection, 2*PDF area more extreme
+                if col_limit[sort_ind] == 1: pvals[i] = z1 # upper limit, PDF area which is consistent
+                if col_limit[sort_ind] == 2: pvals[i] = z2 # lower limit, PDF area which is consistent
+                plims[i] = col_limit[sort_ind]
+
+        # supplementary figure: lambda vs R
+        ax.plot(R, pvals, 'o', color=colors[config_num], label=config)
+
+    # finish
+    l = ax.legend(markerscale=0, handletextpad=-2.0, loc='upper right')
+    for i, text in enumerate(l.get_texts()):
+        text.set_color(colors[i])
+
+    fig.savefig(saveName)
+    plt.close(fig)
 
 def coveringFractionVsDist(sPs, saveName, ions=['OVI'], config='COS-Halos', 
                            colDensThresholds=[13.5, 14.5], conf=0):
