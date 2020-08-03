@@ -1031,7 +1031,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
     nSubsTot = sP.numSubhalos
 
     # task parallelism (pSplit): determine subhalo and particle index range coverage of this task
-    subhaloIDsTodo, indRange, nSubsSelected = _pSplitBounds(sP, pSplit, minStellarMass, indivStarMags=True)
+    subhaloIDsTodo, indRange, nSubsSelected = _pSplitBounds(sP, pSplit, minStellarMass, equalSubSplit=False, indivStarMags=True)
 
     nSubsDo = len(subhaloIDsTodo)
     partInds = None

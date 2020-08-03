@@ -1513,13 +1513,16 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         return {'count':0}
 
     # low particle count, use serial
-    if numPartTot < nThreads*10 or (inds is not None and inds.size < nThreads*10):
+    if numPartTot < nThreads*10 or \
+      (inds is not None and inds.size < nThreads*10) or \
+      (indRange is not None and (indRange[1]-indRange[0]) < nThreads*10):
         return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
                               subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
 
     # set indRange to load
     if inds is not None:
         # load the range which bounds the minimum and maximum indices, then return subset
+        assert indRange is None
         indRange = [inds.min(), inds.max()]
 
     if indRange is None:
