@@ -137,9 +137,16 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
 
             rotMatrix = rotationMatrixFromVec(jVec, target_vec)
 
-        if str(rotation) in ['face-on','edge-on','edge-on-smallest','edge-on-random']:
+        if str(rotation) in ['face-on','edge-on','edge-on-smallest','edge-on-random','edge-on-stars']:
             # calculate moment of inertia tensor
-            I = momentOfInertiaTensor(sP, subhaloID=shID)
+            onlyStars = False
+            rotName = rotation
+
+            if rotation == 'edge-on-stars':
+                onlyStars = True
+                rotName = rotation.replace('-stars','')
+
+            I = momentOfInertiaTensor(sP, subhaloID=shID, onlyStars=onlyStars)
 
             # hardcoded such that face-on must be projecting along z-axis (think more if we want to relax)
             assert 3-axes[0]-axes[1] == 2
@@ -147,7 +154,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
 
             # calculate rotation matrix
             rotMatrices = rotationMatricesFromInertiaTensor(I)
-            rotMatrix = rotMatrices[rotation]
+            rotMatrix = rotMatrices[rotName]
 
     return boxSizeImg, boxCenter, extent, haloVirRad, \
            galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter

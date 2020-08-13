@@ -162,6 +162,10 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
         if molecularModel == 'BL06':
             frac_nH0[ww] *= get_H2_frac(nH[ww])
 
+        if molecularModel == 'KMT':
+            # https://github.com/franciscovillaescusa/Pylians3/blob/master/library/HI_library/HI_library.pyx
+            pass
+
         # zero H2 in non-SFing gas
         w = np.where(nH <= PhysDensThresh)
         frac_nH0[w] = 0.0

@@ -606,6 +606,7 @@ class units(object):
                 gas_vel[:,i] -= subhaloVel[:,i]
 
         # correct velocities for hubble flow (neglect mass growth term)
+        np.clip(rad, self._sP.gravSoft, None) # avoid division by zero
         vrad_noH = ( gas_vel[:,0] * xyz[:,0] + \
                      gas_vel[:,1] * xyz[:,1] + \
                      gas_vel[:,2] * xyz[:,2] ) / rad # radial velocity (km/s), negative=inwards

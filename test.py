@@ -18,6 +18,30 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def minify_gergo_hydrogen_files():
+    """ Rewrite Gergo's hydrogen catalog files to avoid unneeded fields. """
+    basePath = '/u/dnelson/sims.TNG/TNG100-1/postprocessing/hydrogen/'
+    outPath = '/u/dnelson/sims.TNG/TNG100-1/data.files/'
+    fields = ['MH','MH2BR','MH2KMT','MH2GK']
+    #fields = ['MH','MH2BR','MH2KMT','MH2GK','MHIBR','MHIKMT','MHIGK'] # FULL!
+
+    for i in range(100):
+        fOut = h5py.File(outPath + 'gas_%03d.hdf5' % i, 'w')
+
+        # open input file and rewrite
+        with h5py.File(basePath + 'gas_%03d.hdf5' % i, 'r') as fIn:
+
+            header = fOut.create_group('Header')
+            for attr in fIn['Header'].attrs:
+                fOut['Header'].attrs[attr] = fIn['Header'].attrs[attr]
+
+            for field in fields:
+                print(i, field)
+                dset = fOut.create_dataset(field, data=fIn[field][()], compression='gzip')
+                #fOut[field] = fIn[field][()]
+
+        fOut.close()
+
 def half_Kband_radii():
     """ Test for Hannah's paper. """
     sP = simParams(run='tng50-1',redshift=2.0)

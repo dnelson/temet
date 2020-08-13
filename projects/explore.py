@@ -11,6 +11,7 @@ import h5py
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.signal import savgol_filter
+from os.path import isfile
 
 from util import simParams
 from util.helper import loadColorTable, logZeroNaN, running_median
@@ -517,3 +518,250 @@ def smitaXMMproposal():
                  qRestrictions=qRestrictions, medianLine=medianLine, cenSatSelect=cenSatSelect, 
                  cNaNZeroToMin=cNaNZeroToMin, cQuant=cQuant)
 
+
+def nachoAngularQuenchingDens():
+    """ Variation of CGM gas density with azimuthal angle (for Martin Navarro+20). """
+    from projects.outflows import gasOutflowRates2DStackedInMstar
+    from projects.outflows_analysis import loadRadialMassFluxes
+
+    sP = simParams(run='tng100-1',redshift=0.0)
+    #mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]] # exploration
+    mStarBins = [[10.8,11.2]] #[[10.5,10.8]] # txt-files/1d plots
+
+    v200norm = False
+    rawMass  = False
+    rawDens  = False
+
+    if 0:
+        clims  = [[-1.8,-1.1],[-1.8,-0.9],[-2.0,-0.9],[-2.0,-0.4]]
+        config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[1,2,5,5]}
+    if 0:
+        v200norm = True
+        clims  = [[-1.8,-1.1],[-1.4,-0.8],[-1.4,-0.4],[-1.4,0.0]]
+        config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[3,3,3,3]}
+    if 0:
+        rawMass  = True
+        clims  = [[6,8],[6,8.5],[6.5,9],[6.5,10]]
+        config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[0,0,0,0]} # only 0 is all mass (no vcut)
+    if 1:
+        rawDens  = True
+        #clims  = [[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]]
+        clims  = [[-0.1,0.1]]
+        #clims  = [[-0.1,0.1],[-0.1,0.1],[-0.1,0.1],[-0.1,0.1]]
+        config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[0,0,0,0]} # only 0 is all mass (no vcut)
+
+    gasOutflowRates2DStackedInMstar(sP, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, 
+                                    v200norm=v200norm, rawMass=rawMass, rawDens=rawDens, config=config)
+
+    # 1d plot and txt file output
+    mdot, mstar, subids, binConfig, numBins, vcut_vals = \
+      loadRadialMassFluxes(sP, scope='SubfindWithFuzz', ptType='Gas', thirdQuant='theta', fourthQuant=None, 
+                           v200norm=False, rawMass=True)
+
+    mdot_2d = np.squeeze( mdot[:,:,config['vcutInd'][0],:] ).copy()
+
+    # bin selection
+    w = np.where( (mstar > mStarBins[0][0]) & (mstar <= mStarBins[0][1]) )
+    mdot_local = np.squeeze( mdot_2d[w,:,:] ).copy()
+
+    # relative to azimuthal average in each radial bin: delta_rho/<rho>
+    h2d = np.nanmean(mdot_local, axis=0) # mean
+    radial_means = np.nanmean(h2d, axis=1)
+    h2d /= radial_means[:, np.newaxis]
+
+    # plot
+    radIndsSave = [8,9,10,11] # up to 13
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('Galactocentric Angle [ deg ] [0 = major axis, 90 = minor axis]')
+    ax.set_ylabel('Gas $\delta \\rho / <\\rho>$ [ linear ]')
+
+    ax.set_ylim([0.75,1.35])
+    ax.set_xlim([0,360])
+    ax.plot(ax.get_xlim(), [1,1], '-', lw=lw, color='black', alpha=0.5)
+
+    xx = np.rad2deg(binConfig['theta'][:-1] + np.pi) # [-180,180] -> [0,360]
+
+    for radInd in radIndsSave:
+        radMidPoint = 0.5*(binConfig['rad'][radInd] + binConfig['rad'][radInd+1])
+
+        yy = h2d[radInd,:]
+
+        ax.plot(xx, yy, '-', lw=lw, label='r = %d kpc' % radMidPoint)
+
+    ax.legend(loc='best')
+    fig.savefig('delta_rho_vs_theta_%.1f-%.1f.pdf' % (mStarBins[0][0],mStarBins[0][1]))
+    plt.close(fig)
+
+    # write text file
+    with open('delta_rho_vs_theta_Mstar_%.1f-%.1f.txt' % (mStarBins[0][0],mStarBins[0][1]), 'w') as f:
+
+        f.write('# theta [deg]:\n')
+        f.write(' '.join(['%.1f' % angle for angle in xx]))
+        f.write('\n')
+
+        for radInd in radIndsSave:
+            f.write('# gas delta_rho/<rho> [linear], radial bin [%d-%d kpc]\n' % (binConfig['rad'][radInd],binConfig['rad'][radInd+1]))
+            f.write(' '.join(['%.3f' % val for val in np.squeeze(h2d[radInd,:])]))
+            f.write('\n')
+
+
+def nachoAngularQuenchingImage(conf=0, renderIndiv=False, median=True, rvirUnits=False, depthFac=1.0):
+    """ Images of delta rho/rho and x-ray SB (for Martin Navarro+20). """
+    from projects.azimuthalAngleCGM import _get_dist_theta_grid
+    from scipy.interpolate import interp1d
+
+    sP = simParams(run='tng100-1', redshift=0.0)
+    mStarBin = [10.95, 11.05] #[11.0, 11.05]
+
+    # select halos
+    mstar = sP.subhalos('mstar_30pkpc_log')
+    cen_flag = sP.subhalos('central_flag')
+    subhaloIDs = np.where( (mstar>mStarBin[0]) & (mstar<=mStarBin[1]) & cen_flag )[0]
+
+    # vis
+    rVirFracs  = [0.25, 0.5]
+    method     = 'sphMap'
+    nPixels    = [1200,1200]
+    axes       = [0,1]
+    labelZ     = False
+    labelScale = 'physical'
+    labelSim   = False
+    labelHalo  = True
+    relCoords  = True
+    rotation   = 'edge-on-stars'
+    sizeType   = 'kpc'
+    size       = 600
+
+    if conf != 1:
+        # temperature cut, except for x-ray where it isn't needed
+        ptRestrictions = {'temp_sfcold':['gt',6.0]}
+
+    if conf == 2:
+        # zoom-in a bit
+        size = 400
+        nPixels = [800,800]
+
+    if rvirUnits:
+        size = 3.0
+        sizeType = 'rVirial'
+        nPixels = [800,800]
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = nPixels[0] 
+        colorbars    = True
+        #fontsize     = 24
+
+    indivSaveName = './vis_%s_z%d_XX_conf%d.pdf' % (sP.simName,sP.redshift,conf)
+
+    # cache file
+    saveFilename = 'stack_data_global_conf%d_median%s_rvirunits%d.hdf5' % (conf,median,rvirUnits)
+    if depthFac != 1.0: saveFilename = saveFilename.replace('.hdf5','_df%.1f.hdf5' % depthFac)
+
+    if isfile(saveFilename):
+        print('Loading [%s].' % saveFilename)
+
+        with h5py.File(saveFilename,'r') as f:
+            data_global = f['data_global'][()]
+            weight_global = f['weight_global'][()]
+
+    else:
+        # allocate
+        print('Stacking [%d] halos.' % len(subhaloIDs))
+        if median:
+            data_global = np.zeros( (len(subhaloIDs),nPixels[0],nPixels[1]), dtype='float64')
+            weight_global = np.zeros( (1), dtype='int32' )
+        else:
+            data_global = np.zeros(nPixels, dtype='float64')
+            weight_global = np.zeros(nPixels, dtype='int32')
+
+        # loop over halos
+        for i, hInd in enumerate(subhaloIDs):
+            # panel
+            if conf == 0:
+                panels = [{'partType':'gas', 'partField':'delta_rho', 'valMinMax':[-0.3, 1.0]}]
+            if conf == 1:
+                panels = [{'partType':'gas', 'partField':'xray', 'valMinMax':[33.0,36.0]}]
+            if conf == 2:
+                panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0, 6.0]}]
+
+            # render individual or return data?
+            if renderIndiv:
+                plotConfig.saveFilename = indivSaveName.replace("XX","sh%d" % hInd)
+                renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+            else:
+                data_loc, config = renderSingleHalo(panels, plotConfig, locals(), skipExisting=False, returnData=True)
+                data_loc = 10.0**data_loc.astype('float64') # log -> linear
+
+                if median:
+                    # median stacking
+                    data_global[i,:,:] = data_loc
+                else:
+                    # mean stacking
+                    w = np.where(np.isfinite(data_loc))
+
+                    weight_global[w] += 1 # number of halos accumulated per pixel
+                    data_global[w] += data_loc[w] # accumulate
+
+        with h5py.File(saveFilename,'w') as f:
+            f['data_global'] = data_global
+            f['weight_global'] = weight_global
+        print('Saved: [%s].' % saveFilename)
+
+    # plot stacked image and save data grid to hdf5
+    if conf == 0:
+        panels = [{'partType':'gas', 'partField':'delta_rho', 'valMinMax':[-0.25, 0.25]}]
+        if depthFac == 0.1: panels[0]['valMinMax'] = [-0.6,0.2]
+        if depthFac == 0.5: panels[0]['valMinMax'] = [-0.4,0.2]
+    if conf == 1:
+        panels = [{'partType':'gas', 'partField':'xray', 'valMinMax':[0.5,1.5], 'ctName':'curl0'}]
+    if conf == 2:
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[0.75,1.25], 'ctName':'delta'}]
+
+    hInd = subhaloIDs[int(len(subhaloIDs)/2)] # used for rvir circles
+    labelHalo = False
+    plotConfig.saveFilename = indivSaveName.replace('XX','stack')
+
+    # construct input grid: mean/median average across halos, and linear -> log
+    if median:
+        grid = np.nanmedian(data_global, axis=0)
+    else:
+        grid = data_global / weight_global
+
+    if conf in [1,2]:
+        # we have gridded actual gas mass surface density, derive mean radial profile now and remove it
+        dist, _ = _get_dist_theta_grid(size, nPixels)
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        ax.set_xlabel('distance [kpc]')
+        ax.set_ylabel('density [msun/kpc^2 linear] or x-ray SB')
+        #ax.set_ylim([0.75,1.35])
+        #ax.set_xlim([0,360])
+        ax.scatter(dist, grid, s=1.0, marker='.', color='black', alpha=0.5)
+
+        xx, yy, _ = running_median(dist, grid, nBins=50)
+        ax.plot(xx, yy, 'o-', lw=lw)
+
+        f = interp1d(xx, yy, kind='cubic', bounds_error=False, fill_value='extrapolate')
+        dist_uniq_vals = np.unique(dist)
+        yy2 = f(dist_uniq_vals)
+
+        ax.plot(dist_uniq_vals, yy2, '-', lw=lw)
+
+        fig.savefig('debug_dist_fit_conf%d.png' % conf)
+        plt.close(fig)
+
+        # we have our interpolating function for the average value at a given distance
+        grid /= f(dist) # Sigma -> Sigma/<Sigma> (linear)
+    else:
+        # delta_rho computed in 3D: use log
+        grid = np.log10(grid)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+    with h5py.File(plotConfig.saveFilename.replace('.pdf','.hdf5'),'w') as f:
+        f['grid'] = grid

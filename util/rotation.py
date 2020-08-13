@@ -58,10 +58,12 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
 
     return ang_mom_mean
 
-def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None, useStars=True):
+def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None, 
+                         useStars=True, onlyStars=False):
     """ Calculate the moment of inertia tensor (3x3 matrix) for a subhalo or halo, given a load 
     of its member gas and stars (at least within 2*rHalf==shHalfMassRadStars) and center position shPos. 
-    If useStars == True, then switch to stars if not enough SFing gas present, otherwise never use stars. """
+    If useStars == True, then switch to stars if not enough SFing gas present, otherwise never use stars. 
+    If onlyStars == True, use stars alone to determine. """
     if subhaloID is not None:
         assert all(v is None for v in [gas,stars,rHalf])
         # load required particle data for this subhalo
@@ -74,11 +76,14 @@ def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subh
     else:
         assert all(v is not None for v in [gas,stars,rHalf,shPos])
 
+    if 'count' not in gas: gas['count'] = gas['Masses'].size
+    if 'count' not in stars: stars['count'] = stars['Masses'].size
+
     if not gas['count'] and not stars['count']:
         print('Warning! momentOfInteriaTensor() no stars or gas in subhalo...')
         return np.identity(3)
 
-    if gas['count'] and len(gas['Masses']) > 1:
+    if gas['count'] and len(gas['Masses']) > 1 and not onlyStars:
         rad_gas = sP.periodicDists(shPos, gas['Coordinates'])
         wGas = np.where( (rad_gas <= 0.5*rHalf) & (gas['StarFormationRate'] > 0.0) )[0]
 

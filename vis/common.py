@@ -646,9 +646,13 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
                 quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
             else:
                 # temporary override, switch to halo specified load (for halo-centric quantities)
+                assert method in ['sphMap','sphMap_subhalo'] # must be fof-scope or subhalo-scope
                 haloID = sP.subhalo(sP.hInd)['SubhaloGrNr']
-                quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
-                assert quant.size == indRange[1] - indRange[0] + 1 # should verify fof scope (e.g. method == 'sphMap')
+                if method == 'sphMap':
+                    quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
+                if method == 'sphMap_subhalo':
+                    quant = sP.snapshotSubset(partType, partFieldLoad, subhaloID=sP.hInd)
+                assert quant.size == indRange[1] - indRange[0] + 1
         else:
             quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
 
@@ -1298,7 +1302,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             # load: skip certain cells/particles?
             if ptRestrictions is not None:
-                mask = np.ones(quant.size, dtype='bool')
+                mask = np.ones(mass.size, dtype='bool')
 
                 for restrictionField in ptRestrictions:
                     # load
@@ -2344,6 +2348,10 @@ def renderMultiPanel(panels, conf):
             # grid projection for image
             grid, config, _ = gridBox(**p)
 
+            if 'grid' in p:
+                print('NOTE: Overriding computed image grid with input grid!')
+                grid = p['grid']
+
             # create this panel, and label axes and title
             ax = fig.add_subplot(nRows,nCols,i+1)
 
@@ -2530,6 +2538,10 @@ def renderMultiPanel(panels, conf):
             if p['boxSizeImg'] is None: continue # blank panel
             # grid projection for image
             grid, config, _ = gridBox(**p)
+
+            if 'grid' in p:
+                print('NOTE: Overriding computed image grid with input grid!')
+                grid = p['grid']
 
             # set axes coordinates and add
             curRow = np.floor(i / nCols)

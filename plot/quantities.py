@@ -1947,7 +1947,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-2.0, 1.0]
         log = True
 
-    if ptProperty == 'z_solar':
+    if ptProperty in ['z_solar','metal_solar']:
         label = '%s Metallicity [ log Z$_{\\rm sun}$ ]' % typeStr
         lim = [-3.5, 1.0]
         if haloLims: lim = [-2.0, 1.0]

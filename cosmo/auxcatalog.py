@@ -935,7 +935,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         #bands += ['wfc_acs_f606w','wfc3_ir_f125w','wfc3_ir_f140w','wfc3_ir_f160w'] # HST IR wide
         #bands += ['jwst_f070w','jwst_f090w','jwst_f115w','jwst_f150w','jwst_f200w','jwst_f277w','jwst_f356w','jwst_f444w'] # JWST IR (NIRCAM) wide
 
-        if indivStarMags or sizes: bands = ['sdss_r','jwst_f150w']
+        if indivStarMags: bands = ['sdss_r','jwst_f150w']
 
     nBands = len(bands)
 
@@ -1038,6 +1038,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     print(' Total # Subhalos: %d, [%d] in selection, now processing [%d] in [%d] bands and [%d] projections...' % \
         (nSubsTot,nSubsSelected,nSubsDo,nBands,nProj))
+    print(' indRange:', indRange)
 
     # allocate
     if indivStarMags:
@@ -1247,7 +1248,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
         for i, subhaloID in enumerate(subhaloIDsTodo):
             #print('[%d] subhalo = %d' % (i,subhaloID))
             if i % np.max([1,int(nSubsDo/printFac)]) == 0 and i <= nSubsDo:
-                print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo))
+                print('   %4.1f%%' % (float(i+1)*100.0/nSubsDo), flush=True)
 
             # slice starting/ending indices for stars local to this subhalo
             i0 = gc['SubhaloOffsetType'][subhaloID,sP.ptNum('stars')] - indRange['stars'][0]

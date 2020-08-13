@@ -82,7 +82,7 @@ def _get_dist_theta_grid(size, nPixels):
 
     return dist, theta
 
-def metallicityVsVradProjected(sP, hInds=[440839]):
+def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=False, distBin=None, ylim=None):
     """ Plot correlation of gas metallicity and vrad (i.e. mass flow rate) in projection 
     by using the images directly. """
     rVirFracs  = [0.5]
@@ -97,41 +97,90 @@ def metallicityVsVradProjected(sP, hInds=[440839]):
     x_field = 'vrad'
     y_field = 'metal_solar'
 
-    dist, theta = _get_dist_theta_grid(size, nPixels)
-    dist = dist.ravel()
-
     class plotConfig:
         dummy = True
 
-    for hInd in hInds:
-        # compute
-        y_data, y_conf = renderSingleHalo([{'partField':y_field}], plotConfig, locals(), returnData=True)
-        x_data, x_conf = renderSingleHalo([{'partField':x_field}], plotConfig, locals(), returnData=True)
-
-        x_data = x_data.ravel()
-        y_data = y_data.ravel()
-
     # start plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    if clean:
+        figsize_loc = (figsize[0]*2,figsize[1]*2) # (figsize[1]*2,figsize[1]*2) # square
+        fig = plt.figure(figsize=figsize_loc, frameon=False, tight_layout=False, facecolor='black')
+        ax = fig.add_axes([0,0,1,1], facecolor='black')
+        markersize = 3.0
+        outFormat = 'png'
+    else:
+        fig = plt.figure(figsize=(figsize[0]*0.8,figsize[1]*0.8))
+        ax = fig.add_subplot(111)
+        ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+        markersize = 1.5
+        outFormat = 'pdf'
 
-    ax.set_xlabel(x_conf['label'])
-    ax.set_ylabel(y_conf['label'])
-    #ax.set_xlim(x_conf['vMM_guess'])
-    #ax.set_ylim(y_conf['vMM_guess'])
+    # compute
+    x_data = []
+    y_data = []
+    dist = []
 
-    s = ax.scatter(x_data, y_data, s=1.5, c=dist, marker='.')
+    if directCells:
+        # use actual gas cell values directly
+        for hInd in hInds:
+            x_data_loc = sP.snapshotSubset(partType, x_field, subhaloID=hInd)
+            y_data_loc = sP.snapshotSubset(partType, y_field, subhaloID=hInd)
+            dist_loc = sP.snapshotSubset(partType, 'rad_kpc', subhaloID=hInd)
 
-    ax.plot([0,0],ax.get_ylim(),'-',color='black', alpha=0.5)
+            x_data = np.hstack( (x_data, x_data_loc.ravel()) )
+            y_data = np.hstack( (y_data, y_data_loc.ravel()) )
+            dist = np.hstack( (dist, dist_loc.ravel()) )
 
-    # finish plot
-    cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-    cb = plt.colorbar(s, cax=cax)
-    cb.ax.set_ylabel('Impact Parameter [kpc]')
+        xlabel, xlim, xlog = sP.simParticleQuantity(partType, x_field)
+        ylabel, ylim, ylog = sP.simParticleQuantity(partType, y_field)
+        clabel = '3D Radial Distance [kpc]'
 
-    fig.savefig('scatter_%s_%s_vs_%s_h%d.png' % (sP.simName,y_field,x_field,hInd))
+        if xlog: x_data = logZeroNaN(x_data)
+        if ylog: y_data = logZeroNaN(y_data)
+    else:
+        # use projected images
+        for hInd in hInds:
+            y_data_loc, y_conf = renderSingleHalo([{'partField':y_field}], plotConfig, locals(), returnData=True)
+            x_data_loc, x_conf = renderSingleHalo([{'partField':x_field}], plotConfig, locals(), returnData=True)
+
+            x_data = np.hstack( (x_data, x_data_loc.ravel()) )
+            y_data = np.hstack( (y_data, y_data_loc.ravel()) )
+
+            # get distances of pixels
+            dist_loc, _ = _get_dist_theta_grid(size, nPixels)
+            dist = np.hstack( (dist, dist_loc.ravel()) )
+
+        xlabel = x_conf['label']
+        ylabel = y_conf['label']
+        clabel = 'Impact Parameter [kpc]'
+
+    # RESTRICT DISTANCE:
+    if distBin is not None:
+        w = np.where( (dist>distBin[0]) & (dist<=distBin[1]) )
+        dist = dist[w]
+        x_data = x_data[w]
+        y_data = y_data[w]
+
+    if ylim is not None:
+        ax.set_ylim(ylim)
+
+    # scatterplot
+    s = ax.scatter(x_data, y_data, s=markersize, c=dist, marker='.', zorder=0)
+
+    if not clean:
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+        ax.plot([0,0],ax.get_ylim(),'-',color='black', alpha=0.5)
+
+        # colorbar
+        #cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cax = fig.add_axes([0.80,0.2,0.04,0.54])
+        cb = plt.colorbar(s, cax=cax)
+        cb.ax.set_ylabel(clabel)
+
+    hStr = hInds[0] if len(hInds) == 1 else ('stack-%s' % len(hInds))
+    fig.savefig('scatter_%s_%s_vs_%s_h%s.%s' % (sP.simName,y_field,x_field,hStr,outFormat), facecolor=fig.get_facecolor())
     plt.close(fig)
-
 
 def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRestrictions=None, 
                        fullbox=False, nThetaBins=90, addObs=False, addEagle=False, sizefac=1.0, 
@@ -426,7 +475,19 @@ def paperPlots():
         gasOutflowRatesVsQuantStackedInMstar(TNG50, quant='theta', mStarBins=mStarBins, config=config, inflow=True)
 
     if 0:
-        # figure 3: main comparison of TNG vs EAGLE
+        # fig 3: metallicity vs rad/massflowrate
+        distBin = [90, 110]
+        ylim = [-4.0, 0.5]
+
+        mstar = TNG50.subhalos('mstar_30pkpc_log')
+        cen_flag = TNG50.subhalos('central_flag')
+        subhaloIDs = np.where( (mstar>9.95) & (mstar<10.05) & cen_flag )[0]
+        print(subhaloIDs.size)
+
+        metallicityVsVradProjected(TNG50, directCells=False, clean=False, hInds=subhaloIDs, distBin=distBin, ylim=ylim)
+
+    if 0:
+        # figure 4: main comparison of TNG vs EAGLE
         field = 'metal_solar'
         massBins = [ [9.46, 9.54] ]
         distBins = [ [95, 105] ]
@@ -434,7 +495,7 @@ def paperPlots():
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, addEagle=True, ylim=ylim)
 
     if 0:
-        # figure 4a: subplots for variation of (Z,theta) with M*
+        # figure 5a: subplots for variation of (Z,theta) with M*
         field = 'metal_solar'
         massBins = [ [8.49,8.51], [8.99, 9.01], [9.46,9.54] , [9.95,10.05], [10.44,10.56], [10.9,11.1] ]
         distBins = [ [95,105]]
@@ -442,7 +503,7 @@ def paperPlots():
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
     if 0:
-        # figure 4b: subplots for variation of (Z,theta) with b
+        # figure 5b: subplots for variation of (Z,theta) with b
         field = 'metal_solar'
         massBins = [ [9.46,9.54] ]
         distBins = [ [20,30], [45,55], [95,105], [195,205] ]
@@ -450,7 +511,7 @@ def paperPlots():
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
     if 0:
-        # figure 4c: subplots for variation of (Z,theta) with redshift
+        # figure 5c: subplots for variation of (Z,theta) with redshift
         field = 'metal_solar'
         massBins = [ [9.46,9.54] ]
         distBins = [ [95,105] ]
@@ -463,7 +524,7 @@ def paperPlots():
         metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
 
     if 0:
-        # figure 4d: subplots for variation of (Z,theta) with minimum N_HI
+        # figure 5d: subplots for variation of (Z,theta) with minimum N_HI
         field = 'metal_solar'
         massBins = [ [9.46,9.54] ]
         distBins = [ [70,130] ]
@@ -486,5 +547,10 @@ def paperPlots():
         metallicityVsTheta(sPs, field, massBins=massBins, distBins=distBins, sizefac=sf)
 
     if 0:
-        # explore: metallicity vs rad/massflowrate
-        metallicityVsVradProjected(TNG50)
+        # explore: metallicity vs rad/massflowrate (clean/black background vis gallery)
+        mstar = TNG50.subhalos('mstar_30pkpc_log')
+        cen_flag = TNG50.subhalos('central_flag')
+        subhaloIDs = np.where( (mstar>8.49) & (mstar<8.51) & cen_flag )[0]
+
+        for hInd in subhaloIDs:
+            metallicityVsVradProjected(TNG50, hInd=hInd, clean=True)

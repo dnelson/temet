@@ -2875,35 +2875,6 @@ def paperPlots(sPs=None):
         gasOutflowRates2DStackedInMstar(TNG50_z1, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, config=config)
 
     if 0:
-        # explore: fig 11 variant (for Martin Navarro+20)
-        sP = simParams(run='tng100-1',redshift=0.0)
-        mStarBins = [[9.8,10.2],[10.4,10.6],[10.9,11.1],[11.3,11.7]]
-
-        v200norm = False
-        rawMass  = False
-        rawDens  = False
-
-        if 0:
-            clims  = [[-1.8,-1.1],[-1.8,-0.9],[-2.0,-0.9],[-2.0,-0.4]]
-            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[1,2,5,5]}
-        if 0:
-            v200norm = True
-            clims  = [[-1.8,-1.1],[-1.4,-0.8],[-1.4,-0.4],[-1.4,0.0]]
-            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[3,3,3,3]}
-        if 0:
-            rawMass  = True
-            clims  = [[6,8],[6,8.5],[6.5,9],[6.5,10]]
-            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[0,0,0,0]} # only 0 is all mass (no vcut)
-        if 1:
-            rawDens  = True
-            clims  = [[-0.5,0.5],[-0.5,0.5],[-0.5,0.5],[-0.5,0.5]]
-            #clims  = [[-0.1,0.1],[-0.1,0.1],[-0.1,0.1],[-0.1,0.1]]
-            config = {'stat':'mean', 'skipZeros':False, 'vcutInd':[0,0,0,0]} # only 0 is all mass (no vcut)
-
-        gasOutflowRates2DStackedInMstar(sP, xAxis='rad', yAxis='theta', mStarBins=mStarBins, clims=clims, 
-                                        v200norm=v200norm, rawMass=rawMass, rawDens=rawDens, config=config)
-
-    if 0:
         # fig 12: visualization of bipolar SN-wind driven outflow, gas density LIC-convolved with vel field, overlaid with streamlines
         singleHaloDemonstrationImage(conf=2)
 
