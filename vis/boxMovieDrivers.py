@@ -358,7 +358,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     # set selection subhaloID at sP.snap
     if gal == 'one':
         # first movie (sbSnaps 51 - 3400+)
-        sP = simParams(res=2160,run='tng_old',snap=90)
+        sP = simParams(res=2160,run='tng',snap=90)
         sbNum = 0
         #subhaloID = 389836 # halo 296, snap 58
         subhaloID = 440389 # re-located at snap 90 (halo 227)
@@ -377,7 +377,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     if gal == 'two':
         # second movie (sbSnaps 0 - 3400+)
-        sP = simParams(res=2160,run='tng_old',snap=58)
+        sP = simParams(res=2160,run='tng',snap=58)
         sbNum = 2
         subhaloID = 0 # halo 0, snap 58, also snap 68, but after this run into fof0/MDB issues
         refVel = np.array([-195.3,-52.9,-157.0]) # avg of stars within 30 pkpc of subhalo_pos at sbSnapNum=1762
@@ -468,7 +468,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     panels = []
 
     res     = 2160
-    run     = 'tng_old'
+    run     = 'tng'
     method  = 'sphMap'
     variant = 'subbox%d' % sbNum
     snap    = sbSnapNum
@@ -620,7 +620,7 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
                      # as a final config, filter out half: take Nsb_final-867/2 (currently: 3400-433+eps = 2968)
 
     # get snapshot list
-    sP = simParams(res=2160,run='tng_old',snap=90,variant='subbox0')
+    sP = simParams(res=2160,run='tng',snap=90,variant='subbox0')
 
     sbSnapNums = validSnapList(sP, maxNum=maxNSnaps, minRedshift=minZ, maxRedshift=maxZ)
 

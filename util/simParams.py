@@ -41,7 +41,7 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-2-dark':['tng_dm',1080],
                      'tng50-3-dark':['tng_dm',540],
                      'tng50-4-dark':['tng_dm',270],
-                     #'tng1':['tng':8192],
+                     'tng-cluster':['tng',6144],
                      'tng1-dark':['tng_dm',2048],
                      'eagle':['eagle',1504],
                      'eagle-dark':['eagle_dm',1504],
@@ -174,7 +174,7 @@ class simParams:
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
-            res_L680 = [1024, 2048, 4096, 8192]
+            res_L680 = [1024, 2048, 6144] # DM-parent-lowres, DM-parent, virtual
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
             self.groupOrdered = True
@@ -185,13 +185,15 @@ class simParams:
             if res in res_L35:  self.gravSoft = 3.12 / (res/270)
             if res in res_L75:  self.gravSoft = 4.0 / (res/455)
             if res in res_L205: self.gravSoft = 8.0 / (res/625)
+
             if res in res_L680: self.gravSoft = 16.0 / (res/1024)
+            if res == 6144: self.gravSoft = 16.0 / (8192/1024) # 2.0, e.g. as if run was 8192^3
 
             if res in res_L25:  self.targetGasMass = 1.57032e-4 * (8 ** np.log2(512/res))
             if res in res_L35:  self.targetGasMass = 5.73879e-6 * (8 ** np.log2(2160/res))
             if res in res_L75:  self.targetGasMass = 9.43950e-5 * (8 ** np.log2(1820/res))
             if res in res_L205: self.targetGasMass = 7.43736e-4 * (8 ** np.log2(2500/res))
-            if res in res_L680: self.targetGasMass = 0.0 # todo
+            if res in res_L680: self.targetGasMass = 1.82873e-3 * (8 ** np.log2(6144/res))
 
             if res in res_L25:  self.boxSize = 25000.0
             if res in res_L35:  self.boxSize = 35000.0
@@ -228,7 +230,7 @@ class simParams:
             if res in res_L75:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,0,-1,-1,-1,-1,-1] # LastStarTime only
                 self.trMCPerCell = 2
-            if res in res_L35 + res_L205 + res_L680:
+            if res in res_L35 + res_L205:
                 self.trMCFields  = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1] # none
                 self.trMCPerCell = 1
             if res in res_L680:
@@ -335,10 +337,7 @@ class simParams:
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if '_old' in run:
-                self.simName += '_old' # temporary
-
-            if res in res_L35+res_L75+res_L205:#+res_L680:
+            if res in res_L35+res_L75+res_L205+res_L680:
                 # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
@@ -346,6 +345,8 @@ class simParams:
                 if res in res_L680: resInd = len(res_L680) - res_L680.index(res)
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
+
+                if res == 6144: self.simName = 'TNG-Cluster'
                 if '_dm' in run: self.simName += '-Dark'
                 if 'NR' in self.variant: self.simName = 'TNG%d-%d-%s' % (boxSizeName,resInd,self.variant)
 
@@ -430,7 +431,7 @@ class simParams:
             # load cmInitial (box recentering offset) for TNG1 production runs
             if self.variant == 'sf3':
                 ics_filename = 'ics_zoom_L%sn%dTNG_DM_halo%d_L%d_sf3.0_mpc.hdf5' % (bs,parentRes,self.hInd,self.res) # generalize if not sf3
-                self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/done/' + ics_filename
+                self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/' + ics_filename
                 with h5py.File(self.icsPath, 'r') as f:
                     self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 

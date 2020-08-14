@@ -766,7 +766,6 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
             assert sP is not None
             
             gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
-            
 
         # halos with a primary subhalo
         wHalo = np.where((gc['GroupFirstSub'] >= 0) & (gc['Group_M_Crit200'] > 0))
