@@ -38,9 +38,8 @@ def pick_halos():
         print(bin,hInds[i])
 
     # note: skipped h305 (IC gen failures, replaced with 443 in its mass bin)
-    # note: skipped h1096 (IC failure, spans box edge, replaced with 799)
-    # note: run down to 14.5 mass bin with 10 per bin, then:
-    #  increase to 20 for 14.9-15, 50 for 14.8-14.9, 40 each for 14.6-14.8
+    # note: skipped h1096 (IC gen failure, spans box edge, replaced with 799)
+    # note: skipped h604 (corrupt GroupNsubs != Nsubgroups_Total in snap==53, replaced with 616)
     return hInds
 
 def _halo_ids_run(onlyDone=False):
@@ -90,7 +89,6 @@ def mass_function():
     ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
     ax.set_ylabel('Number of Halos [%.1f dex$^{-1}$]' % binSize)
     ax.set_yscale('log')
-    #ax.yaxis.tick_right()
     ax.yaxis.set_ticks_position('both')
 
     yy_max = 1.0
@@ -717,8 +715,8 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     variant = 'sf3'
     run = 'tng_zoom'
 
-    #hInds = [0,1,36,93,877,901,1041,4274] # testing
-    hInds = [0,36,877,901,1041]
+    hInds = [0,8,36,50,51,93,125,171,231,330,470,877,901,1041,2191,3297,4274] # testing
+    #hInds = _halo_ids_run(onlyDone=True)
 
     def _newpartid(old_ids, halo_ind, ptNum):
         """ Define convention to offset particle/cell/tracer IDs based on zoom run halo ID. 
@@ -750,10 +748,15 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
         lengths['Group'][i] = sP.numHalos
         lengths['Subhalo'][i] = sP.numSubhalos
 
-    numHalosTot    = np.sum(lengths['Group'])
-    numSubhalosTot = np.sum(lengths['Subhalo'])
+        # verify
+        if lengths['Subhalo'][i]:
+            GroupNsubs = sP.groups('GroupNsubs')
+            assert lengths['Subhalo'][i] == GroupNsubs.sum() #h604 fails snap==53
 
-    print('Snapshot = [%2d], total [%d] halos, [%d] subhalos.' % (snap,numHalosTot,numSubhalosTot))
+    numHalosTot    = np.sum(lengths['Group'], dtype='int32')
+    numSubhalosTot = np.sum(lengths['Subhalo'], dtype='int32')
+
+    print('\nSnapshot = [%2d], total [%d] halos, [%d] subhalos.' % (snap,numHalosTot,numSubhalosTot))
 
     GroupLenType_hInd = np.zeros( (len(hInds),6), dtype='int32' )
 
@@ -786,11 +789,11 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
     headers['Header']['Ngroups_Total'] = numHalosTot
     headers['Header']['Nsubgroups_Total'] = numSubhalosTot
-    headers['Header']['NumFiles'] = len(hInds)
+    headers['Header']['NumFiles'] = np.int32(len(hInds))
 
     headers['Parameters']['BoxSize'] *= fac # Mpc -> kpc units
     headers['Parameters']['InitCondFile'] = 'various'
-    headers['Parameters']['NumFilesPerSnapshot'] = len(hInds)*2
+    headers['Parameters']['NumFilesPerSnapshot'] = np.int32(len(hInds)*2)
     headers['Parameters']['UnitLength_in_cm'] /= fac # kpc units
     headers['Config']['LONGIDS'] = "" # True
 
@@ -813,6 +816,9 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                     length = f[gName][ list(f[gName].keys())[0] ].shape[0]
 
                     for field in f[gName]:
+                        if field in ['SubhaloBfldDisk','SubhaloBfldHalo']:
+                            continue # do not save (not fixed)
+
                         if i == 0:
                             # allocate
                             shape = list(f[gName][field].shape)
@@ -824,68 +830,82 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
                     offsets_loc[gName] += length
 
-        # allocate fields to save originating zoom run IDs
-        data['Group']['GroupOrigHaloID'] = np.zeros(lengths['Group'][hCount], dtype='int32')
-        data['Subhalo']['SubhaloOrigHaloID'] = np.zeros(numSubhalosTot, dtype='int32')
+        
+        if lengths['Group'][hCount]:
+            # allocate fields to save originating zoom run IDs
+            data['Group']['GroupOrigHaloID'] = np.zeros(lengths['Group'][hCount], dtype='int32')
 
-        # allocate new meta-data fields
-        data['Group']['GroupPrimaryZoomTarget'] = np.zeros(lengths['Group'][hCount], dtype='int32')
-        data['Group']['GroupContaminationFracByMass'] = np.zeros(lengths['Group'][hCount], dtype='float32')
-        data['Group']['GroupContaminationFracByNumPart'] = np.zeros(lengths['Group'][hCount], dtype='float32')
+            # allocate new meta-data fields
+            data['Group']['GroupPrimaryZoomTarget'] = np.zeros(lengths['Group'][hCount], dtype='int32')
+            data['Group']['GroupContaminationFracByMass'] = np.zeros(lengths['Group'][hCount], dtype='float32')
+            data['Group']['GroupContaminationFracByNumPart'] = np.zeros(lengths['Group'][hCount], dtype='float32')
 
-        w = np.where(data['Group']['GroupMassType'][:,1] > 0)
-        data['Group']['GroupContaminationFracByMass'][w] = \
-          data['Group']['GroupMassType'][w,2] / (data['Group']['GroupMassType'][w,1]+data['Group']['GroupMassType'][w,2])
+            w = np.where(data['Group']['GroupMassType'][:,1] > 0)
+            data['Group']['GroupContaminationFracByMass'][w] = \
+              data['Group']['GroupMassType'][w,2] / (data['Group']['GroupMassType'][w,1]+data['Group']['GroupMassType'][w,2])
 
-        w = np.where(data['Group']['GroupLenType'][:,1] > 0)
-        data['Group']['GroupContaminationFracByNumPart'][w] = \
-          data['Group']['GroupLenType'][w,2] / (data['Group']['GroupLenType'][w,1]+data['Group']['GroupLenType'][w,2])
+            w = np.where(data['Group']['GroupLenType'][:,1] > 0)
+            data['Group']['GroupContaminationFracByNumPart'][w] = \
+              data['Group']['GroupLenType'][w,2] / (data['Group']['GroupLenType'][w,1]+data['Group']['GroupLenType'][w,2])
 
-        w = np.where((data['Group']['GroupLenType'][:,2] > 0) & (data['Group']['GroupLenType'][:,2] == 0))
-        data['Group']['GroupContaminationFracByMass'][w] = 1.0
-        data['Group']['GroupContaminationFracByNumPart'][w] = 1.0
+            w = np.where((data['Group']['GroupLenType'][:,2] > 0) & (data['Group']['GroupLenType'][:,2] == 0))
+            data['Group']['GroupContaminationFracByMass'][w] = 1.0
+            data['Group']['GroupContaminationFracByNumPart'][w] = 1.0
 
-        GroupLenType_hInd[hCount,:] = np.sum(data['Group']['GroupLenType'], axis=0)
+            # save originating zoom run halo ID
+            data['Group']['GroupOrigHaloID'][:] = hInd
+            data['Group']['GroupPrimaryZoomTarget'][0] = 1
 
-        # save originating zoom run halo ID
-        data['Group']['GroupOrigHaloID'][:] = hInd
-        data['Subhalo']['SubhaloOrigHaloID'][:] = hInd
-        data['Group']['GroupPrimaryZoomTarget'][0] = 1
+            # make index adjustments
+            data['Group']['GroupFirstSub'] += offsets['Subhalo'][hCount]
 
-        # make index adjustments
-        data['Group']['GroupFirstSub'] += offsets['Subhalo'][hCount]
-        data['Subhalo']['SubhaloGrNr'] += offsets['Group'][hCount]
+            # spatial offset adjustments: un-shift zoom center and periodic shift
+            for field in ['GroupCM','GroupPos']:
+                data['Group'][field] -= sP.boxSize/2
+                data['Group'][field] += sP.zoomShiftPhys
+                sP.correctPeriodicPosVecs(data['Group'][field])
 
-        # SubhaloIDMostbound could be any type, identify any of PT1/PT2 (with low IDs) and offset those
-        # such that they are unchanged after _newpartid(ptNum=0)
-        w = np.where(data['Subhalo']['SubhaloIDMostbound'] < 1000000000)
-        data['Subhalo']['SubhaloIDMostbound'][w] += (1000000000-1)
+            # spatial offset adjustments: unit system (Mpc -> kpc)
+            for field in ['Group_R_Crit200','Group_R_Crit500','Group_R_Mean200','Group_R_TopHat200',
+                          'GroupCM','GroupPos']:
+                data['Group'][field] *= fac
 
-        data['Subhalo']['SubhaloIDMostbound'] = _newpartid(data['Subhalo']['SubhaloIDMostbound'], hInd, ptNum=0)
+            data['Group']['GroupBHMdot'] *= fac**(-1) # UnitLength^-1
 
-        # spatial offset adjustments: un-shift zoom center and periodic shift
-        for field in ['GroupCM','GroupPos']:
-            data['Group'][field] -= sP.boxSize/2
-            data['Group'][field] += sP.zoomShiftPhys
-            sP.correctPeriodicPosVecs(data['Group'][field])
-        for field in ['SubhaloCM','SubhaloPos']:
-            data['Subhalo'][field] -= sP.boxSize/2
-            data['Subhalo'][field] += sP.zoomShiftPhys
-            sP.correctPeriodicPosVecs(data['Subhalo'][field])
+            # record fof-scope lengths by type
+            GroupLenType_hInd[hCount,:] = np.sum(data['Group']['GroupLenType'], axis=0)
 
-        # spatial offset adjustments: unit system (Mpc -> kpc)
-        for field in ['SubhaloHalfmassRad','SubhaloHalfmassRadType','SubhaloSpin',
-                      'SubhaloStellarPhotometricsRad','SubhaloVmaxRad','SubhaloCM','SubhaloPos']:
-            data['Subhalo'][field] *= fac
-        for field in ['Group_R_Crit200','Group_R_Crit500','Group_R_Mean200','Group_R_TopHat200',
-                      'GroupCM','GroupPos']:
-            data['Group'][field] *= fac
+        if lengths['Subhalo'][hCount]:
+            data['Subhalo']['SubhaloOrigHaloID'] = np.zeros(numSubhalosTot, dtype='int32')
 
-        data['Group']['GroupBHMdot'] *= fac**(-1) # UnitLength^-1
-        data['Subhalo']['SubhaloBHMdot'] *= fac**(-1)
+            data['Subhalo']['SubhaloOrigHaloID'][:] = hInd
 
-        for field in ['SubhaloBfldDisk','SubhaloBfldHalo']:
-            data['Subhalo'][field] *= fac**(-1.5) # UnitLength^-1.5
+            # make index adjustments
+            data['Subhalo']['SubhaloGrNr'] += offsets['Group'][hCount]
+
+            # SubhaloIDMostbound could be any type, identify any of PT1/PT2 (with low IDs) and offset those
+            # such that they are unchanged after _newpartid(ptNum=0)
+            w = np.where(data['Subhalo']['SubhaloIDMostbound'] < 1000000000)
+            data['Subhalo']['SubhaloIDMostbound'][w] += (1000000000-1)
+
+            data['Subhalo']['SubhaloIDMostbound'] = _newpartid(data['Subhalo']['SubhaloIDMostbound'], hInd, ptNum=0)
+
+            # spatial offset adjustments: un-shift zoom center and periodic shift
+            for field in ['SubhaloCM','SubhaloPos']:
+                data['Subhalo'][field] -= sP.boxSize/2
+                data['Subhalo'][field] += sP.zoomShiftPhys
+                sP.correctPeriodicPosVecs(data['Subhalo'][field])
+
+            # spatial offset adjustments: unit system (Mpc -> kpc)
+            for field in ['SubhaloHalfmassRad','SubhaloHalfmassRadType','SubhaloSpin',
+                          'SubhaloStellarPhotometricsRad','SubhaloVmaxRad','SubhaloCM','SubhaloPos']:
+                data['Subhalo'][field] *= fac
+
+            data['Subhalo']['SubhaloBHMdot'] *= fac**(-1)
+
+            for field in ['SubhaloBfldDisk','SubhaloBfldHalo']:
+                if field in data['Subhalo']:
+                    data['Subhalo'][field] *= fac**(-1.5) # UnitLength^-1.5
 
         # per-halo header adjustments
         headers['Header']['Ngroups_ThisFile'] = lengths['Group'][hCount]
@@ -964,7 +984,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
         headers['Header']['Time'] = 1.0
 
     headers['Header']['BoxSize'] *= fac # Mpc -> kpc units
-    headers['Header']['NumFilesPerSnapshot'] = len(hInds) * 2
+    headers['Header']['NumFilesPerSnapshot'] = np.int32(len(hInds) * 2)
     headers['Header']['UnitLength_in_cm'] /= fac # kpc units
 
     headers['Header']['NumPart_Total'] = np.uint32(NumPart_Total_Global & 0xFFFFFFFF) # first 32 bits
@@ -988,7 +1008,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             with h5py.File(sP.snapPath(sP.snap,i), 'r') as f:
                 # loop over groups with datasets
                 for gName in data.keys():
-                    if len(f[gName]) == 0:
+                    if gName not in f or len(f[gName]) == 0:
                         continue
 
                     start = offsets_loc[gName]
@@ -999,8 +1019,8 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
                         if field in ['TimeStep','TimebinHydro','HighResGasMass']:
                             continue # do not save
 
-                        if i == 0:
-                            # allocate
+                        if field not in data[gName]:
+                            # allocate (could be i>0)
                             shape = list(f[gName][field].shape)
                             shape[0] = length_global # override chunk length with global (for this hInd)
                             data[gName][field] = np.zeros(shape, dtype=f[gName][field].dtype)
@@ -1065,24 +1085,25 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             data['PartType0']['EnergyDissipation'] *= fac**(-1)
             #attr['PartType0']['EnergyDissipation']['to_cgs'] /= fac**(-1) # meta-data not present
 
-        data['PartType5']['BH_BPressure'] *= fac**(-3) # assume same as BH_Pressure (todo verify!)
-        attr['PartType5']['BH_BPressure']['a_scaling'] = -4.0 # unit meta-data missing
-        attr['PartType5']['BH_BPressure']['h_scaling'] = 2.0 # units are (MagneticField)^2
-        attr['PartType5']['BH_BPressure']['length_scaling'] = -3.0
-        attr['PartType5']['BH_BPressure']['mass_scaling'] = 1.0
-        attr['PartType5']['BH_BPressure']['to_cgs'] = attr['PartType0']['MagneticField']['to_cgs']**2
-        attr['PartType5']['BH_BPressure']['velocity_scaling'] = 2.0
+        if len(data['PartType5']):
+            data['PartType5']['BH_BPressure'] *= fac**(-3) # assume same as BH_Pressure (todo verify!)
+            attr['PartType5']['BH_BPressure']['a_scaling'] = -4.0 # unit meta-data missing
+            attr['PartType5']['BH_BPressure']['h_scaling'] = 2.0 # units are (MagneticField)^2
+            attr['PartType5']['BH_BPressure']['length_scaling'] = -3.0
+            attr['PartType5']['BH_BPressure']['mass_scaling'] = 1.0
+            attr['PartType5']['BH_BPressure']['to_cgs'] = 6.76994e-12 #attr['PartType0']['MagneticField']['to_cgs']**2
+            attr['PartType5']['BH_BPressure']['velocity_scaling'] = 2.0
 
-        data['PartType5']['BH_Pressure'] *= fac**(-3) # Pressure = UnitLength^-3 (todo verify!) (assume wrong in io_fields.c)
-        attr['PartType5']['BH_Pressure']['to_cgs'] /= fac**(-3)
+            data['PartType5']['BH_Pressure'] *= fac**(-3) # Pressure = UnitLength^-3 (assuming wrong in io_fields.c)
+            attr['PartType5']['BH_Pressure']['to_cgs'] /= fac**(-3)
 
-        for field in ['BH_CumEgyInjection_RM','BH_CumEgyInjection_QM']:
-            data['PartType5'][field] *= 1 # UnitLength^0
-            attr['PartType5'][field]['to_cgs'] *= 1
+            for field in ['BH_CumEgyInjection_RM','BH_CumEgyInjection_QM']:
+                data['PartType5'][field] *= 1 # UnitLength^0
+                attr['PartType5'][field]['to_cgs'] *= 1
 
-        for field in ['BH_Mdot','BH_MdotBondi','BH_MdotEddington']: # UnitMass/UnitTime = UnitLength^-1
-            data['PartType5'][field] *= fac**(-1) # TODO verify (assuming wrong in io_fields.c)
-            attr['PartType5'][field]['to_cgs'] /= fac**(-1)
+            for field in ['BH_Mdot','BH_MdotBondi','BH_MdotEddington']: # UnitMass/UnitTime = UnitLength^-1
+                data['PartType5'][field] *= fac**(-1) # (assuming wrong in io_fields.c)
+                attr['PartType5'][field]['to_cgs'] /= fac**(-1)
 
         # write this zoom halo into two files: one for fof-particles, one for outside-fof-particles
         for fileNum in [0,1]:
@@ -1128,17 +1149,12 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
 
     # TODO: add offsets from lengths_hind_%03d.hdf5 to offsets files during their construction
 
-    # TODO: understand PartType0: ElectronAbundance, GFM_CoolingRate, StarFormationRate differences
-
-    # TODO: verify PartType0: NeutralHydrogenAbundance, InternalEnergy
-
-def testVirtualParentBoxGroupCat():
+def testVirtualParentBoxGroupCat(snap=99):
     """ Compare all group cat fields (1d histograms) vs TNG300-1 to check unit conversions, etc. """
     from matplotlib.backends.backend_pdf import PdfPages
 
     # config
     nBins = 50
-    snap = 99
 
     sP1 = simParams(run='tng-cluster', snap=snap)
     sP2 = simParams(run='tng300-1', snap=snap)
@@ -1166,7 +1182,7 @@ def testVirtualParentBoxGroupCat():
         for field in fields:
             # start plot
             print(field)
-            if field in ['SubhaloFlag']: continue
+            if field in ['SubhaloFlag','SubhaloBfldDisk','SubhaloBfldHalo']: continue
 
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
@@ -1206,15 +1222,14 @@ def testVirtualParentBoxGroupCat():
         # finish
         pdf.close()
 
-def testVirtualParentBoxSnapshot():
+def testVirtualParentBoxSnapshot(snap=99):
     """ Compare all snapshot fields (1d histograms) vs TNG300-1 to check unit conversions, etc. """
     from matplotlib.backends.backend_pdf import PdfPages
     from util.helper import closest
 
     # config
-    haloID = 1 # for particle comparison, indexing primary targets of TNG-Cluster
+    haloID = 4 # for particle comparison, indexing primary targets of TNG-Cluster
     nBins = 50
-    snap = 99
 
     sP1 = simParams(run='tng-cluster', snap=snap)
     sP2 = simParams(run='tng300-1', snap=snap)
@@ -1224,14 +1239,28 @@ def testVirtualParentBoxSnapshot():
 
     sP1_hInd = np.where(pri_target)[0][haloID]
     sP1_m200 = sP1.halo(sP1_hInd)['Group_M_Crit200']
+    zoomOrigID = sP1.groupCatSingle(haloID=sP1_hInd)['GroupOrigHaloID']
 
     # locate close mass in sP2 to compare to
     sP2_m200, sP2_hInd = closest(sP2.halos('Group_M_Crit200'), sP1_m200)
 
     haloIDs = [sP1_hInd, sP2_hInd]
 
-    print('Comparing hInd [%d] from TNG-Cluster to [%d] from TNG300-1 (%.1f vs %.1f log msun).' % \
-        (sP1_hInd,sP2_hInd,sP1.units.codeMassToLogMsun(sP1_m200),sP2.units.codeMassToLogMsun(sP2_m200)))
+    print('Comparing hInd [%d (%d)] from TNG-Cluster to [%d] from TNG300-1 (%.1f vs %.1f log msun).' % \
+        (sP1_hInd,zoomOrigID,sP2_hInd,sP1.units.codeMassToLogMsun(sP1_m200),sP2.units.codeMassToLogMsun(sP2_m200)))
+
+    if 0:
+        # debugging: load one field
+        pt = 'dm'
+        field = 'ParticleIDs'
+
+        vals1 = sP1.snapshotSubset(pt, field, haloID=sP1_hInd)
+        vals2 = sP2.snapshotSubset(pt, field, haloID=sP2_hInd)
+
+        print(sP1.simName, ' min max mean: ', vals1.min(), vals1.max(), np.mean(vals1))
+        print(sP2.simName, ' min max mean: ', vals2.min(), vals2.max(), np.mean(vals2))
+
+        import pdb; pdb.set_trace()
 
     # loop over part types
     for ptNum in [0,1,4,5]: # skip low-res DM (2) and tracers (3)
@@ -1261,6 +1290,10 @@ def testVirtualParentBoxSnapshot():
             for i, sP in enumerate([sP1,sP2]):
                 vals = sP.snapshotSubset(ptNum, field, haloID=haloIDs[i])
 
+                if field == 'ParticleIDs' and i == 0: # verify ID spacing
+                    offset = 1000000000*zoomOrigID
+                    assert (vals-offset).min() > 0 and (vals-offset).max() < 1000000000
+
                 if field == 'Potential': vals *= -1
 
                 vals = vals[np.isfinite(vals) & (vals > 0)]
@@ -1278,3 +1311,153 @@ def testVirtualParentBoxSnapshot():
 
         # finish
         pdf.close()
+
+def vis_fullbox_virtual(conf=0):
+    """ Visualize the entire virtual reconstructed box. """
+    from vis.box import renderBox
+
+    sP = simParams(run='tng-cluster', redshift=0.0)
+
+    axes       = [0,1] # x,y
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    nPixels    = 2000
+
+    # halo plotting
+    plotHalos  = False
+
+    if conf in [0,1,2,3,4]:
+        pri = sP.groups('GroupPrimaryZoomTarget')
+        plotHaloIDs = np.where(pri == 1)[0]
+
+    # panel config
+    if conf == 0:
+        method = 'sphMap_globalZoom'
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,7.1]}]
+    if conf == 1:
+        method = 'sphMap' # is global, overlapping coarse cells
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.7,8.0]}]
+    if conf == 2:
+        method = 'sphMap_globalZoom'
+        panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
+    if conf == 3:
+        method = 'sphMap' # is global
+        panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
+    if conf == 4:
+        method = 'sphMap' # is global
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.2,6.8]}]
+        numBufferLevels = 3 # 2 or 3, free parameter
+
+        maxGasCellMass = sP.targetGasMass
+        if numBufferLevels >= 1:
+            # first buffer level is 27x mass, then 8x mass for each subsequent level
+            maxGasCellMass *= 27 * np.power(8,numBufferLevels-1)
+            # add padding for x2 Gaussian distribution
+            maxGasCellMass *= 3
+
+        ptRestrictions = {'Masses':['lt',maxGasCellMass]}
+
+    if conf == 5:
+        sP = simParams(run='tng_dm',res=2048,redshift=0.0) # parent box
+        method = 'sphMap'
+        panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[7.0,8.4]}]
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = [nPixels,nPixels]
+        colorbars  = True
+
+        saveFilename = './boxImage_%s_%s-%s_%s_conf%d.pdf' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],sP.snap,conf)
+
+    renderBox(panels, plotConfig, locals(), skipExisting=False)
+
+def test_variant_box():
+    """ Test if a variant box is responsible for a noted difference. """
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    sP1 = simParams(run='tng',res=512,redshift=0.0,variant='0000')
+    sP2 = simParams(run='tng',res=512,redshift=0.0,variant='5008')
+
+    # 4503 = sh03: STEEPER_SFR_FOR_STARBURST (1.0)
+    # 5001 = 17Oct2016 gfm_metal_cooling bugfix
+    # 5002 = 17Nov2016 benergy_wind_spawning fix
+    # 5003 = 8May2017 z>6 UVB fix
+    # 5004 = 6Apr2018 velocity gradients sign/limiter fixes (see StarFormationRate!)
+    # 5005 = 7May2018 vel slope limiter fix
+    # --- not included in TNG-Cluster -- 5006 = 7May2018 wind-recoupling/stellar-evo energy injection fix
+    # --- not included in TNG-Cluster -- 5007 = 13May2018 gas total energy kick fix
+    # 5008 = 3Oct2018 mhd missing scalefactor in powell source term fix
+    # --- not included in TNG-Cluster -- 5011 = subfind phase2 pot fix (see StarFormationRate!)
+
+    # TODO: understand PartType0: ElectronAbundance, GFM_CoolingRate, StarFormationRate differences
+
+    # TODO: verify PartType0: NeutralHydrogenAbundance, InternalEnergy
+
+    pt = 'gas'
+    fields = ['ElectronAbundance','GFM_CoolingRate','StarFormationRate','NeutralHydrogenAbundance','InternalEnergy']
+    haloID = 0
+
+    pdf = PdfPages('compare_%s_h%d_%s.pdf' % (sP2.simName,haloID,pt))
+
+    for field in fields:
+        # start plot
+        print(field)
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel(field + ' [log]')
+        ax.set_ylabel('N')
+        ax.set_yscale('log')
+
+        # load and histogram
+        for i, sP in enumerate([sP1,sP2]):
+            vals = sP.snapshotSubset(pt, field, haloID=haloID)
+
+            vals = vals[np.isfinite(vals) & (vals > 0)]
+            vals = vals.ravel() # 1D for all multi-D
+
+            vals = np.log10(vals)
+
+            ax.hist(vals, bins=50, alpha=0.6, label=sP.simName)
+
+        # finish plot
+        ax.legend(loc='best')
+        pdf.savefig()
+        plt.close(fig)
+
+    # finish
+    pdf.close()
+
+def check_all():
+    """ TEMP CHECK NSUBS. """
+    # zoom config
+    res = 13
+    variant = 'sf3'
+    run = 'tng_zoom'
+
+    hInds = _halo_ids_run(onlyDone=True)
+
+    # load total number of halos and subhalos
+    lengths = {'Group'   : np.zeros(len(hInds), dtype='int32'),
+               'Subhalo' : np.zeros(len(hInds), dtype='int32')}
+
+    for i, hInd in enumerate(hInds):
+        if i < 300:
+            continue
+        print(i,hInd)
+        if hInd in [5,701,1039,1067,2766,3425]:
+            print(' skip')
+            continue
+
+        for snap in range(100):
+            print(' snap: ',snap)
+            sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
+
+            lengths['Group'][i] = sP.numHalos
+            lengths['Subhalo'][i] = sP.numSubhalos
+
+            if lengths['Subhalo'][i]:
+                assert lengths['Subhalo'][i] == sP.groups('GroupNsubs').sum()

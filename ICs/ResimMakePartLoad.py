@@ -515,7 +515,7 @@ def generate_set():
     from util.simParams import simParams
 
     if 1:
-        # TNG1-Cluster
+        # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
         zoomFac = 3 # effective 6144^3 in L680 is 2.37 lower times mass res than TNG300-1
         haloIDs = [4,79,84,102,107,136,155,156,179,202,205,210,217,224,239,280,282,361,390]

@@ -641,7 +641,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
         if partFieldLoad in haloCentricFields:
-            if method == 'sphMap_global':
+            if method in ['sphMap_global','sphMap_globalZoom']:
                 # likely in chunked load, will use refPos and refVel as set in haloImgSpecs
                 quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
             else:
@@ -1218,6 +1218,17 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 startInd = sP.groupCatOffsetListIntoSnap()['snapOffsetsGroup'][sh['SubhaloGrNr'],pt]
                 indRange = [startInd, startInd + gr['GroupLenType'][pt] - 1]
 
+        if method == 'sphMap_globalZoom':
+            # virtual box 'global' scope: all fof-scope particles of all original zooms, plus h0 outer fuzz
+            assert not sP.isZoom
+
+            pt = sP.ptNum(partType)
+
+            with h5py.File(sP.postPath + 'offsets/offsets_%03d.hdf5' % sP.snap,'r') as f:
+                OuterFuzzSnapOffsetByType = f['OriginalZooms/OuterFuzzSnapOffsetByType'][()]
+
+            indRange = [0, OuterFuzzSnapOffsetByType[1,pt]] # end at beginning of outer fuzz of second halo
+
         if indRange is not None and indRange[1] - indRange[0] < 1:
             return emptyReturn()
 
@@ -1243,7 +1254,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         disableChunkLoad = (sP.isPartType(partType,'dm') and not sP.snapHasField(partType, 'SubfindHsml') and method != 'histo') or \
                            sP.isPartType(partType,'stars') # use custom CalcHsml always for stars now
 
-        if len(sP.data):
+        if len(sP.data) and np.count_nonzero( [key for key in sP.data.keys() if 'snap%d'%sP.snap in key] ):
             print(' gridBox(): have fields in sP.data, disabling chunking (possible spatial subset already applied)')
             disableChunkLoad = True
             sP.data['nThreads'] = 1 # disable parallel snapshot loading
@@ -1435,7 +1446,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     quant = quant[wMask]
 
             # render
-            if method in ['sphMap','sphMap_global','sphMap_subhalo','sphMap_minIP','sphMap_maxIP']:
+            if method in ['sphMap','sphMap_global','sphMap_globalZoom','sphMap_subhalo','sphMap_minIP','sphMap_maxIP']:
                 # particle by particle (unordered) splat using standard SPH cubic spline kernel
 
                 # further sub-method specification?
@@ -1801,14 +1812,29 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
             _addCirclesHelper(p, ax, gc['SubhaloPos'], gc['SubhaloHalfmassRad'], p['plotSubhalos'])
 
+    if 'plotHaloIDs' in p:
+        # plotting halos/groups specified by ID, in visible area
+        haloInds = p['plotHaloIDs']
+        gc = p['sP'].groupCat(fieldsHalos=['GroupPos','Group_R_Crit200'])
+        gc['GroupPos'] = gc['GroupPos'][haloInds,:]
+        rad = 10.0*gc['Group_R_Crit200'][haloInds]
+        labelVals = {'%d' : p['plotHaloIDs']} # label IDs
+
+        if p['sP'].groupCatHasField('Group','GroupOrigHaloID'):
+            GroupOrigHaloID = p['sP'].halos('GroupOrigHaloID')
+            labelVals = {'%d' : GroupOrigHaloID[p['plotHaloIDs']]}
+
+        _addCirclesHelper(p, ax, gc['GroupPos'], rad, len(p['plotHaloIDs']), labelVals)
+
     if 'plotSubhaloIDs' in p:
         # plotting child subhalos specified by ID, in visible area
         subInds = p['plotSubhaloIDs']
         gc = p['sP'].groupCat(fieldsSubhalos=['SubhaloPos','SubhaloHalfmassRadType'])
         gc['SubhaloPos'] = gc['SubhaloPos'][subInds,:]
         rad = 20.0*gc['SubhaloHalfmassRadType'][subInds,4]
+        labelVals = {'%d' : p['plotSubhaloIDs']} # label IDs
 
-        _addCirclesHelper(p, ax, gc['SubhaloPos'], rad, len(p['plotSubhaloIDs']), p['plotSubhaloIDs'])
+        _addCirclesHelper(p, ax, gc['SubhaloPos'], rad, len(p['plotSubhaloIDs']), labelVals)
 
     if 'customCircles' in p:
         # plotting custom list of (x,y,z),(rad) inputs as circles, inputs in simdata coordinates

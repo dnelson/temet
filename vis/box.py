@@ -69,10 +69,9 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, r
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
 
     # defaults (all panel fields that can be specified)
-
-    run         = 'tng'       # run name
-    res         = 1820        # run resolution
-    redshift    = 0.0         # run redshift
+    #run         = 'tng'       # run name
+    #res         = 1820        # run resolution
+    #redshift    = 0.0         # run redshift
     partType    = 'dm'        # which particle type to project
     partField   = 'coldens'   # which quantity/field to project for that particle type
     valMinMax   = None        # if not None (auto), then stretch colortable between 2-tuple [min,max] field values
@@ -136,15 +135,19 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, r
 
         if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
-        # add simParams info
-        v = p['variant'] if 'variant' in p else None
-        h = p['hInd'] if 'hInd' in p else None
-        s = p['snap'] if 'snap' in p else None
-        z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
-        rp = p['refPos'] if 'refPos' in p else None
-        rv = p['refVel'] if 'refVel' in p else None
+        # add simParams info if not directly input
+        if 'run' in p:
+            v = p['variant'] if 'variant' in p else None
+            h = p['hInd'] if 'hInd' in p else None
+            s = p['snap'] if 'snap' in p else None
+            z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
+            rp = p['refPos'] if 'refPos' in p else None
+            rv = p['refVel'] if 'refVel' in p else None
 
-        p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v, refPos=rp, refVel=rv)
+            if 'sP' in p:
+                print('Warning: Overriding common sP with specified run,snap,redshift.')
+
+            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=h, variant=v, refPos=rp, refVel=rv)
 
         # add imaging config for render of the whole box, if not directly specified
         boxSizeImg, boxCenter, extent = boxImgSpecs(**p)
