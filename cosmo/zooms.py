@@ -876,7 +876,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
             GroupLenType_hInd[hCount,:] = np.sum(data['Group']['GroupLenType'], axis=0)
 
         if lengths['Subhalo'][hCount]:
-            data['Subhalo']['SubhaloOrigHaloID'] = np.zeros(numSubhalosTot, dtype='int32')
+            data['Subhalo']['SubhaloOrigHaloID'] = np.zeros(lengths['Subhalo'][hCount], dtype='int32')
 
             data['Subhalo']['SubhaloOrigHaloID'][:] = hInd
 
@@ -1438,17 +1438,15 @@ def check_all():
     variant = 'sf3'
     run = 'tng_zoom'
 
-    hInds = _halo_ids_run(onlyDone=True)
+    hInds = [3425] #_halo_ids_run(onlyDone=True)
 
     # load total number of halos and subhalos
     lengths = {'Group'   : np.zeros(len(hInds), dtype='int32'),
                'Subhalo' : np.zeros(len(hInds), dtype='int32')}
 
     for i, hInd in enumerate(hInds):
-        if i < 300:
-            continue
         print(i,hInd)
-        if hInd in [5,701,1039,1067,2766,3425]:
+        if hInd in [5,701,1039,1067,2766]:
             print(' skip')
             continue
 
