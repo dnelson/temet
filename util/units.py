@@ -825,7 +825,7 @@ class units(object):
         return ent_cgs
 
     def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, log=False):
-        """ Following Navarro+ (1994) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
+        """ Following Navarro+ (1995) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
         in [10^30 erg/s] for individual gas cells, based only on their density and temperature. Assumes 
         simplified (primordial) high-temp cooling function, and only free-free (bremsstrahlung) 
         emission contribution from T>10^6 Kelvin gas. All inputs in code units. """

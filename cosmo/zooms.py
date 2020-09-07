@@ -1109,10 +1109,10 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
         for fileNum in [0,1]:
             # per-halo header adjustments
             if fileNum == 0:
-                headers['Header']['NumPart_ThisFile'] = GroupLenType_hInd[hCount,:]
+                headers['Header']['NumPart_ThisFile'] = np.int32(GroupLenType_hInd[hCount,:])
                 start = np.zeros( 6, dtype='int32' )
             else:
-                headers['Header']['NumPart_ThisFile'] = OuterFuzzLenType_hInd[hCount,:]
+                headers['Header']['NumPart_ThisFile'] = np.int32(OuterFuzzLenType_hInd[hCount,:])
                 start = GroupLenType_hInd[hCount,:]
             
             outFile = "snap_%03d.%d.hdf5" % (snap,hCount+len(hInds)*fileNum)

@@ -2834,12 +2834,12 @@ def createVirtualSimHDF5():
 
         if mode == 'trees/SubLink':
             filepath = 'postprocessing/trees/SubLink/tree_extended.hdf5'
-            baseName = 'Trees/SubLink' % snap
+            baseName = 'Trees/SubLink'
             gNames = ['/']
 
         if mode == 'trees/SubLink_gal':
             filepath = 'postprocessing/trees/SubLink_gal/tree_extended.hdf5'
-            baseName = 'Trees/SubLink_gal' % snap
+            baseName = 'Trees/SubLink_gal'
             gNames = ['/']
 
         _addPostprocessingCat(fSim,filepath,baseName,gNames)
@@ -3063,7 +3063,7 @@ def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
 
-    sP = simParams(run='eagle')
+    sP = simParams(run='tng100-1-dark')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -3130,6 +3130,26 @@ def supplementVirtualSimHDF5():
                 if key in fSim:
                     print('delete [%s]' % (key))
                     del fSim[key]
+
+    if 0:
+        # add Trees/
+        modes_sim = ['trees/SubLink',
+                     'trees/SubLink_gal']
+                     #'trees/LHaloTree'] # terrible structure with too many groups...
+
+        for mode in modes_sim:
+            if mode == 'trees/SubLink':
+                filepath = 'postprocessing/trees/SubLink/tree_extended.hdf5'
+                baseName = 'Trees/SubLink'
+                gNames = ['/']
+
+            if mode == 'trees/SubLink_gal':
+                filepath = 'postprocessing/trees/SubLink_gal/tree_extended.hdf5'
+                baseName = 'Trees/SubLink_gal'
+                gNames = ['/']
+
+            _addPostprocessingCat(fSim,filepath,baseName,gNames)
+
     # finish custom
 
     fSim.close()

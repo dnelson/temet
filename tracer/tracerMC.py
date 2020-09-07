@@ -368,19 +368,22 @@ def concatTracersByType(trIDsByParType, parPartTypes):
 
 def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None, 
                           parPartTypes=defParPartTypes, concatTypes=True,
-                          ParentID=None, ParentIDSortInds=None):
+                          ParentID=None, ParentIDSortInds=None, doCache=True):
     """ For a given haloID or subhaloID, return all the child tracers of parents in that object (their 
         IDs or their global indices in the snap), by default for parents of all particle types, 
         optionally restricted to input particle type(s). """
     trIDsByParType = {}
 
-    doCache = True
-
     # quick caching mechanism
-    saveFilename = sP.derivPath + 'trChildren/snap_' + str(sP.snap) + '_sh_' + str(subhaloID) + \
+    objStr = '_sh_%d' % subhaloID if subhaloID is not None else '_h_%d' % haloID
+    saveFilename = sP.derivPath + 'trChildren/snap_' + str(sP.snap) + objStr + \
                    '_i' + str(int(inds)) + '_' + '-'.join(parPartTypes) + '.hdf5'
 
+    if not isdir(sP.derivPath + 'trChildren'):
+        mkdir(sP.derivPath + 'trChildren')
+
     if isfile(saveFilename) and doCache:
+        print('Loading: ' + saveFilename)
         with h5py.File(saveFilename,'r') as f:
             for key in f.keys():
                 trIDsByParType[key] = f[key][()]
@@ -452,7 +455,8 @@ def subhaloTracerChildren(sP, inds=False, haloID=None, subhaloID=None,
         if doCache:
             with h5py.File(saveFilename,'w') as f:
                 for key in trIDsByParType.keys():
-                    f[key] = trIDsByParType[key]
+                    if trIDsByParType[key] is not None:
+                        f[key] = trIDsByParType[key]
             print('Wrote: ' + saveFilename)
 
     # concatenate child tracer IDs disregarding type?
@@ -1154,21 +1158,25 @@ def subhaloTracersTimeEvo(sP, subhaloID, fields, snapStep=1, toRedshift=10.0, fu
         if len(fields) == 1:
             return trVals
 
-def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTracerOffsets=None):
+def globalTracerLength(sP, halos=False, subhalos=False, haloTracerOffsets=None):
     """ Return a 1D array of the number of tracers per halo or subhalo, for all in the snapshot, in 
     direct analogy to LenType in the group catalogs. Compute the offsets as well. """
     assert halos is True or subhalos is True # pick one
     if subhalos is True: assert haloTracerOffsets is not None # required for subhalo-based offsets
 
+    # load the parent IDs of all tracers in this snapshot
+    ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
+
+    # if the IDs of parents are dense enough, use a histogram counting approach
+    ParentID_min = ParentID.min()
+    ParentID_max = ParentID.max()
+
+    histoMethod = False
+
+    if ParentID_max - ParentID_min <= 68e9: # up to 507GB memory allocation
+        histoMethod = True
+
     if histoMethod:
-        # load and count the parent IDs of all tracers in this snapshot
-        ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
-
-        # if the IDs of parents are dense enough, use a histogram counting approach
-        ParentID_min = ParentID.min()
-        ParentID_max = ParentID.max()
-        assert ParentID_max - ParentID_min <= 68e9 # up to 507GB memory allocation here
-
         # offset ParentIDs by their minimum, cast into signed type, then histogram
         ParentID -= ParentID_min
 
@@ -1180,13 +1188,6 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         assert ParentHisto.max() < np.iinfo('int32').max
 
         ParentID = None
-    else:
-        # load and sort the parent IDs of all tracers in this snapshot
-        ParentID = sP.snapshotSubsetP('tracer', 'ParentID')
-
-        # otherwise do a pre-sort and we will later do many bisection searches
-        ParentIDSortInds = np.argsort(ParentID, kind='mergesort')
-        ParentID = ParentID[ParentIDSortInds]
 
     # allocate counts
     h = sP.groupCatHeader()
@@ -1225,35 +1226,61 @@ def globalTracerLength(sP, halos=False, subhalos=False, histoMethod=True, haloTr
         if histoMethod:
             parIDsType -= ParentID_min # offset
 
-        # loop over each halo/subhalo, calculate lengths
-        for i in np.arange(nObjs):
-            if i % int(nObjs/10) == 0 and i <= nObjs:
-                print(' %4.1f%%' % (float(i+1)*100.0/nObjs))
+            # loop over each halo/subhalo, calculate lengths
+            for i in np.arange(nObjs):
+                if i % int(nObjs/10) == 0 and i <= nObjs:
+                    print(' %4.1f%%' % (float(i+1)*100.0/nObjs), flush=True)
 
-            # get parent IDs of this type local to this halo/subhalo
-            i0 = objOffsetType[i,ptNum]
-            i1 = i0 + gc[i,ptNum]
+                # get parent IDs of this type local to this halo/subhalo
+                i0 = objOffsetType[i,ptNum]
+                i1 = i0 + gc[i,ptNum]
 
-            if i1 == i0:
-                continue # zero length of this type
-            
-            parIDsTypeLocal = parIDsType[i0:i1]
+                if i1 == i0:
+                    continue # zero length of this type
+                
+                parIDsTypeLocal = parIDsType[i0:i1]
 
-            if histoMethod:
                 # truncate any ParentID's which exceed ParentHisto bounds (by definition have 0 tracers)
                 parIDsTypeLocal = parIDsTypeLocal[(parIDsTypeLocal >= 0) & \
                                                   (parIDsTypeLocal < ParentHisto.size)]
 
                 # sum histogram entries of offset parIDsType
                 trCounts[parPartType][i] = ParentHisto[parIDsTypeLocal].sum()
-            else:
-                # crossmatch
-                trIDs = getTracerChildren(sP, parIDsTypeLocal, inds=True, 
-                                          ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
+        else:
+            # create array of all IDs of all objects
+            offset = 0
+            ids_in_objs = np.zeros(gc[:,ptNum].sum(), dtype=parIDsType.dtype)
 
-                # save counts
-                if trIDs is not None:
-                    trCounts[parPartType][i] = len(trIDs)
+            for i in np.arange(nObjs):
+                # get parent IDs of this type local to this halo/subhalo
+                i0 = objOffsetType[i,ptNum]
+                i1 = i0 + gc[i,ptNum]
+
+                if i1 == i0:
+                    continue # zero length of this type
+
+                ids_in_objs[offset:offset+gc[i,ptNum]] = parIDsType[i0:i1]
+                offset += gc[i,ptNum]
+
+            # cross-match
+            objInds, trInds = match3(ids_in_objs, ParentID)
+
+            # count (can be duplicate objInds)
+            counts = np.bincount(objInds, minlength=ids_in_objs.size)
+            assert counts.sum() == objInds.size
+
+            # count
+            offset = 0
+
+            for i in np.arange(nObjs):
+                if gc[i,ptNum] == 0:
+                    continue
+
+                # ids were stored dense in ids_in_objs (i.e. should not use objOffsetType for subhalos)
+                trCounts[parPartType][i] = counts[offset:offset+gc[i,ptNum]].sum()
+                offset += gc[i,ptNum]
+
+            assert trCounts[parPartType].sum() == objInds.size
 
     # build offsets
     if halos:
@@ -1559,9 +1586,9 @@ def checkTracerMeta(sP):
         print(i,haloID,subhaloID)
 
         # get actual children
-        trIDs_halo_check = subhaloTracerChildren(sP, haloID=haloID, concatTypes=False,
+        trIDs_halo_check = subhaloTracerChildren(sP, haloID=haloID, concatTypes=False, doCache=False, 
                                             ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
-        trIDs_subhalo_check = subhaloTracerChildren(sP, subhaloID=subhaloID, concatTypes=False,
+        trIDs_subhalo_check = subhaloTracerChildren(sP, subhaloID=subhaloID, concatTypes=False, doCache=False, 
                                             ParentID=ParentID, ParentIDSortInds=ParentIDSortInds)
 
         # loop over types
@@ -1606,3 +1633,5 @@ def checkTracerMeta(sP):
             if children_ids.size:
                 children_ids = np.hstack(children_ids)
                 assert np.array_equal(children_ids, trIDs_subhalo_pt[0:children_ids.size])
+
+    print('Pass.')
