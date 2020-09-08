@@ -596,7 +596,7 @@ def globalTracerChildren(sP, inds=False, halos=False, subhalos=False, parPartTyp
 
     return trIDsByParType
 
-def getEvoSnapList(sP, toRedshift=None, snapStep=1):
+def getEvoSnapList(sP, toRedshift=None, snapStep=1, reqFluidQuants=False):
     """ Helper for below. """
     startSnap = sP.snap
 
@@ -614,7 +614,7 @@ def getEvoSnapList(sP, toRedshift=None, snapStep=1):
     snaps = snaps[snaps >= 0]
 
     # intersect with valid snapshots (skip missing, etc) with tracers (e.g. skip mini's in L75TNG)
-    validSnaps = sP.validSnapList(reqTr=(True if not sP.isSubbox else False))
+    validSnaps = sP.validSnapList(reqTr=(True if not sP.isSubbox else False), reqFluidQuants=reqFluidQuants)
     snaps = [snap for snap in snaps if snap in validSnaps]
 
     redshifts = sP.snapNumToRedshift(snaps)
@@ -636,7 +636,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         then process only one snapshot and return, mostly for memory efficiency. """
 
     # snapshot config
-    snaps, redshifts = getEvoSnapList(sP, toRedshift, snapStep)
+    snaps, redshifts = getEvoSnapList(sP, toRedshift, snapStep, reqFluidQuants=(len(trFields) > 0))
     startSnap = sP.snap
 
     sP_start = sP.copy()

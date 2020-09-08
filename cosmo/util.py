@@ -94,9 +94,11 @@ def redshiftToSnapNum(redshifts=None, sP=None):
 
     return snaps
   
-def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=False, onlyFull=False):
+def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=False,
+                  reqTr=False, reqFluidQuants=False):
     """ Return a list of all snapshot numbers which exist. """
     from util.helper import evenlySample, closest, contiguousIntSubsets
+    if reqFluidQuants: assert reqTr
 
     if minRedshift is None:
         minRedshift = 0.0 # filter out -1 values indicating missing snaps
@@ -143,14 +145,21 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, reqTr=Fal
     if reqTr:
         snaps = w
         w = []
+        gName = 'PartType' + str(sP.ptNum('tracer'))
 
         for snap in snaps:
             fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
             if fileName is None: continue
 
             with h5py.File(fileName,'r') as f:
-                if 'PartType'+str(sP.ptNum('tracer')) in f:
-                    w.append(snap)
+                if reqFluidQuants:
+                    # TNG50/300/Cluster: although tracers exist in all snaps, FluidQuantities only in full
+                    if gName in f and 'FluidQuantities' in f[gName]:
+                        w.append(snap)
+                else:
+                    # just require tracers in general (only exist in full snaps for TNG100)
+                    if gName in f:
+                        w.append(snap)
 
         w = np.array(w)
 
