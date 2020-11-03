@@ -756,6 +756,16 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             else:
                 r[field][m,:] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
 
+            # internal saving of this field? do so now, and mark this snapshot as done
+            if saveFilename is not None:
+                with h5py.File(saveFilename,'r+') as f:
+                    f['done'][saveSnapInd] = 1
+                    done[saveSnapInd] = 1
+
+                    f[field][saveSnapInd,:] = r[field][m,:]
+
+                print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
+
         # get parent IDs and then indices by-type
         if len(parFields):
             if parent_indextype is None:
@@ -1418,6 +1428,8 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
 
     # save cache
     if 1 and not retMPBs:
+        if not isdir(sP.derivPath + 'tracer_tracks'):
+            mkdir(sP.derivPath + 'tracer_tracks')
         with h5py.File(saveFilename,'w') as f:
             for key in mpb:
                 f[key] = mpb[key]

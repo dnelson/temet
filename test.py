@@ -18,6 +18,62 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def omega_metals_z():
+    """ Compute Omega_Z(z). """
+    from cosmo.hydrogen import neutral_fraction
+    sP = simParams(run='tng100-1')
+    
+    snaps = sP.validSnapList(onlyFull=True)
+
+    rho_z_allgas  = np.zeros(snaps.size, dtype='float32')
+    rho_z_gasdens = np.zeros( (3,snaps.size), dtype='float32' )
+    rho_z_nh0frac = np.zeros( (4,snaps.size), dtype='float32' )
+    rho_z_stars   = np.zeros(snaps.size, dtype='float32')
+    redshifts     = np.zeros(snaps.size, dtype='float32')
+
+    for i, snap in enumerate(snaps):
+        sP.setSnap(snap)
+        print(snap, sP.redshift)
+        redshifts[i] = sP.redshift
+
+        # all gas
+        mass = sP.gas('mass') * sP.gas('metallicity') / sP.HubbleParam # 10^10 msun
+        rho_z_allgas[i] = np.sum(mass, dtype='float64') # 10^10 msun
+
+        # gas density thresholds
+        dens = sP.gas('nh') # 1/cm^3 physical
+
+        rho_z_gasdens[0,i] = np.sum(mass[np.where(dens > 0.1)], dtype='float64') # ~ star-forming gas
+        rho_z_gasdens[1,i] = np.sum(mass[np.where(dens > 0.016)], dtype='float64') # 10^(-1.8) cm^-3
+        rho_z_gasdens[2,i] = np.sum(mass[np.where(dens > 0.004)], dtype='float64') # 10^(-2.4) cm^-3
+
+        # gas neutral fraction thresholds
+        nh0frac = sP.gas('NeutralHydrogenAbundance')
+
+        w = np.where(dens > 0.13) # cm^-3, correct for eEOS for star-forming gas
+        nh0frac[w] = neutral_fraction(dens[w], sP)
+
+        rho_z_nh0frac[0,i] = np.sum(mass[np.where(nh0frac > 0.5)], dtype='float64')
+        rho_z_nh0frac[1,i] = np.sum(mass[np.where(nh0frac > 0.1)], dtype='float64')
+        rho_z_nh0frac[2,i] = np.sum(mass[np.where(nh0frac > 0.05)], dtype='float64')
+        rho_z_nh0frac[3,i] = np.sum(mass[np.where(nh0frac > 0.01)], dtype='float64')
+
+        # stars
+        mass = sP.stars('mass') * sP.stars('metallicity') # 10^10 msun/h
+        rho_z_stars[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
+
+    # units: [10^10 msun] -> [msun/cMpc^3]
+    rho_z_allgas  *= 1e10 / sP.boxSizeCubicComovingMpc
+    rho_z_gasdens *= 1e10 / sP.boxSizeCubicComovingMpc
+    rho_z_nh0frac *= 1e10 / sP.boxSizeCubicComovingMpc
+    rho_z_stars   *= 1e10 / sP.boxSizeCubicComovingMpc
+
+    print('redshifts = ', redshifts)
+    print('rho_z_allgas = ', rho_z_allgas)
+    print('rho_z_stars = ', rho_z_stars)
+    print('rho_z_gasdens = ', rho_z_gasdens)
+    print('rho_z_nh0frac = ', rho_z_nh0frac)
+
 def minify_gergo_hydrogen_files():
     """ Rewrite Gergo's hydrogen catalog files to avoid unneeded fields. """
     basePath = '/u/dnelson/sims.TNG/TNG100-1/postprocessing/hydrogen/'

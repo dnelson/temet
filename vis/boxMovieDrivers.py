@@ -357,11 +357,12 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     # set selection subhaloID at sP.snap
     if gal == 'one':
-        # first movie (sbSnaps 51 - 3400+)
-        sP = simParams(res=2160,run='tng',snap=90)
+        # first movie (sbSnaps 51 - 3600)
+        sP = simParams(res=2160,run='tng',snap=99)
         sbNum = 0
         #subhaloID = 389836 # halo 296, snap 58
-        subhaloID = 440389 # re-located at snap 90 (halo 227)
+        #subhaloID = 440389 # re-located at snap 90 (halo 227)
+        subhaloID = 537941 # re-locate at snap 99
         refVel = np.array([-45.357, 2.279, 82.549]) # SubhaloVel at main snap=40 (z=1.5)
 
     if gal in ['one','three']:
@@ -376,10 +377,10 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         mm10 = [37.0, 40.7]
 
     if gal == 'two':
-        # second movie (sbSnaps 0 - 3400+)
-        sP = simParams(res=2160,run='tng',snap=58)
+        # second movie (sbSnaps 0 - 3600)
+        sP = simParams(res=2160,run='tng',snap=99)
         sbNum = 2
-        subhaloID = 0 # halo 0, snap 58, also snap 68, but after this run into fof0/MDB issues
+        subhaloID = 0 # halo 0, snap 58, also snap 99
         refVel = np.array([-195.3,-52.9,-157.0]) # avg of stars within 30 pkpc of subhalo_pos at sbSnapNum=1762
 
         mm1 = [5.7, 8.8]
@@ -474,8 +475,8 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     snap    = sbSnapNum
 
     axes       = [0,1] # x,y
-    labelScale = 'physical' #'lightyears'
-    labelZ     = True #'tage'
+    labelScale = False #'physical' #'lightyears'
+    labelZ     = False #True #'tage'
     plotHalos  = False
 
     nPixels   = [1920,1080] #[3840,2160]
@@ -526,7 +527,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
             SFR = np.squeeze(cat['SubhaloGas_SFR'][w[0],aperture_num,sbSnapNum])
             #labelCustom = ["log M$_{\star}$ = %.2f" % sP.units.codeMassToLogMsun(stellarMass),
             #               "SFR = %.1f M$_\odot$ yr$^{-1}$" % SFR]
-            labelCustom = ["galaxy stellar mass = %s million suns" % locale.format_string('%d', sP.units.codeMassToMsun(stellarMass)/1e6,'1')]
+            #labelCustom = ["galaxy stellar mass = %s million suns" % locale.format_string('%d', sP.units.codeMassToMsun(stellarMass)/1e6,'1')]
 
     if conf == 'two':
         # galaxy zoom panel: gas

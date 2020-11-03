@@ -118,6 +118,7 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
     x_data = []
     y_data = []
     dist = []
+    theta = []
 
     if directCells:
         # use actual gas cell values directly
@@ -146,17 +147,19 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
             y_data = np.hstack( (y_data, y_data_loc.ravel()) )
 
             # get distances of pixels
-            dist_loc, _ = _get_dist_theta_grid(size, nPixels)
+            dist_loc, theta_loc = _get_dist_theta_grid(size, nPixels)
             dist = np.hstack( (dist, dist_loc.ravel()) )
+            theta = np.hstack( (theta, theta_loc.ravel()) )
 
         xlabel = x_conf['label']
         ylabel = y_conf['label']
-        clabel = 'Impact Parameter [kpc]'
+        clabel = 'Azimuthal Angle [deg]' #'Impact Parameter [kpc]'
 
     # RESTRICT DISTANCE:
     if distBin is not None:
         w = np.where( (dist>distBin[0]) & (dist<=distBin[1]) )
         dist = dist[w]
+        theta = theta[w]
         x_data = x_data[w]
         y_data = y_data[w]
 
@@ -164,7 +167,7 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
         ax.set_ylim(ylim)
 
     # scatterplot
-    s = ax.scatter(x_data, y_data, s=markersize, c=dist, marker='.', zorder=0)
+    s = ax.scatter(x_data, y_data, s=markersize, c=theta, marker='.', zorder=0) # dist
 
     if not clean:
         ax.set_xlabel(xlabel)
@@ -184,14 +187,15 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
 
 def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRestrictions=None, 
                        fullbox=False, nThetaBins=90, addObs=False, addEagle=False, sizefac=1.0, 
-                       ylim=None, percs=[38,50,62]):
+                       ylim=None, percs=[38,50,62], distRvir=False):
     """ Use some projections to create the Z_gas vs. theta plot. 
     dataField : what to plot on y-axis
     massBins: list of 2-tuples, one or more M* bins
     distBins: list of 2-tuples, one or more impact parameter bins
     ptRestrictions: pass to gridBox(), e.g. {'NeutralHydrogenAbundance':['gt',1e-3]}
     min_NHI: list of scalars, enforce minimum N_HI column of pixels to consider (log cm-2)
-    fullbox: do global projections out to larger distance, otherwise fof-local scope"""
+    fullbox: do global projections out to larger distance, otherwise fof-local scope
+    distRvir: distBins are in units of rvir """
     labels = {'metal_solar' : 'Gas Metallicity [log Z$_\odot$]',
               'Mg II'       : 'Median Mg II Column Density [log cm$^{-2}$]',
               'O VI'        : 'Median O VI Column Density [log cm$^{-2}$]',
@@ -351,7 +355,12 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
             theta_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
 
             for j, hInd in enumerate(subInds):
-                dist_global[:,j] = dist.ravel()
+                if distRvir:
+                    haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
+                    haloRvir_code = sP.groupCatSingle(haloID=haloID)['Group_R_Crit200']
+                    dist_global[:,j] = dist.ravel() / sP.units.codeLengthToKpc(haloRvir_code)
+                else:
+                    dist_global[:,j] = dist.ravel()
                 theta_global[:,j] = theta.ravel()
 
             dist_global = dist_global.ravel()
@@ -501,6 +510,14 @@ def paperPlots():
         distBins = [ [95,105]]
 
         metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs)
+
+    if 1:
+        # figure 5a (variant): subplots for variation of (Z,theta) with M*, at rvir relative impact parameters
+        field = 'metal_solar'
+        massBins = [ [8.49,8.51], [8.99, 9.01], [9.46,9.54] , [9.95,10.05], [10.44,10.56] ]
+        distBins = [ [0.48,0.52] ]
+
+        metallicityVsTheta([TNG50], field, massBins=massBins, distBins=distBins, sizefac=sf, ylim=ylim, fullbox=True, percs=percs, distRvir=True)
 
     if 0:
         # figure 5b: subplots for variation of (Z,theta) with b

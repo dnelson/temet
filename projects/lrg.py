@@ -2629,15 +2629,16 @@ def paperPlots():
         #    cloudEvoVis(TNG50, haloID=haloID, clumpID=clumpID, sbNum=sbNum, sizeParam=sizeParam)
 
     # fig X: visual comparison of MHD vs noMHD zoom test run of h23 down to z=0.5
-    if 0:
+    if 1:
         # no_mhd run: snaps 63-69 (z=0.594 to z=0.506), with_mhd run: snaps up to 67 (z=0.520)
         # MHD was disabled in restart at z=0.601 roughly (500 Myr from snap 63 to 67)
-        for snap in [67]: #[63,64,65,66,67]:
+        for snap in [65]: #[63,64,65,66,67]:
             zoom_with_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap)
-            zoom_no_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap,variant='nob_z06')
+            #zoom_no_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap,variant='nob_z06') # published
+            zoom_no_mhd = simParams(run='tng50_zoom',hInd=23,res=11,snap=snap,variant='nob') # new test
 
             conf = 3 # 2=HI, 3=MgII, 9=delta_rho
-            lrgHaloVisualization(zoom_no_mhd, [0], conf=conf, gallery=False, globalDepth=False)
+            lrgHaloVisualization(zoom_with_mhd, [0], conf=conf, gallery=False, globalDepth=False)
 
     # fig 17: resolution convergence, visual (matched halo)
     if 0:

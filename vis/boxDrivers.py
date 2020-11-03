@@ -176,12 +176,15 @@ def _TNGboxFieldConfig(res, conf, thinSlice, remap=False):
 
     # 16:9 remappings may need different optimal bounds: (i.e. even thinner slices)
     if remap:
-        if conf == 0: panels[0]['valMinMax'] = [3.1, 6.3] # gas coldens_msunkpc2
+        if conf == 0: panels[0]['valMinMax'] = [3.3, 6.3] # gas coldens_msunkpc2
         if conf == 1: panels[0]['valMinMax'] = [4.1, 8.0] # dm coldens_msunkpc2
-        if conf == 5: panels[0]['valMinMax'] = [-8.0, 6.0] # gas bmag_ug
+        if conf == 2: panels[0]['valMinMax'] = [0.0, 6.4] # stars coldens_msunkpc2
+        if conf == 5: panels[0]['valMinMax'] = [-7.0, -1.0] # gas bmag_ug
         if conf == 6: panels[0]['valMinMax'] = [-4.0,-0.2] # gas Z_solar
-        if conf == 7: panels[0]['valMinMax'] = [3.5,7.2] # gas temp
-        if conf == 14: panels[0]['valMinMax'] = [0, 700] # gas velmag
+        if conf == 7: panels[0]['valMinMax'] = [3.5,6.7] # gas temp
+        if conf == 11: panels[0]['valMinMax'] = [26, 36] # gas xray_lum
+        if conf == 13: panels[0]['valMinMax'] = [32, 36.5] # gas shocks_dedt
+        if conf == 14: panels[0]['valMinMax'] = [0, 600] #[0, 700] # gas velmag
 
     return panels, centerHaloID, nSlicesTot, curSlice
 
@@ -234,36 +237,55 @@ def TNG_mainImages(res, conf=0, variant=None, thinSlice=False):
 
     renderBox(panels, plotConfig, locals())
 
-def TNG_remapImages(res, redshift=0.0, conf=0, variant=None):
+def TNG_remapImages(res, redshift=0.0, conf=0, variant=None, phase=None, colorbars=False):
     """ Create the full-box (full volume) remapped images. """
     panels, _, _, _ = _TNGboxFieldConfig(res, conf, thinSlice=False, remap=True)
 
     run        = 'tng'
     axes       = [0,1] # x,y
     labelZ     = False
-    labelScale = True
+    labelScale = False # True
     labelSim   = False
-    plotHalos  = 100 # False
+    plotHalos  = False #100 # False
     method     = 'sphMap' # sphMap, sphMap_minIP, sphMap_maxIP
     hsmlFac    = 2.5 # use for all: gas, dm, stars (for whole box)
 
-    nPixels    = [7680, 4280] # 1080p x4
-    remapRatio = [5.0, 2.7857, 0.0718] # about 16:9 aspect, 7% depth
-
-    #nPixels    = [2000, 2000]
-    #remapRatio = [2.44, 2.44, 0.168] # square, 17% depth
-    #remapRatio = [5.0, 5.0, 0.04] # square, 4% depth
+    if 0:
+        nPixels    = [7680, 4280] # 1080p x4
+        remapRatio = [5.0, 2.7857, 0.0718] # about 16:9 aspect, 7% depth
+    if 0:
+        nPixels    = [2000, 2000]
+        remapRatio = [2.44, 2.44, 0.168] # square, 17% depth
+        #remapRatio = [5.0, 5.0, 0.04] # square, 4% depth
+    if 0:
+        nPixels = [40167,2160] # for 4K and 5120x1440 movies
+        if phase is not None: splitphase = [phase,2] # cannot render >30k side-length PNGs, split them
+        #nPixels = [22310, 1200] # ~300 dpi for printing
+        remapRatio = [10.488, 0.564, 0.169] # 20x longer than tall
+    if 1:
+        nPixels = [28153,4320]
+        remapRatio = [6.1644, 0.9459, 0.1715]
+    if colorbars:
+        # render pdf for colorbars
+        nPixels = [1200,1200]
+        res = 270
 
     sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
 
     # render config (global)
     class plotConfig:
-        plotStyle  = 'edged' # open, edged
+        plotStyle  = 'edged'
         rasterPx   = nPixels
-        colorbars  = True
+        colorbars  = False
 
-        saveFilename = './boxImage_%s_z%.1f_%s-%s_axes%d%d_ratio-%g-%g-%g.pdf' % \
+    if not colorbars:
+        plotConfig.saveFilename = './boxImage_%s_z%.1f_%s-%s_axes%d%d_ratio-%g-%g-%g.png' % \
           (sP.simName,redshift,panels[0]['partType'],panels[0]['partField'],axes[0],axes[1],remapRatio[0],remapRatio[1],remapRatio[2])
+
+    if colorbars:
+        plotConfig.plotStyle = 'edged_black'
+        plotConfig.colorbars = True
+        plotConfig.saveFilename = './colorbar_%s_%s.pdf' % (panels[0]['partType'],panels[0]['partField'])
 
     renderBox(panels, plotConfig, locals())
 
@@ -690,16 +712,25 @@ def multiBoxComparison():
     redshift = 0.0
     sPs = []
 
-    sPs.append( simParams(res=270, run='tng', redshift=redshift, variant='NR_arepo') )
-    sPs.append( simParams(res=270, run='tng', redshift=redshift, variant='NR_swift') )
+    sPs.append( simParams(res=512, run='tng', redshift=redshift, variant='0000') )
+    sPs.append( simParams(res=512, run='tng', redshift=redshift, variant='0010') )
 
     partType  = 'gas'
-    partField = 'coldens_msunkpc2' # temp
-    valMinMax = [4.5, 7.0]
     nPixels   = 1000
     axes      = [0,1]
     plotHalos = False
-    labelSim  = False
+    labelSim  = True
+    labelScale = 'physical'
+
+    if 0:
+        partField = 'coldens_msunkpc2'
+        valMinMax = [4.5, 7.0]
+    if 1:
+        partField = 'temp'
+        valMinMax = [5.0, 6.8] #[4.5, 6.5]
+    if 0:
+        partField = 'metal_solar'
+        valMinMax = [-2.0, -0.5]
 
     # zoom in to FoF 0? show out to 2rvir
     if 0:
@@ -716,11 +747,11 @@ def multiBoxComparison():
         panels.append( {'run':sP.run, 'redshift':sP.redshift, 'res':sP.res, 'variant':sP.variant} )
 
     class plotConfig:
-        plotStyle  = 'open'
+        plotStyle  = 'edged'
         rasterPx   = nPixels
         colorbars  = True
 
-        saveFilename = './boxComparison.png'
+        saveFilename = './boxComparison_%s.pdf' % partField
 
     renderBox(panels, plotConfig, locals())
 

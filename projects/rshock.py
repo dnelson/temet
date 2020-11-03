@@ -695,8 +695,12 @@ def plotRshockVsMass(sPs, quants=['Temp_400rad_16ns'], vsHaloMass=True, kpc=Fals
                     txt_sP.append([xm,pm_kpc[1,:],pm_kpc[0,:],pm_kpc[-1,:],pm_rvir[1,:],pm_rvir[0,:],pm_rvir[-1,:]])
 
                     # determine quantName for label
-                    quantName = quant 
-                    quantName, nRad, Nside = quant.split("_") # e.g. 'Temp_400rad_16ns'
+                    quantName = quant
+                    if quant.count('_') == 2:
+                        quantName, nRad, Nside = quant.split("_") # e.g. 'Temp_400rad_16ns'
+                    elif quant.count('_') == 3:
+                        quantName, rvirFac, nRad, Nside = quant.split("_") #e.g. 'Temp_10rvir_800rad_16ns'
+                        rvirFac = "($%dr_{\\rm vir}$)" % int(rvirFac.replace('rvir',''))
                     nRad = "$N_{\\rm rad} = %d$" % int(nRad.replace('rad',''))
                     Nside = "$N_{\\rm side} = %d$" % int(Nside.replace('ns',''))
                     quantLabel = ''
@@ -704,6 +708,7 @@ def plotRshockVsMass(sPs, quants=['Temp_400rad_16ns'], vsHaloMass=True, kpc=Fals
                     if not allQuantsSame: quantLabel += quantName
                     if not allnRadSame: quantLabel += ' ' + nRad
                     if not allNsideSame: quantLabel += ' ' + Nside
+                    if quant.count('_') == 3: quantLabel += ' ' + rvirFac
 
                     # determine color, linestyle, and label
                     label = None
@@ -894,20 +899,13 @@ def paperPlots():
                 for depthFac in [1.0,0.5,0.22]:
                     visualizeHaloVirialShock(sP, haloID=haloID, conf=conf, depthFac=depthFac)
 
-    # figure X: testing rshock detection method, associated plots
-    if 0:
-        haloID = 20 # 0,10,20,110,120,200,300
-        sP = simParams(run='tng50-2', redshift=2.0)
-
-        virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True)
-
     # figure 2: rshock vs mass
     if 0:
         quants = ['ShocksMachNum_400rad_16ns']
         percInds = [2]
         methodInds = [2]
         kpc = False
-        redshift = 2.0
+        redshift = 0.0
         runs = ['tng50-1', 'tng100-1', 'tng300-1']
 
         sPs = [simParams(run=run,redshift=redshift) for run in runs]
@@ -934,6 +932,18 @@ def paperPlots():
         fig = plt.figure(figsize=figsize)
         quantHisto2D(sP, pdf, yQuant=yQuant, fig_subplot=[fig,111], **params)
         pdf.close()
+
+    # figure X: explore 5rvir vs 10rvir max radius
+    if 0:
+        quants = ['ShocksMachNum_400rad_16ns','ShocksMachNum_10rvir_800rad_16ns']
+        percInds = [2] # None
+        methodInds = [2] # None
+
+        for redshift in [0.0,1.0,2.0]:
+            sP = simParams(run='tng50-2',redshift=redshift)
+
+            plotRshockVsMass([sP], quants=quants, vsHaloMass=True, kpc=False,
+                             percInds=percInds, methodInds=methodInds)
 
     # figure X: explore rshock vs mass (percs, methods, runs, ...)
     if 0:
@@ -963,3 +973,18 @@ def paperPlots():
         for kpc in [True,False]:
             plotRshockVsMass([sP], quants=quants, vsHaloMass=vsHaloMass, kpc=kpc,
                              percInds=percInds, methodInds=methodInds)
+
+    # figure appendix: testing rshock detection method, associated plots
+    if 0:
+        haloID = 20 # 0,10,20,110,120,200,300
+        sP = simParams(run='tng50-2', redshift=2.0)
+
+        virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True)
+
+    # figure test: why methods start to fail towards z=0
+    if 1:
+        haloID = 200
+        sP = simParams(run='tng50-1', redshift=0.0)
+        print('halo mass: ', sP.units.codeMassToLogMsun(sP.halo(haloID)['Group_M_Crit200']))
+
+        virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True)

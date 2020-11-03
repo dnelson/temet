@@ -867,21 +867,21 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         uLabel = 'arcsec$^{-2}$'
         if ster: uLabel = 'ster$^{-1}$'
         if '_kpc' in partField: uLabel = 'kpc$^{-2}$'
-        eLabel = 'Surface Brightness [log photon s$^{-1}$ cm$^{-2}$'
+        eLabel = 'SB [log photon s$^{-1}$ cm$^{-2}$'
         if '_lum' in partField:
             eLabel = 'Luminosity Surface Density [log erg s$^{-1}$'
 
         lineName = partField.replace("_ster","").split("sb_")[1].replace("_lum","").replace("_kpc","").replace("-"," ")
-        lineName = lineName.replace(" alpha","$\\alpha$").replace(" beta","$\\beta$")
+        lineName = lineName.replace(" alpha","-$\\alpha$").replace(" beta","$\\beta$")
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
         config['label']  = '%s %s %s]' % (lineName,eLabel,uLabel)
-        config['ctName'] = 'inferno'
+        config['ctName'] = 'inferno' # 'cividis'
 
     # gas: mass-weighted quantities
     if partField in ['temp','temperature','temp_sfcold']:
         grid = grid
         config['label']  = 'Temperature [log K]'
-        config['ctName'] = 'jet'
+        config['ctName'] = 'thermal' #'jet'
 
     if partField in ['ent','entr','entropy']:
         grid = grid
@@ -931,7 +931,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if partField in ['dedt','energydiss','shocks_dedt','shocks_energydiss']:
         grid = sP.units.codeEnergyRateToErgPerSec(grid)
         config['label']  = 'Shocks Dissipated Energy [log erg/s]'
-        config['ctName'] = 'gist_heat'
+        config['ctName'] = 'ice' #'gist_heat'
         #config['plawScale'] = 0.7
 
     if partField in ['machnum','shocks_machnum']:
@@ -2374,6 +2374,7 @@ def renderMultiPanel(panels, conf):
             # grid projection for image
             grid, config, _ = gridBox(**p)
 
+            assert 'splitphase' not in p
             if 'grid' in p:
                 print('NOTE: Overriding computed image grid with input grid!')
                 grid = p['grid']
@@ -2569,6 +2570,14 @@ def renderMultiPanel(panels, conf):
                 print('NOTE: Overriding computed image grid with input grid!')
                 grid = p['grid']
 
+            # render tweaks
+            if 'splitphase' in p:
+                print('NOTE: Rendering fraction of grid, phase = %s!' % p['splitphase'])
+                splitPart, totParts = p['splitphase']
+                splitRange = pSplitRange([0, grid.shape[1]], totParts, splitPart)
+                grid = grid[:, splitRange[0]:splitRange[1]]
+                fig.set_size_inches(width_in / totParts, height_in)
+
             # set axes coordinates and add
             curRow = np.floor(i / nCols)
             curCol = i % nCols
@@ -2607,11 +2616,23 @@ def renderMultiPanel(panels, conf):
 
             cmap = loadColorTable(ctName, valMinMax=vMM, plawScale=plaw, cmapCenterVal=cenVal)
 
+            # DEBUG: dump raw 16-bit tiff image
+            if 0:
+                import skimage.io
+                norm = mpl.colors.Normalize(vmin=vMM[0], vmax=vMM[1])
+                mVal = np.uint16(65535)
+                grid_out = np.round( cmap(norm(grid))[:,:,:3] * mVal ).astype('uint16')
+                grid_out = grid_out[::-1,:,:] #np.transpose(grid_out, axes=[1,0,2])
+                skimage.io.imsave(conf.saveFilename.replace('.png','.tif'), grid_out, plugin='tifffile')
+
             cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
             grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image
             pExtent = _getPlotExtent(p['extent'], p['axesUnits'], p['projType'], p['sP'])
+
+            if 'splitphase' in p:
+                pExtent[1] /= totParts
 
             plt.imshow(grid, extent=pExtent, cmap=cmap, aspect='equal') #float(grid.shape[0])/grid.shape[1]
             ax.autoscale(False) # disable re-scaling of axes with any subsequent ax.plot()
