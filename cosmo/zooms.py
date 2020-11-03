@@ -1438,7 +1438,7 @@ def check_all():
     variant = 'sf3'
     run = 'tng_zoom'
 
-    hInds = [3425] #_halo_ids_run(onlyDone=True)
+    hInds = _halo_ids_run(onlyDone=True) #[5]
 
     # load total number of halos and subhalos
     lengths = {'Group'   : np.zeros(len(hInds), dtype='int32'),
@@ -1446,9 +1446,6 @@ def check_all():
 
     for i, hInd in enumerate(hInds):
         print(i,hInd)
-        if hInd in [5,701,1039,1067,2766]:
-            print(' skip')
-            continue
 
         for snap in range(100):
             print(' snap: ',snap)

@@ -170,11 +170,11 @@ class simParams:
         # IllustrisTNG (L35 L75 and L205 boxes) + (L12.5 and L25 test boxes)
         if 'tng' in run and ('zoom' not in run):
 
-            res_L25  = [128, 256, 512] #, 1024]
+            res_L25  = [128, 256, 512, 1024]
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
-            res_L680 = [1024, 2048, 6144] # DM-parent-lowres, DM-parent, virtual
+            res_L680 = [2048, 6144] # DM-parent, virtual
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
             self.groupOrdered = True
@@ -1274,8 +1274,8 @@ class simParams:
     
     @property
     def boxSizeCubicPhysicalMpc(self):
-        if self.redshift != 0.0:
-            print("Warning: Make sure you mean it (smaller physical boxsize at z>0).")
+        #if self.redshift != 0.0:
+        #    print("Warning: Make sure you mean it (smaller physical boxsize at z>0).")
         return (self.units.codeLengthToKpc(self.boxSize)/1000.0)**3
 
     @property

@@ -1,6 +1,6 @@
 """
-projects/bulletCluster.py
-  do we have a bullet cluster in TNG300? what about CC vs NCC entropy cores?
+projects/tngcluster.py
+  TNG-Cluster: introduction paper.
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *

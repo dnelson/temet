@@ -87,8 +87,8 @@ For example, add the following lines to your `.bashrc` file
 
         mkdir -p ~/.fonts/Roboto
         cd ~/.fonts/Roboto/
-        wget https://github.com/google/fonts/raw/master/apache/roboto/Roboto-Light.ttf
-        wget https://github.com/google/fonts/raw/master/apache/roboto/Roboto-LightItalic.ttf
+        wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-Light.ttf
+        wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-LightItalic.ttf
 
 8. Organize simulation directories as follows
 
