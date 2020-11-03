@@ -1393,6 +1393,43 @@ class units(object):
         pxAreaArcsecSq = pxSizeX * pxSizeY
         return vals + 2.5 * np.log10(pxAreaArcsecSq)
 
+    def haloMassToOtherOverdensity(self, mass_orig, delta_orig=200, delta_new=500):
+        """ Convert a halo mass between two different spherical overdensity definitions, e.g. M200 to M500.
+        Assumes NFW density profile and the c-M relation from Bullock by default.
+        Based on https://arxiv.org/abs/astro-ph/0203169 (appendix).
+        Input halo mass (and output) in units of linear Msun. """
+
+        # derive concentration according to Bullock+
+        Mstar = 2.77e12 / 0.6774 # msun
+        scalefac = 1.0
+        c = 9.0 * scalefac * (mass_orig/Mstar)**(-0.13)
+
+        def _convinv(x):
+            """ Fitting function from Hu & Kravtsov (2003). """
+            a2 = 0.5116
+            a3 = -1.285 / 3
+            a4 = -3.13e-3
+            a5 = -3.52e-5
+            p = a3+a4*np.log(x)+a5*(np.log(x))**2
+            convinv = a2 * x**(2*p) + (3/4)**2
+            convinv = 1.0 / np.sqrt(convinv) + 2*x
+            return convinv
+
+        # M_target
+        ratio = delta_orig / delta_new
+        fval = np.log(1 + c) - c/(1+c)
+        fval = fval / ratio / c**3
+
+        new_c = _convinv(fval)
+
+        mtarget = mass_orig * ((c*new_c)**(-3.0) / ratio)
+
+        return mtarget
+
+    def m200_to_m500(self, halo_mass):
+        """ Convert a halo mass from Delta=200 to Delta=500. """
+        return self.haloMassToOtherOverdensity(halo_mass, delta_orig=200, delta_new=500)
+
     # --- other ---
 
     def particleCountToMass(self, N_part, baryon=True, boxLength=None):

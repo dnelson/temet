@@ -12,6 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import leastsq
 from os.path import isfile
+from plot.config import *
 
 def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
     """ Calculate relative velocity between Nth most massive satellite and central halo, in units 
@@ -430,174 +431,281 @@ def clusterEntropyCores():
 
     pdf.close()
 
-def barnes_check1():
-    """ Test plots for Barnes paper. """
-    from util.loadExtern import rossetti17planck
-    data = rossetti17planck()
+def vis_fullbox_virtual(conf=0):
+    """ Visualize the entire virtual reconstructed box. """
+    from vis.box import renderBox
 
-    # z=0 TNG300-1
-    sP = simParams(res=2500, run='tng', redshift=0.0)
-    m500 = sP.groupCat(fieldsSubhalos=['mhalo_500_log'])
-    w500 = np.where(10.0**m500 >= 2e14)
+    sP = simParams(run='tng-cluster', redshift=0.0)
 
-    # redshifts
-    zz = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
-    med_sim = np.zeros( zz.size, dtype='float32' )
-    med_data = np.zeros( zz.size, dtype='float32' )
+    axes       = [0,1] # x,y
+    labelZ     = True
+    labelScale = True
+    labelSim   = True
+    nPixels    = 2000
 
-    for i, z in enumerate(zz):
-        print(z)
-        sPloc = simParams(res=2500, run='tng', redshift=z)
-        m500loc = sPloc.groupCat(fieldsSubhalos=['mhalo_500'])
-        w = np.where(m500loc >= 2e14)
-        med_sim[i] = np.log10( np.median( m500loc[w] ) )
-        w = np.where( np.abs(data['z'] - z) <= 0.05 )
-        med_data[i] = np.log10( np.median( 10.0**data['m500'][w] ) )
+    # halo plotting
+    plotHalos  = False
+
+    if conf in [0,1,2,3,4]:
+        pri = sP.groups('GroupPrimaryZoomTarget')
+        plotHaloIDs = np.where(pri == 1)[0]
+
+    # panel config
+    if conf == 0:
+        method = 'sphMap_globalZoom'
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,7.1]}]
+    if conf == 1:
+        method = 'sphMap' # is global, overlapping coarse cells
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.7,8.0]}]
+    if conf == 2:
+        method = 'sphMap_globalZoom'
+        panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
+    if conf == 3:
+        method = 'sphMap' # is global
+        panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
+    if conf == 4:
+        method = 'sphMap' # is global
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.2,6.8]}]
+        numBufferLevels = 3 # 2 or 3, free parameter
+
+        maxGasCellMass = sP.targetGasMass
+        if numBufferLevels >= 1:
+            # first buffer level is 27x mass, then 8x mass for each subsequent level
+            maxGasCellMass *= 27 * np.power(8,numBufferLevels-1)
+            # add padding for x2 Gaussian distribution
+            maxGasCellMass *= 3
+
+        ptRestrictions = {'Masses':['lt',maxGasCellMass]}
+
+    if conf == 5:
+        sP = simParams(run='tng_dm',res=2048,redshift=0.0) # parent box
+        method = 'sphMap'
+        panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[7.0,8.4]}]
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = [nPixels,nPixels]
+        colorbars  = True
+
+        saveFilename = './boxImage_%s_%s-%s_%s_conf%d.pdf' % \
+          (sP.simName,panels[0]['partType'],panels[0]['partField'],sP.snap,conf)
+
+    renderBox(panels, plotConfig, locals(), skipExisting=False)
+
+def mass_function():
+    """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
+    from cosmo.zooms import _halo_ids_run
+    
+    mass_range = [14.0, 15.5]
+    binSize = 0.1
+    redshift = 0.0
+    
+    sP_tng300 = simParams(res=2500,run='tng',redshift=redshift)
+    sP_tng1 = simParams(res=2048, run='tng_dm', redshift=redshift)
+
+    # load halos
+    halo_inds = _halo_ids_run()
+
+    print(len(halo_inds))
+    print(halo_inds)
+
+    # start figure
+    fig = plt.figure(figsize=figsize)
+
+    nBins = int((mass_range[1]-mass_range[0])/binSize)
+
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlim(mass_range)
+    ax.set_xticks(np.arange(mass_range[0],mass_range[1],0.1))
+    ax.set_xlabel('Halo Mass M$_{\\rm 200,crit}$ [ log M$_{\\rm sun}$ ]')
+    ax.set_ylabel('Number of Halos [%.1f dex$^{-1}$]' % binSize)
+    ax.set_yscale('log')
+    ax.yaxis.set_ticks_position('both')
+
+    yy_max = 1.0
+
+    hh = []
+    labels = []
+
+    for sP in [sP_tng300,sP_tng1]:
+        if sP == sP_tng300:
+            # tng300
+            gc = sP_tng300.groupCat(fieldsHalos=['Group_M_Crit200'])
+            masses = sP_tng300.units.codeMassToLogMsun(gc)
+            label = 'TNG300-1'
+        elif sP == sP_tng1:
+            # tng1 - achieved targets (from runs.txt)
+            gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
+            masses = sP_tng1.units.codeMassToLogMsun(gc[halo_inds])
+            label = 'TNG-Cluster'
+        else:
+            # OLD: tng1 parent box for zooms (planned targets)
+            gc = sP_tng1.groupCat(fieldsHalos=['Group_M_Crit200'])
+            halo_inds = pick_halos()
+            first_bin = 5 # >=14.5
+            masses = [gc[inds] for inds in halo_inds[first_bin:]] # list of masses in each bin
+            masses = np.hstack(masses)
+            masses = sP_tng1.units.codeMassToLogMsun(masses)
+            label = 'TNG-Cluster'
+
+        w = np.where(~np.isnan(masses))
+        yy, xx = np.histogram(masses[w], bins=nBins, range=mass_range)
+        yy_max = np.nanmax([yy_max,np.nanmax(yy)])
+
+        print(xx,yy)
+
+        hh.append(masses[w])
+        labels.append(label)
+
+    # 'bonus': halos above 14.0 in the high-res regions of more massive zoom targets
+    if 0:
+        cacheFile = 'cache_mass_function_bonus.hdf5'
+        if isfile(cacheFile):
+            with h5py.File(cacheFile,'r') as f:
+                masses = f['masses'][()]
+        else:
+            masses = []
+            for i, hInd in enumerate(halo_inds):
+                # only runs with existing data
+                if not isdir('sims.TNG_zooms/L680n2048TNG_h%d_L13_sf3' % hInd):
+                    print('[%3d of %3d]  skip' % (i,len(halo_inds)))
+                    continue
+
+                # load FoF catalog, record clusters with zero contamination
+                sP = simParams(res=13, run='tng_zoom', redshift=redshift, hInd=hInd, variant='sf3')
+                loc_masses = sP.halos('Group_M_Crit200')
+                loc_masses = sP.units.codeMassToLogMsun(loc_masses[1:]) # skip FoF 0 (assume is target)
+
+                loc_length = sP.halos('GroupLenType')[1:,:]
+                contam_frac = loc_length[:,sP.ptNum('dm_lowres')] / loc_length[:,sP.ptNum('dm')]
+
+                w = np.where( (loc_masses >= mass_range[0]) & (contam_frac == 0) )
+
+                if len(w[0]):
+                    masses = np.hstack( (masses,loc_masses[w]) )
+                print('[%3d of %3d] ' % (i,len(halo_inds)), hInd, len(w[0]), len(masses))
+            with h5py.File(cacheFile,'w') as f:
+                f['masses'] = masses
+
+        hh.append(masses)
+        labels.append('TNG1 Bonus')
 
     # plot
-    fig = plt.figure(figsize=(18,8))
-    ax = fig.add_subplot(121)
+    ax.hist(hh,bins=nBins,range=mass_range,label=labels,histtype='bar',alpha=0.9,stacked=True)
 
-    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
-    ax.set_ylabel('N$_{\\rm halos}$')
-    label = sP.simName + ' z=%.1f' % sP.redshift + ' "high-mass" (M$_{\\rm halo} > 2*10^{14} M_{\\rm sun}$)'
-    ax.hist(m500[w500], bins=10, range=[14.2,15.2], alpha=0.7, label=label)
-    ax.hist(data['m500'], bins=10, range=[14.2,15.2], alpha=0.7, label=data['label'])
-    ax.legend()
+    ax.set_ylim([0.8,100])
+    ax.legend(loc='upper right')
 
-    ax = fig.add_subplot(122)
-    ax.set_xlabel('Redshift')
-    ax.set_xlim([-0.05,0.6])
-    ax.set_ylabel('Median Halo Mass [m500, log M$_{\\rm sun}$]')
-
-    ax.plot(zz, med_sim, '-', marker='o', label=sP.simName)
-    ax.plot(zz, med_data, '-', marker='o', label='Planck Sample')
-    ax.legend(loc='best')
-
-    fig.savefig('check_halomass.pdf')
+    fig.savefig('mass_functions.pdf')
     plt.close(fig)
 
-def barnes_check2():
-    """ Test plots for Barnes paper. """
-    from util.loadExtern import rossetti17planck
-    data = rossetti17planck()
+def sample_halomasses_vs_redshift(sPs):
+    """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
+    from util.loadExtern import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
 
-    c_thresh = 0.075 # from Rossetti
+    redshifts = np.linspace(0.0, 0.5, 11) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    zspread = (redshifts[1]-redshifts[0]) / 3 # add random noise along redshift axis
+    alpha = 0.8
+    msize = 30 # scatter() default is 20
 
-    binSize = 0.2
-    binMin = 14.0
-    nBins = 6
+    np.random.seed(424242)
 
-    cc_frac = np.zeros(nBins, dtype='float32')
-    mass = np.zeros(nBins, dtype='float32')
-    cc_frac.fill(np.nan)
-
-    for i in range(nBins):
-        mass0 = binMin + binSize*i
-        mass1 = mass0 + binSize
-        mass[i] = (mass0+mass1)/2
-
-        w = np.where( (data['m500'] > mass0) & (data['m500'] <= mass1) )
-        c_vals = data['c'][w]
-        if c_vals.size == 0: continue
-
-        n_below = np.count_nonzero(c_vals < c_thresh)
-        n_above = np.count_nonzero(c_vals >= c_thresh)
-        cc_frac[i] = float(n_above) / (n_above+n_below)
-
-    # plot
-    fig = plt.figure(figsize=(14,10))
+    # start plot
+    fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
-    ax.set_xlabel('Halo Mass [m500, log M$_{\\rm sun}$]')
-    ax.set_ylabel('Cool Core Fraction (Planck Obs, Rossetti+ 17 definition)')
-    ax.plot(mass, cc_frac, '-', marker='o', label=data['label'])
-
-    fig.savefig('check_ccfrac_vs_mass.pdf')
-    plt.close(fig)
-
-def barnes_check3():
-    """ Line fitting, Figure 9 (oct9 draft) right panel. """
-    x      = np.array([1.00, 0.75,  0.5,   0.4,   0.3,   0.2,   0.1,   0.0])
-    y      = np.array([0.50, 0.384, 0.0,   0.048, 0.098, 0.219, 0.069, 0.097])
-    y_up   = np.array([0.75, 0.525, 0.108, 0.147, 0.181, 0.303, 0.131, 0.157])
-    y_down = np.array([0.25, 0.273, 0.001, 0.032, 0.066, 0.164, 0.046, 0.068])
-
-    obs_x      = np.array([1.0, 0.75, 0.375, 0.125])
-    obs_x_l    = np.array([1.2, 0.8, 0.6, 0.2])
-    obs_x_r    = np.array([0.8, 0.6, 0.2, 0.0])
-    obs_y      = np.array([0.07, 0.183, 0.170, 0.225])
-    obs_y_up   = np.array([0.20, 0.26, 0.26, 0.27])
-    obs_y_down = np.array([0.05, 0.14, 0.12, 0.19])
-
-    # fit
-    from scipy.stats import linregress
-    from scipy.optimize import leastsq
-    from numpy.polynomial.polynomial import polyfit
-
-    result1 = linregress(x[::-1],y[::-1])
-    print('Slope and intercept: %g, %g (linregress)' % (result1.slope,result1.intercept))
-
-    sigma = ((y-y_down) + (y_up-y)) / 2 # avg
-    weights = 1/sigma
-    result2 = polyfit(x, y, deg=1, w=weights)
-    print('Slope and intercept: %g, %g (polyfit avg)' % (result2[1], result2[0]))
-
-    sigma_max = np.max( np.vstack( ((y-y_down), (y_up-y)) ), axis=0 ) # max
-    result3 = polyfit(x, y, deg=1, w=1/sigma_max)
-    print('Slope and intercept: %g, %g (polyfit max)' % (result3[1], result3[0]))
-
-    def error_function(params, x, y, y_err_up, y_err_down):
-        y_fit = params[1]*x + params[0]
-        error = y - y_fit
-        error_pos = np.where(error >= 0) # fit below data
-        error_neg = np.where(error < 0) # fit above data
-        error[error_pos] /= y_err_down[error_pos]
-        error[error_neg] /= y_err_up[error_neg]
-        return error
-
-    params_init = [0.0, 0.0]
-    args = (x,y,y_up,y_down)
-    result4, params_cov, info, errmsg, retcode = \
-      leastsq(error_function, params_init, args=args, full_output=True)
-
-    print('Slope and intercept: %g, %g' % (result4[1], result4[0]))
-
-    params_init = [0.0, 0.0]
-    args = (obs_x,obs_y,obs_y_up,obs_y_down)
-    result5, params_cov, info, errmsg, retcode = \
-      leastsq(error_function, params_init, args=args, full_output=True)
-
-    print('Slope and intercept: %g, %g (data)' % (result5[1], result5[0]))
-
-    # requires: linfit.py
-    #sigmay = y_up-y
-    #result6, covarmat, info6 = linfit(x, y, sigmay=sigmay, relsigma=False, return_all=True)
-    #print('Slope and intercept: %g, %g (error: %g, %g)' % (result6[0], result6[1],info6.fiterr[0],info6.fiterr[1]))
-
-    #sigmay_obs = ((obs_y-obs_y_down) + (obs_y_up-obs_y)) / 2 # avg
-    #result7, covarmat, info7 = linfit(obs_x, obs_y, sigmay=sigmay_obs, relsigma=False, return_all=True)
-    #print('Slope and intercept: %g, %g (error: %g, %g) (data)' % (result7[0], result7[1],info7.fiterr[0],info7.fiterr[1]))
-
-    # plot
-    fig = plt.figure(figsize=(14,10))
-    ax = fig.add_subplot(111)
-
     ax.set_xlabel('Redshift')
-    ax.set_ylabel('Fraction')
-    ax.set_xlim([-0.1, 1.1])
-    ax.set_ylim([0.0, 1.05])
-    ax.errorbar(x, y, yerr=[y-y_down,y_up-y], marker='o', label='TNG300-1')
-    ax.errorbar(obs_x, obs_y, linestyle='None', yerr=[obs_y-obs_y_down,obs_y_up-obs_y], marker='o', color='black', label='Obs')
+    ax.set_ylabel('Halo Mass M$_{\\rm 500,crit}$ [log M$_{\\rm sun}$]')
 
-    xx = np.array([-0.05,1.05])
-    ax.plot(xx, result1.slope*xx + result1.intercept, '-', label='linregress un-weighted (%.3f)' % result1.slope)
-    ax.plot(xx, result2[1]*xx + result2[0], '-', label='polyfit weighted mean symmetric error (%.3f)' % result2[1])
-    ax.plot(xx, result3[1]*xx + result3[0], '-', label='polyfit weighted max symmetric error (%.3f)' % result3[1])
-    ax.plot(xx, result4[1]*xx + result4[0], '-', label='leastsq weighted asymmetric error (%.3f)' % result4[1])
-    ax.plot(xx, result5[1]*xx + result5[0], '--', color='black', label='obs-fit leastsq weighted asymmetric error (%.3f)' % result5[1])
-    #ax.plot(xx, result6[0]*xx + result6[1], '-', label='linfit (%.3f)' % result6[0])
+    ax.set_xlim([redshifts[0]-zspread*1.01, redshifts[-1]+zspread*1.01])
+    ax.set_ylim([14.0, 15.6])
 
-    ax.legend()
-    fig.savefig('check_linfit_Figure9_right.pdf')
+    # load simulations and plot
+    for i, sP in enumerate(sPs):
+        color = next(ax._get_lines.prop_cycler)['color']
+
+        for j, redshift in enumerate(redshifts):
+            print(sP.simName, redshift)
+            sP.setRedshift(redshift)
+            m500 = sP.subhalos('mhalo_500_log')
+            pri_target = sP.halos('GroupPrimaryZoomTarget')[ sP.subhalos('SubhaloGrNr') ]
+                
+            with np.errstate(invalid='ignore'):
+                w = np.where((m500 > ax.get_ylim()[0]) & (pri_target == 1))
+
+            # scatterplot
+            xx = np.random.uniform(low=-zspread, high=zspread, size=len(w[0])) + redshift
+            label = sP.simName if j == 0 else ''
+
+            ax.scatter(xx, m500[w], s=msize, c=color, marker='o', alpha=alpha, label=label)
+
+    # add first legend
+    legend1 = ax.legend(loc='upper left')
+    ax.add_artist(legend1)
+
+    # plot obs samples
+    r17 = rossetti17planck()
+    pc19 = pintoscastro19(sP)
+    h20 = hilton20act()
+    a18 = adami18xxl()
+
+    d1 = ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#222222', marker='s', alpha=alpha, label=r17['label'])
+
+    d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'])
+
+    d3 = ax.scatter(h20['z'], h20['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.3, label=h20['label'])
+
+    d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'])
+
+    # plot coma cluster
+    coma_z = 0.0
+    coma_m500 = [3.89, 3.89+1.04, 3.89-0.76] # "1e14 Msun/h" (Okabe+2014 Table 8, g+ profile)
+    coma_m500 = np.log10(np.array(coma_m500) * 1e14 / sP.HubbleParam)
+
+    error_lower = coma_m500[0] - coma_m500[2]
+    error_upper = coma_m500[1] - coma_m500[0]
+    yerr = np.reshape( [error_lower, error_upper], (2,1) )
+
+    d4 = ax.errorbar(coma_z, coma_m500[0], yerr=yerr, color='#000000', marker='H')
+    ax.text(coma_z+0.005, coma_m500[0]+0.02, 'Coma', fontsize=14)
+
+    # plot eROSITA completeness goal
+    erosita_minhalo = [0.20,0.32,0.47,0.65,0.86,1.12,1.44,1.87,2.33,2.91,3.46,4.19,4.86,5.80,6.68,7.33,7.79]
+    erosita_z       = [0.05,0.08,0.11,0.14,0.17,0.21,0.25,0.32,0.38,0.47,0.56,0.69,0.82,1.03,1.30,1.60,1.92]
+
+    erosita_minhalo = np.log10(sP.units.m200_to_m500(np.array(erosita_minhalo) * 1e14)) # log msun
+
+    l, = ax.plot(erosita_z, erosita_minhalo, '-', lw=lw, alpha=alpha)
+    ax.arrow(erosita_z[6], erosita_minhalo[6]+0.02, 0.0, 0.1, lw=lw, head_length=0.008, color=l.get_color())
+    ax.text(erosita_z[7]-0.04, 14.02, 'eROSITA All-Sky Complete', color=l.get_color(), fontsize=14, rotation=21)
+
+    # second legend and finish
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles[2:], labels[2:], loc='upper right') # removes legend1 from axes, so add it back:
+
+    fig.savefig('sample_halomass_vs_redshift.pdf')
     plt.close(fig)
+
+def paperPlots():
+    """ Todo. """
+    from util.simParams import simParams
+
+    TNG300 = simParams(run='tng300-1')
+    TNG_C  = simParams(run='tng-cluster')
+
+    sPs = [TNG300, TNG_C]
+
+    # figure 1 - mass function
+    if 0:
+        mass_function()
+
+    # figure 2 - samples
+    if 1:
+        sample_halomasses_vs_redshift(sPs)
+
+    # figure 3 - virtual full box vis
+    if 0:
+        for conf in [0,1,2,3,4]:
+            vis_fullbox_virtual(conf=conf)
+
+    # figure 4 - individual halo/gallery vis (x-ray)

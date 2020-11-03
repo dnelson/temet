@@ -82,6 +82,30 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
     r = {}
 
+    # derived HALO fields
+    if fieldsHalos is not None:
+        fieldsHalos = list(iterable(fieldsHalos))
+
+        for i, field in enumerate(fieldsHalos):
+            quant = field.lower()
+            quantName = quant.lower().replace("_log","")
+
+            # fields defined only for TNG-Cluster, generalize to normal boxes
+            if quantName in ['groupprimaryzoomtarget']:
+                if not groupCatHasField(sP, 'Group', 'GroupPrimaryZoomTarget'):
+                    r[field] = np.ones( sP.numHalos, dtype='int32' ) # all valid
+
+        # for now, if a custom halo field requested, only 1 allowed, and cannot mix with anything else
+        if len(r) > 0:
+            assert len(r) == 1
+            assert fieldsSubhalos is None
+            if sq and len(r) == 1:
+                # compress and return single field
+                key = list(r.keys())[0]
+                return r[key]
+
+            return r
+
     # derived SUBHALO fields and unit conversions (mhalo_200_log, ...). Can request >=1 custom fields 
     # and >=1 standard fields simultaneously, as opposed to snapshotSubset().
     if fieldsSubhalos is not None:
