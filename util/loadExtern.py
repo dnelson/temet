@@ -1533,7 +1533,112 @@ def rossetti17planck():
          'm500'  : np.log10(m500 * 1e14), # msun -> log[msun]
          'c'     : c,
          'c_err' : c_err,
-         'label' : 'Rossetti+ (2017) Planck Sample'}
+         'label' : 'Planck-SZ1 (Rossetti+17)'}
+
+    return r
+
+def pintoscastro19(sP):
+    """ Load observational data (halo mass distribution) from Pintos-Castro+2019 from HSC."""
+    path = dataBasePath + 'pintos.castro/data_M200.dat'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    z     = np.zeros( nLines, dtype='float32' )
+    m200  = np.zeros( nLines, dtype='float32' )
+    m500  = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line    = line.split(" ")
+        z[i]    = float(line[0])
+        m200[i] = float(line[1]) # log msun
+        m500[i] = sP.units.m200_to_m500(10.0**m200[i]) # msun
+        i += 1
+
+    r = {'z'     : z,
+         'm500'  : np.log10(m500), # msun -> log[msun]
+         'm200'  : m200,
+         'label' : 'HSC$\,$x$\,$SpARCS (Pintos-Castro+19)'}
+
+    return r
+
+def hilton20act():
+    """ Load the ACT cluster sample from Hilton+2020. (https://astro.ukzn.ac.za/~mjh/ACTDR5/v1.0b3/)"""
+    path = dataBasePath + 'hilton/DR5_cluster-catalog_v1.0b3.txt'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    z     = np.zeros( nLines, dtype='float32' )
+    m200  = np.zeros( nLines, dtype='float32' )
+    m500  = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        # # name, redshift, yc [1e-4], m500c [1e14 msun], m500c_cal [1e14 msun], m200m [1e14 msun]
+        line    = line.split("\t")
+        z[i]    = float(line[1])
+        m500[i] = float(line[3]) # 1e14 msun
+        m200[i] = float(line[5]) # 1e14 msun
+        i += 1
+
+    r = {'z'     : z,
+         'm500'  : np.log10(m500 * 1e14), # 1e14 msun -> log[msun]
+         'm200'  : np.log10(m200 * 1e14), # 1e14 msun -> log[msun]
+         'label' : 'ACT-SZ DR5 (Hilton+20)'}
+
+    return r
+
+def adami18xxl():
+    """ Load the XMM-Newton "XXL Survey 365 Cluster" sample from Adami+2018. (https://arxiv.org/abs/1810.03849)"""
+    path = dataBasePath + 'adami/xxl_365_gc.txt'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    z     = np.zeros( nLines, dtype='float32' )
+    m500  = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line    = line.split("\t")
+        z[i]    = float(line[4])
+        m500[i] = float(line[-4]) # 1E13 solar mass
+        i += 1
+
+    # restrict to those with mass estimates
+    w = np.where(m500 > 0)
+    z = z[w]
+    m500 = m500[w]
+
+    r = {'z'     : z,
+         'm500'  : np.log10(m500 * 1e13), # 1e13 msun -> log[msun]
+         'label' : 'XMM-Newton XXL 365 (Adami+18)'}
 
     return r
 
