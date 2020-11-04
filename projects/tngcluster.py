@@ -602,10 +602,11 @@ def mass_function():
 def sample_halomasses_vs_redshift(sPs):
     """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
     from util.loadExtern import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
+    from util.loadExtern import bleem20spt, piffaretti11rosat
 
-    redshifts = np.linspace(0.0, 0.5, 11) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+    redshifts = np.linspace(0.0, 0.6, 13) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
     zspread = (redshifts[1]-redshifts[0]) / 3 # add random noise along redshift axis
-    alpha = 0.8
+    alpha = 0.6 # for data
     msize = 30 # scatter() default is 20
 
     np.random.seed(424242)
@@ -613,12 +614,39 @@ def sample_halomasses_vs_redshift(sPs):
     # start plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
+    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
     ax.set_xlabel('Redshift')
     ax.set_ylabel('Halo Mass M$_{\\rm 500,crit}$ [log M$_{\\rm sun}$]')
 
     ax.set_xlim([redshifts[0]-zspread*1.01, redshifts[-1]+zspread*1.01])
     ax.set_ylim([14.0, 15.6])
+
+    # plot obs samples
+    r17 = rossetti17planck()
+    pc19 = pintoscastro19(sPs[0])
+    h20 = hilton20act()
+    a18 = adami18xxl()
+    b20 = bleem20spt(sPs[0])
+    p11 = piffaretti11rosat()
+
+    d1 = ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#000000', marker='s', alpha=alpha, label=r17['label'], zorder=0)
+
+    d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'], zorder=0)
+
+    d3 = ax.scatter(h20['z'], h20['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.3, label=h20['label'], zorder=0)
+
+    d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'], zorder=0)
+
+    d5 = ax.scatter(b20['z'], b20['m500'], s=msize+8, c='#222222', marker='X', alpha=alpha, label=b20['label'], zorder=0)
+
+    d6 = ax.scatter(p11['z'], p11['m500'], s=msize-4, c='#222222', marker='h', alpha=alpha-0.3, label=p11['label'], zorder=0)
+
+    # add first legend
+    legend1 = ax.legend(loc='upper right', frameon=True)
+    legend1.get_frame().set_edgecolor('#bbbbbb')
+    legend1.get_frame().set_linewidth(1.0)
+    ax.add_artist(legend1)
 
     # load simulations and plot
     for i, sP in enumerate(sPs):
@@ -637,37 +665,46 @@ def sample_halomasses_vs_redshift(sPs):
             xx = np.random.uniform(low=-zspread, high=zspread, size=len(w[0])) + redshift
             label = sP.simName if j == 0 else ''
 
-            ax.scatter(xx, m500[w], s=msize, c=color, marker='o', alpha=alpha, label=label)
+            ax.scatter(xx, m500[w], s=msize, c=color, marker='o', alpha=1.0, label=label)
 
-    # add first legend
-    legend1 = ax.legend(loc='upper left')
-    ax.add_artist(legend1)
-
-    # plot obs samples
-    r17 = rossetti17planck()
-    pc19 = pintoscastro19(sP)
-    h20 = hilton20act()
-    a18 = adami18xxl()
-
-    d1 = ax.scatter(r17['z'], r17['m500'], s=msize+8, c='#222222', marker='s', alpha=alpha, label=r17['label'])
-
-    d2 = ax.scatter(pc19['z'], pc19['m500'], s=msize+8, c='#222222', marker='*', alpha=alpha, label=pc19['label'])
-
-    d3 = ax.scatter(h20['z'], h20['m500'], s=msize-9, c='#222222', marker='p', alpha=alpha-0.3, label=h20['label'])
-
-    d4 = ax.scatter(a18['z'], a18['m500'], s=msize+8, c='#222222', marker='D', alpha=alpha, label=a18['label'])
+    # second legend
+    handles, labels = ax.get_legend_handles_labels()
+    legend2 = ax.legend(handles[-2:], labels[-2:], loc='upper left', frameon=True)
+    legend2.get_frame().set_edgecolor('#bbbbbb')
+    legend2.get_frame().set_linewidth(1.0)
 
     # plot coma cluster
-    coma_z = 0.0
-    coma_m500 = [3.89, 3.89+1.04, 3.89-0.76] # "1e14 Msun/h" (Okabe+2014 Table 8, g+ profile)
-    coma_m500 = np.log10(np.array(coma_m500) * 1e14 / sP.HubbleParam)
+    def _plot_single_cluster(m500_msun, m500_err_up, m500_err_down, redshift, name):
+        """ Helper. Input in linear msun. """
+        m500 = np.log10([m500_msun, m500_err_up, m500_err_down])
 
-    error_lower = coma_m500[0] - coma_m500[2]
-    error_upper = coma_m500[1] - coma_m500[0]
-    yerr = np.reshape( [error_lower, error_upper], (2,1) )
+        error_lower = m500[0] - m500[2]
+        error_upper = m500[1] - m500[0]
+        yerr = np.reshape( [error_lower, error_upper], (2,1) )
 
-    d4 = ax.errorbar(coma_z, coma_m500[0], yerr=yerr, color='#000000', marker='H')
-    ax.text(coma_z+0.005, coma_m500[0]+0.02, 'Coma', fontsize=14)
+        d4 = ax.errorbar(redshift, m500[0], yerr=yerr, color='#000000', marker='H')
+        ax.text(redshift+0.005, m500[0]+0.02, name, fontsize=14)
+
+    # plot coma cluster (Okabe+2014 Table 8, g+ profile)
+    coma_z = 0.0231
+    coma_m500 = np.array([3.89, 3.89+1.04, 3.89-0.76]) * 1e14 / sP.HubbleParam
+
+    _plot_single_cluster(coma_m500[0], coma_m500[1], coma_m500[2], coma_z, 'Coma')
+
+    # plot pheonix cluster
+    pheonix_z = 0.597 # currently off edge of plot
+    pheonix_m500 = 2.34e15 # msun, Tozzi+15 (Section 3)
+    m500_err = 0.71e15 # msun
+
+    _plot_single_cluster(pheonix_m500, pheonix_m500+m500_err, pheonix_m500-m500_err, pheonix_z, 'Pheonix')
+
+    # plot perseus cluster (note: virgo, fornax m500<1e14)
+    perseus_z = 0.0183
+    perseus_m500 = sP.units.m200_to_m500(6.65e14) # Simionescu+2011
+    perseus_m500_errup = sP.units.m200_to_m500(6.65e14 + 0.43e14)
+    perseus_m500_errdown = sP.units.m200_to_m500(6.65e14 - 0.46e14)
+
+    _plot_single_cluster(perseus_m500, perseus_m500_errup, perseus_m500_errdown, perseus_z, 'Perseus')
 
     # plot eROSITA completeness goal
     erosita_minhalo = [0.20,0.32,0.47,0.65,0.86,1.12,1.44,1.87,2.33,2.91,3.46,4.19,4.86,5.80,6.68,7.33,7.79]
@@ -675,19 +712,71 @@ def sample_halomasses_vs_redshift(sPs):
 
     erosita_minhalo = np.log10(sP.units.m200_to_m500(np.array(erosita_minhalo) * 1e14)) # log msun
 
-    l, = ax.plot(erosita_z, erosita_minhalo, '-', lw=lw, alpha=alpha)
+    l, = ax.plot(erosita_z, erosita_minhalo, '-', lw=lw, alpha=alpha, color='#000000')
     ax.arrow(erosita_z[6], erosita_minhalo[6]+0.02, 0.0, 0.1, lw=lw, head_length=0.008, color=l.get_color())
     ax.text(erosita_z[7]-0.04, 14.02, 'eROSITA All-Sky Complete', color=l.get_color(), fontsize=14, rotation=21)
-
-    # second legend and finish
-    handles, labels = ax.get_legend_handles_labels()
-    legend2 = ax.legend(handles[2:], labels[2:], loc='upper right') # removes legend1 from axes, so add it back:
 
     fig.savefig('sample_halomass_vs_redshift.pdf')
     plt.close(fig)
 
+def bfield_strength_vs_halomass(sPs, redshifts):
+    """ Driver for quantMedianVsSecondQuant. """
+    from plot.cosmoGeneral import quantMedianVsSecondQuant
+
+    sPs_in = []
+    for redshift in redshifts:
+        for sP in sPs:
+            sPloc = sP.copy()
+            sPloc.setRedshift(redshift)
+            sPs_in.append( sPloc )
+
+    xQuant = 'mhalo_200_log'
+    yQuant = 'bmag_halfr500_volwt'
+    scatterColor = 'redshift'
+    cenSatSelect = 'cen'
+
+    xlim = [14.0, 15.4]
+    ylim = [-0.45, 0.85]
+    clim = [0.0, 2.0]
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    def _draw_data(ax):
+        """ Draw data constraints on figure. """
+
+        # Di Gennaro+2020 (https://arxiv.org/abs/2011.01628)
+        #  -- measurements based on integrated flux within <~ 0.5*r500
+        bmin = np.log10(1.0) # uG
+        bmax = np.log10(3.0) # uG
+        mass_range = sPs[0].units.m500_to_m200(np.array([5e14, 9e14])) # msun
+
+        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], color='#cccccc', 
+            label='Di Gennaro+20 ($z \sim 0.8$)')
+
+        # Boehringer+2016 (https://arxiv.org/abs/1610.02887)
+        # -- about ~90 measurements have mean r/r500 = 0.32, median r/r500 = 0.25
+        bmin = np.log10(2.0) # uG
+        bmax = np.log10(6.0) # uG
+        mass_range = [2e14,4e14] # m200 msun
+
+        ax.fill_between(np.log10(mass_range), y1=[bmin,bmin], y2=[bmax,bmax], color='#eeeeee', 
+            label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)')
+
+    def _draw_data2(ax):
+        """ Draw additional data constraints on figure. """
+        pass
+        # get coma cluster m200 and bfield within r500 (https://arxiv.org/abs/1002.0594)
+        # see also Govoni+17 (has Hydra, Perseus, a few others...)
+
+    quantMedianVsSecondQuant(sPs_in, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right')
+
 def paperPlots():
-    """ Todo. """
+    """ Plots for TNG-Cluster intro paper. """
     from util.simParams import simParams
 
     TNG300 = simParams(run='tng300-1')
@@ -700,7 +789,7 @@ def paperPlots():
         mass_function()
 
     # figure 2 - samples
-    if 1:
+    if 0:
         sample_halomasses_vs_redshift(sPs)
 
     # figure 3 - virtual full box vis
@@ -709,3 +798,8 @@ def paperPlots():
             vis_fullbox_virtual(conf=conf)
 
     # figure 4 - individual halo/gallery vis (x-ray)
+
+    # figure X - magnetic fields
+    if 1:
+        redshifts = [0.0, 1.0, 2.0]
+        bfield_strength_vs_halomass(sPs, redshifts)

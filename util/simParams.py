@@ -1222,6 +1222,10 @@ class simParams:
         return self.zoomLevel != 0
 
     @property
+    def isZoomOrVirtualBox(self):
+        return ((self.zoomLevel != 0) or (self.simName == 'TNG-Cluster'))
+    
+    @property
     def isDMO(self):
         return self.targetGasMass == 0.0
 

@@ -776,17 +776,41 @@ def cenSatSubhaloIndices(sP=None, gc=None, cenSatSelect=None):
             
             gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'])
 
-        # halos with a primary subhalo
+        mask = np.zeros( sP.numSubhalos, dtype='int16' )
+
         wHalo = np.where((gc['GroupFirstSub'] >= 0) & (gc['Group_M_Crit200'] > 0))
 
-        # indices
-        w1 = gc['GroupFirstSub'][wHalo] # centrals only
-        w2 = np.arange(sP.numSubhalos) # centrals + satellites
+        # zoom simulation or virtual box (TNG-Cluster)?
+        if sP.isZoomOrVirtualBox:
+            # -only- include indices for centrals/satellites of primary targeted (i.e. uncontaminated) halos
+            n_subs = sP.halos('GroupNsubs')
+            pri_target = sP.halos('GroupPrimaryZoomTarget')
 
-        mask = np.zeros( sP.numSubhalos, dtype='int16' )
-        mask[w1] = 1
-        w3 = np.where(mask == 0)[0]
-        #w3 = np.array( list(set(w2) - set(w1)) ) # satellites only (slow)
+            wHaloPri = np.where((gc['GroupFirstSub'] >= 0) & (gc['Group_M_Crit200'] > 0) & (pri_target == 1))
+
+            # indices
+            w1 = gc['GroupFirstSub'][wHaloPri] # centrals only
+            w1_all = gc['GroupFirstSub'][wHalo]
+            mask[w1] = 2 # pri-targeted centrals
+            mask[w1_all] = 1 # other (ignored) centrals
+
+            for halo_ind in wHaloPri[0]:
+                start = gc['GroupFirstSub'][halo_ind]
+                end = start + n_subs[halo_ind]
+                mask[start:end] = 3 # satellites in pri-targeted centrals
+
+            w2 = np.where(mask >= 2)[0] # centrals + satellites
+            w3 = np.where(mask == 3)[0] # satellites
+
+            assert n_subs[wHaloPri].sum() == w3.size
+        else:
+            # normal full box: halos with a primary subhalo
+            w1 = gc['GroupFirstSub'][wHalo] # centrals only
+            w2 = np.arange(sP.numSubhalos) # centrals + satellites
+
+            mask[w1] = 1
+            w3 = np.where(mask == 0)[0] # satellites only
+            #w3 = np.array( list(set(w2) - set(w1)) ) # satellites only (slow)
 
         # cache
         sP.data['css_inds_w1'] = w1

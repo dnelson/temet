@@ -685,10 +685,10 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
         plt.close(fig)
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
-                             sQuant=None, sLowerPercs=None, sUpperPercs=None, 
-                             qRestrictions=None,
+                             sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, 
+                             qRestrictions=None, f_pre=None, f_post=None, 
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
-                             markSubhaloIDs=None, mark1to1=False, drawMedian=True, 
+                             markSubhaloIDs=None, mark1to1=False, drawMedian=True, legendLoc='best', 
                              xlim=None, ylim=None, clim=None, filterFlag=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
@@ -698,6 +698,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     subhalos on it according to sLowerPercs, sUpperPercs (above/below the given percentiles), for 
     each split plotting the sub-sample yQuant again versus xQuant.
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
+    If f_pre, f_post are not None, then these are 'custom' functions accepting the axis as a single argument, which 
+    are called before and after the rest of plotting, respectively.
     If scatterPoints, include all raw points with a scatterplot. If maxPointsPerDex, then randomly sub-sample down to 
     this number (equal number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. If scatterColor, 
     color each point by a third property.
@@ -715,9 +717,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     lw = 2.5
     ptPlotThresh = 2000
     nBins = 60
-    legendLoc = 'best'
-
-    sizefac = 0.8 if nCols > 4 else 1.0 # enlarge text for big panel grids
+    if nCols > 4 and sizefac == 1.0: sizefac = 0.8
 
     # start plot
     if fig_subplot[0] is None:
@@ -733,7 +733,10 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
         else:
             ax = fig.add_subplot(fig_subplot[1])
 
-        for sP in sPs:
+        if f_pre is not None:
+            f_pre(ax)
+
+        for j, sP in enumerate(sPs):
             # loop over each run and add to the same plot
             print(' ',yQuant,xQuant,sP.simName,cenSatSelect)
 
@@ -821,7 +824,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             # plot points (todo: update for medianQuant)
             c = next(ax._get_lines.prop_cycler)['color']
 
-            if sim_xvals.size < ptPlotThresh:
+            if sim_xvals.size < ptPlotThresh and not scatterPoints:
                 ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=0.3)
 
             # median and 10/90th percentile lines
@@ -854,9 +857,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
                                                     sPercs=sLowerPercs)
 
-                for j, sLowerPerc in enumerate(sLowerPercs):
+                for k, sLowerPerc in enumerate(sLowerPercs):
                     label = '%s < P[%d]' % (slabel,sLowerPerc)
-                    ax.plot(xm, ymb[j], linestyles[1+j], lw=lw, color=c, label=label)
+                    ax.plot(xm, ymb[k], linestyles[1+k], lw=lw, color=c, label=label)
 
                 lsOffset = len(sLowerPercs)
                 if 1 or len(sPs) == 1:
@@ -866,9 +869,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
                                                     sPercs=sUpperPercs)
 
-                for j, sUpperPerc in enumerate(sUpperPercs):
+                for k, sUpperPerc in enumerate(sUpperPercs):
                     label = '%s > P[%d]' % (slabel,sUpperPerc)
-                    ax.plot(xm, yma[j], linestyles[1+j+lsOffset], lw=lw, color=c, label=label)
+                    ax.plot(xm, yma[k], linestyles[1+k+lsOffset], lw=lw, color=c, label=label)
 
             # contours (optionally conditional, i.e. independently normalized for each x-axis value)
             # todo
@@ -912,15 +915,16 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                 if scatterColor is not None:
                     # override constant color
-                    cc = cc[inds[0:count]]
+                    if maxPointsPerDex is not None:
+                        cc = cc[inds[0:count]]
                     cmap = loadColorTable('viridis')
-                    #norm = Normalize(vmin=cMinMax[0], vmax=cMinMax[1], clip=False)
-                    #c = cmap(norm(cc))
                     alpha = 1.0
 
                     opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
+                    #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
+                    opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
 
-                sc = ax.scatter(xx, yy, s=markersize, marker='o', edgecolors='none', alpha=alpha, **opts)
+                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts)
 
             # 1-to-1 line?
             if mark1to1:
@@ -1002,6 +1006,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             legend = ax.legend(handles+handlesO, labels+labelsO, loc=legendLoc)
 
+        if f_post is not None:
+            f_post(ax)
+
     # colorbar?
     if scatterColor is not None:
         cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
@@ -1021,8 +1028,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
         if pdf is not None:
             pdf.savefig()
         else:
+            simNames = '-'.join(set([sP.simName for sP in sPs]))
             fig.savefig('medianQuants_%s_%s_%s_%s.pdf' % \
-                ('-'.join([sP.simName for sP in sPs],'-'.join([xQ for xQ in xQuant]),yQuant,cenSatSelect)))
+                (simNames,'-'.join([yQ for yQ in yQuants]),xQuant,cenSatSelect))
         plt.close(fig)
 
 # ------------------------------------------------------------------------------------------------------

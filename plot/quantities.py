@@ -316,7 +316,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if sP.boxSize > 200000: minMax = [11.0, 15.0]
         if sP.boxSize < 50000: minMax = [10.5, 13.5]
 
-        label = 'M$_{\\rm halo, %s}$ [ log M$_{\\rm sun}$ ]' % mTypeStr
+        label = 'Halo Mass M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % mTypeStr
         #if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
     if quantname in ['rhalo_200','rhalo_500']:
@@ -1121,8 +1121,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
     if quantname in ['bmag_sfrgt0_masswt','bmag_sfrgt0_volwt',
                      'bmag_2rhalf_masswt','bmag_2rhalf_volwt',
-                     'bmag_halo_masswt','bmag_halo_volwt']:
-        # mean magnetic field magnitude either in the ISM (star forming gas) or halo (0.15 < r/rvir < 1.0)
+                     'bmag_halo_masswt','bmag_halo_volwt', 'bmag_r500_masswt', 'bmag_r500_volwt',
+                     'bmag_halfr500_masswt', 'bmag_halfr500_volwt', 'bmag_masswt','bmag_volwt']:
+        # mean magnetic field magnitude either in the ISM (star forming gas), within 2rhalf, 
+        # within the 'halo' (0.15 < r/rvir < 1.0), or entire subhalo
         # weighted by either gas cell mass or gas cell volume
         if '_masswt' in quant: wtStr = 'massWt'
         if '_volwt' in quant: wtStr = 'volWt'
@@ -1142,13 +1144,34 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             selDesc = 'halo'
             minMax = [-1.5, 0.0]
             if tight: minMax = [-1.8, 0.2]
+        if '_r500' in quant:
+            selStr = 'fof_r500'
+            selDesc = 'r500'
+            minMax = [-1.5, 0.0]
+        if '_halfr500' in quant:
+            selStr = 'fof_halfr500'
+            selDesc = '0.5r500'
+            minMax = [-1.0, 0.5]
+        if quant in ['bmag_masswt','bmag_volwt']:
+            selStr = 'subhalo'
+            selDesc = ''
+            minMax = [-1.5, 0.0]
+            if tight: minMax = [-1.8, 0.5]
 
         fieldName = 'Subhalo_Bmag_%s_%s' % (selStr,wtStr)
 
         ac = sP.auxCat(fields=[fieldName])
-        vals = ac[fieldName] * 1e6 # Gauss -> microGauss
+        vals = ac[fieldName]
 
-        label = 'log |B|$_{\\rm %s}$  [$\mu$G]' % selDesc
+        if ac['subhaloIDs'].size < sP.numSubhalos:
+            #print('NOTE: Expanding auxCat [%s] from size [%d] to full.' % (fieldName,ac['subhaloIDs'].size))
+            vals = np.zeros( sP.numSubhalos, dtype='float32' )
+            vals.fill(np.nan)
+            vals[ ac['subhaloIDs'] ] = ac[fieldName]
+
+        vals *= 1e6 # Gauss -> microGauss
+
+        label = '|B|$_{\\rm %s}$  [ log $\mu$G ]' % selDesc
         if not clean:
             if '_sfrgt0' in quant: label += '  [SFR > 0 %s]' % wtStr
             if '_2rhalf' in quant: label += '  [r < 2r$_{\\rm 1/2,stars}$ %s]' % wtStr
@@ -1810,6 +1833,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'log ( Z$_{\\rm %s}$ / Z$_{\\rm sun}$ )' % ptName.lower()
         if not clean:
             label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
+    if quantname in ['redshift']:
+        # redshift
+        minMax = [0.0, 4.0]
+
+        vals = np.zeros(sP.numSubhalos, dtype='float32') + sP.redshift
+        label = 'Redshift'
+        takeLog = False
 
     # take log?
     if '_log' in quant and takeLog:

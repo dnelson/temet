@@ -1430,6 +1430,10 @@ class units(object):
         """ Convert a halo mass from Delta=200 to Delta=500. """
         return self.haloMassToOtherOverdensity(halo_mass, delta_orig=200, delta_new=500)
 
+    def m500_to_m200(self, halo_mass):
+        """ Convert a halo mass from Delta=500 to Delta=200. """
+        return self.haloMassToOtherOverdensity(halo_mass, delta_orig=500, delta_new=200)
+
     # --- other ---
 
     def particleCountToMass(self, N_part, baryon=True, boxLength=None):

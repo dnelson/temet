@@ -1642,6 +1642,84 @@ def adami18xxl():
 
     return r
 
+def bleem20spt(sP):
+    """ Load the SPT-ECS sample from Bleem+2020. (https://arxiv.org/abs/1910.04121)"""
+    path = dataBasePath + 'bleem/sptpol-ecs.dat'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    z       = np.zeros( nLines, dtype='float32' )
+    z_err   = np.zeros( nLines, dtype='float32' )
+    m500    = np.zeros( nLines, dtype='float32' )
+    m500_e1 = np.zeros( nLines, dtype='float32' )
+    m500_e2 = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line    = line.split("\t")
+        if line[3].strip() == '': continue
+        z[i]     = float(line[3])
+        z_err[i] = float(line[4] if line[4].strip() != '' else '0.0')
+        m500[i]  = float(line[5]) # m500c [10^+14^h_70_^-1^M_{sun}], meaning 'evaluated for h=0.7'
+        m500_e1[i] = float(line[6]) # 1 sigma up
+        m500_e2[i] = float(line[7]) # 1 sigma down
+        i += 1
+
+    # restrict to those with redshifts and mass estimates
+    w = np.where(z > 0)
+    z = z[w]
+    m500 = m500[w]
+
+    r = {'z'     : z,
+         'm500'  : np.log10(m500 * 1e14 * (0.7/sP.HubbleParam)), # log[msun]
+         'label' : 'SPT-ECS (Bleem+20)'}
+
+    return r
+
+def piffaretti11rosat():
+    """ Load the ROSAT All-Sky MCXC cluster sample from Piffareeti+2011 (http://arxiv.org/abs/1007.1916)"""
+    path = dataBasePath + 'piffaretti/mcxc.txt'
+
+    # load
+    with open(path,'r') as f:
+        lines = f.readlines()
+
+    nLines = 0
+    for line in lines:
+        if line[0] != '#': nLines += 1
+
+    # allocate
+    z    = np.zeros( nLines, dtype='float32' )
+    L500 = np.zeros( nLines, dtype='float32' )
+    m500 = np.zeros( nLines, dtype='float32' )
+    r500 = np.zeros( nLines, dtype='float32' )
+
+    # parse
+    i = 0
+    for line in lines:
+        if line[0] == '#': continue
+        line    = line.split("\t")
+        z[i]    = float(line[1])
+        L500[i] = float(line[2]) # 1e37 W
+        m500[i] = float(line[3]) # 1e14 msun
+        r500[i] = float(line[4]) # Mpc
+        i += 1
+
+    r = {'z'     : z,
+         'm500'  : np.log10(m500 * 1e14), # log[msun]
+         'label' : 'ROSAT MCXC (Piffaretti+11)'}
+
+    return r
+
 def cassano13():
     """ Load observational data points from Cassano+ (2013) Tables 1 and 2, radio/x-ray/SZ clusters. """
     path1 = dataBasePath + 'cassano/C13_table1.txt'
