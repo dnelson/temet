@@ -138,8 +138,10 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
                 'mergers_mean_z','mergers_mean_mu'] # mergers_mean_fgas
 
     # generally available (masses)
-    quants_mass = ['mstar1','mstar2','mgas1','mgas2','mstar_30pkpc','mhi_30pkpc','mhi2',
-                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
+    quants_mass = ['mstar1','mstar2','mstar_30pkpc','mstar_r500',
+                   'mgas1','mgas2','mhi_30pkpc','mhi2','mgas_r500',
+                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent',
+                   'mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
 
     quants_rad = ['rhalo_200','rhalo_500']
 
@@ -275,13 +277,16 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'M$_{\star,%s}$ / $M_{\\rm halo,200crit}$ [ log ]' % distStr
         if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
 
-    if quantname in ['mstar_30pkpc']:
+    if quantname in ['mstar_30pkpc','mstar_r500','mgas_r500']:
         # stellar mass (auxcat based calculations)
         vals = sP.groupCat(sub=quantname)
 
         minMax = [9.0, 12.0]
         if sP.boxSize < 50000: minMax = [8.0, 11.0]
-        label = 'M$_{\\rm \star}(<30pkpc)$ [ log M$_{\\rm sun}$ ]'
+
+        if '_30pkpc' in quantname: selStr = '<30pkpc'
+        if '_r500' in quantname: selStr = '<r500'
+        label = 'M$_{\\rm \star}(%s)$ [ log M$_{\\rm sun}$ ]' % selStr
         if clean: label = 'M$_{\\rm \star}$ [ log M$_{\\rm sun}$ ]'
 
     if quantname in ['mhi','mhi_30pkpc','mhi2']:
@@ -1087,7 +1092,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if 'massfrac_insitu' in quant:
             label = 'In-Situ Stellar Mass Fraction [log]'
 
-        if '2' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
+        #if '2' in quant: label += ' [r < 2r$_{\\rm 1/2,stars}$]'
 
         minMax = [-2.2,0.0]
         if 'insitu' in quant: minMax = [-0.5, 0.0]

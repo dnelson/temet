@@ -3022,6 +3022,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_r200_Gas_Global' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r200crit',scope='global',minStellarMass=9.0),
 
+   'Subhalo_Mass_r500_Gas_FoF': \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
+   'Subhalo_Mass_r500_Stars_FoF': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
+
    # subhalo
    'Subhalo_CoolingTime_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestrictions=sfreq0),

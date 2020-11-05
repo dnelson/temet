@@ -2237,9 +2237,64 @@ def paperPlots():
         yQuant = 'BH_CumEgy_ratioInv'
         css = 'cen'
 
+        def _add_theory_line(ax):
+            """ Special case: yQuant == BH_CumEgy_ratio add theory curve on top from BH model. """
+            # NOTE: moved here later, may need additional inputs (sP, cenSatSelect, ...) to work
+            # make a second y-axis on the right
+            color2 = '#999999'
+
+            ax2 = ax.twinx()
+            ax2.set_ylim([8e-5, 0.12])
+            ax2.set_yscale('log')
+
+            #ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
+            ax2.set_ylabel('Blackhole Accretion Rate / Eddington Rate', color=color2)
+            ax2.tick_params('y', which='both', colors=color2)
+
+            # need median M_BH as a function of x-axis (e.g. M_star)
+            for bhIterNum, bhRedshift in enumerate([0.0]):
+                # more than 1 redshift
+                sP_loc = sP.copy()
+                sP_loc.setRedshift(bhRedshift)
+
+                sim_x_loc, _, _, take_log2 = sP_loc.simSubhaloQuantity(xQuant, clean)
+                if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
+
+                # same filters as above
+                wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
+                sim_x_loc = sim_x_loc[wSelect]
+
+                for bhPropNum, bhPropName in enumerate(['BH_mass','BH_Mdot_edd']):
+                    sim_m_bh, _, _, take_log2 = sP_loc.simSubhaloQuantity(bhPropName, clean)
+                    if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
+
+                    # same filters as above
+                    sim_m_bh = sim_m_bh[wSelect]
+
+                    wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
+                    sim_x_loc2 = sim_x_loc[wFinite]
+                    sim_m_bh = sim_m_bh[wFinite]
+
+                    xm_bh, ym_bh, _ = running_median(sim_x_loc2,sim_m_bh,binSize=binSize*2,skipZeros=True)
+                    ym_bh = savgol_filter(ym_bh,sKn,sKo)
+                    w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
+                    xm_bh = xm_bh[w]
+                    ym_bh = ym_bh[w]
+
+                    # derive eddington ratio transition as a function of x-axis (e.g. M_star)
+                    linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
+                    if bhPropName == 'BH_mass':
+                        ym_bh = sP.units.BH_chi(ym_bh)
+
+                    ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
+
+            ax.set_xlim(xMinMax) # fix
+            legendLoc = 'lower right'
+
         pdf = PdfPages('figure8_medianTrend_%s_%s-%s_%s.pdf' % \
             ('_'.join([sP.simName for sP in sPs]),xQuant,yQuant,css))
-        quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css)
+        quantMedianVsSecondQuant(sPs, pdf, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=css, 
+            f_post=_add_theory_line)
         pdf.close()    
 
     # figure 9: flux arrows in color-mass plane (9c unused)

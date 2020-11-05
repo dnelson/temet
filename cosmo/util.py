@@ -165,18 +165,21 @@ def validSnapList(sP, maxNum=None, minRedshift=None, maxRedshift=None, onlyFull=
 
     # only full snapshots? have to check now
     if onlyFull:
-        assert 'TNG' in sP.simName # otherwise generalize
-        snaps = w
-        w = []
+        if sP.simName == 'Eagle100':
+            pass # all snaps are full
+        else:
+            assert 'TNG' in sP.simName # otherwise generalize
+            snaps = w
+            w = []
 
-        for snap in snaps:
-            fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
-            if fileName is None: continue
-            with h5py.File(fileName,'r') as f:
-                if '/PartType0/MagneticField' in f:
-                    w.append(snap)
+            for snap in snaps:
+                fileName = sP.snapPath(snap, subbox=sP.subbox, checkExists=True)
+                if fileName is None: continue
+                with h5py.File(fileName,'r') as f:
+                    if '/PartType0/MagneticField' in f:
+                        w.append(snap)
 
-        w = np.array(w)
+            w = np.array(w)
 
     # cap at a maximum number of snaps? (evenly spaced)
     if maxNum is not None:

@@ -12,6 +12,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.optimize import leastsq
 from os.path import isfile
+
+from plot.cosmoGeneral import quantMedianVsSecondQuant
 from plot.config import *
 
 def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
@@ -431,11 +433,9 @@ def clusterEntropyCores():
 
     pdf.close()
 
-def vis_fullbox_virtual(conf=0):
+def vis_fullbox_virtual(sP, conf=0):
     """ Visualize the entire virtual reconstructed box. """
     from vis.box import renderBox
-
-    sP = simParams(run='tng-cluster', redshift=0.0)
 
     axes       = [0,1] # x,y
     labelZ     = True
@@ -721,8 +721,6 @@ def sample_halomasses_vs_redshift(sPs):
 
 def bfield_strength_vs_halomass(sPs, redshifts):
     """ Driver for quantMedianVsSecondQuant. """
-    from plot.cosmoGeneral import quantMedianVsSecondQuant
-
     sPs_in = []
     for redshift in redshifts:
         for sP in sPs:
@@ -736,7 +734,7 @@ def bfield_strength_vs_halomass(sPs, redshifts):
     cenSatSelect = 'cen'
 
     xlim = [14.0, 15.4]
-    ylim = [-0.45, 0.85]
+    ylim = [-0.65, 0.85]
     clim = [0.0, 2.0]
     scatterPoints = True
     drawMedian = False
@@ -765,22 +763,111 @@ def bfield_strength_vs_halomass(sPs, redshifts):
             label='B$\\rm\\"{o}$hringer+16 ($z \sim 0.1$)')
 
     def _draw_data2(ax):
-        """ Draw additional data constraints on figure. """
-        pass
-        # get coma cluster m200 and bfield within r500 (https://arxiv.org/abs/1002.0594)
-        # see also Govoni+17 (has Hydra, Perseus, a few others...)
+        """ Draw additional data constraints on figure, individual halos. """
+        b = np.log10(2.0) # uG, Bonafede+10 https://arxiv.org/abs/1002.0594
+        yerr = np.reshape( [0.34, 0.34], (2,1) ) # 1-4.5 uG (center vs 1 Mpc), Bonafede+10
+        m200 = 14.88 # Okabe+14 m500->m200
+        xerr = np.reshape( [0.1, 0.1], (2,1) ) # Okabe+14
+
+        ax.errorbar(m200, b, xerr=xerr, yerr=yerr, color='#000000', marker='D', label='Bonafede+10 (Coma)')
+
+        b = np.log10( (1.5+0.3)/2 ) # average of <B0>=1.5 uG and ~0.3 uG (volume average within 1 Mpc, ~1r500)
+        yerr = np.reshape( [0.47, 0.22], (2,1) )
+        m200 = np.log10(1e14 / 0.6774) # Govoni+17 Sec 4.2
+        xerr = np.reshape( [0.1, 0.1], (2,1) ) # assumed, e.g. minimum of ~30% uncertainty
+
+        ax.errorbar(m200, b, xerr=xerr, yerr=yerr, color='#000000', marker='H', label='Govoni+17 (Abell 194)')
 
     quantMedianVsSecondQuant(sPs_in, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, f_post=_draw_data2, legendLoc='lower right')
 
+def stellar_mass_vs_halomass(sPs, conf=0):
+    """ Plot various stellar mass quantities vs halo mass. """
+    xQuant = 'mhalo_500_log'
+    cenSatSelect = 'cen'
+
+    xlim = [13.8, 15.4]
+    clim = [-0.4, 0.0] # log fraction
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    if conf == 0:
+        yQuant = 'mstar_30pkpc'
+        ylabel = 'BCG Stellar Mass [ log M$_{\\rm sun}$ ]'
+        ylim = [10.9, 13.1]
+        scatterColor = 'massfrac_exsitu2'
+
+        def _draw_data(ax):
+            # Kravtsov+ 2018 (Table 1 for M500crit + Table 4)
+            label = 'Kravtsov+18'
+            
+            m500c = np.log10(np.array([15.60, 10.30, 7.00, 5.34, 2.35, 1.86, 1.34, 0.46, 0.47]) * 1e14)
+            mstar_30pkpc = np.log10(np.array([5.18, 10.44, 7.12, 3.85, 3.67, 4.35, 4.71, 4.59, 6.76]) * 1e11)
+
+            ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#000000', marker='D', alpha=1.0, label=label)
+
+    if conf == 1:
+        yQuant = 'mstar_r500'
+        ylabel = 'Total Halo Stellar Mass [ log M$_{\\rm sun}$ ]' # BCG+SAT+ICL (e.g. <r500c)
+        ylim = [11.9, 13.5]
+        scatterColor = 'massfrac_exsitu'
+
+        def _draw_data(ax):
+            # Kravtsov+ 2018 (Figure 7 for r500c, Figure 8 for satellites within r500c)
+            label = 'Kravtsov+18'
+            m500c       = np.log10([5.31e13,5.68e13,1.29e14,1.79e14,2.02e14,5.40e14,5.87e14,8.59e14,1.19e15])
+            mstar_r500c = np.log10([1.47e12,1.45e12,2.28e12,2.80e12,2.42e12,4.36e12,6.58e12,1.01e13,1.33e13])
+            #mstar_sats  = np.log10([7.97e11,3.89e11,1.45e12,1.78e12,1.83e12,3.27e12,4.39e12,6.61e12,1.07e13])
+
+            ax.scatter(m500c, mstar_r500c, s=markersize+20, c='#000000', marker='s', alpha=1.0, label=label)
+
+            # Gonzalez+13 (Figure 7, mstar is <r500c, and msats is satellites within r500c)
+            label = 'Gonzalez+13'
+            m500c = [9.55e13,9.84e13,9.54e13,1.45e14,3.66e14,3.52e14,3.23e14,5.35e14,2.28e14,2.44e14,2.42e14,2.26e14]
+            mstar = [2.82e12,3.21e12,4.18e12,3.06e12,4.99e12,6.07e12,7.53e12,7.04e12,5.95e12,5.95e12,5.56e12,5.50e12]
+            #msats = [1.96e12,1.75e12,1.55e12,1.51e12,2.65e12,4.60e12,4.61e12,4.94e12,3.48e12,3.56e12,3.65e12,3.87e12]
+
+            ax.scatter(np.log10(m500c), np.log10(mstar), s=markersize+20, c='#000000', marker='D', alpha=1.0, label=label)
+
+            # Leauthaud+12 (obtained from Kravtsov+18 Fig 7)
+            label = 'Leauthaud+12'
+            m500c = [3e13, 4.26e14]
+            mstar_r500c = [5.8e11, 5.6e12]
+
+            ax.plot(np.log10(m500c), np.log10(mstar_r500c), '-', color='#000000', alpha=1.0, label=label)
+
+            # Bahe+17 (Hydrangea sims, Fig 4 left) (arXiv:1703.10610)
+            label = 'Bahe+17 (sims)'
+            m500c = [13.83,13.92,13.88,13.97,14.04,14.07,14.29,14.31,14.35,14.40,14.42,14.48,14.55,14.58,
+                     14.64,14.79,14.81,14.84,14.90,14.90,15.04,15.07] # 14.69,
+            mstar = [12.02,12.14,12.21,12.25,12.32,12.29,12.47,12.53,12.49,12.60,12.66,12.69,12.71,12.76,
+                     12.81,13.00,12.97,12.99,13.05,13.08,13.17,13.23] # 12.38,
+
+            ax.scatter(m500c, mstar, s=markersize+20, c='#000000', marker='*', alpha=1.0, label=label)
+
+    if conf == 2:
+        yQuant = 'TODO'
+        ylabel = 'Stellar Mass <100 pkpc)[ log M$_{\\rm sun}$ ]'
+
+        def _draw_data(ax):
+            pass
+
+    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_post=_draw_data, ylabel=ylabel, legendLoc='lower right')
+
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
     from util.simParams import simParams
 
-    TNG300 = simParams(run='tng300-1')
-    TNG_C  = simParams(run='tng-cluster')
+    # all analysis at z=0 unless changed below
+    TNG300 = simParams(run='tng300-1', redshift=0.0)
+    TNG_C  = simParams(run='tng-cluster', redshift=0.0)
 
     sPs = [TNG300, TNG_C]
 
@@ -795,11 +882,16 @@ def paperPlots():
     # figure 3 - virtual full box vis
     if 0:
         for conf in [0,1,2,3,4]:
-            vis_fullbox_virtual(conf=conf)
+            vis_fullbox_virtual(sP, conf=conf)
 
     # figure 4 - individual halo/gallery vis (x-ray)
 
     # figure X - magnetic fields
-    if 1:
+    if 0:
         redshifts = [0.0, 1.0, 2.0]
         bfield_strength_vs_halomass(sPs, redshifts)
+
+    # figure X - stellar mass contents
+    if 1:
+        for conf in [1]: # [0,1,2]
+            stellar_mass_vs_halomass(sPs, conf=conf)

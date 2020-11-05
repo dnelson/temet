@@ -562,7 +562,7 @@ class simParams:
                 self.savPrefix  = 'E'
                 self.simNameAlt = 'Eagle-L'+bs+'n'+str(res)+'FP'
 
-                if res == 1504: self.simName = 'Eagle100-1' #'Eagle-L68n1504FP'
+                if res == 1504: self.simName = 'Eagle100' #'Eagle-L68n1504FP'
 
             if run == 'eagle_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.other/Eagle-L'+bs+'n'+str(res)+'DM/'

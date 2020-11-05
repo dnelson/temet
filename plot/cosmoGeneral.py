@@ -686,7 +686,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, 
-                             qRestrictions=None, f_pre=None, f_post=None, 
+                             qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, 
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
                              markSubhaloIDs=None, mark1to1=False, drawMedian=True, legendLoc='best', 
                              xlim=None, ylim=None, clim=None, filterFlag=False, fig_subplot=[None,None]):
@@ -741,8 +741,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             print(' ',yQuant,xQuant,sP.simName,cenSatSelect)
 
             # y-axis: load fullbox galaxy properties
-            sim_yvals, ylabel, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
+            sim_yvals, ylabel_def, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
             if ylim is not None: yMinMax = ylim
+            if ylabel is None: ylabel = ylabel_def
 
             if sim_yvals is None:
                 print('   skip')
@@ -750,9 +751,10 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if yLog: sim_yvals = logZeroNaN(sim_yvals)
 
             # x-axis: load fullbox galaxy properties
-            sim_xvals, xlabel, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
+            sim_xvals, xlabel_def, xMinMax, xLog = simSubhaloQuantity(sP, xQuant, clean, tight=True)
             if xLog: sim_xvals = logZeroNaN(sim_xvals)
             if xlim is not None: xMinMax = xlim
+            if xlabel is None: xlabel = xlabel_def
 
             # splitting on third quantity? load now
             if sQuant is not None:
@@ -939,62 +941,10 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     ax.plot(sim_xvals_orig[subID], sim_yvals_orig[subID], 'o', markersize=markersize*2, 
                         color=sampleColorTable('tableau10','red'), alpha=1.0, label=label)
 
-        # special case: BH_CumEgy_ratio add theory curve on top from BH model
-        if clean and yQuant in ['BH_CumEgy_ratio','BH_CumEgy_ratioInv']:
-            # make a second y-axis on the right
-            color2 = '#999999'
-
-            #ax.set_ylim([0.0,6.0])
-            ax2 = ax.twinx()
-            #ax2.set_ylim([-0.002, 0.103])
-            ax2.set_ylim([8e-5, 0.12])
-            ax2.set_yscale('log')
-
-            #ax2.set_ylabel('BH Low State Transition Threshold ($\chi$)', color=color2)
-            ax2.set_ylabel('Blackhole Accretion Rate / Eddington Rate', color=color2)
-            ax2.tick_params('y', which='both', colors=color2)
-
-            # need median M_BH as a function of x-axis (e.g. M_star)
-            for bhIterNum, bhRedshift in enumerate([0.0]):
-                # more than 1 redshift
-                sP_loc = copy.copy(sP)
-                sP_loc.setRedshift(bhRedshift)
-
-                sim_x_loc, _, _, take_log2 = simSubhaloQuantity(sP_loc, xQuant, clean)
-                if take_log2: sim_x_loc = logZeroNaN(sim_x_loc) # match
-
-                # same filters as above
-                wSelect = sP_loc.cenSatSubhaloIndices(cenSatSelect=cenSatSelect)
-                sim_x_loc = sim_x_loc[wSelect]
-
-                for bhPropNum, bhPropName in enumerate(['BH_mass','BH_Mdot_edd']):
-                    sim_m_bh, _, _, take_log2 = simSubhaloQuantity(sP_loc, bhPropName, clean)
-                    if not take_log2: sim_m_bh = 10.0**sim_m_bh # undo log then
-
-                    # same filters as above
-                    sim_m_bh = sim_m_bh[wSelect]
-
-                    wFinite = np.isfinite(sim_x_loc) & np.isfinite(sim_m_bh)
-                    sim_x_loc2 = sim_x_loc[wFinite]
-                    sim_m_bh = sim_m_bh[wFinite]
-
-                    xm_bh, ym_bh, _ = running_median(sim_x_loc2,sim_m_bh,binSize=binSize*2,skipZeros=True)
-                    ym_bh = savgol_filter(ym_bh,sKn,sKo)
-                    w = np.where( (ym_bh > 0.0) ) #& (xm_bh > xMinMax[0]) & (xm_bh < xMinMax[1]))
-                    xm_bh = xm_bh[w]
-                    ym_bh = ym_bh[w]
-
-                    # derive eddington ratio transition as a function of x-axis (e.g. M_star)
-                    linestyle = '-' if (bhIterNum == 0 and bhPropNum == 0) else ':'
-                    if bhPropName == 'BH_mass':
-                        ym_bh = sP.units.BH_chi(ym_bh)
-
-                    ax2.plot( xm_bh, ym_bh, linestyle=linestyle, lw=lw, color=color2)
-
-            ax.set_xlim(xMinMax) # fix
-            legendLoc = 'lower right'
-
         # legend
+        if f_post is not None:
+            f_post(ax)
+
         if i == 0:
             handles, labels = ax.get_legend_handles_labels()
             handlesO = []
@@ -1005,9 +955,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 labelsO  = ['median, P[10,90]']
 
             legend = ax.legend(handles+handlesO, labels+labelsO, loc=legendLoc)
-
-        if f_post is not None:
-            f_post(ax)
 
     # colorbar?
     if scatterColor is not None:
@@ -1028,7 +975,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
         if pdf is not None:
             pdf.savefig()
         else:
-            simNames = '-'.join(set([sP.simName for sP in sPs]))
+            simNames = '-'.join(sorted(set([sP.simName for sP in sPs])))
             fig.savefig('medianQuants_%s_%s_%s_%s.pdf' % \
                 (simNames,'-'.join([yQ for yQ in yQuants]),xQuant,cenSatSelect))
         plt.close(fig)

@@ -277,6 +277,21 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 ac = auxCat(sP, fields=[acField])
                 r[field] = sP.units.codeMassToMsun( ac[acField] )
 
+            # subhalo stellar or gas mass (<r500c definition, with auxCat, fof-scope) [msun or log msun]
+            if quantName in ['mstar_r500','mgas_r500']:
+                pt = 'Stars' if 'mstar' in quantName else 'Gas'
+                acField = 'Subhalo_Mass_r500_%s_FoF' % pt
+                ac = auxCat(sP, fields=[acField])
+                r[field] = sP.units.codeMassToMsun( ac[acField] )
+
+                # TODO: generalize, i.e. move below and make work for any quantity
+                if ac['subhaloIDs'].size < sP.numSubhalos:
+                    print('  NOTE: Expanding auxCat [%s] from size [%d] to full.' % (quantName,ac['subhaloIDs'].size))
+                    vals = np.zeros( sP.numSubhalos, dtype='float32' )
+                    vals.fill(np.nan)
+                    vals[ ac['subhaloIDs'] ] = r[field]
+                    r[field] = vals
+
             # stellar mass to halo mass ratio
             if quantName in ['mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio','mstar_mhalo_ratio']:
                 fields = ['mhalo_200_code']
