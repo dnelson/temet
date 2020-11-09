@@ -18,7 +18,7 @@ from mpl_toolkits.axes_grid.inset_locator import inset_axes
 from obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
 from plot.config import *
 
-from util.loadExtern import loadSDSSFits
+from load.data import loadSDSSFits
 from matplotlib.backends.backend_pdf import PdfPages
 
 def plotSingleResult(ind, sps=None, doSim=None):

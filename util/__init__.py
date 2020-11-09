@@ -2,7 +2,6 @@ from . import boxRemap
 from . import dataConvert
 from . import gfmExternalFiles
 from . import helper
-from . import loadExtern
 from . import metaPlots
 from . import rotation
 from .simParams import simParams

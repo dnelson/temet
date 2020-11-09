@@ -139,7 +139,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar_30pkpc','mstar_r500',
-                   'mgas1','mgas2','mhi_30pkpc','mhi2','mgas_r500',
+                   'mgas1','mgas2','mhi_30pkpc','mhi2','mgas_r500','fgas_r500',
                    'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent',
                    'mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
 
@@ -278,7 +278,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
 
     if quantname in ['mstar_30pkpc','mstar_r500','mgas_r500']:
-        # stellar mass (auxcat based calculations)
+        # stellar or gas mass in different apertures (auxcat based calculations)
         vals = sP.groupCat(sub=quantname)
 
         minMax = [9.0, 12.0]
@@ -702,6 +702,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'log f$_{\\rm gas}$ (< r$_{\\rm 200,crit}$ )'
         minMax = [-2.2, -0.6]
+
+    if quantname in ['fgas_r500']:
+        # gas mass / halo mass (auxcat based calculations)
+        if 'fgas_' in quantname: masses = sP.groupCat(sub='mgas_r500')
+        norm = sP.groupCat(sub='mhalo_500')
+
+        vals = masses / norm # linear
+
+        minMax = [0.0, 0.25]
+        takeLog = False
+
+        if '_r500' in quantname: selStr = '<r500'
+        label = 'Halo Gas Fraction (M$_{\\rm gas,%s}$ / M$_{\\rm 500}$)' % selStr
+        if clean: label = 'Halo Gas Fraction (M$_{\\rm gas,500}$ / M$_{\\rm 500}$)'
 
     if quantname == 'tcool_halo_ovi':
         # mean cooling time of halo gas, weighted by ovi mass [Gyr]

@@ -10,7 +10,7 @@ import h5py
 from os.path import isfile, isdir
 from os import mkdir
 
-from util.loadExtern import werk2013, johnson2015, berg2019, chen2018zahedy2019
+from load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from cosmo.util import redshiftToSnapNum
 from vis.common import getHsmlForPartType
 from util.sphMap import sphMap

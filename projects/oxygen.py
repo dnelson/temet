@@ -19,7 +19,7 @@ from os.path import isfile
 from functools import partial
 
 from util import simParams
-from util.loadExtern import werk2013, johnson2015, berg2019, chen2018zahedy2019
+from load.data import werk2013, johnson2015, berg2019, chen2018zahedy2019
 from plot.config import *
 from util.helper import running_median, logZeroNaN, iterable, contourf, loadColorTable, getWhiteBlackColors, closest, reducedChiSq
 from cosmo.cloudy import cloudyIon
@@ -34,7 +34,7 @@ from obs.galaxySample import obsMatchedSample, addIonColumnPerSystem, ionCoverin
 def nOVIcddf(sPs, pdf, moment=0, simRedshift=0.2, boxDepth10=False, boxDepth125=False):
     """ CDDF (column density distribution function) of O VI in the whole box at z~0.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
-    from util.loadExtern import danforth2008, danforth2016, thomChen2008, tripp2008
+    from load.data import danforth2008, danforth2016, thomChen2008, tripp2008
 
     # config
     lw = 3.5
@@ -172,7 +172,7 @@ def cddfRedshiftEvolution(sPs, saveName, moment=0, ions=['OVI','OVII'], redshift
                           boxDepth10=False, colorOff=0):
     """ CDDF (column density distribution function) of O VI in the whole box.
         (Schaye Fig 17) (Suresh+ 2016 Fig 11) """
-    from util.loadExtern import danforth2016, muzahid2011
+    from load.data import danforth2016, muzahid2011
 
     # plot setup
     lw = 3.0

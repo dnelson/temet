@@ -18,7 +18,7 @@ from os.path import isfile
 from util import simParams
 from util.helper import running_median, logZeroNaN, loadColorTable
 from util.voronoi import voronoiThresholdSegmentation
-from util.loadExtern import werk2013, berg2019, chen2018zahedy2019
+from load.data import werk2013, berg2019, chen2018zahedy2019
 from cosmo.util import subboxSubhaloCat
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D

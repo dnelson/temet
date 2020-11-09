@@ -84,7 +84,7 @@ def explore_vrad_halos(sP, haloIDs):
 
 def sample_comparison_z2_sins_ao(sP):
     """ Compare available galaxies vs. the SINS-AO sample of ~35 systems. """
-    from util.loadExtern import foersterSchreiber2018
+    from load.data import foersterSchreiber2018
     from util.helper import closest
 
     # config
@@ -555,7 +555,7 @@ def gasOutflowRatesVsQuant(sP, ptType, xQuant='mstar_30pkpc', eta=False, config=
             f.write(out)
 
         # special plotting behavior (including observational data sets)
-        from util.loadExtern import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
+        from load.data import heckman15, fiore17, fluetsch18, chisholm15, davies18, genzel14, leung17, rupke05, rupke17, bordoloi16
 
         color = '#555555'
         labels = []
@@ -1239,7 +1239,7 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                         ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
 
         # special plotting behavior (including observational data sets)
-        from util.loadExtern import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18, toba17, \
+        from load.data import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18, toba17, \
                                     bordoloi14, chisholm15, cicone16, genzel14, leung17, rupke05, rupke17, spence18, bordoloi16
 
         color = '#555555'

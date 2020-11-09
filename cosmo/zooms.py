@@ -1290,3 +1290,138 @@ def check_all():
 
             if lengths['Subhalo'][i]:
                 assert lengths['Subhalo'][i] == sP.groups('GroupNsubs').sum()
+
+def check_groupcat_property():
+    """ Compare TNG300 vs TNG-Cluster property. """
+    xprop = 'Group_M_Crit200'
+    yprop = 'SubhaloBHMass' #'GroupMassType', 'GroupSFR', 'GroupNsubs', 'GroupWindMass', 'GroupBHMass'
+    ypropind = None
+
+    snap = 99
+
+    halo_inds = _halo_ids_run(onlyDone=True)
+    halo_inds.pop(-1) # remove h4
+
+    # load
+    cache = 'cache_%s_%s.hdf5' % (yprop,ypropind)
+    if isfile(cache):
+        with h5py.File(cache,'r') as f:
+            x = f['x'][()]
+            y = f['y'][()]
+
+    else:
+        # compute now
+        res = 13
+        variant = 'sf3'
+        run = 'tng_zoom'
+        haloID = 0 # always use first fof
+
+        # allocate
+        x = np.zeros( len(halo_inds), dtype='float32' )
+        y = np.zeros( len(halo_inds), dtype='float32')
+
+        # loop over halos
+        for i, hInd in enumerate(halo_inds):
+            sP = simParams(run=run, res=res, snap=snap, hInd=hInd, variant=variant)
+            halo = sP.halo(haloID)
+            subh = sP.subhalo(halo['GroupFirstSub'])
+
+            x[i] = halo[xprop]
+            if 'Group' in yprop:
+                y[i] = halo[yprop][ypropind] if ypropind is not None else halo[yprop]
+            else:
+                y[i] = subh[yprop][ypropind] if ypropind is not None else subh[yprop]
+
+            print(i,hInd)
+
+        with h5py.File(cache,'w') as f:
+            f['x'] = x
+            f['y'] = y
+        print('Saved: [%s]' % cache)
+
+    # TNG-Cluster unit conversions
+    sP = simParams(run='tng-cluster')
+    x = sP.units.codeMassToLogMsun(x)
+    if 'Mass' in yprop:
+        y = sP.units.codeMassToLogMsun(y)
+    else:
+        y = np.log10(y)
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel(xprop)
+    ax.set_ylabel(yprop + (' ['+str(ypropind)+']' if ypropind is not None else ''))
+
+    ax.set_xlim([14.0,15.5])
+
+    ax.scatter(x, y, marker='o', label='TNG-Cluster')
+
+    for run in ['tng300-1','tng300-2','tng300-3']:
+        # load TNG300-x
+        sP = simParams(run=run, snap=snap)
+
+        x2 = sP.halos(xprop)
+
+        if 'Group' in yprop:
+            y2 = sP.halos(yprop)[:,ypropind] if ypropind is not None else sP.halos(yprop)
+        else:
+            GroupFirstSub = sP.halos('GroupFirstSub')
+            #y2 = np.zeros( sP.numHalos, dtype='float32' )
+            #y2.fill(np.nan)
+            y2 = sP.subhalos(yprop)[GroupFirstSub,ypropind] if ypropind is not None else sP.subhalos(yprop)[GroupFirstSub]
+
+        x2 = sP.units.codeMassToLogMsun(x2)
+        if 'Mass' in yprop:
+            y2 = sP.units.codeMassToLogMsun(y2)
+        else:
+            y2 = np.log10(y2)
+
+        w = np.where(x2 >= 14.0)
+        x2 = x2[w]
+        y2 = y2[w]
+
+        # plot
+        ax.scatter(x2, y2, marker='s', label=sP.simName)
+
+    ax.legend(loc='best')
+    fig.savefig('check_%s_%s_%s.pdf' % (xprop,yprop,ypropind))
+    plt.close(fig)
+
+def check_particle_property():
+    snap = 99
+    pt = 'bh'
+    prop = 'BH_Mass'
+
+    # load zoom
+    hInd = 0 
+    haloID = 0  # always use first fof
+
+    sP = simParams(run='tng_zoom', res=13, snap=snap, hInd=hInd, variant='sf3')
+
+    x = sP.snapshotSubset(pt, prop, haloID=haloID)
+    x = sP.units.codeMassToLogMsun(x)
+
+    # load box
+    sP = simParams(run='tng300-1', snap=snap)
+
+    y = sP.snapshotSubset(pt, prop, haloID=haloID)
+    y = sP.units.codeMassToLogMsun(y)
+
+    print( 10.0**y.mean() / 10.0**x.mean() )
+    print( 10.0**x.mean() / 10.0**y.mean() )
+
+    # plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.set_xlabel('%s %s' % (pt,prop))
+    ax.set_ylabel('PDF')
+
+    ax.hist(x, bins=40, label='TNG-Cluster')
+    ax.hist(y, bins=40, label='TNG300')
+
+    ax.legend(loc='best')
+    fig.savefig('check_%s_%s.pdf' % (pt,prop))
+    plt.close(fig)

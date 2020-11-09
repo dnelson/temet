@@ -601,8 +601,8 @@ def mass_function():
 
 def sample_halomasses_vs_redshift(sPs):
     """ Compare simulation vs observed cluster samples as a function of (redshift,mass). """
-    from util.loadExtern import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
-    from util.loadExtern import bleem20spt, piffaretti11rosat
+    from load.data import rossetti17planck, pintoscastro19, hilton20act, adami18xxl
+    from load.data import bleem20spt, piffaretti11rosat
 
     redshifts = np.linspace(0.0, 0.6, 13) #[0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
     zspread = (redshifts[1]-redshifts[0]) / 3 # add random noise along redshift axis
@@ -785,6 +785,8 @@ def bfield_strength_vs_halomass(sPs, redshifts):
 
 def stellar_mass_vs_halomass(sPs, conf=0):
     """ Plot various stellar mass quantities vs halo mass. """
+    from load.data import behrooziSMHM, mosterSMHM, kravtsovSMHM
+
     xQuant = 'mhalo_500_log'
     cenSatSelect = 'cen'
 
@@ -809,6 +811,19 @@ def stellar_mass_vs_halomass(sPs, conf=0):
             mstar_30pkpc = np.log10(np.array([5.18, 10.44, 7.12, 3.85, 3.67, 4.35, 4.71, 4.59, 6.76]) * 1e11)
 
             ax.scatter(m500c, mstar_30pkpc, s=markersize+20, c='#000000', marker='D', alpha=1.0, label=label)
+
+            # empirical SMHM relations
+            #b = behrooziSMHM(sPs[0], redshift=0.0)
+            #m = mosterSMHM(sPs[0], redshift=0.0)
+            #k = kravtsovSMHM(sPs[0])
+
+            #ax.plot(b['m500c'], b['mstar_mid'], color='#333333', label='Behroozi+ (2013)')
+            #ax.fill_between(b['m500c'], b['mstar_low'], b['mstar_high'], color='#333333', interpolate=True, alpha=0.3)
+
+            #ax.plot(m['m500c'], m['mstar_mid'], color='#dddddd', label='Moster+ (2013)')
+            #ax.fill_between(m['m500c'], m['mstar_low'], m['mstar_high'], color='#dddddd', interpolate=True, alpha=0.3)
+
+            #ax.plot(k['m500c'], k['mstar_mid'], color='#888888', label='Kravtsov+ (2014)')
 
     if conf == 1:
         yQuant = 'mstar_r500'
@@ -861,6 +876,52 @@ def stellar_mass_vs_halomass(sPs, conf=0):
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_post=_draw_data, ylabel=ylabel, legendLoc='lower right')
 
+def gas_fraction_vs_halomass(sPs):
+    """ Plot f_gas vs halo mass. """
+    from load.data import giodini2009, lovisari2015
+
+    xQuant = 'mhalo_500_log'
+    cenSatSelect = 'cen'
+
+    xlim = [13.8, 15.4]
+    clim = [-0.4, 0.0] # log fraction
+    scatterPoints = True
+    drawMedian = False
+    markersize = 40.0
+    sizefac = 0.8 # for single column figure
+
+    yQuant = 'fgas_r500'
+    ylim = [0.05, 0.18]
+    scatterColor = None #'massfrac_exsitu2'
+
+    def _draw_data(ax):
+        # observational points
+        g = giodini2009(sPs[0])
+        l = lovisari2015(sPs[0])
+
+        l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
+                             color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
+                             fmt=markers[0]+linestyles[0],label=g['label'])
+        l4,_,_ = ax.errorbar(l['m500_logMsun'], l['fGas500'], #yerr=l['fGas500Err'],
+                             color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, 
+                             marker=markers[0],linestyle='',label=l['label'])
+
+        #legend1 = ax.legend([l1,l2,l3,l4], [g['label']+' f$_{\\rm gas}$',
+        #                                    g['label']+' f$_{\\rm stars}$',
+        #                                    g['label']+' f$_{\\rm baryons}$',
+        #                                    l['label']+' f$_{\\rm gas}$'], loc='upper left')
+        #ax.add_artist(legend1)
+
+        # universal baryon fraction line
+        OmegaU = sPs[0].omega_b / sPs[0].omega_m
+        ax.plot( xlim, [OmegaU,OmegaU], '--', lw=1.0, color='#444444', alpha=0.2)
+        ax.text( xlim[1]-0.2, OmegaU+0.003, '$\Omega_{\\rm b} / \Omega_{\\rm m}$', size='large', alpha=0.2)
+
+    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             f_post=_draw_data, legendLoc='lower right')
+
 def paperPlots():
     """ Plots for TNG-Cluster intro paper. """
     from util.simParams import simParams
@@ -892,6 +953,38 @@ def paperPlots():
         bfield_strength_vs_halomass(sPs, redshifts)
 
     # figure X - stellar mass contents
-    if 1:
-        for conf in [1]: # [0,1,2]
+    if 0:
+        for conf in [0,1]:
             stellar_mass_vs_halomass(sPs, conf=conf)
+
+    # figure X - gas fractions
+    if 0:
+        gas_fraction_vs_halomass(sPs)
+
+    # figure X - black hole mass scaling relation
+    if 0:
+        from plot.globalComp import blackholeVsStellarMass
+
+        pdf = PdfPages('blackhole_masses_vs_mstar_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        blackholeVsStellarMass(sPs, pdf, twiceR=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
+        pdf.close()
+
+        #pdf = PdfPages('blackhole_masses_vs_mbulge_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        #blackholeVsStellarMass(sPs, pdf, vsBulgeMass=True, xlim=[11,13.0], ylim=[7.5,11], actualLargestBHMasses=True)
+        #pdf.close()
+
+        #pdf = PdfPages('blackhole_masses_vs_mhalo_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        #blackholeVsStellarMass(sPs, pdf, vsHaloMass=True, xlim=[13.8,15.4], ylim=[8.5,11], actualLargestBHMasses=True)
+        #pdf.close()
+
+    # figure X - BCG stellar sizes
+    if 0:
+        from plot.sizes import galaxySizes
+        pdf = PdfPages('galaxy_stellar_sizes_%s_z%d.pdf' % ('-'.join(sP.simName for sP in sPs),sPs[0].redshift))
+        galaxySizes(sPs, pdf, xlim=[11.0,13.0], ylim=[3,300], onlyRedData=True)
+        pdf.close()
+
+    # figure todo - entropy profiles
+    # figure todo - cc/ncc fractions vs mass
+    # figure todo - Lx vs mass
+    # figure todo - SZ-y vs mass

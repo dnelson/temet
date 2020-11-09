@@ -880,7 +880,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             # scatter all points?
             if scatterPoints:
-                alpha = 0.2
+                alpha = 1.0
 
                 w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) ) # reduce PDF weight
                 xx = sim_xvals[w]
@@ -920,7 +920,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     if maxPointsPerDex is not None:
                         cc = cc[inds[0:count]]
                     cmap = loadColorTable('viridis')
-                    alpha = 1.0
 
                     opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
                     #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''

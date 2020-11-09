@@ -1,5 +1,5 @@
 """
-loadExtern.py
+load/data.py
   load external data files (observational points, etc) and Arepo txt files
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
@@ -49,6 +49,12 @@ def behrooziSMHM(sP, logHaloMass=None, redshift=0.1):
     r['y_low_i']  = interpolate.interp1d(r['haloMass'],r['y_low'],  'cubic')(r['haloMass_i'])
     r['y_mid_i']  = interpolate.interp1d(r['haloMass'],r['y_mid'],  'cubic')(r['haloMass_i'])
     r['y_high_i'] = interpolate.interp1d(r['haloMass'],r['y_high'], 'cubic')(r['haloMass_i'])
+
+    # raw stellar masses
+    r['mstar_mid']  = np.log10( 10.0**r['smhmRatio'] * 10.0**r['haloMass']) # log msun
+    r['mstar_low']  = np.log10( 10.0**(r['smhmRatio']-r['errorDown']) * 10.0**r['haloMass'] ) # log msun
+    r['mstar_high'] = np.log10( 10.0**(r['smhmRatio']+r['errorUp']) * 10.0**r['haloMass'] ) # log msun
+    r['m500c'] = np.log10(sP.units.m200_to_m500(10.0**r['haloMass'])) # log msun
     
     return r
 
@@ -190,10 +196,16 @@ def mosterSMHM(sP, redshift=0.0):
         return 2.0 * N[ind] / ( (mass/M1[ind])**(-beta[ind]) + (mass/M1[ind])**(gamma[ind])  )
 
     r = {}
-    r['haloMass'] = np.linspace(8.0, 16.0, num=200)
+    r['haloMass'] = np.linspace(10.5, 16.0, num=200)
     r['y_low']  = f2013( 10.0**r['haloMass'], ind=0, redshift=redshift ) / (sP.omega_b/sP.omega_m)
     r['y_mid']  = f2013( 10.0**r['haloMass'], ind=1, redshift=redshift ) / (sP.omega_b/sP.omega_m)
     r['y_high'] = f2013( 10.0**r['haloMass'], ind=2, redshift=redshift ) / (sP.omega_b/sP.omega_m)
+    
+    # raw stellar masses
+    r['mstar_mid']  = np.log10(r['y_mid'] * (sP.omega_b/sP.omega_m) * 10.0**r['haloMass']) # log msun
+    r['mstar_low']  = np.log10(r['y_low'] * (sP.omega_b/sP.omega_m) * 10.0**r['haloMass']) # log msun
+    r['mstar_high'] = np.log10(r['y_high'] * (sP.omega_b/sP.omega_m) * 10.0**r['haloMass']) # log msun
+    r['m500c'] = np.log10(sP.units.m200_to_m500(10.0**r['haloMass'])) # log msun
 
     return r
 
@@ -231,6 +243,9 @@ def kravtsovSMHM(sP):
     #r['y_low']  = ( k2014( 10.0**r['haloMass'] )-10.0**0.05 ) / (sP.omega_b/sP.omega_m)
     r['y_mid']  = k2014( 10.0**r['haloMass'] ) / (sP.omega_b/sP.omega_m)
     #r['y_high'] = ( k2014( 10.0**r['haloMass'] )+10.0**0.05 ) / (sP.omega_b/sP.omega_m)
+
+    r['mstar_mid'] = np.log10(r['y_mid'] * (sP.omega_b/sP.omega_m) * 10.0**r['haloMass']) # log msun
+    r['m500c'] = np.log10( sP.units.m200_to_m500(10.0**r['haloMass']) ) # log msun
 
     return r
 
@@ -271,7 +286,7 @@ def mcconnellMa2013():
     #          sigma lower, sigma upper, log(LV/Lsun), error in log(LV/Lsun), log(L3.6/Lsun),
     #          error in log(L3.6/Lsun), Mbulge [Msun], radius of influence [arcsec], morphology, 
     #          profile, reff (V), reff (I), reff (3.6)
-    data = np.genfromtxt(path, dtype=None) # array of 20 lists
+    data = np.genfromtxt(path, dtype=None, encoding=None) # array of 20 lists
 
     galName   = np.array([d[0] for d in data])
     M_BH      = np.array([d[2] for d in data])
@@ -427,6 +442,28 @@ def shen2003SizeMass():
 
     return r
 
+def mowla2019():
+    """ Load observational data points from Mowla+ (2019) COSMOS-DASH. """
+    r = {}
+    r['label'] = 'Mowla+ (2019) z=0.1-0.5 (Q)'
+
+    r['z01_05'] = {}
+
+    # Fig 9 points: quiescent z=0.1-0.5
+    path = dataBasePath + 'mowla/m19_quiescent_z01.txt'
+    data = np.loadtxt(path, delimiter=',')
+
+    r['z01_05']['quiescent'] = {'stellarMass' : data[:,0], # log msun
+                                'r_e' : data[:,1]} # kpc
+
+    # Fig 9 points: star-forming z=0.1-0.5
+    path = dataBasePath + 'mowla/m19_starforming_z01.txt'
+    data = np.loadtxt(path, delimiter=',')
+
+    r['z01_05']['starforming'] = {'stellarMass' : data[:,0], # log msun
+                                  'r_e' : data[:,1]} # kpc
+    return r
+
 def baldry2008SMF():
     """ Load observational data points from Baldry+ (2008). """
     path = dataBasePath + 'baldry/gsmf-BGD08.txt'
@@ -541,7 +578,7 @@ def song2015SMF(redshift):
 
     # redshift log_Mstar[msun] log_phi[1/Mpc^3/dex] log_err_up[1sigma] log_err_down[1sigma]
     data = np.loadtxt(path,delimiter=' ')
-    #data = np.genfromtxt(path, dtype=None)
+    #data = np.genfromtxt(path, dtype=None, encoding=None)
 
     w = np.where(data[:,0] == redshift)
 
@@ -690,7 +727,7 @@ def woo2008(sP):
 
     # columns: Name, log(Mstar/Msun), log(Z) where log(Z/0.019)=[Fe/H]
     # note: using instead Z_solar = 0.019 below would convert to [Fe/H] instead of Z/Z_solar
-    data = np.genfromtxt(path, dtype=None)
+    data = np.genfromtxt(path, dtype=None, encoding=None)
 
     r = { 'name'           : np.array([d[0] for d in data]), 
           'stellarMass'    : np.array([d[1] for d in data]),
@@ -708,7 +745,7 @@ def kirby2013():
     # columns: Name, Num, Lv, Lv_err, log(Mstar/Msun), err, <[Fe/H]>, err, sigma, err, 
     #          median, mad, IQR, skewness, err, kurtosis, err
     # "assume a solar abundance of 12 + log(Fe/H) = 7.52" (this is within 5% of GS10)
-    data = np.genfromtxt(path, dtype=None)
+    data = np.genfromtxt(path, dtype=None, encoding=None)
 
     r = { 'name'           : np.array([d[0] for d in data]), 
           'stellarMass'    : np.array([d[4] for d in data]),
@@ -740,7 +777,7 @@ def lovisari2015(sP):
     # Table 2, 7th column is M500 in [10^13 / h70 Msun], 9th column is M500gas in [10^12 * h70^{-5/2} Msun]
     path = dataBasePath + 'lovisari/lovisari2015_table2.txt'
 
-    data = np.genfromtxt(path, dtype=None)
+    data = np.genfromtxt(path, dtype=None, encoding=None)
 
     m500_tot = np.array([d[6] for d in data])
     m500_tot_err = np.array([d[7] for d in data])
@@ -868,8 +905,8 @@ def rafelski2012(sP, redshiftRange=[2.5, 3.5]):
     path1 = dataBasePath + 'rafelski/raf2012_table2.txt'
     path2 = dataBasePath + 'rafelski/raf2012_table3.txt'
 
-    data1 = np.genfromtxt(path1, dtype=None)
-    data2 = np.genfromtxt(path2, dtype=None)
+    data1 = np.genfromtxt(path1, dtype=None, encoding=None)
+    data2 = np.genfromtxt(path2, dtype=None, encoding=None)
 
     redshifts     = np.array([d[1] for d in data1] + [d[1] for d in data2])
     metallicities = np.array([d[11] for d in data1] + [d[11] for d in data2]) # 8=[Fe/H], 11=[M/H]
@@ -2769,7 +2806,7 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
 
     # convert CSV to HDF5 (first column is int64, all others are float32)
     data = np.genfromtxt(path_csv+'.csv',comments='#',delimiter=',',skip_header=1,names=True,
-              dtype="i8,"+",".join(["f4" for _ in range(nFloatFields)]))
+              dtype="i8,"+",".join(["f4" for _ in range(nFloatFields)]), encoding=None)
 
     # petrosian instead of cModelMag?
     if petro:
@@ -2777,7 +2814,7 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
         nFloatFields = 8
 
         data_p = np.genfromtxt(path_csv+'.csv',comments='#',delimiter=',',skip_header=1,names=True,
-                  dtype="i8,"+",".join(["f4" for _ in range(nFloatFields)]))
+                  dtype="i8,"+",".join(["f4" for _ in range(nFloatFields)]), encoding=None)
 
         # replace band magnitude fields in data, leave everything else
         for band in ['u','g','r','i','z']:

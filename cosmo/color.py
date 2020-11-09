@@ -12,7 +12,6 @@ from os import mkdir
 from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 
-from util.loadExtern import loadSDSSData
 from cosmo.kCorr import kCorrections, coeff
 
 # dictionary of band name -> SubhaloStellarPhotometrics[:,i] index i (currently same for all sims, otherwise move into sP)
@@ -158,6 +157,7 @@ def stellarPhotToSDSSColor(photVector, bands):
 def calcSDSSColors(bands, redshiftRange=None, eCorrect=False, kCorrect=False, petro=False):
     """ Load the SDSS data files and compute a requested color, optionally restricting to a given 
     galaxy redshift range, correcting for extinction, and/or doing a K-correction. """
+    from load.data import loadSDSSData
     assert redshiftRange is None, 'Not implemented.'
 
     sdss = loadSDSSData(petro=petro)

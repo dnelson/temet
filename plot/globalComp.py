@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from util.loadExtern import *
+from load.data import *
 from util.helper import running_median, running_histogram, logZeroNaN, iterable
 from plot.sizes import galaxySizes, galaxyHISizeMass
 from plot.cosmoGeneral import addRedshiftAgeAxes
@@ -429,30 +429,40 @@ def sfrdVsRedshift(sPs, pdf, xlog=True, addSubhalosOnly=False):
     plt.close(fig)
 
 def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass=False, 
-                           actualBHMasses=False, actualLargestBHMasses=True, simRedshift=0.0):
+                           actualBHMasses=False, actualLargestBHMasses=True, simRedshift=0.0,
+                           xlim=None, ylim=None):
     """ Black hole mass vs. stellar (bulge) mass relation at z=0. """
     assert twiceR or vsHaloMass or vsBulgeMass
 
     # plot setup
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
-    
-    ax.set_xlim([8.5, 13.0])
-    ax.set_ylim([5.5, 11.0])
 
-    ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ tot dyn sum, only cen ]')
-    if actualBHMasses:
-        ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ actual sum, only cen ]')
-    if actualLargestBHMasses:
-        ax.set_ylabel('Black Hole Mass [ log M$_{\\rm sun}$ ] [ actual max, only cen ]')
+    xlim_def = [8.5, 13.0]
+    ylim_def = [5.5, 11.0]
+    
+    ax.set_xlim(xlim_def if xlim is None else xlim)
+    ax.set_ylim(ylim_def if ylim is None else ylim)
+
+    ylabel = 'Black Hole Mass [ log M$_{\\rm sun}$ ]'
+    
+    if not clean:
+        if not actualBHMasses and not actualLargestBHMasses:
+            ylabel += ' [ tot dyn sum, only cen ]'
+        if actualBHMasses:
+            ylabel += ' [ actual sum, only cen ]'
+        if actualLargestBHMasses:
+            ylabel += ' [ actual max, only cen ]'
+
+    ax.set_ylabel(ylabel)
 
     ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 1r$_{1/2}$ ]')
     if twiceR:
         ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ] [ < 2r$_{1/2}$ ]')
     if vsHaloMass:
         ax.set_xlabel('M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ] [ M$_{\\rm 200c}$ ]')
-        ax.set_xlim([9,14.5])
-        ax.set_ylim([5.0, 11.0])
+        if xlim is None: ax.set_xlim([9,14.5])
+        if ylim is None: ax.set_ylim([5.0, 11.0])
     if vsBulgeMass:
         ax.set_xlabel('M$_{\\rm bulge,\star}$ [ log M$_{\\rm sun}$ ] [ 2*counter-rotating < 1r$_{1/2}$ ]')
 
@@ -488,15 +498,15 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
 
         print('BHMass: '+sP.simName)
 
-        fieldsSubhalos = ['SubhaloBHMass','SubhaloMassType']
+        fieldsSubhalos = ['SubhaloBHMass','SubhaloMassType','SubhaloGrNr']
         if vsBulgeMass: fieldsSubhalos.append('SubhaloMassInHalfRadType')
         if twiceR: fieldsSubhalos.append('SubhaloMassInRadType')
 
         gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'], fieldsSubhalos=fieldsSubhalos)
 
         # centrals only
-        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
-        w = gc['halos']['GroupFirstSub'][wHalo]
+        w = sP.cenSatSubhaloIndices(cenSatSelect='cen')
+        wHalo = gc['subhalos']['SubhaloGrNr'][w]
 
         # stellar mass definition: would want to mimic bulge mass measurements
         if not twiceR and not vsHaloMass:
@@ -539,9 +549,10 @@ def blackholeVsStellarMass(sPs, pdf, twiceR=False, vsHaloMass=False, vsBulgeMass
         yy = sP.units.codeMassToLogMsun(yy)
         ww = np.where(yy > 0.0)
 
-        xm, ym, sm = running_median(xx[ww],yy[ww],binSize=binSize,skipZeros=True)
-        ym2 = savgol_filter(ym,sKn,sKo)
-        sm2 = savgol_filter(sm,sKn,sKo)
+        minPerBin = 1 if sP.simName == 'TNG-Cluster' else 10
+        xm, ym, sm = running_median(xx[ww],yy[ww],binSize=binSize,skipZeros=True,minNumPerBin=minPerBin)
+        ym2 = savgol_filter(ym,sKn,sKo) if ym.size > sKn else ym
+        sm2 = savgol_filter(sm,sKn,sKo) if sm.size > sKn else sm
         l, = ax.plot(xm[:-1], ym2[:-1], '-', lw=3.0, label=sP.simName)
 
         if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
@@ -1641,7 +1652,7 @@ def baryonicFractionsR500Crit(sPs, pdf, simRedshift=0.0):
 
             xx = sP.units.codeMassToLogMsun( xx_code )
 
-            # metallicity measured within what radius?
+            # loop over fraction types
             c = next(ax._get_lines.prop_cycler)['color']
                     
             for i, fracType in enumerate(fracTypes):

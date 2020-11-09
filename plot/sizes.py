@@ -17,11 +17,12 @@ from util import simParams
 from util.helper import running_median, logZeroNaN
 from plot.config import *
 
-def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], addHalfLightRad=None):
+def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,None], 
+                addHalfLightRad=None, onlyRedData=False, xlim=None, ylim=None):
     """ Galaxy sizes (half mass radii) vs stellar mass or halo mass, at redshift zero. 
     If addHalfLightRad is not None, then addHalfLightRad = [dustModel,band,show3D] e.g.
     addHalfLightRad = ['p07c_cf00dust_res_conv_efr_rad30pkpc','sdss_r',False]. """
-    from util.loadExtern import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+    from load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass, mowla2019
 
     # plot setup
     if fig_subplot[0] is None:
@@ -32,7 +33,7 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         fig = fig_subplot[0]
         ax = fig.add_subplot(fig_subplot[1])
 
-    ax.set_ylim([0.3,1e2])
+    ax.set_ylim([0.3,1e2] if ylim is None else ylim)
 
     ylabel = 'Galaxy Size [ kpc ]'
     if not clean: ylabel += ' [ r$_{\\rm 1/2, stars/gas}$ ] [ only centrals ]'
@@ -49,38 +50,49 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         if not clean: xlabel += ' [ < 2r$_{1/2}$ ]'
         ax.set_xlabel(xlabel)
         #ax.set_xlim( behrooziSMHM(sPs[0], logHaloMass=np.array(ax.get_xlim())) )
-        ax.set_xlim([7,12.0])
-        if clean: ax.set_xlim([8.0,12.0])
+        ax.set_xlim([7,12.0] if xlim is None else xlim)
+        if clean: ax.set_xlim([8.0,12.0] if xlim is None else xlim)
 
     # observational points
     if not vsHaloMass:
         b = baldry2012SizeMass()
         s = shen2003SizeMass()
         l = lange2016SizeMass()
+        m = mowla2019()
 
         l1,_,_ = ax.errorbar(b['red']['stellarMass'], b['red']['sizeKpc'], 
                              yerr=[b['red']['errorDown'],b['red']['errorUp']],
                              color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='D')
-        l2,_,_ = ax.errorbar(b['blue']['stellarMass'], b['blue']['sizeKpc'], 
-                             yerr=[b['blue']['errorDown'],b['blue']['errorUp']],
-                             color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='o')
-
-        l4, = ax.plot(s['late']['stellarMass'], s['late']['sizeKpc'], '-', color='#cccccc')
-        ax.fill_between(s['late']['stellarMass'], s['late']['sizeKpcDown'], s['late']['sizeKpcUp'], 
-                        color='#cccccc', interpolate=True, alpha=0.3)
+        if not onlyRedData:
+            l2,_,_ = ax.errorbar(b['blue']['stellarMass'], b['blue']['sizeKpc'], 
+                                 yerr=[b['blue']['errorDown'],b['blue']['errorUp']],
+                                 color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, fmt='o')
 
         l3, = ax.plot(s['early']['stellarMass'], s['early']['sizeKpc'], '-', color='#aaaaaa')
         ax.fill_between(s['early']['stellarMass'], s['early']['sizeKpcDown'], s['early']['sizeKpcUp'], 
                         color='#aaaaaa', interpolate=True, alpha=0.3)
 
-        l5, = ax.plot(l['stellarMass2'], l['hubbletype']['E_gt2e10']['sizeKpc'], '--', color='#777777')
-        l6, = ax.plot(l['stellarMass'], l['combined']['all_discs']['sizeKpc'], '--', color='#333333')
+        if not onlyRedData:
+            l4, = ax.plot(s['late']['stellarMass'], s['late']['sizeKpc'], '-', color='#cccccc')
+            ax.fill_between(s['late']['stellarMass'], s['late']['sizeKpcDown'], s['late']['sizeKpcUp'], 
+                            color='#cccccc', interpolate=True, alpha=0.3)
 
-        legend1 = ax.legend([l1,l2,l3,l4,l5,l6], 
-          [ b['red']['label'], b['blue']['label'], 
-            s['early']['label'], s['late']['label'],
-            l['hubbletype']['E_gt2e10']['label'], l['combined']['all_discs']['label'] ], 
-          loc='upper left') # lower right
+        l5, = ax.plot(l['stellarMass2'], l['hubbletype']['E_gt2e10']['sizeKpc'], '--', color='#777777')
+        if not onlyRedData:
+            l6, = ax.plot(l['stellarMass'], l['combined']['all_discs']['sizeKpc'], '--', color='#333333')
+
+        if onlyRedData:
+            l7, = ax.plot(m['z01_05']['quiescent']['stellarMass'], m['z01_05']['quiescent']['r_e'], 'o', color='#666666')
+
+            legend1 = ax.legend([l1,l3,l5,l7], 
+                  [ b['red']['label'], s['early']['label'], l['hubbletype']['E_gt2e10']['label'], m['label']], 
+                  loc='upper left')
+        else:
+            legend1 = ax.legend([l1,l2,l3,l4,l5,l6], 
+              [ b['red']['label'], b['blue']['label'], 
+                s['early']['label'], s['late']['label'],
+                l['hubbletype']['E_gt2e10']['label'], l['combined']['all_discs']['label'] ], 
+              loc='upper left')
         ax.add_artist(legend1)
 
     # loop over each fullbox run
@@ -92,11 +104,11 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
         sP.setRedshift(simRedshift)
 
         gc = sP.groupCat(fieldsHalos=['GroupFirstSub','Group_M_Crit200'],
-            fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType'])
+            fieldsSubhalos=['SubhaloMassInRadType','SubhaloHalfmassRadType','SubhaloGrNr'])
 
         # centrals only
-        wHalo = np.where((gc['halos']['GroupFirstSub'] >= 0))
-        w = gc['halos']['GroupFirstSub'][wHalo]
+        w = sP.cenSatSubhaloIndices(cenSatSelect='cen')
+        wHalo = gc['subhalos']['SubhaloGrNr'][w]
 
         # x-axis: mass definition
         if vsHaloMass:
@@ -155,32 +167,40 @@ def galaxySizes(sPs, pdf, vsHaloMass=False, simRedshift=0.0, fig_subplot=[None,N
                 yy_stars_Re[i] = yy_stars_Re[i][ww]
 
         # take median vs mass and smooth
-        xm_gas, ym_gas, sm_gas       = running_median(xx,yy_gas,binSize=binSize,skipZeros=True)
-        xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize,skipZeros=True)
+        minPerBin = 1 if sP.simName == 'TNG-Cluster' else 10
+
+        xm_gas, ym_gas, sm_gas       = running_median(xx,yy_gas,binSize=binSize,skipZeros=True,minNumPerBin=minPerBin)
+        xm_stars, ym_stars, sm_stars = running_median(xx,yy_stars,binSize=binSize,skipZeros=True,minNumPerBin=minPerBin)
 
         ww_gas   = np.where(ym_gas > 0.0)
         ww_stars = np.where(ym_stars > 0.0)
 
-        ym_gas   = savgol_filter(ym_gas[ww_gas],sKn,sKo)
-        ym_stars = savgol_filter(ym_stars[ww_stars],sKn,sKo)
-        sm_gas   = savgol_filter(sm_gas[ww_gas],sKn,sKo)
-        sm_stars = savgol_filter(sm_stars[ww_stars],sKn,sKo)
+        ym_gas = ym_gas[ww_gas]
+        sm_gas = sm_gas[ww_gas]
+        ym_stars = ym_stars[ww_stars]
+        sm_stars = sm_stars[ww_stars]
+
+        if len(ww_gas[0]) > sKn:
+            ym_gas   = savgol_filter(ym_gas,sKn,sKo)
+            sm_gas   = savgol_filter(sm_gas,sKn,sKo)
+        if len(ww_stars[0]) > sKn:
+            ym_stars = savgol_filter(ym_stars,sKn,sKo)
+            sm_stars = savgol_filter(sm_stars,sKn,sKo)
 
         xm_gas = xm_gas[ww_gas]
         xm_stars = xm_stars[ww_stars]
 
         label = sP.simName
         if sP.redshift > 0.0: label += ' z=%.1f' % sP.redshift
-        l, = ax.plot(xm_stars[1:-1], ym_stars[1:-1], linestyles[0], lw=3.0, label=label)
+        l, = ax.plot(xm_stars, ym_stars, linestyles[0], lw=3.0, label=label)
 
         if not clean:
-            l, = ax.plot(xm_gas[1:-1], ym_gas[1:-1], linestyles[1], color=l.get_color(), lw=3.0)
+            l, = ax.plot(xm_gas, ym_gas, linestyles[1], color=l.get_color(), lw=3.0)
 
         if ((len(sPs) > 2 and sP == sPs[0]) or len(sPs) <= 2):
-            y_down = np.array(ym_stars[1:-1]) - sm_stars[1:-1]
-            y_up   = np.array(ym_stars[1:-1]) + sm_stars[1:-1]
-            ax.fill_between(xm_stars[1:-1], y_down, y_up, 
-                            color=l.get_color(), interpolate=True, alpha=0.3)
+            y_down = np.array(ym_stars) - sm_stars
+            y_up   = np.array(ym_stars) + sm_stars
+            ax.fill_between(xm_stars, y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.3)
 
         # add all of the half-light radii size measurements, one line per projection
         if addHalfLightRad is not None:
@@ -506,7 +526,7 @@ def lumModelsRatios(res=1820, run='tng', redshifts=[0.0]):
 
 def clumpSizes(sP):
     """ Galaxy sizes of the very small things vs stellar mass or halo mass, at redshift zero. """
-    from util.loadExtern import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+    from load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
     from cosmo.util import cenSatSubhaloIndices
 
     centralsOnly = False
@@ -571,7 +591,7 @@ def clumpSizes(sP):
 
 def characteristicSizes(sP, vsHaloMass=False):
     """ Compare many different 'characteristic' halo/galaxy sizes as a function of mass. """
-    from util.loadExtern import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
+    from load.data import baldry2012SizeMass, shen2003SizeMass, lange2016SizeMass
 
     reBand = 'jwst_f115w' # for half light radii
 
