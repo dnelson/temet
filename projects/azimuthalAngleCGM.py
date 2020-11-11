@@ -1,7 +1,7 @@
 """
 projects/azimuthalAngleCGM.py
-  Plots: Azimuthal angle dependence of CGM properties (Peroux, TNG50)
-  https://arxiv.org/abs/xxxx.xxxx
+  Plots: Azimuthal angle dependence of CGM properties (Peroux+, TNG50)
+  https://arxiv.org/abs/2009.07809
 """
 import numpy as np
 import h5py

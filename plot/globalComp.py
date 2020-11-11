@@ -2402,7 +2402,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(run='tng100-1', redshift=0.0) )
+    #sPs.append( simParams(run='tng100-1', redshift=0.0) )
     #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
@@ -2423,7 +2423,7 @@ def plots():
     #sPs.append( simParams(res=540, run='tng') )  
     #sPs.append( simParams(res=270, run='tng') )
 
-    sPs.append( simParams(run='eagle', redshift=0.0) )
+    #sPs.append( simParams(run='eagle', redshift=0.0) )
 
     # add runs: TNG_methods
     #sPs.append( simParams(res=128, run='tng', variant='6003') )
@@ -2432,8 +2432,8 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
-    #sPs.append( simParams(res=512, run='tng', variant='0000') )
-    #sPs.append( simParams(res=512, run='tng', variant='5008') )
+    sPs.append( simParams(res=512, run='tng', variant='0000') )
+    sPs.append( simParams(res=512, run='tng', variant='5014') )
 
     if 0:
         # testing

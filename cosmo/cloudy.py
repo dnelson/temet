@@ -972,6 +972,7 @@ class cloudyEmission():
     """ Use pre-computed Cloudy table to derive line emissivities for simulation gas cells. """
     lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
                          'Lyman-beta'  : 'H  1 1025.72A',
+                         'MgII'        : 'Blnd 2798.00A', # 2796+2803A together
                          'H-alpha'     : 'H  1 6562.81A',
                          'H-beta'      : 'H  1 4861.33A',
                          '[OII]3729'   : 'O  2 3728.81A',
@@ -1128,10 +1129,11 @@ class cloudyEmission():
 
         return emis
 
-    def calcGasLineLuminosity(self, sP, line, indRange=None, 
+    def calcGasLineLuminosity(self, sP, line, indRange=None, dustDepletion=False, 
                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
         """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
         for gas particles in the whole snapshot, optionally restricted to an indRange. 
+         dustDepletion: apply a dust-depletion model for a given species
          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
          aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field.
          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
@@ -1160,6 +1162,7 @@ class cloudyEmission():
         #   L_l = e_l(z,Z,T,n) * (mass/rho) * (X_j/X_j_solar) = e_l * cell_volume * (X_j/X_j_solar)
         #   where X_j is the mass fraction of element j, and e_l has assumed solar abundances
         element = line[0:2].strip()
+        if line == 'Blnd 2798.00A': element = 'Mg'
         if element == 'Bl': raise Exception("Handle blend.")
 
         if assumeSolarAbunds:
@@ -1174,13 +1177,33 @@ class cloudyEmission():
                     print('WARNING: [%s] not in sP.metals (expected for sulphur), taking solar abunds.' % sym)
                     el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
                 else:
-                    assert sym in sP.metals
                     fieldName = "metals_" + sym
                     el_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
                     el_mass_fraction[el_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
             else:
                 print('WARNING: line emission but GFM_Metals not available (mini-snap). Assuming solar abundances.')
                 el_mass_fraction = ion._solarMetalAbundanceMassRatio(element)
+
+        # take into account dust-depletion of this species (i.e. taking it out of the gas phase)
+        if dustDepletion:
+            from load.data import decia2018
+            assert element == 'Mg' # can generalize in the future
+
+            gasphase_frac_Si = decia2018()['gasphase_frac_Si']
+
+            if isinstance(el_mass_fraction,float):
+                # single scalar mass fraction (e.g. mini-snap), use average metallicity
+                el_mass_fraction *= gasphase_frac_Si(metal_logSolar.mean())
+            else:
+                # species mass per gas cell, use per cell metallicities
+                gasfrac = gasphase_frac_Si(metal_logSolar)
+
+                # e.g. sputtering: cannot have any dust-phase metals at >~10^5 K
+                # (doesn't matter for MgII, as no MgII emissivity at these temperatures)
+                #w = np.where(temp >= 5.0)
+                #gasfrac[w] = 1.0
+                
+                el_mass_fraction *= gasfrac
 
         # load volume and finish calculation
         volume = sP.snapshotSubset('gas', 'vol', indRange=indRange)

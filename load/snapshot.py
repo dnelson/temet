@@ -248,8 +248,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
-    useCache = True
-    createCache = True if getuser() != 'wwwrun' else False
+    useCache = False #True
+    createCache = False #createCache = True if getuser() != 'wwwrun' else False
 
     cachePath = sP.derivPath + 'cache/'
     sbStr = 'sb%d_' % sP.subbox if sP.subbox is not None else ''

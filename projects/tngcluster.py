@@ -2,9 +2,6 @@
 projects/tngcluster.py
   TNG-Cluster: introduction paper.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
@@ -899,18 +896,16 @@ def gas_fraction_vs_halomass(sPs):
         g = giodini2009(sPs[0])
         l = lovisari2015(sPs[0])
 
-        l1,_,_ = ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
-                             color='#999999', ecolor='#999999', alpha=0.9, capsize=0.0, 
+        ax.errorbar(g['m500_logMsun'], g['fGas500'], yerr=g['fGas500Err'],
+                             color='#999999', alpha=0.9, 
                              fmt=markers[0]+linestyles[0],label=g['label'])
-        l4,_,_ = ax.errorbar(l['m500_logMsun'], l['fGas500'], #yerr=l['fGas500Err'],
-                             color='#555555', ecolor='#555555', alpha=0.9, capsize=0.0, 
+        ax.errorbar(l['m500_logMsun'], l['fGas500'], #yerr=l['fGas500Err'],
+                             color='#555555', alpha=0.9, 
                              marker=markers[0],linestyle='',label=l['label'])
 
-        #legend1 = ax.legend([l1,l2,l3,l4], [g['label']+' f$_{\\rm gas}$',
-        #                                    g['label']+' f$_{\\rm stars}$',
-        #                                    g['label']+' f$_{\\rm baryons}$',
-        #                                    l['label']+' f$_{\\rm gas}$'], loc='upper left')
-        #ax.add_artist(legend1)
+        # Tanimura+2020 (https://arxiv.org/abs/2007.02952) (xerr assumed)
+        ax.errorbar( np.log10(0.9e14/0.6774), 0.13, xerr=0.1, yerr=0.03, marker='D', alpha=0.9, 
+                     color='#333333', label='Tanimura+ (2020) z~0.4')
 
         # universal baryon fraction line
         OmegaU = sPs[0].omega_b / sPs[0].omega_m

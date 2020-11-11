@@ -1359,9 +1359,11 @@ class units(object):
             return 10.0/1e6
         return self.redshiftToComovingDist(z) * (1.0+z)
 
-    def arcsecToAngSizeKpcAtRedshift(self, ang_diam, z):
+    def arcsecToAngSizeKpcAtRedshift(self, ang_diam, z=None):
         """ Convert an angle in arcseconds to an angular/transverse size (in proper/physical kpc) 
         at redshift z. Assumes flat cosmology. """
+        if z is None: z = self._sP.redshift
+
         dA = self.redshiftToAngDiamDist(z)
         size_mpc = dA * ang_diam * self.arcsec_in_rad
         return size_mpc * 1000.0

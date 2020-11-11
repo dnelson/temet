@@ -423,7 +423,7 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
         resFac = 1.0 #(512.0/sP.res)**2.0
 
         # 2.2 for twelve, 1.4 for thirteen
-        minValLog = np.array([1.4,1.4,1.4]) # 0.6, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
+        minValLog = np.array([2.2,2.2,2.2]) # 0.6, 1.4, previous: 2.2 = best recent option, 2.8, 3.3 (nice control of low-SB features)
         minValLog = np.log10( (10.0**minValLog) * (pxArea/pxArea0*resFac) )
 
         #maxValLog = np.array([5.71, 5.68, 5.36])*0.9 # jwst f200w, f115w, f070w # previous
@@ -570,12 +570,21 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         # zero contribution from SFing gas cells?
         zeroSfr = False
         lumUnits = False
+        ergUnits = False
+        dustDepletion = False
+
         if '_sf0' in partField:
             partField = partField.split("_sf0")[0]
             zeroSfr = True
         if '_lum' in partField:
             partField = partField.split("_lum")[0]
             lumUnits = True
+        if '_ergs' in partField:
+            partField = partField.replace("_ergs","")
+            ergUnits = True
+        if '_dustdeplete' in partField:
+            partField = partField.replace("_dustdeplete","")
+            dustDepletion = True
 
         partField = partField.replace("_ster","").replace("_kpc","") # options handled later
 
@@ -586,16 +595,18 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             # use cache
             assert not zeroSfr # not implemented in cache
             assert not lumUnits # not implemented in cache
+            assert not dustDepletion # not implemented in cache
             mass = sP.snapshotSubsetP('gas', '%s flux' % lineName, indRange=indRange)
         else:
             e_interp = cloudyEmission(sP, line=lineName, redshiftInterp=True)
-            lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange)
+            lum = e_interp.calcGasLineLuminosity(sP, lineName, indRange=indRange, dustDepletion=dustDepletion)
             
             if lumUnits:
                 mass = lum / 1e30 # 10^30 erg/s
             else:
                 wavelength = e_interp.lineWavelength(lineName)
-                mass = sP.units.luminosityToFlux(lum, wavelength=wavelength) # photon/s/cm^2 if wavelength is not None
+                # photon/s/cm^2 if wavelength is not None, else erg/s/cm^2
+                mass = sP.units.luminosityToFlux(lum, wavelength=wavelength if not ergUnits else None)
 
             assert mass.min() >= 0.0
             assert np.count_nonzero( np.isnan(mass) ) == 0
@@ -868,10 +879,14 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         if ster: uLabel = 'ster$^{-1}$'
         if '_kpc' in partField: uLabel = 'kpc$^{-2}$'
         eLabel = 'SB [log photon s$^{-1}$ cm$^{-2}$'
+        if '_ergs' in partField:
+            eLabel = 'SB [log erg s$^{-1}$ cm$^{-2}$'
         if '_lum' in partField:
             eLabel = 'Luminosity Surface Density [log erg s$^{-1}$'
 
-        lineName = partField.replace("_ster","").split("sb_")[1].replace("_lum","").replace("_kpc","").replace("-"," ")
+        lineName = partField.split("sb_")[1].replace("-"," ")
+        for s in ["_ster","_lum","_kpc","_ergs","_dustdeplete"]:
+            lineName = lineName.replace(s,"")
         lineName = lineName.replace(" alpha","-$\\alpha$").replace(" beta","$\\beta$")
         if lineName[-1] == 'A': lineName = lineName[:-1] + '$\AA$' # Angstrom
         config['label']  = '%s %s %s]' % (lineName,eLabel,uLabel)
@@ -1559,7 +1574,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     if smoothFWHM is not None:
         # fwhm -> 1 sigma, and physical kpc -> pixels (can differ in x,y)
         sigma_xy = (smoothFWHM / 2.3548) / (np.array(boxSizeImg)[axes] / nPixels) 
-        print('fwhm: ',smoothFWHM,sigma_xy)
+        print('smoothFWHM: [%.2f pkpc] = sigma of [%.1f px]: ' % (smoothFWHM,sigma_xy[0]))
         grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
 
     # handle units and come up with units label
@@ -1941,6 +1956,8 @@ def addBoxMarkers(p, conf, ax, pExtent):
         # if scale bar is less than 10% of width, increase by 4x
         if scaleBarLen < 0.1 * (p['extent'][1]-p['extent'][0]):
             scaleBarLen *= 4
+        if scaleBarLen < 0.15 * (p['extent'][1]-p['extent'][0]):
+            scaleBarLen *= 2
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
         roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0, 1000.0, 100.0, 10.0]
@@ -2195,6 +2212,43 @@ def addVectorFieldOverlay(p, conf, ax):
         ax.streamplot(xx, yy, grid_x, grid_y, density=density, 
                       linewidth=grid_s, color=grid_c, arrowsize=arrowsize, cmap='afmhot', norm=norm)
 
+def addContourOverlay(p, conf, ax):
+    """ Add set of contours on top to visualize a second field. """
+    if 'contour' not in p or not p['contour']:
+        return
+
+    field_pt, field_name = p['contour'] # e.g. ['gas','vrad'] or ['stars','coldens_msunkpc2']
+
+    nPixels = p['nPixels'] if 'contourSizePx' not in p else p['contourSizePx']
+
+    # compress vector grids along third direction to more thin slice?
+    boxSizeImg = np.array(p['boxSizeImg'])
+    if 'contourSliceDepth' in p:
+        boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(contourSliceDepth)
+
+    # load grid of contour quantity
+    hsmlFac = p['hsmlFac'] if p['partType'] == field_pt else defaultHsmlFac(field_pt)
+    grid_c, conf_c, _ = gridBox(p['sP'], p['method'], field_pt, field_name, nPixels, p['axes'], p['projType'], p['projParams'], 
+                                p['boxCenter'], boxSizeImg, hsmlFac, p['rotMatrix'], p['rotCenter'], p['remapRatio'])
+
+    # make pixel grid
+    XX = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], grid_c.shape[0])
+    YY = np.linspace(ax.get_ylim()[0], ax.get_ylim()[1], grid_c.shape[1])
+    grid_x, grid_y = np.meshgrid(XX, YY)
+
+    # contour options:
+    #   'colors' can be a string e.g. 'white' or a list of strings/colors, one per level
+    #   'alpha', 'cmap', 'linewidths' (num or list), 'linestyles' (num or list)
+    contourOpts = {} if 'contourOpts' not in p else p['contourOpts']
+
+    if 'contourLevels' in p:
+        # either [int] number of levels, or [list] of actual values
+        ax.contour(grid_x, grid_y, grid_c, p['contourLevels'], **contourOpts)
+    else:
+        # automatic contour levels
+        ax.contour(grid_x, grid_y, grid_c, **contourOpts)
+    
+
 def setAxisColors(ax, color2):
     """ Factor out common axis color commands. """
     ax.title.set_color(color2)
@@ -2445,6 +2499,8 @@ def renderMultiPanel(panels, conf):
 
             addVectorFieldOverlay(p, conf, ax)
 
+            addContourOverlay(p, conf, ax)
+
             # colorbar
             if conf.colorbars:
                 pad = np.clip(conf.rasterPx[0] / 6000.0, 0.05, 0.4) # 0.2 for 1200px
@@ -2479,7 +2535,11 @@ def renderMultiPanel(panels, conf):
             barAreaHeight = 0.055 / aspect
             if conf.fontsize == min_fontsize:
                 barAreaHeight += 0.03
-        if nRows == 1 and nCols >= 3: barAreaHeight += 0.014*nCols
+        if nRows == 1 and nCols >= 2:
+            if conf.fontsize > 20:
+                barAreaHeight += 0.002*(conf.fontsize-20)
+        if nCols >= 3:
+            barAreaHeight += 0.014*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
         
@@ -2490,7 +2550,7 @@ def renderMultiPanel(panels, conf):
 
         for p in panels:
             pPartTypes.add(p['partType'])
-            pPartFields.add(p['partField'])
+            pPartFields.add(p['partField'].replace("_dustdeplete",""))
             pValMinMaxes.add(str(p['valMinMax']))
 
         # if all panels in the entire figure are the same, we will do 1 single colorbar
@@ -2643,6 +2703,8 @@ def renderMultiPanel(panels, conf):
 
             addVectorFieldOverlay(p, conf, ax)
 
+            addContourOverlay(p, conf, ax)
+
             # colobar(s)
             if oneGlobalColorbar:
                 continue
@@ -2669,7 +2731,7 @@ def renderMultiPanel(panels, conf):
 
         # one global colorbar? centered at bottom
         if oneGlobalColorbar:
-            widthFrac = 0.4
+            widthFrac = 0.8
             hOffset = None
             heightFac = np.clip(1.0*np.sqrt(nCols/nRows), 0.35, 2.5)
 
@@ -2680,12 +2742,14 @@ def renderMultiPanel(panels, conf):
                 if conf.fontsize == min_fontsize: # small images
                     heightFac *= 1.6
                     widthFrac = 0.8
-            if nRows == 1 and nCols in [2,3]: heightFac *= 0.7 # decrease
+            if nRows == 1 and nCols in [2,3] and conf.fontsize < 28: heightFac *= 0.8 # decrease
             if nRows == 2 and nCols == 1 and varRowHeights:
                 # single edge-on face-on combination
                 heightFac = 0.7
                 widthFrac = 0.9
                 hOffset = -0.5
+            if nRows >= 4:
+                heightFac *= 0.65
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal

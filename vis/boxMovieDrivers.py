@@ -540,12 +540,13 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     if conf == 'three':
         # galaxy zoom panel: stars
-        nPixels = nPixelsSq
+        nPixels = nPixels #nPixelsSq
         labelScale = False
         labelZ = False
 
         panels.append( {'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-        boxSizeImg = [boxSizeSq, boxSizeSq, boxSizeSq]
+        boxSizeImg = [int(boxSizeSq * aspect), boxSizeSq, boxSizeSq]
+        #boxSizeImg = [boxSizeSq, boxSizeSq, boxSizeSq]
 
     if conf == 'four':
         # large-scale structure: zoom out, DM

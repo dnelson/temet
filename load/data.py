@@ -2743,6 +2743,54 @@ def obuljen2018():
          'mHI_high' : yy_high}
     return r
 
+def decia2018():
+    """ Load observational data (elemental dust depletions) from De Cia+ (2018). """
+    path = dataBasePath + 'de.cia/Final_deCia2018_DLA_v181017.asc'
+    # columns: ID z N(Hi) [Fe/H]tot [Zn/Fe]exp δZn δSi δFe [X/Fe]
+    data = np.genfromtxt(path,comments='#',skip_header=8,names=True,
+              dtype=None, encoding=None)
+
+    # fit
+    f_delta_Si = np.poly1d( np.polyfit(data['FeHtot'],data['delta_Si'],1) )
+
+    def gasphase_frac_Si(Z_gas):
+        """ For an input ndarray of gas metallicity (log solar), return 
+        1 - dust-to-metal ratio of Si (as a proxy for Mg), i.e. the fraction of 
+        Mg mass which remains in the gas-phase."""
+        delta_Si = np.clip(f_delta_Si(Z_gas), -1.0, 0.0)
+        return (10.0**delta_Si)
+
+    # debug plot
+    if 0:
+        import matplotlib.pyplot as plt
+        from plot.config import figsize
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+
+        ax.set_xlabel('Dust-Corrected Metallicity [Fe/H]$_{\\rm tot}$')
+        ax.set_ylabel('$\delta_{\\rm X}$')
+        for i, X in enumerate(['Zn','Si','Fe']):
+            ax.plot(data['FeHtot'], data['delta_%s' % X], ['o','s','D'][i], label=X)
+        xx = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 100)
+        ax.plot(xx, f_delta_Si(xx), '-', label='Si fit')
+
+        ax.legend(loc='lower left')
+        fig.savefig('DeCia2018_delta_X.pdf')
+        plt.close(fig)
+
+    r = { 'FeH'       : data['FeHtot'], # log solar
+          'FeH_err'   : data['FeH_err'],
+          'z'         : data['z'],
+          'NHI'       : data['NHI'], # log 1/cm^2
+          'NHI_err'   : data['NHI_err'],
+          'delta_Zn'  : data['delta_Zn'],
+          'delta_Si'  : data['delta_Si'],
+          'delta_Fe'  : data['delta_Fe'],
+          'gasphase_frac_Si' : gasphase_frac_Si, # function
+          'label'     : 'De Cia+ (2018)' }
+
+    return r
+
 def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     """ Load some CSV->HDF5 files dumped from the SkyServer. """
     #SELECT
