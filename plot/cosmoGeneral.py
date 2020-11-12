@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 import copy
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from matplotlib.colors import Normalize, LogNorm, colorConverter
 from matplotlib.cm import ScalarMappable
 from matplotlib.backends.backend_pdf import PdfPages
@@ -685,11 +685,12 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
         plt.close(fig)
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
-                             sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, 
+                             sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
                              qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, 
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
                              markSubhaloIDs=None, mark1to1=False, drawMedian=True, legendLoc='best', 
-                             xlim=None, ylim=None, clim=None, filterFlag=False, fig_subplot=[None,None]):
+                             xlim=None, ylim=None, clim=None, filterFlag=False, 
+                             colorbarInside=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -706,12 +707,13 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If markSubhaloIDs, highlight these subhalos especially on the plot. 
     If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
     If drawMedian, then include median line and 1-sigma band.
-    If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects. """
+    If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects.
+    If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
 
-    nRows = np.floor(np.sqrt(len(yQuants)))
-    nCols = np.ceil(len(yQuants) / nRows)
+    nRows = int(np.floor(np.sqrt(len(yQuants))))
+    nCols = int(np.ceil(len(yQuants) / nRows))
 
     # hard-coded config
     lw = 2.5
@@ -743,7 +745,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             # y-axis: load fullbox galaxy properties
             sim_yvals, ylabel_def, yMinMax, yLog = simSubhaloQuantity(sP, yQuant, clean, tight=True)
             if ylim is not None: yMinMax = ylim
-            if ylabel is None: ylabel = ylabel_def
+            if ylabel is None or i > 0: ylabel = ylabel_def
 
             if sim_yvals is None:
                 print('   skip')
@@ -827,7 +829,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             c = next(ax._get_lines.prop_cycler)['color']
 
             if sim_xvals.size < ptPlotThresh and not scatterPoints:
-                ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=0.3)
+                ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=alpha)
 
             # median and 10/90th percentile lines
             binSize = (xMinMax[1]-xMinMax[0]) / nBins
@@ -880,12 +882,13 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             # scatter all points?
             if scatterPoints:
-                alpha = 1.0
-
                 w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) ) # reduce PDF weight
                 xx = sim_xvals[w]
                 yy = sim_yvals[w]
                 cc = sim_cvals[w]
+
+                if xx.size > 1000:
+                    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
                 if maxPointsPerDex is not None:
                     # sub-select in 0.1 dex bins, at most N points per bin
@@ -925,7 +928,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
                     opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
 
-                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts)
+                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, zorder=0, **opts)
 
             # 1-to-1 line?
             if mark1to1:
@@ -957,9 +960,28 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
     # colorbar?
     if scatterColor is not None:
-        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
-        cb = plt.colorbar(sc, cax=cax)
-        cb.ax.set_ylabel(clabel)
+        if colorbarInside: # can generalize to 'upper left', etc
+            # throws UserWarning about tight_layout()
+            import warnings
+            warnings.filterwarnings(action='ignore', category=UserWarning, # module='matplotlib.figure'
+                message=('This figure includes Axes that are not compatible with tight_layout, '
+                         'so results might be incorrect.'))
+            #cax = inset_locator.inset_axes(ax, width="40%", height="4%", loc='upper left')
+
+            rect = [0.5,0.25,0.4,0.04]
+            cax = fig.add_axes(rect)
+            orientation = 'horizontal'
+            #cax.patch.set_facecolor('white') # doesn't work
+            #cax.patch.set_alpha(1.0)
+        else:
+            cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+            orientation = 'vertical'
+
+        cb = plt.colorbar(sc, cax=cax, orientation=orientation)
+        cb.set_alpha(1) # fix stripes
+        cb.draw_all()
+        if orientation == 'vertical': cb.ax.set_ylabel(clabel)
+        if orientation == 'horizontal': cb.ax.set_title(clabel)
         if len(clabel) > 45:
             newsize = 23 - (len(clabel)-45)/5
             cb.ax.set_ylabel(clabel, size=newsize) # default: 24.192 (14 * x-large)
@@ -975,8 +997,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             pdf.savefig()
         else:
             simNames = '-'.join(sorted(set([sP.simName for sP in sPs])))
-            fig.savefig('medianQuants_%s_%s_%s_%s.pdf' % \
-                (simNames,'-'.join([yQ for yQ in yQuants]),xQuant,cenSatSelect))
+            colorStr = '_c=%s' % scatterColor if scatterColor is not None else ''
+            fig.savefig('medianQuants_%s_%s_%s%s_%s.pdf' % \
+                (simNames,'-'.join([yQ for yQ in yQuants]),xQuant,colorStr,cenSatSelect))
         plt.close(fig)
 
 # ------------------------------------------------------------------------------------------------------

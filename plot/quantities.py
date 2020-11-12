@@ -164,7 +164,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
 
-    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo',
+    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo', 'mg2_lum', 'mg2_lumsize', 'mg2_lumsize_rel',
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla',
                    'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo',
                    'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi',
@@ -272,7 +272,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax = [-3.0, -1.0]
         if 'mstar2_' in quantname: distStr = '<2r_{\star,1/2}'
-        if 'mstar_30pkpc' in quantname: distStr = '<30 pkpc'
+        if 'mstar30pkpc_' in quantname: distStr = '<30 pkpc'
 
         label = 'M$_{\star,%s}$ / $M_{\\rm halo,200crit}$ [ log ]' % distStr
         if clean: label = 'M$_{\star}$ / $M_{\\rm halo}$ [ log ]'
@@ -585,13 +585,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quantname in ['sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens']:
         # SFR (within 1, 2, or entire subhalo), or SFR surface density within either 1 or 2 times 2r1/2stars
         if '1' in quant:
-            fields = ['SubhaloSFRin%sRad' % hStr]
-            sfrLabel = '(<%d$r_{\\rm 1/2,\star}$, instant)' % hFac
             hFac = 1.0
-        elif '2' in quant:
-            fields = ['SubhaloSFRin%sRad' % hStr]
+            fields = ['SubhaloSFRinHalfRad']
             sfrLabel = '(<%d$r_{\\rm 1/2,\star}$, instant)' % hFac
+        elif '2' in quant:
             hFac = 2.0
+            fields = ['SubhaloSFRinRad']
+            sfrLabel = '(<%d$r_{\\rm 1/2,\star}$, instant)' % hFac
         else:
             fields = ['SubhaloSFR']
             sfrLabel = '(subhalo, instant)'
@@ -742,7 +742,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         label = 'r$_{\\rm \star,1/2}$ [ log kpc ]'
         minMax = [0.1, 1.6]
-        if tight: minMax = [0.2, 1.8]
+        if tight: minMax = [0.0, 1.8]
 
         if sP.redshift >= 0.99:
             minMax[0] -= 0.4
@@ -1674,6 +1674,35 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
+
+    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel']:
+        # MgII emission luminosity [erg/s] or half-light radius, subhalo total, including dust depletion
+        if 'size' in quantname:
+            # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
+            acField = 'Subhalo_MgII_LumSize_DustDepleted'
+            ac = sP.auxCat(fields=[acField])[acField]
+
+            if '_rel' in quantname:
+                # relative to galaxy size, normalize now
+                label = 'L$_{\\rm MgII}$ Half-light Radius / R$_{\\rm 1/2,\\star}$ [log]'
+                norm = sP.subhalos('rhalf_stars_code')
+                vals = ac / norm
+                minMax = [-0.5, 0.5]
+            else:
+                # absolute [pkpc]
+                label = 'L$_{\\rm MgII}$ Half-light Radius [ pkpc ]'
+                vals = sP.units.codeLengthToKpc(ac)
+                minMax = [1,10]
+                takeLog = False
+        else:
+            label = 'L$_{\\rm MgII}$ [ log erg/s ]'
+
+            # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
+            acField = 'Subhalo_MgII_Lum_DustDepleted'
+            ac = sP.auxCat(fields=[acField])[acField]
+            vals = ac.astype('float64') * 1e30
+
+            minMax = [37,42]
 
     if 'fiber_' in quantname:
         # mock SDSS fiber spectrum MCMC fit quantities

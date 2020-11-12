@@ -3076,6 +3076,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_BH_mode' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_mode',op='mean',rad=None), # if not zero or unity, >1 BH
 
+   'Subhalo_MgII_Lum_DustDepleted' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='sum',rad=None),
+   'Subhalo_MgII_LumSize_DustDepleted' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='halfrad',rad=None),
+
    'Subhalo_Gas_Wind_vel' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='wind_vel',op='mean',rad='2rhalfstars'),
    'Subhalo_Gas_Wind_dEdt' : \

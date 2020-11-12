@@ -1116,7 +1116,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     # shouldn't have any NaN, and shouldn't be all uniformly zero
     assert np.count_nonzero(np.isnan(grid)) == 0, 'ERROR: Final grid contains NaN.'
-    assert np.min(grid) != 0 or np.max(grid) != 0, 'ERROR: Final grid is uniformly zero.'
+    if np.min(grid) == 0 and np.max(grid) == 0:
+        print('WARNING: Final grid is uniformly zero.')
 
     # compute a guess for an adaptively clipped heuristic [min,max] bound
     if logMin:
@@ -1325,6 +1326,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, 
                                                        weightField, indRange=indRange)
             assert mass.size == 1 or (mass.size == hsml.size)
+
+            if mass.sum() == 0:
+                return emptyReturn()
 
             # load: skip certain cells/particles?
             if ptRestrictions is not None:
@@ -2529,15 +2533,13 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
-        barAreaHeight = (0.125 / nRows) # / aspect)
+        barAreaHeight = (0.08 / nRows) / aspect
+        if conf.fontsize > min_fontsize:
+            barAreaHeight += 0.001*(conf.fontsize-min_fontsize)
+        if conf.fontsize == min_fontsize:
+            barAreaHeight += 0.03
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
-        if nRows == 1 and nCols in [1]:
-            barAreaHeight = 0.055 / aspect
-            if conf.fontsize == min_fontsize:
-                barAreaHeight += 0.03
-        if nRows == 1 and nCols >= 2:
-            if conf.fontsize > 20:
-                barAreaHeight += 0.002*(conf.fontsize-20)
+
         if nCols >= 3:
             barAreaHeight += 0.014*nCols
         if not conf.colorbars:
@@ -2738,7 +2740,7 @@ def renderMultiPanel(panels, conf):
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1:
-                heightFac *= 0.5 # decrease
+                heightFac *= 0.8 # decrease
                 if conf.fontsize == min_fontsize: # small images
                     heightFac *= 1.6
                     widthFrac = 0.8

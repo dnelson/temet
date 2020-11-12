@@ -219,14 +219,18 @@ def _ionLoadHelper(sP, partType, field, kwargs):
     """ Helper to load (with particle level caching) ionization fraction, or total ion mass, 
     values values for gas cells. Or, total line flux for emission. """
 
-    if 'flux' in field:
+    if 'flux' in field or 'lum' in field:
         lineName, prop = field.rsplit(" ",1)
         lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
+        dustDepletion = False
+        if '_dustdepleted' in prop: # e.g. "MgII lum dustdepleted"
+            dustDepletion = True
+            prop = prop.replace('_dustdepleted', '')
     else:
         element, ionNum, prop = field.split() # e.g. "O VI mass" or "Mg II frac" or "C IV numdens"
 
     assert sP.isPartType(partType, 'gas')
-    assert prop in ['mass','frac','flux','numdens']
+    assert prop in ['mass','frac','flux','lum','numdens']
 
     # indRange subset
     indRangeOrig = kwargs['indRange']
@@ -248,7 +252,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
-    useCache = False #True
+    useCache = True
     createCache = False #createCache = True if getuser() != 'wwwrun' else False
 
     cachePath = sP.derivPath + 'cache/'
@@ -297,9 +301,12 @@ def _ionLoadHelper(sP, partType, field, kwargs):
                     if prop == 'numdens':
                         values *= sP.snapshotSubset(partType, 'numdens', indRange=indRangeLocal)
                         values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
-                else:
+                elif prop == 'lum':
+                    values = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
+                    values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+                elif prop == 'flux':
                     # emission flux
-                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal)
+                    lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeLocal, dustDepletion=dustDepletion)
                     values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2] @ sP.redshift
 
                 with h5py.File(cacheFile,'a') as f:
@@ -338,9 +345,12 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             if prop == 'numdens':
                 values *= sP.snapshotSubset(partType, 'numdens', indRange=indRangeOrig)
                 values /= ion.atomicMass(element) # [H atoms/cm^3] to [ions/cm^3]
-        else:
+        elif prop == 'lum':
+            values = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeOrig, dustDepletion=dustDepletion)
+            values /= 1e30 # 10^30 erg/s unit system to avoid overflow
+        elif prop == 'flux':
             # emission flux
-            lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeOrig)
+            lum = emis.calcGasLineLuminosity(sP, lineName, indRange=indRangeOrig, dustDepletion=dustDepletion)
             values = sP.units.luminosityToFlux(lum, wavelength=wavelength) # [photon/s/cm^2]
 
     return values
@@ -810,7 +820,7 @@ def snapshotSubset(sP, partType, fields,
                 r[field] = hydrogenMass(None, sP, molecular=molecularModel, indRange=indRange)
 
             else:
-                # cloudy-based calculation
+                # cloudy-based calculation (e.g. "O VI mass", "Mg II frac", "C IV numdens", "O  8 16.0067A")
                 r[field] = _ionLoadHelper(sP, partType, field, kwargs)
 
         # pre-computed H2/other particle-level data [linear code mass or density units]

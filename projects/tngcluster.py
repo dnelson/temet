@@ -63,7 +63,7 @@ def satelliteVelocityDistribution(sP, minMasses, sub_N=1):
     return r
 
 def plotRelativeVelDists():
-    """ desc """
+    """ Do we have a bullet cluster in the volume? Based on relative velocity of sub-component. """
     from util import simParams
     
     for snap in range(99,60,-1):
@@ -76,9 +76,6 @@ def plotRelativeVelDists():
         # start plot
         fig = plt.figure(figsize=(16,9))
         ax = fig.add_subplot(111)
-        #ax.set_xlim([0.0,2.5])
-        #ax.set_ylim([1e-4,1e0])
-        #ax.set_yscale('log')
 
         ax.set_xlabel('V$_{\\rm sub,rel}$ / V$_{\\rm 200}$')
         ax.set_ylabel('N(>V$_{\\rm sub,rel}$) / N$_{\\rm tot}$')

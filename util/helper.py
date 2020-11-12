@@ -949,13 +949,15 @@ def getWhiteBlackColors(pStyle):
 
 def validColorTableNames():
     """ Return a list of whitelisted colormap names. """
-    from matplotlib.pyplot import cm
+    from matplotlib.pyplot import colormaps
 
-    names1 = list(cm.cmap_d.keys()) # matplotlib
-    names2 = [n.replace('.cmo','') for n in cm.cmap_d] # cmocean
-    names3 = ['dmdens','dmdens_tng','HI_segmented','perula'] # custom
+    names1 = colormaps() # matplotlib
+    names1 = [n.replace('cmo.','') for n in names1] # cmocean
+    names2 = ['dmdens','dmdens_tng','HI_segmented','H2_segmented','perula','magma_gray',
+              'bluered_black0','blgrrd_black0','BdRd_r_black',
+              'tarn0','diff0','curl0','delta0','topo0','balance0'] # custom
 
-    return names1 + names2 + names3
+    return names1 + names2
 
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None, numColors=None):
     """ Load a custom or built-in color table specified by ctName. Note that appending '_r' to most default colormap names 
@@ -970,17 +972,17 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     """
     if ctName is None: return None
 
-    from matplotlib.pyplot import cm
+    from matplotlib.pyplot import cm, colormaps
     from matplotlib.colors import LinearSegmentedColormap
     import cmocean
     cmap = None
 
     # matplotlib
-    if ctName in cm.cmap_d:
+    if ctName in colormaps():
         cmap = cm.get_cmap(ctName, lut=numColors)
 
     # cmocean
-    if 'cmo.%s' % ctName in cm.cmap_d:
+    if 'cmo.%s' % ctName in colormaps():
         cmap = cm.get_cmap('cmo.%s' % ctName, lut=numColors)
 
     # cubehelix (with arbitrary parameters)

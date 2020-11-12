@@ -261,7 +261,7 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
         if 'hInd' in p and p['sP'].hInd is None:
             # todo: cleanup in migration from hInd to subhaloInd throughout vis!
             p['sP'] = p['sP'].copy()
-            print('Warning: Copying sP and attaching hInd [%d] to sP.hInd for vis.' % p['hInd'])
+            #print('Warning: Copying sP and attaching hInd [%d] to sP.hInd for vis.' % p['hInd'])
             p['sP'].hInd = p['hInd']
 
         # add imaging config for single halo view
