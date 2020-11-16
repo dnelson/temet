@@ -285,4 +285,6 @@ version, tagged on the date near the finalization of the paper.
 
 [Nelson et al. (2019b) - TNG50 outflows](http://arxiv.org/abs/1902.05554) - `projects.outflows.paperPlots()`
 
-[Nelson et al. (in prep) - TNG50 small-scale CGM](#) - `projects.lrg.paperPlots()`
+[Nelson et al. (2020) - TNG50 small-scale CGM](http://arxiv.org/abs/2005.09654) - `projects.lrg.paperPlots()`
+
+[Nelson et al. (in prep) - TNG50 MgII emission](#) - `projects.mg2emission.paperPlots()`

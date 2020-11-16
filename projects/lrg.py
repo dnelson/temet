@@ -2479,10 +2479,9 @@ def paperPlots():
         saveStr = weights[0] if weights is not None else meancolors[0]
         pdf = PdfPages('phase2d_%s_%d_h%d_%s_%s_%s.pdf' % (sP.simName,sP.snap,haloIDs[0],xQuant,yQuant,saveStr))
 
-        for haloID in haloIDs:
-            plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
-                         haloID=haloID, pdf=pdf, xlim=xlim, ylim=ylim, clim=clim, nBins=None, 
-                         contours=contours, contourQuant=contourQuant, qRestrictions=qRestrictions)
+        plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
+                     haloIDs=haloIDs, pdf=pdf, xlim=xlim, ylim=ylim, clim=clim, nBins=None, 
+                     contours=contours, contourQuant=contourQuant, qRestrictions=qRestrictions)
         pdf.close()
 
 
@@ -2532,7 +2531,7 @@ def paperPlots():
                 ctName = 'curl'
 
             plotPhaseSpace2D(sP, partType='gas', xQuant=xQuant, yQuant=yQuant, weights=weights, meancolors=meancolors, 
-                         haloID=haloID, xlim=xlim, ylim=ylim, clim=clim, nBins=200, ctName=ctName, 
+                         haloIDs=[haloID], xlim=xlim, ylim=ylim, clim=clim, nBins=200, ctName=ctName, 
                          contours=contours, contourQuant='mass', normColMax=normColMax, 
                          normContourQuantColMax=True, smoothSigma=1.0, colorEmpty=False)
 

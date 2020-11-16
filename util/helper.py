@@ -975,15 +975,16 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
     from matplotlib.pyplot import cm, colormaps
     from matplotlib.colors import LinearSegmentedColormap
     import cmocean
+    import copy # cannot modify default cmap, must make copy, e.g. for cmap.set_bad()
     cmap = None
 
     # matplotlib
     if ctName in colormaps():
-        cmap = cm.get_cmap(ctName, lut=numColors)
+        cmap = copy.copy(cm.get_cmap(ctName, lut=numColors))
 
     # cmocean
     if 'cmo.%s' % ctName in colormaps():
-        cmap = cm.get_cmap('cmo.%s' % ctName, lut=numColors)
+        cmap = copy.copy(cm.get_cmap('cmo.%s' % ctName, lut=numColors))
 
     # cubehelix (with arbitrary parameters)
     # ...

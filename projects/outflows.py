@@ -52,33 +52,33 @@ def explore_vrad_halos(sP, haloIDs):
         plotHistogram1D([sP], haloIDs=[haloID], ptType='gas', ptProperty='vrad', 
             sfreq0=False, ylim=[-6.0,-2.0], xlim=vrad_lim, pdf=pdf)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', haloID=haloID, pdf=pdf, **commonOpts)
+        plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloID=haloID, pdf=pdf, **commonOpts)
+        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloID=haloID, pdf=pdf, 
+        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, 
             yQuant='vrelmag', ylim=[0,3000], nBins=nBins, clim=clim)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', haloID=haloID, pdf=pdf, 
+        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', haloIDs=[haloID], pdf=pdf, 
             yQuant='vrad', ylim=vrad_lim, nBins=nBins, clim=[-4.5,-7.0])
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloID=haloID, pdf=pdf, sfreq0=True, **commonOpts)
+        plotPhaseSpace2D(sP, partType='gas', xQuant='rad', haloIDs=[haloID], pdf=pdf, sfreq0=True, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='wind_real', xQuant='rad', haloID=haloID, pdf=pdf, **commonOpts)
+        plotPhaseSpace2D(sP, partType='wind_real', xQuant='rad', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='temp', haloID=haloID, pdf=pdf, **commonOpts)
+        plotPhaseSpace2D(sP, partType='gas', xQuant='temp', haloIDs=[haloID], pdf=pdf, **commonOpts)
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='temp', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
-            meancolors=['rad'], weights=None, haloID=haloID, pdf=pdf)
+            meancolors=['rad'], weights=None, haloIDs=[haloID], pdf=pdf)
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
-            meancolors=['temp'], weights=None, haloID=haloID, pdf=pdf)
+            meancolors=['temp'], weights=None, haloIDs=[haloID], pdf=pdf)
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='rad', yQuant='vrad', ylim=vrad_lim, nBins=nBins, 
-            meancolors=['temp'], weights=None, haloID=haloID, pdf=pdf)
+            meancolors=['temp'], weights=None, haloIDs=[haloID], pdf=pdf)
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', nBins=nBins, 
-            meancolors=['vrad'], weights=None, haloID=haloID, clim=vrad_lim, pdf=pdf)
+            meancolors=['vrad'], weights=None, haloIDs=[haloID], clim=vrad_lim, pdf=pdf)
 
         pdf.close()
 
@@ -2832,10 +2832,54 @@ def paperPlots(sPs=None):
         clim   = [-3.0, 0.0]
         normColMax = True
 
-        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc', xlim=[0.0,2.0], haloID=haloID,
-            yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim, median=False)
-        #plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloID=haloID,
-        #    yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim)
+        def _f_post(ax):
+            """ Custom behavior. """
+            if 0:
+                # escape velocity curve, direct from enclosed mass profile                
+                ptTypes = ['stars','gas','dm']
+                haloLen = sP.groupCatSingle(haloID=haloIDs[0])['GroupLenType']
+                totSize = np.sum( [haloLen[sP.ptNum(ptType)] for ptType in ptTypes] )
+
+                offset = 0
+                mass = np.zeros( totSize, dtype='float32' )
+                rad  = np.zeros( totSize, dtype='float32' )
+
+                for ptType in ptTypes:
+                    mass[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, 'mass', haloID=haloIDs[0])
+                    rad[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, xQuant, haloID=haloIDs[0])
+                    offset += haloLen[sP.ptNum(ptType)]
+
+                sort_inds = np.argsort(rad)
+                mass = mass[sort_inds]
+                rad = rad[sort_inds]
+                cum_mass = np.cumsum(mass)
+
+                # sample down to N radial points
+                rad_code = evenlySample(rad[1:], 100)
+                tot_mass_enc = evenlySample(cum_mass[1:], 100)
+
+                if '_kpc' in xQuant: rad_code = sP.units.physicalKpcToCodeLength(rad_code) # pkpc -> code
+                vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
+            if 1:
+                # escape velocity curve, directly from potential of particles
+                vesc = sP.snapshotSubset('dm', 'vesc', haloID=haloIDs[0])
+                rad = sP.snapshotSubset('dm', xQuant, haloID=haloIDs[0])
+
+                sort_inds = np.argsort(rad)
+                vesc = vesc[sort_inds]
+                rad = rad[sort_inds]
+
+                rad_code = evenlySample(rad, 100, logSpace=True)
+                vesc = evenlySample(vesc, 100, logSpace=True)
+
+            if xlog: rad_code = np.log10(rad_code)
+            ax.plot(rad_code[1:], vesc[1:], '-', lw=lw, color='#000000', alpha=0.5)
+            #ax.text(rad_code[-17], vesc[-17]*1.02, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
+
+        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc', xlim=[0.0,2.0], haloIDs=[haloID],
+            yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim, median=False, f_post=f_post)
+        #plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', xlim=[0,80], haloIDs=[haloID],
+        #    yQuant=yQuant, ylim=ylim, nBins=nBins, normColMax=normColMax, clim=clim, f_post=f_post)
 
     if 0:
         # fig 8: distribution of radial velocities

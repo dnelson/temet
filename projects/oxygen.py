@@ -2246,7 +2246,7 @@ def paperPlots():
         hideBelow = True
         smoothSigma = 1.0
 
-        plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=None, 
+        plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, 
                          clim=massFracMinMax, xlim=xMinMax, ylim=yMinMax, 
                          contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 

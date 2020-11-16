@@ -357,7 +357,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
     # set selection subhaloID at sP.snap
     if gal == 'one':
-        # first movie (sbSnaps 51 - 3600)
+        # first movie, Andromeda (sbSnaps 51 - 3600)
         sP = simParams(res=2160,run='tng',snap=99)
         sbNum = 0
         #subhaloID = 389836 # halo 296, snap 58
@@ -377,7 +377,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         mm10 = [37.0, 40.7]
 
     if gal == 'two':
-        # second movie (sbSnaps 0 - 3600)
+        # second movie, massive elliptical (sbSnaps 0 - 3600)
         sP = simParams(res=2160,run='tng',snap=99)
         sbNum = 2
         subhaloID = 0 # halo 0, snap 58, also snap 99
@@ -394,7 +394,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         mm10 = [37.5, 41.0]
 
     if gal == 'three':
-        # third movie (sbSnaps 0 - ...)
+        # third movie, Milky Way (sbSnaps 0 - ...)
         sP = simParams(res=2160,run='tng',snap=90)
         sbNum = 0
         subhaloID = 481167 # halo 359, snap 90

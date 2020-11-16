@@ -688,9 +688,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
                              qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, 
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
-                             markSubhaloIDs=None, mark1to1=False, drawMedian=True, legendLoc='best', 
-                             xlim=None, ylim=None, clim=None, filterFlag=False, 
-                             colorbarInside=False, fig_subplot=[None,None]):
+                             markSubhaloIDs=None, mark1to1=False, drawMedian=True, medianLabel=None, 
+                             extraMedians=[],legendLoc='best', xlim=None, ylim=None, clim=None, 
+                             filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
@@ -706,7 +706,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     color each point by a third property.
     If markSubhaloIDs, highlight these subhalos especially on the plot. 
     If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
-    If drawMedian, then include median line and 1-sigma band.
+    If drawMedian, then include median line and 1-sigma band (optionally override label to medianLabel).
+    If extraMedians is not empty, then add median lines for these (y-axis) quantities as well.
     If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects.
     If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. """
     assert cenSatSelect in ['all', 'cen', 'sat']
@@ -718,7 +719,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     # hard-coded config
     lw = 2.5
     ptPlotThresh = 2000
-    nBins = 60
+    nBins = 50
     if nCols > 4 and sizefac == 1.0: sizefac = 0.8
 
     # start plot
@@ -801,8 +802,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             sim_cvals = sim_cvals[wFinite]
 
             # arbitrary property restriction(s)?
+            wRestrictions = []
             if qRestrictions is not None:
-                wRestrictions = []
                 for rFieldName, rFieldMin, rFieldMax in qRestrictions:
                     # load and restrict
                     vals, _, _, _ = sP.simSubhaloQuantity(rFieldName)
@@ -836,18 +837,53 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if sP.boxSize < 205000.0: binSize *= 2.0
 
             if drawMedian:
-                xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
+                xm, ym, _, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
                 if xm.size > sKn:
                     ym = savgol_filter(ym,sKn,sKo)
-                    sm = savgol_filter(sm,sKn,sKo)
+                    #sm = savgol_filter(sm,sKn,sKo)
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-                label = sP.simName + ' z=%.1f' % sP.redshift
-                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
+                label = sP.simName + ' z=%.1f' % sP.redshift if medianLabel is None else medianLabel
+                ax.plot(xm, ym, linestyles[0], lw=lw, color='black', alpha=0.8, label=label)
+                #ax.plot(xm, pm[0,:], ':', lw=lw, color='black', alpha=0.8)
+                #ax.plot(xm, pm[-1,:], ':', lw=lw, color='black', alpha=0.8)
+                ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor='black', alpha=0.1, interpolate=True)
 
-                # percentile:
-                if sim_xvals.size >= ptPlotThresh:
-                    ax.fill_between(xm, pm[1,:], pm[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+            for k, medianProp in enumerate(extraMedians):
+                # load new (y-axis) quantity, subset as before, and median
+                sim_mvals, mlabel, mMinMax, mLog = simSubhaloQuantity(sP, medianProp, clean, tight=True)
+                if mLog: sim_mvals = logZeroNaN(sim_mvals)
+
+                # verify units (in theory, must match with y-axis units...)
+                yunits = ylabel.split("[")[1][:-1].strip()
+                munits = mlabel.split("[")[1][:-1].strip()
+                mlabel = mlabel.split("[")[0] # delete units
+
+                if 'log ' in munits and munits.replace("log ","") == yunits:
+                    # munits is log(yunits), can fix this
+                    assert mLog
+                    sim_mvals = 10.0**sim_mvals
+                    munits = munits.replace("log ","")
+
+                if medianProp == 'size_gas':
+                    sim_mvals /= 10
+                    mlabel = "0.1" + mlabel
+
+                if munits != yunits:
+                    print('WARNING: Extra median [%s] has units [%s] mismatch with existing y-units [%s]!' % (medianProp,munits,yunits))
+
+                sim_mvals = sim_mvals[wSelect]
+                sim_mvals = sim_mvals[wFinite]
+                for wRestrict in wRestrictions:
+                    sim_mvals = sim_mvals[wRestrict]
+
+                xm, ym, _, pm = running_median(sim_xvals,sim_mvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
+                if xm.size > sKn:
+                    ym = savgol_filter(ym,sKn,sKo)
+                    #sm = savgol_filter(sm,sKn,sKo)
+                    pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+                ax.plot(xm, ym, linestyles[k+1], lw=lw, color='black', alpha=0.8, label=mlabel)
 
             # slice value?
             if sQuant is not None:
@@ -928,7 +964,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
                     opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
 
-                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, zorder=0, **opts)
+                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts) # zorder=0, 
 
             # 1-to-1 line?
             if mark1to1:
@@ -938,10 +974,11 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             # highlight/overplot a single subhalo or a few subhalos?
             if markSubhaloIDs is not None:
+                c = sampleColorTable('tableau10','red')
                 for subID in markSubhaloIDs:
-                    label = 'Subhalo #%d' % subID if len(markSubhaloIDs) <= 3 else ''
-                    ax.plot(sim_xvals_orig[subID], sim_yvals_orig[subID], 'o', markersize=markersize*2, 
-                        color=sampleColorTable('tableau10','red'), alpha=1.0, label=label)
+                    label = 'Subhalo #%d' % subID if len(markSubhaloIDs) <= 2 else ''                    
+                    ax.scatter(sim_xvals_orig[subID], sim_yvals_orig[subID], s=markersize*2.4, marker='o',
+                        linewidth=1.5, color=c, facecolor='none', alpha=1.0, label=label)
 
         # legend
         if f_post is not None:

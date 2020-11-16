@@ -517,7 +517,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         vals = sP.units.codeLengthToKpc(ac[fieldName])
 
-        label = 'Gas r$_{\\rm 1/2,H\\alpha}$ [ log kpc ]'
+        label = 'r$_{\\rm 1/2,H\\alpha}$ [ log kpc ]'
         minMax = [0.5, 2.0]
         if tight: minMax = [1.0, 2.2]
 
@@ -740,7 +740,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         gc = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
         vals = sP.units.codeLengthToKpc( gc[:,sP.ptNum('stars')] )
 
-        label = 'r$_{\\rm \star,1/2}$ [ log kpc ]'
+        label = 'r$_{\\rm 1/2,\star}$ [ log kpc ]'
         minMax = [0.1, 1.6]
         if tight: minMax = [0.0, 1.8]
 
@@ -1690,7 +1690,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
                 minMax = [-0.5, 0.5]
             else:
                 # absolute [pkpc]
-                label = 'L$_{\\rm MgII}$ Half-light Radius [ pkpc ]'
+                label = 'L$_{\\rm MgII}$ Half-light Radius [ kpc ]'
                 vals = sP.units.codeLengthToKpc(ac)
                 minMax = [1,10]
                 takeLog = False
@@ -2105,6 +2105,13 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
             label = 'n$_{\\rm %s%s}$ [ log cm$^{-3}$ ]' % (element, ionNum)
             lim = [-14.0, -4.0]
             if haloLims: [-12.0, -6.0]
+            log = True
+        elif 'lum' in ptProperty:
+            lineName, prop = ptProperty.rsplit(" ",1) # e.g. "H alpha lum", "MgII lum", "MgII lum_dustdepleted"
+            lineName = lineName.replace("_dustdepleted","")
+            label = '%s Luminosity [log 10$^{30}$ erg/s]' % lineName
+            lim = [-15.0, 10.0]
+            if haloLims: pass
             log = True
 
     if '_ionmassratio' in ptProperty: # e.g. 'O6_O8_ionmassratio', ionic mass ratio

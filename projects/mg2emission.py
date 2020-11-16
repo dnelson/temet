@@ -13,12 +13,13 @@ from scipy.ndimage import gaussian_filter
 from vis.halo import renderSingleHalo
 from util.helper import running_median, sampleColorTable, loadColorTable
 from plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
+from plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from plot.config import *
 from projects.azimuthalAngleCGM import _get_dist_theta_grid
 
-def singleHaloImageMGII(sP, hInd, conf=1):
+def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
+                        rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True):
     """ MgII emission image test.. """
-    rVirFracs  = [0.25]
     method     = 'sphMap' # note: fof-scope
     nPixels    = [800,800]
     axes       = [0,1]
@@ -27,10 +28,7 @@ def singleHaloImageMGII(sP, hInd, conf=1):
     labelSim   = False
     labelHalo  = True
     relCoords  = True
-    rotation   = 'edge-on'
-
     sizeType   = 'kpc'
-    size       = 100
 
     # smooth? MUSE UDF has a PSF FWMH ~ 0.7 arcsec
     #smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.7)
@@ -56,8 +54,8 @@ def singleHaloImageMGII(sP, hInd, conf=1):
     class plotConfig:
         plotStyle    = 'edged'
         rasterPx     = nPixels[0] 
-        colorbars    = True
-        fontsize     = 16
+        colorbars    = cbars
+        fontsize     = font
         saveFilename = '%s_%d_%d_%s.pdf' % (sP.simName,sP.snap,hInd,'-'.join([p['partField'] for p in panels]))
 
     # render
@@ -214,7 +212,7 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
         return sP.derivPath + 'cache/mg2emission_%d_sbr_%d_%d_%s_%d.hdf5' % (sP.snap,massBin[0]*10,massBin[1]*10,rotation,size)
 
     # not at lowest redshift? add low redshift line for comparison
-    if not indiv and sP.redshift > minRedshift+0.1:
+    if not indiv and minRedshift is not None and sP.redshift > minRedshift+0.1:
         sP_lowz = sP.copy()
         sP_lowz.setRedshift(minRedshift)
         massBin = massBins[-1] # highest mass
@@ -314,7 +312,7 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
             print('Saved: [%s]' % _cachefile(sP))
 
         # use psf smoothed results? just replace all arrays now
-        if psf:
+        if psf == True:
             sbr_indiv_mean = sbr_indiv_mean_psf
             sbr_indiv_med = sbr_indiv_med_psf
             sbr_stack_mean = sbr_stack_mean_psf
@@ -342,20 +340,40 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
         else:
             # compute stack of 'per halo profiles' and plot
             label = 'M$_{\star}$ = %.1f' % (massBin[0])
+            if psf == 'both': label += ' (no PSF)'
 
-            yy = np.nanpercentile(sbr_indiv_med[:,:,1], percs, axis=0)
-            l, = ax.plot(radMidPts, yy[1,:], linestyle=':', lw=lw, color=colors[i])
-            #ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=colors[i], alpha=0.15)
+            if psf != 'both':
+                yy = np.nanpercentile(sbr_indiv_med[:,:,1], percs, axis=0)
+                l, = ax.plot(radMidPts, yy[1,:], linestyle=':', lw=lw, color=colors[i])
+                #ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=colors[i], alpha=0.15)
 
             yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
             l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color=colors[i], label=label)
             ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
+
+            if psf == 'both':
+                label = 'M$_{\star}$ = %.1f (w/ PSF)' % (massBin[0])
+                yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
+                l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle=':', color=colors[i], label=label)
+                ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
 
             # plot 'image stack' and shaded band
             #l, = ax.plot(radMidPts, sbr_stack_med[:,1], lw=lw, label=label + ' (stack then prof, median)')
             #ax.fill_between(radMidPts, sbr_stack_med[:,0], sbr_stack_med[:,2], color=l.get_color(), alpha=0.1)
 
             #l, = ax.plot(radMidPts, sbr_stack_mean, lw=lw, label=label + ' (stack then prof, mean)')
+
+    # observational data
+    if sP.redshift == 0.7 and not indiv:
+        # (Rickards Vaught+ 2019)
+        dist = 14.5 # kpc
+        dist_err = 6.5 # kpc
+
+        sb_lim = np.log10(6.51e-19) # erg/s/cm^2/arcsec^2 (5sigma upper limit)
+        #mstar_gals = [9.9, 11.0] # log msun, 5 galaxies, 4<SFR<40 msun/yr
+
+        ax.errorbar(dist, sb_lim, xerr=dist_err, yerr=0.4, uplims=True, color='#000000', marker='D', alpha=0.6)
+        ax.text(dist, sb_lim+0.15, 'RV+2019', ha='center', fontsize=20)
 
     # finish and save plot
     if indiv:
@@ -364,11 +382,14 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
         cb = plt.colorbar(sm, cax=cax, orientation='horizontal')
         cb.ax.set_title('Galaxy Stellar Mass [log M$_{\\rm sun}$]')
     else:
-        ax.text(ax.get_xlim()[1]-0.22*(ax.get_xlim()[1]-ax.get_xlim()[0]), -18.9, 'z = %.1f' % sP.redshift, fontsize=24)
+        if psf != 'both':
+            xx = ax.get_xlim()[1]-0.22*(ax.get_xlim()[1]-ax.get_xlim()[0])
+            yy = -18.9
+            ax.text(xx, yy, 'z = %.1f' % sP.redshift, fontsize=24)
         ax.legend(loc='best')
 
     fig.savefig('SB_profiles_%s_%d_%s%s%s.pdf' % \
-        (sP.simName,sP.snap,partField,'_indiv' if indiv else '','_psf' if psf else ''))
+        (sP.simName,sP.snap,partField,'_indiv' if indiv else '','_psf=%s' % psf))
     plt.close(fig)
 
 def mg2lum_vs_mass(sP, redshifts=None):
@@ -399,6 +420,26 @@ def mg2lum_vs_mass(sP, redshifts=None):
 
     def _draw_data(ax):
         """ Draw data constraints on figure. """
+        # Rubin+ (2011), z=0.7, TKRS4389, SFR=50 or 60 msun/yr (same object as Burchett+2020)
+        mstar = 9.9
+        mstar_err = 0.1 # assumed
+        flux = 1.920e-17 + 2.103e-17 # 2796+2803, Table 1, [erg/s/cm^2]
+        lum = np.log10(sP.units.fluxToLuminosity(flux)) # log(erg/s)
+        lum_err = 0.4 # assumed
+
+        label = 'Rubin+11 (z=0.7 LRIS/TKRS4389)'
+        ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='H', label=label)
+
+        # Martin+ (2013) z=1.0, 32016857, SFR=80 msun/yr
+        mstar = 9.8
+        mstar_err = 0.1 # assumed
+        flux = 1.5e-17 + 1.0e-17 # 2796+2803 [erg/s/cm^2]
+        lum = np.log10(sP.units.fluxToLuminosity(flux)) # log(erg/s)
+        lum_err = 0.4 # assumed
+
+        label = 'Martin+13 (z=1 LRIS/32016857)'
+        ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='s', label=label)
+
         # Johannes Zahl+ (in prep, MUSE UDF) (BlueMUSE slides)
         mstar = 10.0 # log msun
         mstar_err = 0.1 # assumed
@@ -406,7 +447,8 @@ def mg2lum_vs_mass(sP, redshifts=None):
         lum = np.log10(9e40) # erg/s
         lum_err = 0.2 # assumed
 
-        ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='D', label='Zabl+21 (MEGAFLOW)')
+        label = 'Zabl+21 (z=0.7 MEGAFLOW)'
+        ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='D', label=label)
 
     quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
@@ -437,7 +479,7 @@ def paperPlots():
     # figure 3 - stacked SB profiles
     if 0:
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45] ]
-        for redshift in redshifts:
+        for redshift in [0.7]: #redshifts:
             sP.setRedshift(redshift)
             radialSBProfiles(sP, mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
 
@@ -464,11 +506,56 @@ def paperPlots():
         #             xlim=[8.0,11.5], ylim=[-2.6,0.6], minCount=None, cRel=[0.5,2.0,False], nBins=50, 
         #             filterFlag=True, medianLine=True, sizeFac=0.8, ctName=None)
 
+    # figure 7 - lumsize vs mstar, compare with other sizes
+    if 0:
+        # find three particular subhalos of interest on this plot
+        mg2_lumsize,_,_,_ = sP.simSubhaloQuantity('mg2_lumsize')
+        subIDs = [435554,445695,460949] # high, medium, low
+
+        if 0:
+            xx = sP.subhalos('mstar_30pkpc_log')
+            cen_flag = sP.subhalos('cen_flag')
+            ww = np.where( (xx>9.8) & (xx < 9.9) & (np.abs(mg2_lumsize-17.5) < 0.2) & cen_flag ) # 2.4,6.0,17.5
+
+        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
+                                 xlim=[8.0,11.5], ylim=[0,20], clim=[37,42], drawMedian=True, medianLabel='r$_{\\rm 1/2,L(MgII)}$', 
+                                 markersize=30, scatterPoints=True, scatterColor='mg2_lum', sizefac=0.8, markSubhaloIDs=subIDs,
+                                 extraMedians=['size_stars','size_gas'], alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
+
+        for subID in subIDs:
+            subh = sP.subhalo(subID)
+            label = 'SFR = %.1f M$_{\\odot}$ yr$^{-1}$' % subh['SubhaloSFR']
+            label += '\nr$_{\\rm 1/2,L(MgII)}$ = %.1f kpc' % mg2_lumsize[subID]
+            label += '\nID #%d' % subID
+            singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
+                                rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False)
+
+    # figure 8 - relation of MgII flux and vrad (inflow vs outflow)
+    if 0:
+        SubhaloGrNr = sP.subhalos('SubhaloGrNr')
+        mstar = sP.subhalos('mstar_30pkpc_log')
+        cen_flag = sP.subhalos('cen_flag')
+
+        with np.errstate(invalid='ignore'):
+            subIDs = np.where( (mstar>9.99) & (mstar < 10.01) & cen_flag )
+            haloIDs = SubhaloGrNr[subIDs]
+
+        def _f_post(ax):
+            ax.text(0.97, 0.97, 'M$_{\\star} = 10^{10}\,$M$_{\odot}$', transform=ax.transAxes, 
+                    color='#ffffff', fontsize=22, ha='right', va='top')
+
+        plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', yQuant='vrad', weights=['MgII lum_dustdepleted'], meancolors=None, 
+                         xlim=[0, 30], ylim=[-160,160], clim=[-5,-3], contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
+                         ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
+                         normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post, addHistY=50)
+
     # figure X - impact of dust depletion
     if 0:
         visDustDepletionImpact(sP, subhaloID)
 
-    # todo: psf vs no psf
-    # todo: correlation with vrad: inflow vs outflow
-    # todo: lumsize vs mstar, compare with other sizes
+    # figure X: psf vs no psf
+    if 0:
+        mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1] ]
+        radialSBProfiles(sP, mStarBins, psf='both')
+
     # todo: resolution convergence

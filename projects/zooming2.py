@@ -184,9 +184,9 @@ def phase_diagram_ovi():
     cMinMax = [-4.0, -1.0] #[-10.0, 0.0]
     hideBelow = True
     smoothSigma = 1.5
-    haloID = 0 # None for fullbox
+    haloIDs = [0] # None for fullbox
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, 
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, 
                      clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
                      contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
@@ -205,8 +205,9 @@ def phase_diagram_coolingtime():
     contours = [-2.0, -1.0, 0.0]
     hideBelow = False
     smoothSigma = 1.5
+    haloIDs = [0] # None for fullbox
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, 
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, 
                      clim=cMinMax, xlim=xMinMax, ylim=yMinMax, 
                      contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
@@ -226,17 +227,18 @@ def phase_diagram_vs_L11():
     cMinMax = [-3.0, 1.0] # 1 Myr to 10 Gyr
     hideBelow = False
     smoothSigma = 1.5
+    haloIDs = [0]
 
-    plotPhaseSpace2D(sP1, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, clim=cMinMax, 
+    plotPhaseSpace2D(sP1, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
                      xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
-    plotPhaseSpace2D(sP2, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloID=0, clim=cMinMax, 
+    plotPhaseSpace2D(sP2, ptType, xQuant, yQuant, weights=weights, meancolors=meancolors, haloIDs=haloIDs, clim=cMinMax, 
                      xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
 def phase_diagram_ovi_tng50_comparison():
     # TNG50 analog for comparison
     print('Need to disable OVI cache for now...')
     sP = simParams(res=2160,run='tng',redshift=2.25)
-    haloID = 100
+    haloIDs = [100]
 
     ptType = 'gas'
     xQuant = 'hdens'
@@ -249,7 +251,7 @@ def phase_diagram_ovi_tng50_comparison():
     hideBelow = True
     smoothSigma = 1.0
 
-    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloID=haloID, clim=cMinMax, 
+    plotPhaseSpace2D(sP, ptType, xQuant, yQuant, weights=weights, haloIDs=haloIDs, clim=cMinMax, 
                      xlim=xMinMax, ylim=yMinMax, contours=contours, smoothSigma=smoothSigma, hideBelow=True)
 
 def figure1_res_statistics(conf=0):

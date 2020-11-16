@@ -213,12 +213,12 @@ def _draw_special_lines(sP, ax, ptProperty):
         ax.plot(ax.get_xlim(), [0.0, 0.0], ':', lw=lw, alpha=0.3, color='#ffffff')
         ax.plot(ax.get_xlim(), [1.0, 1.0], ':', lw=lw, alpha=0.3, color='#ffffff')
 
-def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloID=None, 
+def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloIDs=None, 
                      xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
                      ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, 
-                     normContourQuantColMax=False, pdf=None):
-    """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a single halo or for an entire box 
-    (if haloID is None). weights is a list of the gas properties to weight the 2D histogram by, 
+                     normContourQuantColMax=False, addHistX=False, addHistY=False, colorbar=True, f_pre=None, f_post=None, pdf=None):
+    """ Plot a 2D phase space plot (arbitrary values on x/y axes), for a list of halos, or for an entire box 
+    (if haloIDs is None). weights is a list of the gas properties to weight the 2D histogram by, 
     if more than one, a horizontal multi-panel plot will be made with a single colorbar. Or, if meancolors is 
     not None, then show the mean value per pixel of these quantities, instead of weighted histograms.
     If xlim,ylim,clim specified, then use these bounds, otherwise use default/automatic bounds.
@@ -226,6 +226,9 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     then the histogram itself (or meancolors) is used, otherwise this quantity is used.
     if normColMax, then normalize every column to its maximum (i.e. conditional 2D PDF).
     If normContourQuantColMax, same but for a specified contourQuant.
+    If f_pre, f_post are not None, then these are 'custom' functions accepting the axis as a single argument, which 
+    are called before and after the rest of plotting, respectively.
+    If addHistX and/or addHistY, then specifies the number of bins to add marginalized 1D histogram(s).
     If hideBelow, then pixel values below clim[0] are left pure white. 
     If colorEmpty, then empty/unoccupied pixels are colored at the bottom of the cmap.
     If smoothSigma is not zero, gaussian smooth contours at this level. 
@@ -237,9 +240,9 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
     if nBins is None:
         # automatic (2d binning set below based on aspect ratio)
-        nBins = 400
+        nBins = 200
         if sP.isZoom:
-            nBins = 250
+            nBins = 150
     else:
         if isinstance(nBins,(list,np.ndarray)):
             # fully specified
@@ -263,17 +266,39 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
     contoursColor = 'k' # black
 
+    def _load_all_halos(sP, partType, partField, haloIDs, GroupLenType=None):
+        # global box load?
+        if haloIDs is None:
+            return sP.snapshotSubsetP(partType, partField)
+
+        # set of halos: get total load size
+        if GroupLenType is None:
+            GroupLenType = sP.halos('GroupLenType')[:,sP.ptNum(partType)]
+        loadSize = np.sum(GroupLenType[haloIDs])
+
+        # allocate
+        vals = np.zeros(loadSize, dtype='float32')
+
+        offset = 0
+
+        # load each
+        for haloID in haloIDs:
+            vals[offset:offset+GroupLenType[haloID]] = sP.snapshotSubset(partType, partField, haloID=haloID)
+            offset += GroupLenType[haloID]
+
+        return vals
+
     # load: x-axis
-    xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
+    xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloIDs is not None))
     if xlim is None: xlim = xlim_quant
-    xvals = sP.snapshotSubsetP(partType, xQuant, haloID=haloID)
+    xvals = _load_all_halos(sP, partType, xQuant, haloIDs)
 
     if xlog: xvals = logZeroNaN(xvals)
 
     # load: y-axis
-    ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
+    ylabel, ylim_quant, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloIDs is not None))
     if ylim is None: ylim = ylim_quant
-    yvals = sP.snapshotSubsetP(partType, yQuant, haloID=haloID)
+    yvals = _load_all_halos(sP, partType, yQuant, haloIDs)
 
     if ylog: yvals = logZeroNaN(yvals)
 
@@ -282,12 +307,12 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         mask = np.zeros( xvals.size, dtype='int16' )
         for rFieldName, rFieldMin, rFieldMax in qRestrictions:
             # load and update mask
-            r_vals = sP.snapshotSubset(partType, rFieldName, haloID=haloID)
+            r_vals = _load_all_halos(sP, partType, rFieldName, haloIDs)
 
             wRestrict = np.where( (r_vals < rFieldMin) | (r_vals > rFieldMax) )
             mask[wRestrict] = 1
-            print('[%d] restrict [%s] eliminated [%d] of [%d] = %.2f%%' % \
-                (haloID,rFieldName,len(wRestrict[0]),mask.size,len(wRestrict[0])/mask.size*100))
+            print(' restrict [%s] eliminated [%d] of [%d] = %.2f%%' % \
+                (rFieldName,len(wRestrict[0]),mask.size,len(wRestrict[0])/mask.size*100))
 
         # apply mask
         wRestrict = np.where(mask == 0)
@@ -300,7 +325,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     # loop over each weight requested
     for i, wtProp in enumerate(weights):
         # load: weights
-        weight = sP.snapshotSubset(partType, wtProp, haloID=haloID)
+        weight = _load_all_halos(sP, partType, wtProp, haloIDs)
 
         if qRestrictions is not None:
             weight = weight[wRestrict]
@@ -308,8 +333,11 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         # add panel
         ax = fig.add_subplot(1,len(weights),i+1)
 
+        if f_pre is not None:
+            f_pre(ax)
+
         if len(weights) == 1: # title
-            hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
+            hStr = 'fullbox' if haloIDs is None else 'halos%s' % '-'.join([str(h) for h in haloIDs])
             wtStr = partType.capitalize() + ' ' + wtProp.capitalize()
             #ax.set_title('%s z=%.1f %s' % (sP.simName,sP.redshift,hStr))
 
@@ -332,7 +360,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             weight = weight[w_fin]
                 
             # plot 2D image, each pixel colored by the mean value of a third quantity
-            clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloID is not None))
+            clabel, clim_quant, clog = simParticleQuantity(sP, partType, wtProp, clean=clean, haloLims=(haloIDs is not None))
             wtStr = clabel # 'Mean ' + clabel
             zz, _, _, _ = binned_statistic_2d(xvals, yvals, weight, 'mean', # median unfortunately too slow
                                               bins=nBins2D, range=[xlim,ylim])
@@ -377,7 +405,8 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
             if contourQuant is not None:
                 # load a different quantity for the contouring
-                contourq = sP.snapshotSubset(partType, contourQuant, haloID=haloID)
+                contourq = _load_all_halos(sP, partType, contourQuant, haloIDs)
+
                 if qRestrictions is not None: contourq = contourq[wRestrict]
                 if binnedStat: contourq = contourq[w_fin]
 
@@ -432,19 +461,14 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         # median/percentiles line(s)?
         if median:
             binSize = (xlim[1] - xlim[0]) / nBins2D[0] * 5
-            group = sP.groupCatSingle(haloID=haloID)
-            v200 = sP.units.codeM200R200ToV200InKmS(group['Group_M_Crit200'], group['Group_R_Crit200'])
-            w = np.where(yvals > v200)
-            print('Note: Hard-coded behavior, restricting median line yvals to >v200.')
-            xm, ym, sm, pm = running_median(xvals[w], yvals[w], binSize=binSize, percs=[16,50,84])
+            xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=[16,50,84])
             ax.plot(xm, ym, '-', lw=lw, color='black', alpha=0.5)
-            print(xm)
-            print(ym)
 
-        # mark virial radius?
-        if haloID is not None and xQuant in ['rad','rad_kpc','rad_kpc_linear']:
-            textOpts = {'rotation':90.0, 'horizontalalignment':'right', 'verticalalignment':'bottom', 'fontsize':18, 'color':'#ffffff'}
-            rvir = sP.groupCatSingle(haloID=haloID)['Group_R_Crit200']
+        # special behaviors
+        if haloIDs is not None and xQuant in ['rad','rad_kpc','rad_kpc_linear']:
+            # mark virial radius
+            textOpts = {'rotation':90.0, 'ha':'right', 'va':'bottom', 'fontsize':18, 'color':'#ffffff'}
+            rvir = sP.groupCatSingle(haloID=haloIDs[0])['Group_R_Crit200']
             if '_kpc' in xQuant: rvir = sP.units.codeLengthToKpc(rvir)
 
             for fac in [1,2,4,10]: #,100]:
@@ -456,50 +480,10 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
 
                 ax.plot( [xx,xx], yy, '-', lw=lw, color=textOpts['color'])
                 ax.text( xx - xoff, yy[0], '$r_{\\rm vir}$/%d'%fac if fac != 1 else '$r_{\\rm vir}$', **textOpts)
-
-        # special behaviors
-        if xQuant in ['rad_kpc','rad_kpc_linear'] and yQuant == 'vrad':
-            if 0:
-                # escape velocity curve, direct from enclosed mass profile                
-                ptTypes = ['stars','gas','dm']
-                haloLen = sP.groupCatSingle(haloID=haloID)['GroupLenType']
-                totSize = np.sum( [haloLen[sP.ptNum(ptType)] for ptType in ptTypes] )
-
-                offset = 0
-                mass = np.zeros( totSize, dtype='float32' )
-                rad  = np.zeros( totSize, dtype='float32' )
-
-                for ptType in ptTypes:
-                    mass[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, 'mass', haloID=haloID)
-                    rad[offset:offset+haloLen[sP.ptNum(ptType)]] = sP.snapshotSubset(ptType, xQuant, haloID=haloID)
-                    offset += haloLen[sP.ptNum(ptType)]
-
-                sort_inds = np.argsort(rad)
-                mass = mass[sort_inds]
-                rad = rad[sort_inds]
-                cum_mass = np.cumsum(mass)
-
-                # sample down to N radial points
-                rad_code = evenlySample(rad[1:], 100)
-                tot_mass_enc = evenlySample(cum_mass[1:], 100)
-
-                if '_kpc' in xQuant: rad_code = sP.units.physicalKpcToCodeLength(rad_code) # pkpc -> code
-                vesc = np.sqrt(2 * sP.units.G * tot_mass_enc / rad_code) # code velocity units = [km/s]
-            if 1:
-                # escape velocity curve, directly from potential of particles
-                vesc = sP.snapshotSubset('dm', 'vesc', haloID=haloID)
-                rad = sP.snapshotSubset('dm', xQuant, haloID=haloID)
-
-                sort_inds = np.argsort(rad)
-                vesc = vesc[sort_inds]
-                rad = rad[sort_inds]
-
-                rad_code = evenlySample(rad, 100, logSpace=True)
-                vesc = evenlySample(vesc, 100, logSpace=True)
-
-            if xlog: rad_code = np.log10(rad_code)
-            ax.plot(rad_code[1:], vesc[1:], '-', lw=lw, color='#000000', alpha=0.5)
-            ax.text(rad_code[-17], vesc[-17]*1.02, '$v_{\\rm esc}(r)$', color='#000000', alpha=0.5, fontsize=18.0, va='bottom', rotation=-4.0)
+        
+        if yQuant == 'vrad' and ax.get_ylim()[1] > 0 and ax.get_ylim()[0] < 0:
+            # mark inflow-outflow boundary
+            ax.plot(ax.get_xlim(), [0,0], '-', lw=lw, color='#000000', alpha=0.5)
 
         if xQuant == 'density' and yQuant == 'temp':
             # add Torrey+12 'ISM cut' line
@@ -507,29 +491,95 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             yy = 6.0 + 0.25*xx
             ax.plot(xx, yy, '-', lw=lw, color='#000000', alpha=0.7, label='Torrey+12 ISM cut')
 
-    # colorbar and save
-    if xQuant == 'hdens' and yQuant == 'temp' and len(weights) == 3:
-        # TNG colors paper
-        fig.subplots_adjust(right=0.93)
-        cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.831]) 
-    else:
-        # more general
-        fig.subplots_adjust(right=0.89)
-        cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.15)
+        if f_post is not None:
+            f_post(ax)
 
-    cb = plt.colorbar(im, cax=cbar_ax)
-    if not binnedStat: wtStr = 'Relative ' + wtStr + ' [ log ]'
-    cb.ax.set_ylabel(wtStr)
-    
+    # marginalized 1D distributions
+    aspect = fig.get_size_inches()[0] / fig.get_size_inches()[1]
+
+    height = 0.12
+    hpad = 0.004
+    width = 0.12 #* aspect
+    wpad = 0.004 #* aspect
+    color = '#555555'
+
+    if addHistX:
+        # horizontal histogram on the top
+        fig.tight_layout()
+        fig.set_tight_layout(False)
+
+
+        rect = ax.get_position().bounds # [left,bottom,width,height]
+        ax.set_position([rect[0],rect[1],rect[2],rect[3]-height-hpad*2])
+        
+        rect_new = [rect[0], rect[1]+rect[3]-height+hpad, rect[2], height]
+        if addHistY: rect_new[2] -= (width+wpad*2) # pre-emptively adjust width
+        ax_histx = fig.add_axes(rect_new)
+        ax_histx.tick_params(direction='in', labelbottom=False, left=False, labelleft=False)
+        ax_histx.set_xlim(ax.get_xlim())
+        ax_histx.hist(xvals, bins=addHistX, range=ax.get_xlim(), weights=weight, 
+                      color=color, log=False, alpha=0.7)
+        assert len(weights) == 1 # otherwise do multiple histograms
+        colorbar = False # disable colorbar
+
+    if addHistY:
+        # vertical histogram on the right
+        if not addHistX: fig.tight_layout()
+        fig.set_tight_layout(False)
+
+        rect = ax.get_position().bounds # [left,bottom,width,height]
+        ax.set_position([rect[0],rect[1],rect[2]-width-wpad*2,rect[3]])
+
+        ax_histy = fig.add_axes([rect[0]+rect[2]-width+wpad, rect[1], width, rect[3]])
+        ax_histy.tick_params(direction='in', labelleft=False, bottom=False, labelbottom=False)
+        ax_histy.set_ylim(ax.get_ylim())
+        hist, bins, patches = ax_histy.hist(yvals, bins=addHistY, range=ax.get_ylim(), weights=weight, 
+                                            color=color, log=False, alpha=0.7, orientation='horizontal')
+
+        if yQuant == 'vrad':
+            # special coloring: red for negative (inflow), blue for positive (outflow)
+            colors = [sampleColorTable('tableau10','red'), sampleColorTable('tableau10','blue')]
+            binsize = bins[1] - bins[0]
+            w_neg = np.where(bins[:-1]+binsize/2 < 0.0)[0]
+            w_pos = np.where(bins[:-1]+binsize/2 > 0.0)[0]
+            for ind in w_neg: patches[ind].set_facecolor(colors[0])
+            for ind in w_pos: patches[ind].set_facecolor(colors[1])
+
+            # write fractions
+            textOpts = {'ha':'center', 'fontsize':18, 'transform':ax_histy.transAxes}
+            ax_histy.text(0.5, 0.06, 'inflow\n%.2f' % (hist[w_neg].sum()/hist.sum()), va='bottom', color=colors[0], **textOpts)
+            ax_histy.text(0.5, 0.94, 'outflow\n%.2f' % (hist[w_pos].sum()/hist.sum()), va='top', color=colors[1], **textOpts)
+
+        assert len(weights) == 1 # otherwise do multiple histograms
+        colorbar = False # disable colorbar
+
+    # colorbar
+    if colorbar:
+        if xQuant == 'hdens' and yQuant == 'temp' and len(weights) == 3:
+            # TNG colors paper
+            fig.subplots_adjust(right=0.93)
+            cbar_ax = fig.add_axes([0.94, 0.131, 0.02, 0.831]) 
+        else:
+            # more general
+            fig.subplots_adjust(right=0.89)
+            cbar_ax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.15)
+
+        cb = plt.colorbar(im, cax=cbar_ax)
+        if not binnedStat: wtStr = 'Relative ' + wtStr + ' [ log ]'
+        cb.ax.set_ylabel(wtStr)
+
+    # save
     if pdf is not None:
         pdf.savefig(facecolor=fig.get_facecolor())
     else:
-        fig.savefig('phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_h-%s.pdf' % \
-            (sP.simName,sP.snap,partType,xQuant,yQuant,"-".join([w.replace(" ","") for w in weights]),haloID))
+        fig.savefig('phase2d_%s_%d_%s_x-%s_y-%s_wt-%s_%s.pdf' % \
+            (sP.simName,sP.snap,partType,xQuant,yQuant,
+            "-".join([w.replace(" ","") for w in weights]),
+            "nh%d" % len(haloIDs) if haloIDs is not None else 'fullbox') )
     plt.close(fig)
 
 def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='Si_H_numratio', 
-                                   haloID=None, radMinKpc=None, radMaxKpc=None):
+                                    haloID=None, radMinKpc=None, radMaxKpc=None):
     """ Plot the (median) relation between two particle properties for a single halo (if haloID is not None), 
     or the whole box (if haloID is None). If a halo is specified, optionally restrict to a given 
     [radMinKpc,radMaxKpc] radial range, specified in physical kpc."""
@@ -941,8 +991,8 @@ def compareRuns_PhaseDiagram():
         sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
         if sP.simName == 'DM only': continue
         print(variant,sP.simName)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, haloID=None, pdf=pdf)
-        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=['coolrate_ratio'], weights=None, haloID=None, pdf=pdf)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, pdf=pdf)
+        plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=['coolrate_ratio'], weights=None, pdf=pdf)
 
     pdf.close()
 
@@ -971,7 +1021,7 @@ def compareVariants_NO_OH_stellar():
         sP = simParams(res=512,run='tng',redshift=redshift,variant=variant)
         if sP.simName in ['L25n512_0020','L25n512_0030']: continue
         print(variant,sP.simName)
-        plotPhaseSpace2D(sP, partType=partType, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, haloID=None, pdf=pdf)
+        plotPhaseSpace2D(sP, partType=partType, xQuant=xQuant, yQuant=yQuant, xlim=xlim, ylim=ylim, pdf=pdf)
 
     pdf.close()
 
@@ -1006,7 +1056,7 @@ def oneRun_PhaseDiagram(snaps=None):
         pdf = PdfPages('phaseDiagram_%s_%s%s_%d.pdf' % (yQuant,sP.simName,'_zoom' if zoom else '',snap))
 
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, #meancolors=[cQuant], weights=weights, 
-            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
 
         pdf.close()
 
@@ -1034,9 +1084,9 @@ def oneRun_tempcheck():
         pdf = PdfPages('phaseCheck_%s_%d.pdf' % (sP.simName,snap))
 
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp', 
-            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant='temp_old', 
-            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, pdf=pdf)
+            xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, pdf=pdf)
 
         pdf.close()
 
@@ -1157,7 +1207,7 @@ def singleHaloProperties():
 
     #for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:
     #    plotStackedRadialProfiles1D([sP], haloIDs=haloID, ptType='gas', ptProperty=prop)
-    #    plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloID=haloID)
+    #    plotPhaseSpace2D(sP, partType='gas', xQuant='hdens', yQuant=prop, haloIDs=[haloID])
 
 def compareRuns_particleQuant():
     """ Driver. Compare a series of runs in a single panel plot of a particle median quantity vs another. """
@@ -1196,6 +1246,6 @@ def coolingPhase():
 
     for cQuant in cQuants:
         plotPhaseSpace2D(sP, xQuant=xQuant, yQuant=yQuant, meancolors=[cQuant], xlim=xlim, ylim=ylim, 
-                         weights=None, hideBelow=False, haloID=None, pdf=pdf)
+                         weights=None, hideBelow=False, haloIDs=None, pdf=pdf)
 
     pdf.close()

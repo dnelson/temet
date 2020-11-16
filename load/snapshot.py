@@ -223,7 +223,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
         lineName, prop = field.rsplit(" ",1)
         lineName = lineName.replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
         dustDepletion = False
-        if '_dustdepleted' in prop: # e.g. "MgII lum dustdepleted"
+        if '_dustdepleted' in prop: # e.g. "MgII lum_dustdepleted"
             dustDepletion = True
             prop = prop.replace('_dustdepleted', '')
     else:
@@ -1509,7 +1509,9 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     if haloSubset and (not sP.groupOrdered or (indRange is not None) or (inds is not None)):
         raise Exception('haloSubset only for groupordered snapshots, and not with indRange subset.')
     if haloID is not None or subhaloID is not None:
-        raise Exception('Not yet supported.')
+        print('NOTE: Parallel load with haloID or subhaloID not yet supported, loading in serial.')
+        return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
+            subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
 
     # override path function
     il.snapshot.snapPath = partial(snapPath, subbox=sP.subbox)

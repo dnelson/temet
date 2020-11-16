@@ -480,6 +480,7 @@ def vis_fullbox_virtual(sP, conf=0):
         plotStyle  = 'edged' # open, edged
         rasterPx   = [nPixels,nPixels]
         colorbars  = True
+        fontsize   = 32
 
         saveFilename = './boxImage_%s_%s-%s_%s_conf%d.pdf' % \
           (sP.simName,panels[0]['partType'],panels[0]['partField'],sP.snap,conf)
@@ -933,9 +934,9 @@ def paperPlots():
         sample_halomasses_vs_redshift(sPs)
 
     # figure 3 - virtual full box vis
-    if 0:
+    if 1:
         for conf in [0,1,2,3,4]:
-            vis_fullbox_virtual(sP, conf=conf)
+            vis_fullbox_virtual(TNG_C, conf=conf)
 
     # figure 4 - individual halo/gallery vis (x-ray)
 

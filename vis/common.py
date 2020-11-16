@@ -2533,7 +2533,7 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
-        barAreaHeight = (0.08 / nRows) / aspect
+        barAreaHeight = (0.07 / nRows) / aspect - 0.01*conf.rasterPx[0]/1000
         if conf.fontsize > min_fontsize:
             barAreaHeight += 0.001*(conf.fontsize-min_fontsize)
         if conf.fontsize == min_fontsize:
@@ -2740,7 +2740,7 @@ def renderMultiPanel(panels, conf):
             if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1:
-                heightFac *= 0.8 # decrease
+                heightFac *= 0.7 # decrease
                 if conf.fontsize == min_fontsize: # small images
                     heightFac *= 1.6
                     widthFrac = 0.8

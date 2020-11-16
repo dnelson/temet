@@ -610,8 +610,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     variant = 'sf3'
     run = 'tng_zoom'
 
-    hInds = [0,8,36,50,51,93,125,171,231,330,470,877,901,1041,2191,3297,4274] # testing
-    #hInds = _halo_ids_run(onlyDone=True)
+    hInds = _halo_ids_run(onlyDone=True)
 
     def _newpartid(old_ids, halo_ind, ptNum):
         """ Define convention to offset particle/cell/tracer IDs based on zoom run halo ID. 

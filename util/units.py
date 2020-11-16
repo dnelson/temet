@@ -1146,6 +1146,19 @@ class units(object):
         flux = lum / dist_fac * photon_fac
         return flux
 
+    def fluxToLuminosity(self, flux, redshift=None):
+        """ Convert a flux in [erg/s/cm^2] to a luminosity [erg/s], from a source at the given redshift. """
+        if redshift is None:
+            redshift = self._sP.redshift
+
+        d_L_cm = self.redshiftToLumDist(redshift) * self.Mpc_in_cm
+
+        dist_fac = 4 * np.pi * d_L_cm**2.0
+
+        lum = flux * dist_fac
+
+        return lum
+
     def fluxToSurfaceBrightness(self, flux, pxDimsCode, arcsec2=True, arcmin2=False, ster=False, kpc=False):
         """ Convert a flux in e.g. [energy/s/cm^2] or [photon/s/cm^2] into a surface brightness 
         at a given redshift and for a certain pixel scale. pxDimsCode is a 2-tuple of the x and y 
