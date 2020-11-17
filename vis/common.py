@@ -652,7 +652,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
         if partFieldLoad in haloCentricFields:
-            if method in ['sphMap_global','sphMap_globalZoom']:
+            if method in ['sphMap_global','sphMap_globalZoom','sphMap_globalZoomOrig']:
                 # likely in chunked load, will use refPos and refVel as set in haloImgSpecs
                 quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
             else:
@@ -1245,6 +1245,21 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             indRange = [0, OuterFuzzSnapOffsetByType[1,pt]] # end at beginning of outer fuzz of second halo
 
+        if method == 'sphMap_globalZoomOrig':
+            # virtual box 'global original zoom' scope: all particles of a single original zoom
+            assert not sP.isZoom and sP.hInd is not None
+
+            pt = sP.ptNum(partType)
+
+            with h5py.File(sP.postPath + 'offsets/offsets_%03d.hdf5' % sP.snap,'r') as f:
+                origIDs = f['OriginalZooms/HaloIDs'][()]
+                offsets = f['OriginalZooms/GroupsSnapOffsetByType'][()]
+                lengths = f['OriginalZooms/GroupsTotalLengthByType'][()]
+
+            origZoomID = sP.groupCatSingle(subhaloID=sP.hInd)['SubhaloOrigHaloID']
+            origZoomInd = np.where(origIDs == origZoomID)[0][0]
+            indRange = [offsets[origZoomInd,pt], offsets[origZoomInd,pt]+lengths[origZoomInd,pt]]
+
         if indRange is not None and indRange[1] - indRange[0] < 1:
             return emptyReturn()
 
@@ -1465,7 +1480,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     quant = quant[wMask]
 
             # render
-            if method in ['sphMap','sphMap_global','sphMap_globalZoom','sphMap_subhalo','sphMap_minIP','sphMap_maxIP']:
+            if method in ['sphMap','sphMap_global','sphMap_globalZoom','sphMap_globalZoomOrig',
+                          'sphMap_subhalo','sphMap_minIP','sphMap_maxIP']:
                 # particle by particle (unordered) splat using standard SPH cubic spline kernel
 
                 # further sub-method specification?
@@ -2737,7 +2753,7 @@ def renderMultiPanel(panels, conf):
             hOffset = None
             heightFac = np.clip(1.0*np.sqrt(nCols/nRows), 0.35, 2.5)
 
-            if nRows == 1: heightFac *= np.sqrt(aspect) # reduce
+            if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1:
                 heightFac *= 0.7 # decrease

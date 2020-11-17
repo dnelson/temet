@@ -7,13 +7,13 @@ sKn     = 5   # savgol smoothing kernel length (1=disabled)
 sKo     = 3   # savgol smoothing kernel poly order
 binSize = 0.2 # dex in stellar mass/halo mass for median lines
 
-figsize = (14,10) # (8,6)
-clean   = True    # make visually clean plots with less information
-sfclean = 0.8 if clean else 1.0 # sizefac to multiply figsize by if clean == True
-pStyle  = 'white' # white or black background
+percs   = [16,50,84] # +/- 1 sigma (50 must be in the middle for many analyses)
 
-figsize = [figsize[0] * sfclean, figsize[1] * sfclean]
-figsize_lg = [figsize[0] * sfclean, figsize[1] * sfclean]
+figsize = (11.2, 8.0) # (8,6), [14,10]*0.8
+clean   = True    # make visually clean plots with less information (TODO: remove)
+pStyle  = 'white' # white or black background
+sizefac = 0.8     # for single column figures
+figsize_sm = [figsize[0] * sizefac, figsize[1] * sizefac]
 
 lw = 2.5 # default line width
 

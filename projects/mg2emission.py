@@ -11,7 +11,7 @@ from scipy.signal import savgol_filter
 from scipy.ndimage import gaussian_filter
 
 from vis.halo import renderSingleHalo
-from util.helper import running_median, sampleColorTable, loadColorTable
+from util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN
 from plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
 from plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from plot.config import *
@@ -145,7 +145,7 @@ def visDustDepletionImpact(sP, hInd):
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xlim=None):
+def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xlim=None, ylim=None):
     """ Use grids to produce individual and stacked radial surface brightness profiles. """
     method     = 'sphMap' # note: fof-scope
     nPixels    = [800,800]
@@ -162,18 +162,14 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
     radMinMax = [0.0, 70] # ~ sqrt((size/2)**2 + (size/2)**2)
     radBins   = np.linspace(radMinMax[0], radMinMax[1], nRadBins+1)
     radMidPts = radBins[:-1] + (radMinMax[1]-radMinMax[0])/nRadBins/2
-    percs     = [16,50,84] # +/- 1 sigma (50 must be in the middle)
-
-    # load catalog
-    dist, _ = _get_dist_theta_grid(size, nPixels)
-
-    mstar = sP.subhalos('mstar_30pkpc_log')
-    cen_flag = sP.subhalos('central_flag')
 
     # MUSE UDF has a PSF FWMH ~ 0.7 arcsec
     pxScale = size / nPixels[0] # pkpc/px
-    psfFWHM_px = sP.units.arcsecToAngSizeKpcAtRedshift(0.7) / pxScale
+    psfFWHM_px = sPs[0].units.arcsecToAngSizeKpcAtRedshift(0.7) / pxScale
     psfSigma_px = psfFWHM_px / 2.3548
+
+    def _cachefile(sP):
+        return sP.derivPath + 'cache/mg2emission_%d_sbr_%d_%d_%s_%d.hdf5' % (sP.snap,massBin[0]*10,massBin[1]*10,rotation,size)
 
     def _rad_profile(rad_pts, sb_pts):
         """ Profile helper. """
@@ -199,169 +195,188 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
         return sb2, sb3
 
     # start figure
-    sizefac = 0.8 # for single column figure
-    fig = plt.figure(figsize=(figsize[0]*sizefac,figsize[1]*sizefac))
+    fig = plt.figure(figsize=figsize_sm)
     ax = fig.add_subplot(111)
 
     ax.set_xlabel('Projected Distance [pkpc]')
     ax.set_ylabel('MgII SB [log erg s$^{-1}$ cm$^{-2}$ arcsec$^{-2}$]')
     ax.set_xlim(radMinMax if xlim is None else xlim)
-    ax.set_ylim([-22.0,-16.5])
+    ax.set_ylim([-22.0,-16.5] if ylim is None else ylim)
 
-    def _cachefile(sP):
-        return sP.derivPath + 'cache/mg2emission_%d_sbr_%d_%d_%s_%d.hdf5' % (sP.snap,massBin[0]*10,massBin[1]*10,rotation,size)
+    # loop over runs
+    for k, sP in enumerate(sPs):
+        # load catalog
+        dist, _ = _get_dist_theta_grid(size, nPixels)
 
-    # not at lowest redshift? add low redshift line for comparison
-    if not indiv and minRedshift is not None and sP.redshift > minRedshift+0.1:
-        sP_lowz = sP.copy()
-        sP_lowz.setRedshift(minRedshift)
-        massBin = massBins[-1] # highest mass
+        mstar = sP.subhalos('mstar_30pkpc_log')
+        cen_flag = sP.subhalos('central_flag')
 
-        if isfile(_cachefile(sP_lowz)):
-            with h5py.File(_cachefile(sP_lowz),'r') as f:
-                sbr_indiv_mean = f['sbr_indiv_mean'][()]
-                sbr_indiv_mean_psf = f['sbr_indiv_mean_psf'][()]
+        # not at lowest redshift? add low redshift line for comparison
+        if not indiv and minRedshift is not None and sP.redshift > minRedshift+0.1:
+            sP_lowz = sP.copy()
+            sP_lowz.setRedshift(minRedshift)
+            massBin = massBins[-1] # highest mass
 
-        if psf:
-            yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
+            if isfile(_cachefile(sP_lowz)):
+                with h5py.File(_cachefile(sP_lowz),'r') as f:
+                    sbr_indiv_mean = f['sbr_indiv_mean'][()]
+                    sbr_indiv_mean_psf = f['sbr_indiv_mean_psf'][()]
+
+                if psf:
+                    yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
+                else:
+                    yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
+                l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color='#bbbbbb', alpha=0.4)
+
+        if indiv:
+            colors = sampleColorTable('rainbow', indiv, bounds=[0.0,1.0])
+            colorQuant = 'sfr' #'mstar'
+            sfr = logZeroNaN(sP.subhalos('SubhaloSFRinRad'))
+            #cmap = loadColorTable('terrain', fracSubset=[0.0,0.8])
+            cmap = loadColorTable('turbo', fracSubset=[0.1,1.0])
         else:
-            yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
-        l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color='#bbbbbb', alpha=0.4)
+            colors = sampleColorTable('plasma', len(massBins), bounds=[0.1,0.7])
 
-    if indiv:
-        colors = sampleColorTable('rainbow', indiv, bounds=[0.0,1.0])
-        #cmap = loadColorTable('rainbow')
-        cmap = loadColorTable('terrain', fracSubset=[0.0,0.8])
-    else:
-        colors = sampleColorTable('plasma', len(massBins), bounds=[0.1,0.7])
+        # loop over halos in each mass bin
+        for i, massBin in enumerate(massBins):
 
-    # loop over halos in each mass bin
-    for i, massBin in enumerate(massBins):
+            with np.errstate(invalid='ignore'):
+                subInds = np.where( (mstar>massBin[0]) & (mstar<massBin[1]) & cen_flag )[0]
 
-        with np.errstate(invalid='ignore'):
-            subInds = np.where( (mstar>massBin[0]) & (mstar<massBin[1]) & cen_flag )[0]
+            print('[%.2f - %.2f] Processing [%d] halos...' % (massBin[0],massBin[1],len(subInds)))
 
-        print('[%.2f - %.2f] Processing [%d] halos...' % (massBin[0],massBin[1],len(subInds)))
+            # check for existence of cache
+            if isfile(_cachefile(sP)):
+                # load cached result
+                with h5py.File(_cachefile(sP),'r') as f:
+                    sbr_indiv_mean = f['sbr_indiv_mean'][()]
+                    sbr_indiv_med = f['sbr_indiv_med'][()]
+                    sbr_indiv_mean_psf = f['sbr_indiv_mean_psf'][()]
+                    sbr_indiv_med_psf = f['sbr_indiv_med_psf'][()]
+                    sbr_stack_mean = f['sbr_stack_mean'][()]
+                    sbr_stack_med = f['sbr_stack_med'][()]
+                    sbr_stack_mean_psf = f['sbr_stack_mean_psf'][()]
+                    sbr_stack_med_psf = f['sbr_stack_med_psf'][()]
+                    #grid_global = f['grid_global'][()]
+                print('Loaded: [%s]' % _cachefile(sP))
+            else:
+                # compute now
+                sbr_indiv_mean = np.zeros( (len(subInds), nRadBins), dtype='float32' )
+                sbr_indiv_med = np.zeros( (len(subInds), nRadBins, len(percs)), dtype='float32' )
+                sbr_indiv_mean_psf = np.zeros( (len(subInds), nRadBins), dtype='float32' )
+                sbr_indiv_med_psf = np.zeros( (len(subInds), nRadBins, len(percs)), dtype='float32' )
+                grid_global = np.zeros( (len(subInds), nPixels[0], nPixels[1]), dtype='float32' )
 
-        # check for existence of cache
-        if isfile(_cachefile(sP)):
-            # load cached result
-            with h5py.File(_cachefile(sP),'r') as f:
-                sbr_indiv_mean = f['sbr_indiv_mean'][()]
-                sbr_indiv_med = f['sbr_indiv_med'][()]
-                sbr_indiv_mean_psf = f['sbr_indiv_mean_psf'][()]
-                sbr_indiv_med_psf = f['sbr_indiv_med_psf'][()]
-                sbr_stack_mean = f['sbr_stack_mean'][()]
-                sbr_stack_med = f['sbr_stack_med'][()]
-                sbr_stack_mean_psf = f['sbr_stack_mean_psf'][()]
-                sbr_stack_med_psf = f['sbr_stack_med_psf'][()]
-                #grid_global = f['grid_global'][()]
-            print('Loaded: [%s]' % _cachefile(sP))
-        else:
-            # compute now
-            sbr_indiv_mean = np.zeros( (len(subInds), nRadBins), dtype='float32' )
-            sbr_indiv_med = np.zeros( (len(subInds), nRadBins, len(percs)), dtype='float32' )
-            sbr_indiv_mean_psf = np.zeros( (len(subInds), nRadBins), dtype='float32' )
-            sbr_indiv_med_psf = np.zeros( (len(subInds), nRadBins, len(percs)), dtype='float32' )
-            grid_global = np.zeros( (len(subInds), nPixels[0], nPixels[1]), dtype='float32' )
+                sbr_indiv_mean.fill(np.nan)
+                sbr_indiv_med.fill(np.nan)
+                sbr_indiv_mean_psf.fill(np.nan)
+                sbr_indiv_med_psf.fill(np.nan)
 
-            sbr_indiv_mean.fill(np.nan)
-            sbr_indiv_med.fill(np.nan)
-            sbr_indiv_mean_psf.fill(np.nan)
-            sbr_indiv_med_psf.fill(np.nan)
+                for j, hInd in enumerate(subInds):
+                    class plotConfig:
+                        saveFilename = 'dummy'
 
-            for j, hInd in enumerate(subInds):
-                class plotConfig:
-                    saveFilename = 'dummy'
+                    grid, _ = renderSingleHalo([{}], plotConfig, locals(), returnData=True)
 
-                grid, _ = renderSingleHalo([{}], plotConfig, locals(), returnData=True)
+                    grid_global[j,:,:] = grid
+                    sbr_indiv_mean[j,:], sbr_indiv_med[j,:,:] = _rad_profile(dist.ravel(), grid.ravel())
 
-                grid_global[j,:,:] = grid
-                sbr_indiv_mean[j,:], sbr_indiv_med[j,:,:] = _rad_profile(dist.ravel(), grid.ravel())
+                    # psf smooth and recompute
+                    grid2 = gaussian_filter(grid, psfSigma_px, mode='reflect', truncate=5.0)
+                    sbr_indiv_mean_psf[j,:], sbr_indiv_med_psf[j,:,:] = _rad_profile(dist.ravel(), grid2.ravel())
+
+                # create dist in same shape as grid_global
+                dist_global = np.zeros( (len(subInds), nPixels[0]*nPixels[1]), dtype='float32' )
+
+                for j, hInd in enumerate(subInds):
+                    dist_global[j,:] = dist.ravel()
+
+                # compute profile on 'stacked images'
+                sbr_stack_mean, sbr_stack_med = _rad_profile(dist_global.ravel(), grid_global.ravel())
 
                 # psf smooth and recompute
-                grid2 = gaussian_filter(grid, psfSigma_px, mode='reflect', truncate=5.0)
-                sbr_indiv_mean_psf[j,:], sbr_indiv_med_psf[j,:,:] = _rad_profile(dist.ravel(), grid2.ravel())
+                grid_global2 = gaussian_filter(grid_global, psfSigma_px, mode='reflect', truncate=5.0)
+                sbr_stack_mean_psf, sbr_stack_med_psf = _rad_profile(dist_global.ravel(), grid_global2.ravel())
 
-            # create dist in same shape as grid_global
-            dist_global = np.zeros( (len(subInds), nPixels[0]*nPixels[1]), dtype='float32' )
+                # save cache
+                with h5py.File(_cachefile(sP),'w') as f:
+                    f['grid_global'] = grid_global
+                    f['sbr_indiv_mean'] = sbr_indiv_mean
+                    f['sbr_indiv_med'] = sbr_indiv_med
+                    f['sbr_indiv_mean_psf'] = sbr_indiv_mean_psf
+                    f['sbr_indiv_med_psf'] = sbr_indiv_med_psf
 
-            for j, hInd in enumerate(subInds):
-                dist_global[j,:] = dist.ravel()
+                    f['sbr_stack_mean'] = sbr_stack_mean
+                    f['sbr_stack_med'] = sbr_stack_med
+                    f['sbr_stack_mean_psf'] = sbr_stack_mean_psf
+                    f['sbr_stack_med_psf'] = sbr_stack_med_psf
 
-            # compute profile on 'stacked images'
-            sbr_stack_mean, sbr_stack_med = _rad_profile(dist_global.ravel(), grid_global.ravel())
+                print('Saved: [%s]' % _cachefile(sP))
 
-            # psf smooth and recompute
-            grid_global2 = gaussian_filter(grid_global, psfSigma_px, mode='reflect', truncate=5.0)
-            sbr_stack_mean_psf, sbr_stack_med_psf = _rad_profile(dist_global.ravel(), grid_global2.ravel())
+            # use psf smoothed results? just replace all arrays now
+            if psf == True:
+                sbr_indiv_mean = sbr_indiv_mean_psf
+                sbr_indiv_med = sbr_indiv_med_psf
+                sbr_stack_mean = sbr_stack_mean_psf
+                sbr_stack_med = sbr_stack_med_psf
 
-            # save cache
-            with h5py.File(_cachefile(sP),'w') as f:
-                f['grid_global'] = grid_global
-                f['sbr_indiv_mean'] = sbr_indiv_mean
-                f['sbr_indiv_med'] = sbr_indiv_med
-                f['sbr_indiv_mean_psf'] = sbr_indiv_mean_psf
-                f['sbr_indiv_med_psf'] = sbr_indiv_med_psf
-
-                f['sbr_stack_mean'] = sbr_stack_mean
-                f['sbr_stack_med'] = sbr_stack_med
-                f['sbr_stack_mean_psf'] = sbr_stack_mean_psf
-                f['sbr_stack_med_psf'] = sbr_stack_med_psf
-
-            print('Saved: [%s]' % _cachefile(sP))
-
-        # use psf smoothed results? just replace all arrays now
-        if psf == True:
-            sbr_indiv_mean = sbr_indiv_mean_psf
-            sbr_indiv_med = sbr_indiv_med_psf
-            sbr_stack_mean = sbr_stack_mean_psf
-            sbr_stack_med = sbr_stack_med_psf
-
-        # individual profiles or stack?
-        if indiv:
-            # plot stack under
-            yy = np.nanpercentile(sbr_indiv_med[:,:,1], percs, axis=0)
-            yy = savgol_filter(yy, sKn, sKo, axis=1)
-            #l, = ax.plot(radMidPts, yy[1,:], linestyle='-', lw=lw*4, color='#000000', alpha=0.4)
-            ax.fill_between(radMidPts, yy[0,:], yy[2,:], color='#000000', alpha=0.2)
-
-            norm = Normalize(vmin=massBin[0], vmax=massBin[1]) # color on mstar
-
-            # plot individual profiles
-            for j in range( np.min([indiv,sbr_indiv_med.shape[0]]) ):
-                yy = sbr_indiv_med[j,:,1]
-                if 0:
-                    c = colors[j] # sampled uniformly from colormap in order of subhalo IDs
-                if 1:
-                    c = cmap(norm(mstar[subInds[j]]))
-
-                ax.plot(radMidPts, savgol_filter(yy,sKn,sKo,axis=0), '-', color=c)
-        else:
-            # compute stack of 'per halo profiles' and plot
-            label = 'M$_{\star}$ = %.1f' % (massBin[0])
-            if psf == 'both': label += ' (no PSF)'
-
-            if psf != 'both':
+            # individual profiles or stack?
+            if indiv:
+                # plot stack under
                 yy = np.nanpercentile(sbr_indiv_med[:,:,1], percs, axis=0)
-                l, = ax.plot(radMidPts, yy[1,:], linestyle=':', lw=lw, color=colors[i])
-                #ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=colors[i], alpha=0.15)
+                yy = savgol_filter(yy, sKn, sKo, axis=1)
+                #l, = ax.plot(radMidPts, yy[1,:], linestyle='-', lw=lw*4, color='#000000', alpha=0.4)
+                ax.fill_between(radMidPts, yy[0,:], yy[2,:], color='#000000', alpha=0.2)
 
-            yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
-            l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color=colors[i], label=label)
-            ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
+                if colorQuant == 'mstar':
+                    norm = Normalize(vmin=massBin[0], vmax=massBin[1]) # color on mstar
+                if colorQuant == 'sfr':
+                    norm = Normalize(vmin=-0.2, vmax=0.8)
+                    #norm = Normalize(vmin=np.percentile(sfr[subInds],5), vmax=np.percentile(sfr[subInds],95))
 
-            if psf == 'both':
-                label = 'M$_{\star}$ = %.1f (w/ PSF)' % (massBin[0])
-                yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
-                l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle=':', color=colors[i], label=label)
-                ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
+                # plot individual profiles
+                for j in range( np.min([indiv,sbr_indiv_med.shape[0]]) ):
+                    yy = sbr_indiv_med[j,:,1]
+                    if 0:
+                        c = colors[j] # sampled uniformly from colormap in order of subhalo IDs
+                    if 1:
+                        if colorQuant == 'mstar': c = cmap(norm(mstar[subInds[j]]))
+                        if colorQuant == 'sfr': c = cmap(norm(sfr[subInds[j]]))
 
-            # plot 'image stack' and shaded band
-            #l, = ax.plot(radMidPts, sbr_stack_med[:,1], lw=lw, label=label + ' (stack then prof, median)')
-            #ax.fill_between(radMidPts, sbr_stack_med[:,0], sbr_stack_med[:,2], color=l.get_color(), alpha=0.1)
+                    ax.plot(radMidPts, savgol_filter(yy,sKn,sKo,axis=0), '-', color=c)
+            else:
+                # compute stack of 'per halo profiles' and plot
+                label = 'M$_{\star}$ = %.1f' % (massBin[0])
+                if psf == 'both': label += ' (no PSF)'
 
-            #l, = ax.plot(radMidPts, sbr_stack_mean, lw=lw, label=label + ' (stack then prof, mean)')
+                if psf != 'both' and len(sPs) == 1:
+                    yy = np.nanpercentile(sbr_indiv_med[:,:,1], percs, axis=0)
+                    l, = ax.plot(radMidPts, yy[1,:], linestyle=':', lw=lw, color=colors[i])
+                    #ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=colors[i], alpha=0.15)
+
+                if len(sPs) == 1:
+                    # single run
+                    yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
+                    l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color=colors[i], label=label)
+                    ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
+                else:
+                    # multiple runs (resolution convergence plot)
+                    yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
+                    if k > 0: label = ''
+                    l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle=linestyles[k], color=colors[i], label=label)
+                    #ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
+
+                if psf == 'both':
+                    label = 'M$_{\star}$ = %.1f (w/ PSF)' % (massBin[0])
+                    yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
+                    l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle=':', color=colors[i], label=label)
+                    ax.fill_between(radMidPts, yy[0,:], yy[2,:], color=l.get_color(), alpha=0.15)
+
+                # plot 'image stack' and shaded band
+                #l, = ax.plot(radMidPts, sbr_stack_med[:,1], lw=lw, label=label + ' (stack then prof, median)')
+                #ax.fill_between(radMidPts, sbr_stack_med[:,0], sbr_stack_med[:,2], color=l.get_color(), alpha=0.1)
+
+                #l, = ax.plot(radMidPts, sbr_stack_mean, lw=lw, label=label + ' (stack then prof, mean)')
 
     # observational data
     if sP.redshift == 0.7 and not indiv:
@@ -375,21 +390,51 @@ def radialSBProfiles(sP, massBins, minRedshift=None, psf=False, indiv=False, xli
         ax.errorbar(dist, sb_lim, xerr=dist_err, yerr=0.4, uplims=True, color='#000000', marker='D', alpha=0.6)
         ax.text(dist, sb_lim+0.15, 'RV+2019', ha='center', fontsize=20)
 
+        # Burchett+2020
+        dist     = np.array([0.33, 1.03, 1.73, 2.44, 3.15, 3.85, 4.55]) # arcsec
+        dist_kpc = sP.units.arcsecToAngSizeKpcAtRedshift(dist)
+        sb       = np.log10([1.70e-17, 1.01e-17, 4.36e-18, 2.10e-18, 9.48e-19, 5.26e-19, 1.03e-19]) # erg/s/cm^2/arcsec^2
+        sb_up    = np.log10([1.70e-17, 1.01e-17, 4.36e-18, 2.10e-18, 1.04e-18, 6.26e-19, 1.89e-19]) - sb
+        sb_down  = sb - np.log10([1.70e-17, 1.01e-17, 4.36e-18, 2.10e-18, 8.60e-19, 4.53e-19, 4.99e-20])
+
+        ax.errorbar(dist_kpc, sb, yerr=[sb_down,sb_up], color='#000000', marker='s', alpha=0.6)
+        if indiv:
+            yy = sb[2] - 0.5
+        else:
+            yy = sb[2] + 0.2
+        ax.text(dist_kpc[2], sb[2]+0.2, 'Burchett+2020', ha='left', fontsize=20)
+
     # finish and save plot
+    if len(sPs) > 1:
+        handles = []
+        labels = []
+
+        for k, sP in enumerate(sPs):
+            handles += [plt.Line2D( (0,1),(0,0),color='black',lw=lw,linestyle=linestyles[k],marker='')]
+            labels += [sP.simName]
+
+        legend2 = ax.legend(handles, labels, loc='lower left')
+        ax.add_artist(legend2)
+
     if indiv:
+        fig.tight_layout()
+        fig.set_tight_layout(False)
         cax = fig.add_axes([0.5,0.84,0.4,0.04])
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         cb = plt.colorbar(sm, cax=cax, orientation='horizontal')
-        cb.ax.set_title('Galaxy Stellar Mass [log M$_{\\rm sun}$]')
+        if colorQuant == 'mstar': ctitle = 'Galaxy Stellar Mass [log M$_{\\rm sun}$]'
+        if colorQuant == 'sfr': ctitle = 'Galaxy SFR [log M$_{\\rm sun}$ yr$^{-1}$]'
+        cb.ax.set_title(ctitle)
     else:
-        if psf != 'both':
+        if psf != 'both' and len(sPs) == 1:
             xx = ax.get_xlim()[1]-0.22*(ax.get_xlim()[1]-ax.get_xlim()[0])
             yy = -18.9
             ax.text(xx, yy, 'z = %.1f' % sP.redshift, fontsize=24)
         ax.legend(loc='best')
 
-    fig.savefig('SB_profiles_%s_%d_%s%s%s.pdf' % \
-        (sP.simName,sP.snap,partField,'_indiv' if indiv else '','_psf=%s' % psf))
+    fig.savefig('SB_profiles_%s_%d_%s%s%s%s.pdf' % \
+        (sP.simName,sP.snap,partField,'_indiv' if indiv else '','_psf=%s' % psf,
+            '_sP%d' % len(sPs) if len(sPs)>1 else ''))
     plt.close(fig)
 
 def mg2lum_vs_mass(sP, redshifts=None):
@@ -416,7 +461,6 @@ def mg2lum_vs_mass(sP, redshifts=None):
     alpha = 0.7
     maxPointsPerDex = 500
     colorbarInside = True
-    sizefac = 0.8 # for single column figure
 
     def _draw_data(ax):
         """ Draw data constraints on figure. """
@@ -481,12 +525,12 @@ def paperPlots():
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45] ]
         for redshift in [0.7]: #redshifts:
             sP.setRedshift(redshift)
-            radialSBProfiles(sP, mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
+            radialSBProfiles([sP], mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
 
     # figure 4 - individual SB profiles
     if 0:
         mStarBins = [ [10.0,10.1] ]
-        radialSBProfiles(sP, mStarBins, indiv=70, xlim=[0,30], psf=False)
+        radialSBProfiles([sP], mStarBins, indiv=70, xlim=[0,30], psf=True)
 
     # figure 5 - L_MgII vs M*, multiple redshifts overplotted
     if 0:
@@ -496,11 +540,11 @@ def paperPlots():
     if 0:
         quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                  xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[37,42], drawMedian=False, markersize=30,
-                                 scatterPoints=True, scatterColor='mg2_lum', sizefac=0.8, 
+                                 scatterPoints=True, scatterColor='mg2_lum', sizefac=sizefac, 
                                  alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
         quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                  xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[1,10], drawMedian=False, markersize=30,
-                                 scatterPoints=True, scatterColor='mg2_lumsize', sizefac=0.8, 
+                                 scatterPoints=True, scatterColor='mg2_lumsize', sizefac=sizefac, 
                                  alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
         #quantHisto2D(sP, pdf=None, yQuant='ssfr', xQuant='mstar_30pkpc_log', cenSatSelect='cen', cQuant='mg2_lumsize', 
         #             xlim=[8.0,11.5], ylim=[-2.6,0.6], minCount=None, cRel=[0.5,2.0,False], nBins=50, 
@@ -519,7 +563,7 @@ def paperPlots():
 
         quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                  xlim=[8.0,11.5], ylim=[0,20], clim=[37,42], drawMedian=True, medianLabel='r$_{\\rm 1/2,L(MgII)}$', 
-                                 markersize=30, scatterPoints=True, scatterColor='mg2_lum', sizefac=0.8, markSubhaloIDs=subIDs,
+                                 markersize=30, scatterPoints=True, scatterColor='mg2_lum', sizefac=sizefac, markSubhaloIDs=subIDs,
                                  extraMedians=['size_stars','size_gas'], alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
 
         for subID in subIDs:
@@ -549,13 +593,18 @@ def paperPlots():
                          ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
                          normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post, addHistY=50)
 
-    # figure X - impact of dust depletion
+    # figure A1 - impact of dust depletion
     if 0:
         visDustDepletionImpact(sP, subhaloID)
 
-    # figure X: psf vs no psf
-    if 0:
+    # figure A2 - psf vs no psf
+    if 1:
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1] ]
-        radialSBProfiles(sP, mStarBins, psf='both')
+        radialSBProfiles([sP], mStarBins, xlim=[0,50], ylim=[-23.0,-16.5], psf='both')
 
-    # todo: resolution convergence
+    # figure A3 - resolution convergence
+    if 1:
+        runs = ['tng50-1','tng50-2','tng50-3']
+        mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1] ]
+        sPs = [simParams(run=run, redshift=0.7) for run in runs]
+        radialSBProfiles(sPs, mStarBins, xlim=[0,50], ylim=[-23.0,-16.5])

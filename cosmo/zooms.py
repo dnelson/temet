@@ -868,6 +868,8 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
         f['GroupLenType_hInd'] = GroupLenType_hInd 
         # particle lengths outside fofs for this hInd (file 2)
         f['OuterFuzzLenType_hInd'] = OuterFuzzLenType_hInd 
+        # halo IDs of original zooms
+        f['HaloIDs'] = hInds.astype('int32')
 
     print(' Saved [%s%s].' % (outPath,saveFilename))
 

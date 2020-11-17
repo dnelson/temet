@@ -173,7 +173,7 @@ def _thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=None):
             saveFilename=saveBase+'_mask2d.pdf')
 
         # plot 1d histo
-        fig = plt.figure(figsize=figsize_lg)
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         ax.minorticks_on()
         ax.xaxis.grid(which='major', linestyle='-', linewidth=1.0, alpha=0.3, color='black')
@@ -194,7 +194,7 @@ def _thresholded_radius(radPts, h2d, thresh_perc, inequality, saveBase=None):
         plt.close(fig)
 
         # plot 1d ray histo
-        fig = plt.figure(figsize=figsize_lg)
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
         ax.minorticks_on()
         ax.xaxis.grid(which='major', linestyle='-', linewidth=1.0, alpha=0.3, color='black')

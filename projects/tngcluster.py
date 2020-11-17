@@ -450,7 +450,7 @@ def vis_fullbox_virtual(sP, conf=0):
         panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.5,7.1]}]
     if conf == 1:
         method = 'sphMap' # is global, overlapping coarse cells
-        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[6.7,8.0]}]
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[9.1,9.6]}]
     if conf == 2:
         method = 'sphMap_globalZoom'
         panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
@@ -459,7 +459,7 @@ def vis_fullbox_virtual(sP, conf=0):
         panels = [{'partType':'dm', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
     if conf == 4:
         method = 'sphMap' # is global
-        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.2,6.8]}]
+        panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.8,7.2]}]
         numBufferLevels = 3 # 2 or 3, free parameter
 
         maxGasCellMass = sP.targetGasMass
@@ -486,6 +486,66 @@ def vis_fullbox_virtual(sP, conf=0):
           (sP.simName,panels[0]['partType'],panels[0]['partField'],sP.snap,conf)
 
     renderBox(panels, plotConfig, locals(), skipExisting=False)
+
+def vis_gallery(sP, conf=0, num=20):
+    """ Visualize the entire virtual reconstructed box. """
+    from vis.halo import renderSingleHalo
+
+    rVirFracs  = [1.0]
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelScale = False
+    labelHalo  = True
+    rotation   = None # random
+    nPixels    = 600
+    size       = 3.0
+    sizeType   = 'rVirial'
+
+    if num == 1:
+        # for single halo showcase image
+        nPixels = [1920, 1080]
+        size = 4.0
+        print('TODO: add insets of other properties, including zooms onto BCG')
+
+    method = 'sphMap_globalZoomOrig' # all particles of original zoom run only
+
+    if conf == 0:
+        partType = 'gas'
+        partField = 'coldens_msunkpc2'
+        valMinMax = [5.8, 7.8]
+    if conf == 1:
+        partType = 'gas'
+        partField = 'xray'
+        valMinMax = [34.0, 39.5]
+
+    # targets
+    pri_target = sP.groups('GroupPrimaryZoomTarget')
+    subIDs = sP.groups('GroupFirstSub')[np.where(pri_target == 1)]
+
+    if num == 1:
+        subIDs = [subIDs[2]]
+    else:
+        subIDs = subIDs[0:num]
+
+    # panels
+    panels = []
+
+    for subhaloInd in subIDs:
+        panels.append( {'hInd':subhaloInd} )
+
+    panels[0]['labelScale'] = 'physical'
+
+    class plotConfig:
+        plotStyle  = 'edged' # open, edged
+        rasterPx   = nPixels
+        colorbars  = True if num > 1 else False
+        fontsize   = 24
+        nCols      = int(np.floor(np.sqrt(num)))
+        nRows      = int(np.ceil(num/nCols))
+
+        saveFilename = './gallery_%s_%d_%s-%s_n%d.pdf' % (sP.simName,sP.snap,partType,partField,num)
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def mass_function():
     """ Plot halo mass function from the parent box (TNG300) and the zoom sample. """
@@ -934,11 +994,15 @@ def paperPlots():
         sample_halomasses_vs_redshift(sPs)
 
     # figure 3 - virtual full box vis
-    if 1:
-        for conf in [0,1,2,3,4]:
+    if 0:
+        for conf in [0,1,2,3,4,5]:
             vis_fullbox_virtual(TNG_C, conf=conf)
 
     # figure 4 - individual halo/gallery vis (x-ray)
+    if 0:
+        vis_gallery(TNG_C, conf=1, num=1) # single in xray
+        for conf in [0,1]:
+            vis_gallery(TNG_C, conf=conf, num=72) # gallery
 
     # figure X - magnetic fields
     if 0:

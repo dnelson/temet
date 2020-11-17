@@ -1,6 +1,6 @@
 """
 projects/lrg.py
-  Plots: LRG CGM paper (TNG50).
+  Plots: LRG small-scale cold clouds CGM paper (TNG50).
   https://arxiv.org/abs/2005.09654
 """
 import numpy as np
@@ -310,7 +310,6 @@ def ionColumnsVsImpact2D(sP, haloMassBin, ion, radRelToVirRad=False, ycum=False,
         ylim = [13.0, 22.0]
 
     minVals = [-np.inf, ylim[0]] if ion == 'Mg II' else [-np.inf]
-    percs   = [16,50,84]
 
     xlog       = False
     nBins      = 100
@@ -1475,7 +1474,7 @@ def clumpDemographics(sPs, haloID, stackHaloIDs=None, trAnalysis=False):
             # running median
             binSize = (lims[xname][1] - lims[xname][0]) / nBins1D
             if xname == 'ncells': binSize = 1
-            xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=[16,50,84])
+            xm, ym, sm, pm = running_median(xvals, yvals, binSize=binSize, percs=percs)
 
             l, = ax.plot(xm, ym, '-', lw=lw, alpha=0.8, label=th['label'])
             if i in [0,len(threshSets)-1]:
@@ -2037,7 +2036,7 @@ def clumpPropertiesVsHaloMass(sPs):
         # loop over runs
         for i, sP in enumerate(sPs):
             # calculate median
-            xm, ym, sm, pm = running_median(x_vals[i],clump_props[i][prop],binSize=binSize*2,percs=[16,50,84],minNumPerBin=3)
+            xm, ym, sm, pm = running_median(x_vals[i],clump_props[i][prop],binSize=binSize*2,percs=percs,minNumPerBin=3)
             if xm.size > sKn:
                 ym = savgol_filter(ym,sKn,sKo)
                 sm = savgol_filter(sm,sKn,sKo)
@@ -2050,7 +2049,7 @@ def clumpPropertiesVsHaloMass(sPs):
 
             # alternate number count (above a minimum size of 2pkpc)
             if prop == 'number':
-                xm, ym, sm, pm = running_median(x_vals[i],clump_props[i]['number2'],binSize=binSize*2,percs=[16,50,84],minNumPerBin=3)
+                xm, ym, sm, pm = running_median(x_vals[i],clump_props[i]['number2'],binSize=binSize*2,percs=percs,minNumPerBin=3)
                 if xm.size > sKn:
                     ym = savgol_filter(ym,sKn,sKo)
                     sm = savgol_filter(sm,sKn,sKo)
@@ -2074,7 +2073,6 @@ def clumpRadialProfiles(sP, haloID, selections, norm=False):
     props = ['temp_sfcold_linear','hdens','vrel','sfr','entropy','bmag_ug','beta','z_solar','Mg II numdens','cellsize_kpc',
              'pres_ratio','p_b_linear','p_gas_linear','p_tot','tcool','tcool_tff','MHIGK_popping_numdens','H I numdens']
     nBins = 50
-    percs = [16,50,84]
     stat = 'mean'
     cenfield = 'cen_propwt' # 'cen', 'cen_denswt', 'cen_propwt' (MgII weighted CoM)
 
