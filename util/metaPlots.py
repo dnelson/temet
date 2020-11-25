@@ -146,6 +146,71 @@ def plotUsersData():
     fig.savefig('userstats_users.pdf', facecolor=fig.get_facecolor())
     plt.close(fig)
     
+def plotNumPublicationsVsTime():
+    """ Compare the number of publications vs time for various projects. """
+    import requests
+    import json
+    from re import findall
+    from time import mktime
+    from datetime import datetime
+    from plot.config import figsize, lw
+
+    num_start = 10 # align 'time=0' after this number of publications have appeared
+    xlim = [-0.6, 6.5] # years, [-3.2, 4.0] for num_start=100
+
+    # load Illustris and TNG
+    pub_sets = {
+      'Illustris' : json.loads( requests.get('https://www.illustris-project.org/results/?json=1').content ),
+      'TNG' : json.loads( requests.get('https://www.tng-project.org/results/?json=1').content ),
+    }
+
+    for sim_name, pub_set in pub_sets.items():
+        for i, pub in enumerate(pub_set):
+            pub['ts'] = mktime(datetime.strptime(pub['arxiv_date'], "%Y-%m-%d").timetuple())
+
+    # load Millennium
+    pubs_html = requests.get('https://wwwmpa.mpa-garching.mpg.de/millennium/').content.decode()
+    pubs_html = pubs_html[pubs_html.find("<small>PUBLICATIONS</small>"):]
+
+    astroph_ids = findall(r"a name=\"astro-ph/[0-9.]+\"", pubs_html)
+    astroph_ids = [apid.split("/")[1].replace("\"","") for apid in astroph_ids]
+
+    pub_sets['Millennium'] = []
+    for apid in astroph_ids:
+        # possible formats (the first used, after 1 April 2007)
+        # "YYMM.NNNN[N]" where YY is a 2-digit year, MM is a 2-digit month, and NNNN is a 4 or 5 digit identifier
+        # "YYMMNNN" where YY is a 2-digit year, MM is a 2-digit month, and NNN is the paper index in that month
+        # regardless, we have only month time resolution unless we load all the arxiv pages and scrape the dates
+        pub = {'ts':mktime(datetime.strptime(apid[0:4], "%y%m").timetuple())}
+        pub_sets['Millennium'].append(pub)
+
+    # start plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    ax.set_ylabel('Number of Publications')
+    ax.set_xlabel('Number of Years since %s Publication' % \
+        ('%d$^{\\rm th}$' % num_start if num_start > 0 else 'First'))
+    ax.set_axisbelow(True)
+    ax.grid(alpha=0.6)
+
+    ax.set_xlim(xlim)
+    ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
+
+    for sim_name, pub_set in pub_sets.items():
+        xx = np.array([pub['ts'] for pub in pub_set])
+        xx = xx[np.argsort(xx)] # make sure we are sorted ascending in time
+
+        # calculate starting point, and delta years of each publication
+        start_ts = xx[num_start]
+        xx_plot = (xx - start_ts) / (60*60*24*7*52) # delta years
+
+        ax.plot(xx_plot, np.arange(xx_plot.size), '-', lw=lw, label=sim_name)
+
+
+    ax.legend(loc='upper left')
+    fig.savefig('numpubs_vs_time_%d.pdf' % num_start)
+    plt.close(fig)
+
 def plotCpuTimeEstimates():
     """ Read the log file produced by plotCpuTimes() and plot the 'predicted' total CPUhs 
     and finish date of a run versus the date on which that prediction was made. """
