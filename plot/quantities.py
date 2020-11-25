@@ -148,7 +148,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # generally available (auxcat)
     quants2 = ['stellarage_4pkpc','mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 
                'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr','sfr_surfdens_30pkpc_100myr',
-               're_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w',
+               #'re_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w',
                'shape_s_sfrgas','shape_s_stars','shape_ratio_sfrgas','shape_ratio_stars']
 
     quants2_mhd = ['bmag_sfrgt0_masswt', 'bmag_sfrgt0_volwt', 'bmag_2rhalf_masswt', 'bmag_2rhalf_volwt',
@@ -172,9 +172,9 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     quants_rshock = ['rshock', 'rshock_rvir', 'rshock_ShocksMachNum_m2p2']
 
-    quants_color = ['color_C_gr','color_snap_gr','color_C_ur','color_nodust_UV','color_nodust_VJ','color_C-30kpc-z_UV','color_C-30kpc-z_VJ']
+    quants_color = ['color_C_gr','color_snap_gr','color_C_ur'] # color_nodust_UV, color_nodust_VJ, color_C-30kpc-z_UV, color_C-30kpc-z_VJ
 
-    quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms','etaM_100myr_0kpc_50kms',
+    quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms',
                       'etaE_10kpc_0kms','etaE_10kpc_50kms','etaP_10kpc_0kms','etaP_10kpc_50kms',
                       'vout_50_10kpc', 'vout_50_all', 'vout_90_20kpc', 'vout_99_20kpc']
     quants_wind =    ['wind_vel','wind_etaM','wind_dEdt','wind_dPdt'] # GFM wind model, derived from SFing gas
@@ -187,7 +187,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants5 = ['fcirc_10re_eps07m', 'fcirc_all_eps07o', 'fcirc_all_eps07m', 'fcirc_10re_eps07o',               
                'mstar_out_10kpc', 'mstar_out_30kpc', 'mstar_out_100kpc', 'mstar_out_2rhalf',
                'mstar_out_10kpc_frac_r200', 'mstar_out_30kpc_frac_r200',
-               'mstar_out_100kpc_frac_r200', 'mstar_out_2rhalf_frac_r200']
+               'mstar_out_100kpc_frac_r200', 'mstar_out_2rhalf_frac_r200',
+               'fesc_no_dust','fesc_dust']
 
     # supplementary catalogs of other people (temporary, TNG50):
     quants5b = ['slit_vrot_halpha','slit_vsigma_halpha','slit_vrot_starlight','slit_vsigma_starlight',
@@ -211,7 +212,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     if wCounts: quants1 = [None] + quants1
 
     quantList = quants1 + quants1b + quants1c + quants2 + quants2_mhd + quants_bh + quants4 + quants5b #+ quants5
-    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad + quants_rshock
+    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad #+ quants_rshock
     if wTr: quantList += trQuants
     if wMasses: quantList += quants_mass
     if onlyTr: quantList = trQuants
@@ -370,7 +371,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         vals = sP.groupCat(sub=quantname)
 
         takeLog = False
-        label = 'M$_{\\rm %s}$ [ abs AB mag, no dust ]' % bandName
+        label = 'M$_{\\rm %s}$ [ abs AB mag, no dust ]' % quantname.split("_")[1]
 
         minMax = [-24, -16]
         if tight: minMax = [-25, -14]
@@ -840,7 +841,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     if quantname in ['stellarage','stellarage_4pkpc']:
         if quant == 'stellarage':
             ageType = 'NoRadCut_MassWt'
-        if quant == 'stellarage_fiber':
+        if quant == 'stellarage_4pkpc':
             ageType = '4pkpc_rBandLumWt'
 
         fieldName = 'Subhalo_StellarAge_' + ageType
@@ -940,6 +941,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vrot,_,_,_  = sP.simSubhaloQuantity(quant.replace('_voversigma','_vrot'))
             sigma,_,_,_ = sP.simSubhaloQuantity(quant.replace('_voversigma','_vsigma'))
 
+            if vrot is None:
+              return [None]*4
+
             with np.errstate(invalid='ignore'):
                 vals = vrot
                 w = np.where(sigma > 0.0)
@@ -958,7 +962,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             # load either vrot or sigma
             filePath = basePath + typeName + '_slitKinematics_%03d.hdf5' % sP.snap
 
-            assert isfile(filePath)
+            if not isfile(filePath):
+              return [None]*4
 
             with h5py.File(filePath,'r') as f:
                 done = np.squeeze( f['/Subhalo/Done'][()] )
@@ -1005,6 +1010,9 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             height,_,_,_  = sP.simSubhaloQuantity(quant.replace('diskheightnorm2d_','diskheight2d_'))
             size,_,_,_ = sP.simSubhaloQuantity(quant.replace('diskheightnorm2d_','size2d_'))
 
+            if height is None:
+              return [None]*4
+
             with np.errstate(invalid='ignore'):
                 vals = height
                 w = np.where(size > 0.0)
@@ -1013,7 +1021,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
                 vals[w] = np.nan
         else:
             # load directly
-            assert isfile(filePath)
+            if not isfile(filePath):
+              return [None]*4
 
             with h5py.File(filePath,'r') as f:
                     done = np.squeeze( f['/Subhalo/Done'][()] )
@@ -1047,6 +1056,60 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [0.0, 0.5]
             if tight: minMax = [0.1, 0.9]
             takeLog = False
+
+    if quantname in ['fesc_dust','fesc_no_dust']:
+        # load data from ./data.files/df_f_esc_freq.hdf5 file from Ivan/Martin/CRASH
+        filePath = sP.derivPath + '/df_f_esc_freq.hdf5'
+        assert isfile(filePath)
+
+        gName = quantname.split("fesc_")[1]
+
+        # load and parse pandas dataframe type hdf5 file
+        with h5py.File(filePath,'r') as f:
+            # load field names -> array indices mappings
+            fields0 = [fname.decode('ascii') for fname in f[gName]['block0_items'][()]]
+            fields1 = [fname.decode('ascii') for fname in f[gName]['block1_items'][()]]
+
+            # halo IDs and redshifts (snaps)
+            haloIDs = f[gName]['block1_values'][:,fields1.index('ID')]
+            redshifts  = f[gName]['block1_values'][:,fields1.index('z')]
+
+            # properties
+            HaloMass = f[gName]['block0_values'][:,fields0.index('HaloMass')]
+            f_esc    = f[gName]['block0_values'][:,fields0.index('f_esc')]
+
+        # map redshifts to snaps, restrict data
+        snaps = sP.redshiftToSnapNum(redshifts)
+        w = np.where(snaps == sP.snap)
+
+        # create return
+        vals = np.zeros( sP.numSubhalos, dtype='float32' )
+        vals.fill(np.nan)
+
+        GroupFirstSub = sP.halos('GroupFirstSub')
+        vals[GroupFirstSub[haloIDs[w]]] = f_esc[w]
+
+        if 0: # debug verify
+          vals2 = np.zeros( sP.numSubhalos, dtype='float32' ) # debug verify for HaloMass
+          vals2.fill(np.nan)
+
+          vals2[GroupFirstSub[haloIDs[w]]] = HaloMass[w]
+
+          #vals2b = sP.subhalos('mhalo_200_code') / sP.HubbleParam # mhalo_200_code
+          vals2c = np.zeros( sP.numSubhalos, dtype='float32' )
+          vals2c.fill(np.nan)
+          vals2c[GroupFirstSub] = sP.halos('GroupMass') #/ sP.HubbleParam
+          w = np.where(~np.isnan(vals))
+          assert np.array_equal(vals2[w],vals2c[w])
+
+        if 1:
+            minMax = [-2.5, 0.0]
+            takeLog = True # default
+            label = 'Escape Fraction (%s) [log]' % gName.replace("_"," ")
+        if 0:
+            minMax = [0, 0.5]
+            takeLog = False
+            label = 'Escape Fraction (%s)' % gName.replace("_"," ")
 
     if quantname in ['mstar_out_10kpc', 'mstar_out_30kpc', 'mstar_out_100kpc', 'mstar_out_2rhalf',
                      'mstar_out_10kpc_frac_r200', 'mstar_out_30kpc_frac_r200',

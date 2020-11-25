@@ -56,7 +56,7 @@ patch.antialiased      : True    # render patches in antialiased (no jaggies)
 # The font.style property has three values: normal (or roman), italic
 # or oblique.  The oblique style will be used for italic, if it is not
 # present.
-#
+
 # The font.variant property has two values: normal or small-caps.  For
 # TrueType fonts, which are scalable fonts, small-caps is equivalent
 # to using a font size of 'smaller', or about 83% of the current font
@@ -269,7 +269,7 @@ grid.alpha       :   0.2     # transparency, between 0.0 and 1.0
                                # legend, else a rectangle
 #legend.isaxes        : True
 legend.numpoints     : 1      # the number of points in the legend line
-legend.fontsize      : x-large
+legend.fontsize      : large
 #legend.borderpad     : 0.5    # border whitespace in fontsize units
 legend.markerscale   : 1.2    # the relative size of legend markers vs. original
 # the following dimensions are in axes coords

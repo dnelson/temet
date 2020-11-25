@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 import h5py
 import copy
+import warnings
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from matplotlib.colors import Normalize, LogNorm, colorConverter
@@ -19,7 +20,8 @@ from scipy.signal import savgol_filter
 from scipy.stats import binned_statistic_2d
 
 from util import simParams
-from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, getWhiteBlackColors, sampleColorTable, binned_stat_2d
+from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, \
+       getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors, setColorbarColors
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
@@ -257,9 +259,18 @@ def quantHisto2D(sP, pdf, yQuant, xQuant='mstar2_log', cenSatSelect='cen', cQuan
         if cStatistic == 'count':
             w = np.where(cc == 0.0)
             cc[w] = np.nan
+        
+        # convert warnings into error causing pdb break
+        #with warnings.catch_warnings():
+        #    warnings.filterwarnings('error')
+        #    medVals = np.nanmedian(cc, axis=0)
+
+        with warnings.catch_warnings():
+            # if any column contains no valid values (poor statistics), throws warning messages
+            warnings.filterwarnings('ignore')
+            medVals = np.nanmedian(cc, axis=0)
 
         with np.errstate(invalid='ignore'):
-            medVals = np.nanmedian(cc, axis=0)
             cc /= medVals[np.newaxis, :]
 
         cmap   = loadColorTable('coolwarm') # diverging
@@ -588,7 +599,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
                 assert yLog is False # otherwise handle in a general way (and maybe undo?)
                 if len(yRel) == 3:
                     yMinMax[0], yMinMax[1], yLog = yRel
-                    ylabel = 'Relative ' + ylabel.split('[')[0] + ('[ log ]' if yLog else '')
+                    ylabel = '$\Delta$ ' + ylabel.split('[')[0] + ('[ log ]' if yLog else '')
                 if len(yRel) == 4:
                     yMinMax[0], yMinMax[1], yLog, ylabel = yRel
                 
@@ -686,10 +697,10 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
                              sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
-                             qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, 
+                             qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
-                             markSubhaloIDs=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                             extraMedians=[],legendLoc='best', xlim=None, ylim=None, clim=None, 
+                             markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
+                             extraMedians=[],legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
@@ -703,7 +714,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     are called before and after the rest of plotting, respectively.
     If scatterPoints, include all raw points with a scatterplot. If maxPointsPerDex, then randomly sub-sample down to 
     this number (equal number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. If scatterColor, 
-    color each point by a third property.
+    color each point by a third property. If lowessSmooth, smooth the resulting color distribution.
+    If cRel is not None, then should be a 3-tuple of [relMin,relMax,takeLog] in which case the colors are not 
+    scatterColor itself, but the value of that quantity relative to the median at that value of the x-axis (e.g. mass).
     If markSubhaloIDs, highlight these subhalos especially on the plot. 
     If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
     If drawMedian, then include median line and 1-sigma band (optionally override label to medianLabel).
@@ -712,6 +725,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
+    if lowess: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
 
     nRows = int(np.floor(np.sqrt(len(yQuants))))
     nCols = int(np.ceil(len(yQuants) / nRows))
@@ -926,6 +940,32 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 if xx.size > 1000:
                     ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
+                ctName = 'viridis'
+
+                # relative coloring as a function of the x-axis?
+                if cRel is not None:
+                    # override min,max of color and whether or not to log
+                    if cLog:
+                        cc = 10.0**cc # remove log
+
+                    cMinMax[0], cMinMax[1], cLog = cRel
+
+                    bins = np.arange(np.nanmin(xx), np.nanmax(xx)+binSize, binSize)
+                    # loop through bins
+                    for i in range(bins.size-1):
+                        w = np.where( (xx>bins[i]) & (xx<=bins[i+1]) )[0]
+                        if len(w) == 0:
+                            continue
+
+                        # normalize all points in this bin by the bin median
+                        cc[w] /= np.nanmedian(cc[w])
+
+                    if cLog: # log relative?
+                        cc = logZeroNaN(cc)
+
+                    ctName = 'curl' # diverging
+                    clabel = '$\Delta$ ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
+
                 if maxPointsPerDex is not None:
                     # sub-select in 0.1 dex bins, at most N points per bin
                     np.random.seed(424242)
@@ -950,21 +990,24 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                     xx = xx[inds[0:count]]
                     yy = yy[inds[0:count]]
+                    cc = cc[inds[0:count]]
+
+                if lowessSmooth:
+                    in1 = np.vstack( (xx,yy) )
+                    cc = lowess(in1, cc, in1, degree=1, l=0.2)
 
                 # plot scatter
                 opts = {'color':c}
 
                 if scatterColor is not None:
                     # override constant color
-                    if maxPointsPerDex is not None:
-                        cc = cc[inds[0:count]]
-                    cmap = loadColorTable('viridis')
+                    cmap = loadColorTable(ctName)
 
                     opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
                     #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
                     opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
 
-                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts) # zorder=0, 
+                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, zorder=0)
 
             # 1-to-1 line?
             if mark1to1:
@@ -998,14 +1041,12 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     # colorbar?
     if scatterColor is not None:
         if colorbarInside: # can generalize to 'upper left', etc
-            # throws UserWarning about tight_layout()
-            import warnings
-            warnings.filterwarnings(action='ignore', category=UserWarning, # module='matplotlib.figure'
-                message=('This figure includes Axes that are not compatible with tight_layout, '
-                         'so results might be incorrect.'))
             #cax = inset_locator.inset_axes(ax, width="40%", height="4%", loc='upper left')
+            fig.tight_layout() # avoid warning
+            fig.set_tight_layout(False)
 
-            rect = [0.5,0.25,0.4,0.04]
+            #rect = [0.5,0.25,0.4,0.04] # lower right
+            rect = [0.15, 0.84, 0.38, 0.04] # upper left
             cax = fig.add_axes(rect)
             orientation = 'horizontal'
             #cax.patch.set_facecolor('white') # doesn't work
@@ -1014,7 +1055,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
             orientation = 'vertical'
 
-        cb = plt.colorbar(sc, cax=cax, orientation=orientation)
+        cb = plt.colorbar(sc, cax=cax, orientation=orientation, ticks=cbarticks)
         cb.set_alpha(1) # fix stripes
         cb.draw_all()
         if orientation == 'vertical': cb.ax.set_ylabel(clabel)
@@ -1044,23 +1085,23 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
-    #sPs.append( simParams(res=2500, run='tng', redshift=0.0) )
+    sPs.append( simParams(run='tng50-1', redshift=6.0) )
 
-    yQuant = 'massfrac_exsitu2' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
+    yQuant = 'fesc_no_dust' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
     xQuant = 'mstar_30pkpc' # #'mstar_30pkpc'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
-    quants = ['num_mergers'] #['mgas1'] #['sfr'] #[None,'ssfr','mhalo_200_log','mstar_30pkpc_log'] #quantList(wTr=True, wMasses=True)
+    quants = quantList(wTr=False, wMasses=True)
     clim = None #[10.0,11.0]
     medianLine = True
-    minCount = 0
-    nBins = 40
+    minCount = 2
+    nBins = 20
     cStatistic = 'median_nan'
-    cRel = [0.7,1.3,False] #None
+    cRel = [0.6,1.4,False] #None
+    #cRel = [-0.04, 0.04, True]
 
-    xlim = None #[9.0,11.0]
-    ylim = None #[11.0, 13.0] # None
+    xlim = [6.0, 9.0]
+    ylim = None# [-2.5, 0.0] # None
     qRestrictions = [['fdm',0.0,1.0]] #None #[ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
 
     for sP in sPs:

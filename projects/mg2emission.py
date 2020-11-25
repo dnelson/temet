@@ -454,7 +454,7 @@ def mg2lum_vs_mass(sP, redshifts=None):
     scatterColor = 'redshift'
     clim = [0.3, 2.2]
     xlim = [8.0, 11.5]
-    ylim = [37, 43]
+    ylim = [37, 42]
     scatterPoints = True
     drawMedian = False
     markersize = 30.0
@@ -476,7 +476,7 @@ def mg2lum_vs_mass(sP, redshifts=None):
 
         # Martin+ (2013) z=1.0, 32016857, SFR=80 msun/yr
         mstar = 9.8
-        mstar_err = 0.1 # assumed
+        mstar_err = 0.15 # factor of two uncertainty
         flux = 1.5e-17 + 1.0e-17 # 2796+2803 [erg/s/cm^2]
         lum = np.log10(sP.units.fluxToLuminosity(flux)) # log(erg/s)
         lum_err = 0.4 # assumed
@@ -494,11 +494,23 @@ def mg2lum_vs_mass(sP, redshifts=None):
         label = 'Zabl+21 (z=0.7 MEGAFLOW)'
         ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='D', label=label)
 
+        # Rupke+ (2019) (KCWI 'Makani', OII nebula)
+        redshift = 0.459
+        mstar = 11.1 # log msun
+        mstar_err = 0.2 # assumed
+
+        flux = 2.3e-16 # erg/s/cm^2 (lum = 1.5e41 erg/s)
+        lum = np.log10(sP.units.fluxToLuminosity(flux, redshift=redshift))
+        lum_err = 0.2 # assumed
+
+        label = 'Rupke+19 (z=0.5 KCWI/Makani)'
+        ax.errorbar(mstar, lum, xerr=mstar_err, yerr=lum_err, color='#000000', marker='p', label=label)
+
     quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              f_pre=_draw_data, alpha=alpha, maxPointsPerDex=maxPointsPerDex, 
-                             colorbarInside=colorbarInside, legendLoc='upper left')
+                             colorbarInside=colorbarInside, legendLoc='lower right')
 
 def paperPlots():
     """ Plots for the TNG50 MgII CGM emission paper. """
@@ -536,19 +548,16 @@ def paperPlots():
     if 0:
         mg2lum_vs_mass(sP, redshifts)
 
-    # figure 6 - L_MgII correlation with SFR
+    # figure 6 - L_MgII and r_1/2,MgII correlation with SFR
     if 0:
         quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
-                                 xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[37,42], drawMedian=False, markersize=30,
-                                 scatterPoints=True, scatterColor='mg2_lum', sizefac=sizefac, 
-                                 alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
+                                 xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[38,41], drawMedian=False, markersize=40,
+                                 scatterPoints=True, scatterColor='mg2_lum', sizefac=sizefac, cbarticks=[38,39,40,41],
+                                 alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
         quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
-                                 xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[1,10], drawMedian=False, markersize=30,
+                                 xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[2,10], drawMedian=False, markersize=40,
                                  scatterPoints=True, scatterColor='mg2_lumsize', sizefac=sizefac, 
-                                 alpha=0.7, maxPointsPerDex=None, colorbarInside=False)
-        #quantHisto2D(sP, pdf=None, yQuant='ssfr', xQuant='mstar_30pkpc_log', cenSatSelect='cen', cQuant='mg2_lumsize', 
-        #             xlim=[8.0,11.5], ylim=[-2.6,0.6], minCount=None, cRel=[0.5,2.0,False], nBins=50, 
-        #             filterFlag=True, medianLine=True, sizeFac=0.8, ctName=None)
+                                 alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
 
     # figure 7 - lumsize vs mstar, compare with other sizes
     if 0:
@@ -574,7 +583,15 @@ def paperPlots():
             singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
                                 rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False)
 
-    # figure 8 - relation of MgII flux and vrad (inflow vs outflow)
+    # figure 8 - L_MgII and r_1/2,MgII correlation with SFR
+    if 0:
+        for cQuant in ['mg2_lum','mg2_lumsize']:
+            quantMedianVsSecondQuant([sP], pdf=None, yQuants=['sfr2_surfdens'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
+                                     xlim=[8.0,11.5], ylim=[-4.2,-0.4], clim=[37,41.5], drawMedian=False, markersize=40,
+                                     scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, cRel=[-0.2,0.2,True], #[0.5,1.5,False],
+                                     alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
+
+    # figure 9 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
         SubhaloGrNr = sP.subhalos('SubhaloGrNr')
         mstar = sP.subhalos('mstar_30pkpc_log')
@@ -593,17 +610,23 @@ def paperPlots():
                          ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
                          normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post, addHistY=50)
 
+    # TODO: What is the contribution of winds (vrad>0) vs ambient CGM to MgII lum (as a function of radius)
+
+    # TODO: impact of orientation (face-on vs edge-on) on MgII lum/morphology
+
+    # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
+
     # figure A1 - impact of dust depletion
     if 0:
         visDustDepletionImpact(sP, subhaloID)
 
     # figure A2 - psf vs no psf
-    if 1:
+    if 0:
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1] ]
         radialSBProfiles([sP], mStarBins, xlim=[0,50], ylim=[-23.0,-16.5], psf='both')
 
     # figure A3 - resolution convergence
-    if 1:
+    if 0:
         runs = ['tng50-1','tng50-2','tng50-3']
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1] ]
         sPs = [simParams(run=run, redshift=0.7) for run in runs]

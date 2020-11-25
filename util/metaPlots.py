@@ -193,8 +193,8 @@ def plotNumPublicationsVsTime():
     ax.set_axisbelow(True)
     ax.grid(alpha=0.6)
 
-    ax.set_xlim(xlim)
-    ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
+    #ax.set_xlim(xlim)
+    #ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
 
     for sim_name, pub_set in pub_sets.items():
         xx = np.array([pub['ts'] for pub in pub_set])
@@ -205,7 +205,6 @@ def plotNumPublicationsVsTime():
         xx_plot = (xx - start_ts) / (60*60*24*7*52) # delta years
 
         ax.plot(xx_plot, np.arange(xx_plot.size), '-', lw=lw, label=sim_name)
-
 
     ax.legend(loc='upper left')
     fig.savefig('numpubs_vs_time_%d.pdf' % num_start)

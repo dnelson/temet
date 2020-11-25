@@ -771,6 +771,96 @@ def binned_statistic_weighted(x, values, statistic, bins, weights=None, weights_
         std = weighted_std_binned(x, values, weights, bins)
         return std, None, None
 
+def lowess(x, y, x0, degree=1, l=1, robust=False):
+    """
+    Locally smoothed regression with the LOWESS algorithm (https://github.com/arokem/lowess).
+    x - values of x for which f(x) is input, with shape (ndim,y.size)
+    y - values of f(x) at these points (1d)
+    x0 - x values to output LOWESS estimate for (can be the same as x)
+    degree - degree of smoothing functions (0=locally constant, 1=linear, ...)
+    l - metric window size for the kernel (scalar, or array of y.size)
+    robust - if True, apply the robustification procedure from Cleveland (1979), pg 831
+    """
+    import numpy.linalg as la
+
+    def epanechnikov(xx, l):
+        ans = np.zeros(xx.shape)
+        xx_norm = xx / l
+        idx = np.where(xx_norm <= 1)
+        ans[idx] = 0.75 * (1 - xx_norm[idx]  ** 2)
+        return ans
+
+    def tri_cube(xx, **kwargs):
+        ans = np.zeros(xx.shape)
+        idx = np.where(xx <= 1)
+        ans[idx] = (1 - np.abs(xx[idx]) ** 3) ** 3
+        return ans
+
+    def bi_square(xx, **kwargs):
+        ans = np.zeros(xx.shape)
+        idx = np.where(xx < 1)
+        ans[idx] = (1 - xx[idx] ** 2) ** 2
+        return ans
+
+    if robust:
+        # We use the procedure described in Cleveland+1979
+        # Start by calling this function with robust set to false and the x0
+        # input being equal to the x input:
+        y_est = lowess(x, y, x, l=l, robust=False)
+        resid = y_est - y
+        median_resid = np.nanmedian(np.abs(resid))
+
+        # calculate the bi-cube function on the residuals for robustness weights
+        robustness_weights = bi_square(resid / (6 * median_resid))
+
+    # for the case where x0 is provided as a scalar
+    if not np.iterable(x0):
+       x0 = np.asarray([x0])
+
+    ans = np.zeros(x0.shape[-1], dtype=np.float32)
+
+    # we only need one design matrix for fitting
+    B = [np.ones(x.shape[-1])]
+    for d in range(1, degree+1):
+        B.append(x ** degree)
+
+    B = np.vstack(B).T
+    for idx, this_x0 in enumerate(x0.T):
+        # handle 1d case
+        if not np.iterable(this_x0):
+            this_x0 = np.asarray([this_x0])
+
+        # Different weighting kernel for each x0
+        xx = np.sqrt(np.sum(np.power(x - this_x0[:, np.newaxis], 2), 0))
+        W = np.diag( epanechnikov(xx, l=l) )
+        #W = np.diag(do_kernel(this_x0, x, l=l, kernel=kernel))
+
+        if robust:
+            # apply the robustness weights to the weighted least-squares procedure
+            robustness_weights[np.isnan(robustness_weights)] = 0
+            W = np.dot(W, np.diag(robustness_weights))
+
+        #try:
+        # Equation 6.8 in HTF:
+        BtWB = np.dot(np.dot(B.T, W), B)
+        BtW = np.dot(B.T, W)
+        # Get the params:
+        beta = np.dot(np.dot(la.pinv(BtWB), BtW), y.T)
+        # We create a design matrix for this coordinat for back-predicting:
+        B0 = [1]
+        for d in range(1, degree+1):
+            B0 = np.hstack([B0, this_x0 ** degree])
+        B0 = np.vstack(B0).T
+        # Estimate the answer based on the parameters:
+        ans[idx] += np.dot(B0, beta)
+
+    # If we are trying to sample far away from where the function is
+    # defined, we will be trying to invert a singular matrix. In that case,
+    # the regression should not work for you and you should get a nan:
+        #except la.LinAlgError :
+        #    ans[idx] += np.nan
+    return ans.T
+
 # --- numba accelerated ---
 
 @jit(nopython=True, nogil=True, cache=True)

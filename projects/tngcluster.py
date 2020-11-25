@@ -538,7 +538,7 @@ def vis_gallery(sP, conf=0, num=20):
     class plotConfig:
         plotStyle  = 'edged' # open, edged
         rasterPx   = nPixels
-        colorbars  = True if num > 1 else False
+        colorbars  = True if num > 1 and num < 72 else False
         fontsize   = 24
         nCols      = int(np.floor(np.sqrt(num)))
         nRows      = int(np.ceil(num/nCols))

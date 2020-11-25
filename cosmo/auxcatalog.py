@@ -790,6 +790,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 haloVel = gc['SubhaloVel'][subhaloID,:]
 
                 vrad = sP.units.particleRadialVelInKmS(gas_pos, gas_vel, haloPos, haloVel)
+                if gas_weights.ndim == 0 and vrad.ndim == 1: gas_weights = [gas_weights]
 
                 r[i] = np.average(vrad, weights=gas_weights)
 
@@ -1055,7 +1056,6 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
     print(' Total # Subhalos: %d, [%d] in selection, now processing [%d] in [%d] bands and [%d] projections...' % \
         (nSubsTot,nSubsSelected,nSubsDo,nBands,nProj))
-    print(' indRange:', indRange)
 
     # allocate
     if indivStarMags:
@@ -3667,10 +3667,10 @@ fieldComputeFunctionMapping = \
    'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-50myr' : partial(massLoadingsSN,sfr_timescale=50,outflowMethod='instantaneous',massField='MgII'),
    'Subhalo_MassLoadingSN_MgII_SubfindWithFuzz_SFR-10myr' : partial(massLoadingsSN,sfr_timescale=10,outflowMethod='instantaneous',massField='MgII'),
 
-   'Subhalo_RadialEnergyFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxKE=True),
-   'Subhalo_RadialEnergyFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxKE=True),
-   'Subhalo_RadialMomentumFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxP=True),
-   'Subhalo_RadialMomentumFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxP=True),
+   'Subhalo_RadialEnergyFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxKE=True,fluxMass=False),
+   'Subhalo_RadialEnergyFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxKE=True,fluxMass=False),
+   'Subhalo_RadialMomentumFlux_SubfindWithFuzz_Gas' : partial(instantaneousMassFluxes,ptType='gas',scope='subhalo_wfuzz',fluxP=True,fluxMass=False),
+   'Subhalo_RadialMomentumFlux_SubfindWithFuzz_Wind' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',fluxP=True,fluxMass=False),
    'Subhalo_EnergyLoadingSN_SubfindWithFuzz' : partial(massLoadingsSN,outflowMethod='instantaneous',fluxKE=True),
    'Subhalo_MomentumLoadingSN_SubfindWithFuzz' : partial(massLoadingsSN,outflowMethod='instantaneous',fluxP=True),
 

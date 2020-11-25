@@ -304,7 +304,7 @@ class units(object):
         assert self._sP.BHs == 2 # denotes fiducial TNG model, otherwise generalize to Illustris and/or others
 
         # get mode separation
-        mode = self.codeBHMassMdotToFeedbackMode(bh_mass, bh_mdot, bh_mdot_bondi, bh_mdot_edd)
+        mode = self.codeBHValsToFeedbackMode(bh_mass, bh_mdot, bh_mdot_bondi, bh_mdot_edd)
         w_low = np.where(mode == 0)
         w_high = np.where(mode == 1)
 

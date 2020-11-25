@@ -3434,8 +3434,7 @@ def exportSubhalosBinary():
     from util.simParams import simParams
 
     # config
-    sP = simParams(res=2160,run='tng',redshift=0.0)
-    #sP = simParams(run='tng1-dark', redshift=0.0)
+    sP = simParams(run='eagle',redshift=0.0)
     cenSatSelect = 'cen'
     writeN = 100000 # None for all
     nValsPerHalo = 7 # x, y, z, r200, log_Tvir, log_M200, log_Lx
