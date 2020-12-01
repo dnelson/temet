@@ -3430,7 +3430,7 @@ def convertVoronoiConnectivityVPPP(stage=1, thisTask=0):
     print('done.')
 
 def exportSubhalosBinary():
-    """ Export a very minimal group catalog to a flat binary format (for Explorer3D). """
+    """ Export a very minimal group catalog to a flat binary format (for WebGL/Explorer3D). """
     from util.simParams import simParams
 
     # config
@@ -3504,6 +3504,79 @@ def exportSubhalosBinary():
         # write ID list
         id_list = inds[0:nSubhalos].astype('int32')
         f.write( struct.pack('i'*len(id_list), *id_list) )
+
+        # footer
+        footer = np.array( [99], dtype='int32' )
+        f.write( struct.pack('i', *footer) )
+
+    print('Saved: [%s]' % fileName)
+
+def exportHierarchicalBoxGrids():
+    """ Export a series of 3D uniform grids, of different resolutions, to a flat binary format 
+    appropriate for javascript/WebGL processing (volume rendering). """
+    from vis.common import getHsmlForPartType, defaultHsmlFac
+    from util.sphMap import sphGridWholeBox
+    from util.simParams import simParams
+    from util.helper import logZeroMin
+
+    # config
+    sP = simParams(run='tng50-2',redshift=0.0)
+    partType = 'gas'
+    partField = 'dens' # dens, temp, velmag, xray_lum
+
+    nCells = [32, 64, 128, 256, 512]
+
+    # load
+    pos = sP.snapshotSubsetP(partType, 'pos')
+    mass = sP.snapshotSubsetP(partType, 'mass')
+
+    if sP.isPartType(partType, 'stars'):
+        hsml = getHsmlForPartType(sP, partType, nNGB=32)
+    else:
+        hsml = getHsmlForPartType(sP, partType)
+    hsml *= defaultHsmlFac(partType) # e.g. 2.5 for gas
+
+    quant = None # grid mass
+    if partField != 'mass': # grid a different, mass-weighted quantity
+        quant = sP.snapshotSubsetP(partType, partField)
+
+    # make series of grids at progressively better resolution
+    grids = []
+
+    for nCell in nCells:
+        print('grid ', nCell)
+        grid = sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=nCell)
+
+        if partField == 'mass': # unit conversion
+            pxVol = (sP.boxSize / nCell)**3 # code units (ckpc/h)^3
+            grid = sP.units.codeDensToPhys(grid/pxVol) * 1e10 # Msun/kpc^3
+
+        grid = logZeroMin(grid).astype('float32') # always log, 4 bytes per value
+        grids.append( grid.ravel() )
+
+    # save binary
+    fileName = "boxgrid_%s_%s_%s_z%.1f.dat" % (sP.simName,partType,partField,sP.redshift)
+
+    with open(fileName,'wb') as f:
+        # header (24 bytes + 12 bytes per grid)
+        binVersion   = 1
+        headerBytes  = 6*4 + len(nCells)*12
+        
+        header = np.array( [binVersion, headerBytes, len(nCells), sP.snap], dtype='int32' )
+        f.write( struct.pack('iiii', *header) )
+        header = np.array( [sP.redshift, sP.boxSize], dtype='float32' )
+        f.write( struct.pack('ff', *header) )
+
+        # for each grid, write [nCells, startOffset, stopOffset], offsets are file global
+        offset = headerBytes
+        for i, grid in enumerate(grids):
+            header = np.array( [nCells[i], offset, offset+grid.nbytes], dtype='int32')
+            offset += grid.nbytes
+            f.write( struct.pack('i'*len(header), *header) )
+
+        # write each grid (nCells[i]**3*4 bytes each)
+        for grid in grids:
+            f.write( struct.pack('f'*len(grid), *grid) )
 
         # footer
         footer = np.array( [99], dtype='int32' )

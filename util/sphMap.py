@@ -1286,6 +1286,19 @@ def sphMapWholeBox(pos, hsml, mass, quant, axes, nPixels, sP,
                    boxCen=boxCen, nPixels=[nPixels,nPixels], 
                    colDens=colDens, nThreads=nThreads, multi=multi, posTarget=posTarget )
 
+def sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=32):
+    """ Wrap sphMap(), produce a 3D grid of the given pt/field combination for an entire box. """
+    boxSizeImg = sP.boxSize * np.array([1.0,1.0,1.0])
+    boxCen = sP.boxSize * np.array([0.5,0.5,0.5])
+
+    if sP.isSubbox:
+        boxSizeImg = sP.subboxSize[sP.subbox] * np.array([1.0,1.0,1.0*sliceFac])
+        boxCen = sP.subboxCen[sP.subbox]
+
+    return sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=[0,1], 
+                   ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+                   boxCen=boxCen, nPixels=[nCells, nCells, nCells] )
+
 def benchmark():
     """ Benchmark performance of sphMap(). """
     np.random.seed(424242)
