@@ -50,10 +50,23 @@ def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCus
         panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,7.5]} )
     if conf == 4:
         panels.append( {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,7.5]} )
+    if conf == 5:
+        panels.append( {'partType':'gas', 'partField':'tau0_MgII2796', 'valMinMax':[-2.0,2.0], 'ctName':'tarn0'} )
+    if conf == 6:
+        # equirectangular
+        contour = None
+        rVirFracs = False
+        panels.append( {'partType':'gas', 'partField':'tau0_MgII2796', 'valMinMax':[-2.0,2.0], 'ctName':'tarn0'} )
+        #panels.append( {'partType':'gas', 'partField':'tau0_LyA', 'valMinMax':[4.0,8.0]} )
+
+        projType   = 'equirectangular'
+        projParams = {'fov':360.0}
+        nPixels    = [1200,600]
+        axesUnits  = 'rad_pi'
 
     class plotConfig:
         plotStyle    = 'edged'
-        rasterPx     = nPixels[0] 
+        rasterPx     = nPixels
         colorbars    = cbars
         fontsize     = font
         saveFilename = '%s_%d_%d_%s.pdf' % (sP.simName,sP.snap,hInd,'-'.join([p['partField'] for p in panels]))
@@ -404,6 +417,14 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
             yy = sb[2] + 0.2
         ax.text(dist_kpc[2], sb[2]+0.2, 'Burchett+2020', ha='left', fontsize=20)
 
+    if sP.redshift == 0.3 and not indiv:
+        # Rupke+ 2019 Makani
+        from load.data import rupke19
+        r19 = rupke19()
+
+        ax.errorbar(r19['rad_kpc'], r19['sb'], yerr=[r19['sb_down'],r19['sb_up']], color='#000000', marker='s', alpha=0.6)
+        ax.text(r19['rad_kpc'][14], r19['sb'][14]+0.3, r19['label'], ha='left', fontsize=20)
+
     # finish and save plot
     if len(sPs) > 1:
         handles = []
@@ -499,7 +520,7 @@ def mg2lum_vs_mass(sP, redshifts=None):
         mstar = 11.1 # log msun
         mstar_err = 0.2 # assumed
 
-        flux = 2.3e-16 # erg/s/cm^2 (lum = 1.5e41 erg/s)
+        flux = 4.5e-16 # erg/s/cm^2 (David's email, "closer to 6-7e16 than 2-3e16")
         lum = np.log10(sP.units.fluxToLuminosity(flux, redshift=redshift))
         lum_err = 0.2 # assumed
 
@@ -535,7 +556,7 @@ def paperPlots():
     # figure 3 - stacked SB profiles
     if 0:
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45] ]
-        for redshift in [0.7]: #redshifts:
+        for redshift in redshifts:
             sP.setRedshift(redshift)
             radialSBProfiles([sP], mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
 
@@ -615,6 +636,10 @@ def paperPlots():
     # TODO: impact of orientation (face-on vs edge-on) on MgII lum/morphology
 
     # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
+
+    # figure X - line-center optical depth for MgII all-sky map, show low values
+    if 0:
+        singleHaloImageMGII(sP, subhaloID, conf=6)
 
     # figure A1 - impact of dust depletion
     if 0:

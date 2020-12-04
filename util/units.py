@@ -859,6 +859,46 @@ class units(object):
             Lx = logZeroSafe(Lx)
         return Lx.astype('float32')
 
+    def opticalDepthLineCenter(self, transition, dens_cgs, temp_K, cellsize_code):
+        """ Derive an optical depth tau_0 = n * sigma_0 * L for a given transition, assuming the
+        frequency is at line center (neglecting the Voigt profile shape). dens_cgs is the volume 
+        number density of the species of relevance [1/cm^3], temp is the cell temperature [linear K], 
+        and cellsize_code is the usual radius of the cell [code units], which we take as L/2. """
+        assert transition in ['MgII2796','MgII2803','LyA','LyB'] # otherwise generalize
+
+        if transition == 'MgII2796':
+            f12 = 0.3058 # oscillator strength of the transition
+            wave0 = 2796.352 # 2803.5320 # line center wavelength [Ang]
+        if transition == 'MgII2803':
+            f12 = 0.6155
+            wave0 = 2803.5320
+        if transition == 'LyA':
+            f12 = 0.416
+            wave0 = 1215.67
+        if transition == 'LyB':
+            f12 = 0.07912
+            wave0 = 1025.7223
+
+        # Doppler width [Hz]
+        nu0 = self.c_ang_per_sec / wave0 # line center frequency [Hz]
+        Delta_vd = np.sqrt(2 * self.boltzmann * temp_K / (self.mass_proton * self.c_cgs**2)) * nu0
+
+        # line center cross section [cm^2]
+        sigma_0 = f12 * np.sqrt(np.pi) * self.electron_charge**2 / (self.mass_electron * self.c_cgs * Delta_vd)
+
+        # note: could compute for an arbitrary frequency away from line center, as
+        # sigma = sigma_0 * H(alpha,x) where alpha = Delta_vl / (2 * Delta_vd)
+        #   and Delta_vl is the natural line width [Hz], x=(nu-nu0)/Delta_vd is the 
+        #   relative frequency of the incident photon in the observer's frame
+        #   and H is the Voigt profile (see plot.cloudy.curveOfGrowth and Tasitsiomi+2006)
+
+        # optical depth [unitless]
+        length_cgs = self.codeLengthToKpc(cellsize_code * 2.0) * self.kpc_in_cm
+
+        tau_0 = dens_cgs * length_cgs * sigma_0
+
+        return tau_0
+
     def sfrToHalphaLuminosity(self, sfr):
         """ Convert SFR from code units (Msun/yr) into H-alpha line luminosity [linear 10^30 erg/s]. Just the 
         usual linear conversion from Kennicutt. """

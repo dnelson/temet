@@ -728,6 +728,21 @@ def snapshotSubset(sP, partType, fields,
             ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
 
+        # optical depth to a certain line, at line center [linear unitless]
+        if 'tau0_' in field.lower():
+            transition = field.split("_")[1] # e.g. "tau0_MgII2796", "tau0_MgII2803", "tau0_LyA"
+
+            if 'MgII' in transition:
+                baseSpecies = 'Mg I'
+            elif 'Ly' in transition:
+                baseSpecies = 'H I' # note: uses internal hydrogen model, could use e.g. 'MHIGK_popping_numdens'
+
+            temp = snapshotSubset(sP, partType, 'temp_sfcold_linear', **kwargs) # K
+            dens = snapshotSubset(sP, partType, '%s numdens' % baseSpecies, **kwargs) # linear 1/cm^3
+            cellsize = snapshotSubset(sP, partType, 'cellsize', **kwargs) # code
+
+            r[field] = sP.units.opticalDepthLineCenter(transition, dens, temp, cellsize)
+
         # h-alpha line luminosity (simple model: linear conversion from SFR) [10^30 erg/s]
         if field.lower() in ['halpha_lum','halpha','sfr_halpha']:
             sfr  = snapshotSubset(sP, partType, 'StarFormationRate', **kwargs)
@@ -1574,7 +1589,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         shared_mem_array = mp.sharedctypes.RawArray(ctype, size)
         numpy_array_view = np.frombuffer(shared_mem_array, sample[k].dtype).reshape(shape)
 
-        # spawn threads with indRange subsets
+        # spawn processes with indRange subsets
         offset = 0
         processes = []
 
@@ -1604,7 +1619,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         # see also this for python 3.8: https://bugs.python.org/issue35813
         if 0:
             # hack: delete the global _heap and create a new one (all buffers erased!)
-            # have to do this at exactly the right moment (after done with the return of snapshotSubsetP)
+            # have to do this at exactly the right moment (not here! after done with the return of snapshotSubsetP)
             print('WARNING: Erasing global _heap of mp and recreating!')
             mp.heap.BufferWrapper._heap = mp.heap.Heap()
             gc.collect()

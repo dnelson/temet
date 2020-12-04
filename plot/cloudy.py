@@ -353,7 +353,7 @@ def curveOfGrowth(lineName='MgII2803'):
 
     if lineName == 'LyB':
         f = 0.07912 # dimensionless
-        gamma = 1.897e8 # 1/s, where tau=1/gamma is the ~lifetime
+        gamma = 1.897e8 # 1/s, where tau=1/gamma is the ~lifetime (is the sum of A)
         wave0_ang = 1025.7223
     if lineName == 'LyA':
         f = 0.416
@@ -361,7 +361,7 @@ def curveOfGrowth(lineName='MgII2803'):
         wave0_ang = 1215.67
     if lineName == 'MgII2803':
         f = 0.6155 #0.3058 for 2796
-        gamma = 2.626e8
+        gamma = 2.626e8 # 2.612e8 for 2796, 2.592e8 for 2803
         wave0_ang = 2803.5315
 
     # wave = c/nu

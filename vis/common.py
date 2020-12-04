@@ -34,7 +34,7 @@ volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
                     'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                     'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
-totSumFields     = ['mass','sfr']
+totSumFields     = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
@@ -565,6 +565,9 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
     if partField in ['sfr_halpha','halpha']:
         mass = sP.snapshotSubsetP(partType, 'sfr_halpha', indRange=indRange)
 
+    if 'tau0_' in partField:
+        mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
+
     # flux/surface brightness (replace mass)
     if 'sb_' in partField: # e.g. ['sb_H-alpha','sb_Lyman-alpha','sb_OVIII']
         # zero contribution from SFing gas cells?
@@ -590,7 +593,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
 
         lineName = partField.split("_")[1].replace("-"," ") # e.g. "O--8-16.0067A" -> "O  8 16.0067A"
 
-        # compute line emission flux for each gas cell in [photon/s/cm^2]
+        # compute line emission flux for each gas cell in [erg/s/cm^2] or [photon/s/cm^2]
         if 0:
             # use cache
             assert not zeroSfr # not implemented in cache
@@ -739,6 +742,12 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label'] = 'Star Formation Surface Density [log M$_{\\rm sun}$ yr$^{-1}$ kpc$^{-2}$]'
         config['ctName'] = 'inferno'
 
+    if 'tau0_' in partField:
+        species = partField.split("tau0_")[1]
+        grid = grid
+        config['label'] = 'Optical Depth $\\tau(\\nu=\\nu_0)_{\\rm %s}$ [log]' % species
+        config['ctName'] = 'cubehelix'
+
     # fractional total sum of sub-component relative to total (note: for now, grid is pure mass)
     if ' fracmass' in partField:
         grid  = sP.units.codeMassToMsun(grid)
@@ -794,9 +803,10 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
     if (' ' in partField and ' mass' not in partField and ' frac' not in partField):
         assert 'sb_' not in partField
         ion = cloudyIon(sP=None)
-        grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
 
-        grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
+        grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True) # [H atoms/cm^2]
+        grid /= ion.atomicMass(partField.split()[0]) # [H atoms/cm^2] to [ions/cm^2]
+        
         config['label']  = 'N$_{\\rm ' + partField + '}$ [log cm$^{-2}$]'
         config['ctName'] = 'viridis'
         if partField == 'O VII': config['ctName'] = 'magma_gray' #'magma'
@@ -2604,11 +2614,12 @@ def renderMultiPanel(panels, conf):
         varRowHeights = False
         nShortPanels = 0
 
-        for p in panels:
-            if p['nPixels'][1] <= 0.5*p['nPixels'][0] and 'rotation' in p and p['rotation'] == 'edge-on':
-                varRowHeights = True
-                rowHeightRatio = p['nPixels'][1] / p['nPixels'][0] # e.g. 0.25 for 4x longer than tall
-                nShortPanels += 1
+        if len(panels) > 1:
+            for p in panels:
+                if p['nPixels'][1] <= 0.5*p['nPixels'][0] and 'rotation' in p and p['rotation'] == 'edge-on':
+                    varRowHeights = True
+                    rowHeightRatio = p['nPixels'][1] / p['nPixels'][0] # e.g. 0.25 for 4x longer than tall
+                    nShortPanels += 1
 
         if varRowHeights and nRows == 2 and nCols == 1: # single face-on edge-on combination
             barAreaBottom *= (1-rowHeightRatio/2)
@@ -2620,7 +2631,7 @@ def renderMultiPanel(panels, conf):
         fig = plt.figure(frameon=False, tight_layout=False, facecolor=color1)
 
         width_in  = sizeFac[0] * np.ceil(nCols)
-        height_in = sizeFac[1] * np.ceil(nRows)# * aspect
+        height_in = sizeFac[1] * np.ceil(nRows)
 
         rowHeight  = (1.0 - barAreaTop - barAreaBottom) / np.ceil(nRows)
 

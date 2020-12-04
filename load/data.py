@@ -2522,6 +2522,20 @@ def rupke17():
 
     return r
 
+def rupke19():
+    """ Load observational data points from Rupke+ (2019), Makani with KCWI. """
+    path = dataBasePath + 'rupke/rupke19.mg2radprof.txt'
+
+    data = np.loadtxt(path)
+
+    r = {'rad_kpc' : np.array(data[:,0]),
+         'sb'      : data[:,1], # log erg/s/cm^2/arcsec^2
+         'sb_down' : data[:,2], # 1 sigma (dex)
+         'sb_up'   : data[:,3], # 1 sigma (dex)
+         'label'   : 'Rupke+ (2019)'}
+
+    return r
+
 def spence18(vel05=False):
     """ Load observational data points from Spence+ (2018), outflow properties (z<0.2). """
     path = dataBasePath + 'spence/spence18.txt'
