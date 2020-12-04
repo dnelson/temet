@@ -3511,18 +3511,20 @@ def exportSubhalosBinary():
 
     print('Saved: [%s]' % fileName)
 
-def exportHierarchicalBoxGrids():
+def exportHierarchicalBoxGrids(sP, partField='mass'):
     """ Export a series of 3D uniform grids, of different resolutions, to a flat binary format 
     appropriate for javascript/WebGL processing (volume rendering). """
     from vis.common import getHsmlForPartType, defaultHsmlFac
     from util.sphMap import sphGridWholeBox
     from util.simParams import simParams
-    from util.helper import logZeroMin
+    from util.helper import logZeroSafe
 
     # config
-    sP = simParams(run='tng50-2',redshift=0.0)
+    #sP = simParams(run='tng100-2',redshift=0.0)
     partType = 'gas'
-    partField = 'dens' # dens, temp, velmag, xray_lum
+    #partField = 'temp_linear' # mass, temp_linear, velmag, xray_lum
+
+    takeLog = True if partField != 'velmag' else False
 
     nCells = [32, 64, 128, 256, 512]
 
@@ -3539,23 +3541,28 @@ def exportHierarchicalBoxGrids():
     quant = None # grid mass
     if partField != 'mass': # grid a different, mass-weighted quantity
         quant = sP.snapshotSubsetP(partType, partField)
+        assert partField != 'dens' # do mass instead
 
     # make series of grids at progressively better resolution
     grids = []
 
     for nCell in nCells:
-        print('grid ', nCell)
         grid = sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=nCell)
 
         if partField == 'mass': # unit conversion
             pxVol = (sP.boxSize / nCell)**3 # code units (ckpc/h)^3
             grid = sP.units.codeDensToPhys(grid/pxVol) * 1e10 # Msun/kpc^3
 
-        grid = logZeroMin(grid).astype('float32') # always log, 4 bytes per value
+        if takeLog:
+            grid = logZeroSafe(grid)
+
+        grid = grid.astype('float16') # 2 bytes per value!
         grids.append( grid.ravel() )
+        print('grid ', nCell, grid.min(), grid.max())
 
     # save binary
-    fileName = "boxgrid_%s_%s_%s_z%.1f.dat" % (sP.simName,partType,partField,sP.redshift)
+    fileName = "boxgrid_%s_%s_%s_z%.1f.dat" % \
+            (sP.simName.replace("-2",""),partType,partField.replace("_linear",""),sP.redshift)
 
     with open(fileName,'wb') as f:
         # header (24 bytes + 12 bytes per grid)
@@ -3574,9 +3581,10 @@ def exportHierarchicalBoxGrids():
             offset += grid.nbytes
             f.write( struct.pack('i'*len(header), *header) )
 
-        # write each grid (nCells[i]**3*4 bytes each)
+        # write each grid (nCells[i]**3*2 bytes each)
+        # to write in float32: only change 'e' to 'f' and 'float16' to 'float32' above
         for grid in grids:
-            f.write( struct.pack('f'*len(grid), *grid) )
+            f.write( struct.pack('e'*len(grid), *grid) )
 
         # footer
         footer = np.array( [99], dtype='int32' )
