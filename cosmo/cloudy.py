@@ -554,6 +554,7 @@ class cloudyIon():
     # basic atomic information and helpers:
     #   number    = atomic number (#p = #e = numIonizationStates-1)
     #   solar     = solar abundance [n/nH] (Grevesse+ 2010, Hazy c13 Table 7.4)
+    #   mass      = mass in unified atomic mass units (Dalton)
     #   isotopes  = mass numbers (#p+n) of isotopes of this element
     #   ionEnergy = ionization energies [eV]
     el = [ {'number':1,  'name':'Hydrogen',  'symbol':'H',  'solar':1.00e+00, 'mass':1.008,  'isotopes':[1,2], 

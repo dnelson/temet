@@ -56,7 +56,8 @@ def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCus
         # equirectangular
         contour = None
         rVirFracs = False
-        panels.append( {'partType':'gas', 'partField':'tau0_MgII2796', 'valMinMax':[-2.0,2.0], 'ctName':'tarn0'} )
+        #panels.append( {'partType':'gas', 'partField':'tau0_MgII2796', 'valMinMax':[-2.0,2.0], 'ctName':'tarn0'} )
+        panels.append( {'partType':'gas', 'partField':'tau0_MgII2796', 'valMinMax':[1.0,5.0]} )
         #panels.append( {'partType':'gas', 'partField':'tau0_LyA', 'valMinMax':[4.0,8.0]} )
 
         projType   = 'equirectangular'

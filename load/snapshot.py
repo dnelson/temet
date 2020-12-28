@@ -733,7 +733,7 @@ def snapshotSubset(sP, partType, fields,
             transition = field.split("_")[1] # e.g. "tau0_MgII2796", "tau0_MgII2803", "tau0_LyA"
 
             if 'MgII' in transition:
-                baseSpecies = 'Mg I'
+                baseSpecies = 'Mg II'
             elif 'Ly' in transition:
                 baseSpecies = 'H I' # note: uses internal hydrogen model, could use e.g. 'MHIGK_popping_numdens'
 

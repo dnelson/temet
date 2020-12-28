@@ -2,9 +2,6 @@
 test.py
   Temporary stuff.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import glob
@@ -18,14 +15,15 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
-def omega_metals_z():
-    """ Compute Omega_Z(z). """
+def omega_metals_z(metal_mass=True):
+    """ Compute Omega_Z(z) or Omega(z) for various components. """
     from cosmo.hydrogen import neutral_fraction
-    sP = simParams(run='tng100-1')
+    sP = simParams(run='eagle')
     
     snaps = sP.validSnapList(onlyFull=True)
 
     rho_z_allgas  = np.zeros(snaps.size, dtype='float32')
+    rho_z_smbhs   = np.zeros(snaps.size, dtype='float32')
     rho_z_gasdens = np.zeros( (3,snaps.size), dtype='float32' )
     rho_z_nh0frac = np.zeros( (4,snaps.size), dtype='float32' )
     rho_z_stars   = np.zeros(snaps.size, dtype='float32')
@@ -37,8 +35,9 @@ def omega_metals_z():
         redshifts[i] = sP.redshift
 
         # all gas
-        mass = sP.gas('mass') * sP.gas('metallicity') / sP.HubbleParam # 10^10 msun
-        rho_z_allgas[i] = np.sum(mass, dtype='float64') # 10^10 msun
+        mass = sP.gas('mass') # 10^10/h msun, total mass
+        if metal_mass: mass *= sP.gas('metallicity') # metal mass
+        rho_z_allgas[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
 
         # gas density thresholds
         dens = sP.gas('nh') # 1/cm^3 physical
@@ -59,20 +58,30 @@ def omega_metals_z():
         rho_z_nh0frac[3,i] = np.sum(mass[np.where(nh0frac > 0.01)], dtype='float64')
 
         # stars
-        mass = sP.stars('mass') * sP.stars('metallicity') # 10^10 msun/h
+        mass = sP.stars('mass') # 10^10 msun/h, total mass
+        if metal_mass: mass *= sP.stars('metallicity') # metal mass
         rho_z_stars[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
+
+        # smbhs
+        if sP.numPart[sP.ptNum('bhs')]:
+            mass = sP.bhs('mass') # 10^10 msun/h, total mass
+            if metal_mass: mass *= sP.bhs('metallicity') # metal mass
+            rho_z_smbhs[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
 
     # units: [10^10 msun] -> [msun/cMpc^3]
     rho_z_allgas  *= 1e10 / sP.boxSizeCubicComovingMpc
     rho_z_gasdens *= 1e10 / sP.boxSizeCubicComovingMpc
     rho_z_nh0frac *= 1e10 / sP.boxSizeCubicComovingMpc
     rho_z_stars   *= 1e10 / sP.boxSizeCubicComovingMpc
+    rho_z_smbhs   *= 1e10 / sP.boxSizeCubicComovingMpc
 
+    print('metal masses: ', metal_mass)
     print('redshifts = ', redshifts)
-    print('rho_z_allgas = ', rho_z_allgas)
-    print('rho_z_stars = ', rho_z_stars)
-    print('rho_z_gasdens = ', rho_z_gasdens)
-    print('rho_z_nh0frac = ', rho_z_nh0frac)
+    print('rho_allgas = ', rho_z_allgas)
+    print('rho_stars = ', rho_z_stars)
+    print('rho_gasdens = ', rho_z_gasdens)
+    print('rho_nh0frac = ', rho_z_nh0frac)
+    print('rho_smbhs = ', rho_z_nh0frac)
 
 def minify_gergo_hydrogen_files():
     """ Rewrite Gergo's hydrogen catalog files to avoid unneeded fields. """

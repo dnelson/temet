@@ -866,22 +866,27 @@ class units(object):
         and cellsize_code is the usual radius of the cell [code units], which we take as L/2. """
         assert transition in ['MgII2796','MgII2803','LyA','LyB'] # otherwise generalize
 
+        # todo: move into cosmo.cloudy, remove duplication in other parts of the codebase
         if transition == 'MgII2796':
             f12 = 0.3058 # oscillator strength of the transition
             wave0 = 2796.352 # 2803.5320 # line center wavelength [Ang]
+            mass_amu = 24.305
         if transition == 'MgII2803':
             f12 = 0.6155
             wave0 = 2803.5320
+            mass_amu = 24.305
         if transition == 'LyA':
             f12 = 0.416
             wave0 = 1215.67
+            mass_amu = 1.008
         if transition == 'LyB':
             f12 = 0.07912
             wave0 = 1025.7223
+            mass_amu = 1.008
 
         # Doppler width [Hz]
         nu0 = self.c_ang_per_sec / wave0 # line center frequency [Hz]
-        Delta_vd = np.sqrt(2 * self.boltzmann * temp_K / (self.mass_proton * self.c_cgs**2)) * nu0
+        Delta_vd = np.sqrt(2 * self.boltzmann * temp_K / (self.mass_proton * mass_amu * self.c_cgs**2)) * nu0
 
         # line center cross section [cm^2]
         sigma_0 = f12 * np.sqrt(np.pi) * self.electron_charge**2 / (self.mass_electron * self.c_cgs * Delta_vd)
