@@ -11,13 +11,13 @@ import glob
 import subprocess
 
 from functools import partial
-from os.path import isfile, isdir, getsize, expanduser
+from os.path import isfile, isdir, getsize
 from os import mkdir, remove
 
 from cosmo import hydrogen
-from util.helper import closest, iterable, logZeroNaN
+from util.helper import closest, iterable, logZeroNaN, rootPath
 
-basePath = expanduser("~") + "/code/cloudy.run/"
+basePath = rootPath + "tables/cloudy/"
 
 # proposed emission lines to record:
 lineList = """
@@ -120,7 +120,7 @@ def getEmissionLines():
 
 def loadFG11UVB(redshifts=None):
     """ Load the Faucher-Giguerre (2011) UVB at one or more redshifts and convert to CLOUDY units. """
-    basePath = expanduser("~") + '/python/data/faucher.giguere/UVB_tables/'
+    basePath = rootPath + 'data/faucher.giguere/UVB_tables/'
 
     # make sure fields is not a single element
     if isinstance(redshifts, (int,float)):
@@ -158,9 +158,9 @@ def loadFG11UVB(redshifts=None):
 
 def loadHM12UVB(redshifts=None, puchwein18=False):
     """ Load the Haardt-Madau (2012) or Puchwein+ (2018) UVB at one or more redshifts and convert to CLOUDY units. """
-    filePath = expanduser("~") + '/python/data/haardt.madau/hm2012.uvb.txt'
+    filePath = rootPath + 'data/haardt.madau/hm2012.uvb.txt'
     if puchwein18:
-        filePath = expanduser("~") + '/python/data/puchwein/p18.uvb.txt'
+        filePath = rootPath + '/data/puchwein/p18.uvb.txt'
     from util.simParams import simParams
     sP = simParams(res=1820,run='tng') # for units
 

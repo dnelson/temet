@@ -55,7 +55,7 @@ For example, add the following lines to your `.bashrc` file
         source activate ~/.local/envs/myenv
         export PATH=$HOME/.local/envs/myenv/bin/:$PATH
 
-5. The FSPS stellar population synthesis package is required
+5. The FSPS stellar population synthesis package is required to generate new SPS tables
 
         mkdir ~/code
         cd ~/code/
@@ -66,7 +66,7 @@ For example, add the following lines to your `.bashrc` file
         MILES 1
         PADOVA 1 (and so MIST 0)
 
-    for most people, edit `src/Makefile` and add to the F90FLAGS line `-fPIC`, then compile FSPS
+    edit `src/Makefile` and make sure the F90FLAGS line contains `-fPIC`, then compile FSPS
 
         make
 
@@ -90,7 +90,12 @@ For example, add the following lines to your `.bashrc` file
         wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-Light.ttf
         wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-LightItalic.ttf
 
-8. Organize simulation directories as follows
+8. Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and x-ray emission (from XPSEC). For convenience these can be downloaded as
+
+        cd ~/python/tables/
+        wget -r -nH --cut-dirs=2 --no-parent --reject="index.html*" -e robots=off www.tng-project.org/files/dnelson_tables/
+
+9. Organize simulation directories as follows
 
         mkdir ~/sims.TNG
         mkdir ~/sims.TNG/L75n1820TNG

@@ -6,7 +6,6 @@ from __future__ import (absolute_import,division,print_function,unicode_literals
 from builtins import *
 
 import numpy as np
-from os.path import expanduser
 from numba import jit
 from util.helper import closest
 
@@ -266,11 +265,12 @@ def CuboidTransformArray(pos_in, pos_out, nCellsTot, nFacesTot, faceOff, faceLen
 def findCuboidRemapInds(remapRatio, nPixels):
     """ Find the closest remapping matrix (3x3) to achieve the input remapping ratio of [x,y,z] relative extents. 
     Also input nPixels [x,y] of the final image to be made, in order to calculate newBoxSize. """
+    from util.helper import rootPath
     assert len(remapRatio) == 3, 'Error: remapRatio should have three elements.'
     assert np.abs(1.0 - np.prod(remapRatio)) < 1e-3, 'Error: Check L1*L2*L3 == 1 constraint.'
 
     # load pre-computed mapping posibilities
-    file = expanduser("~") + '/python/data/box_remap_N7.txt' # e1,e2,e3,u11,u12,u13,u21,u22,u23,u31,u32,u33,periodicity
+    file = rootPath + 'tables/box_remap_N7.txt' # e1,e2,e3,u11,u12,u13,u21,u22,u23,u31,u32,u33,periodicity
     data = np.loadtxt(file, comments='#', usecols=[0,1,2,3,4,5,6,7,8,9,10,11]) # skip last (periodicity)
 
     # calculate closest matching edge length set (use abs(xyz) distance metric)

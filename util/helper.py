@@ -13,6 +13,10 @@ from scipy.optimize import leastsq, least_squares, curve_fit
 from scipy.stats import binned_statistic
 from numba import jit
 
+# --- root path (e.g. '/home/dnelson/python/') ----
+from os.path import dirname, abspath
+rootPath = abspath(dirname(__file__) + '/../') + '/'
+
 # --- utility functions ---
 
 def nUnique(x):

@@ -15,7 +15,7 @@ from scipy.ndimage import map_coordinates
 from scipy.interpolate import interp1d
 from getpass import getuser
 
-from util.helper import logZeroMin, trapsum, iterable
+from util.helper import logZeroMin, trapsum, iterable, rootPath
 from util.sphMap import sphMap
 from util.rotation import rotationMatrixFromVec, rotateCoordinateArray
 
@@ -271,7 +271,7 @@ def _dust_tau_model_lum_indiv(N_H,Z_g,ages_logGyr,metals_log,masses_msun,wave,A_
 
 class sps():
     """ Use pre-computed FSPS stellar photometrics tables to derive magnitudes for simulation stars. """
-    basePath = expanduser("~") + '/code/fsps.run/'
+    basePath = rootPath + '/tables/fsps/'
 
     imfTypes   = {'salpeter':0, 'chabrier':1, 'kroupa':2}
     isoTracks  = ['mist','padova07','parsec','basti','geneva']
@@ -458,7 +458,7 @@ class sps():
 
         # get nebular emission line names, wavelengths
         line_wave = pop.emline_wavelengths
-        line_file = self.basePath + '../fsps/data/emlines_info.dat'
+        line_file = rootPath + 'fsps/emlines_info.dat'
         with open(line_file,'r') as f:
             line_file = [fline.strip() for fline in f.readlines()]
 
@@ -1414,8 +1414,8 @@ def debug_check_rawspec():
     ageInd = 30
     redshift = 0.8
 
-    paths = [expanduser("~") + '/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5',
-             expanduser("~") + '/code/fsps.run/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5',]
+    paths = [rootPath + '/tables/fsps/mags_padova07_chabrier_cf00_bands-143_z=0.5.hdf5',
+             rootPath + '/tables/fsps/mags_padova07_chabrier_cf00_bands-143_z=0.5_em.hdf5',]
 
     # start plot
     fig = plt.figure(figsize=(figsize[0]*1.8,figsize[1]))
