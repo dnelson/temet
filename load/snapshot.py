@@ -728,6 +728,21 @@ def snapshotSubset(sP, partType, fields,
             ne   = snapshotSubset(sP, partType, 'ne', **kwargs)
             r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
 
+        # x-ray luminosity/flux/counts (the latter for a given instrumental configuration)
+        if field.lower() in ['xray_lum_05-2kev','xray_flux_05-2kev','xray_counts_erosita','xray_counts_chandra']:
+            from cosmo.xray import xrayEmission
+
+            instrument = field.replace('xray_','').replace('-','_').replace('kev','')
+            instrument = instrument.replace('lum_','Luminosity_')
+            instrument = instrument.replace('flux_','Flux_')
+            instrument = instrument.replace('counts_erosita','Count_Erosita_05_2_2ks') # only available config
+            instrument = instrument.replace('counts_chandra','Count_Chandra_03_5_100ks') # as above
+
+            xray = xrayEmission(sP, instrument)
+            r[field] = xray.calcGasEmission(sP, instrument, indRange=indRange)
+            if 'lum_' in field.lower():
+                r[field] /= 1e30 # 10^30 erg/s unit system to avoid overflow
+
         # optical depth to a certain line, at line center [linear unitless]
         if 'tau0_' in field.lower():
             transition = field.split("_")[1] # e.g. "tau0_MgII2796", "tau0_MgII2803", "tau0_LyA"

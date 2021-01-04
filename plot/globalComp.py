@@ -2169,7 +2169,8 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 
 def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig_subplot=[None,None]):
     """ X-ray bolometric luminosity scaling relation vs halo mass (e.g. Schaye Fig 16). """
-    lumTypes = ['Subhalo_XrayBolLum','Group_XrayBolLum_Crit500'] #,'Subhalo_XrayBolLum_2rhalfstars']
+    #lumTypes = ['Subhalo_XrayBolLum','Group_XrayBolLum_Crit500'] #,'Subhalo_XrayBolLum_2rhalfstars']
+    lumTypes = ['Subhalo_XrayLum_05-2kev','Group_XrayLum_05-2kev_Crit500']
     if clean: lumTypes = [lumTypes[1]]
 
     # plot setup
@@ -2402,7 +2403,7 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    #sPs.append( simParams(run='tng100-1', redshift=0.0) )
+    sPs.append( simParams(run='tng100-1', redshift=0.0) )
     #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
@@ -2432,14 +2433,13 @@ def plots():
     #sPs.append( simParams(res=256, run='tng', variant='0000') )
     #sPs.append( simParams(res=256, run='tng', variant='4601') )
     #sPs.append( simParams(res=256, run='tng', variant='4602') )
-    sPs.append( simParams(res=512, run='tng', variant='0000') )
-    sPs.append( simParams(res=512, run='tng', variant='5014') )
+    #sPs.append( simParams(res=512, run='tng', variant='0000') )
+    #sPs.append( simParams(res=512, run='tng', variant='5014') )
 
-    if 0:
-        # testing
-        pdf = PdfPages('cddfh2_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        nHIcddf(sPs, pdf, simRedshift=None, molecular=True)
-        #nHIcddf(sPs, pdf, simRedshift=None, molecular=True, moment=1)
+    if 1:
+        # single plot and quit
+        pdf = PdfPages('xray_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0)
         pdf.close()
         return
 

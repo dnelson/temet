@@ -9,4 +9,5 @@ from . import perf
 from . import skirt
 from . import stellarPop # requires fsps
 from . import util
+from . import xray
 from . import zooms

@@ -19,7 +19,7 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
     panels = []
 
     run        = 'tng' #'tng_zoom_dm'
-    res        = 2160 #1820
+    res        = 1820
     variant    = None #'sf2' # None
 
     redshift   = 0.0
@@ -74,7 +74,8 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
         # magnetic field strength
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-9.0,0.5]} )
         #panels.append( {'partType':'gas', 'partField':'bmag_uG',   'valMinMax':[-3.0,3.5]} )
-        panels.append( {'partType':'gas', 'partField':'temp',   'valMinMax':[4.0,6.0]} )
+        #panels.append( {'partType':'gas', 'partField':'temp',   'valMinMax':[4.0,6.0]} )
+        panels.append( {'partType':'gas', 'partField':'xray_lum_05-2kev',  'valMinMax':[34,38]} )
     if conf == 6:
         panels.append( {'partType':'stars',  'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
 

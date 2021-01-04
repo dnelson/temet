@@ -2926,6 +2926,8 @@ fieldComputeFunctionMapping = \
      partial(fofRadialSumType,ptProperty='Masses',ptType='all',rad='Group_R_Crit500'),
    'Group_XrayBolLum_Crit500' : \
      partial(fofRadialSumType,ptProperty='xray_lum',ptType='gas',rad='Group_R_Crit500'),
+   'Group_XrayLum_05-2kev_Crit500' : \
+     partial(fofRadialSumType,ptProperty='xray_lum_05-2kev',ptType='gas',rad='Group_R_Crit500'),
 
    # subhalo: masses
    'Subhalo_Mass_30pkpc_Stars' : \
@@ -3053,8 +3055,12 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_XrayBolLum' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
+   'Subhalo_XrayLum_05-2kev' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad=None), 
    'Subhalo_XrayBolLum_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad='2rhalfstars'),
+   'Subhalo_XrayLum_05-2kev_2rhalfstars' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad='2rhalfstars'),
    'Subhalo_S850um' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='s850um_flux',op='sum',rad=None),
    'Subhalo_S850um_25pkpc' : \

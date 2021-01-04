@@ -11,6 +11,7 @@ Code repository for Dylan Nelson.
 * obs/ - analysis and data reduction for observations
 * plot/ - generalized plotting
 * projects/ - routines, both analysis and plotting, specific to papers
+* tables/ - large pre-computed datafiles (empty until downloaded)
 * tracer/ - Monte Carlo tracer particles
 * util/ - misc helper utilities
 * vis/ - visualization

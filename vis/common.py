@@ -32,7 +32,7 @@ savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 # configure certain behavior types
 volDensityFields = ['density']
 colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                    'xray','xray_lum','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
+                    'xray','xray_lum','xray_lum_05-2kev','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                     'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
 totSumFields     = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
 velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
@@ -554,10 +554,10 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
     # other total sum fields (replace mass)
-    if partField in ['xray','xray_lum']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev']:
         # xray: replace 'mass' with x-ray luminosity [10^-30 erg/s], which is then accumulated into a 
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
-        mass = sP.snapshotSubsetP(partType, 'xray', indRange=indRange)
+        mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
 
     if partField in ['sfr_msunyrkpc2']:
         mass = sP.snapshotSubsetP(partType, 'sfr', indRange=indRange)
@@ -841,10 +841,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'viridis' #'HI_segmented'
 
-    if partField in ['xray','xray_lum']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
-        config['label']  = 'Gas Bolometric L$_{\\rm X}$ [log erg s$^{-1}$ kpc$^{-2}$]'
+
+        if '05-2kev' in partField:
+            xray_label = 'L$_{\\rm X, 0.5-2 keV}$'
+        else:
+            xray_label = 'Bolometric L$_{\\rm X}$'
+
+        config['label']  = 'Gas %s [log erg s$^{-1}$ kpc$^{-2}$]' % xray_label
         config['ctName'] = 'inferno'
 
     if partField in ['sfr_halpha','halpha']:
