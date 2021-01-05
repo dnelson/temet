@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 from datetime import datetime
 from os.path import isfile
+from copy import deepcopy
 
 from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
 from cosmo.util import multiRunMatchedSnapList
@@ -64,9 +65,10 @@ def boxImgSpecs(sP, zoomFac, sliceFac, relCenPos, absCenPos, axes, nPixels, boxO
 
     return boxSizeImg, boxCenter, extent
 
-def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, returnData=False):
+def renderBox(panels_in, plotConfig, localVars, skipExisting=True, retInfo=False, returnData=False):
     """ Driver: render views of a full/fraction of a cosmological box, variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
+    panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
     #run         = 'tng'       # run name
@@ -179,12 +181,12 @@ def renderBox(panels, plotConfig, localVars, skipExisting=True, retInfo=False, r
  
     renderMultiPanel(panels, plotConfig)
 
-def renderBoxFrames(panels, plotConfig, localVars, curTask=0, numTasks=1, skipExisting=True):
+def renderBoxFrames(panels_in, plotConfig, localVars, curTask=0, numTasks=1, skipExisting=True):
     """ Driver: render views of a full/fraction of a cosmological box, variable number of panels, and 
     repeat this frame across snapshots in order to make a movie. """
-    
-    # defaults (all panel fields that can be specified)
+    panels = deepcopy(panels_in)
 
+    # defaults (all panel fields that can be specified)
     run         = 'illustris' # run name
     res         = 1820        # run resolution
     partType    = 'dm'        # which particle type to project

@@ -8,6 +8,7 @@ from builtins import *
 import numpy as np
 from datetime import datetime
 from os.path import isfile
+from copy import deepcopy
 from getpass import getuser
 
 from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
@@ -159,9 +160,10 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
     return boxSizeImg, boxCenter, extent, haloVirRad, \
            galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter
 
-def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnData=False):
+def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, returnData=False):
     """ Render view(s) of a single halo in one plot, with a variable number of panels, comparing 
         any combination of parameters (res, run, redshift, vis field, vis type, vis direction, ...). """
+    panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
     #hInd        = 0            # subhalo (subfind) index, or zoom run ID (todo: remove this ambiguity)
@@ -289,12 +291,12 @@ def renderSingleHalo(panels, plotConfig, localVars, skipExisting=True, returnDat
     # request render and save
     renderMultiPanel(panels, plotConfig)
 
-def renderSingleHaloFrames(panels, plotConfig, localVars, skipExisting=True):
+def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     """ Render view(s) of a single halo in one plot, and repeat this frame across all snapshots 
     using the smoothed MPB properties. """
+    panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
-
     hInd        = 2               # zoom halo index, or subhalo (subfind) index in periodic box
     run         = 'zooms2'        # run name
     res         = 9               # run resolution

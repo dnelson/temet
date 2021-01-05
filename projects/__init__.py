@@ -11,4 +11,5 @@ from . import outflows
 from . import oxygen
 from . import rshock
 from . import tngcluster
+from . import xrayAngularDependence
 from . import zooming2

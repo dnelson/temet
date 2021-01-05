@@ -126,4 +126,9 @@ class xrayEmission():
         if 'Luminosity' in instrument:
             vals *= 1e44
 
+        # check for strange values, and avoid absolute zeros
+        assert np.count_nonzero(np.isnan(vals)) == 0
+        w = np.where(vals == 0)
+        vals[w] = 1e10 # extremely small
+
         return vals

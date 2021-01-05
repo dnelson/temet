@@ -739,6 +739,10 @@ def snapshotSubset(sP, partType, fields,
             instrument = instrument.replace('counts_chandra','Count_Chandra_03_5_100ks') # as above
 
             xray = xrayEmission(sP, instrument)
+
+            if haloID is not None or subhaloID is not None:
+                indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
+
             r[field] = xray.calcGasEmission(sP, instrument, indRange=indRange)
             if 'lum_' in field.lower():
                 r[field] /= 1e30 # 10^30 erg/s unit system to avoid overflow
@@ -1257,7 +1261,45 @@ def snapshotSubset(sP, partType, fields,
             tff = snapshotSubset(sP, partType, 'tff', **kwargs)
             r[field] = (tcool / tff)
 
-        # ratio of density to local mean density, delta_rho/<rho> [linear]
+        # ratio of any particle property to its radially binned average, delta_Q/<Q> [linear]
+        if field.lower().startswith('delta_') and field.lower() != 'delta_rho':
+            # based on spherically symmetric, halo-centric, mass-density profile, derive now
+            propName = field.lower()[len('delta_'):]
+
+            from scipy.stats import binned_statistic
+            from scipy.interpolate import interp1d
+
+            prop = snapshotSubset(sP, partType, propName, **kwargs)
+            rad = snapshotSubset(sP, partType, 'rad', **kwargs)
+            rad = logZeroNaN(rad)
+
+            # create radial profile
+            bins = np.linspace(0.0, 3.6, 19) # log code dist, 0.2 dex bins, ~1 kpc - 3 Mpc
+            bin_cens = (bins[1:] + bins[:-1])/2
+
+            avg_prop_binned, _, _ = binned_statistic(rad, prop, 'mean', bins=bins)
+
+            # if any bins were empty, avg_prop_binned has nan entries
+            w_nan = np.where(np.isnan(avg_prop_binned))
+            if len(w_nan[0]):
+                # linear extrapolate/interpolate (in log quantity) to fill them
+                w_finite = np.where(~np.isnan(avg_prop_binned))
+                f_interp = interp1d(bin_cens[w_finite], np.log10(avg_prop_binned[w_finite]), 
+                             kind='linear', bounds_error=False, fill_value='extrapolate')
+                avg_prop_binned[w_nan] = 10.0**f_interp(bin_cens[w_nan])
+
+            # interpolate mass-density to the distance of each particle/cell
+            avg_prop = np.interp(rad, bin_cens, avg_prop_binned)
+
+            avg_prop[avg_prop == 0] = np.min(avg_prop[avg_prop > 0]) # clip to nonzero as we divide
+
+            w = np.where(avg_prop < 0)
+            if len(np.where(avg_prop < 0)[0]):
+                print('WARNING: avg_prop has negative entries, unexpected.')
+
+            r[field] = (prop / avg_prop).astype('float32')
+
+        # ratio of density to local mean density, delta_rho/<rho> [linear], special case of the above
         if field.lower() in ['delta_rho']:
             # based on spherically symmetric, halo-centric, mass-density profile, derive now
             from scipy.stats import binned_statistic
@@ -1267,13 +1309,17 @@ def snapshotSubset(sP, partType, fields,
             rad = logZeroNaN(rad)
 
             bins = np.linspace(0.0, 3.6, 19) # log code dist, 0.2 dex bins, ~1 kpc - 3 Mpc
-            totvol = 4/3 * np.pi * ((10.0**bins[1:])**3 - (10.0**bins[:-1])**3) # (ckpc/h)^3
+            totvol_bins = 4/3 * np.pi * ((10.0**bins[1:])**3 - (10.0**bins[:-1])**3) # (ckpc/h)^3
             bin_cens = (bins[1:] + bins[:-1])/2
 
-            totmass, _, _ = binned_statistic(rad, mass, 'sum', bins=bins)
+            totmass_bins, _, _ = binned_statistic(rad, mass, 'sum', bins=bins)
 
             # interpolate mass-density to the distance of each particle/cell
-            avg_rho = np.interp(rad, bin_cens, totmass/totvol)
+            avg_rho = np.interp(rad, bin_cens, totmass_bins/totvol_bins)
+
+            avg_rho[avg_rho == 0] = np.min(avg_rho[avg_rho > 0]) # clip to nonzero as we divide
+
+            # return ratio
             dens = snapshotSubset(sP, partType, 'dens', **kwargs) # will fail for stars/DM, can generalize
 
             r[field] = (dens / avg_rho).astype('float32')

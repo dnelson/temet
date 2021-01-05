@@ -654,7 +654,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             normCol = True
     else:
         # distribute a mass-weighted quantity and calculate mean value grid
-        if partFieldLoad in haloCentricFields:
+        if partFieldLoad in haloCentricFields or partFieldLoad.startswith('delta_'):
             if method in ['sphMap_global','sphMap_globalZoom','sphMap_globalZoomOrig']:
                 # likely in chunked load, will use refPos and refVel as set in haloImgSpecs
                 quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
@@ -954,8 +954,22 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label'] = 't$_{\\rm cool}$ / t$_{\\rm ff}$ [log]'
         config['ctName'] = 'curl'
 
+    # halo-centric
     if partField in ['delta_rho']:
         config['label'] = '$\\delta \\rho / <\\rho>$ [log]'
+        config['ctName'] = 'diff0'
+
+    if 'delta_xray' in partField:
+        config['label'] = '$\\delta L_{\\rm X} / <L_{\\rm X}>$ [log]'
+        config['ctName'] = 'curl0'
+
+    if partField in ['delta_temp_linear']:
+        config['label'] = '$\\delta T / <T>$ [log]'
+        config['ctName'] = 'jet' #'CMRmap' #'coolwarm' #'balance'
+        config['plawScale'] = 1.5
+
+    if partField in ['delta_metal_solar','delta_z_solar']:
+        config['label'] = '$\\delta Z_{\\rm gas} / <Z_{\\rm gas}>$ [log]'
         config['ctName'] = 'delta0'
 
     # gas: shock finder
@@ -2565,7 +2579,7 @@ def renderMultiPanel(panels, conf):
     if conf.plotStyle in ['edged','edged_black']:
         # colorbar plot area sizing
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
-        barAreaHeight = (0.07 / nRows) / aspect - 0.01*conf.rasterPx[0]/1000
+        barAreaHeight = (0.07 / nRows) / aspect / (conf.rasterPx[0]/1000)
         if conf.fontsize > min_fontsize:
             barAreaHeight += 0.001*(conf.fontsize-min_fontsize)
         if conf.fontsize == min_fontsize:
@@ -2768,7 +2782,9 @@ def renderMultiPanel(panels, conf):
         if oneGlobalColorbar:
             widthFrac = 0.8
             hOffset = None
-            heightFac = np.clip(1.0*np.sqrt(nCols/nRows), 0.35, 2.5)
+            heightFac = np.clip(1.0*np.sqrt(nCols/nRows), 0.35, 2.5) / (conf.rasterPx[0]/1000)
+
+            heightFac += 0.002*(conf.fontsize-12) # larger for larger fonts, and vice versa (needs tuning)
 
             if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
