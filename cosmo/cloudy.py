@@ -921,8 +921,7 @@ class cloudyIon():
          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
 
         # load required gas properties
-        dens = sP.snapshotSubset('gas', 'dens', indRange=indRange)
-        dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
+        dens = sP.snapshotSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
 
         if assumeSolarMetallicity:
             metal = np.zeros( dens.size, dtype='float32' ) + self.solar_Z
@@ -1142,8 +1141,7 @@ class cloudyEmission():
         line = self.resolveLineNames(line, single=True)
 
         # load required gas properties
-        dens = sP.snapshotSubset('gas', 'dens', indRange=indRange)
-        dens = np.log10( sP.units.codeDensToPhys(dens, cgs=True, numDens=True) ) # log [cm^-3]
+        dens = sP.snapshotSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
 
         if assumeSolarMetallicity:
             metal = np.zeros( dens.size, dtype='float32' ) + ion.solar_Z
