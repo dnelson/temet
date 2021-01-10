@@ -30,14 +30,16 @@ savePathDefault = expanduser("~") + '/' # for testing/quick outputs
 savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 
 # configure certain behavior types
-volDensityFields = ['density']
-colDensityFields = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                    'xray','xray_lum','xray_lum_05-2kev','p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
-                    'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
-totSumFields     = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
-velLOSFieldNames = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
+volDensityFields  = ['density']
+colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
+                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet',
+                     'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
+                     'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
+totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
+velLOSFieldNames  = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
 velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
+loggedFields      = ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']
 
 def validPartFields(ions=True, emlines=True, bands=True):
     """ Helper, return a list of all field names we can handle. """
@@ -554,7 +556,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
     # other total sum fields (replace mass)
-    if partField in ['xray','xray_lum','xray_lum_05-2kev']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet']:
         # xray: replace 'mass' with x-ray luminosity [10^-30 erg/s], which is then accumulated into a 
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
@@ -678,7 +680,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             mass[w] = 0.0
 
     # quantity pre-processing (need to remove log for means)
-    if partField in ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']:
+    if partField in loggedFields:
         quant = 10.0**quant
 
     if partField in ['coldens_sq_msunkpc2']:
@@ -841,7 +843,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'viridis' #'HI_segmented'
 
-    if partField in ['xray','xray_lum','xray_lum_05-2kev']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
 
@@ -909,7 +911,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'inferno' # 'cividis'
 
     # gas: mass-weighted quantities
-    if partField in ['temp','temperature','temp_sfcold']:
+    if partField in ['temp','temperature','temp_sfcold','temp_linear']:
         grid = grid
         config['label']  = 'Temperature [log K]'
         config['ctName'] = 'thermal' #'jet'

@@ -14,7 +14,8 @@ from plot.config import *
 from vis.halo import renderSingleHalo
 from projects.azimuthalAngleCGM import _get_dist_theta_grid
 
-def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirUnits=False, depthFac=1.0):
+def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirUnits=False, depthFac=1.0,
+    stack2Dmaps=False):
     """ Stacked halo-scale image: delta rho/rho (for Martin Navarro+21) and x-ray SB (for Truong+21). 
     Orient all galaxies edge-on, and remove average radial profile, to highlight angular variation. """
 
@@ -39,7 +40,7 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
     sizeType   = 'kpc'
     size       = 600
 
-    # config
+    # normal config: create projections of relative quantities, first calculated in 3D per-cell
     if conf == 0:
         panels = [{'partType':'gas', 'partField':'delta_rho', 'valMinMax':[-0.2, 0.2]}]
     if conf == 1:
@@ -47,11 +48,29 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
         if median: panels[0]['valMinMax'][1] = 0.1
     if conf == 2:
         panels = [{'partType':'gas', 'partField':'delta_temp_linear', 'valMinMax':[0.05,0.5]}]
+        if stack2Dmaps: panels[0]['valMinMax'] = [-0.1, 0.1]
     if conf == 3:
         panels = [{'partType':'gas', 'partField':'delta_xray_lum', 'valMinMax':[-0.3, 0.1]}]
         if not median: panels[0]['valMinMax'][1] = 0.2
     if conf == 4:
         panels = [{'partType':'gas', 'partField':'delta_metal_solar', 'valMinMax':[-0.2,0.2]}]
+    if conf == 5:
+        panels = [{'partType':'gas', 'partField':'delta_xray_lum_05-2kev_nomet', 'valMinMax':[-0.3,0.3]}]
+        if median: panels[0]['valMinMax'][1] = 0.1
+
+    # or: create normal projections of original quantities, stack, and then remove radial profile in 2D?
+    if stack2Dmaps:
+        panels[0]['partField'] = panels[0]['partField'].replace('delta_','')
+        if panels[0]['partField'] == 'rho': panels[0]['partField'] = 'coldens'
+
+    valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantities instead of deltas
+                      'xray_lum_05-2kev' : [33, 37],
+                      'temp_linear': [6.2, 6.6],
+                      'xray_lum': [33, 37],
+                      'metal_solar':[-0.5, 0.0],
+                      'xray_lum_05-2kev_nomet':[33, 37]}
+    if renderIndiv:
+        panels[0]['valMinMax'] = valMinMaxQuant[ panels[0]['partField'] ]
 
     if 'xray' not in panels[0]['partField']:
         # temperature cut, except for x-ray where it isn't needed
@@ -68,14 +87,18 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
         colorbars    = True
         fontsize     = 22 #if 'xray' in panels[0]['partField'] else 32
 
-    indivSaveName = './vis_%s_z%d_XX_%s_%s.pdf' % \
-      (sP.simName,sP.redshift,panels[0]['partField'],'median' if median else 'mean')
+    # cache and output files
+    dfStr = '_df%.1f' % depthFac if depthFac != 1.0 else ''
+    mStr = '_median' if median else '_mean'
+    sStr = '_stack2D' if stack2Dmaps else ''
+    rStr = '_rvirunits' if rvirUnits else ''
 
-    # cache file
-    saveFilename = 'stack_data_global_conf%d_median%s_rvirunits%d.hdf5' % (conf,median,rvirUnits)
-    if depthFac != 1.0: saveFilename = saveFilename.replace('.hdf5','_df%.1f.hdf5' % depthFac)
+    indivSaveName = './vis_%s_z%d_XX%s_%s%s.pdf' % \
+      (sP.simName,sP.redshift,dfStr,panels[0]['partField'],mStr)
 
-    if isfile(saveFilename):
+    saveFilename = 'stack_data_global_conf%d%s%s%s%s.hdf5' % (conf,mStr,rStr,dfStr,sStr)
+
+    if isfile(saveFilename) and not renderIndiv:
         print('Loading [%s].' % saveFilename)
 
         with h5py.File(saveFilename,'r') as f:
@@ -124,7 +147,7 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
     # plot stacked image and save data grid to hdf5
     hInd = subhaloIDs[int(len(subhaloIDs)/2)] # used for rvir circles
     labelHalo = False
-    plotConfig.saveFilename = indivSaveName.replace('XX','stack')
+    plotConfig.saveFilename = indivSaveName.replace('XX','stack' if not stack2Dmaps else 'stack2D')
 
     # construct input grid: mean/median average across halos, and linear -> log
     if median:
@@ -137,20 +160,20 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
         grid = np.log10(grid)
 
     else:
-        # we have gridded actual gas mass surface density, derive mean radial profile now and remove it
+        # we have gridded an actual cell property, derive mean radial profile now and remove it
         dist, _ = _get_dist_theta_grid(size, nPixels)
 
-        xx, yy, _ = running_median(dist, grid, nBins=50)
+        xx, yy, _ = running_median(dist, np.log10(grid), nBins=50)
 
-        f = interp1d(xx, yy, kind='cubic', bounds_error=False, fill_value='extrapolate')
+        f = interp1d(xx, yy, kind='linear', bounds_error=False, fill_value='extrapolate')
 
         if 0:
             # debug plot
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(111)
             ax.set_xlabel('distance [kpc]')
-            ax.set_ylabel('density [msun/kpc^2 linear] or x-ray SB')
-            ax.scatter(dist, grid, s=1.0, marker='.', color='black', alpha=0.5)
+            ax.set_ylabel('gas cell property [log]')
+            ax.scatter(dist, np.log10(grid), s=1.0, marker='.', color='black', alpha=0.5)
 
             ax.plot(xx, yy, 'o-', lw=lw)
 
@@ -162,8 +185,20 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
             fig.savefig('debug_dist_fit_conf%d.png' % conf)
             plt.close(fig)
 
+        # render stacked grid prior to subtraction
+        if 1:
+            plotConfig.saveFilename = plotConfig.saveFilename.replace('.pdf','_orig.pdf')
+            valMinMaxOrig = panels[0]['valMinMax']
+            panels[0]['valMinMax'] = valMinMaxQuant[ panels[0]['partField'] ]
+            grid = np.log10(grid)
+            renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+            plotConfig.saveFilename = plotConfig.saveFilename.replace('_orig','')
+            grid = 10.0**grid
+            panels[0]['valMinMax'] = valMinMaxOrig
+
         # we have our interpolating function for the average value at a given distance
-        grid /= f(dist) # Sigma -> Sigma/<Sigma> (linear)
+        grid /= 10.0**f(dist) # Sigma -> Sigma/<Sigma> (linear)
+        grid = np.log10(grid)
 
     # render stacked grid
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -181,6 +216,9 @@ def paperPlots():
 
     median = True
     rvirUnits = False
-    depthFac = 0.1
-    for conf in [0,1,2,3,4]:
-        stackedHaloImage(sP, mStarBin, conf=conf, median=median, rvirUnits=rvirUnits, depthFac=depthFac)
+    depthFac = 1.0
+    stack2Dmaps = True
+
+    for conf in [0,1,2,3,4,5]:
+        stackedHaloImage(sP, mStarBin, conf=conf, median=median, rvirUnits=rvirUnits, 
+                         depthFac=depthFac, stack2Dmaps=stack2Dmaps, renderIndiv=False)

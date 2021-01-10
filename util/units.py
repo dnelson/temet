@@ -103,6 +103,7 @@ class units(object):
     arcsec_in_rad = 4.84814e-6 # 1 arcsecond in radian (rad / ")
     ang_in_cm     = 1.0e-8     # cm / angstrom (1 angstrom in cm)
     erg_in_J      = 1e-7       # 1 erg in joules
+    erg_in_kev    = 6.2415e8   # 1 erg in keV
 
     # derived unit conversions
     s_in_Myr      = None
@@ -1182,9 +1183,9 @@ class units(object):
         # flux F = L/(4*pi*d_L^2)*(lambda_L/h/c)*(1+z) in [photon/s/cm^2]
         d_L_cm = self.redshiftToLumDist(redshift) * self.Mpc_in_cm
 
-        dist_fac = 4 * np.pi * d_L_cm**2.0
+        dist_fac = 4 * np.pi * d_L_cm**2.0 # cm^2
 
-        photon_fac = 1.0
+        photon_fac = 1.0 # photon/erg
         if wavelength is not None:
             photon_fac = (wavelength*self.ang_in_cm/self.planck_erg_s/self.c_cgs) * (1.0 + redshift)
 
