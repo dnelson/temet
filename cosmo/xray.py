@@ -5,6 +5,7 @@ cosmo/xray.py
 import numpy as np
 import h5py
 import astropy.io.fits as pyfits
+from os.path import expanduser
 from scipy.integrate import cumtrapz
 
 from util.helper import rootPath
@@ -77,14 +78,17 @@ def integrate_to_common_grid(bins_in, cont_in, bins_out):
 
 def apec_load():
     """ Testing. """
-    base = '/u/dnelson/code/atomdb/'
+    from util.units import units
+
+    base = expanduser("~") + '/code/atomdb/'
     path_line = base + 'apec_line.fits'
     path_cont = base + 'apec_coco.fits'
 
     # define our master wavelength grid
-    n_energy_bins = 400
+    dtype = 'float64'
+    n_energy_bins = 1000
 
-    master_grid = np.logspace(-2.0, 1.5, n_energy_bins+1) # 0.001 to 100 keV (EDGES)
+    master_grid = np.logspace(-3.5, 1.5, n_energy_bins+1) # 0.001 to 100 keV (EDGES)
 
     # define our abundance ratio choice
     abundanceSet = 'AG89'
@@ -102,10 +106,10 @@ def apec_load():
         n_atom_bins = f[2].data.field('Z').size
 
         # allocate, both have units of [photon cm^3 s^-1 bin^-1]
-        master_continuum = np.zeros( (n_temp_bins, n_atom_bins, n_energy_bins), dtype='float32' )
-        master_pseudo    = np.zeros( (n_temp_bins, n_atom_bins, n_energy_bins), dtype='float32' )
+        master_continuum = np.zeros( (n_temp_bins, n_atom_bins, n_energy_bins), dtype=dtype )
+        master_pseudo    = np.zeros( (n_temp_bins, n_atom_bins, n_energy_bins), dtype=dtype )
 
-        # there are n_bins blocks in the fits file
+        # there are n_temp_bins main blocks in the fits file
         for i in range(n_temp_bins):
             data = f[2+i].data
 
@@ -149,28 +153,63 @@ def apec_load():
                 master_pseudo[i,j,:] = loc_result
 
     # open line emission APEC file
-    # todo
+    with pyfits.open(path_line) as f:
+
+        assert np.array_equal(f[1].data.field('kT'), temp_kev) # same temp bins
+
+        # allocate
+        master_line = np.zeros( (n_temp_bins, n_atom_bins, n_energy_bins), dtype=dtype )
+
+        # loop over temperature bins
+        for i in range(n_temp_bins):
+            atomic_number_Z = f[2+i].data.field('Element')
+            #ion_number = f[2+i].data.field('Element') # unused
+
+            assert atomic_number_Z.max() < n_atom_bins
+
+            # in each temperature bin, we have an arbitrary number of entries here:
+            waveang = f[2+i].data.field('Lambda') # wavelength of list [angtrom]
+            emis = f[2+i].data.field('Epsilon') # line emissivity, at this temp and density [photon cm^3 s^-1]
+
+            # convert wavelength to energy
+            wave_kev = units.hc_kev_ang / waveang
+
+            # deposit each line as a delta function (neglect thermal/velocity broadening...)
+            # we combine all elements and ions together, could keep them separate if there was some reason
+            ind = np.clip(np.searchsorted(master_grid, wave_kev, side='left') - 1, a_min=0, a_max=None)
+
+            master_line[i,atomic_number_Z,ind] += emis
+
+    for j in range(n_atom_bins):
+        print('[%2d, %2s] total emis: cont = %e, pseudo = %e, line = %e' % \
+            (j,apec_elem_names[j],master_continuum[:,j,:].sum(),master_pseudo[:,j,:].sum(),master_line[:,j,:].sum()))
 
     # convert these per-element emissivities to be instead as a function of metallicity, 
     # (must assume solar abundances, or otherwise input abundances per species of interest)
     # i.e. here we 'bake in' the abundances
-    spec_prim  = np.zeros( (n_temp_bins, n_energy_bins), dtype='float32' )
-    spec_metal = np.zeros( (n_temp_bins, n_energy_bins), dtype='float32' )
+    spec_prim  = np.zeros( (n_temp_bins, n_energy_bins), dtype=dtype )
+    spec_metal = np.zeros( (n_temp_bins, n_energy_bins), dtype=dtype )
 
     apecAbundSet = 'AG89' # i.e. as assumed when generating APEC tables, never change
 
+    # note: e.g. SOXS takes a different definition of 'metals', and includes several additional 
+    # 'trace' elements beyond {H, He} into the non-metals category
     for i in range(2): # H, He
         abund_ratio = abundance_tables[abundanceSet][i] / abundance_tables[apecAbundSet][i]
         spec_prim += master_continuum[:,i,:] * abund_ratio
+        spec_prim += master_pseudo[:,i,:] * abund_ratio
+        spec_prim += master_line[:,i,:] * abund_ratio
 
     for i in range(2,n_atom_bins):
         abund_ratio = abundance_tables[abundanceSet][i] / abundance_tables[apecAbundSet][i]
         spec_metal += master_continuum[:,i,:] * abund_ratio
+        spec_metal += master_pseudo[:,i,:] * abund_ratio
+        spec_metal += master_line[:,i,:] * abund_ratio
 
     # save 3D table with grid config [temp_kev, metal_solar, master_grid] 
     # in units of [photon cm^3 s^-1 bin^-1]
     # such that multiplication by n*n*V gives [photon s^-1 bin^-1]
-    spec_grid_3d = np.zeros( (n_temp_bins, n_metal_bins, n_energy_bins), dtype='float32' )
+    spec_grid_3d = np.zeros( (n_temp_bins, n_metal_bins, n_energy_bins), dtype=dtype )
 
     metallicities = np.linspace(metal_minmax[0], metal_minmax[1], n_metal_bins)
 
@@ -190,8 +229,6 @@ def apec_load():
         emax = 2.0 # kev, observed frame
 
     # erg/photon for each bin of master_grid
-    from util.units import units
-
     master_grid_mid = (master_grid[1:] + master_grid[:-1]) / 2 # midpoints
     energy_erg_emit = master_grid_mid / units.erg_in_kev # erg/photon
     energy_erg_obs = energy_erg_emit / (1.0 + redshift) # erg/photon
@@ -208,12 +245,13 @@ def apec_load():
     emis = np.sum( spec_grid_3d[:,:,w], axis=2 ) # [erg cm^3 s^-1]
 
     # save test output
-    with h5py.File('apec_z%02d.hdf5' % np.round(redshift*10),'w') as f:
+    fileName = basePath + 'apec_z%02d.hdf5' % np.round(redshift*10)
+    with h5py.File(fileName,'w') as f:
         f['emis_05-2kev'] = emis # erg cm^3 s^-1
         f['temp'] = temp_kev # linear kev
         f['metal'] = metallicities # log solar
 
-    import pdb; pdb.set_trace()
+    print('Done, saved: [%s].' % fileName)
 
 class xrayEmission():
     """ Use pre-computed XSPEC table to derive x-ray emissivities for simulation gas cells. """
@@ -377,7 +415,53 @@ class xrayEmission():
 
         # check for strange values, and avoid absolute zeros
         assert np.count_nonzero(np.isnan(vals)) == 0
+
         w = np.where(vals == 0)
         vals[w] = 1e10 # extremely small
 
+        # todo: convert to float32?
         return vals
+
+def compare_tables():
+    """ Test. Compare XSPEC and APEC tables. """
+    from util.helper import plothist
+    from util.simParams import simParams
+
+    # config
+    sP = simParams(run='tng100-1', redshift=0.0)
+
+    inst1 = 'Luminosity_05_2'
+    inst2 = 'emis_05-2kev'
+
+    # create interpolators
+    xray1 = xrayEmission(sP, instrument=inst1, use_apec=False)
+    xray2 = xrayEmission(sP, instrument=inst2, use_apec=True)
+
+    # load a subset
+    indRange = [0,1000000]
+
+    vals1 = xray1.calcGasEmission(sP, inst1, indRange=indRange)
+    vals2 = xray2.calcGasEmission(sP, inst2, indRange=indRange)
+
+    ratio = vals1 / vals2 # old / new
+    print('mean median: ',ratio.mean(), np.median(ratio))
+    print('min max: ', ratio.min(), ratio.max())
+    print('percs 5,16,84,95: ', np.percentile(ratio, [5,16,85,95]))
+    plothist(ratio[vals2 > 1e10])
+
+    # what are outliers?
+    w_good = np.where( (ratio>0.5) & (ratio<2.0) )
+    w_bad = np.where( (ratio>2) )
+
+    print('bad outliers: [%d of %d]' % (len(w_bad[0]),vals1.size))
+
+    # relation with temp/metallicity/dens
+    temp = sP.snapshotSubset('gas', 'temp', indRange=indRange)
+    metal = sP.snapshotSubset('gas', 'z_solar', indRange=indRange)
+    dens_nh = sP.snapshotSubset('gas', 'nh', indRange=indRange)
+
+    print('temp: ', temp[w_good].mean(), temp[w_bad].mean())
+    print('metal: ', metal[w_good].mean(), metal[w_bad].mean())
+    print('dens_nh: ', dens_nh[w_good].mean(), dens_nh[w_bad].mean())
+
+    import pdb; pdb.set_trace()

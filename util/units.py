@@ -34,6 +34,7 @@ class units(object):
     boltzmann_JK      = 1.380650e-23    # joules/Kelvin
     boltzmann_keV     = 11604505.0      # Kelvin/KeV
     planck_erg_s      = 6.626e-27       # Planck constant, [erg*s]
+    hc_kev_ang        = 12.3981689      # h*c, [keV*angstrom]
     mass_proton       = 1.672622e-24    # cgs
     mass_electron     = 9.1095e-28      # cgs
     gamma             = 1.666666667     # 5/3
