@@ -375,9 +375,13 @@ def stellar3BandCompositeImage(sP, partField, method, nPixels, axes, projType, p
 
     if '-'.join(bands) in ['sdss_g-sdss_r-sdss_i','sdss_r-sdss_i-sdss_z']:
         # gri-composite, following the method of Lupton+2004 (as in SDSS/HSC RGB cutouts)
-        fac = {'g':1.0, 'r':1.0, 'i':0.8} # RGB = gri
+        if '-'.join(bands) == 'sdss_r-sdss_i-sdss_z':
+            fac = {'g':1.0, 'r':1.0, 'i':1.2} # RGB = riz
+        else:
+            fac = {'g':1.0, 'r':1.0, 'i':0.8} # RGB = gri
+
         lupton_alpha = 2.0 # 1/stretch
-        lupton_Q = 8.0
+        lupton_Q = 10.0 # lower values clip highlights more (more contrast)
         scale_min = 0.1 #1e5 # units of linear luminosity
 
         # make RGB array using arcsinh scaling following Lupton (1e7 shift to avoid truncation issues)
@@ -958,20 +962,20 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     # halo-centric
     if partField in ['delta_rho']:
-        config['label'] = '$\\delta \\rho / <\\rho>$ [log]'
+        config['label'] = '$\\rho / <\\rho>$ [log]'
         config['ctName'] = 'diff0'
 
     if 'delta_xray' in partField:
-        config['label'] = '$\\delta L_{\\rm X} / <L_{\\rm X}>$ [log]'
+        config['label'] = '$L_{\\rm X} / <L_{\\rm X}>$ [log]'
         config['ctName'] = 'curl0'
 
     if partField in ['delta_temp_linear']:
-        config['label'] = '$\\delta T / <T>$ [log]'
+        config['label'] = '$T / <T>$ [log]'
         config['ctName'] = 'jet' #'CMRmap' #'coolwarm' #'balance'
         config['plawScale'] = 1.5
 
     if partField in ['delta_metal_solar','delta_z_solar']:
-        config['label'] = '$\\delta Z_{\\rm gas} / <Z_{\\rm gas}>$ [log]'
+        config['label'] = '$Z_{\\rm gas} / <Z_{\\rm gas}>$ [log]'
         config['ctName'] = 'delta0'
 
     # gas: shock finder
@@ -1148,20 +1152,25 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     # shouldn't have any NaN, and shouldn't be all uniformly zero
     assert np.count_nonzero(np.isnan(grid)) == 0, 'ERROR: Final grid contains NaN.'
+
     if np.min(grid) == 0 and np.max(grid) == 0:
+        # this is also a catastropic failure (i.e. mis-centering, but return blank image)
         print('WARNING: Final grid is uniformly zero.')
-
-    # compute a guess for an adaptively clipped heuristic [min,max] bound
-    if logMin:
-        data_grid = logZeroNaN(grid) + gridOffset
-        config['vMM_guess'] = np.nanpercentile(data_grid, [15,99.5])
+        data_grid = grid.copy()
+        config['vMM_guess'] = [0.0, 1.0]
     else:
-        data_grid = grid.copy() + gridOffset
-        config['vMM_guess'] = np.nanpercentile(data_grid, [5,99.5])
+        # compute a guess for an adaptively clipped heuristic [min,max] bound
+        if logMin:
+            data_grid = logZeroNaN(grid) + gridOffset
+            config['vMM_guess'] = np.nanpercentile(data_grid, [15,99.5])
+        else:
+            data_grid = grid.copy() + gridOffset
+            config['vMM_guess'] = np.nanpercentile(data_grid, [5,99.5])
 
-    # handle requested log
-    if logMin:
-        grid = logZeroMin(grid)
+        # handle requested log
+        if logMin:
+            grid = logZeroMin(grid)
+
     grid += gridOffset
 
     return grid, config, data_grid
@@ -1340,9 +1349,11 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
             # rotation? shift points to subhalo center, rotate, and shift back
             if rotMatrix is not None:
+                print(rotCenter)
                 if rotCenter is None:
                     # use subhalo center at this snapshot
                     sh = sP.groupCatSingle(subhaloID=sP.hInd)
+                    print(sP.hInd)
                     rotCenter = sh['SubhaloPos']
 
                     if not sP.isZoom and sP.hInd is None:
@@ -1372,7 +1383,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             # load: mass/weights, quantity, and render specifications required
             mass, quant, normCol = loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, 
                                                        weightField, indRange=indRange)
-            assert mass.size == 1 or (mass.size == hsml.size)
+
+            if method != 'histo':
+                assert mass.size == 1 or (mass.size == hsml.size)
 
             if mass.sum() == 0:
                 return emptyReturn()
@@ -1506,8 +1519,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                     return emptyReturn()
 
                 mass = mass[wMask]
-                hsml = hsml[wMask]
                 pos  = pos[wMask,:]
+                if method != 'histo':
+                    hsml = hsml[wMask]
                 if quant is not None:
                     quant = quant[wMask]
 
@@ -1996,23 +2010,23 @@ def addBoxMarkers(p, conf, ax, pExtent):
         scaleBarLen = (p['extent'][1]-p['extent'][0])*0.10 # 10% of plot width
         scaleBarLen /= p['sP'].HubbleParam # ckpc/h -> ckpc (or cMpc/h -> cMpc)
 
-        if p['sP'].mpcUnits:
-            scaleBarLen = 1.0 * np.ceil(scaleBarLen/1.0) # round to nearest ~1 Mpc
-        else:
-            scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest ~100 kpc
+        #if p['sP'].mpcUnits:
+        #    scaleBarLen = 1.0 * np.ceil(scaleBarLen/1.0) # round to nearest ~1 Mpc
+        #else:
+        #    scaleBarLen = 100.0 * np.ceil(scaleBarLen/100.0) # round to nearest ~100 kpc
 
-        # if scale bar is more than 40% of width, reduce by 10x
-        if scaleBarLen >= 0.4 * (p['extent'][1]-p['extent'][0]):
-            scaleBarLen /= 10.0
+        # if scale bar is more than 30% of width, reduce
+        while scaleBarLen >= 0.3 * (p['extent'][1]-p['extent'][0]):
+            scaleBarLen /= 1.2
 
-        # if scale bar is less than 10% of width, increase by 4x
-        if scaleBarLen < 0.1 * (p['extent'][1]-p['extent'][0]):
-            scaleBarLen *= 4
-        if scaleBarLen < 0.15 * (p['extent'][1]-p['extent'][0]):
-            scaleBarLen *= 2
+        # if scale bar is less than 20% of width, increase
+        while scaleBarLen < 0.20 * (p['extent'][1]-p['extent'][0]):
+            scaleBarLen *= 1.2
 
         # if scale bar is more than X Mpc/kpc, round to nearest X Mpc/kpc
-        roundScales = [100.0, 10.0, 1.0] if p['sP'].mpcUnits else [10000.0, 1000.0, 1000.0, 100.0, 10.0]
+        mpcFac = 1000.0 if p['sP'].mpcUnits else 1.0
+        roundScales = np.array([10000.0, 1000.0, 1000.0, 100.0, 10.0]) / mpcFac
+
         for roundScale in roundScales:
             if scaleBarLen >= roundScale:
                 scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
@@ -2022,13 +2036,14 @@ def addBoxMarkers(p, conf, ax, pExtent):
 
         if p['labelScale'] == 'physical':
             # convert size from comoving to physical, which influences only the label below
-            scaleBarLen = np.round(scaleBarLen * p['sP'].units.scalefac)
+            scaleBarLen *= p['sP'].units.scalefac
 
             # want to round this display value
             for roundScale in roundScales:
                 if scaleBarLen >= roundScale:
                     scaleBarLen = roundScale * np.round(scaleBarLen/roundScale)
-                    scaleBarPlotLen = p['sP'].units.physicalKpcToCodeLength(scaleBarLen)
+
+            scaleBarPlotLen = p['sP'].units.physicalKpcToCodeLength(scaleBarLen*mpcFac)
 
         # label
         cmStr = 'c' if (p['sP'].redshift > 0.0 and p['labelScale'] != 'physical') else ''
@@ -2444,8 +2459,8 @@ def renderMultiPanel(panels, conf):
 
     # plot sizing and arrangement
     sizeFac = np.array(conf.rasterPx) / mpl.rcParams['savefig.dpi']
-    nRows   = np.floor(np.sqrt(len(panels))) if not hasattr(conf,'nRows') else conf.nRows 
-    nCols   = np.ceil(len(panels) / nRows) if not hasattr(conf,'nCols') else conf.nCols
+    nRows   = int(np.floor(np.sqrt(len(panels)))) if not hasattr(conf,'nRows') else conf.nRows 
+    nCols   = int(np.ceil(len(panels) / nRows)) if not hasattr(conf,'nCols') else conf.nCols
     aspect  = nRows/nCols
 
     conf.nCols = nCols
@@ -2592,6 +2607,29 @@ def renderMultiPanel(panels, conf):
             barAreaHeight += 0.014*nCols
         if not conf.colorbars:
             barAreaHeight = 0.0
+
+        def _heightfac():
+            """ Helper. Used later to define height of colorbar. """
+            heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5) / (conf.rasterPx[0]/1000)
+
+            heightFac += 0.002*(conf.fontsize-12) # larger for larger fonts, and vice versa (needs tuning)
+
+            if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
+            if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
+            if nRows == 1 and nCols == 1:
+                heightFac *= 0.7 # decrease
+                if conf.fontsize == min_fontsize: # small images
+                    heightFac *= 1.6
+                    widthFrac = 0.8
+            if nRows == 2 and nCols == 1 and varRowHeights:
+                # single edge-on face-on combination
+                heightFac = 0.7
+                widthFrac = 0.9
+                hOffset = -0.5
+            if nRows >= 4:
+                heightFac *= 0.65
+
+            return heightFac
         
         # check uniqueness of panel (partType,partField,valMinMax)'s
         pPartTypes   = set()
@@ -2760,21 +2798,21 @@ def renderMultiPanel(panels, conf):
             if oneGlobalColorbar:
                 continue
 
-            heightFac = np.max([1.0/nRows, 0.35])
+            heightFac = _heightfac() * 0.65
 
             if nRows == 2:
                 # both above and below, one per column
                 if curRow == 0:
-                    addCustomColorbars(fig, ax, conf, config, heightFac, 0.0, barTop, color2, 
+                    addCustomColorbars(fig, ax, conf, config, heightFac*0.6, 0.0, barTop, color2, 
                                        rowHeight, colWidth, bottomNorm, leftNorm)
 
                 if curRow == nRows-1:
-                    addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, 0.0, color2, 
+                    addCustomColorbars(fig, ax, conf, config, heightFac*0.6, barBottom, 0.0, color2, 
                                        rowHeight, colWidth, bottomNorm, leftNorm)
             
             if nRows == 1 or (nRows > 2 and curRow == nRows-1):
                 # only below, one per column
-                addCustomColorbars(fig, ax, conf, config, heightFac*1.4, barBottom, barTop, color2, 
+                addCustomColorbars(fig, ax, conf, config, heightFac, barBottom, barTop, color2, 
                                    rowHeight, colWidth, bottomNorm, leftNorm)
 
             if 'vecColorbar' in p and p['vecColorbar'] and not oneGlobalColorbar:
@@ -2784,25 +2822,7 @@ def renderMultiPanel(panels, conf):
         if oneGlobalColorbar:
             widthFrac = 0.8
             hOffset = None
-            heightFac = np.clip(1.0*np.sqrt(nCols/nRows), 0.35, 2.5) / (conf.rasterPx[0]/1000)
-
-            heightFac += 0.002*(conf.fontsize-12) # larger for larger fonts, and vice versa (needs tuning)
-
-            if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
-            if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
-            if nRows == 1 and nCols == 1:
-                heightFac *= 0.7 # decrease
-                if conf.fontsize == min_fontsize: # small images
-                    heightFac *= 1.6
-                    widthFrac = 0.8
-            if nRows == 1 and nCols in [2,3] and conf.fontsize < 28: heightFac *= 0.8 # decrease
-            if nRows == 2 and nCols == 1 and varRowHeights:
-                # single edge-on face-on combination
-                heightFac = 0.7
-                widthFrac = 0.9
-                hOffset = -0.5
-            if nRows >= 4:
-                heightFac *= 0.65
+            heightFac = _heightfac()
 
             if 'vecColorbar' not in p or not p['vecColorbar']:
                 # normal

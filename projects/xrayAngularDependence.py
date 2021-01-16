@@ -206,6 +206,50 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
     #with h5py.File(plotConfig.saveFilename.replace('.pdf','.hdf5'),'w') as f:
     #    f['grid'] = grid
 
+def singleHaloImage():
+    """ Quick test. """
+    from util import simParams
+    from util.helper import closest
+
+    # select halo
+    sP = simParams(run='tng100-1', redshift=0.0)
+    mstar = sP.subhalos('mstar_30pkpc_log')
+    cen_flag = sP.subhalos('central_flag')
+
+    mstar[cen_flag == 0] = np.nan # skip secondaries
+
+    _, hInd = closest(mstar, 10.95)
+
+    # vis
+    rVirFracs  = [0.5, 1.0]
+    method     = 'histo' #'sphMap'
+    nPixels    = [100,100] #[800, 800]
+    axes       = [0,1]
+    labelZ     = False
+    labelScale = 'physical'
+    labelSim   = False
+    labelHalo  = 'mstar,mhalo,id'
+    relCoords  = True
+    rotation   = 'edge-on-stars'
+    sizeType   = 'rVirial'
+    size       = 2.0
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 800
+        colorbars    = True
+        fontsize     = 22
+
+    # panels
+    partType = 'gas'
+
+    panels = [ {'partField':'metal_solar', 'valMinMax':[-0.5,0.2]},
+               {'partField':'temp', 'valMinMax':[5.5,6.6]},
+               {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} ]
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+
 def paperPlots():
     """ Plots for Truong+21 x-ray emission angular dependence paper. """
     from util import simParams

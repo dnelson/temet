@@ -18,7 +18,7 @@ from plot.config import *
 from projects.azimuthalAngleCGM import _get_dist_theta_grid
 
 def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
-                        rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True):
+                        rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True, psf=False):
     """ MgII emission image test.. """
     method     = 'sphMap' # note: fof-scope
     nPixels    = [800,800]
@@ -31,7 +31,8 @@ def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCus
     sizeType   = 'kpc'
 
     # smooth? MUSE UDF has a PSF FWMH ~ 0.7 arcsec
-    #smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.7)
+    if psf:
+        smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.7)
 
     # contour test
     contour = ['stars','coldens_msunkpc2']
@@ -70,7 +71,8 @@ def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCus
         rasterPx     = nPixels
         colorbars    = cbars
         fontsize     = font
-        saveFilename = '%s_%d_%d_%s.pdf' % (sP.simName,sP.snap,hInd,'-'.join([p['partField'] for p in panels]))
+        saveFilename = '%s_%d_%d_%s%s.pdf' % \
+          (sP.simName,sP.snap,hInd,'-'.join([p['partField'] for p in panels]),'_psf' if psf else '')
 
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -604,6 +606,8 @@ def paperPlots():
             label += '\nID #%d' % subID
             singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
                                 rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False)
+            #singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
+            #                    rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False, psf=True)
 
     # figure 8 - L_MgII and r_1/2,MgII correlation with SFR
     if 0:

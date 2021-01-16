@@ -59,7 +59,7 @@ def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):
     return ang_mom_mean
 
 def momentOfInertiaTensor(sP, gas=None, stars=None, rHalf=None, shPos=None, subhaloID=None, 
-                         useStars=True, onlyStars=False):
+                          useStars=True, onlyStars=False):
     """ Calculate the moment of inertia tensor (3x3 matrix) for a subhalo or halo, given a load 
     of its member gas and stars (at least within 2*rHalf==shHalfMassRadStars) and center position shPos. 
     If useStars == True, then switch to stars if not enough SFing gas present, otherwise never use stars. 

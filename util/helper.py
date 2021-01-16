@@ -29,7 +29,7 @@ def isUnique(x):
 
 def closest(array, value):
     """ Return closest element of array to input value. """
-    ind = ( np.abs(array-value) ).argmin()
+    ind = np.nanargmin( np.abs(array-value) )
     ind_nd = np.unravel_index( ind, array.shape )
     return array[ind_nd], ind
 

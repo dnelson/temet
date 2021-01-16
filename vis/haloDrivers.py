@@ -1072,54 +1072,61 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def yenting_vis_sample(redshift=0.95): # 1.0
-    """ For all TNG300-1 centrals at z=1, Mhalo > 5e13, plot stellar RIZ (observed-frame) composites and SFR maps, 
-    in a few projections. One plot per halo."""
-    res        = 2500
-    run        = 'tng'
-    rVirFracs  = [1.0]
-    method     = 'sphMap'
-    nPixels    = [800,800]
-    size       = 0.25
-    sizeType   = 'arcmin'
-    axesUnits  = 'arcsec'
-    haloMassLim = 5e13
+def yenting_vis_sample(redshift=1.0):
+    """ For the raw TNG-Cluster halos (not in the virtual box), render some views of RIZ stellar 
+    composite and SFR, to identify rings like Yen-Ting is after."""
+    from cosmo.zooms import _halo_ids_run
+
+    zoomHaloInds = _halo_ids_run(onlyDone=False)
+
+    rVirFracs   = [1.0]
+    method      = 'sphMap'
+    nPixels     = [600,600]
+    size        = 100.0 #1.0
+    sizeType    = 'kpc' #'arcmin'
+    axesUnits   = 'kpc' #'arcsec'
+    #haloMassBin = [13.5, 14.2]
 
     class plotConfig:
         plotStyle = 'open'
-        rasterPx  = 1600
         colorbars = True
         fontsize  = 30.0
 
-    # load halos
-    sP = simParams(res=res, run=run, redshift=redshift)
+    # panel config
+    conf1 = {'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'}
+    conf2 = {'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0]}
 
-    if 0:
-        mhalo = sP.groupCat(fieldsSubhalos=['mhalo_200'])
+    axesLists = [ [0,2], [1,2], [0,1] ]
+    #rotations = [ 'edge-on', 'face-on' ]
 
-        w = np.where(mhalo >= haloMassLim)
-        print('Processing [%d] halos above %g...' % (len(w[0]),haloMassLim))
+    # render halos
+    for zoomHaloInd in [717]: #zoomHaloInds:
+        # set sP
+        sP = simParams(res=13, run='tng_zoom', variant='sf3', redshift=redshift, hInd=zoomHaloInd)
 
-    for hID in [82468]: #[129068]: #w[0]:
-        hInd = hID
+        # hInd is always the most massive
+        hInd = 0
+
+        # set panels
         panels = []
 
-        panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'} )
-        #panels.append( {'axes':[0,2], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'} )
-        #panels.append( {'axes':[1,2], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'} )
-        #panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z', 'rotation':'face-on', 'labelScale':'physical'} )
+        #for axesVal in axesLists:
+        #    panels.append( {**conf1, 'axes':axesVal})
+        #panels.append( {**conf1, 'axes':[0,1], 'rotation':'face-on'})
 
-        panels.append( {'axes':[0,1], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'labelHalo':'mhalo'} )
-        #panels.append( {'axes':[0,2], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'labelHalo':'mstar'} )
-        #panels.append( {'axes':[1,2], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0]} )
-        #panels.append( {'axes':[0,1], 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-6.0,-1.0], 'rotation':'face-on', 'labelScale':'physical'} )
+        #for axesVal in axesLists:
+        #    panels.append( {**conf2, 'axes':axesVal})
+        panels.append( {**conf2, 'axes':[0,1], 'rotation':'face-on'})
 
-        #panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarComp-sdss_g-sdss_r-sdss_i'} )
-        #panels.append( {'axes':[0,1], 'partType':'stars', 'partField':'stellarBand-sdss_i', 'valMinMax':[-20,-13]} )
+        panels[0]['labelScale'] = 'physical'
+        #panels[4]['labelScale'] = 'physical'
+        #panels[3]['labelHalo'] = True
+        panels[-1]['labelHalo'] = True
 
-        plotConfig.saveFilename = 'yenting_%s_z=%.2f_shID-%d.png' % (sP.simName,redshift,hID)
+        plotConfig.saveFilename = 'yenting_%s_z=%.1f.pdf' % (sP.simName,redshift)
 
         renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
+    print('Done.')
 
 def benedetta_vis_sample():
     """ For all TNG300-1 centrals at z=1, Mhalo > 5e13, plot stellar RIZ (observed-frame) composites and SFR maps, 

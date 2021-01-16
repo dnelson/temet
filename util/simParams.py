@@ -2,9 +2,6 @@
 util/simParams.py
   Class to hold all details for a particular simulation, including a snapshot/redshift specification.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import platform
 import numpy as np
 import getpass
@@ -337,7 +334,7 @@ class simParams:
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if res in res_L35+res_L75+res_L205+res_L680:
+            if res in res_L35+res_L75+res_L205:
                 # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
@@ -418,6 +415,8 @@ class simParams:
             # mpc? all L680* except testing
             if '_mpc' in self.variant or ('_dm' not in run and self.variant == 'sf3'):
                 self.mpcUnits = True
+            if self.variant in ['sf3s','sf3s5008','sf3none','sf3none_m','sf3_m']: # h50/h3693 tests
+                self.mpcUnits = True
 
             # paths
             bs = str(int(self.boxSize/1000.0)) if self.boxSize != 680.0 else str(int(self.boxSize))
@@ -431,7 +430,9 @@ class simParams:
             # load cmInitial (box recentering offset) for TNG1 production runs
             if self.variant == 'sf3':
                 ics_filename = 'ics_zoom_L%sn%dTNG_DM_halo%d_L%d_sf3.0_mpc.hdf5' % (bs,parentRes,self.hInd,self.res) # generalize if not sf3
-                self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/' + ics_filename
+                self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/'
+                if self.res == 13: self.icsPath += 'done/' # old set
+                self.icsPath += ics_filename
                 with h5py.File(self.icsPath, 'r') as f:
                     self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
 
@@ -1288,33 +1289,8 @@ class simParams:
     
     @property
     def zoomSubhaloID(self):
-        if self.run in ['tng_zoom','tng_zoom_dm','tng100_zoom','tng100_zoom_dm','tng50_zoom','tng50_zoom_dm']:
-            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
-            return 0 # hardcoded for now
-
-        if self.run in ['zooms','zooms_dm']:
-            # verified
-            if self.hInd == 0 and self.res in [11]:
-                return 0
-
-            # default hardcoded for now:
-            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
-            return 0
-
-        if self.run in ['zooms2','zooms2_josh']:
-            if self.hInd == 2 and self.res in [9,10,11]:
-                return 0 # verified
-
-            # default hardcoded for now:
-            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
-            return 0
-
-        if self.run in ['zooms2_tng']:
-            # default hardcoded for now:
-            print('Warning: zoomSubhaloID hard-coded todo ['+self.simName+'].')
-            return 0
-
-        raise Exception('Unhandled.')
+        #print('Warning: zoomSubhaloID hard-coded to always be the first! ['+self.simName+'].')
+        return 0 # could be individually verified, or else generalized, depending on zoom suite
     
     @property
     def dmParticleMass(self):
@@ -1348,7 +1324,18 @@ class simParams:
         h = self.snapshotHeader()
         if 'Code' in h:
             return h['Code'].decode('ascii')
-        return 'AREPO'  
+        return 'AREPO'
+
+    @property
+    def cpuHours(self):
+        """ Return CPU core hours to z=0 for this simulation. """
+        from cosmo.perf import loadCpuTxt
+        data = loadCpuTxt(self.arepoPath, keys=['total','numCPUs'])
+        
+        final_timestep_sec_per_cpu = np.squeeze(data['total'])[-1,2] # cumulative
+        core_hours = final_timestep_sec_per_cpu * data['numCPUs'] / 3600
+
+        return core_hours
 
     # operator overloads
     def __eq__(self, other): 
