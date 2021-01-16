@@ -93,7 +93,7 @@ def celineH2GalaxyImage():
     rVirFracs  = None
 
     size = 40
-    hInd = 564218 # for Klitsch+ (2019) paper
+    subhaloInd = 564218 # for Klitsch+ (2019) paper
 
     faceOnOptions = {'rotation'   : 'face-on',
                      'labelScale' : 'physical',
@@ -109,7 +109,7 @@ def celineH2GalaxyImage():
 
     # which halo?
     sP = simParams(res=res, run=run, redshift=redshift)
-    haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
+    haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
 
     panels = []
     panels.append( {'partType':'gas', 'partField':'MH2GK_popping', 'valMinMax':[17.5,22.0], **faceOnOptions} )
@@ -122,7 +122,7 @@ def celineH2GalaxyImage():
         nCols        = 1
         nRows        = 2
         fontsize     = 24
-        saveFilename = './%s.%d.%d.%dkpc.pdf' % (sP.simName,sP.snap,hInd,size)
+        saveFilename = './%s.%d.%d.%dkpc.pdf' % (sP.simName,sP.snap,subhaloInd,size)
 
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -291,7 +291,7 @@ def amyDIGzProfiles():
         z_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
         grid_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float64' )
 
-        for j, hInd in enumerate(subInds):
+        for j, subhaloInd in enumerate(subInds):
             # project
             class plotConfig:
                 saveFilename = 'dummy'

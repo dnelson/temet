@@ -221,7 +221,7 @@ each entry in `panels` will add one image/view/panel to the figure, and these ca
 setting different parameters. The `plotConfig` class holds settings which affect the overall figure as a whole, 
 and `commonVars` (which is usually all local variables in the driver functions) are shared between all panels.
 
-For a halo-based render, the process is the same, and `hInd` specifies the subhalo ID:
+For a halo-based render, the process is the same, and `subhaloInd` specifies the subhalo ID:
 
 ```python
 >>> run = 'tng50-3'
@@ -232,10 +232,10 @@ For a halo-based render, the process is the same, and `hInd` specifies the subha
 >>> fof11 = sP.halo(11)
 >>>
 >>> panels = []
->>> panels.append( {'hInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
->>> panels.append( {'hInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'temp'} )
->>> panels.append( {'hInd':fof11['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
->>> panels.append( {'hInd':fof11['GroupFirstSub'], 'partType':'gas', 'partField':'temp'} )
+>>> panels.append( {'subhaloInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
+>>> panels.append( {'subhaloInd':fof10['GroupFirstSub'], 'partType':'gas', 'partField':'temp'} )
+>>> panels.append( {'subhaloInd':fof11['GroupFirstSub'], 'partType':'gas', 'partField':'coldens_msunkpc2'} )
+>>> panels.append( {'subhaloInd':fof11['GroupFirstSub'], 'partType':'gas', 'partField':'temp'} )
 >>>
 >>> class plotConfig:
 >>>     plotStyle = 'edged'

@@ -263,8 +263,8 @@ def _getStackedGrids(sP, ion, haloMassBin, fullDepth, radRelToVirRad, ConfigLan=
         dist_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)*len(axesSets)), dtype='float32' )
         grid_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)*len(axesSets)), dtype='float32' )
 
-        for i, hInd in enumerate(subInds):
-            print(i, len(subInds), hInd)
+        for i, subhaloInd in enumerate(subInds):
+            print(i, len(subInds), subhaloInd)
             class plotConfig:
                 saveFilename = 'dummy'
 
@@ -781,7 +781,7 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
 
         for haloID in haloIDs[0:12]:
             panel_loc = dict(panel)
-            panel_loc['hInd'] = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+            panel_loc['subhaloInd'] = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
             panels.append(panel_loc)
 
@@ -798,7 +798,7 @@ def lrgHaloVisualization(sP, haloIDs, conf=3, gallery=False, globalDepth=True, t
     else:
         # single image
         for haloID in haloIDs:
-            hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+            subhaloInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
             panels = [panel] if not isinstance(panel,list) else panel
 
@@ -870,7 +870,7 @@ def lrgHaloVisResolution(sP, haloIDs, sPs_other):
         panels = []
 
         for j, sPo in enumerate([sP] + sPs_other):
-            panels.append( {'run':sPo.run, 'res':sPo.res, 'redshift':sPo.redshift, 'hInd':subIDs[j][i]} )
+            panels.append( {'run':sPo.run, 'res':sPo.res, 'redshift':sPo.redshift, 'subhaloInd':subIDs[j][i]} )
 
         panels[0]['labelScale'] = 'physical'
 
@@ -1002,11 +1002,11 @@ def cloudEvoVis(sP, haloID, clumpID, sbNum, sizeParam=False):
             print('Warning: Tracers have spread in extent along LOS-axis more than depth [%.2f]' % trExtents[3-axes[0]-axes[1]])
 
         # full box snapshots: fof-scope load and render (global render for subbox snaps)
-        hInd = None
+        subhaloInd = None
         if sbNum is None:
             w = np.where(mpb['SnapNum'] == snap)[0][0]
-            hInd = mpb['SubfindID'][w]
-            print(' fullbox, located snap [%d] at ind [%d] with hInd [%d]' % (snap,w,hInd))
+            subhaloInd = mpb['SubfindID'][w]
+            print(' fullbox, located snap [%d] at ind [%d] with subhaloInd [%d]' % (snap,w,subhaloInd))
 
         panels = [{'run':sP.run, 'res':sP.res}]
 
@@ -1086,11 +1086,11 @@ def cloudEvoVisFigure(sP, haloID, clumpID, sbNum, constSize=False):
                        boxCenter_loc[1] - 0.5*boxSizeImg[1], boxCenter_loc[1] + 0.5*boxSizeImg[1]]
 
         # full box snapshots: fof-scope load and render (global render for subbox snaps)
-        hInd_loc = None
+        subhaloInd_loc = None
         if sbNum is None:
             w = np.where(mpb['SnapNum'] == loc_snap)[0][0]
-            hInd_loc = mpb['SubfindID'][w]
-            print(' fullbox, located snap [%d] at ind [%d] with hInd [%d]' % (loc_snap,w,hInd))
+            subhaloInd_loc = mpb['SubfindID'][w]
+            print(' fullbox, located snap [%d] at ind [%d] with subhaloInd [%d]' % (loc_snap,w,subhaloInd_loc))
 
         # mark position of cloud, and member cells
         customCircles_loc = {}
@@ -1105,7 +1105,7 @@ def cloudEvoVisFigure(sP, haloID, clumpID, sbNum, constSize=False):
         labelCustom_loc = ['$\Delta t$ = %d Myr' % data['dt'][i]]
 
         # panel
-        panel = {'snap':loc_snap, 'boxCenter':boxCenter_loc, 'extent':extent_loc, 'hInd':hInd_loc,
+        panel = {'snap':loc_snap, 'boxCenter':boxCenter_loc, 'extent':extent_loc, 'subhaloInd':subhaloInd_loc,
                  'customCircles':customCircles_loc, 'customCrosses':customCrosses_loc, 
                  'labelCustom':labelCustom_loc}
 
@@ -1978,18 +1978,18 @@ def clumpPropertiesVsHaloMass(sPs):
     for sP in sPs:
         # make halo selection
         print('load: ', sP.simName)
-        hInds = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
-        hInds = np.hstack( [h for h in hInds] ).astype('int32')
+        haloIDs = selectHalosFromMassBins(sP, bins, numPerBin, 'random')
+        haloIDs = np.hstack( [h for h in haloIDs] ).astype('int32')
 
         # allocate
         locProps = {}
         for prop in labels.keys():
-            locProps[prop] = np.zeros( hInds.size, dtype='float32' )
-        locProps['number'] = np.zeros( hInds.size, dtype='int32' )
-        locProps['number2'] = np.zeros( hInds.size, dtype='int32' )
+            locProps[prop] = np.zeros( haloIDs.size, dtype='float32' )
+        locProps['number'] = np.zeros( haloIDs.size, dtype='int32' )
+        locProps['number2'] = np.zeros( haloIDs.size, dtype='int32' )
 
         # load/create segmentations, and accumulate mean properties per halo
-        for i, haloID in enumerate(hInds):
+        for i, haloID in enumerate(haloIDs):
             objs, props = voronoiThresholdSegmentation(sP, haloID=haloID, 
                 propName=thPropName, propThresh=thPropThresh, propThreshComp=thPropThreshComp)
 
@@ -2011,7 +2011,7 @@ def clumpPropertiesVsHaloMass(sPs):
         x_vals_loc, x_label, minMax, takeLog = sP.simSubhaloQuantity(xQuant)
         if takeLog: x_vals_loc = np.log10(x_vals_loc)
 
-        x_vals_loc = x_vals_loc[sP.halos('GroupFirstSub')[hInds]]
+        x_vals_loc = x_vals_loc[sP.halos('GroupFirstSub')[haloIDs]]
 
         # save
         x_vals.append(x_vals_loc)

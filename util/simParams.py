@@ -88,12 +88,12 @@ class simParams:
     levelmax       = 0    # power of two maximum level parameter (equals levelmin for non-zoom runs)
     zoomLevel      = 0    # levelmax-levelmin
     rVirFac        = 0.0  # size of cutout in units of rvir tracer back from targetRedshift
-    hInd           = None # zoom halo index (as in path) (also used in fullboxes as a unique cross-sim ID)
+    hInd           = None # zoom halo index (as in path)
     hIndDisp       = None # zoom halo index to display (in plots)
     zoomShift      = None # Music output = "Domain will be shifted by (X, X, X)"
     zoomShiftPhys  = None # the domain shift in box/code units (cmInitial for N-GENIC zooms)
     targetHaloPos  = None # position at targetRedshift in fullbox
-    targetHaloInd  = 0    # hInd (subhalo index) at targetRedshift in fullbox
+    targetHaloInd  = 0    # subhaloInd at targetRedshift in fullbox
     targetHaloRvir = 0.0  # rvir (ckpc/h) at targetRedshift
     targetHaloMass = 0.0  # mass (logmsun) at targetRedshift
     targetRedshift = 0.0  # maximum redshift the halo can be resimulated to
@@ -106,8 +106,8 @@ class simParams:
     trVelPerCell = 0    # starting number of velocity tracers per cell
 
     # control analysis
-    haloInd    = None # request analysis of a specific FoF halo?
-    subhaloInd = None # request analysis of a specific Subfind subhalo?
+    haloInd    = None # request analysis/vis of a specific FoF halo?
+    subhaloInd = None # request analysis/vis of a specific Subfind subhalo?
     refPos     = None # reference/relative position 3-vector
     refVel     = None # reference/relative velocity 3-vector (e.g. for radvel calculation on fullbox)
 
@@ -1176,24 +1176,6 @@ class simParams:
             if 'mtq_' in key:
                 old_data[key] = self.data[key]
         self.data = old_data
-
-    def matchedSubhaloID(self, hID=None):
-        """ Return a subhalo index (into the group catalog) for this simulation given a unique, 
-            cross-simulation, cross-redshift 'ID'. Useful for comparing individual halos within 
-            full box sims. Can implement either manual pre-determined mappings, or automatic 
-            cross-matching between runs, and/or merger tree tracking across redshift. """
-        if hID is None:
-            # no ID directly input, was one called when this sP was created?
-            hID = self.hInd
-
-            if hID is None:
-                raise Exception('No hID input and sP.hInd not specified previously.')
-
-        # 1. manual mappings
-        # 2. cross-matching (e.g. DM ID weighted rank match across FP/DMO runs, or snapshots of same run)
-        # 3. pos/mass-matching (e.g. across different resolution levels)
-        # 4. tree-matching (across snapshots of same run)
-        raise Exception('Not implemented')
 
     def ptNum(self, partType):
         """ Return particle type number (in snapshots) for input partType string. 

@@ -2,9 +2,6 @@
 haloDrivers.py
   Render specific halo visualizations.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 
@@ -14,7 +11,7 @@ from util.helper import pSplit, logZeroNaN, evenlySample
 from cosmo.util import crossMatchSubhalosBetweenRuns
 from util import simParams
 
-def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
+def oneHaloSingleField(conf=0, haloID=None, subhaloInd=None, snap=None):
     """ In a single panel(s) centered on a halo, show one field from the box. """
     panels = []
 
@@ -38,18 +35,11 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
 
     excludeSubhaloFlag = True
 
-    sP = simParams(res=res, run=run, redshift=redshift, hInd=haloID, variant=variant)
-    
-    if not sP.isZoom:
-        if haloID is not None:
-            # periodic box, FoF/Halo ID
-            hInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
-        else:
-            # periodic box, subhalo ID
-            hInd = subhaloID
-    else:
-        # zoom, assume input haloID specifies the zoom simulation
-        hInd = haloID
+    sP = simParams(res=res, run=run, redshift=redshift, variant=variant)
+
+    if haloID is not None:
+        # periodic box, FoF/Halo ID
+        subhaloInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
     if conf == 0:
         # magnetic pressure, gas pressure, and their ratio
@@ -100,19 +90,19 @@ def oneHaloSingleField(conf=0, haloID=None, subhaloID=None, snap=None):
         rasterPx     = 1200
         colorbars    = True
         saveFilename = './oneHaloSingleField_%d_%s_%d_%d_ID-%d_%s.png' % \
-          (conf,run,res,snap if snap is not None else redshift,subhaloID if subhaloID is not None else haloID,method)
+          (conf,run,res,snap if snap is not None else redshift,subhaloInd if subhaloInd is not None else haloID,method)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
 def oneHaloGaussProposal():
     """ Render single halo with B field streamlines for Gauss proposal (MHD figure). """
-    shID = 4
+    subhaloInd = 4
     panels = []
 
-    #panels.append( {'hInd':shID, 'partField':'bmag_uG', 'valMinMax':[-2.0,1.0]} )
-    panels.append( {'hInd':shID, 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,7.2]} )
-    #panels.append( {'hInd':shID, 'partField':'bfield_x', 'valMinMax':[-1e-2,1e-2]} )
-    #panels.append( {'hInd':shID, 'partField':'bfield_y', 'valMinMax':[-1e-2,1e-2]} )
+    #panels.append( {'partField':'bmag_uG', 'valMinMax':[-2.0,1.0]} )
+    panels.append( {'partField':'coldens_msunkpc2', 'valMinMax':[6.0,7.2]} )
+    #panels.append( {'partField':'bfield_x', 'valMinMax':[-1e-2,1e-2]} )
+    #panels.append( {partField':'bfield_y', 'valMinMax':[-1e-2,1e-2]} )
 
     run        = 'tng'
     res        = 1820
@@ -141,7 +131,7 @@ def oneHaloGaussProposal():
         plotStyle    = 'open'
         rasterPx     = 960
         colorbars    = True
-        saveFilename = './gasDens_%s_%d_z%.1f_sh-%d.pdf' % (run,res,redshift,shID)
+        saveFilename = './gasDens_%s_%d_z%.1f_sh-%d.pdf' % (run,res,redshift,subhaloInd)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -151,7 +141,7 @@ def oneGalaxyThreeRotations(conf=0):
     run        = 'illustris' 
     res        = 1820
     redshift   = 0.0
-    hInd       = 283832 # subhalo ID
+    subhaloInd = 283832
     rVirFracs  = None
     method     = 'sphMap'
     nPixels    = [700,700]
@@ -179,7 +169,7 @@ def oneGalaxyThreeRotations(conf=0):
 
     # create panels, one per view
     sPloc = simParams(res=res, run=run, redshift=redshift)
-    sub   = sPloc.groupCatSingle(subhaloID=hInd)
+    sub   = sPloc.groupCatSingle(subhaloID=subhaloInd)
     panels = []
 
     for i, rot in enumerate(rotations):
@@ -191,7 +181,7 @@ def oneGalaxyThreeRotations(conf=0):
         rasterPx     = 700
         colorbars    = False
         saveFilename = './fig_galaxy_%s_%d_shID=%d_%s.pdf' % \
-          (sPloc.simName,sPloc.snap,hInd,partType)
+          (sPloc.simName,sPloc.snap,subhaloInd,partType)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -237,15 +227,15 @@ def resSeriesGaussProposal(fofInputID=12, resInput=256):
 
         # append panels
         panels.append( {'partType':'stars', 'partField':pF_stars, 'rotation':'face-on', \
-                        'res':resLevel, 'hInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
+                        'res':resLevel, 'subhaloInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
         panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', \
-                        'rotation':'face-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+                        'rotation':'face-on', 'res':resLevel, 'subhaloInd':shID, 'valMinMax':valMinMaxG} )
 
         #'nPixels':[960,320], \ # reduce vertical size of edge-on panels
         panels.append( {'partType':'stars', 'partField':pF_stars, 'rotation':'edge-on', \
-                        'res':resLevel, 'hInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
+                        'res':resLevel, 'subhaloInd':shID, 'size':50.0, 'sizeType':'codeUnits'} )
         panels.append( {'partType':'gas', 'partField':'coldens_msunkpc2', \
-                        'rotation':'edge-on', 'res':resLevel, 'hInd':shID, 'valMinMax':valMinMaxG} )
+                        'rotation':'edge-on', 'res':resLevel, 'subhaloInd':shID, 'valMinMax':valMinMaxG} )
 
     class plotConfig:
         plotStyle    = 'open'
@@ -274,8 +264,8 @@ def multiHalosPagedOneQuantity(curPageNum, numPages=7):
     # split by page, append one panel per subhalo on this page
     subhaloIDs_loc = pSplit(subhaloIDs, numPages, curPageNum)
 
-    for subhaloID in subhaloIDs_loc:
-        panels.append( {'hInd':subhaloID} )
+    for shID in subhaloIDs_loc:
+        panels.append( {'subhaloInd':shID} )
 
     #panels.append( {'partField':'HI', 'valMinMax':[14.0,21.0]} )
     #panels.append( {'partField':'velmag', 'valMinMax':[400,900]} )
@@ -345,7 +335,7 @@ def boxHalo_HI():
     #smoothFWHM = 2.0
     labelScale = True
 
-    hInd       = 362540
+    subhaloInd = 362540
     run        = 'illustris'
     partType   = 'gas'
     res        = 1820
@@ -360,7 +350,7 @@ def boxHalo_HI():
         colorbars    = True
         rasterPx     = 960
         saveFilename = savePathDefault + 'fig5b_%s_%d_z%.1f_shID-%d.pdf' % \
-                       (run,res,redshift,hInd)
+                       (run,res,redshift,subhaloInd)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -382,7 +372,7 @@ def boxHalo_MultiQuant():
     #panels.append( {'nPixels':[960,960],  'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
     #panels.append( {'nPixels':[1920,1920],'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} )
 
-    hInd       = 362540
+    subhaloInd = 362540
     run        = 'illustris'
     res        = 1820
     redshift   = 0.0
@@ -397,7 +387,7 @@ def boxHalo_MultiQuant():
     class plotConfig:
         plotStyle    = 'open_black'
         colorbars    = True
-        saveFilename = savePathDefault + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,hInd,size)
+        saveFilename = savePathDefault + 'box_%s_%d_z%.1f_shID-%d_multiQuant_sf-%.1f.pdf' % (run,res,redshift,subhaloInd,size)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
@@ -416,6 +406,8 @@ def zoomHalo_z2_MultiQuant():
     run        = 'zooms2'
     res        = 10
     redshift   = 2.0
+    subhaloInd = 0
+
     rVirFracs  = [1.0]
     method     = 'sphMap' # sphMap_global
     nPixels    = [960,960]
@@ -466,7 +458,7 @@ def tngDwarf_firstNhalos(conf=0):
         halo = sP.groupCatSingle(haloID=i)
         print(sP.simName, sP.snap, sP.redshift, i, halo['GroupFirstSub'], halo['GroupPos'])
 
-        panels = [ {'hInd':halo['GroupFirstSub']} ]
+        panels = [ {'subhaloInd':halo['GroupFirstSub']} ]
 
         class plotConfig:
             plotStyle    = 'open_black'
@@ -554,7 +546,7 @@ def tngMethods2_stamps(conf=0, curPage=None, numPages=None, rotation=None,
     panels = []
     for i, shID in enumerate(shIDs):
         labelScaleLoc = True if (i == 0 or sizeType == 'rHalfMassStars') else False
-        panels.append( {'hInd':shID, 'labelScale':labelScaleLoc} )
+        panels.append( {'subhaloInd':shID, 'labelScale':labelScaleLoc} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -661,9 +653,9 @@ def tngMethods2_windPatterns(conf=1, pageNum=0):
     panels = []
     for i, shID in enumerate(shIDs):
         labelScaleLoc = True if i == 0 else False
-        panels.append( {'hInd':shID, 'labelScale':labelScaleLoc, 'variant':variant} )
+        panels.append( {'subhaloInd':shID, 'labelScale':labelScaleLoc, 'variant':variant} )
     for i, shID in enumerate(shIDs2):
-        panels.append( {'hInd':shID, 'labelScale':labelScaleLoc, 'variant':matchedToVariant} )
+        panels.append( {'subhaloInd':shID, 'labelScale':labelScaleLoc, 'variant':matchedToVariant} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -713,21 +705,21 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
         # loop over centrals in mass bins, one figure each
         sP = simParams(res=res, run=run, redshift=redshift)
 
-        hID, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=haloOrMassBinNum)
+        shID, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, haloNum=haloOrMassBinNum)
 
-        if hID is None:
+        if shID is None:
             print('Task past bin size, quitting.')
             return
 
-        haloInd = sP.groupCatSingle(subhaloID=hID)['SubhaloGrNr']
+        haloInd = sP.groupCatSingle(subhaloID=shID)['SubhaloGrNr']
         if binInd >= 2: size = 40.0
 
-        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelHalo':True} )
-        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-        panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
-        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
-        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-        panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
+        panels.append( {'subhaloInd':shID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM, 'labelHalo':True} )
+        panels.append( {'subhaloInd':shID, 'rotation':'face-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        panels.append( {'subhaloInd':shID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+        panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+        panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+        panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
 
         plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_halo%d_hID-%d_shID-%d.pdf' % \
                                   (sP.simName,sP.snap,binInd,haloOrMassBinNum,haloInd,hID)
@@ -736,27 +728,27 @@ def massBinsSample_3x2_EdgeOnFaceOn(res,conf,haloOrMassBinNum=None,panelNum=None
         # combined plot of centrals in mass bins
         sP = simParams(res=res, run=run, redshift=redshift)
 
-        hIDs, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, massBinInd=haloOrMassBinNum)
+        shIDs, binInd = selectHalosFromMassBin(sP, massBins, numPerBin, massBinInd=haloOrMassBinNum)
 
         if binInd >= 2: size = 40.0
 
-        for hID in hIDs:
+        for shID in shIDs:
             if panelNum == 0:
-                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+                panels.append( {'subhaloInd':shID, 'rotation':'face-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
             if panelNum == 1:
-                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+                panels.append( {'subhaloInd':shID, 'rotation':'face-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
             if panelNum == 2: 
-                panels.append( {'hInd':hID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+                panels.append( {'subhaloInd':shID, 'rotation':'face-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
             if panelNum == 3: 
-                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+                panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
             if panelNum == 4: 
-                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+                panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
             if panelNum == 5: 
-                panels.append( {'hInd':hID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
+                panels.append( {'subhaloInd':shID, 'rotation':'edge-on', 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMMedge} )
             if panelNum == 6: 
-                panels.append( {'hInd':hID, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
+                panels.append( {'subhaloInd':shID, 'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':starsMM} )
             if panelNum == 7: 
-                panels.append( {'hInd':hID, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+                panels.append( {'subhaloInd':shID, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
         rotStr = '_' + panels[0]['rotation'] if 'rotation' in panels[0] else ''
         plotConfig.saveFilename = savePathDefault + 'renderHalo_%s-%d_bin%d_%s-%s%s.pdf' % \
@@ -964,7 +956,7 @@ def tngFlagship_galaxyStellarRedBlue(blueSample=False, redSample=False, greenSam
                 detailsStr = '(g-r) = %.2f $M_{\\rm OVI}$ = %.1f' % (gr_colors_z0[shID],mass_ovi[shID])
             lCust.append(detailsStr)
                            
-        panels.append( {'hInd':shID, 'redshift':redshifts[i], 'labelCustom':lCust, 'labelScale':lScale} )
+        panels.append( {'subhaloInd':shID, 'redshift':redshifts[i], 'labelCustom':lCust, 'labelScale':lScale} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -1061,7 +1053,7 @@ def vogelsberger_redBlue42(run='illustris', sample='blue'):
         if sample == 'guinevere' and run == 'illustris':
             cenSatStr = ' (SAT)' if cen_flags[i] == 0 else ''
 
-        panels.append( {'hInd':shID, 'labelCustom':['ID %d%s' % (shID,cenSatStr)]} )
+        panels.append( {'subhaloInd':shID, 'labelCustom':['ID %d%s' % (shID,cenSatStr)]} )
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -1077,20 +1069,23 @@ def yenting_vis_sample(redshift=1.0):
     composite and SFR, to identify rings like Yen-Ting is after."""
     from cosmo.zooms import _halo_ids_run
 
-    zoomHaloInds = _halo_ids_run(onlyDone=False)
+    zoomHaloInds = _halo_ids_run(onlyDone=False)[1:] # skip first
 
     rVirFracs   = [1.0]
     method      = 'sphMap'
     nPixels     = [600,600]
-    size        = 100.0 #1.0
-    sizeType    = 'kpc' #'arcmin'
-    axesUnits   = 'kpc' #'arcsec'
+    size        = 1.0
+    sizeType    = 'arcmin'
+    axesUnits   = 'arcsec'
+    labelScale  = 'physical'
+    labelHalo   = 'mstar,mhalo,sfr'
     #haloMassBin = [13.5, 14.2]
 
     class plotConfig:
         plotStyle = 'open'
         colorbars = True
         fontsize  = 30.0
+        title     = False
 
     # panel config
     conf1 = {'partType':'stars', 'partField':'stellarCompObsFrame-sdss_r-sdss_i-sdss_z'}
@@ -1100,28 +1095,23 @@ def yenting_vis_sample(redshift=1.0):
     #rotations = [ 'edge-on', 'face-on' ]
 
     # render halos
-    for zoomHaloInd in [717]: #zoomHaloInds:
+    for zoomHaloInd in zoomHaloInds:
         # set sP
         sP = simParams(res=13, run='tng_zoom', variant='sf3', redshift=redshift, hInd=zoomHaloInd)
 
-        # hInd is always the most massive
-        hInd = 0
+        # subhaloInd is always the most massive
+        subhaloInd = 0
 
         # set panels
         panels = []
 
-        #for axesVal in axesLists:
-        #    panels.append( {**conf1, 'axes':axesVal})
-        #panels.append( {**conf1, 'axes':[0,1], 'rotation':'face-on'})
+        for axesVal in axesLists:
+            panels.append( {**conf1, 'axes':axesVal})
+        panels.append( {**conf1, 'axes':[0,1], 'rotation':'face-on'})
 
-        #for axesVal in axesLists:
-        #    panels.append( {**conf2, 'axes':axesVal})
+        for axesVal in axesLists:
+            panels.append( {**conf2, 'axes':axesVal})
         panels.append( {**conf2, 'axes':[0,1], 'rotation':'face-on'})
-
-        panels[0]['labelScale'] = 'physical'
-        #panels[4]['labelScale'] = 'physical'
-        #panels[3]['labelHalo'] = True
-        panels[-1]['labelHalo'] = True
 
         plotConfig.saveFilename = 'yenting_%s_z=%.1f.pdf' % (sP.simName,redshift)
 
@@ -1155,7 +1145,7 @@ def benedetta_vis_sample():
     GroupFirstSub = sP.groupCat(fieldsHalos=['GroupFirstSub'])
     subInds = GroupFirstSub[haloIDs]
 
-    for i, hInd in enumerate(subInds[0:1]):
+    for i, subhaloInd in enumerate(subInds[0:1]):
         panels = []
 
         panels.append( {'partField':'stellarBandObsFrame-sdss_r', 'valMinMax':[18,28]} )
@@ -1251,9 +1241,9 @@ def annalisa_tng50_presentation(setNum=0, stars=False):
     # configure panels: face-on and edge-on in alternating rows
     for i in range(int(plotConfig.nRows/2)):
         for j in range(nCols):
-            panels.append( {'hInd':shIDs[i*nCols+j], **faceOnOptions} )
+            panels.append( {'subhaloInd':shIDs[i*nCols+j], **faceOnOptions} )
         for j in range(nCols):
-            panels.append( {'hInd':shIDs[i*nCols+j], **edgeOnOptions} )
+            panels.append( {'subhaloInd':shIDs[i*nCols+j], **edgeOnOptions} )
 
     plotConfig.saveFilename = savePathDefault + 'renderHalo_test_set-%s_%s.pdf' % (setNum,partType)
 

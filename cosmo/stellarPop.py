@@ -878,9 +878,9 @@ class sps():
             from cosmo.hydrogen import hydrogenMass
 
             assert rotMatrix is not None and rotCenter is not None
-            assert sP.hInd is not None # use to load gas based on -subhalo- id (e.g. called from within vis)
+            assert sP.subhaloInd is not None # use to load gas based on -subhalo- id (e.g. called from within vis)
 
-            subset = sP.haloOrSubhaloSubset(subhaloID=sP.hInd)
+            subset = sP.haloOrSubhaloSubset(subhaloID=sP.subhaloInd)
             offset = subset['offsetType'][sP.ptNum('gas')]
             length = subset['lenType'][sP.ptNum('gas')]
             indRange_gas = [offset, offset+length-1] # inclusive

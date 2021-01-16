@@ -493,7 +493,7 @@ def TNG_oxygenPaperImages(part=0):
 
         saveStr = '_fof-%d_shid-%d_size-%.1f_%s' % (haloID,shID,size,sizeType)
 
-        panels.append( {'partType':'gas', 'partField':'O VIII', 'hInd':shID, 'valMinMax':[13.5, 15.8]} )
+        panels.append( {'partType':'gas', 'partField':'O VIII', 'subhaloInd':shID, 'valMinMax':[13.5, 15.8]} )
 
     if part == 2:
         # part 2: galaxy halo scale OVI
@@ -539,7 +539,7 @@ def TNG_oxygenPaperImages(part=0):
 
         saveStr = '_shid-%d_size-%.1f_%s' % (shID,size,sizeType)
 
-        panels.append( {'partType':'gas', 'partField':'O VI', 'hInd':shID, 'valMinMax':[12.8, 15.4]} )
+        panels.append( {'partType':'gas', 'partField':'O VI', 'subhaloInd':shID, 'valMinMax':[12.8, 15.4]} )
 
     class plotConfig:
         plotStyle  = 'edged' # open

@@ -116,11 +116,11 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
             weight_global = np.zeros(nPixels, dtype='int32')
 
         # loop over halos
-        for i, hInd in enumerate(subhaloIDs):
+        for i, subhaloInd in enumerate(subhaloIDs):
 
             # render individual images?
             if renderIndiv:
-                plotConfig.saveFilename = indivSaveName.replace("XX","sh%d" % hInd)
+                plotConfig.saveFilename = indivSaveName.replace("XX","sh%d" % subhaloInd)
                 renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
                 continue
@@ -145,7 +145,7 @@ def stackedHaloImage(sP, mStarBin, conf=0, renderIndiv=False, median=True, rvirU
         print('Saved: [%s].' % saveFilename)
 
     # plot stacked image and save data grid to hdf5
-    hInd = subhaloIDs[int(len(subhaloIDs)/2)] # used for rvir circles
+    subhaloInd = subhaloIDs[int(len(subhaloIDs)/2)] # used for rvir circles
     labelHalo = False
     plotConfig.saveFilename = indivSaveName.replace('XX','stack' if not stack2Dmaps else 'stack2D')
 
@@ -218,7 +218,7 @@ def singleHaloImage():
 
     mstar[cen_flag == 0] = np.nan # skip secondaries
 
-    _, hInd = closest(mstar, 10.95)
+    _, subhaloInd = closest(mstar, 10.95)
 
     # vis
     rVirFracs  = [0.5, 1.0]

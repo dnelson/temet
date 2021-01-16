@@ -35,7 +35,7 @@ def singleHaloImage(sP, conf=0):
     sizeType  = 'kpc'
 
     size = 200 #100
-    hInd = 440839 # for muse proposal
+    subhaloInd = 440839 # for muse proposal
 
     panels = []
 
@@ -55,7 +55,7 @@ def singleHaloImage(sP, conf=0):
         rasterPx     = nPixels[0] 
         colorbars    = True
         #fontsize     = 24
-        saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,hInd,panels[0]['partField'],size)
+        saveFilename = './%s.%d.%d.%s.%dkpc.pdf' % (sP.simName,sP.snap,subhaloInd,panels[0]['partField'],size)
 
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -82,7 +82,7 @@ def _get_dist_theta_grid(size, nPixels):
 
     return dist, theta
 
-def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=False, distBin=None, ylim=None):
+def metallicityVsVradProjected(sP, shIDs=[440839], directCells=False, clean=False, distBin=None, ylim=None):
     """ Plot correlation of gas metallicity and vrad (i.e. mass flow rate) in projection 
     by using the images directly. """
     rVirFracs  = [0.5]
@@ -122,10 +122,10 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
 
     if directCells:
         # use actual gas cell values directly
-        for hInd in hInds:
-            x_data_loc = sP.snapshotSubset(partType, x_field, subhaloID=hInd)
-            y_data_loc = sP.snapshotSubset(partType, y_field, subhaloID=hInd)
-            dist_loc = sP.snapshotSubset(partType, 'rad_kpc', subhaloID=hInd)
+        for subhaloInd in shIDs:
+            x_data_loc = sP.snapshotSubset(partType, x_field, subhaloID=subhaloInd)
+            y_data_loc = sP.snapshotSubset(partType, y_field, subhaloID=subhaloInd)
+            dist_loc = sP.snapshotSubset(partType, 'rad_kpc', subhaloID=subhaloInd)
 
             x_data = np.hstack( (x_data, x_data_loc.ravel()) )
             y_data = np.hstack( (y_data, y_data_loc.ravel()) )
@@ -139,7 +139,7 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
         if ylog: y_data = logZeroNaN(y_data)
     else:
         # use projected images
-        for hInd in hInds:
+        for subhaloInd in shIDs:
             y_data_loc, y_conf = renderSingleHalo([{'partField':y_field}], plotConfig, locals(), returnData=True)
             x_data_loc, x_conf = renderSingleHalo([{'partField':x_field}], plotConfig, locals(), returnData=True)
 
@@ -181,7 +181,7 @@ def metallicityVsVradProjected(sP, hInds=[440839], directCells=False, clean=Fals
         cb = plt.colorbar(s, cax=cax)
         cb.ax.set_ylabel(clabel)
 
-    hStr = hInds[0] if len(hInds) == 1 else ('stack-%s' % len(hInds))
+    hStr = shIDs[0] if len(shIDs) == 1 else ('stack-%s' % len(shIDs))
     fig.savefig('scatter_%s_%s_vs_%s_h%s.%s' % (sP.simName,y_field,x_field,hStr,outFormat), facecolor=fig.get_facecolor())
     plt.close(fig)
 
@@ -319,8 +319,8 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
                 grid_global  = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
                 nhi_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
 
-                for j, hInd in enumerate(subInds):
-                    haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
+                for j, subhaloInd in enumerate(subInds):
+                    haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
 
                     class plotConfig:
                         saveFilename = 'dummy'
@@ -354,9 +354,9 @@ def metallicityVsTheta(sPs, dataField, massBins, distBins, min_NHI=[None], ptRes
             dist_global  = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
             theta_global = np.zeros( (nPixels[0]*nPixels[1], len(subInds)), dtype='float32' )
 
-            for j, hInd in enumerate(subInds):
+            for j, subhaloInd in enumerate(subInds):
                 if distRvir:
-                    haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
+                    haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
                     haloRvir_code = sP.groupCatSingle(haloID=haloID)['Group_R_Crit200']
                     dist_global[:,j] = dist.ravel() / sP.units.codeLengthToKpc(haloRvir_code)
                 else:
@@ -493,7 +493,7 @@ def paperPlots():
         subhaloIDs = np.where( (mstar>9.95) & (mstar<10.05) & cen_flag )[0]
         print(subhaloIDs.size)
 
-        metallicityVsVradProjected(TNG50, directCells=False, clean=False, hInds=subhaloIDs, distBin=distBin, ylim=ylim)
+        metallicityVsVradProjected(TNG50, directCells=False, clean=False, shIDs=subhaloIDs, distBin=distBin, ylim=ylim)
 
     if 0:
         # figure 4: main comparison of TNG vs EAGLE
@@ -569,5 +569,5 @@ def paperPlots():
         cen_flag = TNG50.subhalos('central_flag')
         subhaloIDs = np.where( (mstar>8.49) & (mstar<8.51) & cen_flag )[0]
 
-        for hInd in subhaloIDs:
-            metallicityVsVradProjected(TNG50, hInd=hInd, clean=True)
+        for shID in subhaloIDs:
+            metallicityVsVradProjected(TNG50, shIDs=[shID], clean=True)

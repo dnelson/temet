@@ -667,11 +667,11 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
             else:
                 # temporary override, switch to halo specified load (for halo-centric quantities)
                 assert method in ['sphMap','sphMap_subhalo'] # must be fof-scope or subhalo-scope
-                haloID = sP.subhalo(sP.hInd)['SubhaloGrNr']
+                haloID = sP.subhalo(sP.subhaloInd)['SubhaloGrNr']
                 if method == 'sphMap':
                     quant = sP.snapshotSubset(partType, partFieldLoad, haloID=haloID)
                 if method == 'sphMap_subhalo':
-                    quant = sP.snapshotSubset(partType, partFieldLoad, subhaloID=sP.hInd)
+                    quant = sP.snapshotSubset(partType, partFieldLoad, subhaloID=sP.subhaloInd)
                 assert quant.size == indRange[1] - indRange[0] + 1
         else:
             quant = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange)
@@ -1256,9 +1256,9 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         boxSizeImgMap = boxSizeImg
         boxCenterMap = boxCenter
 
-        # non-zoom simulation and hInd specified (plotting around a single halo): do FoF restricted load
-        if not sP.isZoom and sP.hInd is not None and '_global' not in method:
-            sh = sP.groupCatSingle(subhaloID=sP.hInd)
+        # non-zoom simulation and subhaloInd specified (plotting around a single halo): do FoF restricted load
+        if not sP.isZoom and sP.subhaloInd is not None and '_global' not in method:
+            sh = sP.groupCatSingle(subhaloID=sP.subhaloInd)
             gr = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
 
             if not sP.groupOrdered:
@@ -1268,7 +1268,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             pt = sP.ptNum(partType)
             if '_subhalo' in method:
                 # subhalo scope
-                startInd = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo'][sP.hInd,pt]
+                startInd = sP.groupCatOffsetListIntoSnap()['snapOffsetsSubhalo'][sP.subhaloInd,pt]
                 indRange = [startInd, startInd + sh['SubhaloLenType'][pt] - 1]
             else:
                 # fof scope
@@ -1288,7 +1288,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
         if method == 'sphMap_globalZoomOrig':
             # virtual box 'global original zoom' scope: all particles of a single original zoom
-            assert not sP.isZoom and sP.hInd is not None
+            assert not sP.isZoom and sP.subhaloInd is not None
 
             pt = sP.ptNum(partType)
 
@@ -1297,7 +1297,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 offsets = f['OriginalZooms/GroupsSnapOffsetByType'][()]
                 lengths = f['OriginalZooms/GroupsTotalLengthByType'][()]
 
-            origZoomID = sP.groupCatSingle(subhaloID=sP.hInd)['SubhaloOrigHaloID']
+            origZoomID = sP.groupCatSingle(subhaloID=sP.subhaloInd)['SubhaloOrigHaloID']
             origZoomInd = np.where(origIDs == origZoomID)[0][0]
             indRange = [offsets[origZoomInd,pt], offsets[origZoomInd,pt]+lengths[origZoomInd,pt]]
 
@@ -1334,7 +1334,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         if indRange is None and sP.subbox is None and not disableChunkLoad:
             nChunks = np.max( [1, int(h['NumPart'][sP.ptNum(partType)]**(1.0/3.0) / 10.0)] )
             chunkSize = int(h['NumPart'][sP.ptNum(partType)] / nChunks)
-            print(' gridBox(): proceeding for (%s %s) with [%d] chunks...' % (partType,partField,nChunks))
+            if nChunks > 50:
+                print(' gridBox(): proceeding for (%s %s) with [%d] chunks...' % (partType,partField,nChunks))
 
         for chunkNum in np.arange(nChunks):
             # only if nChunks>1 do we here modify indRange
@@ -1342,21 +1343,20 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 # calculate load indices (snapshotSubset is inclusive on last index) (make sure we get to the end)
                 indRange = [chunkNum*chunkSize, (chunkNum+1)*chunkSize-1]
                 if chunkNum == nChunks-1: indRange[1] = h['NumPart'][sP.ptNum(partType)]-1
-                print('  [%2d] %11d - %d' % (chunkNum,indRange[0],indRange[1]))
+                if nChunks > 50:
+                    print('  [%2d] %11d - %d' % (chunkNum,indRange[0],indRange[1]))
 
             # load: 3D positions
             pos = sP.snapshotSubsetP(partType, 'pos', indRange=indRange)
 
             # rotation? shift points to subhalo center, rotate, and shift back
             if rotMatrix is not None:
-                print(rotCenter)
                 if rotCenter is None:
                     # use subhalo center at this snapshot
-                    sh = sP.groupCatSingle(subhaloID=sP.hInd)
-                    print(sP.hInd)
+                    sh = sP.groupCatSingle(subhaloID=sP.subhaloInd)
                     rotCenter = sh['SubhaloPos']
 
-                    if not sP.isZoom and sP.hInd is None:
+                    if not sP.isZoom and sP.subhaloInd is None:
                         raise Exception('Rotation in periodic box must be about a halo center.')
 
                 pos, _ = rotateCoordinateArray(sP, pos, rotMatrix, rotCenter)
@@ -1477,8 +1477,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             # rotation? handle for view dependent quantities (e.g. velLOS) (any 3-vector really...)
             if partField in velLOSFieldNames + velCompFieldNames:
                 # first compensate for subhalo CM motion (if this is a halo plot)
-                if sP.isZoom or sP.hInd is not None:
-                    sh = sP.groupCatSingle(subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.hInd)
+                if sP.isZoom or sP.subhaloInd is not None:
+                    sh = sP.groupCatSingle(subhaloID=sP.zoomSubhaloID if sP.isZoom else sP.subhaloInd)
                     for i in range(3):
                         # SubhaloVel already peculiar, quant converted already in loadMassAndQuantity()
                         quant[:,i] -= sh['SubhaloVel'][i]
@@ -1879,10 +1879,10 @@ def addBoxMarkers(p, conf, ax, pExtent):
         h = p['sP'].groupCatHeader()
 
         if h['Ngroups_Total'] > 0:
-            haloInd = p['sP'].groupCatSingle(subhaloID=p['hInd'])['SubhaloGrNr']
+            haloInd = p['sP'].groupCatSingle(subhaloID=p['subhaloInd'])['SubhaloGrNr']
             halo = p['sP'].groupCatSingle(haloID=haloInd)
 
-            if halo['GroupFirstSub'] != p['hInd']:
+            if halo['GroupFirstSub'] != p['subhaloInd']:
                 print('Warning: Rendering subhalo circles around a non-central subhalo!')
         
             subInds = np.arange( halo['GroupFirstSub']+1, halo['GroupFirstSub']+halo['GroupNsubs'] )
@@ -2109,16 +2109,9 @@ def addBoxMarkers(p, conf, ax, pExtent):
         legend_labels.append( p['sP'].simName )
 
     if 'labelHalo' in p and p['labelHalo']:
-        assert p['sP'].hInd is not None
+        assert p['sP'].subhaloInd is not None
 
-        if not p['sP'].isZoom:
-            # periodic box: write properties of the hInd we are centered on
-            subhaloID = p['hInd']
-        else:
-            # zoom run: write properties of zoomTargetHalo
-            subhaloID = p['sP'].zoomSubhaloID
-
-        subhalo = p['sP'].groupCatSingle(subhaloID=subhaloID)
+        subhalo = p['sP'].groupCatSingle(subhaloID=p['subhaloInd'])
         halo = p['sP'].groupCatSingle(haloID=subhalo['SubhaloGrNr'])
 
         haloMass = p['sP'].units.codeMassToLogMsun(halo['Group_M_Crit200'])
@@ -2132,14 +2125,14 @@ def addBoxMarkers(p, conf, ax, pExtent):
             str2 = "log M$_{\star}$ = %.1f" % stellarMass
             legend_labels.append( str2 )
         if 'sfr' in str(p['labelHalo']):
-            legend_labels.append( 'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFR'])
+            legend_labels.append( 'SFR = %.1f M$_\odot$ yr$^{-1}$' % subhalo['SubhaloSFRinRad'])
         if 'mhalo' in str(p['labelHalo']):
             # just Mhalo
             legend_labels.append( str1 )
         if 'id' in str(p['labelHalo']):
-            legend_labels.append( 'ID %d' % p['sP'].hInd )
+            legend_labels.append( 'ID %d' % p['subhaloInd'] )
         if 'redshift' in str(p['labelHalo']):
-            legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['sP'].hInd))
+            legend_labels.append( 'z = %.1f, ID %d' % (p['sP'].redshift,p['subhaloInd']))
         if str1 not in legend_labels and str2 not in legend_labels:
             # both Mhalo and Mstar
             legend_labels.append( str1 )
@@ -2506,7 +2499,7 @@ def renderMultiPanel(panels, conf):
             sP = p['sP']
 
             if conf.title:
-                idStr = ' (id=' + str(sP.hInd) + ')' if not sP.isZoom and sP.hInd is not None else ''
+                idStr = ' (id=' + str(sP.subhaloInd) + ')' if not sP.isZoom and sP.subhaloInd is not None else ''
                 ax.set_title('%s z=%d%s' % (sP.simName,sP.redshift,idStr))
                 if sP.redshift != int(sP.redshift): ax.set_title('%s z=%3.1f%s' % (sP.simName,sP.redshift,idStr))
                 if sP.redshift/0.1 != int(sP.redshift/0.1): ax.set_title('%s z=%4.2f%s' % (sP.simName,sP.redshift,idStr))

@@ -530,8 +530,8 @@ def vis_gallery(sP, conf=0, num=20):
     # panels
     panels = []
 
-    for subhaloInd in subIDs:
-        panels.append( {'hInd':subhaloInd} )
+    for subID in subIDs:
+        panels.append( {'subhaloInd':subID} )
 
     panels[0]['labelScale'] = 'physical'
 

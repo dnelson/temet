@@ -823,7 +823,7 @@ def visualizeHaloVirialShock(sP, haloID, conf=0, depthFac=1.0, dataCache=None):
     run        = sP.run
     res        = sP.res
     redshift   = sP.redshift
-    hInd       = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
+    subhaloInd = sP.groupCatSingle(haloID=haloID)['GroupFirstSub']
 
     rVirFracs  = [1.0, 2.0, 3.0, 4.0]
     method     = 'sphMap_global'

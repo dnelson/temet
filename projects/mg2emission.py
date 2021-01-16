@@ -17,7 +17,7 @@ from plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from plot.config import *
 from projects.azimuthalAngleCGM import _get_dist_theta_grid
 
-def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
+def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', labelCustom=None,
                         rVirFracs=[0.25], fracsType='rVirial', font=16, cbars=True, psf=False):
     """ MgII emission image test.. """
     method     = 'sphMap' # note: fof-scope
@@ -72,7 +72,7 @@ def singleHaloImageMGII(sP, hInd, conf=1, size=100, rotation='edge-on', labelCus
         colorbars    = cbars
         fontsize     = font
         saveFilename = '%s_%d_%d_%s%s.pdf' % \
-          (sP.simName,sP.snap,hInd,'-'.join([p['partField'] for p in panels]),'_psf' if psf else '')
+          (sP.simName,sP.snap,subhaloInd,'-'.join([p['partField'] for p in panels]),'_psf' if psf else '')
 
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -103,12 +103,12 @@ def visMg2Gallery(sP, mStarBin, num, size=100, colorbar=True):
 
     np.random.seed(424242)
     np.random.shuffle(w)
-    hInds = w[0:num]
+    shIDs = w[0:num]
 
     panels = []
 
-    for hInd_loc in hInds:
-        panels.append( {'hInd':hInd_loc} )
+    for shID in shIDs:
+        panels.append( {'subhaloInd':shID} )
 
     panels[-1]['labelZ'] = True
 
@@ -125,7 +125,7 @@ def visMg2Gallery(sP, mStarBin, num, size=100, colorbar=True):
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
 
-def visDustDepletionImpact(sP, hInd):
+def visDustDepletionImpact(sP, subhaloInd):
     """ MgII emission image test.. """
     
     rVirFracs  = [0.25]
@@ -156,7 +156,7 @@ def visDustDepletionImpact(sP, hInd):
         rasterPx     = nPixels[0] 
         colorbars    = True
         fontsize     = 32
-        saveFilename = '%s_%d_%d_vs_nodustdepletion.pdf' % (sP.simName,sP.snap,hInd)
+        saveFilename = '%s_%d_%d_vs_nodustdepletion.pdf' % (sP.simName,sP.snap,subhaloInd)
 
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -288,7 +288,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                 sbr_indiv_mean_psf.fill(np.nan)
                 sbr_indiv_med_psf.fill(np.nan)
 
-                for j, hInd in enumerate(subInds):
+                for j, subhaloInd in enumerate(subInds):
                     class plotConfig:
                         saveFilename = 'dummy'
 
@@ -304,7 +304,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                 # create dist in same shape as grid_global
                 dist_global = np.zeros( (len(subInds), nPixels[0]*nPixels[1]), dtype='float32' )
 
-                for j, hInd in enumerate(subInds):
+                for j, subhaloInd in enumerate(subInds):
                     dist_global[j,:] = dist.ravel()
 
                 # compute profile on 'stacked images'

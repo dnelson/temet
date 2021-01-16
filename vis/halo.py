@@ -22,22 +22,15 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
 
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
-        if sP.isZoom:
-            shID = sP.zoomSubhaloID
-        else:
-            #shID = sP.matchedSubhaloID()
-            shID = sP.hInd # assume direct input of subhalo ID
-
-        if shID == -1 or shID is None: # e.g. a blank panel
+        if sP.subhaloInd == -1 or sP.subhaloInd is None: # e.g. a blank panel
             return None, None, None, None, None, None, None, None
 
-        sh = sP.groupCatSingle(subhaloID=shID)
+        sh = sP.groupCatSingle(subhaloID=sP.subhaloInd)
         gr = sP.groupCatSingle(haloID=sh['SubhaloGrNr'])
 
-        if gr['GroupFirstSub'] != shID and kwargs['fracsType'] == 'rVirial' and getuser() != 'wwwrun':
-            print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (shID,sP.redshift))
+        if gr['GroupFirstSub'] != sP.subhaloInd and kwargs['fracsType'] == 'rVirial' and getuser() != 'wwwrun':
+            print('WARNING! Rendering a non-central subhalo [id %d z = %.2f]...' % (sP.subhaloInd,sP.redshift))
 
-        sP.subhaloInd = shID # attach for use later
         sP.refPos = sh['SubhaloPos']
         sP.refVel = sh['SubhaloVel']
 
@@ -69,7 +62,8 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
             ind = np.where( mpb['SnapNum'] == sP.snap )[0]
             assert len(ind)
 
-            shID = mpb['SubfindID'][ind[0]]
+            assert sP.subhaloInd is None # about to override, check if compatible with new subhaloInd behavior
+            sP.subhaloInd = mpb['SubfindID'][ind[0]]
             haloVirRad = mpb['sm']['rvir'][ind[0]]
             boxCenter = mpb['sm']['pos'][ind[0],:]
             boxCenter = boxCenter[ axes + [3-axes[0]-axes[1]] ] # permute into axes ordering
@@ -117,12 +111,12 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         if str(rotation) in ['face-on-j','edge-on-j']:
             # calculate 'mean angular momentum' vector of the galaxy (method choices herein)
             if mpb is None:
-                jVec = meanAngMomVector(sP, subhaloID=shID)
+                jVec = meanAngMomVector(sP, subhaloID=sP.subhaloInd)
             else:
                 shPos = mpb['sm']['pos'][ind[0],:]
                 shVel = mpb['sm']['vel'][ind[0],:]
 
-                jVec = meanAngMomVector(sP, subhaloID=shID, shPos=shPos, shVel=shVel)
+                jVec = meanAngMomVector(sP, subhaloID=sP.subhaloInd, shPos=shPos, shVel=shVel)
                 rotCenter = shPos
 
             target_vec = np.zeros( 3, dtype='float32' )
@@ -147,7 +141,7 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
                 onlyStars = True
                 rotName = rotation.replace('-stars','')
 
-            I = momentOfInertiaTensor(sP, subhaloID=shID, onlyStars=onlyStars)
+            I = momentOfInertiaTensor(sP, subhaloID=sP.subhaloInd, onlyStars=onlyStars)
 
             # hardcoded such that face-on must be projecting along z-axis (think more if we want to relax)
             assert 3-axes[0]-axes[1] == 2
@@ -166,7 +160,8 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
-    #hInd        = 0            # subhalo (subfind) index, or zoom run ID (todo: remove this ambiguity)
+    #subhaloInd  = 0            # subhalo (subfind) index to visualize
+    #hInd        = 0            # halo index for zoom run
     #run         = 'illustris'  # run name
     #res         = 1820         # run resolution
     #redshift    = 0.0          # run redshift
@@ -260,11 +255,9 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
 
             p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
 
-        if 'hInd' in p and p['sP'].hInd is None:
-            # todo: cleanup in migration from hInd to subhaloInd throughout vis!
+        if 'subhaloInd' in p and p['sP'].subhaloInd is None:
             p['sP'] = p['sP'].copy()
-            #print('Warning: Copying sP and attaching hInd [%d] to sP.hInd for vis.' % p['hInd'])
-            p['sP'].hInd = p['hInd']
+            p['sP'].subhaloInd = p['subhaloInd']
 
         # add imaging config for single halo view
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
@@ -297,9 +290,10 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     panels = deepcopy(panels_in)
 
     # defaults (all panel fields that can be specified)
-    hInd        = 2               # zoom halo index, or subhalo (subfind) index in periodic box
-    run         = 'zooms2'        # run name
-    res         = 9               # run resolution
+    subhaloInd  = 0               # subhalo (subfind) index to visualize
+    hInd        = None            # halo index for zoom run
+    run         = 'tng'           # run name
+    res         = 1820            # run resolution
     redshift    = 2.0             # run redshift
     partType    = 'gas'           # which particle type to project
     partField   = 'temp'          # which quantity/field to project for that particle type
@@ -308,9 +302,9 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
     fracsType   = 'rVirial'       # if not rVirial, draw circles at fractions of another quant, same as sizeType
     method      = 'sphMap'        # sphMap, sphMap_subhalo, sphMap_global, sphMap_minIP, sphMap_maxIP, histo, voronoi_*, ...
     nPixels     = [1400,1400]     # number of pixels for each dimension of images when projecting
-    cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
+    cenShift    = [0,0,0]         # [x,y,z] coordinates to shift default box center location by
     size        = 3.0             # side-length specification of imaging box around halo/galaxy center
-    depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
+    depthFac    = 1.0             # projection depth, relative to size (1.0=same depth as width and height)
     sizeType    = 'rVirial'       # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc]
     #hsmlFac     = 2.5            # multiplier on smoothing lengths for sphMap
     axes        = [1,0]           # e.g. [0,1] is x,y
@@ -379,14 +373,23 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
 
         if 'hsmlFac' not in p: p['hsmlFac'] = defaultHsmlFac(p['partType'])
 
-        # load MPB once per panel
-        v = p['variant'] if 'variant' in p else None
-        s = p['snap'] if 'snap' in p else None
-        z = plotConfig.treeRedshift if s is None else None # skip if snap specified
-        sP = simParams(res=p['res'], run=p['run'], hInd=p['hInd'], redshift=z, snap=s, variant=v)
+        # add simParams info if not directly input
+        if 'run' in p:
+            v = p['variant'] if 'variant' in p else None
+            s = p['snap'] if 'snap' in p else None
+            z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
 
-        p['shID'] = sP.zoomSubhaloID if sP.isZoom else sP.hInd # direct input of subhalo ID for periodic box
-        p['mpb'] = mpbSmoothedProperties(sP, p['shID'])
+            if 'sP' in p:
+                print('Warning: Overriding common sP with specified run,snap,redshift.')
+
+            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
+
+        if 'subhaloInd' in p and p['sP'].subhaloInd is None:
+            p['sP'] = p['sP'].copy()
+            p['sP'].subhaloInd = p['subhaloInd']
+
+        # load MPB once per panel
+        p['mpb'] = mpbSmoothedProperties(sP, p['sP'].subhaloInd)
 
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]
 

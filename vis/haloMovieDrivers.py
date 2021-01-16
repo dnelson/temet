@@ -21,7 +21,6 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     zStart     = 0.3 # start plotting at this snapshot
     nSnapsBack = 12   # one panel per snapshot, back in time
 
-    #hInd       = 0
     run        = 'illustris'
     res        = 1820
     rVirFracs  = None #[0.05]
@@ -57,13 +56,13 @@ def tngCluster_center_timeSeriesPanels(conf=0):
     # configure panels
     sP = simParams(res=res, run=run, redshift=zStart)
     for i in range(nSnapsBack):
-        hIndLoc = 0
-        if run == 'tng' and i < 2: hIndLoc = 1
+        haloID_loc = 0
+        if run == 'tng' and i < 2: haloID_loc = 1
 
-        halo = sP.groupCatSingle(haloID=hIndLoc)
-        print(sP.snap, sP.redshift, hIndLoc, halo['GroupFirstSub'], halo['GroupPos'])
+        halo = sP.groupCatSingle(haloID=haloID_loc)
+        print(sP.snap, sP.redshift, haloID_loc, halo['GroupFirstSub'], halo['GroupPos'])
 
-        panels.append( {'hInd':halo['GroupFirstSub'], 'redshift':sP.redshift} )
+        panels.append( {'subhaloInd':halo['GroupFirstSub'], 'redshift':sP.redshift} )
         sP.setSnap(sP.snap-1)
 
     panels[0]['labelScale'] = True
@@ -73,7 +72,7 @@ def tngCluster_center_timeSeriesPanels(conf=0):
         plotStyle    = 'edged_black'
         colorbars    = True
         rasterPx     = 960
-        saveFilename = savePathDefault + 'timePanels_%s_hInd-0_%s-%s_z%.1f_n%d.pdf' % \
+        saveFilename = savePathDefault + 'timePanels_%s_shID-0_%s-%s_z%.1f_n%d.pdf' % \
                        (sP.simName,partType,partField,zStart,nSnapsBack)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -101,6 +100,7 @@ def zoomEvoMovies(conf):
         panels.append( {'res':11, 'partField':'temp',    'valMinMax':[4.0,6.5]} )
 
     hInd       = 2
+    subhaloInd = 0
     run        = 'zooms2'
     partType   = 'gas'
     rVirFracs  = [0.15,0.5,1.0]
@@ -148,9 +148,10 @@ def singleEvoFrames_3x2(frame=0, subhaloID=402572, justStars=False):
     tree_mpb = sP.loadMPB(subhaloID)
     assert frame < len(tree_mpb['SnapNum'])
 
-    hInd = tree_mpb['SubfindID'][frame]
+    subhaloInd = tree_mpb['SubfindID'][frame]
     redshift = sP.snapNumToRedshift( tree_mpb['SnapNum'][frame] )
-    print('[%d of %d] render hInd = %d at snap = %d (z = %.3f)' % (frame,len(tree_mpb['SnapNum']),hInd,tree_mpb['SnapNum'][frame],redshift))
+    print('[%d of %d] render subhaloInd = %d at snap = %d (z = %.3f)' % \
+        (frame,len(tree_mpb['SnapNum']),subhaloInd,tree_mpb['SnapNum'][frame],redshift))
 
     # galaxy-scale
     gal_size = 0.2
@@ -192,9 +193,9 @@ def _create_global_subset_saves(doInds=False):
     sP = simParams(res=2160,run='tng',redshift=0.5)
     conf = 'one'
     fieldsToCache = ['Masses','Density'] #['Coordinates']
-    shInds = [54051,  77279,  92816, 105136, 115152, 124403, 131715,
-              160812, 166602, 173133, 178497, 190042, 194783, 199396, 202856,
-              211991, 216072]
+    shIDs = [54051,  77279,  92816, 105136, 115152, 124403, 131715,
+             160812, 166602, 173133, 178497, 190042, 194783, 199396, 202856,
+             211991, 216072]
     
     size = 2.2
     depthFac = 2.0
@@ -208,15 +209,15 @@ def _create_global_subset_saves(doInds=False):
         data[field] = sP.snapshotSubset('gas', field, float32=doInds)
         print('All loading done.', flush=True)
 
-        for shInd in shInds:
-            saveFilename = sP.derivPath + 'cache/vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (shInd,sP.snap)
+        for shID in shIDs:
+            saveFilename = sP.derivPath + 'cache/vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (shID,sP.snap)
 
             # load subhalo info
-            subhalo = sP.groupCatSingle(subhaloID=shInd)
+            subhalo = sP.groupCatSingle(subhaloID=shID)
             halo = sP.groupCatSingle(haloID=subhalo['SubhaloGrNr'])
 
             # reduce to reasonable spatial subset
-            print('[%d] Subsetting...' % shInd, flush=True)
+            print('[%d] Subsetting...' % shID, flush=True)
             boxSizeMax = halo['Group_R_Crit200'] * (size/2) * depthFac
 
             mask = np.zeros( data[field].shape[0], dtype='int16' )
@@ -274,17 +275,14 @@ def static_halo_rotation_fullbox(objInd=10, conf='one'):
     sizeType = 'rVirial'
 
     # objects
-    shInds = [54051,  77279,  92816, 105136, 115152, 124403, 131715,
-              160812, 166602, 173133, 178497, 190042, 194783, 199396, 202856,
-              211991, 216072] # mhalo_200_log > 13.0, excluding sh==0
-    #shInds = [1616, 2312, 2809, 3172, 3491, 3786, 4009, 4758, 5165, 5361,
-    #    5687, 5855, 6155, 6258, 6495] # L35n540TNG TESTING
-    #print('L35n540TNG TESTING, REMOVE.')
+    shIDs = [54051,  77279,  92816, 105136, 115152, 124403, 131715,
+             160812, 166602, 173133, 178497, 190042, 194783, 199396, 202856,
+             211991, 216072] # mhalo_200_log > 13.0, excluding sh==0
 
-    hInd = shInds[objInd]
+    subhaloInd = shIDs[objInd]
 
     sP = simParams(res=res, run=run, redshift=redshift)
-    subhalo = sP.groupCatSingle(subhaloID=hInd)
+    subhalo = sP.groupCatSingle(subhaloID=subhaloInd)
     halo = sP.groupCatSingle(haloID=subhalo['SubhaloGrNr'])
 
     # define panels
@@ -307,7 +305,7 @@ def static_halo_rotation_fullbox(objInd=10, conf='one'):
     # global pre-cache of selected fields into memory, as we do global renders
     dataCache = {}
 
-    saveFilename = sP.derivPath + 'cache/vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (hInd,sP.snap)
+    saveFilename = sP.derivPath + 'cache/vis_static_halo_rotation_fullbox_sh%d_s%d.hdf5' % (subhaloInd,sP.snap)
 
     if isfile(saveFilename):
         with h5py.File(saveFilename,'r') as f:
@@ -333,7 +331,7 @@ def static_halo_rotation_fullbox(objInd=10, conf='one'):
         panels = [panel.copy()]
 
         # derive rotation
-        print(' [%s] subhalo ID = %d, frame = %3d' % (conf,hInd,frame), flush=True)
+        print(' [%s] subhalo ID = %d, frame = %3d' % (conf,subhaloInd,frame), flush=True)
         
         rotAngleDeg = 360.0 * (frame/numFramesPerRot)
         dirVec = [0.1,1.0,0.4] # full non-axis aligned tumble
@@ -341,6 +339,6 @@ def static_halo_rotation_fullbox(objInd=10, conf='one'):
         rotCenter = subhalo['SubhaloPos']
         rotMatrix = rotationMatrixFromAngleDirection(rotAngleDeg, dirVec)
 
-        plotConfig.saveFilename = savePathBase + '%s_s%d_sh%d/frame_%s_%d.png' % (sP.simName,sP.snap,hInd,conf,frame)
+        plotConfig.saveFilename = savePathBase + '%s_s%d_sh%d/frame_%s_%d.png' % (sP.simName,sP.snap,subhaloInd,conf,frame)
 
         renderSingleHalo(panels, plotConfig, locals())

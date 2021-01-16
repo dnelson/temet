@@ -74,11 +74,11 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
         plotConfig.nRows = 29 # 29x26 = aspect ratio about half of 16:9
 
     if hIDsPlot is not None:
-        hIDs = cen_inds[hIDsPlot]
+        shIDs = cen_inds[hIDsPlot]
         plotConfig.nRows = 1
 
     # add panels
-    for i, hID in enumerate(hIDs):
+    for i, shID in enumerate(shIDs):
         # set semi-adaptive size (code units)
         loc_size = 80.0 if hIDsPlot is None else 60.0
         if mhalo[hID] <= 12.5:
@@ -88,28 +88,28 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
 
         # either stars or gas, face-on
         if panelNum == 1:
-            #panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w_dustC-jwst_f115w_dustC-jwst_f070w_dustC'} )
+            #panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'stars', 'partField':'stellarComp-jwst_f200w_dustC-jwst_f115w_dustC-jwst_f070w_dustC'} )
         if panelNum == 2: 
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':gasMM} )
 
         # other: gas explorations
         if panelNum == 3:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-3.0,1.0]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'sfr_msunyrkpc2', 'valMinMax':[-3.0,1.0]} )
         if panelNum == 4: 
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'gasdens_tng5', 'valMinMax':[7.0,8.6]} ) # 7.5,8.6
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'coldens_msunkpc2', 'ctName':'gasdens_tng5', 'valMinMax':[7.0,8.6]} ) # 7.5,8.6
             if rotation == 'edge-on': panels[-1]['valMinMax'] = [8.0, 9.5]
         if panelNum == 5:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'metal_solar', 'valMinMax':[-0.5,0.5]} )
         if panelNum == 6:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los_sfrwt', 'valMinMax':[-300,300]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'vel_los_sfrwt', 'valMinMax':[-300,300]} )
             if rotation is None or rotation == 'edge-on': panels[-1]['valMinMax'] = [-400,400]
         if panelNum == 7:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los_sfrwt', 'valMinMax':[0,400]} )
         if panelNum == 8:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'velsigma_los', 'valMinMax':[0,400]} )
         if panelNum == 9:
-            panels.append( {'hInd':hID, 'size':loc_size, 'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
+            panels.append( {'subhaloInd':shID, 'size':loc_size, 'partType':'gas', 'partField':'HI_segmented', 'valMinMax':[13.5,21.5]} )
 
         if numHalosInd <= 2:
             if i == 0: # upper left
@@ -118,7 +118,7 @@ def galaxyMosaic_topN(numHalosInd, panelNum=1, hIDsPlot=None, redshift=2.0, rota
                 panels[-1]['labelZ'] = True
 
     plotConfig.saveFilename = 'renderHalos_%s-%d_N%d_%s-%s_%s.png' % \
-      (sP.simName,sP.snap,len(hIDs),panels[0]['partType'],panels[0]['partField'],rotation)
+      (sP.simName,sP.snap,len(shIDs),panels[0]['partType'],panels[0]['partField'],rotation)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=True)
 
@@ -680,10 +680,9 @@ def singleHaloDemonstrationImage(conf=1, overlay='lic_stream'):
 
     print('Processing [%d] halos...' % len(w[0]))
 
-    for hInd in [w[0][5]]: # paper
-    #for hInd in w[0]:
+    for subhaloInd in [w[0][5]]: # paper
         panels = []
-        haloID = sP.groupCatSingle(subhaloID=hInd)['SubhaloGrNr']
+        haloID = sP.groupCatSingle(subhaloID=subhaloInd)['SubhaloGrNr']
 
         if conf == 0:
             panels.append( {'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )

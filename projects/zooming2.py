@@ -26,6 +26,7 @@ def check_box(snap):
     run        = 'zooms2_tng'
     res        = 11
     hInd       = 2
+    subhaloInd = 0
     nPixels    = [1000,1000]
     zoomFac    = 0.1
 
@@ -50,6 +51,7 @@ def visualize_halo(conf=1, quadrant=False, snap=None):
     run        = 'zooms2_josh' # 'zooms2'
     res        = 11
     hInd       = 2
+    subhaloInd = 0
     variant    = 'FP' # MO, PO, FP, FP1/FP2/FP3 None
 
     redshift = 2.25 if snap is None else None
@@ -123,6 +125,7 @@ def visualize_compare_vs_normal(conf=1):
     run        = 'zooms2_josh' # 'zooms2'
     res        = 11
     hInd       = 2
+    subhaloInd = 0
     redshift   = 2.25
 
     rVirFracs  = [0.25, 0.5]
