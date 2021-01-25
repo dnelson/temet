@@ -1463,6 +1463,11 @@ def plotxy(x, y, filename='plot.pdf'):
     xx_log = logZeroNaN(x)
     yy_log = logZeroNaN(y)
 
+    step = 1
+    if x.size > 1e4: step = 10
+    if x.size > 1e5: step = 100
+    print(x.size)
+
     # figure
     figsize = np.array([14,10]) * 0.8 * 2
     fig = plt.figure(figsize=figsize)
@@ -1473,13 +1478,21 @@ def plotxy(x, y, filename='plot.pdf'):
         ax.set_ylabel(['y','y','log(y)','log(y)'][i])
 
         if i == 0:
-            ax.plot(x, y, 'o-', lw=2.5)
+            ax.plot(x[::step], y[::step], '.')
+            mx, my, _ = running_median(x, y, nBins=20)
+            ax.plot(mx, my, '-', lw=2.5)
         if i == 1:
-            ax.plot(xx_log, y, 'o-', lw=2.5)
+            ax.plot(xx_log[::step], y[::step], '.')
+            mx, my, _ = running_median(xx_log, y, nBins=20)
+            ax.plot(mx, my, '-', lw=2.5)
         if i == 2:
-            ax.plot(x, yy_log, 'o-', lw=2.5)
+            ax.plot(x[::step], yy_log[::step], '.')
+            mx, my, _ = running_median(x, yy_log, nBins=20)
+            ax.plot(mx, my, '-', lw=2.5)
         if i == 3:
-            ax.plot(xx_log, yy_log, 'o-', lw=2.5)
+            ax.plot(xx_log[::step], yy_log[::step], '.')
+            mx, my, _ = running_median(xx_log, yy_log, nBins=20)
+            ax.plot(mx, my, '-', lw=2.5)
 
     fig.savefig(filename)
     plt.close(fig)

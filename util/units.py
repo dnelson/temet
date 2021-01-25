@@ -826,7 +826,7 @@ class units(object):
             ent_cgs = logZeroSafe(ent_cgs)
         return ent_cgs
 
-    def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, log=False):
+    def calcXrayLumBolometric(self, sfr, u, nelec, mass, dens, temp=None, log=False):
         """ Following Navarro+ (1995) Eqn. 6 the most basic estimator of bolometric X-ray luminosity 
         in [10^30 erg/s] for individual gas cells, based only on their density and temperature. Assumes 
         simplified (primordial) high-temp cooling function, and only free-free (bremsstrahlung) 
@@ -838,8 +838,9 @@ class units(object):
         meanmolwt *= self.mass_proton
 
         # calculate temperature (K)
-        temp = u.astype('float32')
-        temp *= (self.gamma-1.0) / self.boltzmann * self.UnitEnergy_in_cgs / self.UnitMass_in_g * meanmolwt
+        if temp is None:
+            temp = u.astype('float32')
+            temp *= (self.gamma-1.0) / self.boltzmann * self.UnitEnergy_in_cgs / self.UnitMass_in_g * meanmolwt
 
         # Eqn. 6
         mass_g = mass.astype('float32') * (self.UnitMass_in_g) / self._sP.HubbleParam

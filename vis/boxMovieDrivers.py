@@ -582,6 +582,19 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         panels.append( {'partType':'stars', 'partField':'stellarComp-jwst_f200w-jwst_f115w-jwst_f070w'} )
         boxSizeImg = [boxSizeLg, boxSizeLg, boxSizeLg]
 
+    if conf == 'sixteen':
+        # bubbles, xray/temp
+        panels.append( {'partType':'gas', 'partField':'xray', 'valMinMax':[33,38]} )
+        boxSizeImg = [int(boxSizeSq * aspect * 4), boxSizeSq * 4, boxSizeSq * 4]
+        labelZ = True
+        labelScale = True
+    if conf == 'seventeen':
+        # bubbles, xray/temp
+        panels.append( {'partType':'gas', 'partField':'P_gas', 'valMinMax':[2,5]} )
+        boxSizeImg = [int(boxSizeSq * aspect * 4), boxSizeSq * 4, boxSizeSq * 4]
+        labelZ = True
+        labelScale = True
+
     if 0:
         # SWR
         nPixels = [1200,1200] # square
@@ -611,7 +624,8 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
     from cosmo.util import validSnapList
 
     # movie config
-    minZ = 0.1260 # stop after sb snap 3399 which was what existed when we originally made the movies (to keep frameNum sync)
+    #minZ = 0.1260 # stop after sb snap 3399 which was what existed when we originally made the movies (to keep frameNum sync)
+    minZ = 0.0
 
     if gal == 'one':
         maxZ = 12.7 # tng subboxes start at a=0.02, but gal=='one' starts at sbSnapNum==51
@@ -631,6 +645,7 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
         if isfile(savePathBase + '2160sb0_s90_sh440389/frame_%s_%d.png' % (conf,i)):
             print('skip ', i)
             continue
+
         subbox_movie_tng_galaxyevo_frame(sbSnapNum=sbSnapNum, gal=gal, conf=conf, frameNum=i)
 
 def Illustris_vs_TNG_subbox0_2x1_onequant_movie(curTask=0, numTasks=1, conf=1):

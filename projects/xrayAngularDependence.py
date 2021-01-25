@@ -243,12 +243,16 @@ def singleHaloImage():
     # panels
     partType = 'gas'
 
-    panels = [ {'partField':'metal_solar', 'valMinMax':[-0.5,0.2]},
-               {'partField':'temp', 'valMinMax':[5.5,6.6]},
-               {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} ]
+    #panels = [ {'partField':'metal_solar', 'valMinMax':[-0.5,0.2]},
+    #           {'partField':'temp', 'valMinMax':[5.5,6.6]},
+    #           {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[6.0,9.0]} ]
+
+    panels = [ {'partField':'xray_lum', 'valMinMax':[33, 37]},
+               {'partField':'xray_lum_05-2kev', 'valMinMax':[33, 37]},
+               {'partField':'xray_lum_05-2kev_nomet', 'valMinMax':[33, 37]},
+               {'partField':'xray_lum_0.5-2.0kev', 'valMinMax':[33, 37]} ]
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
-
 
 def paperPlots():
     """ Plots for Truong+21 x-ray emission angular dependence paper. """

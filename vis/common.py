@@ -32,7 +32,7 @@ savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 # configure certain behavior types
 volDensityFields  = ['density']
 colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet',
+                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_emis_0.5-2.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
 totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
@@ -560,7 +560,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass[mass < 0] = 0.0 # clip -eps values to 0.0
 
     # other total sum fields (replace mass)
-    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev']:
         # xray: replace 'mass' with x-ray luminosity [10^-30 erg/s], which is then accumulated into a 
         # total Lx [erg/s] per pixel, and normalized by spatial pixel size into [erg/s/kpc^2]
         mass = sP.snapshotSubsetP(partType, partField, indRange=indRange)
@@ -847,12 +847,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'viridis' #'HI_segmented'
 
-    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet']:
+    if partField in ['xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
 
-        if '05-2kev' in partField:
+        if 'xray_lum_05-2kev' == partField:
             xray_label = 'L$_{\\rm X, 0.5-2 keV}$'
+        elif '05-2kev_nomet' in partField:
+            xray_label = 'L$_{\\rm X, 0.5-2 keV, no-Z}$'
+        elif '0.5-2.0kev' in partField:
+            xray_label = 'L$_{\\rm X, 0.5-2 keV, APEC}$'
         else:
             xray_label = 'Bolometric L$_{\\rm X}$'
 
@@ -879,10 +883,8 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['label'] = '%s %s%s Column Density [log cm$^{-2}$]' % (ptStr,metalName,mStr)
         config['ctName'] = 'cubehelix'
 
-        # testing:
         if '_minIP' in method: config['ctName'] = 'gray' # minIP: do dark on light
         if '_maxIP' in method: config['ctName'] = 'gray_r' # maxIP: do light on dark
-        #config['plawScale'] = 1.0
 
     if 'sb_' in partField:
         # surface brightness map, based on fluxes, i.e. [erg/s/cm^2] -> [erg/s/cm^2/arcsec^2]
@@ -2608,7 +2610,8 @@ def renderMultiPanel(panels, conf):
             heightFac += 0.002*(conf.fontsize-12) # larger for larger fonts, and vice versa (needs tuning)
 
             if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
-            if nRows == 2 and not varRowHeights: heightFac *= 1.3 # increase
+            if nRows == 2 and not varRowHeights and barAreaTop == 0.0:
+                heightFac *= 1.3 # increase
             if nRows == 1 and nCols == 1:
                 heightFac *= 0.7 # decrease
                 if conf.fontsize == min_fontsize: # small images
