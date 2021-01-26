@@ -181,6 +181,9 @@ def mosterSMHM(sP, redshift=0.0):
             if ind == 2:
                 r[i] = vals.mean() + vals.std()
 
+        # clip any negatives
+        r[r < 0] = r[r > 0].min() / 2
+
         return r
 
     def f2009(mass, ind=1):

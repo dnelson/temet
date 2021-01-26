@@ -15,6 +15,66 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def check_zoom_variations():
+    """ Check TNG-Cluster h3693. """
+    redshift = 0.0
+
+    # hInd : [variants] pairs
+    sets = {3232 : ['sf3','sf3_n128','sf3_n256','sf3_n512'], # L14* running
+            3693 : ['sf3','sf3_m','sf3s','sf3s5008','sf3none_kpc','sf3s_kpc','sf3_kpc'],
+            50   : ['sf2_n160','sf2_n160s','sf2_n160s_mpc','sf2_n320','sf2_n320s','sf3']} # sf3_m running raven
+
+    # hInd = 3693 we have the following:
+    # sf3 = fiducial (mpc)
+    # sf3s = STEEPER (mpc)
+    # sf3s5008 = STEEPER and 5008 (mpc)
+    # sf3none = nobugfixes (mpc) (made it to z~3.1) (currently skipping here)
+    # sf3none_kpc = nobugfixes (kpc)
+    # sf3s_kpc (kpc, steeper only, no other bugfixes)
+    # sf3_kpc = fiducial (kpc)
+    # sf3none_m = nobugfixes, updated MaxSfrTimescale (mpc) (running on draco, "")
+    # sf3_m = fiducial (mpc), updated MaxSfrTimescale, Time: 0.39761 cum 90859.92 = 9.70khr
+    # L14 = running draco n640, Time: 0.39761 cum 293763.26 = 52.22khr (5.4x L13, n640 vs 483, draco vs raven)
+
+    # hInd = 50 we have variations of CPU numbers, with and without steeper 's'
+    #  - CPU numbers 160,320,fiducial run on draco/cobra/raven
+    # sf3_m = fiducial (mpc), updated MaxSfrTimescale (running on raven)
+
+    # hInd = 30 we have variations of CPU numbers (all L13) (partial hawk runs only)
+    #  - sf3 fiducial: cobra run, 320 cores: Step 18343, Time: 0.2032 cum 114669.73  = 10.19khr
+    #  - n256 hawk (updated MaxSfrTimescale): Step 28647, Time: 0.2032 cum 221221.09 = 15.73khr
+    #  - n512 hawk (updated MaxSfrTimescale): Step 30756, Time: 0.2032 cum 131633.84 = 18.72khr
+    #  - n1024 hawk (updated MaxSfrTimescale): Step 31778, Time: 0.2032 cum 91007.31 = 25.89khr
+
+    # hInd = 3232 we have L13 and L14, variations of CPU numbers, all run on hawk (all new setup)
+    #   L13_sf3_n128,256,512 (done on hawk)
+    #    - n512:  Time: 0.2457 cum 25317.25 =  3.60khr, Time: 0.3100 cum 43854.43 =  6.24khr
+    #   L14_sf3_n512,1024,2048 (partial on hawk): 
+    #    - n512:  Time: 0.2457 cum 71818.84 = 10.21khr, Time: 0.3100 cum 146728.38 = 20.87khr (3.4x L13)
+    #    - n1024: Time: 0.2457 cum 46420.57 = 13.20khr, Time: 0.3100 cum 100744.45 = 28.66khr
+    #    - n2048: Time: 0.2457 cum 73416.33 = 41.77khr...
+
+    for hInd,variants in sets.items():
+        for variant in variants:
+            res = 14 if 'L14_' in variant else 13
+            variant = variant.replace('L14_','')
+
+            sP = simParams(run='tng_zoom', res=res, hInd=hInd, variant=variant, redshift=redshift)
+
+            sub = sP.subhalo(0)
+            group = sP.halo(0)
+
+            mass_stellar = sP.units.codeMassToLogMsun( sub['SubhaloMassInRadType'][4] )
+            mass_bh = sP.units.codeMassToLogMsun( sub['SubhaloMassType'][5] )
+            mass_halostar = sP.units.codeMassToLogMsun( group['GroupMassType'][4] )
+            size = sP.units.codeLengthToKpc( sub['SubhaloHalfmassRadType'][4] )
+
+            print('%4s %13s mstar = [%5.2f %5.2f] mbh = [%5.2f] size = [%6.2f] cpuKHours = %.1f' % \
+                (hInd, variant, mass_stellar, mass_halostar, mass_bh, size, sP.cpuHours/1000))
+
+    # current size of all L13 zooms: ~85TB, size of z=0 virtual snap: 2.0TB
+    # projected size of L14: ~195TB in total, z=0 snapshot: 4.6TB (almost same as TNG300-1)
+
 def omega_metals_z(metal_mass=True):
     """ Compute Omega_Z(z) or Omega(z) for various components. """
     from cosmo.hydrogen import neutral_fraction

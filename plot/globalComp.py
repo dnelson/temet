@@ -25,6 +25,7 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
     # plot setup
     xrange = [10.0, 15.0]
     yrange = [0.0, 0.30]
+    nIndivPoints = 10
     if dataRedshift is not None and dataRedshift > 0.0: yrange[1] = 0.25
 
     # plot setup
@@ -138,6 +139,9 @@ def stellarMassHaloMass(sPs, pdf, ylog=False, allMassTypes=False, use30kpc=False
                 xm, ym, sm = running_median(xx,yy,binSize=binSize)
                 ym2 = savgol_filter(ym,sKn,sKo)
                 l, = ax.plot(xm[:-1], ym2[:-1], linestyles[2], lw=3.0, color=c)
+
+            # individual N most massive points
+            ax.plot(xx[0:nIndivPoints], yy[0:nIndivPoints], 'o', color=l.get_color(), alpha=0.9)
 
     # second legend
     markers = []
@@ -1160,7 +1164,7 @@ def HIMassFraction(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[No
         pdf.savefig()
         plt.close(fig)
 
-def HIvsHaloMass(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None,None]):
+def HIvsHaloMass(sPs, pdf, simRedshift=0.0, fig_subplot=[None,None]):
     """ HI mass (M_HI) vs M_halo at redshift zero. """
     acFields = ['Subhalo_Mass_FoF_HI','Subhalo_Mass_HI']
 
@@ -1205,7 +1209,7 @@ def HIvsHaloMass(sPs, pdf, centralsOnly=True, simRedshift=0.0, fig_subplot=[None
         # for each of the HI mass definitions, calculate HI masses and plot
         for i, acField in enumerate(acFields):
             # load HI masses under this definition
-            ac = sP.auxCat(fields=[acField])[acField]
+            ac = sP.auxCat(fields=[acField], expandPartial=True)[acField]
             yy = sP.units.codeMassToLogMsun(ac[w])
 
             # calculate median            
@@ -2170,7 +2174,7 @@ def stellarAges(sPs, pdf, centralsOnly=False, simRedshift=0.0, sdssFiberFits=Fal
 def haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0, fig_subplot=[None,None]):
     """ X-ray bolometric luminosity scaling relation vs halo mass (e.g. Schaye Fig 16). """
     #lumTypes = ['Subhalo_XrayBolLum','Group_XrayBolLum_Crit500'] #,'Subhalo_XrayBolLum_2rhalfstars']
-    lumTypes = ['Subhalo_XrayLum_05-2kev','Group_XrayLum_05-2kev_Crit500']
+    lumTypes = ['Subhalo_XrayLum_05-2kev','Group_XrayLum_0.5-2.0kev_Crit500']
     if clean: lumTypes = [lumTypes[1]]
 
     # plot setup
@@ -2403,19 +2407,23 @@ def plots():
     #sPs.append( simParams(res=2, run='iClusters', variant='TNG_11', hInd=1) )
 
     # add runs: fullboxes
-    sPs.append( simParams(run='tng100-1', redshift=0.0) )
+    #sPs.append( simParams(run='tng100-1', redshift=0.0) )
     #sPs.append( simParams(res=2160, run='tng', redshift=0.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=1.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
     #sPs.append( simParams(res=1820, run='tng', redshift=4.0) )
     #sPs.append( simParams(res=910, run='tng') )
     #sPs.append( simParams(res=455, run='tng') )
+    #for variant in ['','0000','4503','0000_Mpc']:
+    #    sPs.append( simParams(res=455, run='tng', variant=variant) )
+    #for variant in ['','0000','4503']:
+    #    sPs.append( simParams(res=625, run='tng', variant=variant) )
 
     #sPs.append( simParams(res=1820, run='illustris', redshift=0.0) )
     #sPs.append( simParams(res=910, run='illustris') )
     #sPs.append( simParams(res=455, run='illustris') )
 
-    #sPs.append( simParams(res=2500, run='tng') )
+    sPs.append( simParams(res=2500, run='tng') )
     #sPs.append( simParams(res=1250, run='tng') )
     #sPs.append( simParams(res=625, run='tng') )  
 
@@ -2436,9 +2444,9 @@ def plots():
     #sPs.append( simParams(res=512, run='tng', variant='0000') )
     #sPs.append( simParams(res=512, run='tng', variant='5014') )
 
-    if 1:
+    if 0:
         # single plot and quit
-        pdf = PdfPages('xray_test_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
+        pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
         haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0)
         pdf.close()
         return
@@ -2473,7 +2481,7 @@ def plots():
     massMetallicityGas(sPs, pdf, simRedshift=0.7)
     baryonicFractionsR500Crit(sPs, pdf, simRedshift=zZero)
 
-    if 1:
+    if 0:
         nHIcddf(sPs, pdf) # z=3
         nHIcddf(sPs, pdf, moment=1)
         nOVIcddf(sPs, pdf) # z=0.2
@@ -2498,8 +2506,8 @@ def plots():
     HIvsHaloMass(sPs, pdf, simRedshift=zZero)
     galaxyHISizeMass(sPs, pdf, simRedshift=zZero)
 
-    for sP in sPs:
-        plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
+    #for sP in sPs:
+    #    plotPhaseSpace2D(sP, xQuant='numdens', yQuant='temp', pdf=pdf) #xlim=xlim, ylim=ylim, clim=clim, hideBelow=False, haloID=None, 
 
     # todo: Vmax vs Mstar (tully-fisher) (Torrey Fig 9) (Vog 14b Fig 23) (Schaye Fig 12)
     # todo: Mbaryon vs Mstar (baryonic tully-fisher) (Vog 14b Fig 23)

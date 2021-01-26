@@ -46,6 +46,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             # record counts and dataset shape
             with h5py.File(auxCatPathSplit_i,'r') as f:
                 allShape = f[datasetName].shape
+                if f[datasetName].ndim == 0: # scalar, i.e. single subhalo
+                    allShape = [f[datasetName].size]
 
                 nElemPerSub = np.prod(allShape) / allShape[0]
 

@@ -833,6 +833,10 @@ def bfield_strength_vs_halomass(sPs, redshifts):
 
         ax.errorbar(m200, b, xerr=xerr, yerr=yerr, color='#000000', marker='H', label='Govoni+17 (Abell 194)')
 
+        # TODO: Stuardi, C.+2021, Abell 2345
+        # |B| = 2.8 +/- 0.1 uG (within 200 kpc)
+        # M_500,SZ = 5.91e14 Msun
+
     quantMedianVsSecondQuant(sPs_in, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 

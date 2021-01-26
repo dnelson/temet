@@ -290,33 +290,36 @@ class simParams:
                     self.winds = 1
                     self.BHs   = 1
 
-                if self.variant.isdigit():
-                    if int(self.variant) == 8: self.variant = '0010' # number 0010 interpreted as octal 8! why.
-                    assert int(self.variant) >= 0 and int(self.variant) < 9999
-                    assert self.boxSize == 25000.0
+                if self.variant.isdigit() or '_Mpc' in self.variant:
+                    if self.variant.isdigit():
+                        if int(self.variant) == 8:
+                            self.variant = '0010' # number 0010 interpreted as octal 8! why.
+                        assert int(self.variant) >= 0 and int(self.variant) < 9999
+
                     dirStr = 'TNG_method'
                     runStr = '_%s' % self.variant.zfill(4)
 
-                    # real name from method runs CSV file?
-                    run_file = '%s/sims.%s/runs.csv' % (self.basePath,dirStr)
-                    if path.isfile(run_file):
-                        import csv
+                    # L25*: real name from method runs CSV file?
+                    if self.boxSize == 25000.0:
+                        run_file = '%s/sims.%s/runs.csv' % (self.basePath,dirStr)
+                        if path.isfile(run_file):
+                            import csv
 
-                        with open(run_file) as f:
-                            lines = f.readlines()
-                        for line in csv.reader(lines,quoting=csv.QUOTE_ALL):
-                            if '_' in line[0]:
-                                method_run_names[line[0]] = line[8]
+                            with open(run_file) as f:
+                                lines = f.readlines()
+                            for line in csv.reader(lines,quoting=csv.QUOTE_ALL):
+                                if '_' in line[0]:
+                                    method_run_names[line[0]] = line[8]
 
-                    # freya: variants not accessible (on isaac)
-                    #if 'freya' in platform.node() and self.variant not in ['0000','5005','5006']:
-                    #    raise Exception('No TNG variants except a few currently accessible from freya.')
-                        
-                # draco/freya: no subbox data copied yet
-                #if 'freya' in platform.node() or 'draco' in platform.node():
-                #    if 'subbox' in self.variant and self.res not in [455,1820,2160]:
-                #        raise Exception('No TNG subboxes on /virgo/ yet, except for L75n455, L75n1820, L35n2160.')
-                # end draco/freya
+                        # freya: variants not accessible (on isaac)
+                        #if 'freya' in platform.node() and self.variant not in ['0000','5005','5006']:
+                        #    raise Exception('No TNG variants except a few currently accessible from freya.')
+                    else:
+                        # variants of main boxes, e.g. 'L75n455TNG_0000, 'L75n455TNG_4503'
+                        runStr = 'TNG_%s' % self.variant.zfill(4)
+
+                    if '_Mpc' in self.variant:
+                        self.mpcUnits = True
 
             # make paths and names
             bs = str(int(self.boxSize/1000.0))
@@ -334,7 +337,7 @@ class simParams:
             self.simNameAlt = self.simName
             self.colors     = ['#f37b70', '#ce181e', '#94070a'] # red, light to dark
 
-            if res in res_L35+res_L75+res_L205:
+            if res in res_L35+res_L75+res_L205 and self.variant == 'None':
                 # override flagship name
                 if res in res_L35: resInd = len(res_L35) - res_L35.index(res)
                 if res in res_L75: resInd = len(res_L75) - res_L75.index(res)
@@ -415,8 +418,10 @@ class simParams:
             # mpc? all L680* except testing
             if '_mpc' in self.variant or ('_dm' not in run and self.variant == 'sf3'):
                 self.mpcUnits = True
-            if self.variant in ['sf3s','sf3s5008','sf3none','sf3none_m','sf3_m']: # h50/h3693 tests
-                self.mpcUnits = True
+            if self.hInd == 50 and self.variant not in ['sf2_n160s_mpc','sf3']:
+                self.mpcUnits = False # older testing series, kpc unless specified otherwise
+            if self.hInd in [30,3232,3693] and 'kpc' not in self.variant:
+                self.mpcUnits = True # testing series with kpc vs Mpc variations (_kpc always explicit)
 
             # paths
             bs = str(int(self.boxSize/1000.0)) if self.boxSize != 680.0 else str(int(self.boxSize))
@@ -909,6 +914,19 @@ class simParams:
         # if redshift passed in, convert to snapshot number and save, and attach units(z)
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)
+
+    def auxCatSplit(self, field):
+        """ Automatically do a pSplit auxCat calculation. """
+        n = 8
+        if self.res > 2000:
+            n = 16
+
+        # compute chunked to reduce peak memory load
+        for i in range(n):
+            _ = self.auxCat(field, pSplit=[i,n])
+
+        # concat and return
+        return self.auxCat(field, pSplit=[0,n])
 
     def fillZoomParams(self, res=None, hInd=None, variant=None):
         """ Fill parameters for individual (MUSIC-based) zooms. """

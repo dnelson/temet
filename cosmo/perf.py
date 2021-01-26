@@ -65,7 +65,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
         filePath = basePath + 'cpu.txt'
     if not isfile(filePath):
         print('WARNING: Failed to find [%s].' % filePath)
-        return Noned
+        return None
 
     r = {}
 
@@ -99,7 +99,8 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
 
         maxSize = int(maxSize*1.2) # since we filter empties out anyways, let file grow as we read
 
-        print('[%s] maxSize: %d numCPUs: %d, loading...' % (basePath, maxSize, r['numCPUs']))
+        printPath = "/".join(basePath.split("/")[-3:])
+        print('[%s] maxSize: %d numCPUs: %d, loading...' % (printPath, maxSize, r['numCPUs']))
 
         r['step'] = np.zeros( maxSize, dtype='int32' )
         r['time'] = np.zeros( maxSize, dtype='float32' )
@@ -133,7 +134,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
                     step = int( line[0].split(" ")[1] )
                     time = float( line[1].split(": ")[1] )
 
-                    if step % 100000 == 0:
+                    if step % 100000 == 0 and step > 0:
                         print(' [%d] %8.6f hatb=%d %s' % (step,time,hatb,hatbSkip))
 
                     continue
@@ -172,7 +173,7 @@ def loadCpuTxt(basePath, keys=None, hatbMin=0, skipWrite=False):
                     r[name][step,0] = float( line[1+offset].strip() ) # diff time
                     r[name][step,1] = float( line[2+offset].strip()[:-1] ) # diff percentage
                     r[name][step,2] = float( line[3+offset].strip() ) # cumulative time
-                    r[name][step,3] = float( line[4+offset].strip()[:-1] ) # cumulative percentage
+                    r[name][step,3] = float( line[4+offset].strip().replace('%','') ) # cumulative percentage
 
                 if cols == 3:
                     r[name][step,0] = float( line[1+offset].strip() ) # diff time
@@ -933,17 +934,20 @@ def plotTimebinsFrame(pStyle='white', conf=0, timesteps=None):
         fig.savefig('timebins_%s_%04d.png' % (sP.simName,i), facecolor=color1)
         plt.close(fig)
 
-def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
+def scalingPlots():
     """ Construct strong (fixed problem size) and weak (Npart scales w/ Ncores) scaling plots 
-         based on the Hazel Hen tests. Previous seriesName: scaling_Aug2016_SlabFFT. """
+         based on the Hazel Hen (2016) and Hawk (2021) tests.  """
 
     # config
+    #seriesName = '201608_scaling_ColumnFFT' # 'scaling_Aug2016_SlabFFT'
+    seriesName = '202101_scaling_Hawk'
+
     basePath = '/virgo/simulations/IllustrisTNG/InitialConditions/tests_%s/' % seriesName
     plotKeys = ['total','domain','voronoi','treegrav','pm_grav','hydro']
     dtInd    = 0 # index for column which is the differential time per step
     timestep = 2 # start at the second timestep (first shows strange startup numbers)
     tsMean   = 10 # number of timesteps to average over
-    figsize  = (11.2,8.0)
+    figsize  = [ 10.0, 8.0 ] # due to second xaxis on top
 
     pdf = PdfPages(seriesName + '.pdf')
 
@@ -965,6 +969,7 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
         axTop.set_xscale(ax.get_xscale())
         axTop.set_xticks(nCores)
         axTop.set_xticklabels(['2$\\times$'+str(nPart)+'${^3}$' for nPart in nPartsCubeRoot])
+        axTop.tick_params(axis='both', which='major', labelsize=12)
         #axTop.minorticks_off() # doesn't work
         #axTop.tick_params(which='minor',length=0) # works, but corrupts PDFs somewhat
         axTop.set_xlabel('Weak Scaling: Problem Size [Number of Particles]')
@@ -984,7 +989,6 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
             # load
             cpu = loadCpuTxt(runPath+'/', skipWrite=True)
             nSteps = cpu['step'].size
-            print(runPath,nSteps)
 
             # verify we are looking at high-z (ICs) scaling runs
             tsInd = np.where(cpu['step'] == timestep)[0]
@@ -996,6 +1000,8 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
 
             for plotKey in plotKeys:
                 loc_data = np.squeeze(cpu[plotKey])
+                if plotKey == 'total':
+                    print('  ',runPath.split("/")[-1],' total sec per timestep: ',loc_data[:,dtInd])
                 data[plotKey][i] = np.mean( loc_data[tsInd[0]:tsInd[0]+tsMean,dtInd] )
 
             # extract boxsizes and particle counts from path string
@@ -1020,6 +1026,8 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
     for runSeries in ['L75n910','L75n1820']:
         # loop over runs
         runs = glob(basePath + runSeries + '_*')
+        if len(runs) == 0:
+            continue
         nCores, data = _loadHelper(runs, plotKeys)
 
         # print some totals for latex table
@@ -1042,7 +1050,7 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
             ax.plot(nCores,data[plotKey],marker='s',lw=2.0,label=plotKey)
 
             # add ideal scaling dotted line for each
-            xx_max = 8.5e4
+            xx_max = ax.get_xlim()[1] * 0.97
             xx = [nCores.min() * 0.9, xx_max]
             yy = [data[plotKey][0] / 0.9, data[plotKey][0] / (xx_max / nCores.min())]
 
@@ -1088,9 +1096,9 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
 
     # weak
     # ----
-    runSeries = 'tL*_ics'
+    runSeries = 'tL*'
 
-    runs = glob(basePath + runSeries + '_*')
+    runs = glob(basePath + runSeries)
     nCores, data = _loadHelper(runs, plotKeys)
 
     # print some totals for latex table
@@ -1111,23 +1119,24 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
         ax.plot(nCores,data[plotKey],marker='s',lw=2.0,label=plotKey)
 
         # add ideal scaling dotted line
-        xx = [nCores.min() * 0.6, xx_max]
+        xx_max = ax.get_xlim()[1] * 0.97
+        xx = [nCores.min() * 1.3, xx_max]
         yy = [data[plotKey][0], data[plotKey][0]]
 
-        ax.plot(xx,yy,':',color='#666666',alpha=0.8)
+        ax.plot(xx,yy,'-',color='#666666',alpha=0.3)
 
     # add core count labels above total points, and boxsize labels under particle counts
     for i in range(len(nCores)):
         xx = nCores[i]
         yy = ax.get_ylim()[0] * 1.38 #1.7
-        ax.text(xx,yy,str(nCores[i]),size='large',horizontalalignment='center',verticalalignment='top')
+        #ax.text(xx,yy,str(nCores[i]),size='large',ha='center',va='top',color='#999')
 
-        yy = ax.get_ylim()[1] * 1.88 #2.5
+        yy = ax.get_ylim()[1] * 1.5
         label = 'L%s' % data['boxSize'][i]
-        ax.text(xx,yy,label,size='large',horizontalalignment='center',verticalalignment='top')
+        ax.text(xx,yy,label,size='large',ha='center',va='top',color='#999')
 
     # legend and finish plot
-    ax.legend(loc='upper left')
+    ax.legend(loc='lower right')
     _addTopAxisWeak(ax, nCores, data['boxSize'], data['nPartCubeRoot'])
     pdf.savefig()
     plt.close(fig)
@@ -1155,11 +1164,11 @@ def scalingPlots(seriesName='201608_scaling_ColumnFFT'):
     for i in range(len(nCores)):
         xx = nCores[i]
         yy = ax.get_ylim()[0] + 0.05 # 0.08
-        ax.text(xx,yy,str(nCores[i]),size='large',horizontalalignment='center',verticalalignment='top')
+        #ax.text(xx,yy,str(nCores[i]),size='large',ha='center',va='top',color='#999')
 
-        yy = ax.get_ylim()[1] + 0.1 # 0.15
+        yy = ax.get_ylim()[1] + 0.10 # 0.15
         label = 'L%s' % data['boxSize'][i]
-        ax.text(xx,yy,label,size='large',horizontalalignment='center',verticalalignment='top')
+        ax.text(xx,yy,label,size='large',ha='center',va='top',color='#999')
 
     # legend and finish plot
     ax.legend(loc='lower left')

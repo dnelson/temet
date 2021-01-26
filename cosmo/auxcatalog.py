@@ -98,7 +98,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     if method == 'A':
         # loop over all halos
         for i, haloID in enumerate(haloIDsTodo):
-            if i % int(nHalosDo/50) == 0 and i <= nHalosDo:
+            if nHalosDo >= 50 and i % int(nHalosDo/50) == 0 and i <= nHalosDo:
                 print(' %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
             # For each type:
@@ -153,7 +153,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
 
             # loop over halos
             for i, haloID in enumerate(haloIDsTodo):
-                if i % int(nHalosDo/10) == 0 and i <= nHalosDo:
+                if nHalosDo >= 10 and i % int(nHalosDo/10) == 0 and i <= nHalosDo:
                     print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
                 # slice starting/ending indices for dm local to this FoF
@@ -180,7 +180,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
 
             # loop over halos
             for i, haloID in enumerate(haloIDsTodo):
-                if i % int(nHalosDo/10) == 0 and i <= nHalosDo:
+                if nHalosDo >= 10 and i % int(nHalosDo/10) == 0 and i <= nHalosDo:
                     print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
                 # slice starting/ending indices for gas local to this FoF
@@ -207,7 +207,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
 
             # loop over halos
             for i, haloID in enumerate(haloIDsTodo):
-                if i % int(nHalosDo/10) == 0 and i <= nHalosDo:
+                if nHalosDo >= 10 and i % int(nHalosDo/10) == 0 and i <= nHalosDo:
                     print('  %4.1f%%' % (float(i+1)*100.0/nHalosDo))
 
                 # slice starting/ending indices for stars local to this FoF
@@ -2928,6 +2928,8 @@ fieldComputeFunctionMapping = \
      partial(fofRadialSumType,ptProperty='xray_lum',ptType='gas',rad='Group_R_Crit500'),
    'Group_XrayLum_05-2kev_Crit500' : \
      partial(fofRadialSumType,ptProperty='xray_lum_05-2kev',ptType='gas',rad='Group_R_Crit500'),
+   'Group_XrayLum_0.5-2.0kev_Crit500' : \
+     partial(fofRadialSumType,ptProperty='xray_lum_0.5-2.0kev',ptType='gas',rad='Group_R_Crit500'),
 
    # subhalo: masses
    'Subhalo_Mass_30pkpc_Stars' : \
@@ -2948,7 +2950,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_2rstars_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad='2rhalfstars'),
    'Subhalo_Mass_FoF_HI' : \
-     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,scope='fof'),
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,scope='fof',cenSatSelect='cen'),
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
 
@@ -3057,6 +3059,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad=None),
    'Subhalo_XrayLum_05-2kev' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_05-2kev',op='sum',rad=None), 
+   'Subhalo_XrayLum_0.5-2.0kev' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum_0.5-2.0kev',op='sum',rad=None), 
    'Subhalo_XrayBolLum_2rhalfstars' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='xray_lum',op='sum',rad='2rhalfstars'),
    'Subhalo_XrayLum_05-2kev_2rhalfstars' : \

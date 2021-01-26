@@ -753,8 +753,10 @@ class cloudyIon():
         """ Search el[] structure and return requested information. """
         elements = iterable(elements)
 
-        for i, element in enumerate(elements):
-            elInfo = [el for el in self.el if el[fieldNameToMatch] == element]
+        for i in range(len(elements)):
+            elements[i] = elements[i].capitalize() # "o" -> "O", "ni" -> "Ni", "carbon" -> "Carbon"
+
+            elInfo = [el for el in self.el if el[fieldNameToMatch] == elements[i]]
 
             if elInfo:
                 elements[i] = elInfo[0][fieldNameToReturn]
@@ -786,8 +788,8 @@ class cloudyIon():
         ionNums = iterable(ionNums)
 
         for i, ionNum in enumerate(ionNums):
-            if str(ionNum) in self.roman:
-                ionNums[i] = self.roman[str(ionNum)]
+            if str(ionNum).upper() in self.roman:
+                ionNums[i] = self.roman[str(ionNum).upper()]
 
             if not isinstance(ionNums[i], int) or ionNums[i] == 0:
                 raise Exception('Failed to map ionization number to integer, or is 0-based index.')
