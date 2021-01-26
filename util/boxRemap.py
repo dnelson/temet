@@ -246,6 +246,7 @@ def CuboidTransformPoint(x, y, z, nCellsTot, nFacesTot, faceOff, faceLen, cell_i
         z_new2 = x_new * n3[0] + y_new * n3[1] + z_new * n3[2]
 
         return x_new2, y_new2, z_new2
+    return -1, -1, -1 # failure
 
 @jit(nopython=True, nogil=True, cache=True)
 def CuboidTransformArray(pos_in, pos_out, nCellsTot, nFacesTot, faceOff, faceLen, cell_ix, cell_iy, cell_iz, face_a, face_b, face_c, face_d, n1, n2, n3):
@@ -257,6 +258,15 @@ def CuboidTransformArray(pos_in, pos_out, nCellsTot, nFacesTot, faceOff, faceLen
 
         x_new, y_new, z_new = CuboidTransformPoint(x_in, y_in, z_in, 
             nCellsTot, nFacesTot, faceOff, faceLen, cell_ix, cell_iy, cell_iz, face_a, face_b, face_c, face_d, n1, n2, n3)
+
+        if x_new == -1:
+            # failed due to floating point rounding issues, add small perturbation and redo
+            x_in += 1e-12
+            y_in += 1e-12
+            z_in += 1e-12
+
+            x_new, y_new, z_new = CuboidTransformPoint(x_in, y_in, z_in, 
+                nCellsTot, nFacesTot, faceOff, faceLen, cell_ix, cell_iy, cell_iz, face_a, face_b, face_c, face_d, n1, n2, n3)
 
         pos_out[i,0] = x_new
         pos_out[i,1] = y_new
