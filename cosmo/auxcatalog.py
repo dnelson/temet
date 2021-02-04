@@ -3004,6 +3004,10 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo'),
+   'Subhalo_Mass_HaloGas_Cold' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo',ptRestrictions={'temp':['lt',4.5]}),
+   'Subhalo_Mass_HaloGas_SFCold' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad='r015_1rvir_halo',ptRestrictions={'temp_sfcold':['lt',4.5]}),
    'Subhalo_Mass_HaloStars_Metal' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metalmass',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloStars' : \

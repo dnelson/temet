@@ -867,25 +867,29 @@ class units(object):
         frequency is at line center (neglecting the Voigt profile shape). dens_cgs is the volume 
         number density of the species of relevance [1/cm^3], temp is the cell temperature [linear K], 
         and cellsize_code is the usual radius of the cell [code units], which we take as L/2. """
-        assert transition in ['MgII2796','MgII2803','LyA','LyB'] # otherwise generalize
+        trans = transition.lower()
 
         # todo: move into cosmo.cloudy, remove duplication in other parts of the codebase
-        if transition == 'MgII2796':
+        f12 = None
+
+        if trans == 'mgii2796':
             f12 = 0.3058 # oscillator strength of the transition
             wave0 = 2796.352 # 2803.5320 # line center wavelength [Ang]
             mass_amu = 24.305
-        if transition == 'MgII2803':
+        if trans == 'mgii2803':
             f12 = 0.6155
             wave0 = 2803.5320
             mass_amu = 24.305
-        if transition == 'LyA':
+        if trans == 'lya':
             f12 = 0.416
             wave0 = 1215.67
             mass_amu = 1.008
-        if transition == 'LyB':
+        if trans == 'lyb':
             f12 = 0.07912
             wave0 = 1025.7223
             mass_amu = 1.008
+
+        assert f12 is not None, 'Unhandled.'
 
         # Doppler width [Hz]
         nu0 = self.c_ang_per_sec / wave0 # line center frequency [Hz]

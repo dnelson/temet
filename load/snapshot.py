@@ -441,8 +441,8 @@ def snapshotSubset(sP, partType, fields,
         takeLog = False
 
         field = fieldName.lower()
-        if field[len('_log')+1:] == '_log':
-            field = field[:len('_log')+1]
+        if field[-len('_log'):] == '_log':
+            field = field[:-len('_log')]
             takeLog = True
 
         # temperature (from u,nelec) [log K]
@@ -767,12 +767,14 @@ def snapshotSubset(sP, partType, fields,
 
         # optical depth to a certain line, at line center [linear unitless]
         if 'tau0_' in field:
-            transition = field.split("_")[1] # e.g. "tau0_MgII2796", "tau0_MgII2803", "tau0_LyA"
+            transition = field.split("_")[1] # e.g. "tau0_mgii2796", "tau0_mgii2803", "tau0_lya"
 
-            if 'MgII' in transition:
+            if 'mgii' in transition:
                 baseSpecies = 'Mg II'
-            elif 'Ly' in transition:
+            elif 'ly' in transition:
                 baseSpecies = 'H I' # note: uses internal hydrogen model, could use e.g. 'MHIGK_popping_numdens'
+            else:
+                raise Exception('Not handled.')
 
             temp = snapshotSubset(sP, partType, 'temp_sfcold_linear', **kwargs) # K
             dens = snapshotSubset(sP, partType, '%s numdens' % baseSpecies, **kwargs) # linear 1/cm^3

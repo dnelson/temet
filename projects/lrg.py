@@ -22,6 +22,7 @@ from load.data import werk2013, berg2019, chen2018zahedy2019
 from cosmo.util import subboxSubhaloCat
 from plot.config import *
 from plot.general import plotStackedRadialProfiles1D, plotHistogram1D, plotPhaseSpace2D
+from plot.cosmoGeneral import quantMedianVsSecondQuant
 from tracer.tracerMC import match3, globalAllTracersTimeEvo
 from tracer import tracerEvo
 from vis.halo import renderSingleHalo
@@ -2544,6 +2545,22 @@ def paperPlots():
 
             ionTwoPointCorrelation(sPs, saveName, ions=ions, redshift=redshift, order=order, colorOff=2)
 
+    # explore: resolution convergence of total cold gas mass in halo
+    if 0:
+        sPs = [TNG50,TNG50_2,TNG50_3,TNG50_4]
+        #sPs = []
+        #for res in [1820,910,455]:
+        #    sPs.append( simParams(run='tng',res=res,redshift=redshift) )
+        yQuants = ['mass_halogas_sfcold']
+        xQuant = 'mhalo_200_log'
+
+        quantMedianVsSecondQuant(sPs, None, yQuants, xQuant, cenSatSelect='cen', 
+                                     sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
+                                     qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
+                                     scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
+                                     markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
+                                     extraMedians=[],legendLoc='best', xlim=[10.5,13.0], ylim=None, clim=None, cbarticks=None)
+
     # --- clump analysis ---
 
     # fig 7: zoomed in (high res) visualizations of multiple properties of clumps
@@ -2626,7 +2643,7 @@ def paperPlots():
         #    cloudEvoVis(TNG50, haloID=haloID, clumpID=clumpID, sbNum=sbNum, sizeParam=sizeParam)
 
     # fig X: visual comparison of MHD vs noMHD zoom test run of h23 down to z=0.5
-    if 1:
+    if 0:
         # no_mhd run: snaps 63-69 (z=0.594 to z=0.506), with_mhd run: snaps up to 67 (z=0.520)
         # MHD was disabled in restart at z=0.601 roughly (500 Myr from snap 63 to 67)
         for snap in [65]: #[63,64,65,66,67]:

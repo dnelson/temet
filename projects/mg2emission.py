@@ -61,7 +61,7 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
         panels.append( {'partType':'gas', 'partField':'tau0_MgII2796', 'valMinMax':[1.0,5.0]} )
         #panels.append( {'partType':'gas', 'partField':'tau0_LyA', 'valMinMax':[4.0,8.0]} )
 
-        projType   = 'equirectangular'
+        projType   = 'equirectangular' #'mollweide'
         projParams = {'fov':360.0}
         nPixels    = [1200,600]
         axesUnits  = 'rad_pi'
@@ -643,7 +643,7 @@ def paperPlots():
     # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
 
     # figure X - line-center optical depth for MgII all-sky map, show low values
-    if 0:
+    if 1:
         singleHaloImageMGII(sP, subhaloID, conf=6)
 
     # figure A1 - impact of dust depletion

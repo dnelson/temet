@@ -402,6 +402,16 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
 
         mm7 = [50,300]
 
+    if gal == 'mwbubbles1':
+        # annalisa TNG50 MW bubbles paper: object one
+        sP = simParams(run='tng50-1', redshift=0.0)
+        sbNum = 2
+        subhaloID = 543114 # snaps 3211 - 3599
+    if gal == 'mwbubbles2':
+        sP = simParams(run='tng50-1', redshift=0.0)
+        sbNum = 2
+        subhaloID = 565089 # snaps 3030 - 3599
+
     # load subbox catalog, get time-evolving positions
     cat = subboxSubhaloCat(sP, sbNum)
     assert cat['EverInSubboxFlag'][subhaloID]
@@ -474,7 +484,10 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
     variant = 'subbox%d' % sbNum
     snap    = sbSnapNum
 
-    axes       = [0,1] # x,y
+    axes = [0,1] # x,y
+
+    #if gal == 'mwbubbles1': axes = [0,2]
+
     labelScale = False #'physical' #'lightyears'
     labelZ     = False #True #'tage'
     plotHalos  = False
@@ -590,7 +603,7 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         labelScale = True
     if conf == 'seventeen':
         # bubbles, xray/temp
-        panels.append( {'partType':'gas', 'partField':'P_gas', 'valMinMax':[2,5]} )
+        panels.append( {'partType':'gas', 'partField':'P_gas', 'valMinMax':[1.5,5]} )
         boxSizeImg = [int(boxSizeSq * aspect * 4), boxSizeSq * 4, boxSizeSq * 4]
         labelZ = True
         labelScale = True
@@ -629,6 +642,8 @@ def subbox_movie_tng_galaxyevo(gal='one', conf='one'):
 
     if gal == 'one':
         maxZ = 12.7 # tng subboxes start at a=0.02, but gal=='one' starts at sbSnapNum==51
+    elif gal in ['mwbubbles1','mwbubbles2']:
+        maxZ = 0.25 # short study
     else:
         maxZ = 50.0
 

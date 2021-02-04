@@ -340,10 +340,12 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 r[field] = loadColors(sP, quant)
 
             # total gas masses in sub-species: metals, per metal/ion abundances (could generalize)
-            if quantName in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
+            if quantName in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_halogas_cold','mass_halogas_sfcold']:
                 speciesStr = quantName.split("_")[1].upper()
                 if speciesStr == 'Z': speciesStr = 'AllGas_Metal'
                 if speciesStr == 'O': speciesStr = 'AllGas_Oxygen'
+                if quantName == 'mass_halogas_cold': speciesStr = 'HaloGas_Cold'
+                if quantName == 'mass_halogas_sfcold': speciesStr = 'HaloGas_SFCold'
 
                 acField = 'Subhalo_Mass_%s' % speciesStr
                 ac = sP.auxCat(fields=[acField])

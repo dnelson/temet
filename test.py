@@ -16,25 +16,26 @@ from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
 def check_zoom_variations():
-    """ Check TNG-Cluster h3693. """
+    """ Check TNG-Cluster tests: h30, h50, h3232, h3693. """
     redshift = 0.0
 
     # hInd : [variants] pairs
     sets = {3232 : ['sf3','sf3_n128','sf3_n256','sf3_n512'], # L14* running
-            3693 : ['sf3','sf3_m','sf3s','sf3s5008','sf3none_kpc','sf3s_kpc','sf3_kpc'],
+            3693 : ['sf3','sf3_m','sf3s','sf3s5008','sf3none_kpc','sf3none_m','sf3s_kpc','sf3_kpc'],
             50   : ['sf2_n160','sf2_n160s','sf2_n160s_mpc','sf2_n320','sf2_n320s','sf3']} # sf3_m running raven
 
     # hInd = 3693 we have the following:
     # sf3 = fiducial (mpc)
-    # sf3s = STEEPER (mpc)
-    # sf3s5008 = STEEPER and 5008 (mpc)
-    # sf3none = nobugfixes (mpc) (made it to z~3.1) (currently skipping here)
+    # sf3s = only STEEPER (mpc)
+    # sf3s5008 = only STEEPER and 5008 (mpc)
+    # sf3none = nobugfixes (mpc) (only made it to z~3.1) (currently skipping here)
     # sf3none_kpc = nobugfixes (kpc)
     # sf3s_kpc (kpc, steeper only, no other bugfixes)
     # sf3_kpc = fiducial (kpc)
-    # sf3none_m = nobugfixes, updated MaxSfrTimescale (mpc) (running on draco, "")
+    # sf3none_m = nobugfixes, updated MaxSfrTimescale (mpc)
     # sf3_m = fiducial (mpc), updated MaxSfrTimescale, Time: 0.39761 cum 90859.92 = 9.70khr
-    # L14 = running draco n640, Time: 0.39761 cum 293763.26 = 52.22khr (5.4x L13, n640 vs 483, draco vs raven)
+    # L14 = running draco n640, Time: 0.39761 cum 293763.26 = 52.22khr
+    #  -- L14 is (5.4x L13, n640 vs 483, draco vs raven) (@ Time: 0.4927 is 5.3x)
 
     # hInd = 50 we have variations of CPU numbers, with and without steeper 's'
     #  - CPU numbers 160,320,fiducial run on draco/cobra/raven
@@ -53,6 +54,26 @@ def check_zoom_variations():
     #    - n512:  Time: 0.2457 cum 71818.84 = 10.21khr, Time: 0.3100 cum 146728.38 = 20.87khr (3.4x L13)
     #    - n1024: Time: 0.2457 cum 46420.57 = 13.20khr, Time: 0.3100 cum 100744.45 = 28.66khr
     #    - n2048: Time: 0.2457 cum 73416.33 = 41.77khr...
+
+    # current output:
+    # 3232           sf3 mstar = [12.52 12.90] mbh = [10.33] size = [ 24.89] cpuKHours = 38.1
+    # 3232      sf3_n128 mstar = [12.23 12.62] mbh = [10.34] size = [ 50.07] cpuKHours = 22.3
+    # 3232      sf3_n256 mstar = [12.16 12.59] mbh = [10.36] size = [ 49.60] cpuKHours = 28.3
+    # 3232      sf3_n512 mstar = [12.23 12.62] mbh = [10.35] size = [ 48.99] cpuKHours = 33.7
+    # 3693           sf3 mstar = [12.55 12.92] mbh = [10.21] size = [ 24.08] cpuKHours = 31.9
+    # 3693         sf3_m mstar = [11.89 12.55] mbh = [ 9.90] size = [ 79.76] cpuKHours = 37.1
+    # 3693          sf3s mstar = [12.52 12.91] mbh = [10.19] size = [ 19.31] cpuKHours = 29.0
+    # 3693      sf3s5008 mstar = [12.53 12.92] mbh = [10.21] size = [ 18.79] cpuKHours = 32.1
+    # 3693   sf3none_kpc mstar = [11.91 12.51] mbh = [10.02] size = [ 85.34] cpuKHours = 51.4
+    # 3693     sf3none_m mstar = [11.82 12.54] mbh = [ 9.63] size = [ 71.61] cpuKHours = 57.7
+    # 3693      sf3s_kpc mstar = [11.89 12.59] mbh = [ 9.60] size = [ 73.95] cpuKHours = 40.9
+    # 3693       sf3_kpc mstar = [11.88 12.49] mbh = [10.05] size = [ 62.66] cpuKHours = 37.0
+    #   50      sf2_n160 mstar = [12.61 13.27] mbh = [11.12] size = [297.10] cpuKHours = 269.7
+    #   50     sf2_n160s mstar = [12.64 13.33] mbh = [ 9.74] size = [250.89] cpuKHours = 154.1
+    #   50 sf2_n160s_mpc mstar = [12.97 13.54] mbh = [ 9.84] size = [135.37] cpuKHours = 107.4
+    #   50      sf2_n320 mstar = [12.58 13.26] mbh = [11.12] size = [255.85] cpuKHours = 346.6
+    #   50     sf2_n320s mstar = [12.68 13.32] mbh = [ 9.79] size = [222.44] cpuKHours = 185.5
+    #   50           sf3 mstar = [12.87 13.55] mbh = [ 9.66] size = [177.39] cpuKHours = 202.4
 
     for hInd,variants in sets.items():
         for variant in variants:

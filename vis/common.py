@@ -867,7 +867,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
         gridOffset = 30.0 # add 1e30 factor
         config['label']  = 'H-alpha Luminosity L$_{\\rm H\\alpha}$ [log erg s$^{-1}$ kpc$^{-2}$]'
-        config['ctName'] = 'inferno'
+        config['ctName'] = 'magma' #'inferno'
 
     if partField in ['p_sync_ska']:
         grid = sP.units.codeColDensToPhys( grid, totKpc2=True )
@@ -1435,7 +1435,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
             hsml_1 = None
 
-            if projType == 'equirectangular':
+            if projType in ['equirectangular','mollweide']:
                 assert axes == [0,1] # by convention
                 assert projParams['fov'] == 360.0
                 assert nPixels[0] == nPixels[1]*2 # we expect to make a 2:1 aspect ratio image
@@ -1648,6 +1648,67 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     # handle units and come up with units label
     grid_master, config, data_grid = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method)
 
+    if projType == 'mollweide':
+        # we do not yet support actual projection onto mollweide (or healpix) coordinate systems
+        # instead we produce an equirectangular projection, then re-map the 2d pixel image
+        # from equirectangular into mollweide (image) coordinates
+        print('NOTE: Mollweide not fully tested.')
+        s_long0 = 0.0
+
+        # image (x,y) coordinates in moll
+        dx = 4 * np.sqrt(2) / grid_master.shape[1]
+        dy = 2 * np.sqrt(2) / grid_master.shape[0]
+        x_moll = np.linspace(-2*np.sqrt(2), 2*np.sqrt(2) - dx, grid_master.shape[1]) + dx/2
+        y_moll = np.linspace(-np.sqrt(2), np.sqrt(2) - dy, grid_master.shape[0]) + dy/2
+        R = 1.0
+
+        # convert x,y coordinate lists into 2d grid
+        x_moll, y_moll = np.meshgrid(x_moll, y_moll, indexing='xy')
+        
+        # corresponding lat,long coordinates        
+        theta = np.arcsin(y_moll / (R*np.sqrt(2)))
+        s_lat = np.arcsin( (2*theta + np.sin(2*theta)) / np.pi ) # [-pi/2, +pi/2]
+        s_long = s_long0 + (np.pi * x_moll) / (2 * R * np.sqrt(2) * np.cos(theta))
+
+        w_bad = np.where( (s_long < -np.pi) | (s_long > np.pi) ) # outside egg?
+        #print('bad: ', len(w_bad[0]), s_long.size)
+        s_long[w_bad] = 0.0
+
+        # find pixel indices of these lat,long coordinates in the equirectangular grid
+        dlong = (2*np.pi) / grid_master.shape[0] # long per px
+        dlat = (np.pi) / grid_master.shape[1] # lat per px
+        equi_long = np.linspace(0.0, 2*np.pi - dlong, grid_master.shape[0]) + dlong/2 - np.pi # [-pi,pi]
+        equi_lat = np.linspace(0.0, np.pi - dlat, grid_master.shape[1]) + dlat/2 - np.pi/2 # [-pi/2,pi/2]
+
+        # bilinear interpolation
+        from scipy.ndimage import map_coordinates
+
+        i2 = np.interp(s_lat, equi_lat, np.arange(equi_lat.size)).ravel()
+        i1 = np.interp(s_long, equi_long, np.arange(equi_long.size)).ravel()
+
+        if 0:
+            # test: shift/change center location in vertical (latitude) direction
+            frac_shift = 0.1
+            i2 = (i2 + grid_master.shape[1]*frac_shift) % grid_master.shape[1]
+        if 0:
+            # test: shift/change center location in vertical (latitude) direction
+            frac_shift = 0.5
+            i1 = (i1 + grid_master.shape[0]*frac_shift) % grid_master.shape[0]
+
+        grid_master_new = map_coordinates( grid_master, np.vstack((i1,i2)), order=1, mode='nearest')
+        grid_master_new = grid_master_new.reshape( grid_master.shape )
+
+        data_grid_new = map_coordinates( data_grid, np.vstack((i1,i2)), order=1, mode='nearest')
+        data_grid_new = data_grid_new.reshape( data_grid.shape )
+
+        # flag empty pixels
+        grid_master_new[w_bad] = np.nan
+        data_grid_new[w_bad] = np.nan
+
+        # replace
+        grid_master = grid_master_new
+        data_grid = data_grid_new
+
     # temporary: something a bit peculiar here, request an entirely different grid and 
     # clip the line of sight to zero (or nan) where log(n_HI)<19.0 cm^(-2)
     if 0 and partField in velLOSFieldNames:
@@ -1798,7 +1859,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
                     xPos = p['sP'].units.codeLengthToMpc(xPos)
                     yPos = p['sP'].units.codeLengthToMpc(yPos)
                     rad  = p['sP'].units.codeLengthToMpc(rad)
-                assert p['axesUnits'] not in ['deg','arcmin'] # todo
+                assert p['axesUnits'] not in ['deg','arcsec','arcmin'] # todo
 
                 if marker == 'o':
                     c = plt.Circle((xPos,yPos), rad, **circOpts)
@@ -2421,7 +2482,10 @@ def _getPlotExtent(extent, axesUnits, projType, sP):
             pExtent -= pExtent[1]/2
     if projType == 'equirectangular':
         assert axesUnits == 'rad_pi'
-        pExtent = [0, 2, 0, 1] # in units if pi
+        pExtent = [0, 2, 0, 1] # in units of pi
+    if projType == 'mollweide':
+        assert axesUnits == 'rad_pi'
+        pExtent = [0, 2, 0, 1] # in units of pi
 
     return pExtent
 
@@ -2596,7 +2660,7 @@ def renderMultiPanel(panels, conf):
             barAreaHeight += 0.001*(conf.fontsize-min_fontsize)
         if conf.fontsize == min_fontsize:
             barAreaHeight += 0.03
-        barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, np.inf)
+        barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
 
         if nCols >= 3:
             barAreaHeight += 0.014*nCols
@@ -2770,7 +2834,14 @@ def renderMultiPanel(panels, conf):
                 grid_out = grid_out[::-1,:,:] #np.transpose(grid_out, axes=[1,0,2])
                 skimage.io.imsave(conf.saveFilename.replace('.png','.tif'), grid_out, plugin='tifffile')
 
-            cmap.set_bad(color='#000000',alpha=1.0) # use black for nan pixels
+            # use black for nan pixels
+            cmap.set_bad(color='#000000',alpha=1.0) 
+            if p['projType'] == 'mollweide' and '_black' not in conf.plotStyle:
+                # use white around mollweide edges
+                cmap.set_bad(color='#ffffff',alpha=1.0) 
+                if 'textcolor' not in p or p['textcolor'] in ['white','#fff','#ffffff']:
+                    p['textcolor'] = 'black'
+
             grid = np.ma.array(grid, mask=np.isnan(grid))
 
             # place image

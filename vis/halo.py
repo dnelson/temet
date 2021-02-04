@@ -18,7 +18,7 @@ from util.simParams import simParams
 
 def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
-    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','kpc','arcmin']
+    assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','kpc','arcsec','arcmin']
 
     if mpb is None:
         # load halo position and virial radius (of the central zoom halo, or a given halo in a periodic box)
@@ -85,8 +85,14 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
         boxSizeImg = size
     if sizeType == 'kpc':
         boxSizeImg = sP.units.physicalKpcToCodeLength(size)
+    if sizeType == 'arcsec':
+        size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size, sP.redshift)
+        boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
     if sizeType == 'arcmin':
         size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size*60, sP.redshift)
+        boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
+    if sizeType == 'deg':
+        size_pkpc = sP.units.arcsecToAngSizeKpcAtRedshift(size*60*60, sP.redshift)
         boxSizeImg = sP.units.physicalKpcToCodeLength(size_pkpc)
 
     boxSizeImg = boxSizeImg * np.array([1.0, 1.0, 1.0]) # same width, height, and depth
@@ -175,7 +181,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     cenShift    = [0,0,0]       # [x,y,z] coordinates to shift default box center location by
     size        = 3.0           # side-length specification of imaging box around halo/galaxy center
     depthFac    = 1.0           # projection depth, relative to size (1.0=same depth as width and height)
-    sizeType    = 'rVirial'     # size is multiplying [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc]
+    sizeType    = 'rVirial'     # size multiplies [rVirial,rHalfMass,rHalfMassStars] or in [codeUnits,kpc,arcsec,arcmin,deg]
     #hsmlFac     = 2.5          # multiplier on smoothing lengths for sphMap
     axes        = [1,0]         # e.g. [0,1] is x,y
     axesUnits   = 'code'        # code [ckpc/h], kpc, mpc, deg, arcmin, arcsec
@@ -258,6 +264,8 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
         if 'subhaloInd' in p and p['sP'].subhaloInd is None:
             p['sP'] = p['sP'].copy()
             p['sP'].subhaloInd = p['subhaloInd']
+
+        assert 'subhaloInd' in p or p['sP'].subhaloInd is not None, 'subhaloInd unspecified!'
 
         # add imaging config for single halo view
         if not isinstance(p['nPixels'],list): p['nPixels'] = [p['nPixels'],p['nPixels']]

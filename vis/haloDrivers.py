@@ -1248,3 +1248,71 @@ def annalisa_tng50_presentation(setNum=0, stars=False):
     plotConfig.saveFilename = savePathDefault + 'renderHalo_test_set-%s_%s.pdf' % (setNum,partType)
 
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
+
+def erica_tng50_sfrmaps():
+    """ Render some SFR surface density maps of TNG50 galaxies for Nelson, E.+2021 vs. 3D-HST paper. """
+    from util import simParams
+    from util.helper import closest
+
+    # select halo
+    sP = simParams(run='tng50-1', redshift=1.0)
+    mstar = sP.subhalos('mstar_30pkpc_log')
+    cen_flag = sP.subhalos('central_flag')
+
+    mstar[cen_flag == 0] = np.nan # skip secondaries
+
+    # vis
+    rVirFracs  = [1.0]
+    fracsType  = 'rHalfMassStars'
+    method     = 'histo' #'sphMap'
+    nPixels    = [45,45] #[600,600]
+    axes       = [0,1]
+    labelZ     = True
+    labelScale = 'physical'
+    labelSim   = False
+    labelHalo  = 'mstar,mhalo,sfr,id'
+    relCoords  = True
+    #rotation   = 'edge-on-stars'
+    sizeType   = 'arcsec'
+    size       = 2.7
+    # psf = 0.14" if we want
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 800
+        colorbars    = True
+        fontsize     = 22
+
+    # panels
+    partType = 'gas'
+
+    if 0:
+        # single halo, test
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = 800
+            colorbars    = True
+            fontsize     = 22
+
+        _, subhaloInd = closest(mstar, 10.55)
+        panels = [ {'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]},
+                   {'partField':'temp_sfcold', 'valMinMax':[4.0,6.2]},
+                   {'partField':'sfr_halpha', 'valMinMax':[35.5,40.5]},
+                   {'partType':'stars', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,9.0]} ]
+
+    if 1:
+        # gallery
+        class plotConfig:
+            plotStyle    = 'edged'
+            rasterPx     = 600
+            colorbars    = False
+            fontsize     = 22
+
+        panels = []
+        with np.errstate(invalid='ignore'):
+            subhaloInds = np.where( (mstar > 10.5) & (mstar <= 11.0) )[0]
+
+        for ind in subhaloInds:
+            panels.append( {'subhaloInd':ind, 'partField':'sfr_halpha', 'valMinMax':[35.5,40.5]} )
+
+    renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)

@@ -725,7 +725,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
-    if lowess: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
+    if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
 
     nRows = int(np.floor(np.sqrt(len(yQuants))))
     nCols = int(np.ceil(len(yQuants) / nRows))
@@ -858,10 +858,11 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
 
                 label = sP.simName + ' z=%.1f' % sP.redshift if medianLabel is None else medianLabel
-                ax.plot(xm, ym, linestyles[0], lw=lw, color='black', alpha=0.8, label=label)
+                color = 'black' if len(sPs) == 1 else c
+                l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=0.8, label=label)
                 #ax.plot(xm, pm[0,:], ':', lw=lw, color='black', alpha=0.8)
                 #ax.plot(xm, pm[-1,:], ':', lw=lw, color='black', alpha=0.8)
-                ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor='black', alpha=0.1, interpolate=True)
+                ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
 
             for k, medianProp in enumerate(extraMedians):
                 # load new (y-axis) quantity, subset as before, and median

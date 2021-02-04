@@ -146,7 +146,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants_rad = ['rhalo_200','rhalo_500']
 
     # generally available (auxcat)
-    quants2 = ['stellarage_4pkpc','mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 
+    quants2 = ['stellarage_4pkpc','mass_ovi', 'mass_ovii', 'mass_oviii', 'mass_o', 'mass_z', 'mass_halogas_cold',
                'sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr','sfr_surfdens_30pkpc_100myr',
                #'re_stars_jwst_f150w','re_stars_100pkpc_jwst_f150w',
                'shape_s_sfrgas','shape_s_stars','shape_ratio_sfrgas','shape_ratio_stars']
@@ -414,12 +414,11 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [0.0, 5.0]
             if tight: minMax = [0.0, 5.0]
 
-    if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z']:
-        # total OVI/OVII/metal mass in subhalo
+    if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_halogas_cold','mass_halogas_sfcold']:
+        # total OVI/OVII/metal/cold (logT<4.5) mass in subhalo
         vals = sP.groupCat(sub=quantname)
 
-        speciesStr = quant.split("_")[1].upper()
-        label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
+        speciesStr = quant.split("_")[1].upper()       
 
         if speciesStr == 'OVI':
             minMax = [5.0, 6.8]
@@ -436,6 +435,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if speciesStr == 'Z':
             minMax = [7.0, 9.5]
             if tight: minMax = [6.5, 11.0]
+        if quantname in ['mass_halogas_cold','mass_halogas_sfcold']:
+            minMax = [8.5, 10.5]
+            if tight: minMax = [8.0, 12.0]
+            speciesStr = 'cold gas, halo'
+            if 'sfcold' in quantname: speciesStr = 'cold+SF>0 gas,halo'
+
+        label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
 
         minMax[0] -= sP.redshift/2
         minMax[1] -= sP.redshift/4
