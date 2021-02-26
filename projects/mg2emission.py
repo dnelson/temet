@@ -12,7 +12,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic
 
 from vis.halo import renderSingleHalo, subsampleRandomSubhalos
-from util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN
+from util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN, mvbe
 from plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
 from plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
 from plot.config import *
@@ -505,6 +505,7 @@ def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
 
     # allocate
     props = np.zeros( (subhaloInds.size,numInclinations), dtype='float32' )
+    props.fill(np.nan)
 
     # grid config
     method     = 'sphMap' # note: fof-scope
@@ -531,12 +532,13 @@ def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
         for j in range(numInclinations):
             panels = [{'inclination' : inclinations[i,j]}]
 
-            # generate grid
-            grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
-            grid = 10.0**grid.ravel() # log -> linear
-
+            # generate grid [log erg/s/cm^2/arcsec^2]
+            grid, conf = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+            
             # half light radius: create a cumulative radial profile
             if propName == 'mg2_lumsize':
+                grid = 10.0**grid.ravel() # log -> linear
+
                 prof, prof_bins, _ = binned_statistic(dist, grid, 'sum', bins=unique_dists)
                 prof_cum = np.cumsum(prof)
 
@@ -549,9 +551,25 @@ def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
                 #prop = prof_bins[w[0]]
                 prop = np.interp(halflum, prof_cum, prof_bins)
 
-            # shape: ...
-            if propName == 'mg2_shape':
-                pass
+            # shape: axis ratio of bounding ellipse
+            if 'mg2_shape' in propName:
+                isoval = float(propName.split('mg2_shape_')[1])
+
+                with np.errstate(invalid='ignore'):
+                    mask = ( (grid > isoval) & (grid < isoval+1.0) )
+
+                ww = np.where(mask)
+
+                if len(ww[0]) == 0:
+                    continue
+
+                # compute minimum volume bounding ellipsoid (minimum area ellipse in 2D)
+                xxyy = np.linspace(size/nPixels[0]/2, size-size/nPixels[0]/2, nPixels[0])
+                points = np.vstack( (xxyy[ww[0]], xxyy[ww[1]]) ).T
+
+                axislengths, theta, cen = mvbe(points)
+
+                prop = (axislengths.max() / axislengths.min()) # a/b > 1
 
             # save property
             props[i,j] = prop
@@ -563,6 +581,31 @@ def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
     print('Saved: [%s]' % saveFilename)
 
     return subhaloInds, inclinations, props
+
+def inclinationPlotDriver(sP, quant='inclination_mg2_lumsize'):
+    """ Driver for quantMedianVsSecondQuant. """
+    sPs = [sP]
+
+    xQuant = 'mstar_30pkpc_log'
+    yQuant = 'inclination'
+    cenSatSelect = 'cen'
+
+    scatterColor = quant
+    clim = [3.0, 10.0]
+    xlim = [8.0, 11.5]
+    ylim = [0, 90]
+    cRel = [-0.15, 0.15, True]
+    scatterPoints = True
+    drawMedian = False
+    markersize = 30.0
+    alpha = 0.7
+    maxPointsPerDex = None
+
+    quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                             xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                             scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                             alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
+                             legendLoc='lower right')
 
 def mg2lum_vs_mass(sP, redshifts=None):
     """ Driver for quantMedianVsSecondQuant. """
@@ -738,7 +781,9 @@ def paperPlots():
 
     # TODO: impact of stellar orientation (face-on vs edge-on) on MgII morphology
     if 1:
-        gridPropertyVsInclinations(sP, propName='mg2shape')
+        #inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
+        inclinationPlotDriver(sP, quant='inclination_mg2_shape_-20.0')
+        #gridPropertyVsInclinations(sP, propName='mg2_shape')
 
     # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
     #  isophotes: 1e-18, 5e-18, 1e-19, 5e-19

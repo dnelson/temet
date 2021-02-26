@@ -807,7 +807,10 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             sim_flag  = sim_flag[wSelect]
 
             # reduce to the subset with non-NaN x/y-axis values (galaxy colors, i.e. minimum 1 star particle)
-            wFinite = np.isfinite(sim_xvals) & np.isfinite(sim_yvals)
+            wFinite = np.ones( sim_xvals.shape[0], dtype='bool' )
+
+            wFinite &= np.isfinite(sim_xvals) if sim_xvals.ndim == 1 else np.any(np.isfinite(sim_xvals),axis=1)
+            wFinite &= np.isfinite(sim_yvals) if sim_yvals.ndim == 1 else np.any(np.isfinite(sim_yvals),axis=1)
 
             # reduce to the good-flagged subset
             wFinite &= (sim_flag)
@@ -979,7 +982,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     in1 = np.vstack( (xx,yy) )
                     cc = lowess(in1, cc, in1, degree=1, l=0.2)
 
-                # plot scatter
+                # scatter color and marker
                 opts = {'color':c}
 
                 if scatterColor is not None:
@@ -990,6 +993,23 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
                     opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
 
+                # handle multi-dimensional (i.e. multiple values per subhalo) arrays
+                maxdim = np.max( [xx.ndim, yy.ndim, opts['c'].ndim] )
+
+                if maxdim > 1:
+                    # how many entries per subhalo in the multi-d array?
+                    maxdim_ind = np.argmax( [xx.ndim, yy.ndim, opts['c'].ndim] )
+                    shape = [xx.shape, yy.shape, opts['c'].shape][maxdim_ind][1]
+
+                    # of {x,y,c}, tile the remaining to match this shape
+                    if xx.ndim == 1:
+                        xx = np.tile(xx.reshape((xx.size,1)), (1,shape))
+                    if yy.ndim == 1:
+                        yy = np.tile(yy.reshape((yy.size,1)), (1,shape))
+                    if opts['c'].ndim == 1:
+                        opts['c'] = np.tile(opts['c'].reshape((opts['c'].size,1)), (1,shape))
+
+                # plot scatter
                 sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, zorder=0)
 
             # 1-to-1 line?

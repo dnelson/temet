@@ -1996,7 +1996,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'Inclination [ deg ]'
         takeLog = False
 
-    if quantname in ['inclination_mg2_lumsize','inclination_mg2_shape']:
+    if quantname in ['inclination_mg2_lumsize'] or 'inclination_mg2_shape_' in quantname:
         # CUSTOM! see above.
         from projects.mg2emission import gridPropertyVsInclinations
 
