@@ -2372,7 +2372,7 @@ def wholeBoxCDDF(sP, pSplit, species, omega=False, gridSize=None):
 
 def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=None, 
                          proj2D=None, ptRestrictions=None, subhaloIDsTodo=None,
-                         radMin=-1.0, radMax=3.7, radNumBins=100, Nside=None, Nngb=None, 
+                         radMin=-1.0, radMax=3.7, radNumBins=100, radRvirUnits=False, Nside=None, Nngb=None, 
                          minHaloMass=None, cenSatSelect='cen'):
     """ Compute a radial profile (either total/sum or weighted mean) of a particle property (e.g. mass) 
         for those particles of a given type. If scope=='global', then all snapshot particles are used, 
@@ -2393,6 +2393,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
         If minHaloMass is not None, then minimum (log m200crit) halo mass to process.
         radMin and radMax: log code units, minimum and maximum radius for profiles.
         radNumBins: number of radial bins for profiles.
+        radRvirUnits: change radMin and radMax to be bins linear in units of rvir of each halo.
         Nside: if not None, should be the healpix parameter (2,4,8,etc) in which case we do not compute a 
         spherically averaged radial profile per halo, but instead a spherical healpix sampled set of 
         shells/radial profiles, where the quantity sampling at each point uses a SPH-kernel with Nngb
@@ -2427,9 +2428,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # config
     ptLoadType = sP.ptNum(ptType)
 
-    desc = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] log code units, with [%d] bins." % \
-      (ptProperty,ptType,radMin,radMax,radNumBins)
-    desc += " Note: first/inner-most bin is extra, and extends from r=0 to r=%.1f." % radMin
+    radDesc = 'log code units' if not radRvirUnits else 'linear rvir units'
+    desc = "Quantity [%s] radial profile for [%s] from [%.1f - %.1f] %s, with [%d] bins." % \
+        (ptProperty,ptType,radMin,radMax,radDesc,radNumBins)
+    if not radRvirUnits:
+        desc += " Note: first/inner-most bin is extra, and extends from r=0 to r=%.1f." % radMin
     if Nside is not None:
         desc = "Quantity [%s,%s] spherical healpix sampling, [%.1f - %.1f] r/rvir with [%d] bins. " % \
         (ptType,ptProperty,radMin,radMax,radNumBins)
@@ -2522,23 +2525,32 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # determine radial binning
     if Nside is None:
         # normal radial profiles
-        rad_bin_edges = np.linspace(radMin,radMax,radNumBins+1) # bin edges, including inner and outer boundary
-        rad_bin_edges = np.hstack([radMin-1.0,rad_bin_edges]) # include an inner bin complete to r=0
+        if radRvirUnits:
+            # radMin, radMax in linear rvir units
+            rad_bin_edges = np.linspace(radMin, radMax, radNumBins+1) # bin edges, including inner and outer boundary
+            rbins_sq = rad_bin_edges**2
 
-        rbins_sq = np.log10( (10.0**rad_bin_edges)**2 ) # we work in squared distances for speed
-        rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
-        rad_bins_pkpc = sP.units.codeLengthToKpc( 10.0**rad_bins_code )
+            # load virial radii (code units)
+            gc['Subhalo_Rvir'] = sP.subhalos('rhalo_200_code')
+        else:
+            # radMin, radMax in log code units
+            rad_bin_edges = np.linspace(radMin,radMax,radNumBins+1) # bin edges, including inner and outer boundary
+            rad_bin_edges = np.hstack([radMin-1.0,rad_bin_edges]) # include an inner bin complete to r=0
 
-        radMaxCode = 10.0**radMax
-        radMaxSqCode = (10.0**radMax)**2
+            rbins_sq = np.log10( (10.0**rad_bin_edges)**2 ) # we work in squared distances for speed
+            rad_bins_code = 0.5*(rad_bin_edges[1:] + rad_bin_edges[:-1]) # bin centers [log]
+            rad_bins_pkpc = sP.units.codeLengthToKpc( 10.0**rad_bins_code )
 
-        # bin (spherical shells in 3D, circular annuli in 2D) volumes/areas [code units]
-        r_outer = 10.0**rad_bin_edges[1:]
-        r_inner = 10.0**rad_bin_edges[:-1]
-        r_inner[0] = 0.0
+            radMaxCode = 10.0**radMax
+            radMaxSqCode = (10.0**radMax)**2
 
-        bin_volumes_code = 4.0/3.0 * np.pi * (r_outer**3.0 - r_inner**3.0)
-        bin_areas_code = np.pi * (r_outer**2.0 - r_inner**2.0) # 2D annuli e.g. if proj2D is not None
+            # bin (spherical shells in 3D, circular annuli in 2D) volumes/areas [code units]
+            r_outer = 10.0**rad_bin_edges[1:]
+            r_inner = 10.0**rad_bin_edges[:-1]
+            r_inner[0] = 0.0
+
+            bin_volumes_code = 4.0/3.0 * np.pi * (r_outer**3.0 - r_inner**3.0)
+            bin_areas_code = np.pi * (r_outer**2.0 - r_inner**2.0) # 2D annuli e.g. if proj2D is not None
 
         # allocation: for global particle scope: [all, self-halo, other-halo, diffuse]
         # or for subfind/fof scope: [self-halo] only, or for subfind_global scope: [other-halo] only
@@ -2590,11 +2602,12 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             sP.correctPeriodicDistVecs(dists)
 
             # compute maxdist (in code units): the largest 1d distance we need for the calculation
-            if Nside is None:
+            if Nside is None and not radRvirUnits:
                 maxdist = extent / 2 + np.ceil(10.0**radMax) # radMax in log code units
             else:
                 # radMax in linear rvir units
                 radMaxCode = np.nanmax(gc['Subhalo_Rvir'][subhaloIDsTodo]) * radMax * 1.05
+                radMaxSqCode = radMaxCode**2
                 maxdist = extent / 2 + radMaxCode
 
             w_spatial = np.where(np.abs(dists) > maxdist)
@@ -2619,7 +2632,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
     # allocate
     if Nside is None:
         # normal profiles" NaN indicates not computed except for mass where 0 will do
-        r = np.zeros( (nSubsDo,radNumBins+1,numProfTypes), dtype='float32' )
+        r = np.zeros( (nSubsDo,rad_bin_edges.size-1,numProfTypes), dtype='float32' )
         if numProfTypes == 1: r = np.squeeze(r, axis=2)
     else:
         # spherical sampling
@@ -2847,8 +2860,12 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
             # tree based search?
             if tree is not None:
+                maxSearchRad = radMaxCode
+                if radRvirUnits:
+                    maxSearchRad = gc['Subhalo_Rvir'][subhaloID] * radMax * 1.05
+
                 loc_inds = calcParticleIndices(particles['Coordinates'], gc['SubhaloPos'][subhaloID,:], 
-                                               radMaxCode, boxSizeSim=sP.boxSize, tree=tree)
+                                               maxSearchRad, boxSizeSim=sP.boxSize, tree=tree)
                 loc_size = loc_inds.size
             else:
                 loc_inds = np.s_[i0:i1] # slice object (will create view)
@@ -2930,10 +2947,14 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             if len(wValid[0]) == 0:
                 continue # zero length of particles satisfying radial cut and restriction
 
-            # log(radius), with any zero value set to small (included in first bin)
-            loc_rr_log = logZeroSafe( rr[wValid], zeroVal=radMin-1.0 )
+            if radRvirUnits:
+                # linear(radius), in units of rvir
+                loc_rr = rr[wValid] / gc['Subhalo_Rvir'][subhaloID]
+            else:
+                # log(radius), with any zero value set to small (included in first bin)
+                loc_rr = logZeroSafe( rr[wValid], zeroVal=radMin-1.0 )
+
             loc_wt = particles['weights'][loc_inds][wValid] if weighting is not None else None
-            if tree is not None: assert weighting is None # otherwise need to apply loc_inds...
 
             if ptProperty not in userCustomFields:
                 loc_val = particles[ptProperty][loc_inds][wValid]
@@ -2979,7 +3000,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
             # weighted histogram (or other op) of rr_log distances
             if scope in ['global','global_fof']:
                 # (1) all
-                result, _, _ = binned_statistic_weighted(loc_rr_log, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
+                result, _, _ = binned_statistic_weighted(loc_rr, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
                 r[i,:,0] += result
 
                 # (2) self-halo
@@ -3002,14 +3023,14 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
                 if len(w[0]):
                     # this subhalo at least partially in the currently loaded data
-                    result, _, _ = binned_statistic_weighted(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
+                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
                     r[i,:,1] += result
 
                 # (3) other-halo
                 w = np.where(loc_mask == 1)
 
                 if len(w[0]):
-                    result, _, _ = binned_statistic_weighted(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
+                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
                     r[i,:,2] += result
 
                 if restoreSelf:
@@ -3019,11 +3040,11 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                 w = np.where(loc_mask == 0)
 
                 if len(w[0]):
-                    result, _, _ = binned_statistic_weighted(loc_rr_log[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
+                    result, _, _ = binned_statistic_weighted(loc_rr[w], loc_val[w], statistic=op, bins=rbins_sq, weights=loc_wt, weights_w=w)
                     r[i,:,3] += result
             else:
                 # subhalo/fof/global_spatial scope, only compute the self-term, or 'subfind_global' technique
-                result, _, _ = binned_statistic_weighted(loc_rr_log, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
+                result, _, _ = binned_statistic_weighted(loc_rr, loc_val, statistic=op, bins=rbins_sq, weights=loc_wt)
                 r[i,:] += result
 
     # return
@@ -3033,12 +3054,14 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
                  'ptType'      : ptType.encode('ascii'),
                  'ptProperty'  : ptProperty.encode('ascii'),
                  'weighting'   : str(weighting).encode('ascii'),
-                 'rad_bins_code'    : rad_bins_code,
-                 'rad_bins_pkpc'    : rad_bins_pkpc,
-                 'rad_bin_edges'    : rad_bin_edges,
-                 'bin_volumes_code' : bin_volumes_code,
-                 'bin_areas_code'   : bin_areas_code,
-                 'subhaloIDs'       : subhaloIDsTodo}
+                 'rad_bin_edges' : rad_bin_edges,
+                 'subhaloIDs'    : subhaloIDsTodo}
+
+        if not radRvirUnits:
+            attrs['rad_bins_code'] = rad_bins_code
+            attrs['rad_bins_pkpc'] = rad_bins_pkpc
+            attrs['bin_volumes_code'] = bin_volumes_code
+            attrs['bin_areas_code'] = bin_areas_code
     else:
         attrs = {'Description'   : desc.encode('ascii'),
                  'Selection'     : select.encode('ascii'),
@@ -3637,7 +3660,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_BH_CumMassGrowth_High' : \
      partial(subhaloRadialReduction,ptType='bhs',ptProperty='BH_CumMassGrowth_QM',op='sum',rad=None),
 
-   # radial profiles
+   # radial profiles: oxygen
    'Subhalo_RadProfile3D_Global_OVI_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VI mass',op='sum',scope='global'),
    'Subhalo_RadProfile3D_GlobalFoF_OVI_Mass' : \
@@ -3688,6 +3711,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadProfile2Dz_2Mpc_GlobalFoF_OVIII_Flux' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='O VIII flux',op='sum',scope='global_fof',proj2D=[2,2000]),
 
+   # radial profiles
    'Subhalo_RadProfile3D_Global_Gas_O_Mass' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='metalmass_O',op='sum',scope='global'),
    'Subhalo_RadProfile3D_Global_Gas_Metal_Mass' : \
@@ -3768,6 +3792,12 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op='min',scope='fof'),
    'Subhalo_RadProfile3D_FoF_Gas_CellSizeKpc_p10' : \
      partial(subhaloRadialProfile,ptType='gas',ptProperty='cellsize_kpc',op=lambda x: np.percentile(x,10),scope='fof'),
+
+   # radial profiles: 
+   'Subhalo_RadProfile3D_Global_Gas_Temp' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='temp_sfcold_linear',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
+   'Subhalo_RadProfile3D_Global_Gas_Tcool' : \
+     partial(subhaloRadialProfile,ptType='gas',ptProperty='tcool',op='mean',weighting='mass',scope='global_spatial',radMin=0.0,radMax=2.0,radNumBins=100,radRvirUnits=True,minHaloMass='1000dm'),
 
    # spherical sampling/healpix sightlines
    'Subhalo_SphericalSamples_Global_Gas_Temp_5rvir_400rad_16ns' : \
