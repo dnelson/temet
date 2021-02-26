@@ -4,6 +4,8 @@ cosmo/skirt.py
 """
 import numpy as np
 import h5py
+import subprocess
+import time
 from os.path import isfile, isdir, expanduser
 from os import mkdir
 
@@ -149,6 +151,7 @@ ski_template = """
             <ProbeSystem>
                 <probes type="Probe">
                     <SpatialGridConvergenceProbe probeName="cnv" wavelength="0.55 micron"/>
+                    <RadiationFieldPerCellProbe probeName="radfield" writeWavelengthGrid="true"/>
                 </probes>
             </ProbeSystem>
         </probeSystem>
@@ -160,18 +163,19 @@ ski_template = """
 def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='fsps', dust_model='const04'):
     """ Create the .txt files representing the stellar populations, and gas/dust, to be read in by SKIRT. """
     assert star_model in ['fsps', 'bc03mappings3']
-    assert dust_model in ['const04','varz_dtm']
+    assert dust_model in ['const04','var_dtm_z']
     assert params['simMode'] in ['ExtinctionOnly', 'DustEmission', 'DustEmissionWithSelfAbsorption']
 
     fields_gas   = ['pos_rel','vel_rel','Density','GFM_Metallicity','temp_sfcold']
     fields_stars = ['pos_rel','vel_rel','GFM_InitialMass','GFM_Metallicity','star_age','StellarHsml']
 
-    filename_gas = 'gas_%s_%d_sh=%d_fof=%s_%s.txt' % (sP.simName,sP.snap,subhaloID,fofScope,dust_model)
+    filename_ski = 'sh%d.ski' % subhaloID
 
-    if isfile(filename_gas):
-        # todo: also detect existence of final output files (job already done)
-        print('Note: [%s] already exists, skipping this subhalo entirely.' % filename_gas) # (job should be submitted/running)
-        return
+    if isfile(filename_ski):
+        print('Note: [%s] already exists, skipping input file creation.' % filename_ski)
+        return filename_ski
+
+    filename_gas = 'sh%d_gas_%s_%d_fof=%s_%s.txt' % (subhaloID,sP.simName,sP.snap,fofScope,dust_model)
 
     # load: rotation
     I = momentOfInertiaTensor(sP, subhaloID=subhaloID)
@@ -214,9 +218,23 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
         dust_dens = gas['Density'] * gas['GFM_Metallicity'] * dtm_ratio
         dust_dens = sP.units.codeDensToPhys(dust_dens, msunpc3=True)
 
-    if dust_model == 'varz_dtm':
-        # variable DTM (dust to metal mass ratio) depending on metallicity, based on ...
-        assert 0 # todo
+    if dust_model == 'var_dtm_z':
+        # variable DTM (dust to metal mass ratio) depending on metallicity, based on Popping+2020
+
+        # calculate the dust fracion of the all metals (Mdust / (Mdust + Mmetal)
+        # Based on Remy-Ruyer 2014, variable XCO
+        Z_solar = gas['GFM_Metallicity'] / 0.014 # gas phase metallicity in solar units (note: Z_solar value)
+        logOH  = np.log10(Z_solar) + 8.69
+        logGTD = 2.21 + (8.69 - logOH)
+
+        w = np.where(logOH < 8.1)
+        logGTD[w] = 0.96 + 3.1 * (8.69 - logOH[w])
+
+        DTG = 1.0 / 10**logGTD # gas to dust ratio (linear) = M_dust / M_gas
+        DTM = DTG / gas['GFM_Metallicity'] # dust to metal mass ratio (linear) (varies from ~0.03 to ~0.45)
+
+        dust_dens = gas['Density'] * gas['GFM_Metallicity'] * DTM
+        dust_dens = sP.units.codeDensToPhys(dust_dens, msunpc3=True)
 
     if 1:
         # dust sputtering assumption: none if T > 10^4 K, note all SFR>0 gas passes this check
@@ -237,7 +255,7 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
     header += 'column 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
 
     np.savetxt(filename_gas, data, fmt='%g', header=header, newline='\n')
-    print('Wrote: [%s]' % filename_gas)
+    print('Wrote: [%s] with [%d] gas cells.' % (filename_gas,dust_dens.size))
 
     # stars
     if star_model == 'bc03mappings3':
@@ -269,13 +287,13 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
                                np.zeros(inds_young.size) + P0,
                                np.zeros(inds_young.size) + fPDR) ).T
 
-        filename_stars1 = 'stars_young_%s_%d_sh=%d_fof=%s_%s.txt' % (sP.simName,sP.snap,subhaloID,fofScope,star_model)
+        filename_stars1 = 'sh%d_stars_young_%s_%d_fof=%s_%s.txt' % (subhaloID_sP.simName,sP.snap,fofScope,star_model)
         header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
         header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
         header += 'column 8: SFR (Msun/yr)\ncolumn 9: metallicity (1)\ncolumn 10: logC (1)\ncolumn 11: P0 (Pa)\ncolumn 12: fPDR (1)\n'
 
         np.savetxt(filename_stars1, data, fmt='%.10g', header=header, newline='\n')
-        print('Wrote: [%s]' % filename_stars1)
+        print('Wrote: [%s] with [%d] stars.' % (filename_stars1,inds_young.size))
 
         # write old
         data = []
@@ -292,13 +310,13 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
                                stars['GFM_Metallicity'][inds_old],
                                stars['star_age'][inds_old]) ).T
 
-        filename_stars2 = 'stars_old_%s_%d_sh=%d_fof=%s_%s.txt' % (sP.simName,sP.snap,subhaloID,fofScope,star_model)
+        filename_stars2 = 'sh%d_stars_old_%s_%d_fof=%s_%s.txt' % (subhaloID,sP.simName,sP.snap,fofScope,star_model)
         header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
         header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
         header += 'column 8: initial mass (Msun)\ncolumn 9: metallicity (1)\ncolumn 10: age (Gyr)\n'
 
         np.savetxt(filename_stars2, data, fmt='%.10g', header=header, newline='\n')
-        print('Wrote: [%s]' % filename_stars2)
+        print('Wrote: [%s] with [%d] stars.' % (filename_stars2,inds_old.size))
 
         # fill SKI template (star_model specific)
         starsSourceModel = stars_source_bc03mappings3.format(filenameStars1=filename_stars1,
@@ -317,13 +335,13 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
                            stars['GFM_Metallicity'],
                            stars['star_age']) ).T
 
-        filename_stars = 'stars_%s_%d_sh=%d_fof=%s_%s.txt' % (sP.simName,sP.snap,subhaloID,fofScope,star_model)
+        filename_stars = 'sh%d_stars_%s_%d_fof=%s_%s.txt' % (subhaloID,sP.simName,sP.snap,fofScope,star_model)
         header = '\ncolumn 1: position x (kpc)\ncolumn 2: position y (kpc)\ncolumn 3: position z (kpc)\n'
         header += 'column 4: size h (kpc)\ncolumn 5: velocity x (km/s)\ncolumn 6: velocity y (km/s)\ncolumn 7: velocity z (km/s)\n'
         header += 'column 8: initial mass (Msun)\ncolumn 9: metallicity (1)\ncolumn 10: age (Gyr)\n'
 
         np.savetxt(filename_stars, data, fmt='%.10g', header=header, newline='\n')
-        print('Wrote: [%s]' % filename_stars)
+        print('Wrote: [%s] with [%d] stars.' % (filename_stars,stars['star_age'].size))
 
         # fill SKI template (star_model specific)
         starsSourceModel = stars_source_fsps.format(filenameStars=filename_stars)
@@ -365,20 +383,70 @@ def createParticleInputFiles(sP, subhaloID, params, fofScope=False, star_model='
     )
 
     # write SKI configuration file
-    filename_ski = 'sh%d.ski' % subhaloID
-
     with open(filename_ski,'w') as f:
         f.write(ski_contents)
 
     print('Wrote: [%s]' % filename_ski)
 
+    return filename_ski
+
 def driver_single():
-    """ Prepare and submit a job for a single SKIRT run of one subhalo. """
+    """ Prepare and execute a single SKIRT run of one subhalo. Note that all input and output files 
+    are created in the working directory, and left there after for visualization. By default, 
+    three projections are made simultaneously: edge-on, face-on, and one random orientation. """
     sP = simParams(run='tng100-1', redshift=0.05)
     subhaloID = 343503 # almost edge-on disk
 
-    dust_model = 'const04' # const04, varz_dtm
+    dust_model = 'var_dtm_z' #'const04' # const04, var_dtm_z
     star_model = 'fsps' #'bc03mappings3' # fsps, bc03mappings3
+    fofScope = False
+
+    # use ExtinctionOnly for UV+Opt+NIR. If we want IR dust emission, should switch to 
+    # DustEmissionWithSelfAbsorption and increase maxWavelength to ~100 microns.
+    # note: radiation field per cell probe only output for DustEmission* sim modes.
+    params = {'numPackets'     : 1e6,
+              'numPixelsX'     : 200,
+              'numPixelsY'     : 200,
+              'fovX'           : '40 kpc',
+              'fovY'           : '40 kpc',
+              'numWavelengths' : 100,
+              'simMode'        : 'ExtinctionOnly', # ExtinctionOnly, DustEmission, DustEmissionWithSelfAbsorption
+              'minWavelength'  : '0.09 micron', # 900 Ang
+              'maxWavelength'  : '1.0 micron'} # 10000 Ang
+
+    # create inputs
+    filename_ski = createParticleInputFiles(sP, subhaloID, params, fofScope=fofScope, 
+                                            dust_model=dust_model, star_model=star_model)
+
+    # run already finished?
+    if isfile('sh%d_random_total.fits' % subhaloID):
+        print('Note: Output already done, skipping.')
+        return
+
+    # execute SKIRT (multi-threaded, use all cores on this machine by default)
+    print('Running SKIRT...')
+    start_time = time.time()
+
+    p = subprocess.run(['skirt',filename_ski], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    if p.returncode != 0:
+        print(p.stdout.decode('utf8'))
+        print('\nSKIRT RUN FAILED!')
+    else:
+        lines = p.stdout.decode('utf8').split('\n')
+        for line in lines[-5:]:
+            if 'threads' in line or 'memory' in line:
+                print(' ', line)
+
+    print('Done, took [%.1f] sec.' % (time.time()-start_time))
+
+def driver_sample(sP, subhaloIDs):
+    """ Prepare and execute a large number of jobs. """
+    dust_model = 'const04' # const04, var_dtm_z
+    star_model = 'fsps' #'bc03mappings3' # fsps, bc03mappings3
+    fofScope = False
+
+    maxSimultaneousJobs = 4
 
     # use ExtinctionOnly for UV+Opt+NIR. If we want IR dust emission, should switch to 
     # DustEmissionWithSelfAbsorption and increase maxWavelength to ~100 microns.
@@ -387,24 +455,49 @@ def driver_single():
               'numPixelsY'     : 400,
               'fovX'           : '40 kpc',
               'fovY'           : '40 kpc',
-              'numWavelengths' : 200,
+              'numWavelengths' : 100,
               'simMode'        : 'ExtinctionOnly', # ExtinctionOnly, DustEmission, DustEmissionWithSelfAbsorption
               'minWavelength'  : '0.09 micron',
-              'maxWavelength'  : '2.0 micron'}
+              'maxWavelength'  : '1.0 micron'}
 
     # create inputs
-    createParticleInputFiles(sP, subhaloID, params, dust_model=dust_model, star_model=star_model)
+    for subhaloID in subhaloIDs:
+        filename_ski = createParticleInputFiles(sP, subhaloID, params, fofScope=fofScope, 
+                                                dust_model=dust_model, star_model=star_model)
+        assert filename_ski == 'sh%d.ski' % subhaloID # assumed in job script
 
-    # create job file and submit
-    # (job should do cleanup, delete input files)
+    # create job [array] file for submission, one job per subhalo, one full node (threaded) per job
+    jobFile = """#!/bin/sh
+#SBATCH --mail-user dnelson@uni-heidelberg.de
+#SBATCH --mail-type=FAIL #,ARRAY_TASKS
+#SBATCH -p p.24h
+#SBATCH --array=0-{numJobs}%{maxSimultaneousJobs}
+#SBATCH -J skirt
+#SBATCH -o run_%a.txt
+#SBATCH -e run_%a.err
+#SBATCH -t 01:00:00 # one hour
+#SBATCH --mem=190000 # normal memory nodes
+#SBATCH --exclusive
+#SBATCH --ntasks 40
+#SBATCH --ntasks-per-node=40
 
+subhaloIDs=({subIDs})
+skifilename="sh${{subhaloIDs[${{SLURM_ARRAY_TASK_ID}}]}}.ski"
 
-def driver_sample():
-    """ Prepare and execute a large number of jobs. """
-    pass
+skirt -t $SLURM_NTASKS_PER_NODE $skifilename
+    """
+
+    jobFile = jobFile.format(numJobs=(len(subhaloIDs)-1),
+                             maxSimultaneousJobs=maxSimultaneousJobs,
+                             subIDs=' '.join([str(subID) for subID in subhaloIDs]))
+
+    with open('job.slurm','w') as f:
+        f.write(jobFile)
+
+    print('Wrote: [job.slurm], suggest to now execute with "sbatch job.slurm".')
 
 def _log(x):
-    """ Return natural log for positive values, large negative numbe for zero negative values. """
+    """ Return natural log for positive values, large negative number for zero negative values. """
     r = np.zeros(x.shape, dtype=x.dtype)
     w = x > 0
     r[w] = np.log(x[w])
@@ -444,15 +537,13 @@ def convolve_cube_with_filter(data, wavelengths, filterName):
 
     return result
 
-def vis():
-    """ Load and visualize SKIRT output. """
-    sP = simParams(run='tng100-1', redshift=0.05)
-
-    subhaloID = 343503
+def vis(subhaloID=343503):
+    """ Load and visualize SKIRT output. This routine simply looks for files in the current 
+    working directory corresponding to the input subhalo ID."""
     instNames = ['faceon','edgeon','random','perspective']
     outTypes = ['total','transparent']
 
-    filterNames = ['sdss_g']
+    filterNames = ['sdss_g','sdss_r','sdss_i']
 
     redshift = 0.0 # if >0, add surface-brightness dimming to this redshift
 
@@ -498,38 +589,74 @@ def vis():
                     # exponent is 4 for integrated/bolometric flux, 5 for flux per wavelength interval, 3 for flux per frequency interval
                     convolved /= (1+redshift)**4
 
+                # units: [W/m^2/arcsec^2] -> [erg/s/cm^2/arcsec^2]
+                convolved *= (1e7/1e4) # J/s -> erg/s, m^-2 -> cm^-2
+
                 # create image and save
                 fig = plt.figure(figsize=(10,8))
                 ax = fig.add_subplot(111)
 
-                im = logZeroMin(np.flip(convolved, axis=1))
+                im = logZeroMin(np.flip(convolved.copy(), axis=1))
                 plt.imshow(im, cmap='magma', aspect='equal', extent=[xvals[0],xvals[-1],yvals[0],yvals[-1]])
                 ax.autoscale(False)
-                plt.clim([-18.0, -15.0])
+                plt.clim([-15.0, -12.0])
 
                 ax.set_xlabel('x [kpc]')
                 ax.set_ylabel('y [kpc]')
 
                 cax = make_axes_locatable(ax).append_axes('right', size='5%', pad=0.15)
                 cb = plt.colorbar(cax=cax)
-                cb.ax.set_ylabel('Surface Brightness [ log W m$^{-2}$ arcsec$^{-2}$ ]')
+                cb.ax.set_ylabel('Surface Brightness [ log erg s$^{-1}$ cm$^{-2}$ arcsec$^{-2}$ ]')
 
-                fig.savefig('image_%s_sh%d_%s_%s_%s.pdf' % (sP.simName,subhaloID,outType,instName,filterName))
+                fig.savefig('image_sh%d_%s_%s_%s.pdf' % (subhaloID,outType,instName,filterName))
                 plt.close(fig)
 
                 # save
                 images.append(convolved)
 
-            # three images? create composite RGB
+            # loaded three bands? then create composite RGB now
             if len(images) == 3:
-                pass
+                rgb = np.zeros( (images[0].shape[0],images[0].shape[1], 3), dtype='float32' )
 
-def plot_sed():
-    """ Plot a spectral energy distribution .dat output file. """
+                def logstretch(x, a):
+                    return np.log(a*x+1) / np.log(a+1)
+
+                # stamp in individual band images (for collective bounds)
+                for i in range(3):
+                    rgb[:,:,-(i+1)] = images[i]
+
+                # can derive limits either on rgb as a whole, or on each band
+                w = np.where(rgb > 0.0)
+                minval = np.percentile(rgb, 20) # images[0].min()
+                maxval = np.percentile(rgb, 99.5) # images[0].max()
+
+                # normalize
+                for i in range(3):
+                    grid_norm = (images[i] - minval) / (maxval - minval)
+
+                    rgb[:,:,-(i+1)] = grid_norm
+
+                # clip and scale
+                rgb = np.clip(rgb, 0.0, 1.0)
+                rgb = logstretch(rgb, a=1000)
+
+                # save
+                fig = plt.figure(figsize=(10,8))
+                ax = fig.add_subplot(111)
+
+                plt.imshow(rgb, aspect='equal', origin='lower', extent=[xvals[0],xvals[-1],yvals[0],yvals[-1]])
+
+                ax.set_xlabel('x [kpc]')
+                ax.set_ylabel('y [kpc]')
+
+                fig.savefig('image_sh%d_%s_%s_rgb.pdf' % (subhaloID,outType,instName))
+                plt.close(fig)
+
+def plot_sed(subhaloID=343503):
+    """ Plot a spectral energy distribution .dat output file. As above, simply looks for 
+    existing output files in the current working directory. """
     from plot.config import lw, figsize
-    sP = simParams(run='tng100-1', redshift=0.05)
 
-    subhaloID = 343503
     instNames = ['faceon','edgeon','random']
 
     for instName in instNames:
@@ -563,7 +690,7 @@ def plot_sed():
             ax.plot(xx, logZeroNaN(data[:,col]), '-', lw=lw, label=label)
 
         ax.legend(loc='best')
-        fig.savefig('sed_%s_sh%d_%s.pdf' % (sP.simName,subhaloID,instName))
+        fig.savefig('sed_sh%d_%s.pdf' % (subhaloID,instName))
         plt.close(fig)
 
         # start plot (optical)
@@ -583,5 +710,5 @@ def plot_sed():
             ax.plot(xx, logZeroNaN(data[ww[0],col]), '-', lw=lw, label=label)
 
         ax.legend(loc='best')
-        fig.savefig('sed_optical_%s_sh%d_%s.pdf' % (sP.simName,subhaloID,instName))
+        fig.savefig('sed_optical_sh%d_%s.pdf' % (subhaloID,instName))
         plt.close(fig)
