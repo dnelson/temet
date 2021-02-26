@@ -222,6 +222,9 @@ def rotationMatrixFromVec(vec, target_vec=(0,0,1)):
 def rotationMatrixFromAngleDirection(angle, direction):
     """ Calculate 3x3 rotation matrix for input angle about an axis defined by the input direction 
     about the origin. Input angle in degrees. """
+    assert not isinstance(angle,np.ndarray) # single value
+    assert len(direction) == 3 # 3-tuple or ndarray of length 3
+    
     angle_rad = np.radians(angle)
     
     sin_a = np.sin(angle_rad)
@@ -463,7 +466,6 @@ def ellipsoidfit_run():
 
             #print('[%6d %s] [r = %.2f] q = %.3f s = %.3f ratio = %.2f' % (subhaloID,ptType,10.0**logr[i],q[i],s[i],s[i]/q[i]))
             print(subhaloID,q[i],s[i])
-
 
 def ellipsoidfit_test(N=1000, h=0.1, R=10.0, q=1.0, s=1.0, phi=0.0, theta=0.0, noise_frac=0.0):
     """ Generate random points in an ellipsoidal shell and test the iterative fitting algorithm. """

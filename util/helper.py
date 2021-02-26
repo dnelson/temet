@@ -676,6 +676,51 @@ def sgolay2d(z, window_size, order, derivative=None):
         r = np.linalg.pinv(A)[2].reshape((window_size, -1))
         return sfftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
 
+def mvbe(points, tol=0.005):
+    """
+    Find the 'minimum volume bounding ellipsoid' of a given set of points (iterative).
+    Returns the ellipse equation in "center form" (x-c).T * A * (x-c) = 1
+    Based on MVEE in Matlab by Nima Moshtagh.
+    """
+    N, d = points.shape
+    Q = np.column_stack((points, np.ones(N))).T
+    err = tol+1.0
+    u = np.ones(N)/N
+
+    count = 0
+
+    while err > tol:
+        # assert u.sum() == 1 # invariant
+        X = np.dot(np.dot(Q, np.diag(u)), Q.T)
+        M = np.diag(np.dot(np.dot(Q.T, np.linalg.inv(X)), Q))
+        jdx = np.argmax(M)
+        step_size = (M[jdx]-d-1.0)/((d+1)*(M[jdx]-1.0))
+        new_u = (1-step_size)*u
+        new_u[jdx] += step_size
+        err = np.linalg.norm(new_u-u)
+        u = new_u
+
+        if count > 1000:
+            #print('WARNING, mvbe count >100, err = ', err, ' tol = ', tol)
+            break
+        count += 1
+
+    cen = np.dot(u,points)        
+    A = np.linalg.inv(np.dot(np.dot(points.T, np.diag(u)), points)
+               - np.multiply.outer(cen,cen))/d
+
+    # convert from center form into more typical (majoraxis,minoraxis,angle) form
+    eig_w, eig_v = np.linalg.eig(A)
+
+    # eigenvectors give principal axes of the ellipse
+    eig_v1 = eig_v[0,:]
+    theta = np.degrees(np.arccos(eig_v1[0]))
+    
+    # semimajor axis is the 1/eigenvalue with smaller absolute value
+    axislengths = np.sqrt(1.0 / eig_w) # larger is semi-major, smallest is semi-minor
+
+    return axislengths, theta, cen
+
 def binned_stat_2d(x, y, c, bins, range_x, range_y, stat='median'):
     """ Replacement of binned_statistic_2d for mean_nan or median_nan. """
     assert stat in ['mean','median']
@@ -1497,7 +1542,7 @@ def plotxy(x, y, filename='plot.pdf'):
     fig.savefig(filename)
     plt.close(fig)
 
-def plot2d(grid, label='', filename='plot.pdf'):
+def plot2d(grid, label='', minmax=None, filename='plot.pdf'):
     """ Plot a quick image plot of a 2d array/grid and save it to a PDF. """
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -1511,7 +1556,8 @@ def plot2d(grid, label='', filename='plot.pdf'):
     plt.imshow(grid, cmap=cmap, aspect=grid.shape[0]/grid.shape[1])
 
     ax.autoscale(False)
-    #plt.clim([minval,maxval])
+    if minmax is not None:
+        plt.clim([minmax[0],minmax[1]])
 
     # colorbar
     cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)

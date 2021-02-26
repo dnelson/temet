@@ -546,9 +546,21 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             for ind in w_pos: patches[ind].set_facecolor(colors[1])
 
             # write fractions
+            w_neg = np.where( yvals < 0 )
+            w_pos = np.where( yvals > 0 )
             textOpts = {'ha':'center', 'fontsize':18, 'transform':ax_histy.transAxes}
-            ax_histy.text(0.5, 0.06, 'inflow\n%.2f' % (hist[w_neg].sum()/hist.sum()), va='bottom', color=colors[0], **textOpts)
-            ax_histy.text(0.5, 0.94, 'outflow\n%.2f' % (hist[w_pos].sum()/hist.sum()), va='top', color=colors[1], **textOpts)
+            ax_histy.text(0.5, 0.06, 'inflow\n%.2f' % (weight[w_neg].sum()/weight.sum()), va='bottom', color=colors[0], **textOpts)
+            ax_histy.text(0.5, 0.94, 'outflow\n%.2f' % (weight[w_pos].sum()/weight.sum()), va='top', color=colors[1], **textOpts)
+
+        if yQuant == 'vrad' and 0:
+            # second histogram: only data >vcirc or <vcirc (i.e. exclude galaxy itself)
+            vcirc = sP.subhalos('SubhaloVmax')[sP.halos('GroupFirstSub')[haloIDs]] # km/s
+            vel_thresh = np.median(vcirc) / 3
+
+            w_nondisk = np.where( (yvals > vel_thresh) | (yvals < -vel_thresh) )
+
+            hist, bins, patches = ax_histy.hist(yvals[w_nondisk], bins=addHistY, range=ax.get_ylim(), weights=weight[w_nondisk], 
+                                                color=color, log=False, alpha=0.7, orientation='horizontal', linestyle=':', lw=lw)
 
         assert len(weights) == 1 # otherwise do multiple histograms
         colorbar = False # disable colorbar

@@ -24,6 +24,7 @@ from util.helper import running_median, running_median_sub, logZeroNaN, loadColo
        getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors, setColorbarColors
+from vis.halo import subsampleRandomSubhalos
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
@@ -968,30 +969,11 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     clabel = '$\Delta$ ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
 
                 if maxPointsPerDex is not None:
-                    # sub-select in 0.1 dex bins, at most N points per bin
-                    np.random.seed(424242)
-                    binsize = 0.1 # dex
+                    inds, _ = subsampleRandomSubhalos(sP, maxPointsPerDex, xMinMax, mstar=xx)
 
-                    inds = np.zeros( xx.size, dtype='int32' )
-                    count = 0
-                    xbin = xMinMax[0]
-
-                    while xbin < xMinMax[1]:
-                        w = np.where( (xx >= xbin) & (xx < xbin+binsize))[0]
-
-                        if len(w) < maxPointsPerDex*binsize:
-                            inds[count:count + len(w)] = w
-                            count += len(w)
-                        else:
-                            inds_loc = np.random.choice(w, int(maxPointsPerDex*binsize), replace=False)
-                            inds[count:count+inds_loc.size] = inds_loc
-                            count += inds_loc.size
-
-                        xbin += binsize
-
-                    xx = xx[inds[0:count]]
-                    yy = yy[inds[0:count]]
-                    cc = cc[inds[0:count]]
+                    xx = xx[inds]
+                    yy = yy[inds]
+                    cc = cc[inds]
 
                 if lowessSmooth:
                     in1 = np.vstack( (xx,yy) )
@@ -1086,9 +1068,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 def plots():
     """ Driver (exploration 2D histograms, vary over all known quantities as cQuant). """
     sPs = []
-    sPs.append( simParams(run='tng50-1', redshift=6.0) )
+    sPs.append( simParams(run='tng100-1', redshift=0.0) )
 
-    yQuant = 'fesc_no_dust' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
+    yQuant = 'frac_halogas_sfcold' #'mstar30pkpc_mhalo200_ratio' #'ssfr'
     xQuant = 'mstar_30pkpc' # #'mstar_30pkpc'
     cenSatSelects = ['cen'] #['cen','sat','all']
 
@@ -1210,21 +1192,20 @@ def plots3():
 def plots4():
     """ Driver (single median trend). """
     sPs = []
-    #sPs.append( simParams(res=2160, run='tng', redshift=2.0) )
-    sPs.append( simParams(res=1820, run='tng', redshift=2.0) )
-    #sPs.append( simParams(res=2500, run='tng', redshift=1.0) )
+    #sPs.append( simParams(run='tng50-1, redshift=2.0) )
+    sPs.append( simParams(run='tng100-1', redshift=0.0) )
 
     xQuant = 'mstar_30pkpc' #'mhalo_200_log',mstar1_log','mstar_30pkpc'
-    yQuant = 'fdm1'
-    scatterColor = 'size_halpha' #'size_gas' #'M_bulge_counter_rot' # 'size_stars'
+    yQuant = 'frac_halogas_sfcold'
+    scatterColor = 'ssfr' #'size_gas' #'M_bulge_counter_rot' # 'size_stars'
     cenSatSelect = 'cen'
     filterFlag = False #True
 
     xlim = [9.0, 11.5] #[10.2,11.6]
     ylim = None #[4.7,1.5]
-    clim = [0.0, 1.5] #[1.0, 2.0]
+    clim = [-2.0, -0.5] #[1.0, 2.0]
     scatterPoints = True
-    drawMedian = False
+    drawMedian = True
     markersize = 20.0
     maxPointsPerDex = 2000
 
@@ -1232,8 +1213,8 @@ def plots4():
     sLowerPercs = None #[10,50]
     sUpperPercs = None #[90,50]
 
-    #qRestrictions = None
-    qRestrictions = [ ['delta_sfms',-0.5,np.inf] ] #  [ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
+    qRestrictions = None
+    #qRestrictions = [ ['delta_sfms',-0.5,np.inf] ] #  [ ['mstar_30pkpc_log',10.0,11.0] ] # SINS-AO rough cut
 
     pdf = PdfPages('median_x=%s_y=%s_%s_slice=%s_%s_z%.1f.pdf' % \
         (xQuant,yQuant,cenSatSelect,sQuant,sPs[0].simName,sPs[0].redshift))

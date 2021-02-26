@@ -15,6 +15,7 @@ from getpass import getuser
 import illustris_python as il
 from util.helper import iterable, logZeroNaN, pSplitRange, numPartToChunkLoadSize
 from load.groupcat import groupCatOffsetList, groupCatOffsetListIntoSnap
+from vis.common import getHsmlForPartType, defaultHsmlFac
 
 def subboxVals(subbox):
     """ Return sbNum (integer) and sbStr1 and sbStr2 for use in locating subbox files. """
@@ -566,6 +567,16 @@ def snapshotSubset(sP, partType, fields,
             cellsize_code = snapshotSubset(sP, partType, 'cellsize', **kwargs)
             r[field] = sP.units.codeLengthToKpc(cellsize_code)
 
+        # hsml i.e. smoothing length for visualization purposes [ckpc/h]
+        if field in ["hsml"]:
+            assert inds is None # otherwise generalize
+            if haloID is not None or subhaloID is not None:
+                indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
+
+            useSnapHsml = sP.isPartType(partType, 'stars')
+            r[field] = getHsmlForPartType(sP, partType, indRange=indRange, useSnapHsml=useSnapHsml)
+            r[field] *= defaultHsmlFac(partType)
+
         # particle volume (from subfind hsml of N nearest DM particles) [ckpc/h]
         if field in ["subfind_vol","subfind_volume"]:
             hsml = snapshotSubset(sP, partType, 'SubfindHsml', **kwargs)
@@ -815,7 +826,7 @@ def snapshotSubset(sP, partType, fields,
                 print('Loaded: [%s]' % savepath)
             else:
                 # config
-                fieldname = 'Box_Grid_nHI_popping_GK_depth10'
+                acFieldName = 'Box_Grid_nHI_popping_GK_depth10'
                 boxWidth = 10000.0 # only those in slice, columns don't apply to others
                 z_bounds = [sP.boxSize*0.5 - boxWidth/2, sP.boxSize*0.5 + boxWidth/2]
 
@@ -832,7 +843,7 @@ def snapshotSubset(sP, partType, fields,
                 pos_x = snapshotSubset(sP, partType, 'pos_x', **kwargs)[w]
                 pos_y = snapshotSubset(sP, partType, 'pos_y', **kwargs)[w]
 
-                grid = sP.auxCat(fieldname)[fieldname]
+                grid = sP.auxCat(acFieldName)[acFieldName]
                 pxSize = sP.boxSize / grid.shape[0]
 
                 x_ind = np.floor(pos_x / pxSize).astype('int64')
@@ -875,7 +886,8 @@ def snapshotSubset(sP, partType, fields,
 
             else:
                 # cloudy-based calculation (e.g. "O VI mass", "Mg II frac", "C IV numdens", "O  8 16.0067A")
-                r[field] = _ionLoadHelper(sP, partType, field, kwargs)
+                # NOTE! need capitalizion of saving into fieldName for snapshotSubsetP() to work via sample
+                r[fieldName] = _ionLoadHelper(sP, partType, fieldName, kwargs)
 
         # pre-computed H2/other particle-level data [linear code mass or density units]
         if '_popping' in field:
@@ -885,17 +897,27 @@ def snapshotSubset(sP, partType, fields,
                 indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
 
             path = sP.postPath + 'hydrogen/gas_%03d.hdf5' % sP.snap
-            key = field.split('_popping')[0].replace('_numdens','')
+            key = field.split('_popping')[0].replace('_numdens','').upper()
 
             if not isfile(path):
                 print('Warning: [%s] from [%s] does not exist, empty return.' % (field,path))
                 return None
 
             with h5py.File(path,'r') as f:
-                if indRange is None:
-                    r[field] = f[key][()]
+                if key in f:
+                    if indRange is None:
+                        r[field] = f[key][()]
+                    else:
+                        r[field] = f[key][indRange[0]:indRange[1]+1]
                 else:
-                    r[field] = f[key][indRange[0]:indRange[1]+1]
+                    # more compact storage: only MH and MH2*, where MHI must be derived
+                    assert 'MHI' in key
+                    if indRange is None:
+                        MH = f['MH'][()]
+                        r[field] = MH - f[key.replace('HI','H2')][()]
+                    else:
+                        MH = f['MH'][indRange[0]:indRange[1]+1]
+                        r[field] = MH - f[key.replace('HI','H2')][indRange[0]:indRange[1]+1]
 
             if 'numdens' in field:
                 r[field] /= snapshotSubset(sP, partType, 'volume', **kwargs)
@@ -1595,6 +1617,7 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     """ Identical to snapshotSubset() except split filesystem load over a number of 
     concurrent python+h5py reader processes and gather the result. """
     import ctypes
+    import traceback
     from functools import partial
 
     #enable global logging of multiprocessing to stderr:
@@ -1628,10 +1651,19 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     if numPartTot == 0:
         return {'count':0}
 
+    # detect if we are already fetching data inside a parallelized load, and don't propagate
+    stack = traceback.extract_stack(limit=5)
+    serial = np.any(['snapshotSubsetP' in frame.name for frame in stack[:-1]])
+    if serial:
+        print('NOTE: Detected parallel-load request inside parallel-load, making serial.')
+
     # low particle count, use serial
     if numPartTot < nThreads*10 or \
       (inds is not None and inds.size < nThreads*10) or \
       (indRange is not None and (indRange[1]-indRange[0]) < nThreads*10):
+        serial = True
+
+    if serial:
         return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
                               subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
 

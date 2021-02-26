@@ -9,8 +9,9 @@ from matplotlib.colors import Normalize
 from os.path import isfile
 from scipy.signal import savgol_filter
 from scipy.ndimage import gaussian_filter
+from scipy.stats import binned_statistic
 
-from vis.halo import renderSingleHalo
+from vis.halo import renderSingleHalo, subsampleRandomSubhalos
 from util.helper import running_median, sampleColorTable, loadColorTable, logZeroNaN
 from plot.cosmoGeneral import quantMedianVsSecondQuant, quantHisto2D
 from plot.general import plotParticleMedianVsSecondQuant, plotPhaseSpace2D
@@ -246,7 +247,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
 
         if indiv:
             colors = sampleColorTable('rainbow', indiv, bounds=[0.0,1.0])
-            colorQuant = 'sfr' #'mstar'
+            colorQuant = 'ssfr' #'mstar'
             sfr = logZeroNaN(sP.subhalos('SubhaloSFRinRad'))
             #cmap = loadColorTable('terrain', fracSubset=[0.0,0.8])
             cmap = loadColorTable('turbo', fracSubset=[0.1,1.0])
@@ -349,6 +350,8 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                 if colorQuant == 'sfr':
                     norm = Normalize(vmin=-0.2, vmax=0.8)
                     #norm = Normalize(vmin=np.percentile(sfr[subInds],5), vmax=np.percentile(sfr[subInds],95))
+                if colorQuant == 'ssfr':
+                    norm = Normalize(vmin=-10.3, vmax=-9.3)
 
                 # plot individual profiles
                 for j in range( np.min([indiv,sbr_indiv_med.shape[0]]) ):
@@ -356,13 +359,17 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                     if 0:
                         c = colors[j] # sampled uniformly from colormap in order of subhalo IDs
                     if 1:
+                        ssfr = np.log10(10.0**sfr / 10.0**mstar)
                         if colorQuant == 'mstar': c = cmap(norm(mstar[subInds[j]]))
                         if colorQuant == 'sfr': c = cmap(norm(sfr[subInds[j]]))
+                        if colorQuant == 'ssfr': c = cmap(norm(ssfr[subInds[j]]))
 
                     ax.plot(radMidPts, savgol_filter(yy,sKn,sKo,axis=0), '-', color=c)
             else:
                 # compute stack of 'per halo profiles' and plot
                 label = 'M$_{\star}$ = %.1f' % (massBin[0])
+                if massBin[0] == 10.4: label = 'M$_{\star}$ = 10.5'
+                if massBin[0] == 10.9: label = 'M$_{\star}$ = 11.0'
                 if psf == 'both': label += ' (no PSF)'
 
                 if psf != 'both' and len(sPs) == 1:
@@ -448,6 +455,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
         cb = plt.colorbar(sm, cax=cax, orientation='horizontal')
         if colorQuant == 'mstar': ctitle = 'Galaxy Stellar Mass [log M$_{\\rm sun}$]'
         if colorQuant == 'sfr': ctitle = 'Galaxy SFR [log M$_{\\rm sun}$ yr$^{-1}$]'
+        if colorQuant == 'ssfr': ctitle = 'Galaxy sSFR [log yr$^{-1}$]'
         cb.ax.set_title(ctitle)
     else:
         if psf != 'both' and len(sPs) == 1:
@@ -460,6 +468,101 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
         (sP.simName,sP.snap,partField,'_indiv' if indiv else '','_psf=%s' % psf,
             '_sP%d' % len(sPs) if len(sPs)>1 else ''))
     plt.close(fig)
+
+def gridPropertyVsInclinations(sP, propName='mg2_lumsize'):
+    """ Grid a number of halos, equally sampling across a stellar mass range, and for each of a 
+    few random inclinations, derive a property from the grid. Caching return. """
+    mstarBin = [8.0, 11.5]
+    maxPointsPerDex = 100
+    numInclinations = 5
+
+    saveFilename = sP.derivPath + 'cache/gridprops_%s_inclination_%d_%.1f_%.1f_%d_%d.hdf5' % \
+      (propName,sP.snap,mstarBin[0],mstarBin[1],maxPointsPerDex,numInclinations)
+
+    if isfile(saveFilename):
+        with h5py.File(saveFilename,'r') as f:
+            subhaloInds = f['subhaloInds'][()]
+            inclinations = f['inclinations'][()]
+            props = f['props'][()]
+        print('Loaded: [%s]' % saveFilename)
+        return subhaloInds, inclinations, props
+
+    # subsample to define subhalos
+    subhaloInds, mstar = subsampleRandomSubhalos(sP, maxPointsPerDex, mstarBin, cenOnly=True)
+
+    # define inclinations
+    inclinations = np.zeros( (subhaloInds.size, numInclinations), dtype='float32' )
+
+    for i, subid in enumerate(subhaloInds):
+        # each subhaloID gets a unique set of inclinations
+        np.random.seed(42424242+subid)
+
+        # increasing numInclinations leaves the initial angles the same
+        inclinations[i,:] = np.random.uniform( low=0.0, high=90.0, size=numInclinations )
+
+    if propName == 'inclination':
+        return subhaloInds, inclinations, None
+
+    # allocate
+    props = np.zeros( (subhaloInds.size,numInclinations), dtype='float32' )
+
+    # grid config
+    method     = 'sphMap' # note: fof-scope
+    nPixels    = [250,250]
+    axes       = [0,1]
+    sizeType   = 'kpc'
+    size       = 100
+    rotation   = 'edge-on-random' # avoid possible bias of edge-on-largest
+    partType   = 'gas'
+    partField  = 'sb_MgII_ergs_dustdeplete'
+    smoothFWHM = sP.units.arcsecToAngSizeKpcAtRedshift(0.7) # MUSE UDF, PSF FWHM ~ 0.7 arcsec
+
+    # loop over subhalos
+    dist, _ = _get_dist_theta_grid(size, nPixels)
+    dist = dist.ravel()
+    unique_dists = np.unique(dist)
+
+    class plotConfig:
+        saveFilename = 'dummy'
+
+    for i, subhaloInd in enumerate(subhaloInds):
+        print('[%3d of %3d] subhaloInd = %7d' % (i,subhaloInds.size,subhaloInd))
+
+        for j in range(numInclinations):
+            panels = [{'inclination' : inclinations[i,j]}]
+
+            # generate grid
+            grid, _ = renderSingleHalo(panels, plotConfig, locals(), returnData=True)
+            grid = 10.0**grid.ravel() # log -> linear
+
+            # half light radius: create a cumulative radial profile
+            if propName == 'mg2_lumsize':
+                prof, prof_bins, _ = binned_statistic(dist, grid, 'sum', bins=unique_dists)
+                prof_cum = np.cumsum(prof)
+
+                prof_bins = (prof_bins[1:] + prof_bins[:-1]) / 2 # mid points
+
+                halflum = np.nansum(prof) / 2
+
+                #with np.errstate(invalid='ignore'):
+                #    w = np.where(prof_cum >= halflum)[0]
+                #prop = prof_bins[w[0]]
+                prop = np.interp(halflum, prof_cum, prof_bins)
+
+            # shape: ...
+            if propName == 'mg2_shape':
+                pass
+
+            # save property
+            props[i,j] = prop
+
+    with h5py.File(saveFilename,'w') as f:
+        f['subhaloInds'] = subhaloInds
+        f['inclinations'] = inclinations
+        f['props'] = props
+    print('Saved: [%s]' % saveFilename)
+
+    return subhaloInds, inclinations, props
 
 def mg2lum_vs_mass(sP, redshifts=None):
     """ Driver for quantMedianVsSecondQuant. """
@@ -549,7 +652,7 @@ def paperPlots():
 
     # figure 1 - single halo example
     if 0:
-        singleHaloImageMGII(sP, subhaloID, conf=1)
+        singleHaloImageMGII(sP, subhaloID, conf=3) # 1 for paper
 
     # figure 2 - vis gallery
     if 0:
@@ -558,32 +661,16 @@ def paperPlots():
 
     # figure 3 - stacked SB profiles
     if 0:
-        mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45] ]
+        mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45], [10.9,11.1] ]
         for redshift in redshifts:
             sP.setRedshift(redshift)
             radialSBProfiles([sP], mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
 
-    # figure 4 - individual SB profiles
-    if 0:
-        mStarBins = [ [10.0,10.1] ]
-        radialSBProfiles([sP], mStarBins, indiv=70, xlim=[0,30], psf=True)
-
-    # figure 5 - L_MgII vs M*, multiple redshifts overplotted
+    # figure 4 - L_MgII vs M*, multiple redshifts overplotted
     if 0:
         mg2lum_vs_mass(sP, redshifts)
 
-    # figure 6 - L_MgII and r_1/2,MgII correlation with SFR
-    if 0:
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
-                                 xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[38,41], drawMedian=False, markersize=40,
-                                 scatterPoints=True, scatterColor='mg2_lum', sizefac=sizefac, cbarticks=[38,39,40,41],
-                                 alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
-                                 xlim=[8.0,11.5], ylim=[-2.6,0.6], clim=[2,10], drawMedian=False, markersize=40,
-                                 scatterPoints=True, scatterColor='mg2_lumsize', sizefac=sizefac, 
-                                 alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
-
-    # figure 7 - lumsize vs mstar, compare with other sizes
+    # figure 5 - lumsize vs mstar, compare with other sizes
     if 0:
         # find three particular subhalos of interest on this plot
         mg2_lumsize,_,_,_ = sP.simSubhaloQuantity('mg2_lumsize')
@@ -609,26 +696,31 @@ def paperPlots():
             #singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
             #                    rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False, psf=True)
 
-    # figure 8 - L_MgII and r_1/2,MgII correlation with SFR
+    # figure 6 - L_MgII vs Sigma_SFR, and r_1/2,MgII correlation with sSFR
     if 0:
         for cQuant in ['mg2_lum','mg2_lumsize']:
             quantMedianVsSecondQuant([sP], pdf=None, yQuants=['sfr2_surfdens'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
                                      xlim=[8.0,11.5], ylim=[-4.2,-0.4], clim=[37,41.5], drawMedian=False, markersize=40,
                                      scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, cRel=[-0.2,0.2,True], #[0.5,1.5,False],
                                      alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
+            quantMedianVsSecondQuant([sP], pdf=None, yQuants=['ssfr'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
+                                     xlim=[8.0,11.5], ylim=[-2.6,0.6], cRel=[0.5,1.5,False], drawMedian=False, markersize=40,
+                                     scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, 
+                                     alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
 
-    # figure 9 - relation of MgII flux and vrad (inflow vs outflow)
+    # figure 7 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
+        mStarBin = [9.99, 10.01] #[10.4, 10.42]
         SubhaloGrNr = sP.subhalos('SubhaloGrNr')
         mstar = sP.subhalos('mstar_30pkpc_log')
         cen_flag = sP.subhalos('cen_flag')
 
         with np.errstate(invalid='ignore'):
-            subIDs = np.where( (mstar>9.99) & (mstar < 10.01) & cen_flag )
+            subIDs = np.where( (mstar>mStarBin[0]) & (mstar < mStarBin[1]) & cen_flag )
             haloIDs = SubhaloGrNr[subIDs]
 
         def _f_post(ax):
-            ax.text(0.97, 0.97, 'M$_{\\star} = 10^{10}\,$M$_{\odot}$', transform=ax.transAxes, 
+            ax.text(0.97, 0.97, 'M$_{\\star} = 10^{%d}\,$M$_{\odot}$' % mStarBin[0], transform=ax.transAxes, 
                     color='#ffffff', fontsize=22, ha='right', va='top')
 
         plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', yQuant='vrad', weights=['MgII lum_dustdepleted'], meancolors=None, 
@@ -637,14 +729,31 @@ def paperPlots():
                          normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post, addHistY=50)
 
     # TODO: What is the contribution of winds (vrad>0) vs ambient CGM to MgII lum (as a function of radius)
+    if 0:
+        # some sort of cumulative plot
+        # fraction of MgII lum contributed by gas with vrad>thresh
+        # one line for inflow, one line for outflow
+        # (at what rad?)
+        pass
 
-    # TODO: impact of orientation (face-on vs edge-on) on MgII lum/morphology
+    # TODO: impact of stellar orientation (face-on vs edge-on) on MgII morphology
+    if 1:
+        gridPropertyVsInclinations(sP, propName='mg2shape')
 
     # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
+    #  isophotes: 1e-18, 5e-18, 1e-19, 5e-19
+    # fig: histogram of a/b, scatterplot of a/b vs M*, scatterplot of a/b vs inclination (color by M*)
+
+    # TODO: area of MgII in [kpc^2] vs M*/z, above SB threshs: 1e-18, 5e-18, 1e-19 (compare to Zabl slide)
 
     # figure X - line-center optical depth for MgII all-sky map, show low values
-    if 1:
+    if 0:
         singleHaloImageMGII(sP, subhaloID, conf=6)
+
+    # figure X - individual SB profiles
+    if 0:
+        mStarBins = [ [10.9,11.1] ] # [10.0,10.1]
+        radialSBProfiles([sP], mStarBins, indiv=70, xlim=[0,30], psf=True)
 
     # figure A1 - impact of dust depletion
     if 0:

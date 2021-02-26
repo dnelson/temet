@@ -2,9 +2,6 @@
 cosmo/auxcatalog.py
   Cosmological simulations - auxiliary catalog for additional derived galaxy/halo properties.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 from functools import partial
@@ -12,9 +9,11 @@ from os.path import expanduser
 from getpass import getuser
 
 from scipy.signal import medfilt
+from scipy.ndimage import gaussian_filter
 
 from util.helper import logZeroMin, logZeroNaN, logZeroSafe, binned_statistic_weighted
-from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize
+from util.helper import pSplit as pSplitArr, pSplitRange, numPartToChunkLoadSize, mvbe
+from util.sphMap import sphMap
 from util.rotation import rotateCoordinateArray, rotationMatrixFromVec, momentOfInertiaTensor, \
   rotationMatricesFromInertiaTensor, ellipsoidfit
 
@@ -24,7 +23,8 @@ from projects.rshock import healpixThresholdedRadius
 
 # todo: as soon as snapshotSubset() can handle halo-centric quantities for more than one halo, we can 
 # eliminate the entire specialized ufunc logic herein
-userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','shape_ellipsoid_1r','tff','tcool_tff']
+userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','shape_ellipsoid_1r',
+                    'tff','tcool_tff']
 
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
@@ -466,6 +466,198 @@ def _pSplitBounds(sP, pSplit, minStellarMass=None, minHaloMass=None, indivStarMa
 
     return subhaloIDsTodo, indRange, nSubsSelection
 
+def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid,opts):
+    """ Handle custom logic for user defined functions and other non-standard 'reduction' 
+    operations, for a given particle set (e.g. those of a single subhalo). """
+
+    # ufunc: kappa rot
+    if ptProperty == 'Krot':
+        # minimum two star particles
+        if len(wValid[0]) < 2:
+            return [np.nan, np.nan, np.nan, np.nan]
+
+        stars_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
+        stars_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
+        stars_mass = particles['Masses'][i0:i1][wValid].reshape( (len(wValid[0]),1) )
+
+        # velocity of stellar CoM
+        sub_stellarMass = stars_mass.sum()
+        sub_stellarCoM_vel = np.sum(stars_mass * stars_vel, axis=0) / sub_stellarMass
+
+        # positions relative to most bound star, velocities relative to stellar CoM vel
+        for j in range(3):
+            stars_pos[:,j] -= stars_pos[0,j]
+            stars_vel[:,j] -= sub_stellarCoM_vel[j]
+
+        sP.correctPeriodicDistVecs(stars_pos)
+        stars_pos = sP.units.codeLengthToKpc(stars_pos) # kpc
+        stars_vel = sP.units.particleCodeVelocityToKms(stars_vel) # km/s
+        stars_rad_sq = stars_pos[:,0]**2.0 + stars_pos[:,1]**2.0 + stars_pos[:,2]**2.0
+
+        # total kinetic energy
+        sub_K = 0.5 * np.sum(stars_mass * stars_vel**2.0)
+
+        # specific stellar angular momentum
+        stars_J = stars_mass * np.cross(stars_pos, stars_vel, axis=1)
+        sub_stellarJ = np.sum(stars_J, axis=0)
+        sub_stellarJ_mag = np.linalg.norm(sub_stellarJ)
+        sub_stellarJ /= sub_stellarJ_mag # to unit vector
+        stars_Jz_i = np.dot(stars_J, sub_stellarJ)
+
+        # kinetic energy in rot (exclude first star with zero radius)
+        stars_R_i = np.sqrt(stars_rad_sq - np.dot(stars_pos,sub_stellarJ)**2.0)
+
+        stars_mass = stars_mass.reshape( stars_mass.size )
+        sub_Krot = 0.5 * np.sum( (stars_Jz_i[1:]/stars_R_i[1:])**2.0 / stars_mass[1:])
+
+        # restricted to those stars with the same rotation orientation as the mean
+        w = np.where( (stars_Jz_i > 0.0) & (stars_R_i > 0.0) )
+        sub_Krot_oriented = np.nan
+        if len(w[0]):
+            sub_Krot_oriented = 0.5 * np.sum( (stars_Jz_i[w]/stars_R_i[w])**2.0 / stars_mass[w])
+
+        # mass fraction of stars with counter-rotation
+        w = np.where( (stars_Jz_i < 0.0) )
+        mass_frac_counter = stars_mass[w].sum() / sub_stellarMass
+
+        r0 = sub_Krot / sub_K                   # \kappa_{star, rot}
+        r1 = sub_Krot_oriented / sub_K          # \kappa_{star, rot oriented}
+        r2 = mass_frac_counter                  # M_{star,counter} / M_{star,total}
+        r3 = sub_stellarJ_mag / sub_stellarMass # j_star [kpc km/s]
+
+        return [r0,r1,r2,r3]
+
+    # ufunc: radial velocity
+    if ptProperty == 'radvel':
+        gas_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
+        gas_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
+        gas_weights = np.squeeze( particles['weights'][i0:i1][wValid] )
+
+        haloPos = gc['SubhaloPos'][subhaloID,:]
+        haloVel = gc['SubhaloVel'][subhaloID,:]
+
+        vrad = sP.units.particleRadialVelInKmS(gas_pos, gas_vel, haloPos, haloVel)
+        if gas_weights.ndim == 0 and vrad.ndim == 1: gas_weights = [gas_weights]
+
+        vrad_avg = np.average(vrad, weights=gas_weights)
+        return vrad_avg
+
+    # shape measurement via iterative ellipsoid fitting
+    if ptProperty in ['shape_ellipsoid','shape_ellipsoid_1r']:
+        scale_rad = gc['SubhaloRhalfStars'][subhaloID]
+
+        if scale_rad == 0:
+            return np.nan
+
+        loc_val = particles['Coordinates'][i0:i1, :][wValid]
+        loc_wt  = particles['weights'][i0:i1][wValid] # mass
+
+        # positions relative to subhalo center, and normalized by stellar half mass radius
+        for j in range(3):
+            loc_val[:,j] -= gc['SubhaloPos'][subhaloID,j]
+
+        sP.correctPeriodicDistVecs(loc_val)
+        loc_val /= scale_rad
+
+        # fit, and save ratios of second and third axes lengths to major axis
+        q, s, _, _ = ellipsoidfit(loc_val, loc_wt, scale_rad, ellipsoid_rin, ellipsoid_rout)
+
+        return [q,s]
+
+    # ufunc: 'half radius' of the quantity
+    if op == 'halfrad':
+        loc_val = particles[ptProperty][i0:i1][wValid]
+        loc_rad = np.sqrt( rr[wValid] )
+
+        rhalf = _findHalfLightRadius(loc_rad, mags=None, vals=loc_val)
+
+        return rhalf
+
+    # distance to 256th closest particle
+    if op == 'dist256':
+        rr_loc = np.sort( rr[wValid] )
+        dist = np.sqrt( np.take(rr_loc, 256, mode='clip') )
+
+        return dist
+
+    # 2d gridding: deposit quantity onto a grid and derive a summary statistic
+    if op == 'grid2d_isophot_shape':
+        # prepare grid
+        pos = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
+        hsml = np.squeeze( particles['hsml'][i0:i1][wValid] )
+        mass = np.squeeze( particles[ptProperty][i0:i1][wValid] )
+        quant = None
+
+        boxCen = gc['SubhaloPos'][subhaloID,:]
+
+        # run grid
+        grid = sphMap(pos, hsml, mass, quant, opts['axes'], opts['boxSizeImg'], sP.boxSize, boxCen, 
+                      opts['nPixels'], ndims=3)
+
+        # post-process grid (any/all functionality of vis.common.gridBox() that we care about)
+        if opts['smoothFWHM'] is not None:
+            grid = gaussian_filter(grid, opts['sigma_xy'], mode='reflect', truncate=5.0)
+
+        if ' lum' in ptProperty: # erg/s/cm^2 -> erg/s/cm^2/arcsec^2
+            grid = sP.units.fluxToSurfaceBrightness(grid, opts['pxSizesCode'], arcsec2=True)
+
+        grid = logZeroNaN(grid) # log [erg/s/cm^2/arcsec^2]
+
+        # derive quantity
+        if 0:
+            from util.helper import plot2d
+            plot2d(grid, minmax=[-25,-19], filename='grid.pdf')
+
+        shape = np.zeros( len(opts['isophot_levels']), dtype='float32' )
+        shape.fill(np.nan)
+
+        for j, isoval in enumerate(opts['isophot_levels']):
+            with np.errstate(invalid='ignore'):
+                mask = ( (grid > isoval) & (grid < isoval+1.0) )
+
+            ww = np.where(mask)
+
+            if len(ww[0]) == 0:
+                continue
+
+            points = np.vstack( (opts['xxyy'][ww[0]], opts['xxyy'][ww[1]]) ).T
+
+            # compute minimum volume bounding ellipsoid (minimum area ellipse in 2D)
+            axislengths, theta, cen = mvbe(points)
+
+            if 0:
+                # debug plot
+                import matplotlib.pyplot as plt
+                from mpl_toolkits.axes_grid1 import make_axes_locatable
+                from matplotlib.patches import Ellipse
+
+                figsize = np.array([14,10]) * 0.8
+                fig = plt.figure(figsize=figsize)
+                ax = fig.add_subplot(111)
+
+                # plot
+                plt.imshow(mask, cmap='viridis', aspect=mask.shape[0]/mask.shape[1])
+                ax.autoscale(False)
+
+                pxscale = (opts['nPixels'][0] / opts['gridSizeCodeUnits'])
+                minoraxis_px = 2 * axislengths.min() * pxscale
+                majoraxis_px = 2 * axislengths.max() * pxscale
+                cen_px = cen * pxscale
+
+                e = Ellipse( cen_px, majoraxis_px, minoraxis_px, theta, lw=2.0, fill=False, color='red' )
+                ax.add_artist(e)
+
+                ax.scatter(points[:,1]*pxscale, points[:,0]*pxscale, 1.0, marker='x', color='green')
+
+                fig.savefig('mask_%.1f.pdf' % isoval)
+                plt.close(fig)
+
+            shape[j] = (axislengths.max() / axislengths.min()) # a/b > 1
+
+        return shape
+
+    raise Exception('Unhandled op.')
+
 def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad, 
                            ptRestrictions=None, weighting=None, scope='subfind', 
                            minStellarMass=None, minHaloMass=None, cenSatSelect=None):
@@ -481,7 +673,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         If minStellarMass is not None, then only process subhalos with mstar_30pkpc_log above this value.
         If minHaloMass is not None, then minimum (log m200crit) halo mass to process.
     """
-    assert op in ['sum','mean','max','ufunc','halfrad','dist256']
+    ops_basic = ['sum','mean','max']
+    ops_custom = ['ufunc','halfrad','dist256','grid2d_isophot_shape']
+    assert op in ops_basic + ops_custom
     assert scope in ['subfind','fof','global']
     if op == 'ufunc': assert ptProperty in userCustomFields
     assert minStellarMass is None or minHaloMass is None # cannot have both
@@ -566,6 +760,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         for restrictionField in ptRestrictions:
             fieldsLoad.append(restrictionField)
 
+    allocSize = None
+
     if ptProperty == 'Krot':
         fieldsLoad.append('pos')
         fieldsLoad.append('vel')
@@ -589,6 +785,37 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         fieldsLoad.append('pos')
         allocSize = (nSubsDo,2) # q,s
 
+    opts = None # todo: can move to function argument
+    if 'grid2d' in op:
+        fieldsLoad.append('pos')
+        fieldsLoad.append('hsml')
+
+        # hard-code constant grid parameters (can generalize)
+        opts = {'isophot_levels' : [-18.0, -18.5, -19.0, -19.5, -20.0], # erg/s/cm^2/arcsec^2
+                'axes' : [0,1],
+                'quant' : None, # distribute mass
+                'gridExtentKpc' : 100.0,
+                'pxScaleKpc' : sP.units.arcsecToAngSizeKpcAtRedshift(0.2), # MUSE 0.2"/px
+                'smoothFWHM' : sP.units.arcsecToAngSizeKpcAtRedshift(0.7), # ~MUSE UDF ("), None to disable
+                #'nPixels' : [int(np.round(gridExtentKpc/pxScaleKpc)), int(np.round(gridExtentKpc/pxScaleKpc))]
+                'nPixels' : [250,250]}
+
+        opts['gridSizeCodeUnits'] = sP.units.physicalKpcToCodeLength(opts['gridExtentKpc'])
+        opts['boxSizeImg'] = opts['gridSizeCodeUnits'] * np.array([1.0,1.0,1.0])
+        opts['pxSizesCode'] = opts['boxSizeImg'][0:1] / opts['nPixels']
+
+        # compute pixel coordinates
+        opts['xxyy'] = np.linspace(opts['pxScaleKpc']/2, 
+                                   opts['gridSizeCodeUnits']-opts['pxScaleKpc']/2,
+                                   opts['nPixels'][0])
+
+        if opts['smoothFWHM'] is not None:
+            # fwhm -> 1 sigma, and physical kpc -> pixels (can differ in x,y)
+            pxScaleXY = np.array(opts['boxSizeImg'])[opts['axes']] / opts['nPixels']
+            opts['sigma_xy'] = (opts['smoothFWHM'] / 2.3548) / pxScaleXY
+
+        allocSize = (nSubsDo,len(opts['isophot_levels']))
+
     fieldsLoad = list(set(fieldsLoad)) # make unique
 
     particles = {}
@@ -600,6 +827,12 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         # eliminate the entire specialized ufunc logic herein
         particles[ptProperty] = sP.snapshotSubsetP(partType=ptType, fields=[ptProperty], indRange=indRange)
 
+    if 'grid2d' in op:
+        # ptProperty to be gridded is a luminosity? convert lum -> flux now
+        if ' lum' in ptProperty: # 1e30 erg/s -> erg/s/cm^2
+            particles[ptProperty] *= 1e30
+            particles[ptProperty] = sP.units.luminosityToFlux(particles[ptProperty], wavelength=None)
+            
     if 'count' not in particles:
         key = list(particles.keys())[0]
         particles['count'] = particles[key].shape[0]
@@ -608,7 +841,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     dtype = particles[ptProperty].dtype if ptProperty in particles.keys() else 'float32' # for custom
     assert dtype in ['float32','float64'] # otherwise check, when does this happen?
 
-    if op == 'ufunc': 
+    if allocSize is not None:
         r = np.zeros( allocSize, dtype=dtype )
     else:
         if particles[ptProperty].ndim in [0,1]:
@@ -670,6 +903,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         # use squared radii and sq distance function
         validMask = np.ones( i1-i0, dtype=np.bool )
 
+        rr = None
         if rad is not None or op in ['halfrad','dist256']:
 
             if not radRestrictIn2D:
@@ -724,107 +958,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             continue # zero length of particles satisfying radial cut and restriction
 
         # user function reduction operations
-        if op in ['ufunc','halfrad','dist256']:
-            # ufunc: kappa rot
-            if ptProperty == 'Krot':
-                # minimum two star particles
-                if len(wValid[0]) < 2:
-                    continue
-
-                stars_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
-                stars_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
-                stars_mass = particles['Masses'][i0:i1][wValid].reshape( (len(wValid[0]),1) )
-
-                # velocity of stellar CoM
-                sub_stellarMass = stars_mass.sum()
-                sub_stellarCoM_vel = np.sum(stars_mass * stars_vel, axis=0) / sub_stellarMass
-
-                # positions relative to most bound star, velocities relative to stellar CoM vel
-                for j in range(3):
-                    stars_pos[:,j] -= stars_pos[0,j]
-                    stars_vel[:,j] -= sub_stellarCoM_vel[j]
-
-                sP.correctPeriodicDistVecs(stars_pos)
-                stars_pos = sP.units.codeLengthToKpc(stars_pos) # kpc
-                stars_vel = sP.units.particleCodeVelocityToKms(stars_vel) # km/s
-                stars_rad_sq = stars_pos[:,0]**2.0 + stars_pos[:,1]**2.0 + stars_pos[:,2]**2.0
-
-                # total kinetic energy
-                sub_K = 0.5 * np.sum(stars_mass * stars_vel**2.0)
-
-                # specific stellar angular momentum
-                stars_J = stars_mass * np.cross(stars_pos, stars_vel, axis=1)
-                sub_stellarJ = np.sum(stars_J, axis=0)
-                sub_stellarJ_mag = np.linalg.norm(sub_stellarJ)
-                sub_stellarJ /= sub_stellarJ_mag # to unit vector
-                stars_Jz_i = np.dot(stars_J, sub_stellarJ)
-
-                # kinetic energy in rot (exclude first star with zero radius)
-                stars_R_i = np.sqrt(stars_rad_sq - np.dot(stars_pos,sub_stellarJ)**2.0)
-
-                stars_mass = stars_mass.reshape( stars_mass.size )
-                sub_Krot = 0.5 * np.sum( (stars_Jz_i[1:]/stars_R_i[1:])**2.0 / stars_mass[1:])
-
-                # restricted to those stars with the same rotation orientation as the mean
-                w = np.where( (stars_Jz_i > 0.0) & (stars_R_i > 0.0) )
-                sub_Krot_oriented = np.nan
-                if len(w[0]):
-                    sub_Krot_oriented = 0.5 * np.sum( (stars_Jz_i[w]/stars_R_i[w])**2.0 / stars_mass[w])
-
-                # mass fraction of stars with counter-rotation
-                w = np.where( (stars_Jz_i < 0.0) )
-                mass_frac_counter = stars_mass[w].sum() / sub_stellarMass
-
-                r[i,0] = sub_Krot / sub_K                   # \kappa_{star, rot}
-                r[i,1] = sub_Krot_oriented / sub_K          # \kappa_{star, rot oriented}
-                r[i,2] = mass_frac_counter                  # M_{star,counter} / M_{star,total}
-                r[i,3] = sub_stellarJ_mag / sub_stellarMass # j_star [kpc km/s]
-
-            # ufunc: radial velocity
-            if ptProperty == 'radvel':
-                gas_pos  = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
-                gas_vel  = np.squeeze( particles['Velocities'][i0:i1,:][wValid,:] )
-                gas_weights = np.squeeze( particles['weights'][i0:i1][wValid] )
-
-                haloPos = gc['SubhaloPos'][subhaloID,:]
-                haloVel = gc['SubhaloVel'][subhaloID,:]
-
-                vrad = sP.units.particleRadialVelInKmS(gas_pos, gas_vel, haloPos, haloVel)
-                if gas_weights.ndim == 0 and vrad.ndim == 1: gas_weights = [gas_weights]
-
-                r[i] = np.average(vrad, weights=gas_weights)
-
-            # shape measurement via iterative ellipsoid fitting
-            if ptProperty in ['shape_ellipsoid','shape_ellipsoid_1r']:
-                scale_rad = gc['SubhaloRhalfStars'][subhaloID]
-                if scale_rad == 0.0:
-                    continue
-
-                loc_val = particles['Coordinates'][i0:i1, :][wValid]
-                loc_wt  = particles['weights'][i0:i1][wValid] # mass
-
-                # positions relative to subhalo center, and normalized by stellar half mass radius
-                for j in range(3):
-                    loc_val[:,j] -= gc['SubhaloPos'][subhaloID,j]
-
-                sP.correctPeriodicDistVecs(loc_val)
-                loc_val /= scale_rad
-
-                # fit, and save ratios of second and third axes lengths to major axis
-                q, s, _, _ = ellipsoidfit(loc_val, loc_wt, scale_rad, ellipsoid_rin, ellipsoid_rout)
-                r[i,0] = q
-                r[i,1] = s
-
-            # ufunc: 'half radius' of the quantity
-            if op == 'halfrad':
-                loc_val = particles[ptProperty][i0:i1][wValid]
-                loc_rad = np.sqrt( rr[wValid] )
-                r[i] = _findHalfLightRadius(loc_rad, mags=None, vals=loc_val)
-
-            # distance to 256th closest particle
-            if op == 'dist256':
-                rr = np.sort( rr[wValid] )
-                r[i] = np.sqrt( np.take(rr, 256, mode='clip') )
+        if op in ops_custom:
+            r[i,...] = _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid,opts)
 
             # ufunc processed and value stored, skip to next subhalo
             continue
@@ -835,10 +970,13 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             loc_val = particles[ptProperty][i0:i1][wValid]
             loc_wt  = particles['weights'][i0:i1][wValid]
 
-            if op == 'sum': r[i] = np.sum( loc_val )
-            if op == 'max': r[i] = np.max( loc_val )
+            if op == 'sum':
+                r[i] = np.sum( loc_val )
+            if op == 'max':
+                r[i] = np.max( loc_val )
             if op == 'mean':
-                if loc_wt.sum() == 0.0: loc_wt = np.zeros( loc_val.size, dtype='float32' ) + 1.0 # if all zero weights
+                if loc_wt.sum() == 0.0:
+                    loc_wt = np.zeros( loc_val.size, dtype='float32' ) + 1.0 # if all zero weights
                 r[i] = np.average( loc_val , weights=loc_wt )
         else:
             # vector (e.g. pos, vel, Bfield)
@@ -846,10 +984,14 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 loc_val = particles[ptProperty][i0:i1,j][wValid]
                 loc_wt  = particles['weights'][i0:i1][wValid]
 
-                if op == 'sum': r[i,j] = np.sum( loc_val )
-                if op == 'max': r[i,j] = np.max( loc_val )
+                if op == 'sum':
+                    r[i,j] = np.sum( loc_val )
+                if op == 'max':
+                    r[i,j] = np.max( loc_val )
                 if op == 'mean':
-                    if loc_wt.sum() == 0.0: loc_wt = np.zeros( loc_val.size, dtype='float32' ) + 1.0 # if all zero weights
+                    if loc_wt.sum() == 0.0:
+                        loc_wt = np.zeros( loc_val.size, dtype='float32' ) + 1.0 # if all zero weights
+
                     r[i,j] = np.average( loc_val , weights=loc_wt )
 
     attrs = {'Description' : desc.encode('ascii'),
@@ -3013,6 +3155,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_HaloStars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='mass',op='sum',rad='r015_1rvir_halo'),
 
+   'Subhalo_Mass_HaloGasFoF' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',scope='fof',cenSatSelect='cen',rad='r015_1rvir_halo'),
+   'Subhalo_Mass_HaloGasFoF_SFCold' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',scope='fof',cenSatSelect='cen',rad='r015_1rvir_halo',ptRestrictions={'temp_sfcold':['lt',4.5]}),
+
    'Subhalo_Mass_50pkpc_Gas': \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='Masses',op='sum',rad=50.0),
    'Subhalo_Mass_50pkpc_Stars': \
@@ -3700,6 +3847,8 @@ fieldComputeFunctionMapping = \
    'Subhalo_RadialMassFlux_SubfindWithFuzz_Wind_v200norm' : partial(instantaneousMassFluxes,ptType='wind',scope='subhalo_wfuzz',v200norm=True),
    'Subhalo_MassLoadingSN_SubfindWithFuzz_SFR-100myr_v200norm' : partial(massLoadingsSN,sfr_timescale=100,outflowMethod='instantaneous',v200norm=True),
    'Subhalo_OutflowVelocity_SubfindWithFuzz_v200norm' : partial(outflowVelocities,v200norm=True),
+
+   'Subhalo_MgII_Emission_Grid2D_Shape' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_shape',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
 
   }
 

@@ -164,7 +164,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants4 = ['Krot_stars2','Krot_oriented_stars2','Arot_stars2','specAngMom_stars2',
                'Krot_gas2',  'Krot_oriented_gas2',  'Arot_gas2',  'specAngMom_gas2']
 
-    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo', 'mg2_lum', 'mg2_lumsize', 'mg2_lumsize_rel',
+    quants_misc = ['M_bulge_counter_rot','xray_r500','xray_subhalo', 
+                   'mg2_lum', 'mg2_lumsize', 'mg2_lumsize_rel', 'mg2_shape',
                    'p_sync_ska','p_sync_ska_eta43','p_sync_ska_alpha15','p_sync_vla',
                    'nh_2rhalf','nh_halo','gas_vrad_2rhalf','gas_vrad_halo','temp_halo',
                    'Z_stars_halo', 'Z_gas_halo', 'Z_gas_all', 'fgas_r200', 'tcool_halo_ovi',
@@ -414,9 +415,17 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [0.0, 5.0]
             if tight: minMax = [0.0, 5.0]
 
-    if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z','mass_halogas_cold','mass_halogas_sfcold']:
+    if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z',
+                     'mass_halogas_cold','mass_halogas_sfcold','mass_halogasfof_cold','mass_halogasfof_sfcold',
+                     'frac_halogas_cold','frac_halogas_sfcold','frac_halogasfof_cold','frac_halogasfof_sfcold']:
         # total OVI/OVII/metal/cold (logT<4.5) mass in subhalo
-        vals = sP.groupCat(sub=quantname)
+        if 'frac_' in quantname:
+            mass_subset = sP.groupCat(sub=quantname.replace('frac_','mass_'))
+            mass_total  = sP.groupCat(sub='mass_halogas')
+            with np.errstate(invalid='ignore'):
+                vals = mass_subset / mass_total # linear
+        else:
+            vals = sP.groupCat(sub=quantname)
 
         speciesStr = quant.split("_")[1].upper()       
 
@@ -435,16 +444,24 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if speciesStr == 'Z':
             minMax = [7.0, 9.5]
             if tight: minMax = [6.5, 11.0]
-        if quantname in ['mass_halogas_cold','mass_halogas_sfcold']:
+        if 'halogas_' in quantname:
             minMax = [8.5, 10.5]
             if tight: minMax = [8.0, 12.0]
-            speciesStr = 'cold gas, halo'
-            if 'sfcold' in quantname: speciesStr = 'cold+SF>0 gas,halo'
+            speciesStr = 'cold gas'
+            if 'sfcold' in quantname: speciesStr = 'cold+SFing gas'
+
+        if 'halogasfof' in quantname:
+            speciesStr += ',w/ sats'
 
         label = 'M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % (speciesStr)
 
-        minMax[0] -= sP.redshift/2
-        minMax[1] -= sP.redshift/4
+        if 'frac_' in quantname:
+            label = 'Halo [%s] Mass Fraction' % speciesStr
+            minMax = [0, 1]
+            takeLog = False
+        else:
+            minMax[0] -= sP.redshift/2
+            minMax[1] -= sP.redshift/4
 
     if quantname in ['sfr_30pkpc_instant','sfr_30pkpc_10myr','sfr_30pkpc_50myr','sfr_30pkpc_100myr',
                      'ssfr_30pkpc_instant','ssfr_30pkpc_10myr','ssfr_30pkpc_50myr','ssfr_30pkpc_100myr',
@@ -1744,7 +1761,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
-    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel']:
+    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel','mg2_shape']:
         # MgII emission luminosity [erg/s] or half-light radius, subhalo total, including dust depletion
         if 'size' in quantname:
             # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
@@ -1763,6 +1780,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
                 vals = sP.units.codeLengthToKpc(ac)
                 minMax = [1,10]
                 takeLog = False
+        elif 'shape' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_Emission_Grid2D_Shape'
+            ac = sP.auxCat(fields=[acField])[acField]
+
+            label = 'MgII (a/b) Axis Ratio [ linear ]'
+            minMax = [0,1]
+            takeLog = False
         else:
             label = 'L$_{\\rm MgII}$ [ log erg/s ]'
 
@@ -1950,6 +1975,48 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'log ( Z$_{\\rm %s}$ / Z$_{\\rm sun}$ )' % ptName.lower()
         if not clean:
             label += '  [0.15 < r/r$_{\\rm vir}$ < 1.0]'
+
+    if quantname in ['inclination']:
+        # CUSTOM! We have some particular datsets which generate a property, per subhalo, 
+        # for each of several random/selected inclinations. The return here is the only 
+        # case in which it is multidimensional, with the first axis corresponding to subhaloID.
+        # This can transparently work through e.g. a cen/sat selection, and plotting?
+        minMax = [0, 90]
+
+        from projects.mg2emission import gridPropertyVsInclinations
+
+        subInds, inclinations, _ = gridPropertyVsInclinations(sP, propName='inclination')
+
+        # stamp
+        vals = np.zeros( (sP.numSubhalos,inclinations.shape[1]), dtype='float32' )
+        vals.fill(np.nan)
+
+        vals[subInds,:] = inclinations
+
+        label = 'Inclination [ deg ]'
+        takeLog = False
+
+    if quantname in ['inclination_mg2_lumsize','inclination_mg2_shape']:
+        # CUSTOM! see above.
+        from projects.mg2emission import gridPropertyVsInclinations
+
+        propName = quantname.split("inclination_")[1]
+        subInds, inclinations, props = gridPropertyVsInclinations(sP, propName=propName)
+
+        # stamp
+        vals = np.zeros( (sP.numSubhalos,inclinations.shape[1]), dtype='float32' )
+        vals.fill(np.nan)
+        
+        vals[subInds,:] = props
+
+        if 'lumsize' in propName:
+            minMax = [0, 30]
+            label = 'r$_{\\rm 1/2,MgII}$ [ pkpc ]'
+            takeLog = False
+        if 'shape' in propName:
+            minMax = [0, 1]
+            label = 'MgII (a/b) Axis Ratio [ linear ]'
+            takeLog = False
 
     if quantname in ['redshift']:
         # redshift

@@ -13,10 +13,11 @@ from getpass import getuser
 
 from vis.common import renderMultiPanel, savePathDefault, defaultHsmlFac, gridBox
 from cosmo.mergertree import mpbSmoothedProperties
-from util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, rotationMatricesFromInertiaTensor
+from util.rotation import meanAngMomVector, rotationMatrixFromVec, momentOfInertiaTensor, \
+  rotationMatricesFromInertiaTensor, rotationMatrixFromAngleDirection
 from util.simParams import simParams
 
-def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, cenShift, depthFac, **kwargs):
+def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, inclination, mpb, cenShift, depthFac, **kwargs):
     """ Factor out some box/image related calculations common to all halo plots. """
     assert sizeType in ['rVirial','rHalfMass','rHalfMassStars','codeUnits','kpc','arcsec','arcmin']
 
@@ -157,6 +158,16 @@ def haloImgSpecs(sP, size, sizeType, nPixels, axes, relCoords, rotation, mpb, ce
             rotMatrices = rotationMatricesFromInertiaTensor(I)
             rotMatrix = rotMatrices[rotName]
 
+    if inclination is not None:
+        # derive additional rotation matrix for inclination angle request
+        incRotMatrix = rotationMatrixFromAngleDirection(inclination, [1,0,0])
+
+        # if rotMatrix already exists, multiply our inclination rotation matrix in
+        if rotMatrix is not None:
+            rotMatrix = np.dot(incRotMatrix,rotMatrix)
+        else:
+            rotMatrix = incRotMatrix
+
     return boxSizeImg, boxCenter, extent, haloVirRad, \
            galHalfMassRad, galHalfMassRadStars, rotMatrix, rotCenter
 
@@ -200,9 +211,10 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
     ctName      = None          # if not None (automatic based on field), specify colormap name
     plotSubhalos = False        # plot halfmass circles for the N most massive subhalos in this (sub)halo
     relCoords   = True          # if plotting x,y,z coordinate labels, make them relative to box/halo center
-    projType    = 'ortho'       # projection type, 'ortho', 'equirectangular'
+    projType    = 'ortho'       # projection type, 'ortho', 'equirectangular', 'mollweide'
     projParams  = {}            # dictionary of parameters associated to this projection type
-    rotation    = None          # 'face-on', 'edge-on', or None
+    rotation    = None          # 'face-on', 'edge-on', 'edge-on-stars', or None
+    inclination = None          # inclination angle (degrees, about the x-axis) (0=unchanged)
     rotMatrix   = None          # rotation matrix, i.e. manually specify if rotation is None
     rotCenter   = None          # rotation center, i.e. manually specify if rotation is None
     mpb         = None          # use None for non-movie/single frame
@@ -524,3 +536,39 @@ def selectHalosFromMassBins(sP, massBins, numPerBin, selType='linear'):
         inds.append( wMassBin )
 
     return inds
+
+def subsampleRandomSubhalos(sP, maxPointsPerDex, mstarMinMax, mstar=None, cenOnly=False):
+    """ Sub-select subhalos, returning indices, such that we have at least N per 0.1 dex bin of 
+    stellar mass. """
+    np.random.seed(424242)
+    binsize = 0.1 # dex
+
+    if mstar is None:
+        mstar = sP.subhalos('mstar_30pkpc_log')
+        if cenOnly:
+            cen_flag = sP.subhalos('cen_flag')
+            mstar[cen_flag == 0] = np.nan # never select
+    else:
+        assert not cenOnly # we don't know where mstar values came from, cannot apply
+
+    inds = np.zeros( mstar.size, dtype='int32' )
+    count = 0
+    xbin = mstarMinMax[0]
+
+    while xbin < mstarMinMax[1]:
+        with np.errstate(invalid='ignore'):
+            w = np.where( (mstar >= xbin) & (mstar < xbin+binsize))[0]
+
+        if len(w) < maxPointsPerDex*binsize:
+            inds[count:count + len(w)] = w
+            count += len(w)
+        else:
+            inds_loc = np.random.choice(w, int(maxPointsPerDex*binsize), replace=False)
+            inds[count:count+inds_loc.size] = inds_loc
+            count += inds_loc.size
+
+        xbin += binsize
+
+    inds = inds[0:count]
+
+    return inds, mstar[inds]
