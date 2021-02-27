@@ -12,11 +12,11 @@ import warnings
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable, inset_locator
 from scipy.signal import savgol_filter
-from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic, binned_statistic_2d
 
 from util import simParams
-from util.helper import loadColorTable, sampleColorTable, getWhiteBlackColors, running_median, logZeroNaN, iterable, evenlySample
+from util.helper import loadColorTable, sampleColorTable, getWhiteBlackColors, running_median, \
+  logZeroNaN, iterable, evenlySample, gaussian_filter_nan
 from plot.quantities import quantList, simSubhaloQuantity, simParticleQuantity
 from plot.config import *
 
@@ -441,14 +441,7 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             XX, YY = np.meshgrid(xc[:-1], yc[:-1], indexing='ij')
 
             # smooth, ignoring NaNs
-            if smoothSigma > 0:
-                zz1 = zz.copy()
-                zz1[np.isnan(zz)] = 0.0
-                zz1 = gaussian_filter(zz1, smoothSigma)
-                zz2 = 0 * zz.copy() + 1.0
-                zz2[np.isnan(zz)] = 0.0
-                zz2 = gaussian_filter(zz2, smoothSigma)
-                zz = zz1/zz2
+            zz = gaussian_filter_nan(zz, smoothSigma)
 
             c = plt.contour(XX, YY, zz, contours, colors=contoursColor, linestyles='solid', alpha=0.6)
 
@@ -854,10 +847,10 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
 
     # config
     if xlog:
-        if xlim is not None: xlim = [-0.5,3.0]
+        if xlim is None: xlim = [-0.5,3.0]
         xlabel = 'Radius [ log pkpc ]'
     else:
-        if xlim is not None: xlim = [0.0,500.0]
+        if xlim is None: xlim = [0.0,500.0]
         xlabel = 'Radius [ pkpc ]'
 
     percs = [10,25,75,90]
@@ -945,7 +938,7 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
         ax.plot(rr, yy_mean, '--', lw=lw, color=l.get_color())
 
         if len(sPs) <= 2:
-            for j in range(yy_perc.shape[0]/2):
+            for j in range(int(yy_perc.shape[0]/2)):
                 ax.fill_between(rr, yy_perc[0+j,:], yy_perc[-(j+1),:], color=l.get_color(), interpolate=True, alpha=0.15*(j+1))
 
     # special behavior
@@ -976,6 +969,168 @@ def plotSingleRadialProfile(sPs, ptType='gas', ptProperty='temp_linear', subhalo
         hStr = 'subhID-%d' % subhaloIDs[0] if len(subhaloIDs) == 1 else 'nSH-%d' % len(subhaloIDs)
 
     fig.savefig('radProfile_%s_%s_%s_%s_scope-%s.pdf' % (sPstr,ptType,ptProperty,hStr,scope))
+    plt.close(fig)
+
+def plot2DStackedRadialProfiles(sPs, ptType='gas', ptProperty='temp', ylim=[0.0, 2.0], 
+                                cLog=True, clim=None, cNormQuant=None, smoothSigma=0.0, 
+                                xQuant='mhalo_200_log', xlim=None, xbinsize=None, ctName='viridis'):
+    """ 2D Stacked radial profile(s) of some quantity ptProperty of ptType vs. radius from (all) halo centers 
+    (spatial_global based, using caching auxCat functionality, restricted to >1000 dm particle limit). 
+    Note: Combination of {ptType,ptProperty} must already exist in auxCat mapping.
+    xQuant and xlim specify x-axis (per subhalo) property, by default halo mass, binned by xbinsize.
+    ylim specifies radial range, in linear rvir units.
+    cLog specifies whether to log the color quantity, while clim (optionally) gives the colorbar bounds.
+    If cNormQuant is not None, then normalize the profile values -per halo- by this subhalo quantity, 
+    e.g. 'tvir' in the case of ptProperty=='temp'.
+    If smoothSigma > 0 and cNormQuant is not None, use this smoothing to contour unity values. """
+
+    # config
+    scope = 'Global'
+
+    acName = 'Subhalo_RadProfile3D_%s_%s_%s' % (scope,ptType.capitalize(), ptProperty.capitalize())
+
+    # try to get automatic label/limits
+    clabel, clim2, clog2 = simParticleQuantity(sPs[0], ptType, ptProperty, haloLims=True)
+    if clim is None:
+        clim = clim2
+
+    # get x-axis and y-axis data/config from first sP
+    xvals, xlabel, xlim2, xlog = sPs[0].simSubhaloQuantity(xQuant)
+
+    if xlim is None: xlim = xlim2
+
+    ac = sPs[0].auxCat(acName)
+
+    # radial bins
+    radBinEdges = ac[acName+'_attrs']['rad_bin_edges']
+    radBinCen = (radBinEdges[1:] + radBinEdges[:-1]) / 2
+    radBinInds = np.where( (radBinCen > ylim[0]) & (radBinCen <= ylim[1]) )[0]
+
+    nRadBins = radBinInds.size
+    radBinCen = radBinCen[radBinInds]
+
+    # start figure
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    if xbinsize is None:
+        # automatically determine for ~square pixels
+        bbox = ax.get_window_extent()
+        nXBins = int(nRadBins*(bbox.height/bbox.width/0.6)) # hack: don't have axis labels/cbar yet...
+        xbinsize = (xlim[1] - xlim[0]) / nXBins
+
+    # sanity check that y-axis labels (radial range) will be close enough to binned profile values
+    err_left = np.abs(radBinCen[radBinInds][0] - ylim[0])
+    err_right = np.abs(radBinCen[radBinInds][-1] - ylim[1])
+    err_cen = np.abs(radBinCen[radBinInds][int(nRadBins/2)] - (ylim[1]-ylim[0])/2)
+
+    assert err_left < (ylim[1]-ylim[0])/20
+    assert err_right < (ylim[1]-ylim[0])/20
+    assert err_cen < (ylim[1]-ylim[0])/20 
+
+    # x-axis bins, and allocate
+    bin_edges = np.arange(xlim[0], xlim[1]+xbinsize, xbinsize)
+    bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+    nbins = bin_centers.size
+
+    binned_count = np.zeros( (nbins,nRadBins), dtype='int32' )
+    binned_quant = np.zeros( (nbins,nRadBins), dtype='float32' )
+
+    # loop over simulations
+    for i, sP in enumerate(sPs):
+        print(sP.simName)
+
+        # load (except for first, which is already available above)
+        if i > 0:
+            xvals, xlabel, xlim2, xlog = sP.simSubhaloQuantity(xQuant)
+        
+            # load auxCat profiles
+            ac = sP.auxCat(acName)
+
+        # take subset for radial bins of interest, and restrict xvals/cnorm_vals to available subhalos
+        yvals = ac[acName][:,radBinInds]
+        subhaloIDs = ac['subhaloIDs']
+        xvals = xvals[subhaloIDs]
+
+        if cNormQuant is not None:
+            cnorm_vals, cnorm_label, _, _ = sP.simSubhaloQuantity(cNormQuant)
+            cnorm_vals = cnorm_vals[subhaloIDs]
+
+        if i == 0:
+            # try units verification
+            unit1 = clabel.split("[")[1].split("]")[0].strip()
+            unit2 = cnorm_label.split("[")[1].split("]")[0].strip()
+            assert unit1 == unit2 # can generalize further
+
+            # update colorbar label
+            clabel = clabel.split("[")[0] + "/ " + cnorm_label.split("[")[0]
+            if cLog: clabel += " [ log ]"
+
+        # assign into bins
+        for j in range(nbins):
+            bin_start = bin_edges[j]
+            bin_stop = bin_edges[j+1]
+
+            w = np.where( (xvals > bin_start) & (xvals <= bin_stop) )[0]
+
+            #print(bin_start, bin_stop, len(w), xvals[w].mean())
+
+            if len(w) == 0:
+                continue
+
+            # save sum and counts per bin
+            if cNormQuant is not None:
+                yprof_loc = np.nansum( yvals[w,:] / cnorm_vals[w,np.newaxis], axis=0 )
+            else:
+                yprof_loc = np.nansum( yvals[w,:], axis=0 )
+
+            count_loc = np.count_nonzero( np.isfinite( yvals[w,:] ), axis=0 )
+
+            binned_quant[j,:] += yprof_loc
+            binned_count[j,:] += count_loc
+
+    # compute mean
+    w_zero = np.where(binned_count == 0)
+    assert np.sum(binned_quant[w_zero]) == 0
+
+    w = np.where(binned_count > 0)
+    binned_quant[w] /= binned_count[w]
+    if cLog:
+        binned_quant = logZeroNaN(binned_quant)
+
+    binned_quant[w_zero] = np.nan # leave white
+
+    # start plot
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel('Radius / R$_{\\rm vir}$')
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)        
+
+    _draw_special_lines(sPs[0], ax, ptProperty)
+
+    # add image
+    cmap = loadColorTable(ctName)
+    norm = Normalize(vmin=clim[0], vmax=clim[1], clip=False)
+    im = plt.imshow(binned_quant.T, extent=[xlim[0],xlim[1],ylim[0],ylim[1]], 
+               cmap=cmap, norm=norm, origin='lower', interpolation='nearest', aspect='auto')
+
+    # if we are taking a normalization, contour lines equal to unity in the color quantity
+    if cNormQuant is not None:
+        searchVal = 0.0 if cLog else 1.0
+        XX, YY = np.meshgrid(bin_centers, radBinCen, indexing='ij')
+
+        # smooth, ignoring NaNs
+        binned_quant = gaussian_filter_nan(binned_quant, smoothSigma)
+
+        c = plt.contour(XX, YY, binned_quant, [searchVal], colors='white', linestyles='solid', alpha=0.6)
+
+    cax = make_axes_locatable(ax).append_axes('right', size='3%', pad=0.2)
+    cb = fig.colorbar(im, cax=cax, label=clabel)
+
+    # finish plot
+    sPstr = '-'.join([sP.simName for sP in sPs])
+    fig.savefig('radProfiles2DStack_%s_%d_%s_%s_vs_%s.pdf' % (sPstr,sPs[0].snap,ptType,ptProperty,xQuant))
     plt.close(fig)
 
 # -------------------------------------------------------------------------------------------------

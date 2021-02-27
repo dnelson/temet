@@ -2866,6 +2866,9 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
                 loc_inds = calcParticleIndices(particles['Coordinates'], gc['SubhaloPos'][subhaloID,:], 
                                                maxSearchRad, boxSizeSim=sP.boxSize, tree=tree)
+
+                if loc_inds is None:
+                    continue # zero particles of this type within search radius
                 loc_size = loc_inds.size
             else:
                 loc_inds = np.s_[i0:i1] # slice object (will create view)
