@@ -680,6 +680,16 @@ def groupCatHasField(sP, objType, field):
 
     return False
 
+def groupCatFields(sP, objType):
+    """ Return list of all fields in the group catalog for either halos or subhalos. """
+    for i in range(groupCatNumChunks(sP.basePath,sP.snap,sP.subbox)):
+        with h5py.File(gcPath(sP.simPath,sP.snap,i),'r') as f:
+            if objType in f:
+                fields = list(f[objType].keys())
+                break
+
+    return fields            
+
 def groupCatNumChunks(basePath, snapNum, subbox=None):
     """ Find number of file chunks in a group catalog. """
     from .snapshot import subboxVals

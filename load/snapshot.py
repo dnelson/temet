@@ -109,7 +109,10 @@ def snapshotHeader(sP, fileName=None):
 
 def snapHasField(sP, partType, field):
     """ True or False, does snapshot data for partType have field? """
-    gName = 'PartType' + str(sP.ptNum(partType))
+    gName = partType
+
+    if 'PartType' not in partType:
+        gName = 'PartType' + str(sP.ptNum(partType))
 
     # the first chunk could not have the field but it could exist in a later chunk (e.g. sparse file 
     # contents of subboxes). to definitely return False, we have to check them all, but we can return 
@@ -122,6 +125,22 @@ def snapHasField(sP, partType, field):
                 return True
 
     return False
+
+def snapFields(sP, partType):
+    """ Return list of all fields for this particle type. """
+    gName = partType
+    if 'PartType' not in partType:
+        gName = 'PartType' + str(sP.ptNum(partType))
+
+    for i in range(snapNumChunks(sP.simPath, sP.snap, subbox=sP.subbox)):
+        fileName = snapPath(sP.simPath, sP.snap, chunkNum=i, subbox=sP.subbox)
+
+        with h5py.File(fileName,'r') as f:
+            if gName in f:
+                fields = list(f[gName].keys())
+                break
+
+    return fields
 
 def snapConfigVars(sP):
     """ Load Config.sh flags and values as stored in the /Config/ group of modern snapshots. """

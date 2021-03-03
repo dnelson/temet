@@ -4,6 +4,7 @@ from . import cloudy
 from . import color
 from . import hydrogen
 from . import kCorr
+from . import lightcone
 from . import mergertree
 from . import perf
 from . import skirt

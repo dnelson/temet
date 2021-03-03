@@ -839,12 +839,12 @@ class simParams:
                                validSnapList, cenSatSubhaloIndices, correctPeriodicDistVecs, correctPeriodicPosVecs, \
                                correctPeriodicPosBoxWrap
         from cosmo.util import subhaloIDListToBoundingPartIndices, inverseMapPartIndicesToSubhaloIDs, inverseMapPartIndicesToHaloIDs
-        from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapNumChunks, \
+        from load.snapshot import snapshotSubset, snapshotHeader, snapshotSubsetParallel, snapHasField, snapFields, snapNumChunks, \
                                   snapPath, snapConfigVars, snapParameterVars, subboxVals, haloOrSubhaloSubset, \
                                   snapshotSubsetLoadIndicesChunked
         from load.auxcat import auxCat
         from load.groupcat import groupCat, groupCatSingle, groupCatHeader, \
-                                  gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, \
+                                  gcPath, groupCatNumChunks, groupCatOffsetListIntoSnap, groupCatHasField, groupCatFields, \
                                   groupCat_subhalos, groupCat_halos, groupCatSingle_subhalo, groupCatSingle_halo
         from cosmo.mergertree import loadMPB, loadMDB, loadMPBs
         from plot.quantities import simSubhaloQuantity, simParticleQuantity
@@ -869,6 +869,7 @@ class simParams:
         self.snapshotSubset     = partial(snapshotSubset, self)
         self.snapshotHeader     = partial(snapshotHeader, sP=self)
         self.snapHasField       = partial(snapHasField, self)
+        self.snapFields         = partial(snapFields, self)
         self.snapNumChunks      = partial(snapNumChunks, self.simPath)
         self.snapConfigVars     = partial(snapConfigVars, self)
         self.snapParameterVars  = partial(snapParameterVars, self)
@@ -879,6 +880,7 @@ class simParams:
         self.groupCatHeader     = partial(groupCatHeader, sP=self)
         self.groupCatNumChunks  = partial(groupCatNumChunks, self.simPath)
         self.groupCatHasField   = partial(groupCatHasField, self)
+        self.groupCatFields     = partial(groupCatFields, self)
         self.groupCat           = partial(groupCat, sP=self)
         self.auxCat             = partial(auxCat, self)
         self.loadMPB            = partial(loadMPB, self)
@@ -897,6 +899,7 @@ class simParams:
         self.dm                 = partial(snapshotSubsetParallel, self, 'dm')
         self.stars              = partial(snapshotSubsetParallel, self, 'stars')
         self.bhs                = partial(snapshotSubsetParallel, self, 'bhs')
+        self.blackholes         = partial(snapshotSubsetParallel, self, 'bhs')
         self.tracers            = partial(snapshotSubsetParallel, self, 'tracerMC')
 
         # helpers
@@ -1201,6 +1204,10 @@ class simParams:
         if partType in ['dm_lowres','dm_coarse']:
             assert self.isZoom
             return 2 # sims.zooms, sims.zooms2 ICs configuration
+
+        if 'PartType' in str(partType):
+            return int(partType[-1])
+
         return partTypeNum(partType)
 
     def isPartType(self, ptToCheck, ptToCheckAgainst):

@@ -272,7 +272,7 @@ def CuboidTransformArray(pos_in, pos_out, nCellsTot, nFacesTot, faceOff, faceLen
         pos_out[i,1] = y_new
         pos_out[i,2] = z_new
 
-def findCuboidRemapInds(remapRatio, nPixels):
+def findCuboidRemapInds(remapRatio, nPixels=None):
     """ Find the closest remapping matrix (3x3) to achieve the input remapping ratio of [x,y,z] relative extents. 
     Also input nPixels [x,y] of the final image to be made, in order to calculate newBoxSize. """
     from util.helper import rootPath
@@ -294,17 +294,19 @@ def findCuboidRemapInds(remapRatio, nPixels):
 
     remapMatrix = np.vstack( ([u11,u12,u13],[u21,u22,u23],[u31,u32,u33]) )
 
-    newBoxSize = [data[ind,0], data[ind,1], data[ind,2]] # [e1,e2,e3]
+    newBoxSize = np.array([data[ind,0], data[ind,1], data[ind,2]]) # [e1,e2,e3]
 
     #print('remapRatio: ', remapRatio, ' e123: ',newBoxSize,' found distance:', min_dist, ' with index: ',ind)
     assert min_dist < 0.1, 'Warning: Inaccurate remapping matrix chosen (can disable).'
 
     # adjust box size, increasing smaller xy dimension to match the pixel aspect ratio, and so keep the output image 
     # size exactly as requested (resulting in a black border somewhere)
-    if newBoxSize[0] < newBoxSize[1]:
-        newBoxSize[0] = newBoxSize[1] * (float(nPixels[0])/nPixels[1])
-    else:
-        newBoxSize[1] = newBoxSize[0] * (float(nPixels[1])/nPixels[0])
+    if nPixels is not None:
+        # 2d
+        if newBoxSize[0] < newBoxSize[1]:
+            newBoxSize[0] = newBoxSize[1] * (float(nPixels[0])/nPixels[1])
+        else:
+            newBoxSize[1] = newBoxSize[0] * (float(nPixels[1])/nPixels[0])
 
     return remapMatrix, newBoxSize
 
