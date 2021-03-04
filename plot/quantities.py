@@ -231,6 +231,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
     cQuant, wrapping any special loading or processing. Also return an appropriate label and range.
     If clean is True, label is cleaned up for presentation. If tight is true, alternative range is 
     used (less restrictive, targeted for y-axes/slice1D/medians instead of histo2D colors). """
+    assert isinstance(quant,str)
+    
     label = None
     takeLog = True # default
 
@@ -1761,7 +1763,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
-    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel','mg2_shape']:
+    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel'] or 'mg2_shape_' in quantname:
         # MgII emission luminosity [erg/s] or half-light radius, subhalo total, including dust depletion
         if 'size' in quantname:
             # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
@@ -1783,7 +1785,13 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         elif 'shape' in quantname:
             # load auxCat
             acField = 'Subhalo_MgII_Emission_Grid2D_Shape'
-            ac = sP.auxCat(fields=[acField])[acField]
+            ac = sP.auxCat(fields=[acField])
+
+            isophot_level = float(quantname.split('mg2_shape_')[1])
+            isophot_inds = np.where(ac[acField+'_attrs']['isophot_levels'] == isophot_level)[0]
+            assert len(isophot_inds) == 1, 'Failed to find shape at requested isophot level.'
+
+            vals = ac[acField][:,isophot_inds[0]]
 
             label = 'MgII (a/b) Axis Ratio [ linear ]'
             minMax = [0,1]
@@ -1980,7 +1988,8 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         # CUSTOM! We have some particular datsets which generate a property, per subhalo, 
         # for each of several random/selected inclinations. The return here is the only 
         # case in which it is multidimensional, with the first axis corresponding to subhaloID.
-        # This can transparently work through e.g. a cen/sat selection, and plotting?
+        # This can transparently work through e.g. a cen/sat selection, and plotting.
+        # NOTE: do not mix inclination* fields with others, as they do not correspond.
         minMax = [0, 90]
 
         from projects.mg2emission import gridPropertyVsInclinations
@@ -2168,7 +2177,14 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-2.0, 1.0]
         log = True
 
-    # todo: csnd, xray, ub_ke_ratio
+    # todo: csnd, ub_ke_ratio
+    if ptProperty in ['xray','xray_lum']:
+        assert ptType == 'gas'
+        label = 'L$_{\\rm X,bolometric}$ [ log 10$^{30}$ erg/s ]'
+        lim = [1.0, 15.0] # todo
+        if haloLims: lim = [5.0, 10.0]
+        log = True
+    
     if ptProperty in ['pres_ratio','pressure_ratio','beta']:
         assert ptType == 'gas'
         label = '$\\beta^{-1}$ = P$_{\\rm B}$ / P$_{\\rm gas}$ [ log ]'

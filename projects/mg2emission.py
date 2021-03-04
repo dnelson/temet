@@ -587,14 +587,17 @@ def inclinationPlotDriver(sP, quant='inclination_mg2_lumsize'):
     sPs = [sP]
 
     xQuant = 'mstar_30pkpc_log'
-    yQuant = 'inclination'
+    yQuant = quant #'inclination'
     cenSatSelect = 'cen'
 
     scatterColor = quant
-    clim = [3.0, 10.0]
+    if 'lumsize' in quant:
+        clim = [3.0, 10.0]
+    if 'shape' in quant:
+        clim = [1.0, 2.0]
     xlim = [8.0, 11.5]
-    ylim = [0, 90]
-    cRel = [-0.15, 0.15, True]
+    ylim = [1.0, 2.0] #[0, 90]
+    cRel = None #[-0.15, 0.15, True]
     scatterPoints = True
     drawMedian = False
     markersize = 30.0
@@ -780,14 +783,34 @@ def paperPlots():
         pass
 
     # TODO: impact of stellar orientation (face-on vs edge-on) on MgII morphology
-    if 1:
+    if 0:
         #inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
         inclinationPlotDriver(sP, quant='inclination_mg2_shape_-20.0')
-        #gridPropertyVsInclinations(sP, propName='mg2_shape')
 
     # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
     #  isophotes: 1e-18, 5e-18, 1e-19, 5e-19
     # fig: histogram of a/b, scatterplot of a/b vs M*, scatterplot of a/b vs inclination (color by M*)
+    if 1:
+        xQuant = 'mstar_30pkpc_log'
+        yQuant = 'mg2_shape_-20.0'
+        cenSatSelect = 'cen'
+
+        scatterColor = 'ssfr'
+        clim = None #[1.0, 2.0]
+        xlim = [7.0, 11.5]
+        ylim = [1.0, 2.0]
+        cRel = None #[-0.15, 0.15, True]
+        scatterPoints = True
+        drawMedian = True
+        markersize = 30.0
+        alpha = 0.7
+        maxPointsPerDex = None
+
+        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                                 xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                                 scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                                 alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
+                                 legendLoc='lower right')
 
     # TODO: area of MgII in [kpc^2] vs M*/z, above SB threshs: 1e-18, 5e-18, 1e-19 (compare to Zabl slide)
 

@@ -22,6 +22,81 @@ valMinMaxQuant = {'coldens' : [18.5, 20.0], # in case we render actual quantitie
                   'metal_solar':[-0.5, 0.0],
                   'xray_lum_05-2kev_nomet':[33, 37]}
 
+def _get():
+    """ TEST. """
+    from util.simParams import simParams
+
+    sP = simParams(run='tng100-1', redshift=0.0)
+    subhaloInd = 472174
+
+    rVirFracs  = [0.25, 0.5]
+    method     = 'histo' #'sphMap'
+    nPixels    = [100,100] #[1200,1200]
+    axes       = [0,1]
+    labelZ     = False
+    labelScale = 'physical'
+    labelSim   = False
+    labelHalo  = True
+    relCoords  = True
+    rotation   = None #'edge-on-stars'
+    sizeType   = 'kpc'
+    size       = 600
+    depthFac   = 0.1
+
+    # get mine
+    panels = [{'partType':'gas', 'partField':'coldens_msunkpc2', 'valMinMax':[5.0,8.0]}]
+
+    #if 'xray' not in panels[0]['partField']:
+    #    # temperature cut, except for x-ray where it isn't needed
+    #    ptRestrictions = {'temp_sfcold':['gt',6.0]}
+
+    class plotConfig:
+        plotStyle    = 'edged'
+        rasterPx     = 1200 if 'xray' in panels[0]['partField'] else 840
+        colorbars    = True
+        fontsize     = 22 #if 'xray' in panels[0]['partField'] else 32
+
+    data, config = renderSingleHalo(panels, plotConfig, locals(), skipExisting=False, returnData=True)
+    data = 10.0**data
+
+    # get nhut's
+    with h5py.File('Gas_Properties_TNG100-1_99_SubNum_472174_15R500_0.0.h5','r') as f:
+        data_nhut = f['Density'][()]
+
+    w1 = np.where(np.isfinite(data))
+    w2 = np.where(np.isfinite(data_nhut))
+    print('data minmax: ', np.nanmin(data), np.nanmax(data))
+    print('nhut minmax: ', np.nanmin(data_nhut), np.nanmax(data_nhut))
+
+    # do manually from scratch
+    from scipy.stats import binned_statistic_2d
+
+    groupID = sP.subhalo(subhaloInd)['SubhaloGrNr']
+
+    pos = sP.snapshotSubset('gas', 'pos_rel_kpc', haloID=groupID)
+    xx = pos[:,0]
+    yy = pos[:,1]
+    values = sP.snapshotSubset('gas', 'mass', haloID=groupID)
+    values = sP.units.codeMassToMsun(values)
+    bounds = [[-size/2,size/2],[-size/2,size/2]]
+
+    w_z = np.where( np.abs(pos[:,2]) < size/2*depthFac )
+    xx = xx[w_z]
+    yy = yy[w_z]
+    values = values[w_z]
+
+    grid,_,_,_ = binned_statistic_2d(xx, yy, values, statistic='sum', bins=nPixels[0], range=bounds)
+    grid /= (size / nPixels[0])**2 # msun -> msun/kpc^2
+    grid[grid == 0] = np.nan # consistent with others
+
+    print('grid minmax: ', np.nanmin(grid), np.nanmax(grid))
+
+    w3 = np.where(np.isfinite(grid))
+
+    print('number of non-empty pixels: ',len(w1[0]), len(w2[0]), len(w3[0]))
+
+    import pdb; pdb.set_trace()
+
 def _get_panels(conf, stack2Dmaps, median, renderIndiv):
     """ Common config. """
     if conf == 0:
@@ -45,7 +120,6 @@ def _get_panels(conf, stack2Dmaps, median, renderIndiv):
     if stack2Dmaps:
         panels[0]['partField'] = panels[0]['partField'].replace('delta_','')
         if panels[0]['partField'] == 'rho': panels[0]['partField'] = 'coldens'
-
 
     if renderIndiv:
         panels[0]['valMinMax'] = valMinMaxQuant[ panels[0]['partField'] ]
@@ -432,7 +506,7 @@ def paperPlots():
         depthFac = 0.1
         stack2Dmaps = True
 
-        for conf in [0,1,2,4]: #[0,1,2,3,4,5]:
+        for conf in [0]: #[0,1,2,4]: #[0,1,2,3,4,5]:
             stackedHaloImage(sP, mStarBin, conf=conf, median=median, rvirUnits=rvirUnits, 
                              depthFac=depthFac, stack2Dmaps=stack2Dmaps, renderIndiv=False)
 

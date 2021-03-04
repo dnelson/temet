@@ -211,6 +211,10 @@ def getHsmlForPartType(sP, partType, nNGB=64, indRange=None, useSnapHsml=False, 
 
                     hsml = calcHsml(pos, sP.boxSize, posSearch=posSearch, nNGB=nNGB, nNGBDev=1, treePrec='double')
 
+        # bhs (unused)
+        if sP.isPartType(partType, 'bhs'):
+            hsml = sP.snapshotSubsetP(partType, 'BH_Hsml', indRange=indRange)
+
         # save
         if useCache:
             with h5py.File(saveFilename,'w') as f:
@@ -227,6 +231,8 @@ def defaultHsmlFac(partType):
         return 2.5 # times cellsize
     if partType == 'stars':
         return 1.0 # times nNGB=32 CalcHsml search
+    if partType == 'bhs':
+        return 1.0 # times BH_Hsml, currently unused
     if partType == 'dm':
         return 0.5 # times SubfindHsml or nNGB=64 CalcHsml search
     if partType == 'dmlowres':
@@ -1642,7 +1648,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     if smoothFWHM is not None:
         # fwhm -> 1 sigma, and physical kpc -> pixels (can differ in x,y)
         sigma_xy = (smoothFWHM / 2.3548) / (np.array(boxSizeImg)[axes] / nPixels) 
-        print('smoothFWHM: [%.2f pkpc] = sigma of [%.1f px]: ' % (smoothFWHM,sigma_xy[0]))
+        #print('smoothFWHM: [%.2f pkpc] = sigma of [%.1f px]: ' % (smoothFWHM,sigma_xy[0]))
         grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
 
     # handle units and come up with units label

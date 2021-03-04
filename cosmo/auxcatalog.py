@@ -617,8 +617,8 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
 
             ww = np.where(mask)
 
-            if len(ww[0]) == 0:
-                continue
+            if len(ww[0]) <= 3:
+                continue # singular matrix for mvbe
 
             points = np.vstack( (opts['xxyy'][ww[0]], opts['xxyy'][ww[1]]) ).T
 
@@ -1001,6 +1001,10 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
              'rad'         : str(rad).encode('ascii'),
              'weighting'   : str(weighting).encode('ascii'),
              'subhaloIDs'  : subhaloIDsTodo}
+
+    if 'grid2d' in op:
+        for key in ['isophot_levels','axes','gridExtentKpc','pxScaleKpc','smoothFWHM','nPixels']:
+            attrs[key] = opts[key]
 
     return r, attrs
 
@@ -2566,7 +2570,7 @@ def subhaloRadialProfile(sP, pSplit, ptType, ptProperty, op, scope, weighting=No
 
     if pSplitSpatial:
         # spatial decomposition: determine extent and child subhalos
-        assert pSplitSpatial[1]**(1/3) == np.round(pSplitSpatial[1]**(1/3)), 'pSplitSpatial: Total number of jobs should have integer cube root, e.g. 8, 27, 64.'
+        assert np.abs(pSplitSpatial[1]**(1/3) - np.round(pSplitSpatial[1]**(1/3))) < 1e-6, 'pSplitSpatial: Total number of jobs should have integer cube root, e.g. 8, 27, 64.'
         nPerDim = int(pSplitSpatial[1]**(1/3))
         extent = sP.boxSize / nPerDim
 

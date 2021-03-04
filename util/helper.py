@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import collections
 from scipy.optimize import leastsq, least_squares, curve_fit
+from scipy.ndimage.filters import gaussian_filter
 from scipy.stats import binned_statistic
 from numba import jit
 
@@ -676,6 +677,24 @@ def sgolay2d(z, window_size, order, derivative=None):
         r = np.linalg.pinv(A)[2].reshape((window_size, -1))
         return sfftconvolve(Z, -r, mode='valid'), fftconvolve(Z, -c, mode='valid')
 
+def gaussian_filter_nan(zz, sigma):
+    """ Filter 2D array zz by a Gaussian with input sigma, ignoring any NaN entries. """
+    if sigma == 0:
+        return zz
+
+    zz1 = zz.copy()
+    zz1[np.isnan(zz)] = 0.0
+    zz1 = gaussian_filter(zz1, sigma)
+
+    zz2 = 0 * zz.copy() + 1.0
+    zz2[np.isnan(zz)] = 0.0
+    zz2 = gaussian_filter(zz2, sigma)
+
+    with np.errstate(invalid='ignore'):
+        zz = zz1/zz2
+
+    return zz
+
 def mvbe(points, tol=0.005):
     """
     Find the 'minimum volume bounding ellipsoid' of a given set of points (iterative).
@@ -813,7 +832,9 @@ def binned_statistic_weighted(x, values, statistic, bins, weights=None, weights_
         valwt_sum, bin_edges, bin_number = binned_statistic(x, values*weights_loc, statistic='sum', bins=bins)
         wt_sum, _, _ = binned_statistic(x, weights_loc, statistic='sum', bins=bins)
 
-        return (valwt_sum/wt_sum), bin_edges, bin_number
+        with np.errstate(invalid='ignore'):
+            weighted_stat = valwt_sum / wt_sum # zeros in wt_sum result in nan
+        return weighted_stat, bin_edges, bin_number
 
     if statistic == np.std:
         # weighted standard deviation (note: numba accelerated)

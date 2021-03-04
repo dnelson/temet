@@ -2800,7 +2800,8 @@ def paperPlots(sPs=None):
         gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', config=config)
 
         # outflow velocity as a function of M* at one redshift, variations in (radius,v_perc) values
-        #config = {'percInds':[1,2,4], 'radInds':[1,2], 'ylim':ylim, 'stat':'mean', 'skipZeros':False, 'loc2':'upper left', 'addModelTNG':True}
+        #config = {'percInds':[3,1], 'radInds':[1,2,4], 'ylim':ylim, 'xlim':[8.5,11.0], 'stat':'mean', 'skipZeros':False, 'loc2':'upper left', 'addModelTNG':True}
+        #TNG50_z05 = simParams(run='tng50-1',redshift=0.5)
         #gasOutflowVelocityVsQuant(TNG50, xQuant='mstar_30pkpc', config=config)
 
         # outflow velocity: redshift evo

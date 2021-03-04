@@ -64,18 +64,17 @@ def plotRedshiftSpacings():
 def plotMassFunctions():
     """ Plot DM halo and stellar mass functions comparing multiple boxes, at one redshift. """
     # config
-    mass_ranges = [ [7.0, 16.0], [4.4, 13.0] ] # m_halo, m_star
+    mass_ranges = [ [6.0, 16.0], [4.4, 13.0] ] # m_halo, m_star
     binSize = 0.2
     
     sPs = []
-    #sPs.append( simParams(res=2160,run='tng',redshift=0.0) )
-    #sPs.append( simParams(res=1080,run='tng',redshift=0.8) )
-    #sPs.append( simParams(res=540,run='tng',redshift=0.8) )
-    #sPs.append( simParams(res=270,run='tng',redshift=0.8) )
-    sPs.append( simParams(res=1024,run='tng_dm',redshift=0.0) )
-    sPs.append( simParams(res=2048,run='tng_dm',redshift=0.0) )
-    sPs.append( simParams(res=1820,run='tng_dm',redshift=0.0) )
-    sPs.append( simParams(res=2500,run='tng_dm',redshift=0.0) )
+    sPs.append( simParams(run='tng100-1',redshift=0.0) )
+    sPs.append( simParams(run='tng300-1',redshift=0.0) )
+    sPs.append( simParams(run='tng50-1',redshift=0.0) )
+    #sPs.append( simParams(res=1024,run='tng_dm',redshift=0.0) )
+    #sPs.append( simParams(res=2048,run='tng_dm',redshift=0.0) )
+    #sPs.append( simParams(res=1820,run='tng_dm',redshift=0.0) )
+    #sPs.append( simParams(res=2500,run='tng_dm',redshift=0.0) )
 
     # plot setup
     if all(sP.isDMO for sP in sPs):
@@ -113,7 +112,7 @@ def plotMassFunctions():
             yy_max = np.nanmax([yy_max,np.nanmax(yy)])
 
             label = sP.simName + ' z=%.1f' % sP.redshift
-            ax.hist(masses[w],bins=nBins,range=mass_range,lw=2.0,label=label,histtype='step',alpha=0.9)
+            ax.hist(masses[w],bins=nBins,range=mass_range,lw=lw,label=label,histtype='step',alpha=0.9)
 
         ax.set_ylim([1,yy_max*1.4])
         ax.legend(loc='upper right')

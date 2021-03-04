@@ -407,10 +407,19 @@ def subbox_movie_tng_galaxyevo_frame(sbSnapNum=2687, gal='two', conf='one', fram
         sP = simParams(run='tng50-1', redshift=0.0)
         sbNum = 2
         subhaloID = 543114 # snaps 3211 - 3599
+
+        
     if gal == 'mwbubbles2':
         sP = simParams(run='tng50-1', redshift=0.0)
         sbNum = 2
         subhaloID = 565089 # snaps 3030 - 3599
+
+    if gal in ['mwbubbles1','mwbubbles2']:
+        # add custom label for time elapsed since z=0.25 (movie start) in Myr
+        sP_sub = simParams(run='tng50-1',variant='subbox%d' % sbNum,redshift=0.25)
+        age_start = sP_sub.tage
+        sP_sub.setSnap(sbSnapNum)
+        labelCustom = ['$\Delta t$ = %6.1f Myr' % ((sP_sub.tage - age_start) * 1000)]
 
     # load subbox catalog, get time-evolving positions
     cat = subboxSubhaloCat(sP, sbNum)

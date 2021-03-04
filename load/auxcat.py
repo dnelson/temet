@@ -301,6 +301,9 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
                 assert len(readFields) == 1
                 r[field] = _expand_partial()
 
+            if not expandPartial and r[field].shape[0] != sP.numSubhalos:
+                print('WARNING: Return partial auxCat without expanding to fill subhalo IDs!')
+
             # cache
             sP.data['ac_'+field+epStr] = {}
             for key in r:
