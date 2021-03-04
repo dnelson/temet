@@ -47,6 +47,7 @@ quantDescriptions = {
   'mhalo_500'        : 'Total mass of the parent dark matter halo, defined by M_500_Crit. Because satellites have no such measure, they are excluded.',
   'mhalo_subfind'    : 'Parent dark matter (sub)halo total mass, defined by the gravitationally bound mass as determined by Subfind.',
   'mhalo_200_parent' : 'Total mass of the host/parent dark matter halo, defined by M_200_Crit. Satellites have the value of their host/parent halo.',
+  'mhalo_vir'        : 'Total mass of the parent dark matter halo, defined by M_DeltaC_Crit where DeltaC is the overdensity based on spherical tophat collapse. Because satellites have no such measure, they are excluded.',
   'rhalo_200'        : 'Virial radius of the parent dark matter halo, defined by R_200_Crit. Because satellites have no such measure, they are excluded.',
   'rhalo_500'        : 'The radius R500 of the parent dark matter halo, defined by R_500_Crit. Because satellites have no such measure, they are excluded.',
   'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
@@ -140,7 +141,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar_30pkpc','mstar_r500',
                    'mgas1','mgas2','mhi_30pkpc','mhi2','mgas_r500','fgas_r500',
-                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent',
+                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mhalo_vir',
                    'mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
 
     quants_rad = ['rhalo_200','rhalo_500']
@@ -308,12 +309,15 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         if sP.boxSize < 50000: minMax = [7.0, 10.5]
         label = 'M$_{\\rm HI} (<%s)$ [ log M$_{\\rm sun}$ ]' % radStr
 
-    if quantname in ['mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent']:
+    if quantname in ['mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mhalo_vir']:
         # halo mass
         vals = sP.groupCat(sub=quantname)
 
         if '_200' in quant or '_500' in quant:
             mTypeStr = '%d,crit' % (200 if '_200' in quant else 500)
+
+        if '_vir' in quant:
+            mTypeStr = 'vir'
 
         if '_parent' in quant:
             mTypeStr += ",parent"

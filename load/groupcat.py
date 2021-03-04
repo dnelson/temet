@@ -141,12 +141,14 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             # --- group catalog ---
 
             # halo mass (m200 or m500) of parent halo [code, msun, or log msun]
-            if quantName in ['mhalo_200','mhalo_200_code','mhalo_500','mhalo_200_code','mhalo_200_parent']:
+            if quantName in ['mhalo_200','mhalo_200_code','mhalo_500','mhalo_200_code','mhalo_200_parent','mhalo_vir']:
                 od = 200 if '_200' in quant else 500
 
-                gc = groupCat(sP, fieldsHalos=['Group_M_Crit%d'%od,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+                haloField = 'Group_M_Crit%d'%od
+                if '_vir' in quant: haloField = 'Group_M_TopHat200'
+                gc = groupCat(sP, fieldsHalos=[haloField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
 
-                r[field] = gc['halos']['Group_M_Crit%d'%od][gc['subhalos']]
+                r[field] = gc['halos'][haloField][gc['subhalos']]
 
                 if '_code' not in quant: r[field] = sP.units.codeMassToMsun( r[field] )
 
