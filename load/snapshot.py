@@ -1446,7 +1446,6 @@ def snapshotSubset(sP, partType, fields,
                  [['id','ids'], 'ParticleIDs'],
                  [['pot'], 'Potential'],
                  [['pres'], 'Pressure'],
-                 [['hsml'], 'SmoothingLength'],
                  [['sfr'], 'StarFormationRate'],
                  [['vel'], 'Velocities'],
                  [['vol'], 'Volume'],
@@ -1654,10 +1653,6 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         assert indRange[0] >= 0 and indRange[1] >= indRange[0]
     if haloSubset and (not sP.groupOrdered or (indRange is not None) or (inds is not None)):
         raise Exception('haloSubset only for groupordered snapshots, and not with indRange subset.')
-    if haloID is not None or subhaloID is not None:
-        print('NOTE: Parallel load with haloID or subhaloID not yet supported, loading in serial.')
-        return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
-            subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)
 
     # override path function
     il.snapshot.snapPath = partial(snapPath, subbox=sP.subbox)
@@ -1670,17 +1665,21 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
     if numPartTot == 0:
         return {'count':0}
 
-    # detect if we are already fetching data inside a parallelized load, and don't propagate
-    stack = traceback.extract_stack(limit=5)
-    serial = np.any(['snapshotSubsetP' in frame.name for frame in stack[:-1]])
-    if serial:
-        print('NOTE: Detected parallel-load request inside parallel-load, making serial.')
+    # low particle count (e.g. below ~1e7x4bytes=40MB there is little point) use serial
+    serial = False
+    minParallelCount = 1e7 # nThreads*10
 
-    # low particle count, use serial
-    if numPartTot < nThreads*10 or \
-      (inds is not None and inds.size < nThreads*10) or \
-      (indRange is not None and (indRange[1]-indRange[0]) < nThreads*10):
+    if numPartTot < minParallelCount or \
+      (inds is not None and inds.size < minParallelCount) or \
+      (indRange is not None and (indRange[1]-indRange[0]) < minParallelCount):
         serial = True
+
+    if not serial:
+        # detect if we are already fetching data inside a parallelized load, and don't propagate
+        stack = traceback.extract_stack(limit=6)
+        serial = np.any(['_parallel_load_func' in frame.name for frame in stack])
+        if serial and getuser() != 'wwwrun':
+            print('NOTE: Detected parallel-load request inside parallel-load, making serial.')
 
     if serial:
         return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
@@ -1691,6 +1690,11 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         # load the range which bounds the minimum and maximum indices, then return subset
         assert indRange is None
         indRange = [inds.min(), inds.max()]
+
+    if haloID is not None or subhaloID is not None:
+        # convert halo or subhalo request into a particle index range
+        assert indRange is None
+        indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
 
     if indRange is None:
         indRange = [0, numPartTot-1]
