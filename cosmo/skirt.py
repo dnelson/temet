@@ -23,7 +23,8 @@ stars_source_fsps = """
             <FSPSSEDFamily imf="Chabrier"/>
         </sedFamily>
         <wavelengthBiasDistribution type="WavelengthDistribution">
-            <LogWavelengthDistribution minWavelength="0.0001 micron" maxWavelength="1e6 micron"/>
+            <LogWavelengthDistribution minWavelength="0.01 micron" maxWavelength="1e3 micron"/>
+            <!--<LinWavelengthDistribution minWavelength="0.09 micron" maxWavelength="1.0 micron"/>-->
         </wavelengthBiasDistribution>
     </ParticleSource>
 """
@@ -38,7 +39,8 @@ stars_source_bc03mappings3 = """
             <MappingsSEDFamily/>
         </sedFamily>
         <wavelengthBiasDistribution type="WavelengthDistribution">
-            <LogWavelengthDistribution minWavelength="0.0001 micron" maxWavelength="1e6 micron"/>
+            <LogWavelengthDistribution minWavelength="0.01 micron" maxWavelength="1e3 micron"/>
+            <!--<LinWavelengthDistribution minWavelength="0.09 micron" maxWavelength="1.0 micron"/>-->
         </wavelengthBiasDistribution>
     </ParticleSource>
 
@@ -51,7 +53,8 @@ stars_source_bc03mappings3 = """
             <BruzualCharlotSEDFamily imf="Chabrier" resolution="High"/>
         </sedFamily>
         <wavelengthBiasDistribution type="WavelengthDistribution">
-            <LogWavelengthDistribution minWavelength="0.0001 micron" maxWavelength="1e6 micron"/>
+            <LogWavelengthDistribution minWavelength="0.01 micron" maxWavelength="1e3 micron"/>
+            <!--<LinWavelengthDistribution minWavelength="0.09 micron" maxWavelength="1.0 micron"/>-->
         </wavelengthBiasDistribution>
     </ParticleSource>
 """
@@ -75,7 +78,8 @@ dust_emission = """
                 <LogWavelengthGrid minWavelength="{minWavelength}" maxWavelength="{maxWavelength}" numWavelengths="{numWavelengths}"/>
             </dustEmissionWLG>
             <wavelengthBiasDistribution type="WavelengthDistribution">
-                <LogWavelengthDistribution minWavelength="0.0001 micron" maxWavelength="1e6 micron"/>
+                <LogWavelengthDistribution minWavelength="0.01 micron" maxWavelength="1e3 micron"/>
+                <!--<LinWavelengthDistribution minWavelength="0.09 micron" maxWavelength="1.0 micron"/>-->
             </wavelengthBiasDistribution>
         </DustEmissionOptions>
     </dustEmissionOptions>
@@ -139,10 +143,11 @@ ski_template = """
                     <LogWavelengthGrid minWavelength="{minWavelength}" maxWavelength="{maxWavelength}" numWavelengths="{numWavelengths}"/>
                 </defaultWavelengthGrid>
                 <instruments type="Instrument">
-                    <FullInstrument instrumentName="faceon" distance="10 Mpc" inclination="0 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="{fovX}" numPixelsX="{numPixelsX}" centerX="0 pc" fieldOfViewY="{fovY}" numPixelsY="{numPixelsY}" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
-                    <FullInstrument instrumentName="edgeon" distance="10 Mpc" inclination="90 deg" azimuth="-90 deg" roll="90 deg" fieldOfViewX="{fovX}" numPixelsX="{numPixelsX}" centerX="0 pc" fieldOfViewY="{fovY}" numPixelsY="{numPixelsY}" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
-                    <FullInstrument instrumentName="random" distance="10 Mpc" inclination="{incRandom}" azimuth="{aziRandom}" roll="0 deg" fieldOfViewX="{fovX}" numPixelsX="{numPixelsX}" centerX="0 pc" fieldOfViewY="{fovY}" numPixelsY="{numPixelsY}" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
-                    <!--<PerspectiveInstrument instrumentName="perspective" numPixelsX="1920" numPixelsY="1080" width="{fovX}" viewX="40 kpc" viewY="0 pc" viewZ="0 pc" crossX="0 pc" crossY="0 pc" crossZ="0 pc" upX="0 pc" upY="1 pc" upZ="0 pc" focal="40 kpc" recordComponents="false" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>-->
+                    <!-- recordStatistics can be switched to false to save space, this gives us error information on the photons for debugging -->
+                    <FullInstrument instrumentName="faceon" distance="10 Mpc" inclination="0 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="{fovX}" numPixelsX="{numPixelsX}" centerX="0 pc" fieldOfViewY="{fovY}" numPixelsY="{numPixelsY}" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="true"/>
+                    <FullInstrument instrumentName="edgeon" distance="10 Mpc" inclination="90 deg" azimuth="-90 deg" roll="90 deg" fieldOfViewX="{fovX}" numPixelsX="{numPixelsX}" centerX="0 pc" fieldOfViewY="{fovY}" numPixelsY="{numPixelsY}" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="true"/>
+                    <FullInstrument instrumentName="random" distance="10 Mpc" inclination="{incRandom}" azimuth="{aziRandom}" roll="0 deg" fieldOfViewX="{fovX}" numPixelsX="{numPixelsX}" centerX="0 pc" fieldOfViewY="{fovY}" numPixelsY="{numPixelsY}" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="true"/>
+                    <!--<PerspectiveInstrument instrumentName="perspective" numPixelsX="1920" numPixelsY="1080" width="{fovX}" viewX="40 kpc" viewY="0 pc" viewZ="0 pc" crossX="0 pc" crossY="0 pc" crossZ="0 pc" upX="0 pc" upY="1 pc" upZ="0 pc" focal="40 kpc" recordComponents="false" numScatteringLevels="0" recordPolarization="false" recordStatistics="true"/>-->
                 </instruments>
             </InstrumentSystem>
         </instrumentSystem>
@@ -409,7 +414,7 @@ def driver_single():
               'numPixelsY'     : 200,
               'fovX'           : '40 kpc',
               'fovY'           : '40 kpc',
-              'numWavelengths' : 100,
+              'numWavelengths' : 80,
               'simMode'        : 'ExtinctionOnly', # ExtinctionOnly, DustEmission, DustEmissionWithSelfAbsorption
               'minWavelength'  : '0.09 micron', # 900 Ang
               'maxWavelength'  : '1.0 micron'} # 10000 Ang
@@ -504,7 +509,9 @@ def _log(x):
     r[~w] = -750.0
     return r
 
-def convolve_cube_with_filter(data, wavelengths, filterName):
+def convolve_cube_with_filter(data, wavelengths, filterName, raw=False):
+    """ Return convolution of IFU (x,y,wave) cube with a given broadband. If raw is True, 
+    then do not do any unit conversions (e.g. for stats0 analysis). """
     # get broadband filter and normalize
     import fsps
 
@@ -514,7 +521,8 @@ def convolve_cube_with_filter(data, wavelengths, filterName):
     filter_trans_norm /= np.trapz(x=filter_wave_micron, y=band.transmission[1]) # 1/micron
 
     # convert 'natural' flux unit into 'per wavelength'
-    data /= wavelengths
+    if not raw:
+        data /= wavelengths
 
     # common wavelength grid: assume that SKIRT run covers the filter
     w = np.where( (wavelengths >= filter_wave_micron[0]) & (wavelengths < filter_wave_micron[-1]) )
@@ -532,8 +540,9 @@ def convolve_cube_with_filter(data, wavelengths, filterName):
     result = np.trapz(x=wave_loc, y=F*T)
 
     # convert 'per wavelength' back into 'natural' flux units
-    pivot_wavelength = np.sqrt(1.0 / np.trapz(x=filter_wave_micron, y=filter_trans_norm/filter_wave_micron**2) )
-    result *= pivot_wavelength
+    if not raw:
+        pivot_wavelength = np.sqrt(1.0 / np.trapz(x=filter_wave_micron, y=filter_trans_norm/filter_wave_micron**2) )
+        result *= pivot_wavelength
 
     return result
 
@@ -627,8 +636,8 @@ def vis(subhaloID=343503):
 
                 # can derive limits either on rgb as a whole, or on each band
                 w = np.where(rgb > 0.0)
-                minval = np.percentile(rgb, 20) # images[0].min()
-                maxval = np.percentile(rgb, 99.5) # images[0].max()
+                minval = np.percentile(rgb[w], 50) # images[0].min()
+                maxval = np.percentile(rgb[w], 99.5) # images[0].max()
 
                 # normalize
                 for i in range(3):
@@ -651,6 +660,54 @@ def vis(subhaloID=343503):
 
                 fig.savefig('image_sh%d_%s_%s_rgb.pdf' % (subhaloID,outType,instName))
                 plt.close(fig)
+
+        # stats?
+        statsfile = filename = 'sh%d_%s_stats1.fits' % (subhaloID,instName)
+        if isfile(statsfile):
+            print(statsfile)
+            # w_i is the contribution of the i^th photon packet to each pixel
+            # includes contributions of all photon packets peeled-off and/or scattered from 
+            # originally launched packets
+            with fits.open(statsfile) as f:
+                header = f[0].header # sum of w_i^k for k=1
+                wi1 = np.transpose(f[0].data, [2,1,0])
+
+            with fits.open(statsfile.replace('stats1','stats2')) as f:
+                header = f[0].header # sum of w_i^k for k=2
+                wi2 = np.transpose(f[0].data, [2,1,0])
+
+            # need photon packet count
+            with open('sh%d.ski' % subhaloID,'r') as f:
+                lines = f.readlines()
+
+            for line in lines:
+                if 'numPackets' in line:
+                    N = float(line.split('numPackets="')[1].split('">')[0])
+
+            # derive relative err (see Camps & Baes 2018 Eqn 14)
+            with np.errstate(invalid='ignore'):
+                rel_err = np.sqrt( wi2 / wi1**2 - 1 / N )
+
+            rel_err_band = convolve_cube_with_filter(rel_err, wavelengths, filterNames[0], raw=True)
+
+            # create image and save
+            fig = plt.figure(figsize=(10,8))
+            ax = fig.add_subplot(111)
+
+            im = np.flip(rel_err_band, axis=1)
+            plt.imshow(im, cmap='tab10', aspect='equal', extent=[xvals[0],xvals[-1],yvals[0],yvals[-1]])
+            ax.autoscale(False)
+            plt.clim([0.0, 1.0])
+
+            ax.set_xlabel('x [kpc]')
+            ax.set_ylabel('y [kpc]')
+
+            cax = make_axes_locatable(ax).append_axes('right', size='5%', pad=0.15)
+            cb = plt.colorbar(cax=cax)
+            cb.ax.set_ylabel('Relative Error R = $[ \Sigma w_i^2 / (\Sigma w_i)^2 - 1 / N ]^{1/2}$')
+
+            fig.savefig('image_sh%d_%s_%s_relerr.pdf' % (subhaloID,instName,filterName))
+            plt.close(fig)
 
 def plot_sed(subhaloID=343503):
     """ Plot a spectral energy distribution .dat output file. As above, simply looks for 

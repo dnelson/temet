@@ -13,7 +13,7 @@ from datetime import datetime
 from os.path import isfile, isdir, expanduser
 
 def plotUsersData():
-    """ Parse and plot a user data dump from the Illustris public data release website. """
+    """ Parse and plot a user data dump from the Illustris[TNG] public data release website. """
     from vis.common import setAxisColors
     from util.helper import getWhiteBlackColors
     from plot.config import linestyles, figsize, lw
@@ -31,7 +31,7 @@ def plotUsersData():
               "Number of Downloads: LHaloTree","Number of Downloads: Sublink",
               "Cutout Requests: Subhalos","Cutout Requests: Sublink"]
 
-    pStyle = 'black' # 'white', 'black'
+    pStyle = 'white' # 'white', 'black'
     fac2 = 1.05
 
     # load
@@ -108,7 +108,7 @@ def plotUsersData():
     plt.close(fig)
 
     # plot (2) - user counts
-    fig = plt.figure(figsize=(figsize[0]*0.8, figsize[1]*0.8), facecolor=color1)
+    fig = plt.figure(figsize=figsize, facecolor=color1)
     ax = fig.add_subplot(111, facecolor=color1)
     ax.set_yscale('log')
     ax.set_ylabel('Number')
@@ -131,13 +131,13 @@ def plotUsersData():
 
         l, = ax.plot_date(data['Date'], data[col]/fac, marker=None, linestyle='-', label=labels[w], lw=lw)
         ax.text(data['Date'][-1], data[col][-1]/fac*0.8, '%d'%(data[col][-1]/fac), color=l.get_color(),
-                fontsize=22, horizontalalignment='center')
+                fontsize=20, horizontalalignment='center')
 
     from matplotlib.dates import MonthLocator
     ax.xaxis.set_major_formatter(DateFormatter('%b %Y'))
-    ax.xaxis.set_minor_formatter(DateFormatter('%B'))
-    ax.xaxis.set_minor_locator(MonthLocator(bymonth=6))
-    ax.tick_params(axis='x', which='minor', labelsize=13)
+    #ax.xaxis.set_minor_formatter(DateFormatter('%B'))
+    #ax.xaxis.set_minor_locator(MonthLocator(bymonth=6))
+    #ax.tick_params(axis='x', which='minor', labelsize=13)
     l = ax.legend(loc='upper left', ncol=1, frameon=False)
     for text in l.get_texts():
         text.set_color(color2)

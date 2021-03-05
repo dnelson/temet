@@ -20,6 +20,8 @@ Code repository for Dylan Nelson.
 installation
 ============
 
+The following steps will install this package and get the environment set up on a typical cluster environment, for instance the MPCDF machines (freya, isaac, draco, raven, virgo, and so on). 
+
 1. Clone the repository into your home directory, here into a `python` directory
 
         cd ~
@@ -37,11 +39,11 @@ For example, add the following lines to your `.bashrc` file
         export PYTHONPATH+=:$HOME/python/:$HOME/illustris_release/
         export PYTHONSTARTUP=$HOME/python/.startup.py
 
-4. Load or install python (3.6+, 3.8.x recommended). For example, on the MPCDF machines, using a clean anaconda
+4. Load or install python (3.6+, 3.9.x recommended). For example, on the MPCDF machines, using a clean anaconda
 
         module load anaconda/3/2019.03
         mkdir -p ~/.local/envs
-        conda create --prefix=~/.local/envs/myenv python=3.8
+        conda create --prefix=~/.local/envs/myenv python=3.9
         source activate ~/.local/envs/myenv
 
     and add the following lines to your `.bashrc` file for permanence
@@ -56,7 +58,48 @@ For example, add the following lines to your `.bashrc` file
         source activate ~/.local/envs/myenv
         export PATH=$HOME/.local/envs/myenv/bin/:$PATH
 
-5. The FSPS stellar population synthesis package is required to generate new SPS tables
+5. Install all python dependencies as required
+
+        pip install --user -r ~/python/requirements.txt
+
+6. Point `matplotlib` to the default settings file
+
+        mkdir -p ~/.config/matplotlib
+        ln -s ~/python/matplotlibrc ~/.config/matplotlib/
+
+    and install the Roboto font used by default
+
+        mkdir -p ~/.fonts/Roboto
+        cd ~/.fonts/Roboto/
+        wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-Light.ttf
+        wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-LightItalic.ttf
+
+7. Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and x-ray emission (from XPSEC). For convenience these can be downloaded as
+
+        cd ~/python/tables/
+        wget -r -nH --cut-dirs=2 --no-parent --reject="index.html*" -e robots=off www.tng-project.org/files/dnelson_tables/
+
+8. Organize simulation directories as follows
+
+        mkdir ~/sims.TNG
+        mkdir ~/sims.TNG/L75n1820TNG
+        mkdir ~/sims.TNG/L75n1820TNG/data.files
+        cd ~/sims.TNG/L75n1820TNG/
+        ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/output .
+        ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/postprocessing .
+
+    note that the last two lines create symlinks to the actual output directory where the simulation data files 
+    (`groupcat_*` and `snapdir_*`) reside, as well as to the postprocessing directory (containing `trees`, etc).
+    Replace as needed with the actual path on your machine.
+
+
+installation (continued)
+========================
+
+Several external tools and post-processing codes are used, for specific analysis routines. 
+The following additional installation steps are therefore optional, depending on application.
+
+1. Although most stellar light/magnitude tables of relevance are pre-computed and have been downloaded in the previous steps, the [FSPS](https://github.com/cconroy20/fsps) stellar population synthesis package is required to generate new SPS tables. To install:
 
         mkdir ~/code
         cd ~/code/
@@ -75,39 +118,34 @@ For example, add the following lines to your `.bashrc` file
 
         export SPS_HOME=$HOME/code/fsps/
 
-6. Install all python dependencies as required
+2. Although the x-ray emission tables have been pre-computed, the creation of new tables requires the [AtomDB APEC](http://www.atomdb.org/) files.
 
-        pip install --user -r ~/python/requirements.txt
+        mkdir ~/code/atomdb/
+        cd ~/code/atomdb/
+        wget --content-disposition http://www.atomdb.org/download_process.php?fname=apec_v3_0_9
+        wget --content-disposition http://www.atomdb.org/download_process.php?fname=apec_v3_0_9_nei
+        tar -xvf *.bz2 --strip-components 1
+        rm *.bz2
 
-7. Point `matplotlib` to the default settings file
+3. The [SKIRT](https://skirt.ugent.be/) dust radiative transfer code can be used to compute dust-attenuated stellar light images and spectra, dust infrared emission, and many further sophisticated observables.
 
-        mkdir -p ~/.config/matplotlib
-        ln -s ~/python/matplotlibrc ~/.config/matplotlib/
+        mkdir ~/code/SKIRT9/
+        cd ~/code/SKIRT9/
+        git clone https://github.com/SKIRT/SKIRT9.git git
+        cd git
+        chmod +rx *.sh
+        ./makeSKIRT.sh
+        ./downloadResources.sh
 
-    and install the Roboto font used by default
+    link the executable into your local bin directory
 
-        mkdir -p ~/.fonts/Roboto
-        cd ~/.fonts/Roboto/
-        wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-Light.ttf
-        wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-LightItalic.ttf
+        mkdir ~/.local/bin
+        cd ~/.local/bin
+        ln -s ~/code/SKIRT9/release/SKIRT/main/skirt .
 
-8. Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and x-ray emission (from XPSEC). For convenience these can be downloaded as
+    add the following lines to your `.bashrc` file for permanence
 
-        cd ~/python/tables/
-        wget -r -nH --cut-dirs=2 --no-parent --reject="index.html*" -e robots=off www.tng-project.org/files/dnelson_tables/
-
-9. Organize simulation directories as follows
-
-        mkdir ~/sims.TNG
-        mkdir ~/sims.TNG/L75n1820TNG
-        mkdir ~/sims.TNG/L75n1820TNG/data.files
-        cd ~/sims.TNG/L75n1820TNG/
-        ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/output .
-        ln -s /virgo/simulations/IllustrisTNG/L75n1820TNG/postprocessing .
-
-    note that the last two lines create symlinks to the actual output directory where the simulation data files 
-    (`groupcat_*` and `snapdir_*`) reside, as well as to the postprocessing directory (containing `trees`, etc).
-    Replace as needed with the actual path on your machine.
+        export PATH=$HOME/.local/bin:$PATH
 
 
 getting started
