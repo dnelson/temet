@@ -812,12 +812,13 @@ class cloudyIon():
 
     def formatWithSpace(self, str, name=False):
         """ Convert a string of the type e.g. 'Mg2' or 'O6' to 'Mg II' or 'O VI'. """
+
         elName = None
         ionNum = None
 
         # search through space of element names, sorted shortest first, so that we capture e.g. 'Be' over 'B'
         for element in sorted(self.atomicSymbols, key=len, reverse=False):
-            if element in str:
+            if element == str[:1] or element == str[:2]:
                 elName = element
 
         ionNum = str.split(elName)[1]
