@@ -7,11 +7,27 @@ import h5py
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from os.path import isfile
 
 from util.boxRemap import remapPositions, findCuboidRemapInds
 from util.simParams import simParams
 from util.helper import pSplitRange
 from plot.config import figsize, lw
+
+def _load(sP,group,field,inds):
+    """ Helper to handle loading a subset, specified by inds, of a particle dataset vs halo catalog
+    vs subhalo catalog field. """
+    if 'PartType' in group:
+        ptNum = int(group[-1])
+        data = sP.snapshotSubsetC(ptNum, field, inds)
+    elif group == 'Subhalo':
+        data = sP.subhalos(field)[inds]
+    elif group == 'Group':
+        data = sP.halos(field)[inds]
+    else:
+        raise Exception('Unhandled group.')
+
+    return data
 
 def get_cone(sP,group,config,snap_index):
     """ Load coordinates of a particle type, or halos/subhalos, transform into the lightcone 
@@ -39,13 +55,6 @@ def get_cone(sP,group,config,snap_index):
         if key in data_keys:
             data_keys.remove(key)
 
-    # creating minimal lightcone? do not load any extra fields
-    if config['minimal']:
-        if 'PartType' in group:
-            data_keys = ['Coordinates','Velocities']
-        else:
-            data_keys = ['%sPos' % group, '%sVel' % group]
-
     # allocate
     global_index = np.zeros( numPartTot, dtype='int64' )
     
@@ -64,7 +73,7 @@ def get_cone(sP,group,config,snap_index):
         elif group == 'Group':
             pos_local = sP.halos('GroupPos')
         else:
-            assert 0
+            raise Exception('Unhandled group.')
 
         # transform the coordinates, all in [ckpc/h]
         pos_remapped, _ = remapPositions(sP, pos_local, config['remapShape'], nPixels=None)
@@ -91,30 +100,27 @@ def get_cone(sP,group,config,snap_index):
     assert offset == numPartTot
     global_index = global_index[:count]
 
-    # load other datasets of interest
-    data = {}
+    # load positions and velocities
+    pos_keys = ['Coordinates','SubhaloPos','GroupPos']
+    vel_keys = ['Velocities','SubhaloVel','GroupVel']
 
-    for key in data_keys:
-        if 'PartType' in group:
-            data[key] = sP.snapshotSubsetC(ptNum, key, global_index)
-        elif group == 'Subhalo':
-            data[key] = sP.subhalos(key)[global_index]
-        elif group == 'Group':
-            data[key] = sP.halos(key)[global_index]
+    for key in pos_keys:
+        if key in data_keys:
+            pos = _load(sP,group,key,global_index)
+
+    for key in vel_keys:
+        if key in data_keys:
+            vel = _load(sP,group,key,global_index)
+
+    for key in pos_keys + vel_keys:
+        if key in data_keys:
+            data_keys.remove(key)
         
-    # create snapshot number
-    snap_num = np.zeros( global_index.size, dtype='int16' ) + sP.snap
+    # creating minimal lightcone? do not load any extra fields
+    if config['minimal']:
+        data_keys = []
 
-    # pull out pos and vel
-    for key in ['Coordinates','SubhaloPos','GroupPos']:
-        if key in data:
-            pos = data.pop(key)
-
-    for key in ['Velocities','SubhaloVel','GroupVel']:
-        if key in data:
-            vel = data.pop(key)
-    
-    return pos, vel, data, global_index, snap_num
+    return pos, vel, data_keys, global_index
 
 def lightcone_coordinates(sP,group,pos,vel,config,snap_index):
     """ Compute the ra, dec, and redshift given the position and velocity within the lightcone. """
@@ -229,39 +235,43 @@ def generate_lightcone(index_todo=None):
         # create save file
         saveFilename = sP.postPath + 'lightcones/lightcone.%d.hdf5' % i
 
-        with h5py.File(saveFilename,'w') as f:
-            header = f.create_group("Header")
-            for key in config:
-                header.attrs[key] = config[key]
+        if not isfile(saveFilename):
+            with h5py.File(saveFilename,'w') as f:
+                header = f.create_group("Header")
+                for key in config:
+                    header.attrs[key] = config[key]
+                header.attrs['SnapNum'] = snap
 
         # loop over requested datasets/groups to process
         for group in data_groups:
             print(i, snap, group)
 
             # load and restrict to lightcone geometry
-            pos, vel, data, snap_index, snap_num = get_cone(sP, group, config, i)
+            pos, vel, data_fields, snap_index = get_cone(sP, group, config, i)
 
             # derive ra, dec, and redshift
             z_cosmo, z_obs, dec, ra = lightcone_coordinates(sP, group, pos, vel, config, i)
 
             # write datasets
             with h5py.File(saveFilename,'r+') as f:
+
                 f['%s/ra' % group] = ra
                 f['%s/dec' % group] = dec
                 f['%s/z_cosmo' % group] = z_cosmo
                 f['%s/z_obs' % group] = z_obs
-
                 f['%s/SnapIndex' % group] = snap_index
-                f['%s/SnapNum' % group] = np.zeros(snap_index.size, dtype='int16') + snap
 
-                for key in data.keys():
-                    f[group][key] = data[key]
+                # load and write extra datasets
+                for field in data_fields:
+                    print(field, flush=True)
+                    data = _load(sP,group,field,snap_index)
+                    f[group][field] = data
 
     print('Done [%.1f min].' % ((time.time()-start_time)/60))
 
 def finalize_lightcone():
     """ Write total counts in analogy to normal snapshots to facilitate loading. """
-    sP = simParams(run='tng300-2')
+    sP = simParams(run='tng300-1')
 
     counts = {}
 
@@ -310,7 +320,7 @@ def finalize_lightcone():
 
 def plot_z_distributions():
     """ Debugging. Load lightcone files and plot redshift distributions. """
-    sP = simParams(run='tng300-3')
+    sP = simParams(run='tng300-1')
     group = 'Group' #'PartType0'
 
     # load metadata
