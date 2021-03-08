@@ -402,6 +402,16 @@ class units(object):
         """ Convert length/distance in code units to comoving Mpc. """
         return self.codeLengthToComovingKpc(x) / 1000.0
 
+    def codeAreaToKpc2(self, x):
+        """ Convert an area [length^2] in code units to physical kpc^2. """
+        assert self._sP.redshift is not None
+
+        area = np.array(x, dtype='float32') / self._sP.HubbleParam**2 # remove little h factors
+        area *= (self.UnitLength_in_cm/self.kpc_in_cm)**2 # account for non-kpc code lengths
+        area *= self.scalefac**2 # comoving -> physical
+
+        return area
+
     def codeVolumeToCm3(self, x):
         """ Convert a volume [length^3] in code units to physical cm^3 (cgs). """
         assert self._sP.redshift is not None
@@ -416,11 +426,11 @@ class units(object):
         """ Convert a volume [length^3] in code units to physical kpc^3. """
         assert self._sP.redshift is not None
 
-        vol_cgs = np.array(x, dtype='float64') / self._sP.HubbleParam**3 # remove little h factors
-        vol_cgs *= (self.UnitLength_in_cm/self.kpc_in_cm)**3 # account for non-kpc code lengths
-        vol_cgs *= self.scalefac**3 # comoving -> physical
+        vol = np.array(x, dtype='float64') / self._sP.HubbleParam**3 # remove little h factors
+        vol *= (self.UnitLength_in_cm/self.kpc_in_cm)**3 # account for non-kpc code lengths
+        vol *= self.scalefac**3 # comoving -> physical
 
-        return vol_cgs
+        return vol
 
     def physicalKpcToCodeLength(self, x):
         """ Convert a length in [pkpc] to code units [typically ckpc/h]. """

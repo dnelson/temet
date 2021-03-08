@@ -581,7 +581,7 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
         return dist
 
     # 2d gridding: deposit quantity onto a grid and derive a summary statistic
-    if op == 'grid2d_isophot_shape':
+    if op in ['grid2d_isophot_shape','grid2d_isophot_area']:
         # prepare grid
         pos = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
         hsml = np.squeeze( particles['hsml'][i0:i1][wValid] )
@@ -589,6 +589,13 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
         quant = None
 
         boxCen = gc['SubhaloPos'][subhaloID,:]
+
+        # allocate return
+        result = np.zeros( len(opts['isophot_levels']), dtype='float32' )
+        result.fill(np.nan)
+
+        if mass.size == 1:
+            return result # cannot grid one cell
 
         # run grid
         grid = sphMap(pos, hsml, mass, quant, opts['axes'], opts['boxSizeImg'], sP.boxSize, boxCen, 
@@ -604,57 +611,54 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
         grid = logZeroNaN(grid) # log [erg/s/cm^2/arcsec^2]
 
         # derive quantity
-        if 0:
-            from util.helper import plot2d
-            plot2d(grid, minmax=[-25,-19], filename='grid.pdf')
-
-        shape = np.zeros( len(opts['isophot_levels']), dtype='float32' )
-        shape.fill(np.nan)
-
         for j, isoval in enumerate(opts['isophot_levels']):
             with np.errstate(invalid='ignore'):
                 mask = ( (grid > isoval) & (grid < isoval+1.0) )
 
             ww = np.where(mask)
 
-            if len(ww[0]) <= 3:
-                continue # singular matrix for mvbe
+            if '_shape' in op:
+                if len(ww[0]) <= 3:
+                    continue # singular matrix for mvbe
 
-            points = np.vstack( (opts['xxyy'][ww[0]], opts['xxyy'][ww[1]]) ).T
+                points = np.vstack( (opts['xxyy'][ww[0]], opts['xxyy'][ww[1]]) ).T
 
-            # compute minimum volume bounding ellipsoid (minimum area ellipse in 2D)
-            axislengths, theta, cen = mvbe(points)
+                # compute minimum volume bounding ellipsoid (minimum area ellipse in 2D)
+                axislengths, theta, cen = mvbe(points)
 
-            if 0:
-                # debug plot
-                import matplotlib.pyplot as plt
-                from mpl_toolkits.axes_grid1 import make_axes_locatable
-                from matplotlib.patches import Ellipse
+                if 0:
+                    # debug plot
+                    import matplotlib.pyplot as plt
+                    from mpl_toolkits.axes_grid1 import make_axes_locatable
+                    from matplotlib.patches import Ellipse
 
-                figsize = np.array([14,10]) * 0.8
-                fig = plt.figure(figsize=figsize)
-                ax = fig.add_subplot(111)
+                    figsize = np.array([14,10]) * 0.8
+                    fig = plt.figure(figsize=figsize)
+                    ax = fig.add_subplot(111)
 
-                # plot
-                plt.imshow(mask, cmap='viridis', aspect=mask.shape[0]/mask.shape[1])
-                ax.autoscale(False)
+                    # plot
+                    plt.imshow(mask, cmap='viridis', aspect=mask.shape[0]/mask.shape[1])
+                    ax.autoscale(False)
 
-                pxscale = (opts['nPixels'][0] / opts['gridSizeCodeUnits'])
-                minoraxis_px = 2 * axislengths.min() * pxscale
-                majoraxis_px = 2 * axislengths.max() * pxscale
-                cen_px = cen * pxscale
+                    pxscale = (opts['nPixels'][0] / opts['gridSizeCodeUnits'])
+                    minoraxis_px = 2 * axislengths.min() * pxscale
+                    majoraxis_px = 2 * axislengths.max() * pxscale
+                    cen_px = cen * pxscale
 
-                e = Ellipse( cen_px, majoraxis_px, minoraxis_px, theta, lw=2.0, fill=False, color='red' )
-                ax.add_artist(e)
+                    e = Ellipse( cen_px, majoraxis_px, minoraxis_px, theta, lw=2.0, fill=False, color='red' )
+                    ax.add_artist(e)
 
-                ax.scatter(points[:,1]*pxscale, points[:,0]*pxscale, 1.0, marker='x', color='green')
+                    ax.scatter(points[:,1]*pxscale, points[:,0]*pxscale, 1.0, marker='x', color='green')
 
-                fig.savefig('mask_%.1f.pdf' % isoval)
-                plt.close(fig)
+                    fig.savefig('mask_%.1f.pdf' % isoval)
+                    plt.close(fig)
 
-            shape[j] = (axislengths.max() / axislengths.min()) # a/b > 1
+                result[j] = (axislengths.max() / axislengths.min()) # a/b > 1
 
-        return shape
+            if '_area' in op:
+                result[j] = len(ww[0]) * opts['pxAreaCode'] # (ckpc/h)^2
+
+        return result
 
     raise Exception('Unhandled op.')
 
@@ -674,7 +678,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         If minHaloMass is not None, then minimum (log m200crit) halo mass to process.
     """
     ops_basic = ['sum','mean','max']
-    ops_custom = ['ufunc','halfrad','dist256','grid2d_isophot_shape']
+    ops_custom = ['ufunc','halfrad','dist256','grid2d_isophot_shape','grid2d_isophot_area']
     assert op in ops_basic + ops_custom
     assert scope in ['subfind','fof','global']
     if op == 'ufunc': assert ptProperty in userCustomFields
@@ -791,9 +795,9 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         fieldsLoad.append('hsml')
 
         # hard-code constant grid parameters (can generalize)
-        opts = {'isophot_levels' : [-18.0, -18.5, -19.0, -19.5, -20.0], # erg/s/cm^2/arcsec^2
-                'axes' : [0,1],
-                'quant' : None, # distribute mass
+        opts = {'isophot_levels' : [-17.5, -18.0, -18.5, -19.0, -19.5, -20.0], # erg/s/cm^2/arcsec^2
+                'axes' : [0,1], # random orientations
+                'quant' : None, # distribute e.g. mass or light
                 'gridExtentKpc' : 100.0,
                 'pxScaleKpc' : sP.units.arcsecToAngSizeKpcAtRedshift(0.2), # MUSE 0.2"/px
                 'smoothFWHM' : sP.units.arcsecToAngSizeKpcAtRedshift(0.7), # ~MUSE UDF ("), None to disable
@@ -803,6 +807,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         opts['gridSizeCodeUnits'] = sP.units.physicalKpcToCodeLength(opts['gridExtentKpc'])
         opts['boxSizeImg'] = opts['gridSizeCodeUnits'] * np.array([1.0,1.0,1.0])
         opts['pxSizesCode'] = opts['boxSizeImg'][0:1] / opts['nPixels']
+        opts['pxAreaCode'] = np.product(opts['pxSizesCode'])
 
         # compute pixel coordinates
         opts['xxyy'] = np.linspace(opts['pxScaleKpc']/2, 
@@ -3886,6 +3891,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_OutflowVelocity_SubfindWithFuzz_v200norm' : partial(outflowVelocities,v200norm=True),
 
    'Subhalo_MgII_Emission_Grid2D_Shape' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_shape',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
+   'Subhalo_MgII_Emission_Grid2D_Area' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_area',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
 
   }
 

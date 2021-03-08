@@ -697,25 +697,26 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
         plt.close(fig)
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
-                             sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, 
+                             sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, nBins=50, 
                              qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
-                             scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
+                             scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, scatterCtName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                             extraMedians=[],legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
+                             extraMedians=[], legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
-    which are overplotted. Multiple yQuants results in a grid. 
+    which are overplotted. Multiple yQuants results in a grid.
     If sQuant is not None, then in addition to the median, load this third quantity and split the 
-    subhalos on it according to sLowerPercs, sUpperPercs (above/below the given percentiles), for 
-    each split plotting the sub-sample yQuant again versus xQuant.
+    subhalos on it according to (mandatory) sLowerPercs, sUpperPercs, each a list of percentiles, for 
+    which to split plotting the sub-sample yQuant again versus xQuant.
     If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
     If f_pre, f_post are not None, then these are 'custom' functions accepting the axis as a single argument, which 
     are called before and after the rest of plotting, respectively.
     If scatterPoints, include all raw points with a scatterplot. If maxPointsPerDex, then randomly sub-sample down to 
     this number (equal number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. If scatterColor, 
-    color each point by a third property. If lowessSmooth, smooth the resulting color distribution.
+    color each point by a third property (use scatterCtName colormap if not None). 
+    If lowessSmooth, smooth the resulting color distribution.
     If cRel is not None, then should be a 3-tuple of [relMin,relMax,takeLog] in which case the colors are not 
     scatterColor itself, but the value of that quantity relative to the median at that value of the x-axis (e.g. mass).
     If markSubhaloIDs, highlight these subhalos especially on the plot. 
@@ -723,10 +724,12 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If drawMedian, then include median line and 1-sigma band (optionally override label to medianLabel).
     If extraMedians is not empty, then add median lines for these (y-axis) quantities as well.
     If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects.
-    If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. """
+    If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. 
+    Note: alpha controls only the scattered points (if plotted), and nBins is only for computing the median lines. """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
     if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
+    if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
 
     nRows = int(np.floor(np.sqrt(len(yQuants))))
     nCols = int(np.ceil(len(yQuants) / nRows))
@@ -734,7 +737,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     # hard-coded config
     lw = 2.5
     ptPlotThresh = 2000
-    nBins = 50
     if nCols > 4 and sizefac == 1.0: sizefac = 0.8
 
     # start plot
@@ -856,13 +858,16 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
             if drawMedian:
                 xm, ym, _, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
+
                 if xm.size > sKn:
                     ym = savgol_filter(ym,sKn,sKo)
                     #sm = savgol_filter(sm,sKn,sKo)
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
 
                 label = sP.simName + ' z=%.1f' % sP.redshift if medianLabel is None else medianLabel
+                if len(extraMedians): label = yQuant
                 color = 'black' if len(sPs) == 1 else c
+
                 l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=0.8, label=label)
                 #ax.plot(xm, pm[0,:], ':', lw=lw, color='black', alpha=0.8)
                 #ax.plot(xm, pm[-1,:], ':', lw=lw, color='black', alpha=0.8)
@@ -871,12 +876,17 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             for k, medianProp in enumerate(extraMedians):
                 # load new (y-axis) quantity, subset as before, and median
                 sim_mvals, mlabel, mMinMax, mLog = simSubhaloQuantity(sP, medianProp, clean, tight=True)
+                mlabel_orig = mlabel
                 if mLog: sim_mvals = logZeroNaN(sim_mvals)
 
                 # verify units (in theory, must match with y-axis units...)
-                yunits = ylabel.split("[")[1][:-1].strip()
-                munits = mlabel.split("[")[1][:-1].strip()
-                mlabel = mlabel.split("[")[0] # delete units
+                munits = ""
+                yunits = ""
+
+                if "[" in ylabel:
+                    yunits = ylabel.split("[")[1][:-1].strip()
+                    munits = mlabel.split("[")[1][:-1].strip()
+                    mlabel = mlabel.split("[")[0] # delete units
 
                 if 'log ' in munits and munits.replace("log ","") == yunits:
                     # munits is log(yunits), can fix this
@@ -896,11 +906,20 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 for wRestrict in wRestrictions:
                     sim_mvals = sim_mvals[wRestrict]
 
-                xm, ym, _, pm = running_median(sim_xvals,sim_mvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
+                # make sure these new values are also finite
+                w = np.where(np.isfinite(sim_mvals))
+                sim_xvals_e = sim_xvals[w]
+                sim_mvals = sim_mvals[w]
+
+                xm, ym, _, pm = running_median(sim_xvals_e,sim_mvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
                 if xm.size > sKn:
                     ym = savgol_filter(ym,sKn,sKo)
                     #sm = savgol_filter(sm,sKn,sKo)
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
+
+                if mlabel in [label,ylabel] or mlabel_orig in [label,ylabel]:
+                    mlabel = medianProp # plotting very similar quantities, be explicit
+                mlabel = mlabel.replace("mg2_shape_","SB > ").replace("mg2_area_","SB > ") # custom
 
                 ax.plot(xm, ym, linestyles[k+1], lw=lw, color='black', alpha=0.8, label=mlabel)
 
@@ -957,8 +976,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                     bins = np.arange(np.nanmin(xx), np.nanmax(xx)+binSize, binSize)
                     # loop through bins
-                    for i in range(bins.size-1):
-                        w = np.where( (xx>bins[i]) & (xx<=bins[i+1]) )[0]
+                    for k in range(bins.size-1):
+                        w = np.where( (xx>bins[k]) & (xx<=bins[k+1]) )[0]
                         if len(w) == 0:
                             continue
 
@@ -987,6 +1006,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
 
                 if scatterColor is not None:
                     # override constant color
+                    if scatterCtName is not None: ctName = scatterCtName
                     cmap = loadColorTable(ctName)
 
                     opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}

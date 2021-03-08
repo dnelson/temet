@@ -742,7 +742,32 @@ def paperPlots():
             #singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
             #                    rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False, psf=True)
 
-    # figure 6 - L_MgII vs Sigma_SFR, and r_1/2,MgII correlation with sSFR
+    # fig 6: emission morphology: spherically symmetric or not? shape a/b axis ratio of different isophotes
+    if 0:
+        xQuant = 'mstar_30pkpc_log'
+        yQuant = 'mg2_shape_-18.5'
+        cenSatSelect = 'cen'
+
+        extraMedians = ['mg2_shape_-19.5','mg2_shape_-19.0','mg2_shape_-18.0']
+
+        scatterColor = 'mg2_lumsize'
+        clim = None #[1.0, 2.0]
+        xlim = [8.5, 11.5]
+        ylim = [0.95, 2.6]
+        cRel = [0.5, 1.5, False]
+        scatterPoints = True
+        drawMedian = True
+        markersize = 30.0
+        alpha = 0.5
+        maxPointsPerDex = None
+
+        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
+                                 xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
+                                 scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
+                                 alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
+                                 extraMedians=extraMedians, scatterCtName='matter', legendLoc='upper left')
+
+    # figure 7 - L_MgII vs Sigma_SFR, and r_1/2,MgII correlation with sSFR
     if 0:
         for cQuant in ['mg2_lum','mg2_lumsize']:
             quantMedianVsSecondQuant([sP], pdf=None, yQuants=['sfr2_surfdens'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
@@ -754,7 +779,36 @@ def paperPlots():
                                      scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, 
                                      alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
 
-    # figure 7 - relation of MgII flux and vrad (inflow vs outflow)
+    # fig 8: area of MgII in [kpc^2] vs M*/z
+    if 1:
+        xQuant = 'mstar_30pkpc_log'
+        yQuant = 'mg2_area_-18.5'
+        cenSatSelect = 'cen'
+
+        extraMedians = ['mg2_area_-19.5','mg2_area_-19.0','mg2_area_-18.0']
+
+        xlim = [8.5, 11.5]
+        ylim = [1.0, 3.5]
+        drawMedian = True
+        nBins = 30
+
+        def f_post(ax):
+            plaw_index = 0.6
+            mstar_log = [10.0, 11.0]
+            area_log_kpc2 = plaw_index * np.array(mstar_log)
+            area_log_kpc2 += (2.0-area_log_kpc2[-1]) # hit 2.0 at M*=11
+
+            l, = ax.plot( mstar_log, area_log_kpc2, ':', lw=2.5 )
+
+            label = '$A_{\\rm MgII} \\propto M_\star^{%.1f}$' % plaw_index
+            ax.text(np.mean(mstar_log), np.mean(area_log_kpc2), label, 
+                    color=l.get_color(), va='top', ha='center', rotation=24)
+
+        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, nBins=nBins, 
+                                 cenSatSelect=cenSatSelect, xlim=xlim, ylim=ylim, drawMedian=drawMedian, 
+                                 sizefac=sizefac, extraMedians=extraMedians, f_post=f_post, legendLoc='upper left')
+
+    # figure 9 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
         mStarBin = [9.99, 10.01] #[10.4, 10.42]
         SubhaloGrNr = sP.subhalos('SubhaloGrNr')
@@ -782,37 +836,10 @@ def paperPlots():
         # (at what rad?)
         pass
 
-    # TODO: impact of stellar orientation (face-on vs edge-on) on MgII morphology
+    # fig X: impact of stellar orientation (face-on vs edge-on) on MgII size, morphology
     if 0:
-        #inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
+        inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
         inclinationPlotDriver(sP, quant='inclination_mg2_shape_-20.0')
-
-    # TODO: morphology in general: isotropic or not? shape a/b axis ratio of different isophotes?
-    #  isophotes: 1e-18, 5e-18, 1e-19, 5e-19
-    # fig: histogram of a/b, scatterplot of a/b vs M*, scatterplot of a/b vs inclination (color by M*)
-    if 1:
-        xQuant = 'mstar_30pkpc_log'
-        yQuant = 'mg2_shape_-20.0'
-        cenSatSelect = 'cen'
-
-        scatterColor = 'ssfr'
-        clim = None #[1.0, 2.0]
-        xlim = [7.0, 11.5]
-        ylim = [1.0, 2.0]
-        cRel = None #[-0.15, 0.15, True]
-        scatterPoints = True
-        drawMedian = True
-        markersize = 30.0
-        alpha = 0.7
-        maxPointsPerDex = None
-
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
-                                 xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
-                                 scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
-                                 alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
-                                 legendLoc='lower right')
-
-    # TODO: area of MgII in [kpc^2] vs M*/z, above SB threshs: 1e-18, 5e-18, 1e-19 (compare to Zabl slide)
 
     # figure X - line-center optical depth for MgII all-sky map, show low values
     if 0:

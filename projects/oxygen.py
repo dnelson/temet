@@ -332,7 +332,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
     If toAvgColDens, then instead of total mass plot average column density computed geometrically as (Mtotal/pi/rvir^2). 
     If secondTopAxis, add the other (halo/stellar) mass as a secondary top axis, average relation. """
 
-    binSize = 0.2 # log mass
+    binSize = 0.1 # log mass
     renames = {'AllGas':'Total Gas / 100','AllGas_Metal':'Total Metals','AllGas_Oxygen':'Total Oxygen',
                'AllGas_Mg':'Total Mg','HIGK_popping':'Neutral HI'}
     ionColors = {'AllGas':'#444444','AllGas_Metal':'#777777','AllGas_Oxygen':'#cccccc'}
@@ -360,7 +360,7 @@ def totalIonMassVsHaloMass(sPs, saveName, ions=['OVI','OVII'], cenSatSelect='cen
         massField = mStarField
 
     if toAvgColDens:
-        ax.set_ylim([13.0, 18.0])
+        ax.set_ylim([12.0, 16.0])
         #ax.set_ylabel('Average Column Density $<N_{\\rm oxygen}>$ [ log cm$^{-2}$ ]')
         ax.set_ylabel('Avg Column Density <N> [ log cm$^{-2}$ ]')
     else:

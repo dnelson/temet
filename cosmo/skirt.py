@@ -414,9 +414,9 @@ def driver_single():
               'numPixelsY'     : 200,
               'fovX'           : '40 kpc',
               'fovY'           : '40 kpc',
-              'numWavelengths' : 80,
+              'numWavelengths' : 40,
               'simMode'        : 'ExtinctionOnly', # ExtinctionOnly, DustEmission, DustEmissionWithSelfAbsorption
-              'minWavelength'  : '0.09 micron', # 900 Ang
+              'minWavelength'  : '0.15 micron', # 1500 Ang
               'maxWavelength'  : '1.0 micron'} # 10000 Ang
 
     # create inputs
@@ -636,7 +636,7 @@ def vis(subhaloID=343503):
 
                 # can derive limits either on rgb as a whole, or on each band
                 w = np.where(rgb > 0.0)
-                minval = np.percentile(rgb[w], 50) # images[0].min()
+                minval = np.percentile(rgb[w], 20) # images[0].min()
                 maxval = np.percentile(rgb[w], 99.5) # images[0].max()
 
                 # normalize
