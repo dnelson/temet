@@ -173,11 +173,12 @@ def insertMPBGhost(mpb, snapToInsert=None):
 
     return mpb
 
-def mpbPositionComplete(sP, id, extraFields=[]):
+def mpbPositionComplete(sP, id, extraFields=None):
     """ Load a particular MPB of subhalo id, and return it along with a filled version of SubhaloPos 
     which interpolates for any skipped intermediate snapshots as well as back beyond the end of the 
     tree to the beginning of the simulation. The return indexed by snapshot number. """
     from tracer.tracerMC import match3
+    if extraFields is None: extraFields = []
 
     fields = ['SubfindID','SnapNum','SubhaloPos']
 
@@ -234,13 +235,14 @@ def mpbPositionComplete(sP, id, extraFields=[]):
 
     return snaps, times, posComplete
 
-def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=[]):
+def mpbSmoothedProperties(sP, id, fillSkippedEntries=True, extraFields=None):
     """ Load a particular subset of MPB properties of subhalo id, and smooth them in time. These are 
     currently: position, mass (m200_crit), virial radius (r200_crit), virial temperature (derived), 
     velocity (subhalo), and are inside ['sm'] for smoothed versions. Also attach time with snap/redshift.
     Note: With the Sublink* trees, the group properties are always present for all subhalos and are 
     identical for all subhalos in the same group. """
-
+    if extraFields is None: extraFields = []
+    
     fields = ['SubfindID','SnapNum','SubhaloPos','SubhaloVel','Group_R_Crit200','Group_M_Crit200']
 
     # any extra fields to be loaded?

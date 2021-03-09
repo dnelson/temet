@@ -1321,11 +1321,12 @@ def globalTracerLength(sP, halos=False, subhalos=False, haloTracerOffsets=None):
     return trCounts, trOffsets
 
 def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=False, 
-                       extraFields=[], indRange=None):
+                       extraFields=None, indRange=None):
     """ Load all MPBs of a global tracer set and create a mapping between unique MPBs and tracers.
     If indRange is not None (only so far when calling from accMode()), attempt to get halo_id's 
     using already computed parent_indextype tracer_tracks (for speed and efficiency only). """
     assert halos is True or subhalos is True # pick one
+    if extraFields is None: extraFields = []
 
     treeName = 'SubLink'
 

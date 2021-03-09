@@ -701,7 +701,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                              qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, scatterCtName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                             extraMedians=[], legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
+                             extraMedians=None, legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
     For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
@@ -727,6 +727,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
     If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. 
     Note: alpha controls only the scattered points (if plotted), and nBins is only for computing the median lines. """
     assert cenSatSelect in ['all', 'cen', 'sat']
+    if extraMedians is None: extraMedians = [] # avoid mutable keyword argument
     if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
     if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
     if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
@@ -865,7 +866,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
 
                 label = sP.simName + ' z=%.1f' % sP.redshift if medianLabel is None else medianLabel
-                if len(extraMedians): label = yQuant
+                if extraMedians: label = yQuant
                 color = 'black' if len(sPs) == 1 else c
 
                 l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=0.8, label=label)

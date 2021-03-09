@@ -2559,7 +2559,7 @@ def paperPlots():
                                      qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
                                      scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, 
                                      markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
-                                     extraMedians=[],legendLoc='best', xlim=[10.5,13.0], ylim=None, clim=None, cbarticks=None)
+                                     extraMedians=None,legendLoc='best', xlim=[10.5,13.0], ylim=None, clim=None, cbarticks=None)
 
     # --- clump analysis ---
 
