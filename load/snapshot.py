@@ -272,8 +272,10 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
-    useCache = True
-    createCache = False #createCache = True if getuser() != 'wwwrun' else False
+    useCache = False #True
+    print('TODO re-enable useCache')
+    createCache = False
+    #createCache = True if getuser() != 'wwwrun' else False # can enable
 
     cachePath = sP.derivPath + 'cache/'
     sbStr = 'sb%d_' % sP.subbox if sP.subbox is not None else ''
@@ -1195,7 +1197,8 @@ def snapshotSubset(sP, partType, fields,
             r[field] = rad
 
         # radial velocity, negative=inwards, relative to the central subhalo pos/vel, including hubble correction [km/s]
-        if field in ['vrad','halo_vrad','radvel','halo_radvel']:
+        # or normalized by the halo virial velocity [linear unitless]
+        if field in ['vrad','halo_vrad','radvel','halo_radvel','vrad_vvir','halo_vrad_vvir']:
             if sP.isZoom:
                 subhaloID = sP.zoomSubhaloID
                 print('WARNING: snapshotSubset() using zoomSubhaloID [%d] for zoom run to compute [%s]!' % (subhaloID,field))
@@ -1206,6 +1209,7 @@ def snapshotSubset(sP, partType, fields,
                 refPos = sP.refPos
                 refVel = sP.refVel
             else:
+                if subhaloID is not None: haloID = sP.subhalo(subhaloID)['SubhaloGrNr']
                 shID = sP.halo(haloID)['GroupFirstSub'] if subhaloID is None else subhaloID
                 firstSub = sP.subhalo(shID)
                 refPos = firstSub['SubhaloPos']
@@ -1217,6 +1221,11 @@ def snapshotSubset(sP, partType, fields,
             if isinstance(pos, dict) and pos['count'] == 0: return pos # no particles of type, empty return
 
             r[field] = sP.units.particleRadialVelInKmS(pos, vel, refPos, refVel)
+
+            if '_vvir' in field:
+                # normalize by halo v200
+                mhalo = sP.halo(haloID)['Group_M_Crit200']
+                r[field] /= sP.units.codeMassToVirVel(mhalo)
 
         # velocity 3-vector, relative to the central subhalo pos/vel, [km/s] for each component
         if field in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel','vel_rel']:

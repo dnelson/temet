@@ -213,6 +213,32 @@ def _draw_special_lines(sP, ax, ptProperty):
         ax.plot(ax.get_xlim(), [0.0, 0.0], ':', lw=lw, alpha=0.3, color='#ffffff')
         ax.plot(ax.get_xlim(), [1.0, 1.0], ':', lw=lw, alpha=0.3, color='#ffffff')
 
+def _load_all_halos(sP, partType, partField, haloIDs, GroupLenType=None):
+    """ Loader helper function. If haloIDs is None, then a normal fullbox load of the given 
+    {partType,partField} combination. Otherwise, haloIDs is a list, and this set of groups are
+    loaded sequentially, a concatenated list of particle-level data is then returned. """
+
+    # global box load?
+    if haloIDs is None:
+        return sP.snapshotSubsetP(partType, partField)
+
+    # set of halos: get total load size
+    if GroupLenType is None:
+        GroupLenType = sP.halos('GroupLenType')[:,sP.ptNum(partType)]
+    loadSize = np.sum(GroupLenType[haloIDs])
+
+    # allocate
+    vals = np.zeros(loadSize, dtype='float32')
+
+    offset = 0
+
+    # load each
+    for haloID in haloIDs:
+        vals[offset:offset+GroupLenType[haloID]] = sP.snapshotSubset(partType, partField, haloID=haloID)
+        offset += GroupLenType[haloID]
+
+    return vals
+
 def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weights=['mass'], meancolors=None, haloIDs=None, 
                      xlim=None, ylim=None, clim=None, contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
                      ctName='viridis', colorEmpty=False, smoothSigma=0.0, nBins=None, qRestrictions=None, median=False, 
@@ -265,28 +291,6 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
         assert meancolors is not None
 
     contoursColor = 'k' # black
-
-    def _load_all_halos(sP, partType, partField, haloIDs, GroupLenType=None):
-        # global box load?
-        if haloIDs is None:
-            return sP.snapshotSubsetP(partType, partField)
-
-        # set of halos: get total load size
-        if GroupLenType is None:
-            GroupLenType = sP.halos('GroupLenType')[:,sP.ptNum(partType)]
-        loadSize = np.sum(GroupLenType[haloIDs])
-
-        # allocate
-        vals = np.zeros(loadSize, dtype='float32')
-
-        offset = 0
-
-        # load each
-        for haloID in haloIDs:
-            vals[offset:offset+GroupLenType[haloID]] = sP.snapshotSubset(partType, partField, haloID=haloID)
-            offset += GroupLenType[haloID]
-
-        return vals
 
     # load: x-axis
     xlabel, xlim_quant, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloIDs is not None))
@@ -584,80 +588,250 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
     plt.close(fig)
 
 def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='Si_H_numratio', 
-                                    haloID=None, radMinKpc=None, radMaxKpc=None):
-    """ Plot the (median) relation between two particle properties for a single halo (if haloID is not None), 
-    or the whole box (if haloID is None). If a halo is specified, optionally restrict to a given 
-    [radMinKpc,radMaxKpc] radial range, specified in physical kpc."""
+                                    haloIDs=None, radMinKpc=None, radMaxKpc=None, xlim=None, ylim=None, 
+                                    nBins=50, legendLoc='best', total=False, totalCum=False, 
+                                    totalCumBoundsX=None, totalCumRangeX=None, totalCumLog=False,
+                                    f_pre=None, f_post=None):
+    """ Plot the relationship between two particle/cell properties, either for a full box 
+    (if haloIDs) is None, or else for one or more (sets of) halos.
 
-    # config
-    nBins = 50
-    lw = 3.0
+    Args:
+      sPs (list): one or more :py:class:`~util.simParams` to be overplotted.
+      haloIDs (list[int or list or dict]): one entry per sPs entry. For each entry, if haloIDs[i] is a single halo 
+          ID number, then one halo only. If a list, then median relation. If a dict, then k:v pairs where 
+          keys are a string description, and values are haloID lists, which are then overplotted. 
+          This is the same behavior as :py:func:`plotStackedRadialProfiles1D`.
+      radMinKpc (float): if by-halo loading, optionally restrict to radii above this value (physical kpc).
+      radMaxKpc (float): above, optionally restrict to radii below this value (physical kpc).
+        (Can generalize to qRestrictions approach).
+      total (bool): plot the total sum, instead of the (otherwise default) median.
+      totalCum (bool): plot the total cumulative sum.
+      totalCumRangeX (list[float]): if totalCum, then this gives the x-quantity range to include.
+      totalCumLog (bool): controls whether the y-axis is in linear or log.
+      totalCumBoundsX (list): If not None, then should be a 2-tuple [min,max] within which to -exclude- 
+        bins of the xQuant in the cumulative calculation.
+
+    Returns:
+      None. Produces a PDF figure in the current directory.
+    """
+    assert np.sum([total,totalCum]) in [0,1] # at most one
+
+    if isinstance(haloIDs,int) and len(sPs) == 1: haloIDs = [haloIDs] # single number to list (one sP case)
+    assert (len(haloIDs) == len(sPs)) # one halo ID list per sP
+
+    if radMinKpc is not None or radMaxKpc is not None: assert haloIDs is not None
+    if totalCumLog: assert totalCum
+
+    hStr = 'fullbox'
+    if isinstance(haloIDs[0], (int,np.int32)):
+        hStr = 'halo%d' % haloIDs[0]
+    else:
+        hStr = 'halos%d' % len(haloIDs[0])
+
+    sStr = '%s z=%.1f' % (sPs[0].simName, sPs[0].redshift) if len(sPs) == 1 else ''
+    haloLims = haloIDs is not None
 
     # start plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
-    hStr = 'fullbox' if haloID is None else 'halo%d' % haloID
-    sStr = '%s z=%.1f' % (sPs[0].simName, sPs[0].redshift) if len(sPs) == 1 else ''
-    ax.set_title('%s %s' % (sStr,hStr))
+    if f_pre is not None:
+        f_pre(ax)
 
+    # loop over runs
     for i, sP in enumerate(sPs):
-        # load
-        xlabel, xlim, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=(haloID is not None))
-        sim_xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
-        if xlog: sim_xvals = logZeroNaN(sim_xvals)
+        objIDs = haloIDs[i] # for this run
 
-        ylabel, ylim, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=(haloID is not None))
-        sim_yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
-        if ylog: sim_yvals = logZeroNaN(sim_yvals)
+        # halo is a single number or dict? make a concatenated list
+        if isinstance(objIDs, (int,np.int32)):
+            objIDs = [objIDs]
+        if isinstance(objIDs, dict):
+            objIDs = np.hstack( [objIDs[key] for key in objIDs.keys()])
 
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
+        # how many sets of objects for this run?
+        nSamples = 1 if not isinstance(haloIDs[i],dict) else len(haloIDs[i].keys())
 
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
+        for j in range(nSamples):
+            # get current set of IDs
+            haloIDsLoc = objIDs
+            if isinstance(haloIDs[i], dict):
+                haloIDsLoc = haloIDs[i][list(haloIDs[i].keys())[j]]
 
-        # radial restriction
-        if radMaxKpc is not None or radMinKpc is not None:
-            assert haloID is not None
-            rad = sP.snapshotSubset(partType, 'rad_kpc', haloID=haloID)
-            
-            if radMinKpc is None:
-                w = np.where( (rad <= radMaxKpc) )
-            elif radMaxKpc is None:
-                w = np.where( (rad > radMinKpc) )
+            # load
+            xlabel, xlim2, xlog = simParticleQuantity(sP, partType, xQuant, clean=clean, haloLims=haloLims)
+            #sim_xvals = sP.snapshotSubset(partType, xQuant, haloID=haloID)
+            sim_xvals = _load_all_halos(sP, partType, xQuant, haloIDsLoc)
+            if xlog: sim_xvals = logZeroNaN(sim_xvals)
+
+            ylabel, ylim2, ylog = simParticleQuantity(sP, partType, yQuant, clean=clean, haloLims=haloLims)
+            #sim_yvals = sP.snapshotSubset(partType, yQuant, haloID=haloID)
+            sim_yvals = _load_all_halos(sP, partType, yQuant, haloIDsLoc)
+            #if ylog: sim_yvals = logZeroNaN(sim_yvals) # apply after statistics
+
+            if 'log 10$^{30}$ ' in ylabel:
+                # units special case
+                sim_yvals = sim_yvals.astype('float32') + 30.0
+                ylim2[0] += 10.0
+                ylim2[1] += 10.0
+                ylabel = ylabel.replace('log 10$^{30}$ ','')
+
+            if j == 0:
+                if totalCum:
+                    if "[" in ylabel:
+                        ylabel = ylabel.split("[")[0]
+                    ylabel = "Cumulative " + ylabel
+                    if totalCumRangeX is None: totalCumRangeX = xlim # default
+
+                if totalCumLog:
+                    # log y-axis
+                    if ylim is None: ylim = [-2.0, 0.0]
+                    ylabel = ylabel + " [log]"
+                    ax.plot( xlim, [-1.0, -1.0], '-', color='#aaaaaa', alpha=0.1 )
+                else:
+                    # linear y-axis
+                    if ylim is None: ylim = [0.0, 1.0]
+                    ax.plot( xlim, [0.1, 0.1], '-', color='#aaaaaa', alpha=0.1 )
+
+                if totalCumBoundsX is not None:
+                    ax.fill_between(totalCumBoundsX, ylim[0], ylim[1], color='#aaaaaa', alpha=0.2)
+
+                ax.set_xlabel(xlabel)
+                ax.set_ylabel(ylabel)
+
+                if xlim is None: xlim = xlim2
+                if ylim is None: ylim = ylim2
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+
+            # radial restriction
+            if radMaxKpc is not None or radMinKpc is not None:
+                # load radii
+                rad = _load_all_halos(sP, partType, 'rad_kpc', haloIDsLoc)
+                
+                if radMinKpc is None:
+                    w = np.where( (rad <= radMaxKpc) )
+                elif radMaxKpc is None:
+                    w = np.where( (rad > radMinKpc) )
+                else:
+                    w = np.where( (rad > radMinKpc) & (rad <= radMaxKpc) )
+
+                sim_xvals = sim_xvals[w]
+                sim_yvals = sim_yvals[w]
+
+                if radMinKpc is not None:
+                    hStr += '_rad_gt_%.1fkpc' % radMinKpc
+                if radMaxKpc is not None:
+                    hStr += '_rad_lt_%.1fkpc' % radMaxKpc
+
+            # color and label
+            c = next(ax._get_lines.prop_cycler)['color']
+
+            label = ""
+            if isinstance(haloIDs[i], dict):
+                label = list(haloIDs[i].keys())[j]
+            if len(sPs) > 1:
+                label += " %s" % sP.simName
+
+            # compute statistic: total, cumulative total, or median
+            if total:
+                # sum of y-quantity in each x-quantity bin
+                ym, xm, _ = binned_statistic(sim_xvals,sim_yvals,statistic='sum',bins=nBins,range=xlim)
+                xm = (xm[1:] + xm[:-1]) / 2
+
+                if ylog:
+                    ym = logZeroNaN(ym)
+                
+                ym = savgol_filter(ym,sKn,sKo)
+
+                # plot
+                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
+
+            elif totalCum:
+                # cumulative sum of y-quantity as a function of x-quantity bins
+                num_splits = 1
+                if xlim[0] < 0 and xlim[1] > 0:
+                    # if x-axis quantity spans zero, i.e. has both positive and negative values (e.g. vrad)
+                    # we compute and show the cumulative sum separately for each
+                    num_splits = 2
+
+                for k in range(num_splits):
+                    xlim_loc = list(totalCumRangeX)
+                    if num_splits == 2:
+                        if k == 0:
+                            xlim_loc[1] = 0.0
+                        if k == 1:
+                            xlim_loc[0] = 0.0
+
+                    if totalCumBoundsX is not None:
+                        # [min,max] tuple of range to exclude from calculation
+                        w = np.where( (sim_xvals >= xlim_loc[0]) & (sim_xvals < xlim_loc[1]) & \
+                                      ((sim_xvals <= totalCumBoundsX[0]) | \
+                                       (sim_xvals >= totalCumBoundsX[1])) )
+                    else:
+                        # only restrict to xlim
+                        w = np.where( (sim_xvals >= xlim_loc[0]) & (sim_xvals < xlim_loc[1]) )
+
+                    ysum = np.nansum( sim_yvals[w] )
+
+                    ym, xm, _ = binned_statistic(sim_xvals[w],sim_yvals[w],statistic='sum',bins=nBins,range=xlim_loc)
+                    xm = (xm[1:] + xm[:-1]) / 2
+
+                    if k == 0:
+                        # ascending, i.e. value is the fraction of the total y-quantity contained in 
+                        # bins with x-quantity equal to or less than (to the left) of the x-axis value
+                        # e.g. for vrad, fraction of luminosity in inflowing gas with vrad <= v
+                        ym = np.cumsum(ym)
+                    if k == 1:
+                        # reversed, i.e. value is the fraction of the total y-quantity contained in 
+                        # bins with x-quantity equal to or greater than (to the right) of the x-axis value
+                        # e.g. for vrad, fraction of luminosity in outflowing gas with vrad >= v
+                        ym = np.cumsum(ym[::-1])[::-1]
+
+                    # normalize
+                    ym /= ysum
+
+                    if totalCumBoundsX is not None:
+                        ym[(xm > totalCumBoundsX[0]) & (xm < totalCumBoundsX[1])] = np.nan
+
+                    if totalCumLog:
+                        ym = logZeroNaN(ym)
+
+                    # plot: solid lines for both, with dotted line showing reflection symmetry
+                    ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label if k == 0 else "")
+                    if k == 0:
+                        # plot flipped to assess symmetry
+                        ax.plot(-xm, ym, linestyles[1], lw=lw, color=c, alpha=(1.0-0.5*k))
+
             else:
-                w = np.where( (rad > radMinKpc) & (rad <= radMaxKpc) )
+                # median and 16/84th percentile lines
+                binSize = (xlim[1]-xlim[0]) / nBins
 
-            sim_xvals = sim_xvals[w]
-            sim_yvals = sim_yvals[w]
+                if ylog:
+                    sim_yvals = logZeroNaN(sim_yvals)
 
-            if radMinKpc is not None:
-                hStr += '_rad_gt_%.1fkpc' % radMinKpc
-            if radMaxKpc is not None:
-                hStr += '_rad_lt_%.1fkpc' % radMaxKpc
+                xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[16,50,84])
 
-        # median and 10/90th percentile lines
-        binSize = (xlim[1]-xlim[0]) / nBins
+                ym = savgol_filter(ym,sKn,sKo)
+                sm = savgol_filter(sm,sKn,sKo)
+                pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-        xm, ym, sm, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,percs=[5,10,25,75,90,95])
-        xm = xm[1:-1]
-        ym2 = savgol_filter(ym,sKn,sKo)[1:-1]
-        sm2 = savgol_filter(sm,sKn,sKo)[1:-1]
-        pm2 = savgol_filter(pm,sKn,sKo,axis=1)[:,1:-1]
+                # plot
+                ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label)
 
-        c = next(ax._get_lines.prop_cycler)['color']
-        ax.plot(xm, ym2, linestyles[0], lw=lw, color=c, label=sP.simName)
+                # plot percentile band
+                if not total and not totalCum:
+                    if len(sPs) <= 3 or (len(sPs) > 3 and i == 0):
+                        ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=c, alpha=0.1, interpolate=True)
 
-        # percentile:
-        if len(sPs) <= 3 or (len(sPs) > 3 and i == 0):
-            ax.fill_between(xm, pm2[1,:], pm2[-2,:], facecolor=c, alpha=0.1, interpolate=True)
+    if f_post is not None:
+        f_post(ax)
 
-    ax.legend(loc='best')
+    ax.legend(loc=legendLoc)
 
     # finish plot
     sStr = '%s_z-%.1f' % (sPs[0].simName,sPs[0].redshift) if len(sPs) == 1 else 'sPn%d' % len(sPs)
-    fig.savefig('particleMedian_%s_%s-vs-%s_%s_%s.pdf' % (partType,xQuant,yQuant,sStr,hStr))
+    plotType = 'Median' if np.sum([total,totalCum]) == 0 else ('Total' if total else 'TotalCum')
+    fig.savefig('particle%s_%s_%s-vs-%s_%s_%s.pdf' % (plotType,partType,xQuant,yQuant,sStr,hStr))
     plt.close(fig)
 
 def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas', ptProperty='temp_linear', op='mean', weighting=None, 
@@ -672,12 +846,13 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
     If haloIDs is not None, then use these FoF IDs as inputs instead of Subfind IDs. 
     ptType and ptProperty specify the quantity to bin, and op (mean, sum, min, max) the operation to apply in each bin.
     If ptRestrictions, then a dictionary containing k:v pairs where k is fieldName, v is a 2-tuple [min,max], 
-      to restrict all cells/particles by, e.g. sfrgt0 = {'StarFormationRate':['gt',0.0]}, sfreq0 = {'StarFormationRate':['eq',0.0]}.
+    to restrict all cells/particles by, e.g. sfrgt0 = {'StarFormationRate':['gt',0.0]}, sfreq0 = {'StarFormationRate':['eq',0.0]}.
     if proj2D is not None, then a 2-tuple as input to subhaloRadialProfile().
     If plotMedian is False, then skip the average profile.
     if plotIndiv, then show individual profiles, and in this case:
     If ctName is not None, sample from this colormap to choose line color per object. Assign based on the property ctProp.
-    If colorbar is not False, then use this field (string) to display a colorbar mapping. """
+    If colorbar is not False, then use this field (string) to display a colorbar mapping.
+    """
     from cosmo.auxcatalog import subhaloRadialProfile
     from tracer.tracerMC import match3
 
@@ -711,9 +886,9 @@ def plotStackedRadialProfiles1D(sPs, subhaloIDs=None, haloIDs=None, ptType='gas'
         objIDs = subhaloIDs[i] # for this run
 
         # subhalo is a single number or dict? make a concatenated list
-        if isinstance(objIDs,int):
+        if isinstance(objIDs, (int,np.int32)):
             objIDs = [objIDs]
-        if isinstance(objIDs,dict):
+        if isinstance(objIDs, dict):
             objIDs = np.hstack( [objIDs[key] for key in objIDs.keys()])
 
         if haloIDs is not None:
@@ -1376,13 +1551,13 @@ def singleHaloProperties():
     #haloMasses = sP.units.codeMassToLogMsun(gc['Group_M_Crit200'])
 
     #haloIDs = np.where( (haloMasses > 12.02) & (haloMasses < 12.03) )[0]
-    #haloID = haloIDs[6] # random: 3, 4, 5, 6
+    #haloIDs = [haloIDs[6]] # random: 3, 4, 5, 6
 
     haloID = None
     rMin = None
     rMax = None
 
-    plotParticleMedianVsSecondQuant([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloID=haloID, 
+    plotParticleMedianVsSecondQuant([sP], partType=partType, xQuant=xQuant, yQuant=yQuant, haloIDs=haloIDs, 
                                    radMinKpc=rMin, radMaxKpc=rMax)
 
     #for prop in ['hdens','temp_linear','cellsize_kpc','radvel','temp']:

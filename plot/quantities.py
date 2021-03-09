@@ -2416,6 +2416,12 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-300, 300]
         log = False
 
+    if ptProperty in ['vrad_vvir','halo_vrad_vvir']:
+        label = '%s Radial Velocity / V$_{\\rm 200}$' % typeStr
+        lim = [-2, 2]
+        if haloLims: lim = [-1, 1]
+        log = False
+
     if ptProperty in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
         label = '%s Halo-Relative Velocity [ km/s ]' % typeStr
         lim = [-1000, 1000]

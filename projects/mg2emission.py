@@ -586,29 +586,33 @@ def inclinationPlotDriver(sP, quant='inclination_mg2_lumsize'):
     """ Driver for quantMedianVsSecondQuant. """
     sPs = [sP]
 
-    xQuant = 'mstar_30pkpc_log'
-    yQuant = quant #'inclination'
+    xQuant = 'inclination'
+    yQuant = quant
+    scatterColor = 'mstar_30pkpc_log'
+
     cenSatSelect = 'cen'
 
-    scatterColor = quant
     if 'lumsize' in quant:
-        clim = [3.0, 10.0]
+        ylim = [2.0, 6.0]
     if 'shape' in quant:
-        clim = [1.0, 2.0]
-    xlim = [8.0, 11.5]
-    ylim = [1.0, 2.0] #[0, 90]
+        ylim = [1.0, 2.0]
+
+    xlim = None
+    clim = None
     cRel = None #[-0.15, 0.15, True]
     scatterPoints = True
-    drawMedian = False
+    drawMedian = True
     markersize = 30.0
     alpha = 0.7
     maxPointsPerDex = None
+
+    qRestrictions = [ ['mstar_30pkpc_log',8.0,10.0] ]
 
     quantMedianVsSecondQuant(sPs, pdf=None, yQuants=[yQuant], xQuant=xQuant, cenSatSelect=cenSatSelect, 
                              xlim=xlim, ylim=ylim, clim=clim, drawMedian=drawMedian, markersize=markersize,
                              scatterPoints=scatterPoints, scatterColor=scatterColor, sizefac=sizefac, 
                              alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
-                             legendLoc='lower right')
+                             qRestrictions=qRestrictions, legendLoc='lower right')
 
 def mg2lum_vs_mass(sP, redshifts=None):
     """ Driver for quantMedianVsSecondQuant. """
@@ -696,6 +700,17 @@ def paperPlots():
     # example: TNG50-1 z=0.7 np.where( (mstar_30pkpc>10.0) & (mstar_30pkpc<10.1) & cen_flag )[1]
     subhaloID = 396565
 
+    def _select_haloIDs(mStarBin):
+        SubhaloGrNr = sP.subhalos('SubhaloGrNr')
+        mstar = sP.subhalos('mstar_30pkpc_log')
+        cen_flag = sP.subhalos('cen_flag')
+
+        with np.errstate(invalid='ignore'):
+            subIDs = np.where( (mstar>mStarBin[0]) & (mstar < mStarBin[1]) & cen_flag )
+            haloIDs = SubhaloGrNr[subIDs]
+
+        return haloIDs
+
     # figure 1 - single halo example
     if 0:
         singleHaloImageMGII(sP, subhaloID, conf=3) # 1 for paper
@@ -780,7 +795,7 @@ def paperPlots():
                                      alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
 
     # fig 8: area of MgII in [kpc^2] vs M*/z
-    if 1:
+    if 0:
         xQuant = 'mstar_30pkpc_log'
         yQuant = 'mg2_area_-18.5'
         cenSatSelect = 'cen'
@@ -811,13 +826,7 @@ def paperPlots():
     # figure 9 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
         mStarBin = [9.99, 10.01] #[10.4, 10.42]
-        SubhaloGrNr = sP.subhalos('SubhaloGrNr')
-        mstar = sP.subhalos('mstar_30pkpc_log')
-        cen_flag = sP.subhalos('cen_flag')
-
-        with np.errstate(invalid='ignore'):
-            subIDs = np.where( (mstar>mStarBin[0]) & (mstar < mStarBin[1]) & cen_flag )
-            haloIDs = SubhaloGrNr[subIDs]
+        haloIDs = _select_haloIDs(mStarBin)
 
         def _f_post(ax):
             ax.text(0.97, 0.97, 'M$_{\\star} = 10^{%d}\,$M$_{\odot}$' % mStarBin[0], transform=ax.transAxes, 
@@ -828,15 +837,47 @@ def paperPlots():
                          ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
                          normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post, addHistY=50)
 
-    # TODO: What is the contribution of winds (vrad>0) vs ambient CGM to MgII lum (as a function of radius)
+    # fig 10 - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
     if 0:
-        # some sort of cumulative plot
-        # fraction of MgII lum contributed by gas with vrad>thresh
-        # one line for inflow, one line for outflow
-        # (at what rad?)
-        pass
+        xQuant = 'vrad_vvir' # 'rad_kpc_linear'
+        yQuant = 'Mg II lum'
+        radMinMax = [None, None] # include all radii
+        legendLoc = 'upper left'
+        total = False
+        totalCum = True
+        totalCumLog = False
+        xlim = [-3, 3]
+        ylim = [0.0, 0.5] # cumulative integral goes [0,1]
 
-    # fig X: impact of stellar orientation (face-on vs edge-on) on MgII size, morphology
+        totalCumBoundsX = [-0.5, 0.5] # exclude gas at vrad within +/- vvir/2
+        totalCumRangeX = [-10, 10] # cumulative integral bounds (include everything)
+
+        # get few tens of halos per mass bin
+        mStarBins = [ [7.5, 7.501], [8.0, 8.01], [8.5, 8.501], [9.0,9.03], [9.5,9.53], 
+                      [10.0, 10.03], [10.5,10.55], [11.0,11.05] ]
+        haloIDs = {}
+        for mStarBin in mStarBins:
+            key = 'M$_{\star} = 10^{%.1f}$' % mStarBin[0]
+            haloIDs[key] = _select_haloIDs(mStarBin)
+
+        def f_post(ax):
+            textOpts = {'color':'#cccccc', 'fontsize':48}
+            yy = ylim[0]+(ylim[1]-ylim[0])/15
+            ax.text( totalCumBoundsX[0], yy, 'Inflow', ha='right', rotation=90, **textOpts)
+            ax.text( totalCumBoundsX[1], yy, 'Outflow', ha='left', rotation=-90, **textOpts)
+
+        plotParticleMedianVsSecondQuant([sP], partType='gas', xQuant=xQuant, yQuant=yQuant, 
+                                    haloIDs=[haloIDs], radMinKpc=radMinMax[0], radMaxKpc=radMinMax[1],
+                                    xlim=xlim, ylim=ylim, total=total, totalCum=totalCum, nBins=100, 
+                                    totalCumRangeX=totalCumRangeX, totalCumBoundsX=totalCumBoundsX,
+                                    totalCumLog=totalCumLog, legendLoc=legendLoc, f_post=f_post)
+
+    # TODO: How can we use the spatially resolved spectroscopy to infer the actual 3D spatial 
+    # and kinematics distribution of MgII (and hence of the 10^4K CGM)?
+
+    # TODO: impact of environment, merger history/recent mergers/tidal features etc?
+
+    # TODO: impact of stellar orientation (face-on vs edge-on) on MgII size, morphology
     if 0:
         inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
         inclinationPlotDriver(sP, quant='inclination_mg2_shape_-20.0')

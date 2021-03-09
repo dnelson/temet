@@ -792,7 +792,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                 cMinMax = cMinMax if clim is None else clim
 
             # flagging?
-            sim_flag = np.ones(sim_xvals.shape).astype('bool')
+            sim_flag = np.ones(sim_xvals.shape[0]).astype('bool')
             if filterFlag and sP.groupCatHasField('Subhalo','SubhaloFlag'):
                 # load SubhaloFlag and override sim_flag (0=bad, 1=good)
                 sim_flag = sP.groupCat(fieldsSubhalos=['SubhaloFlag'])
@@ -954,9 +954,27 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             # contours (optionally conditional, i.e. independently normalized for each x-axis value)
             # todo
 
+            # handle multi-dimensional (i.e. multiple values per subhalo) arrays
+            maxdim = np.max( [sim_xvals.ndim, sim_yvals.ndim, sim_cvals.ndim] )
+
+            if maxdim > 1:
+                # how many entries per subhalo in the multi-d array?
+                maxdim_ind = np.argmax( [sim_xvals.ndim, sim_yvals.ndim, sim_cvals.ndim] )
+                shape = [sim_xvals.shape, sim_yvals.shape, sim_cvals.shape][maxdim_ind][1]
+
+                # of {x,y,c}, tile the remaining to match this shape
+                if sim_xvals.ndim == 1:
+                    sim_xvals = np.tile(sim_xvals.reshape((sim_xvals.size,1)), (1,shape))
+                if sim_yvals.ndim == 1:
+                    sim_yvals = np.tile(sim_yvals.reshape((sim_yvals.size,1)), (1,shape))
+                if sim_cvals.ndim == 1:
+                    sim_cvals = np.tile(sim_cvals.reshape((sim_cvals.size,1)), (1,shape))
+
             # scatter all points?
             if scatterPoints:
-                w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) ) # reduce PDF weight
+                # reduce PDF weight, skip points outside of visible plot
+                w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) )
+
                 xx = sim_xvals[w]
                 yy = sim_yvals[w]
                 cc = sim_cvals[w]
@@ -1012,22 +1030,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
                     #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
                     opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
-
-                # handle multi-dimensional (i.e. multiple values per subhalo) arrays
-                maxdim = np.max( [xx.ndim, yy.ndim, opts['c'].ndim] )
-
-                if maxdim > 1:
-                    # how many entries per subhalo in the multi-d array?
-                    maxdim_ind = np.argmax( [xx.ndim, yy.ndim, opts['c'].ndim] )
-                    shape = [xx.shape, yy.shape, opts['c'].shape][maxdim_ind][1]
-
-                    # of {x,y,c}, tile the remaining to match this shape
-                    if xx.ndim == 1:
-                        xx = np.tile(xx.reshape((xx.size,1)), (1,shape))
-                    if yy.ndim == 1:
-                        yy = np.tile(yy.reshape((yy.size,1)), (1,shape))
-                    if opts['c'].ndim == 1:
-                        opts['c'] = np.tile(opts['c'].reshape((opts['c'].size,1)), (1,shape))
 
                 # plot scatter
                 sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, zorder=0)
