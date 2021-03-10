@@ -174,6 +174,8 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     quants_rshock = ['rshock', 'rshock_rvir', 'rshock_ShocksMachNum_m2p2']
 
+    quants_env = ['delta5_mstar_gthalf']
+
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur'] # color_nodust_UV, color_nodust_VJ, color_C-30kpc-z_UV, color_C-30kpc-z_VJ
 
     quants_outflow = ['etaM_100myr_10kpc_0kms','etaM_100myr_10kpc_50kms',
@@ -214,7 +216,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     if wCounts: quants1 = [None] + quants1
 
     quantList = quants1 + quants1b + quants1c + quants2 + quants2_mhd + quants_bh + quants4 + quants5b #+ quants5
-    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad #+ quants_rshock
+    quantList += quants_misc + quants_color + quants_outflow + quants_wind + quants_rad + quants_env #+ quants_rshock
     if wTr: quantList += trQuants
     if wMasses: quantList += quants_mass
     if onlyTr: quantList = trQuants
@@ -420,6 +422,17 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             takeLog = False
             minMax = [0.0, 5.0]
             if tight: minMax = [0.0, 5.0]
+
+    if quantname in ['delta5','delta5_mstar_gthalf']:
+        # environment: galaxy overdensity, in terms of distance to the 5th nearest neighbor
+        # whose stellar mass is at least half our own (default unless specified)
+        vals = sP.subhalos(quantname)
+
+        vals += 1.0 # 1 + delta
+
+        label = 'log( 1 + $\delta_{5}$ )  [$M_{\\rm \star,ngb} \geq M_{\star}/2$]'
+        minMax = [-1.0, 3.0]
+        if tight: minMax = [-1.0, 4.0]
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z',
                      'mass_halogas_cold','mass_halogas_sfcold','mass_halogasfof_cold','mass_halogasfof_sfcold',

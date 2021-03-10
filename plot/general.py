@@ -628,6 +628,11 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     else:
         hStr = 'halos%d' % len(haloIDs[0])
 
+    if radMinKpc is not None:
+        hStr += '_rad_gt_%.1fkpc' % radMinKpc
+    if radMaxKpc is not None:
+        hStr += '_rad_lt_%.1fkpc' % radMaxKpc
+
     sStr = '%s z=%.1f' % (sPs[0].simName, sPs[0].redshift) if len(sPs) == 1 else ''
     haloLims = haloIDs is not None
 
@@ -637,6 +642,9 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
 
     if f_pre is not None:
         f_pre(ax)
+
+    yms = [[], []] # neg, pos
+    xms = [[], []]
 
     # loop over runs
     for i, sP in enumerate(sPs):
@@ -718,11 +726,6 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                 sim_xvals = sim_xvals[w]
                 sim_yvals = sim_yvals[w]
 
-                if radMinKpc is not None:
-                    hStr += '_rad_gt_%.1fkpc' % radMinKpc
-                if radMaxKpc is not None:
-                    hStr += '_rad_lt_%.1fkpc' % radMaxKpc
-
             # color and label
             c = next(ax._get_lines.prop_cycler)['color']
 
@@ -796,6 +799,9 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                     if totalCumLog:
                         ym = logZeroNaN(ym)
 
+                    xms[k].append(xm)
+                    yms[k].append(ym)
+
                     # plot: solid lines for both, with dotted line showing reflection symmetry
                     ax.plot(xm, ym, linestyles[0], lw=lw, color=c, label=label if k == 0 else "")
                     if k == 0:
@@ -824,7 +830,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
                         ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=c, alpha=0.1, interpolate=True)
 
     if f_post is not None:
-        f_post(ax)
+        f_post(ax, fig=fig, xms=xms, yms=yms)
 
     ax.legend(loc=legendLoc)
 

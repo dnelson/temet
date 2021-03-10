@@ -272,8 +272,7 @@ def _ionLoadHelper(sP, partType, field, kwargs):
             return sP.data[cache_key][indRangeOrig[0]:indRangeOrig[1]+1]
 
     # full snapshot-level caching, create during normal usage but not web (always use if exists)
-    useCache = False #True
-    print('TODO re-enable useCache')
+    useCache = True
     createCache = False
     #createCache = True if getuser() != 'wwwrun' else False # can enable
 
@@ -340,8 +339,8 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 
         # load from existing cache if it exists
         if isfile(cacheFile):
-            #if getuser() != 'wwwrun':
-            #    print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
+            if getuser() != 'wwwrun':
+                print('Loading [%s] [%s] from [%s].' % (partType,field,cacheFile.split(sP.derivPath)[1]))
 
             with h5py.File(cacheFile, 'r') as f:
                 assert f['field'].size == indRangeAll[1]

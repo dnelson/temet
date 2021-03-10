@@ -315,23 +315,15 @@ def _treeSearch(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nex
     return numNgbInH, numNgbWeightedInH, quantResult
 
 @jit(nopython=True, nogil=True, cache=True)
-def _treeSearchIndices(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibling,nextnode):
+def _treeSearchIndices(xyz,h,NumPart,boxSizeSim,pos,posMask,next_node,length,center,sibling,nextnode):
     """ Helper routine for calcParticleIndices(), see below. """
     boxHalf = 0.5 * boxSizeSim
 
     h2 = h * h
-    hinv = 1.0 / h
-
-    numNgbInH = 0
 
     # allocate, unfortunately unclear how safe we have to be here
+    numNgbInH = 0
     inds = np.empty( NumPart, dtype=np.int64 )
-
-    # 3D-normalized kernel
-    C1 = 2.546479089470  # COEFF_1
-    C2 = 15.278874536822 # COEFF_2
-    C3 = 5.092958178941  # COEFF_5
-    CN = 4.188790204786  # NORM_COEFF (4pi/3)
 
     # start search
     no = NumPart
@@ -360,6 +352,9 @@ def _treeSearchIndices(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibl
             # spherical exclusion if we've made it this far
             r2 = dx*dx + dy*dy + dz*dz
             if r2 >= h2:
+                continue
+
+            if posMask[p] == 0:
                 continue
 
             # count
@@ -393,6 +388,71 @@ def _treeSearchIndices(xyz,h,NumPart,boxSizeSim,pos,next_node,length,center,sibl
         return inds
 
     return None
+
+@jit(nopython=True, nogil=True, cache=True)
+def _treeSearchNearest(xyz,h,NumPart,boxSizeSim,pos,posMask,next_node,length,center,sibling,nextnode):
+    """ Helper routine for calcParticleIndices(), see below. """
+    boxHalf = 0.5 * boxSizeSim
+    h2 = h * h
+
+    # allocate, unfortunately unclear how safe we have to be here
+    min_index = -1
+    min_dist2 = np.inf
+
+    # start search
+    no = NumPart
+
+    while no >= 0:
+        if no < NumPart:
+            # single particle
+            assert next_node[no] != no # Going into infinite loop.
+
+            p = no
+            no = next_node[no]
+
+            dx = _NEAREST( pos[p,0] - xyz[0], boxHalf, boxSizeSim )
+            dy = _NEAREST( pos[p,1] - xyz[1], boxHalf, boxSizeSim )
+            dz = _NEAREST( pos[p,2] - xyz[2], boxHalf, boxSizeSim )
+            
+            r2 = dx*dx + dy*dy + dz*dz
+
+            if r2 == 0:
+                continue # no self
+
+            if r2 >= h2:
+                continue
+
+            if posMask[p] == 0:
+                continue # masked
+
+            # new closest?
+            if r2 < min_dist2:
+                min_dist2 = r2
+                min_index = p
+
+        else:
+            # internal node
+            ind = no-NumPart
+            no = sibling[ind] # in case the node can be discarded
+
+            if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                continue
+            if _NEAREST( center[0,ind] - xyz[0], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                continue
+
+            if _NEAREST( center[1,ind] - xyz[1], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                continue
+            if _NEAREST( center[1,ind] - xyz[1], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                continue
+
+            if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) + 0.5 * length[ind] < -h:
+                continue
+            if _NEAREST( center[2,ind] - xyz[2], boxHalf, boxSizeSim ) - 0.5 * length[ind] > h:
+                continue
+
+            no = nextnode[ind] # we need to open the node
+
+    return min_index, min_dist2
 
 @jit(nopython=True, nogil=True, cache=True)
 def _treeSearchHsmlIterate(xyz,h_guess,nNGB,nNGBDev,NumPart,boxSizeSim,pos,
@@ -478,6 +538,47 @@ def _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
     return hsml
 
 @jit(nopython=True, nogil=True, cache=True)
+def _treeSearchNearestIterate(posSearch,ind0,ind1,boxSizeSim,pos,posMask,
+                              next_node,length,center,sibling,nextnode):
+    """ Core routine for calcHsml(), see below. """
+    numSearch = ind1 - ind0 + 1
+    NumPart = pos.shape[0]
+
+    h_guess = 1.0 # i.e. code units
+    if boxSizeSim > 0.0:
+        h_guess = boxSizeSim / NumPart**(1.0/3.0) * 0.1
+
+    dists = np.zeros( numSearch, dtype=np.float32 )
+    indices = np.zeros( numSearch, dtype=np.int64 )
+
+    for i in range(numSearch):
+        # iterate ball search using octtree until we have >= 1 neighbor result
+        xyz = posSearch[ind0+i,:]
+
+        loc_index = -1
+        iter_num = 0
+
+        while loc_index == -1:
+            loc_index, loc_dist2 = _treeSearchNearest(xyz,h_guess,NumPart,boxSizeSim,pos,posMask,
+                                                      next_node,length,center,sibling,nextnode)
+            #print(iter_num,loc_index,np.sqrt(loc_dist2),h_guess)
+            h_guess *= 2.0
+            iter_num += 1
+
+            if iter_num > 1000:
+                print('ERROR: Failed to converge.')
+                break
+
+        # store result
+        dists[i] = np.sqrt(loc_dist2)
+        indices[i] = loc_index
+
+        # use previous result as guess for the next (any spatial ordering will greatly help)
+        h_guess = dists[i]
+
+    return dists, indices
+
+@jit(nopython=True, nogil=True, cache=True)
 def _treeSearchQuantReduction(posSearch,hsml,ind0,ind1,boxSizeSim,pos,quant,opnum,
                               next_node,length,center,sibling,nextnode):
     """ Core routine for calcQuantReduction(), see below. """
@@ -545,8 +646,8 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
 
     return NextNode, length, center, sibling, nextnode
 
-def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
-             treePrec='single', tree=None, nThreads=40, verbose=False):
+def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
+             treePrec='single', tree=None, nThreads=40, nearest=False, verbose=False):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
@@ -554,6 +655,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         
       pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords for 2D)
       boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      posSearch[M,3] : search sites
+      posMask[N]     : if not None, bool mask, only True entries are considered in search
       nNGB           : number of nearest neighbors to search for in order to define HSML
       nNGBDev        : allowed deviation (+/-) from the requested number of neighbors
       nDims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
@@ -562,6 +665,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
       tree           : if not None, should be a list of all the needed tree arrays (pre-computed), 
                        i.e the exact return of buildFullTree()
       nThreads       : do multithreaded calculation (on treefind, while tree construction remains serial)
+      nearest        : if True, then instead of returning hsml values based on nNGB, return indices and 
+                       distances to single closest match only
     """
     # input sanity checks
     treeDims  = [3]
@@ -569,6 +674,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
     assert pos.ndim == 2 and pos.shape[1] in treeDims, 'Strange dimensions of pos.'
     assert pos.dtype in [np.float32, np.float64], 'pos not in float32/64.'
     assert nDims in treeDims, 'Invalid ndims specification (3D only).'
+    if posMask is not None: assert nearest # otherwise generalize to also work for hsml
 
     # handle small inputs
     if pos.shape[0] < nNGB-nNGBDev:
@@ -588,6 +694,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
 
     if posSearch is None:
         posSearch = pos # set search coordinates as a view onto the same pos used to make the tree
+    if posMask is None:
+        posMask = np.ones(pos.shape[0], dtype=np.bool)
 
     if posSearch.shape[0] < nThreads:
         nThreads = 1
@@ -599,11 +707,16 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         ind0 = 0
         ind1 = posSearch.shape[0] - 1
 
-        hsml = _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
-                                  NextNode,length,center,sibling,nextnode,weighted_num)
+        if nearest:
+            dists, indices = _treeSearchNearestIterate(posSearch,ind0,ind1,boxSizeSim,pos,posMask,
+                                                       NextNode,length,center,sibling,nextnode)
+            return dists, indices
+        else:
+            hsml = _treeSearchHsmlSet(posSearch,ind0,ind1,nNGB,nNGBDev,boxSizeSim,pos,
+                                      NextNode,length,center,sibling,nextnode,weighted_num)
 
-        #print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-build_done_time))
-        return hsml
+            #print(' calcHsml(): search took [%g] sec (serial).' % (time.time()-build_done_time))
+            return hsml
 
     # else, multithreaded
     # -------------------
@@ -630,6 +743,7 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
 
             # create views to other arrays
             self.posSearch = posSearch
+            self.posMask   = posMask
             self.pos       = pos
 
             self.NextNode  = NextNode
@@ -640,15 +754,22 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
 
         def run(self):
             # call JIT compiled kernel (normQuant=False since we handle this later)
-            self.hsml = _treeSearchHsmlSet(self.posSearch,self.ind0,self.ind1,self.nNGB,self.nNGBDev,
-                                           self.boxSizeSim,self.pos,self.NextNode,self.length,
-                                           self.center,self.sibling,self.nextnode,self.weighted_num)
+            if nearest:
+                self.dists, self.indices = _treeSearchNearestIterate(self.posSearch,self.ind0,self.ind1,self.posMask,
+                                                                     self.boxSizeSim,self.pos,self.NextNode,
+                                                                     self.length,self.center,self.sibling,self.nextnode)
+            else:
+                self.hsml = _treeSearchHsmlSet(self.posSearch,self.ind0,self.ind1,self.nNGB,self.nNGBDev,
+                                               self.boxSizeSim,self.pos,self.NextNode,self.length,
+                                               self.center,self.sibling,self.nextnode,self.weighted_num)
 
     # create threads
     threads = [searchThread(threadNum, nThreads) for threadNum in np.arange(nThreads)]
 
     # allocate master return grids
     hsml = np.zeros( posSearch.shape[0], dtype=np.float32 )
+    if nearest:
+        indices = np.zeros( posSearch.shape[0], dtype=np.int64 )
 
     # launch each thread, detach, and then wait for each to finish
     for thread in threads:
@@ -658,9 +779,15 @@ def calcHsml(pos, boxSizeSim, posSearch=None, nNGB=32, nNGBDev=1, nDims=3, weigh
         thread.join()
 
         # after each has finished, add its result array to the global
-        hsml[thread.ind0 : thread.ind1 + 1] = thread.hsml
+        if nearest:
+            dists[thread.ind0 : thread.ind1 + 1] = thread.dists
+            indices[thread.ind0 : thread.ind1 + 1] = thread.indices
+        else:
+            hsml[thread.ind0 : thread.ind1 + 1] = thread.hsml
 
     #print(' calcHsml(): search took [%g] sec (nThreads=%d).' % (time.time()-build_done_time, nThreads))
+    if nearest:
+        return dists, indices
     return hsml
 
 def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePrec='single', tree=None, nThreads=16):
@@ -785,7 +912,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
     #print(' calcQuantReduction(): took [%g] sec.' % (time.time()-build_done_time))
     return result
 
-def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, treePrec='single', tree=None):
+def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, treePrec='single', tree=None):
     """ Find and return the actual particle indices (indexing pos, hsml) within the search radius hsml 
     of the posSearch location. Serial by construction, since we do only one search.
 
@@ -793,6 +920,7 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, treePrec='single
       posSearch[3]   : search postion
       hsmlSearch[1]  : search distance
       boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
+      posMask[N]     : if not None, then only True entries are considered in the search
       treePrec       : construct the tree using 'single' or 'double' precision for coordinates
       tree           : if not None, should be a list of all the needed tree arrays (pre-computed), 
                        i.e the exact return of buildFullTree()
@@ -801,7 +929,7 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, treePrec='single
     treeDims  = [3]
 
     if isinstance(hsmlSearch,int): hsmlSearch = float(hsmlSearch)
-    assert isinstance(hsmlSearch,(float))
+    assert isinstance(hsmlSearch,(float,np.float32))
     hsmlSearch = np.array(hsmlSearch, dtype='float32')
 
     assert pos.ndim == 2 and pos.shape[1] in treeDims, 'Strange dimensions of pos.'
@@ -819,7 +947,10 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, treePrec='single
     # single threaded
     NumPart = pos.shape[0]
 
-    result = _treeSearchIndices(posSearch,hsmlSearch,NumPart,boxSizeSim,pos,NextNode,length,center,sibling,nextnode)
+    if posMask is None:
+        posMask = np.ones(pos.shape[0], dtype=np.bool)
+
+    result = _treeSearchIndices(posSearch,hsmlSearch,NumPart,boxSizeSim,pos,posMask,NextNode,length,center,sibling,nextnode)
 
     #print(' calcParticleIndices(): took [%g] sec (serial).' % (time.time()-build_done_time))
     return result

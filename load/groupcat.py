@@ -283,16 +283,8 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             if quantName in ['mstar_r500','mgas_r500']:
                 pt = 'Stars' if 'mstar' in quantName else 'Gas'
                 acField = 'Subhalo_Mass_r500_%s_FoF' % pt
-                ac = auxCat(sP, fields=[acField])
+                ac = auxCat(sP, fields=[acField], expandPartial=True)
                 r[field] = sP.units.codeMassToMsun( ac[acField] )
-
-                # TODO: generalize, i.e. move below and make work for any quantity
-                if ac['subhaloIDs'].size < sP.numSubhalos:
-                    print('  NOTE: Expanding auxCat [%s] from size [%d] to full.' % (quantName,ac['subhaloIDs'].size))
-                    vals = np.zeros( sP.numSubhalos, dtype='float32' )
-                    vals.fill(np.nan)
-                    vals[ ac['subhaloIDs'] ] = r[field]
-                    r[field] = vals
 
             # stellar mass to halo mass ratio
             if quantName in ['mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio','mstar_mhalo_ratio']:
@@ -332,6 +324,20 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 ic3d = isolationCriterion3D(sP, dist) #defaults: cenSatSelect='all', mstar30kpc_min=9.0
 
                 r[field] = ic3d['flag_iso_%s_%s' % (quant,max_type)]
+
+            # environment: distance to 5th nearest neighbor with M* at least half of this subhalo [code units]
+            # or overdensity (linear dimensionless) if 'delta'
+            if quantName in ['d5_mstar_gthalf','delta5_mstar_gthalf','delta5']:
+                acField = 'Subhalo_Env_d5_MstarRel_GtHalf'
+
+                ac = sP.auxCat(fields=[acField], expandPartial=True)
+                r[field] = ac[acField]
+
+                # compute dimensionless overdensity (rho/rho_mean-1)
+                if 'delta' in quantName:
+                    sigma_N = 5.0 / (4/3 * np.pi * r[field]**3) # local galaxy volume density
+                    delta_N = sigma_N / np.nanmean(sigma_N) - 1.0
+                    r[field] = delta_N
 
             # auxCat: photometric/broadband colors (e.g. 'color_C_gr', 'color_A_ur')
             if 'color_' in quantName:

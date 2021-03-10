@@ -86,8 +86,8 @@ def validPartFields(ions=True, emlines=True, bands=True):
         if ions == 'only':
             return cloudy_ions
         else:
-            fields += ['%s mass' % ion for ion in cloudy_ions] # ionic mass
-            fields += ['%s fracmass' % ion for ion in cloudy_ions] # ionic mass fraction
+            #fields += ['%s mass' % ion for ion in cloudy_ions] # ionic mass
+            #fields += ['%s fracmass' % ion for ion in cloudy_ions] # ionic mass fraction
             fields += ['%s' % ion for ion in cloudy_ions] # ionic column density
 
     # for all CLOUDY emission lines
@@ -2663,11 +2663,11 @@ def renderMultiPanel(panels, conf):
         aspect = float(conf.rasterPx[1]) / conf.rasterPx[0] if hasattr(conf,'rasterPx') else 1.0
         barAreaHeight = (0.07 / nRows) / aspect / (conf.rasterPx[0]/1000)
         if conf.fontsize > min_fontsize:
-            barAreaHeight += 0.001*(conf.fontsize-min_fontsize)
+            barAreaHeight += 0.002*(conf.fontsize-min_fontsize)
         if conf.fontsize == min_fontsize:
             barAreaHeight += 0.03
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
-
+        print(barAreaHeight)
         if nCols >= 3:
             barAreaHeight += 0.014*nCols
         if not conf.colorbars:
@@ -2677,16 +2677,16 @@ def renderMultiPanel(panels, conf):
             """ Helper. Used later to define height of colorbar. """
             heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5) / (conf.rasterPx[0]/1000)
 
-            heightFac += 0.002*(conf.fontsize-12) # larger for larger fonts, and vice versa (needs tuning)
+            heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
 
             if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights and barAreaTop == 0.0:
                 heightFac *= 1.3 # increase
-            if nRows == 1 and nCols == 1:
-                heightFac *= 0.7 # decrease
-                if conf.fontsize == min_fontsize: # small images
-                    heightFac *= 1.6
-                    widthFrac = 0.8
+            #if nRows == 1 and nCols == 1:
+            #    heightFac *= 0.7 # decrease
+            #    if conf.fontsize == min_fontsize: # small images
+            #        heightFac *= 1.6
+            #        widthFrac = 0.8
             if nRows == 2 and nCols == 1 and varRowHeights:
                 # single edge-on face-on combination
                 heightFac = 0.7
