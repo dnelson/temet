@@ -1,6 +1,5 @@
 """
-job_monitor.py
-  Helpers for working with SLURM jobs.
+Helpers for working with SLURM jobs.
 """
 import re
 import os

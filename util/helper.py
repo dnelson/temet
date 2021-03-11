@@ -1,10 +1,6 @@
 """
-util/helper.py
-  General helper functions, small algorithms, basic I/O, etc.
+General helper functions, small algorithms, basic I/O, etc.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import copy
 import numpy as np
 import matplotlib.pyplot as plt

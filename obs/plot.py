@@ -1,10 +1,6 @@
 """
-obs/plot.py
-  Observational data (SDSS/mock spectra) plotting.
+Observational data (SDSS/mock spectra) plotting.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import os
@@ -14,7 +10,7 @@ import pickle
 import json
 from datetime import datetime
 
-from mpl_toolkits.axes_grid.inset_locator import inset_axes
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from obs.sdss import _indivSavePath, loadSDSSSpectrum, load_obs, mockSpectraAuxcatName, percentiles
 from plot.config import *
 

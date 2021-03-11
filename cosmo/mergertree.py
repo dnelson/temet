@@ -1,18 +1,14 @@
 """
-cosmo/mergertree.py
-  Cosmological simulations - working with merger trees (SubLink, LHaloTree, C-Trees).
+Cosmological simulations - working with merger trees (SubLink, LHaloTree, C-Trees).
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 from numba import jit
-import illustris_python as il
 from os import path
-
 from scipy.signal import savgol_filter
 from scipy import interpolate
+
+import illustris_python as il
 from util.helper import running_sigmawindow, iterable
 
 treeName_default = "SubLink"

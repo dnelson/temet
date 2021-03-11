@@ -1,10 +1,6 @@
 """
-util/rotation.py
-  Find rotation matrices (moment of inertia tensors) to place galaxies edge-on/face-on, do coordinate rotations.
+Find rotation matrices (moment of inertia tensors) to place galaxies edge-on/face-on, do coordinate rotations.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 
 def meanAngMomVector(sP, subhaloID, shPos=None, shVel=None):

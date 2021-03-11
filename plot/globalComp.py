@@ -1,10 +1,8 @@
 """
-globalComp.py
-  run summary plots and comparisons to constraints
+Run summary plots and produce a booklet of comparisons to observational constraints for one or more 
+cosmological simulations. Includes the usual comparisons such as stellar to halo mass ratio (SMHM), 
+the stellar mass function (SMF), and so on.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter

@@ -1,10 +1,6 @@
 """
-cosmo/stellarPop.py
-  Stellar population synthesis, evolution, photometrics.
+Stellar population synthesis, evolution, photometrics.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import time

@@ -1,18 +1,15 @@
 """
-load/data.py
-  load external data files (observational points, etc) and Arepo txt files
+Load external data files (observational points, etc) as well as AREPO .txt diagnostic files.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import glob
-from util.helper import evenlySample, running_median
 from os.path import isfile, expanduser
 from scipy import interpolate
 from scipy.signal import savgol_filter
 from collections import OrderedDict
+
+from util.helper import evenlySample, running_median
 
 logOHp12_solar = 8.69 # Asplund+ (2009) Table 1
 

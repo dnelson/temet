@@ -1,3 +1,5 @@
+""" Handling and analysis of actual observational data, as well as the creation of mock galaxy samples 
+to match the characteristics of a given observed sample. """
 from . import galaxySample
 #from . import sdss
 #from . import plot

@@ -1,6 +1,6 @@
 """
-projects/tngcluster.py
-  TNG-Cluster: introduction paper.
+TNG-Cluster: introduction paper.
+(in prep)
 """
 import numpy as np
 import h5py

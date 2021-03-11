@@ -1,3 +1,4 @@
+""" Utilities, units, numba-accelerated algorithms, and other algorithmic implementations. """
 from . import boxRemap
 from . import dataConvert
 from . import gfmExternalFiles

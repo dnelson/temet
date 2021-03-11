@@ -1,8 +1,7 @@
 """
-ics/Shocks2D_ICs.py
-  Idealized initial conditions: shocks/implosion/discontinuity/"2D Riemann" tests in 2D.
-  Following Schulz-Rinne (1993), Kurganov & Tadmor (2002), Liska & Wendroff (2003).
-  http://www-troja.fjfi.cvut.cz/%7Eliska/CompareEuler/compare8/
+Idealized initial conditions: shocks/implosion/discontinuity/"2D Riemann" tests in 2D.
+Following Schulz-Rinne (1993), Kurganov & Tadmor (2002), Liska & Wendroff (2003).
+http://www-troja.fjfi.cvut.cz/%7Eliska/CompareEuler/compare8/
 """
 import numpy as np
 import h5py

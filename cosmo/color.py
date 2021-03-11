@@ -1,10 +1,6 @@
 """
-color.py
-  Calculations for optical stellar light of galaxies and galaxy colors.
+Calculations for optical stellar light of galaxies and galaxy colors.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 from os.path import isfile, isdir, expanduser

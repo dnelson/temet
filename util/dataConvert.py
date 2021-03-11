@@ -1,10 +1,6 @@
 """
-dataConvert.py
-  Various data exporters/converters, between different formats, etc.
+Various data exporters/converters, between different formats, etc.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 from os import path, mkdir, getcwd

@@ -1,10 +1,6 @@
 """
-boxDrivers.py
-  Render specific fullbox visualizations.
+Render specific fullbox visualizations.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 from datetime import datetime
 

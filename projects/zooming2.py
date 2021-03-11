@@ -1,11 +1,7 @@
 """
-projects/zooming2.py
-  Plots for "Zooming in on accretion" paper series (II) - Suresh et al.
-  http://arxiv.org/abs/1811.01949
+"Zooming in on accretion" paper series (II) - Suresh+ 2019.
+http://arxiv.org/abs/1811.01949
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt

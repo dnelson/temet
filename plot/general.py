@@ -1,10 +1,6 @@
 """
-general.py
-  General exploratory/diagnostic plots of particle-level data of single halos or entire boxes.
+Fully generalized plotting of particle/cell-level data of single halos or entire boxes.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings

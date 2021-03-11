@@ -1,11 +1,7 @@
 """
-cosmo/hydrogen.py
-  Modeling of the UVB and hydrogen states following Rahmati. Credit to Simeon Bird for many ideas herein.
-  Also full box or halo based analysis of hydrogen/metal content.
+Modeling of the UVB and hydrogen states following Rahmati. Credit to Simeon Bird for many ideas herein.
+Also full box or halo based analysis of hydrogen/metal content.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 
 def photoCrossSec(freq, atom='H'):

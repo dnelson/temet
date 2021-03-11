@@ -1,6 +1,5 @@
 """
-haloDrivers.py
-  Render specific halo visualizations.
+Render specific halo visualizations.
 """
 import numpy as np
 import h5py

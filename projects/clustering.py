@@ -1,11 +1,7 @@
 """
-projects/clustering.py
-  Plots for hypothetical TNG clustering paper.
-  in prep.
+Hypothetical TNG clustering paper.
+(can be moved to plot/clustering.py as no paper will result)
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt

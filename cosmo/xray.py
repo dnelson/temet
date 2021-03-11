@@ -1,6 +1,5 @@
 """
-cosmo/xray.py
-  Generate x-ray emissivity tables using AtomDB/XSPEC and apply these to gas cells.
+Generate x-ray emissivity tables using AtomDB/XSPEC and apply these to gas cells.
 """
 import numpy as np
 import h5py

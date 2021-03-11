@@ -1,3 +1,4 @@
+""" Analysis and post-processing specialized for cosmological hydrodynamical simulations. """
 from . import auxcatalog
 from . import cloudy
 #from . import clustering

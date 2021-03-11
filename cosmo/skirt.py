@@ -1,6 +1,5 @@
 """
-cosmo/skirt.py
-  Prepare simulation outputs for SKIRT9 radiative transfer runs.
+Prepare simulation outputs for SKIRT9 radiative transfer runs, execute, and vis/analyze.
 """
 import numpy as np
 import h5py

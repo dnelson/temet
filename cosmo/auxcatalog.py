@@ -1,6 +1,5 @@
 """
-cosmo/auxcatalog.py
-  Cosmological simulations - auxiliary catalog for additional derived galaxy/halo properties.
+Cosmological simulations - auxiliary catalog for additional derived galaxy/halo properties.
 """
 import numpy as np
 import h5py
@@ -29,15 +28,15 @@ userCustomFields = ['Krot','radvel','losvel','losvel_abs','shape_ellipsoid','sha
 
 def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     """ Compute total/sum of a particle property (e.g. mass) for those particles enclosed within one of 
-        the SO radii already computed and available in the group catalog (input as a string). Methods A 
-        and B restrict this calculation to FoF particles only, whereas method C does a full particle 
-        search over the entire box in order to compute the total/sum for each FoF halo. If ptType='all', 
-        then do for all types (dm,gas,stars), otherwise just for the single specified type.
+    the SO radii already computed and available in the group catalog (input as a string). Methods A 
+    and B restrict this calculation to FoF particles only, whereas method C does a full particle 
+    search over the entire box in order to compute the total/sum for each FoF halo. If ptType='all', 
+    then do for all types (dm,gas,stars), otherwise just for the single specified type.
 
-      Method A: do individual halo loads per halo, one loop over all halos.
-      Method B: do a full snapshot load per type, then halo loop and slice per FoF, to cut down on I/O ops. 
-      Method C: per type: full snapshot load, spherical aperture search per FoF (brute-force global).
-      Method D: per type: full snapshot load, construct octtree, spherical aperture search per FoF (global).
+    * Method A: do individual halo loads per halo, one loop over all halos.
+    * Method B: do a full snapshot load per type, then halo loop and slice per FoF, to cut down on I/O ops. 
+    * Method C: per type: full snapshot load, spherical aperture search per FoF (brute-force global).
+    * Method D: per type: full snapshot load, construct octtree, spherical aperture search per FoF (global).
     """
 
     # config

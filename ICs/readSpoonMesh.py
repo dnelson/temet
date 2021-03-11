@@ -1,3 +1,4 @@
+""" Read mesh file for idealized ICs of "3D spoon" problem. """
 if __name__ == '__main__':
 
     import matplotlib.pyplot as plt

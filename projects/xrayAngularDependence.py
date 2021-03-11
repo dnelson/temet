@@ -1,7 +1,6 @@
 """
-projects/xrayAngularDependence.py
-  Plots: Angular dependence/anisotropy of x-ray emission of the CGM/ICM (Troung+21, TNG50)
-  https://arxiv.org/abs/xxxx.xxxxx
+Angular dependence/anisotropy of x-ray emission of the CGM/ICM (Troung+21, TNG50).
+https://arxiv.org/abs/xxxx.xxxxx
 """
 import numpy as np
 import h5py

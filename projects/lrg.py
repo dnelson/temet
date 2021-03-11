@@ -1,7 +1,6 @@
 """
-projects/lrg.py
-  Plots: LRG small-scale cold clouds CGM paper (TNG50).
-  https://arxiv.org/abs/2005.09654
+LRG small-scale cold clouds CGM paper (TNG50).
+https://arxiv.org/abs/2005.09654
 """
 import numpy as np
 import h5py

@@ -1,10 +1,6 @@
 """
-sizes.py
-  Galaxy sizes, half mass and half light radii.
+Galaxy sizes, half mass and half light radii.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt

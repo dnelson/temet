@@ -1,10 +1,6 @@
 """
-obs/galaxySample.py
-  Observations: re-create various mock galaxy samples to match surveys/datasets.
+Observations: re-create various mock galaxy samples to match surveys/datasets.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 from os.path import isfile, isdir

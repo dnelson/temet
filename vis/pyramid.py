@@ -1,7 +1,5 @@
 """
-pyramid.py
-  ArepoVTK/Web: building image pyramids.
-  requires: curl -O https://raw.github.com/drj11/pypng/master/code/png.py
+ArepoVTK/Web: building image pyramids.
 """
 import h5py
 import numpy as np
@@ -15,7 +13,6 @@ import matplotlib.colors as colors
 import matplotlib.cm as cmx
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-
 
 def rebin(a, shape):
     """ See REBIN() IDL function. """

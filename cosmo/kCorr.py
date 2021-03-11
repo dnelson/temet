@@ -1,10 +1,6 @@
 """
-kCorr.py
-  Compute K-corrections following Chilingarian+ (2010).
+Compute K-corrections following Chilingarian+ (2010).
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 from numba import jit
 import numpy as np
 import h5py

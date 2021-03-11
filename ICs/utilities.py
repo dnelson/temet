@@ -1,6 +1,5 @@
 """
-ics/utilities.py
-  Idealized initial conditions: utility (common) functions.
+Idealized initial conditions: utility (common) functions.
 """
 import numpy as np
 import h5py

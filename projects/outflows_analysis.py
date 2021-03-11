@@ -1,11 +1,7 @@
 """
-projects/outflows_analysis.py
-  Analysis: Outflows paper (TNG50 presentation).
-  https://arxiv.org/abs/1902.05554
+Outflows paper (TNG50 presentation): analysis.
+https://arxiv.org/abs/1902.05554
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import time

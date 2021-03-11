@@ -1,6 +1,5 @@
 """
-ics/KelvinHelmholtz.py
-  Idealized initial conditions: kelvin-helmholtz instability.
+Idealized initial conditions: kelvin-helmholtz instability.
 """
 import numpy as np
 import h5py

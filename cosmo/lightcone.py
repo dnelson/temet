@@ -1,7 +1,5 @@
 """
-cosmo/lightcone.py
-  Cosmological simulations - generating and working with lightcones.
-  (w/ Andres Aramburo-Garcia)
+Cosmological simulations - generating and working with lightcones. (w/ Andres Aramburo-Garcia)
 """
 import h5py
 import time

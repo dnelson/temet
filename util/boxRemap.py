@@ -1,10 +1,6 @@
 """
-util/boxRemap.py
-  Implementation of 'a volume and local structure preserving mapping of periodic boxes' (Carlson, White 2010) http://mwhite.berkeley.edu/BoxRemap/.
+Implementation of 'a volume and local structure preserving mapping of periodic boxes' (Carlson, White 2010) http://mwhite.berkeley.edu/BoxRemap/.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 from numba import jit
 from util.helper import closest

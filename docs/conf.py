@@ -2,7 +2,8 @@
 #
 # to build:
 #
-# sphinx-apidoc -o docs/source .
+# sphinx-apidoc -t docs/_templates/ -o docs/source .
+# rm docs/source/.rst docs/source/test.rst
 # sphinx-build -b html docs/ docs/_build/
 
 import sys
@@ -38,7 +39,7 @@ release = git_version()
 extensions = ['sphinx.ext.mathjax','sphinx.ext.autodoc','sphinx.ext.napoleon']
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ['_templates'] # we use this for apidoc -t templates instead
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -48,13 +49,18 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 
+autodoc_member_order = 'bysource'
+
+def setup(app):
+    app.add_css_file('style.css')
+
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = 'sphinx_rtd_theme' #'alabaster'
+html_theme = 'sphinx_rtd_theme'
 html_show_sphinx = False
 html_show_copyright = False
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-#html_static_path = ['_static']
+html_static_path = ['_static']

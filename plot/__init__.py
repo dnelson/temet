@@ -1,3 +1,4 @@
+""" Plotting routines. """
 from . import compareTwoHalos
 from . import cosmoGeneral
 from . import cosmoMisc

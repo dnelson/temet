@@ -1,10 +1,6 @@
 """
-gfmExternalFiles.py
-  create external data files required for GFM runs (photometrics, cooling, etc)
+Create external data files required for GFM runs (photometrics, cooling, etc)
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import glob

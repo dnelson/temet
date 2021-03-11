@@ -1,16 +1,13 @@
 """
-util/tpcf.py
-  Two-point correlation functions (pairwise distances).
+Two-point correlation functions (pairwise distances).
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import threading
 from numba import jit
+from scipy.special import gamma
+
 from util.helper import pSplit, pSplitRange
 from util.sphMap import _NEAREST
-from scipy.special import gamma
 
 @jit(nopython=True, nogil=True, cache=True)
 def _calcTPCFBinned(pos, pos2, rad_bins_sq, boxSizeSim, xi_int, start_ind, stop_ind):

@@ -1,10 +1,8 @@
 """
-quantities.py
-  Lists of halo/particle level quantities and loading/unit versions, default plotting hints (i.e. labels, limits) for each.
+The definitive list of group catalog as well as particle/cell-level quantities which can be loaded
+and analyzed. For each, we have relevant metadata including loading/unit versions, 
+default plotting hints (i.e. labels, limits), and so on.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 from os.path import isfile
@@ -123,7 +121,9 @@ def groupOrderedValsToSubhaloOrdered(vals_group, sP):
     return vals_sub
 
 def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False, onlyMHD=False, alwaysAvail=False):
-    """ Return a list of quantities (galaxy properties) which we know about for exploration. """
+    """ Return a list of quantities (galaxy properties) which we know about for exploration. 
+    Note that the return of this function, with alwaysAvail == True, is used to populate the available 
+    fields of the 'Plot Galaxy/Halo Catalogs' web interface on the TNG website. """
 
     # generally available (groupcat)
     quants1 = ['ssfr','Z_stars','Z_gas','Z_gas_sfr','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',

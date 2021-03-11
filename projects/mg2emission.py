@@ -1,6 +1,6 @@
 """
-projects/mg2emission.py
-  TNG50: MgII CGM emission paper.
+TNG50: MgII CGM emission paper.
+(in prep)
 """
 import numpy as np
 import h5py

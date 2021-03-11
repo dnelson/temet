@@ -1,10 +1,6 @@
 """
-obs/sdss.py
-  Observational data processing, reduction, and analysis (SDSS).
+Observational data processing, reduction, and analysis (SDSS).
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import time

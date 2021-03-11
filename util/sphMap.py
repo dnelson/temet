@@ -1,10 +1,6 @@
 """
-util/sphMap.py
-  Interpolation of scattered point sets onto a uniform grid using the SPH spline kernel deposition method.
+Interpolation of scattered point sets onto a uniform grid using the SPH spline kernel deposition method.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import threading
 from numba import jit
@@ -972,7 +968,7 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
         (2D+depth) of each posTarget is estimated. In this case, the return is of shape [N(posTarget)] 
         giving the projected density or mass weighted quantity along the line of sight to each posTarget.
       maxIntProj (bool): perform a maximum intensity projection (MIP) instead of the usual weighting.
-      minIntProj (bool): perform a -minimum- intensity projection, instead of the usual weighting.
+      minIntProj (bool): perform a minimum intensity projection, instead of the usual weighting.
 
     Returns:
       map (ndarray[float][nPixels]): computed 2D or 3D array, depositing either `mass` or `mass`-weighted `quant`.

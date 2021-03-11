@@ -1,6 +1,5 @@
 """
-config.py
-  Global plot-related configuration which is imported into other plotting submodules.
+Global plot-related configuration which is imported into other plotting submodules.
 """
 
 sKn     = 5   # savgol smoothing kernel length (1=disabled)

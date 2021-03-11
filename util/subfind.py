@@ -1,6 +1,5 @@
 """
-util/subfind.py
-  Implementation of (serial) subfind algorithm.
+Implementation of (serial) subfind algorithm.
 """
 import numpy as np
 import time

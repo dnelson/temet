@@ -1,10 +1,6 @@
 """
-perf.py
-  Performance, scaling and timings analysis.
+Performance, scaling and timings analysis.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
@@ -16,6 +12,7 @@ from os import mkdir
 from os import remove, rename
 from glob import glob
 from scipy.interpolate import interp1d
+
 from util.helper import closest, tail, getWhiteBlackColors
 from vis.common import setAxisColors
 from plot.config import *

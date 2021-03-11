@@ -1,6 +1,5 @@
 """
-load/snapshot.py
-  Loading I/O - snapshots of AREPO cosmological simulations.
+Loading I/O - snapshots of AREPO cosmological simulations.
 """
 import numpy as np
 import h5py
@@ -379,19 +378,25 @@ def _ionLoadHelper(sP, partType, field, kwargs):
 def snapshotSubset(sP, partType, fields, 
                    inds=None, indRange=None, haloID=None, subhaloID=None, 
                    mdi=None, sq=True, haloSubset=False, float32=False):
-    """ For a given snapshot load one or more field(s) for one particle type
-          partType = e.g. [0,1,2,4] or ('gas','dm','tracer','stars')
-          fields   = e.g. ['ParticleIDs','Coordinates','temp',...]
+    """ For a given snapshot load one or more field(s) for one particle type.
+    The four arguments ``inds``, ``indRange``, ``haloID``, and ``subhaloID`` are all optional, but 
+    at most one can be specified.
 
-          the following four arguments are optional, but at most one can be specified:
-            * inds      : known indices requested, optimize the load
-            * indRange  : same, but specify only min and max indices (--inclusive--!)
-            * haloID    : if input, load particles only of the specified fof halo
-            * subhaloID : if input, load particles only of the specified subalo
-          mdi : multi-dimensional index slice load (only used in recursive calls, don't input directly)
-          sq  : squeeze single field return into a numpy array instead of within a dict
-          haloSubset : return particle subset of only those in all FoF halos (no outer fuzz)
-          float32 : load any float64 datatype datasets directly as float32 (optimize for memory)
+    Args:
+      sP: 
+      partType: e.g. [0,1,2,4] or ('gas','dm','tracer','stars').
+      fields: e.g. ['ParticleIDs','Coordinates','temp',...].
+      inds (ndarray[int]): known indices requested, optimize the load.
+      indRange (list[int][2]): same, but specify only min and max indices **(--inclusive--!)**.
+      haloID (int): if input, load particles only of the specified fof halo.
+      subhaloID (int): if input, load particles only of the specified subalo.
+      mdi (int or None): multi-dimensional index slice load (only used in recursive calls, don't input directly)
+      sq (bool): squeeze single field return into a numpy array instead of within a dict.
+      haloSubset (bool): return particle subset of only those in all FoF halos (no outer fuzz).
+      float32 (bool): load any float64 datatype datasets directly as float32 (optimize for memory).
+
+    Returns:
+      ndarray or dict
     """
     kwargs = {'inds':inds, 'indRange':indRange, 'haloID':haloID, 'subhaloID':subhaloID}
     subset = None
@@ -1640,7 +1645,7 @@ def _parallel_load_func(sP,partType,field,indRangeLoad,indRangeSave,float32,shar
 
 def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloID=None, subhaloID=None, 
                            sq=True, haloSubset=False, float32=False, nThreads=8):
-    """ Identical to snapshotSubset() except split filesystem load over a number of 
+    """ Identical to :py:func:`snapshotSubset` except split filesystem load over a number of 
     concurrent python+h5py reader processes and gather the result. """
     import ctypes
     import traceback

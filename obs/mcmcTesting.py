@@ -1,10 +1,6 @@
 """
-mcmcTesting.py
-  Temporary code for MCMC and multi-Gaussian (GMM) fitting.
+Temporary code for MCMC and multi-Gaussian (GMM) fitting.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import time
 import emcee

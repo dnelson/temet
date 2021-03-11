@@ -6,35 +6,31 @@ Welcome to the documentation for the python scripts.
 This code was written by Dylan Nelson (dnelson@uni-heidelberg.de).
 
 .. toctree::
-    :maxdepth: 2
+    :titlesonly:
+    :caption: Getting Started
+
+    installation
+    first_steps
+    features
+
+.. toctree::
+    :titlesonly:
     :caption: General Usage
 
-    getting_started
-
-
+    cookbook
+    parallelism
 
 .. toctree::
     :maxdepth: 1
     :caption: Reference
 
-    source/ICs
-    source/cosmo
-    source/load
-    source/obs
-    source/plot
-    source/projects
-    source/tracer
-    source/util
-    source/vis
-
+    source/modules
 
 Index
 =====
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
 
 To contribute to this documentation, update either in-code comments or supplementary files in
-the ``docs/`` directory, then commit. A new version will be built and placed here
-automatically after a few minutes.
+the ``docs/`` directory, then commit. 

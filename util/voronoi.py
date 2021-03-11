@@ -1,6 +1,5 @@
 """
-util/voronoi.py
-  Algorithms and methods related to construction and use of the Voronoi mesh.
+Algorithms and methods related to construction and use of the Voronoi mesh.
 """
 import numpy as np
 import h5py

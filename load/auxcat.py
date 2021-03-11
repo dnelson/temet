@@ -1,6 +1,5 @@
 """
-load/auxcat.py
-  Loading I/O - postprocessing auxcats.
+Loading I/O - postprocessing auxcats.
 """
 import numpy as np
 import h5py
@@ -10,15 +9,30 @@ from getpass import getuser
 
 from util.helper import iterable, curRepoVersion
 
+# save these as separate datasets, if present
+largeAttrNames = ['subhaloIDs','partInds','wavelength']
+
+# threshold size of elements per subhalo such that we save a condensed (non-full) auxCat
+condThresh = 50
+
 def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, indRange=None, 
            subhaloIDs=None, onlyMeta=False, expandPartial=False):
     """ Load field(s) from the auxiliary group catalog, computing missing datasets on demand. 
-      reCalculate  : force redo of computation now, even if data is already saved in catalog
-      searchExists : return None if data is not already computed, i.e. do not calculate right now 
-      indRange     : if a tuple/list, load only the specified range of data (field and e.g. subhaloIDs)
-      subhaloIDs   : if a tuple/list, load only the requests subhaloIDs (assumed sparse)
-      onlyMeta     : load only attributes and coverage information 
-      expandPartial : if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array """
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      fields (list[str]): requested fields by name.
+      pSplit (list[int]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total].
+      reCalculate (bool): force redo of computation now, even if data is already saved in catalog.
+      searchExists (bool): return None if data is not already computed, i.e. do not calculate right now.
+      indRange (list[int][2]): if a tuple/list, load only the specified range of data (field and e.g. subhaloIDs).
+      subhaloIDs (ndarray[int]): if a tuple/list, load only the requests subhaloIDs (assumed sparse).
+      onlyMeta (bool): load only attributes and coverage information.
+      expandPartial (bool): if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array.
+
+    Returns:
+      dict.
+    """
     assert np.sum([el is not None for el in [indRange,subhaloIDs]]) in [0,1] # specify at most one
 
     epStr = '_ep' if expandPartial else ''
@@ -26,178 +40,11 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       and not reCalculate and not onlyMeta and not searchExists and indRange is None and subhaloIDs is None:
         return sP.data['ac_'+iterable(fields)[0]+epStr].copy() # cached, avoid view
 
-    def _comparatorListInds(fieldName):
-        # transform e.g. 'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_13' into 13 (an integer) for sorting comparison
-        num = fieldName.rsplit('_', 1)[-1]
-        return int(num)
-
-    def _concatSplitFiles(field, datasetName):
-        # specified chunk exists, do all exist? check and record sizes
-        allExist = True
-        allCount = 0
-        allCountPart = 0
-
-        for i in range(pSplit[1]):
-            auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
-            if not isfile(auxCatPathSplit_i):
-                allExist = False
-                continue
-
-            # record counts and dataset shape
-            with h5py.File(auxCatPathSplit_i,'r') as f:
-                allShape = f[datasetName].shape
-                if f[datasetName].ndim == 0: # scalar, i.e. single subhalo
-                    allShape = [f[datasetName].size]
-
-                nElemPerSub = np.prod(allShape) / allShape[0]
-
-                if len(allShape) > 1 and nElemPerSub > condThresh:
-                    # high dimensionality auxCat, save condensed
-                    assert 'partInds' not in f or f['partInds'][()] == -1
-
-                    # sparse large data (e.g. full spectra), save only non-nan
-                    if 'Subhalo_SDSSFiberSpectra' in field:
-                        temp_r = f[datasetName][()]
-                        w = np.where( np.isfinite(np.sum(temp_r,axis=1)) )
-                        allCount += len(w[0])
-                        print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
-                    else:
-                        allCount += allShape[0]
-                        print(' [%2d] saving all %d elements condensed.' % (i,allShape[0]))
-                else:
-                    # normal, save full Subhalo size
-                    allCount += f['subhaloIDs'].size
-                    if 'partInds' in f: allCountPart += f['partInds'].size
-
-        if not allExist:
-            print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
-            #r[field] = None
-            return False
-            
-        # for full saves we want (auxCat size is groupcat size), assuming we computed a subset of objects
-        numSubs = sP.groupCatHeader()['Nsubgroups_Total']
-        writeSparseCalcFullSize = False
-        if numSubs > allCount and nElemPerSub <= condThresh:
-            print('Note: Increasing save size from [%d], shape = %s computed, to full groupcat size [%d].' % (allCount,allShape,numSubs))
-            allCount = numSubs
-            writeSparseCalcFullSize = True
-
-        # all chunks exist, concatenate them now and continue
-        catIndFieldName = 'subhaloIDs'
-
-        if allCountPart > 0:
-            # can relax this if we ever do Particle* auxCat with pts other than stars:
-            assert allCountPart == snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
-            
-            # proceed with 1-per-particle based concatenation, then 'subhaloIDs' = 'partInds'
-            allCount = allCountPart
-            catIndFieldName = 'partInds'
-
-        allShape = np.array(allShape)
-        allShape[0] = allCount # size
-        offset = 0
-
-        new_r = np.zeros( allShape, dtype='float32' )
-        subhaloIDs = np.zeros( allCount, dtype='int32' )
-        attrs = {}
-
-        new_r.fill(np.nan) # note: will be nan for unprocessed subhalos, and e.g. empty bins in processed subs
-        subhaloIDs.fill(-1)
-
-        print(' Concatenating into shape: ', new_r.shape)
-
-        for i in range(pSplit[1]):
-            auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
-
-            with h5py.File(auxCatPathSplit_i,'r') as f:
-                # load
-                length = f[catIndFieldName].size
-                temp_r = f[datasetName][()]
-
-                if length == 0: continue
-
-                if len(allShape) > 1 and nElemPerSub > condThresh:
-                    # want to condense, saving only a subset of subhalos, stamp in to dense indices
-                    subhaloIDsToSave = f[catIndFieldName][()]
-
-                    if 'Subhalo_SDSSFiberSpectra' in field:
-                        # splits saved all subhalos (sdss spectra)
-                        w = np.where( np.isfinite(np.sum(temp_r,axis=1)) )[0]
-                        length = len(w)
-                        temp_r = temp_r[w,:]
-                        subhaloIDsToSave = subhaloIDsToSave[w]
-
-                    subhaloIDs[offset : offset+length] = subhaloIDsToSave
-                    subhaloIndsStamp = np.arange(offset,offset+length)
-                else:
-                    # full, save all subhalos, stamp in to indices corresponding to subhalo indices
-                    subhaloIndsStamp = f[catIndFieldName][()]
-                    subhaloIDs[subhaloIndsStamp] = subhaloIndsStamp
-
-                # save into final array
-                new_r[subhaloIndsStamp,...] = temp_r
-
-                for attr in f[datasetName].attrs:
-                    attrs[attr] = f[datasetName].attrs[attr]
-
-                offset += length
-
-                if 'wavelength' in f: attrs['wavelength'] = f['wavelength'][()]
-
-        if not writeSparseCalcFullSize:
-            assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
-        
-        # auxCat already exists? only allowed if we are processing multiple fields
-        if isfile(auxCatPath):
-            with h5py.File(auxCatPath,'r') as f:
-                assert field+'_0' in f
-                assert datasetName not in f
-
-        # save (or append to) new auxCat
-        with h5py.File(auxCatPath,'a') as f:
-            f.create_dataset(datasetName, data=new_r)
-            if catIndFieldName == 'subhaloIDs' and catIndFieldName not in f:
-                f.create_dataset(catIndFieldName, data=subhaloIDs)
-            for attr, attrValue in attrs.items():
-                if attr in largeAttrNames:
-                    f.create_dataset(attr, data=attrValue)
-                    continue # typically too large to store as an attribute
-                f[datasetName].attrs[attr] = attrValue
-
-        # remove split files
-        for i in range(pSplit[1]):
-            auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
-            unlink(auxCatPathSplit_i)
-
-        print(' Concatenated new [%s] and saved, split files deleted.' % auxCatPath.split("/")[-1])
-        return True
-
-    def _expand_partial():
-        """ Helper, expand a subhalo-partial aC into a subhalo-complete array. """
-        nSubsTot = sP.numSubhalos
-
-        assert 'subhaloIDs' in r # else check why we are here
-
-        if r['subhaloIDs'].size == nSubsTot:
-            return r[field]
-        
-        if r['subhaloIDs'].size < nSubsTot:
-            shape = np.array(r[field].shape)
-            shape[0] = nSubsTot
-            new_data = np.zeros( shape, dtype=r[field].dtype )
-            new_data.fill(np.nan)
-            new_data[r['subhaloIDs'],...] = r[field]
-            print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
-            return new_data
-
     from cosmo import auxcatalog
     import datetime
 
     assert sP.snap is not None, "Must specify sP.snap for snapshotSubset load."
     assert sP.subbox is None, "No auxCat() for subbox snapshots."
-
-    condThresh = 50 # threshold size of elements per subhalo such that we save a condensed (non-full) auxCat
-    largeAttrNames = ['subhaloIDs','partInds','wavelength'] # save these as separate datasets, if present
 
     pathStr1 = sP.derivPath + 'auxCat/%s_%03d.hdf5'
     pathStr2 = sP.derivPath + 'auxCat/%s_%03d-split-%d-%d.hdf5'
@@ -230,7 +77,8 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
                 # combine now
                 for readField in readFields:
-                    ret = _concatSplitFiles(field, readField)
+                    ret = _concatSplitFiles(sP, pSplit, field, readField, 
+                                            auxCatPath, auxCatPathSplit, pathStr2)
                     if ret is False:
                         return # requested, but not all, exist
 
@@ -299,7 +147,7 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
             # subhaloIDs indicates computation only for partial set of subhalos?
             if expandPartial:
                 assert len(readFields) == 1
-                r[field] = _expand_partial()
+                r[field] = _expand_partial(sP, r, field)
 
             if not expandPartial and r[field].shape[0] != sP.numSubhalos:
                 print('WARNING: Return partial auxCat without expanding to fill subhalo IDs!')
@@ -365,6 +213,172 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
 
         # subhaloIDs indicates computation only for partial set of subhalos? modify for immediate return
         if expandPartial:
-            r[field] = _expand_partial()
+            r[field] = _expand_partial(sP, r, field)
 
     return r
+
+def _comparatorListInds(fieldName):
+    """ Transform e.g. 'Subhalo_RadialMassFlux_SubfindWithFuzz_Gas_13' into 13 (an integer) 
+    for sorting comparison. """
+    num = fieldName.rsplit('_', 1)[-1]
+    return int(num)
+
+def _expand_partial(sP, r, field):
+    """ Expand a subhalo-partial aC into a subhalo-complete array. """
+    nSubsTot = sP.numSubhalos
+
+    assert 'subhaloIDs' in r # else check why we are here
+
+    if r['subhaloIDs'].size == nSubsTot:
+        return r[field]
+    
+    if r['subhaloIDs'].size < nSubsTot:
+        shape = np.array(r[field].shape)
+        shape[0] = nSubsTot
+        new_data = np.zeros( shape, dtype=r[field].dtype )
+        new_data.fill(np.nan)
+        new_data[r['subhaloIDs'],...] = r[field]
+        print(' Auxcat Expanding [%d] to [%d] elements for [%s].' % (r[field].shape[0],new_data.shape[0],field))
+        return new_data
+
+def _concatSplitFiles(sP, pSplit, field, datasetName, auxCatPath, auxCatPathSplit, pathStr2):
+    """ Concatenate a number of partial auxCat files into a single completed file. """
+    allExist = True
+    allCount = 0
+    allCountPart = 0
+
+    # specified chunk exists, do all exist? check and record sizes
+    for i in range(pSplit[1]):
+        auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+        if not isfile(auxCatPathSplit_i):
+            allExist = False
+            continue
+
+        # record counts and dataset shape
+        with h5py.File(auxCatPathSplit_i,'r') as f:
+            allShape = f[datasetName].shape
+            if f[datasetName].ndim == 0: # scalar, i.e. single subhalo
+                allShape = [f[datasetName].size]
+
+            nElemPerSub = np.prod(allShape) / allShape[0]
+
+            if len(allShape) > 1 and nElemPerSub > condThresh:
+                # high dimensionality auxCat, save condensed
+                assert 'partInds' not in f or f['partInds'][()] == -1
+
+                # sparse large data (e.g. full spectra), save only non-nan
+                if 'Subhalo_SDSSFiberSpectra' in field:
+                    temp_r = f[datasetName][()]
+                    w = np.where( np.isfinite(np.sum(temp_r,axis=1)) )
+                    allCount += len(w[0])
+                    print(' [%2d] keeping %d of %d non-nan.' % (i,len(w[0]),f['subhaloIDs'].size))
+                else:
+                    allCount += allShape[0]
+                    print(' [%2d] saving all %d elements condensed.' % (i,allShape[0]))
+            else:
+                # normal, save full Subhalo size
+                allCount += f['subhaloIDs'].size
+                if 'partInds' in f: allCountPart += f['partInds'].size
+
+    if not allExist:
+        print('Chunk [%s] already exists, but all not yet done, exiting.' % auxCatPathSplit)
+        #r[field] = None
+        return False
+        
+    # for full saves we want (auxCat size is groupcat size), assuming we computed a subset of objects
+    numSubs = sP.groupCatHeader()['Nsubgroups_Total']
+    writeSparseCalcFullSize = False
+    if numSubs > allCount and nElemPerSub <= condThresh:
+        print('Note: Increasing save size from [%d], shape = %s computed, to full groupcat size [%d].' % (allCount,allShape,numSubs))
+        allCount = numSubs
+        writeSparseCalcFullSize = True
+
+    # all chunks exist, concatenate them now and continue
+    catIndFieldName = 'subhaloIDs'
+
+    if allCountPart > 0:
+        # can relax this if we ever do Particle* auxCat with pts other than stars:
+        assert allCountPart == snapshotHeader(sP)['NumPart'][sP.ptNum('stars')]
+        
+        # proceed with 1-per-particle based concatenation, then 'subhaloIDs' = 'partInds'
+        allCount = allCountPart
+        catIndFieldName = 'partInds'
+
+    allShape = np.array(allShape)
+    allShape[0] = allCount # size
+    offset = 0
+
+    new_r = np.zeros( allShape, dtype='float32' )
+    subhaloIDs = np.zeros( allCount, dtype='int32' )
+    attrs = {}
+
+    new_r.fill(np.nan) # note: will be nan for unprocessed subhalos, and e.g. empty bins in processed subs
+    subhaloIDs.fill(-1)
+
+    print(' Concatenating into shape: ', new_r.shape)
+
+    for i in range(pSplit[1]):
+        auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+
+        with h5py.File(auxCatPathSplit_i,'r') as f:
+            # load
+            length = f[catIndFieldName].size
+            temp_r = f[datasetName][()]
+
+            if length == 0: continue
+
+            if len(allShape) > 1 and nElemPerSub > condThresh:
+                # want to condense, saving only a subset of subhalos, stamp in to dense indices
+                subhaloIDsToSave = f[catIndFieldName][()]
+
+                if 'Subhalo_SDSSFiberSpectra' in field:
+                    # splits saved all subhalos (sdss spectra)
+                    w = np.where( np.isfinite(np.sum(temp_r,axis=1)) )[0]
+                    length = len(w)
+                    temp_r = temp_r[w,:]
+                    subhaloIDsToSave = subhaloIDsToSave[w]
+
+                subhaloIDs[offset : offset+length] = subhaloIDsToSave
+                subhaloIndsStamp = np.arange(offset,offset+length)
+            else:
+                # full, save all subhalos, stamp in to indices corresponding to subhalo indices
+                subhaloIndsStamp = f[catIndFieldName][()]
+                subhaloIDs[subhaloIndsStamp] = subhaloIndsStamp
+
+            # save into final array
+            new_r[subhaloIndsStamp,...] = temp_r
+
+            for attr in f[datasetName].attrs:
+                attrs[attr] = f[datasetName].attrs[attr]
+
+            offset += length
+
+            if 'wavelength' in f: attrs['wavelength'] = f['wavelength'][()]
+
+    if not writeSparseCalcFullSize:
+        assert np.count_nonzero(np.where(subhaloIDs < 0)) == 0
+    
+    # auxCat already exists? only allowed if we are processing multiple fields
+    if isfile(auxCatPath):
+        with h5py.File(auxCatPath,'r') as f:
+            assert field+'_0' in f
+            assert datasetName not in f
+
+    # save (or append to) new auxCat
+    with h5py.File(auxCatPath,'a') as f:
+        f.create_dataset(datasetName, data=new_r)
+        if catIndFieldName == 'subhaloIDs' and catIndFieldName not in f:
+            f.create_dataset(catIndFieldName, data=subhaloIDs)
+        for attr, attrValue in attrs.items():
+            if attr in largeAttrNames:
+                f.create_dataset(attr, data=attrValue)
+                continue # typically too large to store as an attribute
+            f[datasetName].attrs[attr] = attrValue
+
+    # remove split files
+    for i in range(pSplit[1]):
+        auxCatPathSplit_i = pathStr2 % (field,sP.snap,i,pSplit[1])
+        unlink(auxCatPathSplit_i)
+
+    print(' Concatenated new [%s] and saved, split files deleted.' % auxCatPath.split("/")[-1])
+    return True

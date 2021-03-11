@@ -1,3 +1,4 @@
+""" Original coffee problem ICs for AREPO. """
 import numpy as np
 import matplotlib.pyplot as plt
 

@@ -1,6 +1,5 @@
 """
-projects/explore.py
-  Misc exploration plots.
+* Misc exploration plots and testing, checks for others.
 """
 import numpy as np
 import h5py

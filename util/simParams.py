@@ -5,6 +5,7 @@ for instance a particular snapshot/redshift or halo/subhalo. We often start anal
 creating an instance of this class as:
 
 .. code-block:: python
+
    sP = simParams(run='tng100-1', redshift=0.0)
 
 This ``sP`` object can then be passed to many analysis routines, which then automatically 
@@ -13,6 +14,7 @@ of the most common data loading functions are "attached" to this ``sP`` object, 
 the two follow calls are functionally identical:
 
 .. code-block:: python
+
    masses = load.snapshot.snapshotSubset(sP, 'gas', 'mass')
    masses = sP.snapshotSubset('gas', 'mass')
 

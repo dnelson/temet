@@ -1,7 +1,6 @@
 """
-projects/rshock.py
-  Plots: TNG virial shock radius paper.
-  in prep.
+TNG virial shock radius paper.
+(in prep)
 """
 import numpy as np
 import h5py

@@ -1,11 +1,7 @@
 """
-projects/oxygen.py
-  Plots: Oxygen (OVI, OVII and OVIII) TNG paper.
-  http://arxiv.org/abs/1712.00016
+Oxygen (OVI, OVII and OVIII) TNG paper.
+http://arxiv.org/abs/1712.00016
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt

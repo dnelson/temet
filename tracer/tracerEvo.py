@@ -1,10 +1,6 @@
 """
-tracerEvo.py
-  Analysis for evolution of tracer quantities in time (for cosmo boxes/zooms).
+Analysis for evolution of tracer quantities in time (for cosmo boxes/zooms).
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import h5py
 import numpy as np
 from os.path import isfile, isdir

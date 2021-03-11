@@ -1,10 +1,6 @@
 """
-cosmo/cloudy.py
-  Run grids of CLOUDY photo-ionization models and estimate ionic abundances for gas cells.
+Run grids of CLOUDY photo-ionization models and estimate ionic abundances for gas cells.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import glob
@@ -551,6 +547,7 @@ def collectCloudyEmissivityOutputs(res='lg'):
 
 class cloudyIon():
     """ Use pre-computed Cloudy table to derive ionic abundances for simulation gas cells. """
+    
     # basic atomic information and helpers:
     #   number    = atomic number (#p = #e = numIonizationStates-1)
     #   solar     = solar abundance [n/nH] (Grevesse+ 2010, Hazy c13 Table 7.4)

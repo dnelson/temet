@@ -1,10 +1,6 @@
 """
-boxMovieDrivers.py
-  Render specific fullbox (movie frame) visualizations.
+Render specific fullbox (movie frame) visualizations.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 from datetime import datetime
 from os.path import isfile, expanduser

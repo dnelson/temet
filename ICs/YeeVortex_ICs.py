@@ -1,3 +1,6 @@
+"""
+Idealized initial conditions: Yee Vortex.
+"""
 import numpy as np
 
 #set unit system

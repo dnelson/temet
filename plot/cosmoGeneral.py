@@ -1,10 +1,6 @@
 """
-cosmoGeneral.py
-  Fully generalized plots and general plot helpers related to group catalog objects of cosmological boxes.
+Fully generalized plots and general plot helpers related to group catalog objects of cosmological boxes.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import copy

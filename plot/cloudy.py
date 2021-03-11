@@ -1,10 +1,6 @@
 """
-plot/cloudy.py
-  Diagnostic and production plots based on CLOUDY photo-ionization models.
+Diagnostic and production plots based on CLOUDY photo-ionization models.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import h5py
 import glob

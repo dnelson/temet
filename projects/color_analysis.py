@@ -1,7 +1,6 @@
 """
-projects/color_analysis.py
-  Analysis and computations for the TNG galaxy color paper.
-  https://arxiv.org/abs/1707.03395
+TNG galaxy color paper: analysis.
+https://arxiv.org/abs/1707.03395
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *

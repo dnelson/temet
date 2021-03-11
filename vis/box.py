@@ -1,10 +1,6 @@
 """
-box.py
-  Visualizations for whole (cosmological) boxes.
+Visualizations for whole (cosmological) boxes.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 from datetime import datetime
 from os.path import isfile

@@ -1,15 +1,11 @@
 """
-util/treeSearch.py
-  Adaptive estimation of a smoothing length (radius of sphere enclosing N nearest neighbors) using oct-tree.
+Adaptive estimation of a smoothing length (radius of sphere enclosing N nearest neighbors) using oct-tree.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-from builtins import *
-
 import numpy as np
 import threading
 import time
-
 from numba import jit, void, int32
+
 from util.helper import pSplit
 from util.sphMap import _NEAREST, _getkernel
 
@@ -664,15 +660,15 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
       weighted_num (bool): if True, return SPH kernel weighted number of neighbors, instead of real number.
       treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
       tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed), 
-        i.e the exact return of buildFullTree().
+        i.e the exact return of :py:func`~util.treeSearch.buildFullTree`.
       nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
       nearest (bool): if True, then instead of returning hsml values based on nNGB, return indices and 
         distances to single closest match only.
 
     Returns:
       hsml (ndarray[float]): derived smoothing length for each input point (if not nearest).
-      dists (ndarray[float]): indices (ndarray[int]): derived distances and indices for each input 
-        point (if nearest).
+      dists (ndarray[int]): derived distances for each input point (if nearest).
+      indices (ndarray[int]): derived indices for each input point (if nearest).
     """
     # input sanity checks
     treeDims  = [3]

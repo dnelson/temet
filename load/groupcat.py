@@ -1,6 +1,5 @@
 """
-load/groupcat.py
-  Loading I/O - fof/subhalo group cataloges.
+Loading I/O - fof/subhalo group cataloges.
 """
 import numpy as np
 import h5py

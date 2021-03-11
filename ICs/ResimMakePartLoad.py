@@ -1,10 +1,7 @@
 """
-ics/ResimMakePartLoad.py
-  Cosmological zoom/resimulation ICs: re-write of Volker's P-Resim-MakePartLoad.
+Cosmological zoom/resimulation ICs: step one, i.e. handle functionality previously in P-Resim-MakePartLoad.
+Step two is to run the external program ``N-GenICResim`` on the generated particle load.
 """
-from __future__ import (absolute_import,division,print_function,unicode_literals)
-#from builtins import * # future.types.newint interferes with numba typing
-
 import numpy as np
 import h5py
 import time

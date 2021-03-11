@@ -1,7 +1,6 @@
 """
-color.py
-  Plots for TNG flagship paper: galaxy colors, color bimodality.
-  https://arxiv.org/abs/1707.03395
+TNG flagship paper: galaxy colors, color bimodality.
+https://arxiv.org/abs/1707.03395
 """
 from __future__ import (absolute_import,division,print_function,unicode_literals)
 from builtins import *

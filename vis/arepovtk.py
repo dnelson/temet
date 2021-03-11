@@ -1,6 +1,5 @@
 """
-arepovtk.py
-  Processing of ArepoVTK tiled output.
+Processing of ArepoVTK tiled output, to create image pyramids, and support Explorer functionality.
 """
 from .pyramid import *
 

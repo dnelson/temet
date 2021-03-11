@@ -1,7 +1,6 @@
 """
-ics/sod.py
-  Analytic/exact solutions to 1D shocktube problems.
-  Originally from https://gitlab.com/fantaz/Riemann_exact/blob/master/sod.py with modifications.
+Analytic/exact solutions to 1D shocktube problems.
+Originally from https://gitlab.com/fantaz/Riemann_exact/blob/master/sod.py with modifications.
 """
 import numpy as np
 import scipy

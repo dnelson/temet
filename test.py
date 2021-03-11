@@ -1,6 +1,5 @@
 """
-test.py
-  Temporary stuff.
+Temporary stuff.
 """
 import numpy as np
 import h5py
