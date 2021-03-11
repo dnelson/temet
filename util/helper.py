@@ -1120,15 +1120,22 @@ def validColorTableNames():
     return names1 + names2
 
 def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, fracSubset=None, numColors=None):
-    """ Load a custom or built-in color table specified by ctName. Note that appending '_r' to most default colormap names 
-    requests the colormap in reverse order (e.g. changing light->dark to dark->light).
-      valMinMax: required for some custom colormaps, and for some adjustments.
-      plawScale: return the colormap modified as cmap_new = cmap_old**plawScale
-      cmapCenterVal: return the colormap modified such that its middle point lands at 
+    """ Load a custom or built-in color table specified by name.
+
+    Args:
+      ctName (str): requested color map by name. Note that appending '_r' to most default colormap names 
+      requests the colormap in reverse order (e.g. changing light->dark to dark->light).
+      valMinMax (list[float][2]): required for some custom colormaps, and for some adjustments.
+      plawScale (float): return the colormap modified as `cmap_new = cmap_old**plawScale`.
+      cmapCenterVal (float): return the colormap modified such that its middle point lands at 
         the numerical value cmapCenterVal, given the bounds valMinMax (e.g. zero, 
-        for any symmetric colormap, say for positive/negative radial velocities)
-      fracSubset: a 2-tuple in [0,1] e.g. [0.2,0.8] to use only part of the original colormap range
-      numColors: if not None, integer number of discrete colors of the desired colortable (matplotlib colormaps only)
+        for any symmetric colormap, say for positive/negative radial velocities).
+      fracSubset (list[float][2]): a 2-tuple in [0,1] e.g. [0.2,0.8] to use only part of the original cmap range.
+      numColors (int or None): if not None, integer number of discrete colors of the desired colortable 
+        (matplotlib colormaps only).
+
+    Returns:
+      cmap (:py:class:`matplotlib.colors.Colormap`): requested colormap.
     """
     if ctName is None: return None
 

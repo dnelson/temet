@@ -1,6 +1,37 @@
 """
-util/simParams.py
-  Class to hold all details for a particular simulation, including a snapshot/redshift specification.
+The ``simParams`` class encapsulates all meta-data and details for a particular simulation.
+In addition, it can hold specifications to point to a specific part of a given simulation, 
+for instance a particular snapshot/redshift or halo/subhalo. We often start analysis by 
+creating an instance of this class as:
+
+.. code-block:: python
+   sP = simParams(run='tng100-1', redshift=0.0)
+
+This ``sP`` object can then be passed to many analysis routines, which then automatically 
+know (i) where to find the data files, and (ii) which snapshot to analyze. Furthermore, many 
+of the most common data loading functions are "attached" to this ``sP`` object, such that 
+the two follow calls are functionally identical:
+
+.. code-block:: python
+   masses = load.snapshot.snapshotSubset(sP, 'gas', 'mass')
+   masses = sP.snapshotSubset('gas', 'mass')
+
+The second providing a convenient short-hand. Note that upon creation, each 
+:py:class:`simParams` object instantiates and fills a :py:class:`util.units` class which is 
+automatically tailored to this simulation and its unit system. For example
+
+.. code-block:: python
+
+   dists = sP.snapshotSubset('gas', 'rad', haloID=1234)
+   dists_kpc = sP.units.codeLengthToKpc(dists)
+
+converts the original ``dists`` arrary from code units to physical kpc. While "code units" 
+typically implies ``ckpc/h``, this particular simultion could be instead using a Mpc-unit 
+system, and this difference is handled transparently, as are different values of `h` for 
+different simulations.
+
+To add a new simulation (suite), one of the existing examples should be copied and adapted 
+as needed.
 """
 import platform
 import numpy as np

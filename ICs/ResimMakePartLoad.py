@@ -350,13 +350,19 @@ def _get_ic_inds(sP, dmIDs_halo, simpleMethod=False):
 
 def generate(sP, fofID, ZoomFactor=1, EnlargeHighResFactor=3.0):
     """ Create zoom particle set (Coordinates) and save. 
-    After this file is done, create ICs as: srun -n 8 ./N-GenICResim param.txt partload_file.hdf5
-    sP: simParams object, with redshift corresponding to the selected fofID.
-    fofID: the target halo (fof) ID to zoom on.
-    ZoomFactor: resolution boost of high-res region, in linear particle spacing, so total highres particles
-      increases as ZoomFactor**3 while mass decreases by ZoomFactor**3 (1 = no increase beyond original, 
-      2 = x8 mass resolution, 3 = x27 mass resolution, 4 = x64 mass resolution)
-    EnlargeHighResFactor: set spatial size of high-res region, multiplicative factor on FoF volume."""
+    After this file is done, create ICs as: ``srun -n 8 ./N-GenICResim param.txt partload_file.hdf5``.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance, with redshift corresponding to the selected fofID.
+      fofID (int): the target halo (fof) ID to zoom on.
+      ZoomFactor (int): resolution boost of high-res region, in linear particle spacing, so total highres particles
+        increases as ZoomFactor**3 while mass decreases by ZoomFactor**3 (1 = no increase beyond original, 
+        2 = x8 mass resolution, 3 = x27 mass resolution, 4 = x64 mass resolution).
+      EnlargeHighResFactor (float): set spatial size of high-res region, multiplicative factor on FoF volume.
+
+    Returns:
+      None. IC file written to disk.
+    """
 
     # config
     MaxLevel = 11 # 2^N, should match closest to res of original run, 9=512^3, 11=2048^3

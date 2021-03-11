@@ -1,4 +1,3 @@
-import snapHDF5 as ws
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -111,21 +110,20 @@ N_gas = x.shape[0]
 #plt.plot(x_surface,y_surface,'ro',ms=1.0,mew=0.0)
 #plt.show()
 ##########################################################
-print "Writing snapshot..."
-f=ws.openfile("ics.big.dat.hdf5")
+print("Writing snapshot...")
+if 0:
+    f=ws.openfile("ics.big.dat.hdf5")
 
-ws.write_block(f, "POS ", 0, np.array([x,y,z]).T)
-ws.write_block(f, "VEL ", 0, np.array([vx,vy,vz]).T)
-ws.write_block(f, "U   ", 0, utherm)
-ws.write_block(f, "MASS", 0, dens)
-ws.write_block(f, "ID  ", 0, ids)
-ws.write_block(f, "TRCE", 0, tracer)
+    ws.write_block(f, "POS ", 0, np.array([x,y,z]).T)
+    ws.write_block(f, "VEL ", 0, np.array([vx,vy,vz]).T)
+    ws.write_block(f, "U   ", 0, utherm)
+    ws.write_block(f, "MASS", 0, dens)
+    ws.write_block(f, "ID  ", 0, ids)
+    ws.write_block(f, "TRCE", 0, tracer)
 
-massarr=np.array([0,0,0,0,0,0], dtype="float64")
-npart=np.array([N_gas,0,0,0,0,0], dtype="uint32")
-header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr, double = np.array([0], dtype="int32"))
-ws.writeheader(f, header)
-ws.closefile(f)
-print "done."
-
-print "\n-FINISHED-\n"
+    massarr=np.array([0,0,0,0,0,0], dtype="float64")
+    npart=np.array([N_gas,0,0,0,0,0], dtype="uint32")
+    header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr, double = np.array([0], dtype="int32"))
+    ws.writeheader(f, header)
+    ws.closefile(f)
+print("Done.")

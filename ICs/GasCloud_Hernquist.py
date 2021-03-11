@@ -1,5 +1,4 @@
-import pygsl.rng
-import snapHDF5 as ws
+
 import numpy as np
 import numpy.random as rd
 from scipy.integrate import quad
@@ -35,8 +34,7 @@ R_bins     = 1000                          # number of interpolation points for 
 
 #random
 seed=42
-my_ran=pygsl.rng.ran0()
-my_ran.set(seed)
+np.random.seed(seed)
 
 #derived numbers
 gas_mass=HQ_M*gas_frac/N_gas
@@ -85,20 +83,17 @@ def Sigma(r):
 #set seed
 rd.seed(seed)
 
-print "\n-STARTING-\n"
-
 #vectorize functions
-print "Vectorizing functions..."
+print("Vectorizing functions...")
 vecSigma=np.vectorize(Sigma)
 vecRho=np.vectorize(Rho)
 vecGasMass=np.vectorize(GasMass)
 vecHaloMass=np.vectorize(HaloMass)
 vecMass=np.vectorize(Mass)
-print "done."
 
 
 
-print "Inverting/Interpolating functions..."
+print("Inverting/Interpolating functions...")
 #invert function: GasMass^-1 = GasRadius 
 radial_bins=np.exp(np.arange(INTERPOL_BINS)*np.log(INTERPOL_R_MAX_GAS/INTERPOL_R_MIN_GAS)/INTERPOL_BINS + np.log(INTERPOL_R_MIN_GAS))
 mass_bins_gas=vecGasMass(radial_bins)
@@ -113,12 +108,11 @@ HaloRadius=interp1d(mass_bins_halo, radial_bins)
 radial_bins=np.exp(np.arange(INTERPOL_BINS)*np.log(INTERPOL_R_MAX_GAS/INTERPOL_R_MIN_GAS)/INTERPOL_BINS + np.log(INTERPOL_R_MIN_GAS))
 sigma_bins=vecSigma(radial_bins)
 InterpolSigma=interp1d(radial_bins, sigma_bins)
-print "done."
 
-print "Inversion sampling..."
+print("Inversion sampling...")
 #generate random positions gas
 #radius_gas=GasRadius(rd.random_sample(N_gas)*mass_bins_gas.max())
-radius_gas=GasRadius(my_ran.uniform(N_gas)*mass_bins_gas.max())
+radius_gas=GasRadius(np.random.uniform(N_gas)*mass_bins_gas.max())
 phi_gas=2.0*np.pi*rd.random_sample(N_gas)        
 theta_gas=np.arcsin(2.0*rd.random_sample(N_gas)-1.0) 
 x_gas=radius_gas*np.cos(theta_gas)*np.cos(phi_gas)
@@ -126,17 +120,16 @@ y_gas=radius_gas*np.cos(theta_gas)*np.sin(phi_gas)
 z_gas=radius_gas*np.sin(theta_gas)
 
 #radius_halo=HaloRadius(rd.random_sample(N_halo)*mass_bins_halo.max())
-radius_halo=HaloRadius(my_ran.uniform(N_halo)*mass_bins_halo.max())
+radius_halo=HaloRadius(np.random.uniform(N_halo)*mass_bins_halo.max())
 phi_halo=2.0*np.pi*rd.random_sample(N_halo)        
 theta_halo=np.arcsin(2.0*rd.random_sample(N_halo)-1.0) 
 x_halo=radius_halo*np.cos(theta_halo)*np.cos(phi_halo)
 y_halo=radius_halo*np.cos(theta_halo)*np.sin(phi_halo)
 z_halo=radius_halo*np.sin(theta_halo)
-print "done."
 
 utherm=1.5*InterpolSigma(radius_gas)**2.0 
 
-print "Writing snapshot..."
+print("Writing snapshot...")
 massarr=np.array([0,0,0,0,0,0], dtype="float64")
 npart=np.array([0,0,0,0,0,0], dtype="uint32")
 f=ws.openfile("ics.dat.hdf5")
@@ -156,16 +149,5 @@ if (add_halo):
 header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr)
 ws.writeheader(f, header)
 ws.closefile(f)
-print "done."
 
-print "\n-FINISHED-\n"
-
-print "HQ_M   = ", HQ_M
-print "HQ_c   = ", HQ_c
-print "HQ_a   = ", HQ_a
-print "m_gas  = ", gas_mass
-print "N_gas  = ", N_gas
-if (add_halo):
-	print "m_halo = ", halo_mass
-	print "N_halo = ", N_halo
-	
+print("Done.")

@@ -353,11 +353,17 @@ class xrayEmission():
 
     def emis(self, instrument, metal, temp, norm=None, redshift=0.0):
         """ Interpolate the x-ray table, return fluxes [erg/s/cm^2], luminosities [10^44 erg/s], or counts [1/s].
-            Input gas properties can be scalar or np.array(), in which case they must have the same size.
-              instrument : name of the requested dataset
-              metal : metallicity [log solar]
-              norm  : usual XSPEC normalization [log cm^-5], only if use_apec == False
-              temp  : boltzmann constant * temperature [log keV]
+        Input gas properties can be scalar or np.array(), in which case they must have the same size.
+
+        Args:
+          instrument (str): name of the requested dataset.
+          metal (float or ndarray[float]): metallicity [log solar].
+          norm (float or ndarray[float]): usual XSPEC normalization [log cm^-5], only if use_apec == False.
+          temp (float or ndarray[float]): boltzmann constant * temperature [log keV].
+          redshift (float):
+
+        Returns
+          emis (ndarray[float]): x-ray emission per cell.
         """
         from scipy.ndimage import map_coordinates
         import time

@@ -15,3 +15,5 @@ psutil
 requests
 requests-oauthlib
 scipy
+astro-sedpy
+astro-prospector

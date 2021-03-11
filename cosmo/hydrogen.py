@@ -10,11 +10,16 @@ import numpy as np
 
 def photoCrossSec(freq, atom='H'):
     """ Find photoionisation cross-section (for hydrogen) in cm^2 as a function of frequency.
-        This is zero for energies less than 13.6 eV = 1 Ryd, and then falls off like E^-3
-        Normalized to 1 Ryd, where the radiative transfer was calculated originally.
-        From Verner+ (1996), the Opacity Project, values are from Table 1 of astro-ph/9601009.
-          freq : frequency in eV (must be numpy array)
-          return : cross-section [cm^2]
+    This is zero for energies less than 13.6 eV = 1 Ryd, and then falls off like E^-3
+    Normalized to 1 Ryd, where the radiative transfer was calculated originally.
+    From Verner+ (1996), the Opacity Project, values are from Table 1 of astro-ph/9601009.
+
+    Args:
+      freq (ndarray[float]): frequency in eV (must be numpy array).
+      atom (str): specify coefficients.
+
+    Returns:
+      cross (ndarray[float]): cross-section [cm^2].
     """
     if atom == 'H':
         nuthr  = 13.6
@@ -48,25 +53,25 @@ def photoCrossSec(freq, atom='H'):
 
 def uvbPhotoionAtten(log_hDens, log_temp, redshift):
     """ Compute the reduction in the photoionisation rate at an energy of 13.6 eV at a given 
-        density [log cm^-3] and temperature [log K], using the Rahmati+ (2012) fitting formula.
-        Note the Rahmati formula is based on the FG09 UVB; if you use a different UVB,
-        the self-shielding critical density will change somewhat.
+    density [log cm^-3] and temperature [log K], using the Rahmati+ (2012) fitting formula.
+    Note the Rahmati formula is based on the FG09 UVB; if you use a different UVB,
+    the self-shielding critical density will change somewhat.
 
-        For z < 5 the UVB is probably known well enough that not much will change, but for z > 5
-        the UVB is highly uncertain; any conclusions about cold gas absorbers at these redshifts
-        need to marginalise over the UVB amplitude here. 
+    For z < 5 the UVB is probably known well enough that not much will change, but for z > 5
+    the UVB is highly uncertain; any conclusions about cold gas absorbers at these redshifts
+    need to marginalise over the UVB amplitude here. 
 
-        At energies above 13.6eV the HI cross-section reduces like freq^-3.
-        Account for this by noting that self-shielding happens when tau=1, i.e tau = n*sigma*L = 1.
-        Thus a lower cross-section requires higher densities.
-        Assume then that HI self-shielding is really a function of tau, and thus at a frequency nu,
-        the self-shielding factor can be computed by working out the optical depth for the
-        equivalent density at 13.6 eV. ie, for gamma(n, T), account for frequency dependence with:
+    At energies above 13.6eV the HI cross-section reduces like :math:`\\nu^{-3}`.
+    Account for this by noting that self-shielding happens when tau=1, i.e 
+    :math:`\\tau = n*\sigma*L = 1`. Thus a lower cross-section requires higher densities.
+    Assume then that HI self-shielding is really a function of tau, and thus at a frequency :math:`\\nu`,
+    the self-shielding factor can be computed by working out the optical depth for the
+    equivalent density at 13.6 eV. ie, for :math:`\Gamma(n, T)`, account for frequency dependence with:
 
-        Gamma( n / (sigma(13.6) / sigma(nu) ), T).
+    :math:`\Gamma( n / (\sigma(13.6) / \sigma(\\nu) ), T)`.
 
-        So that a lower x-section leads to a lower effective density. Note Rydberg ~ 1/wavelength, 
-        and 1 Rydberg is the energy of a photon at the Lyman limit, ie, with wavelength 911.8 Angstrom.
+    So that a lower x-section leads to a lower effective density. Note Rydberg ~ 1/wavelength, 
+    and 1 Rydberg is the energy of a photon at the Lyman limit, ie, with wavelength 911.8 Angstrom.
     """
     import scipy.interpolate.interpolate as spi
 
@@ -117,8 +122,11 @@ def neutral_fraction(nH, sP, temp=1e4, redshift=None):
 
 def get_H2_frac(nH):
     """ Get the molecular fraction for neutral gas from the ISM pressure: only meaningful when nH > 0.1.
-        From Bird+ (2014) Eqn 4, e.g. the pressure-based model of Blitz & Rosolowsky (2006).
-      nHI : [ cm^-3 ] """
+    From Bird+ (2014) Eqn 4, e.g. the pressure-based model of Blitz & Rosolowsky (2006).
+
+    Args:
+      nHI (ndarray[float]): neutral hydrogen number density [cm^-3].
+    """
     fH2 = 1.0 / ( 1.0 + (35.0*(0.1/nH)**(5.0/3.0))**0.92 )
     return fH2 # Sigma_H2 / Sigma_H
 
@@ -175,8 +183,8 @@ def neutralHydrogenFraction(gas, sP, atomicOnly=True, molecularModel=None):
 def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=False, 
                  atomic=False, molecular=False, indRange=None):
     """ Calculate the (total, total neutral, atomic, or molecular) hydrogen mass per cell. Here we 
-        use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
-        density. Return still in code units, e.g. [10^10 Msun/h].
+    use the calculations of Rahmati+ (2012) for the neutral fractions as a function of 
+    density. Return still in code units, e.g. [10^10 Msun/h].
     """
     reqFields = ['Masses']
     if totalNeutral or atomic or molecular:
@@ -219,10 +227,15 @@ def hydrogenMass(gas, sP, total=False, totalNeutral=False, totalNeutralSnap=Fals
 
 def calculateCDDF(N_GridVals, binMin, binMax, binSize, sP, depthFrac=1.0):
     """ Calculate the CDDF (column density distribution function) f(N) given an input array of 
-        HI or metal column densities values [cm^-2], from a grid of sightlines covering an entire box.
-          * N_GridVals, binMin, binMax : column densities in [log cm^-2]
-          * binSize : in [log cm^-2] 
-          * depthFrac : is the fraction of sP.boxSize over which the projection was done (for dX) """
+    HI or metal column densities values [cm^-2], from a grid of sightlines covering an entire box.
+
+    Args:
+      N_GridVals: column density values in [log cm^-2].
+      binMin (float): column densities in [log cm^-2].
+      binMax (float): column densities in [log cm^-2].
+      binSize (float): in [log cm^-2].
+      depthFrac (float): is the fraction of sP.boxSize over which the projection was done (for dX).
+    """
 
     # Delta_X(z): absorption distance per sightline (Bird+ 2014 Eqn. 10) (Nagamine+ 2003 Eqn. 9) 
     dX = sP.units.H0_h1_s/sP.units.c_cgs * (1+sP.redshift)**2

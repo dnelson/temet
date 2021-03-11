@@ -942,43 +942,50 @@ def _calcSphMapTargets(pos,hsml,mass,quant,posTarget,dens_out,quant_out,densT_ou
 def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels, ndims, hsml_1=None,
            colDens=False, nThreads=16, multi=False, posTarget=None, maxIntProj=False, minIntProj=False, refGrid=None):
     """ Simultaneously calculate a gridded map of projected mass and some other mass weighted
-        quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is
-        returned, optionally converted to a column density map if colDens=True. If quant is specified,
-        the mass-weighted map of the quantity is additionally returned. If len(nPixels) is three, compute grid
-        and not image.
+    quantity (e.g. temperature) with the sph spline kernel. If quant=None, the map of mass is
+    returned, optionally converted to a column density map if colDens=True. If quant is specified,
+    the mass-weighted map of the quantity is additionally returned. If len(nPixels) is three, compute 
+    grid and not image.
 
-          Note: transpose of _calcSphMap() is taken such that with default plotting approaches e.g.
-                axes=[0,1] gives imshow(return[i,j]) with x and y axes corresponding correctly to
-                code coordinates. This does not apply if len(nPixels) == 3 and grid is computed.
-                No transpose is taken in that case.
-          Note: both boxSizeImg, boxCenter, and boxSizeSim [0,1,2] correspond to [axes[0],axes[1],axes[2]], meaning
-                pos[:,axes[0]] is compared against the first entries boxSizeImg[0] and boxCenter[0]
-                and not compared against e.g. boxSizeImg[axes[0]].
+    Args:
+      pos (ndarray[float][N,3 or N,2]): array of 3-coordinates for the particles (or 2-coords only, to ignore z-axis).
+      hsml (ndarray[float][N]): smoothing lengths to use for the particles, same units as pos.
+      mass (ndarray[float][N or 1]): mass to deposit, can be scalar value if all particles have the same mass.
+      quant (ndarray[float][N]): some quantity to calculate a mass-weighted projection of (None=skip).
+      axes (list[int][2]): two axis indices defining the projection direction, 
+        e.g. [0,1] for x,y (project along z-axis).
+      boxSizeImg (list[float][3]): the physical size the image should cover, same units as pos.
+      boxSizeSim (list[float][3]): the physical size of the simulation box for periodic wrapping (0=non periodic).
+      boxCen (list[float][3]): (x,y,z) coordinates of the center of the imaging box, same units as pos.
+      nPixels (list[int][2 or 3]): number of pixels in x,y directions for output image or number of cells 
+        in x,y,z directions for output grid.
+      ndims (int): number of dimensions of simulation (1,2,3), to set SPH kernel coefficients.
+      hsml_1 (ndarray[float][N]): if not None, do asymmetric sph kernel projection with 
+        ``hsml==hsml_0`` (x), and ``hsml_1`` (y).
+      colDens (bool): if True, normalize each grid value by its area (default=False).
+      nThreads (int): do multithreaded calculation (mem required=nThreads times more).
+      multi (bool): if True, return the tuple (dens,quant) instead of selecting one, under the
+        assumption that we are using sphMap() in a chunked mode and have to normalize later.
+      posTarget (ndarray[float][N,3]): array of 3-coordinates for a set of targets (e.g. star particle 
+        locations). If not None, then both pos and posTarget will be sorted on the 3rd (projection
+        direction) coordinate, and mapping will be front to back, such that the grid value at the position 
+        (2D+depth) of each posTarget is estimated. In this case, the return is of shape [N(posTarget)] 
+        giving the projected density or mass weighted quantity along the line of sight to each posTarget.
+      maxIntProj (bool): perform a maximum intensity projection (MIP) instead of the usual weighting.
+      minIntProj (bool): perform a -minimum- intensity projection, instead of the usual weighting.
 
-      pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords only, to ignore z-axis)
-      hsml[N]        : array of smoothing lengths to use for the particles, same units as pos
-      mass[N]/[1]    : array of mass to deposit (or scalar value if all particles have the same mass)
-      quant[N]       : array of some quantity to calculate a mass-weighted projection of (None=skip)
-      axes[2]        : list of two axis indices, e.g. [0,1] for x,y (project along z-axis)
-      boxSizeImg[3]  : the physical size the image should cover, same units as pos
-      boxSizeSim[3]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
-      boxCen[3]      : (x,y,z) coordinates of the center of the imaging box, same units as pos
-      nPixels[2]/[3] : number of pixels in x,y directions for output image or number of cells in x,y,z
-                       directions for output grid
-      ndims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
-      hsml_1[N]      : if not None, do asymmetric sph kernel projection with hsml==hsml_0 (x), and hsml_1 (y)
-      colDens        : if True, normalize each grid value by its area (default=False)
-      nThreads       : do multithreaded calculation (mem required=nThreads times more)
-      multi          : if True, return the tuple (dens,quant) instead of selecting one, under the
-                       assumption that we are using sphMap() in a chunked mode and have to normalize later
-      posTarget[N,3] : array of 3-coordinates for a set of targets (e.g. star particle locations). If
-                       not None, then both pos and posTarget will be sorted on the 3rd (projection
-                       direction) coordinate, and mapping will be front to back, such that the grid
-                       value at the position (2D+depth) of each posTarget is estimated. In this case,
-                       the return is of shape [N(posTarget)] giving the projected density or mass
-                       weighted quantity along the line of sight to each posTarget.
-      maxIntProj     : perform a maximum intensity projection (MIP) instead of the usual weighting
-      minIntProj     : perform a -minimum- intensity projection, instead of the usual weighting
+    Returns:
+      map (ndarray[float][nPixels]): computed 2D or 3D array, depositing either `mass` or `mass`-weighted `quant`.
+      dens_map, quant_map (ndarray,ndarray): if ``multi`` is True, then a 2-tuple of both arrays separately.
+
+    Notes:
+      * the transpose of :py:func:`_calcSphMap()` is taken such that with default plotting approaches e.g.
+        ``axes=[0,1]`` gives ``imshow(return[i,j])`` with x and y axes corresponding correctly to
+        code coordinates. This does not apply if ``len(nPixels) == 3`` and a 3D grid is computed.
+        No transpose is taken in that case.
+      * the entries of ``boxSizeImg``, ``boxCenter``, and ``boxSizeSim`` correspond to 
+        ``[axes[0],axes[1],axes[2]]``, meaning ``pos[:,axes[0]]`` is compared against the first entries 
+        ``boxSizeImg[0]`` and ``boxCenter[0]`` and not compared against e.g. ``boxSizeImg[axes[0]]``.
     """
     # input sanity checks
     if len(boxSizeImg) != pos.shape[1] or len(boxCen) != pos.shape[1]:

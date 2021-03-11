@@ -11,11 +11,13 @@ import glob
 
 def makeStellarPhotometricsHDF5_BC03():
     """ Create stellar_photometrics.hdf5 file using BC03 models, as used for Illustris and IllustrisTNG runs.
-    Bands: UBVK (Buser U,B3,V,IR K filter + Palomar200 IR detectors + atmosphere.57) in Vega, griz (sdss) in AB
-    Requires: http://www.bruzual.org/bc03/Original_version_2003/bc03.models.padova_1994_chabrier_imf.tar.gz
-    Produces: 87f665fe5cdac109b229973a2b48f848  stellar_photometrics.hdf5
-    Original: f4bcd628b35036f346b4e47f4997d55e  stellar_photometrics.hdf5
-      (all datasets between the two satisfy np.allclose(rtol=1e-8,atol=8e-4))
+    Bands: UBVK (Buser U,B3,V,IR K filter + Palomar200 IR detectors + atmosphere.57) in Vega, griz (sdss) in AB.
+
+    Notes:
+      * Requires: http://www.bruzual.org/bc03/Original_version_2003/bc03.models.padova_1994_chabrier_imf.tar.gz
+      * Produces: ``87f665fe5cdac109b229973a2b48f848  stellar_photometrics.hdf5``
+      * Original: ``f4bcd628b35036f346b4e47f4997d55e  stellar_photometrics.hdf5``
+      * (all datasets between the two satisfy np.allclose(rtol=1e-8,atol=8e-4))
     """
     filenames1 = sorted(glob.glob("bc2003_hr_m*_chab_ssp.1color")) # m22-m72
     filenames2 = sorted(glob.glob("bc2003_hr_m*_chab_ssp.1ABmag")) # m22-m72

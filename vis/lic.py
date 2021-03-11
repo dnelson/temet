@@ -15,67 +15,46 @@ def line_integral_convolution(input, velocity, kernel, origin=0, order=3,
     Line integral convolution of an input image with an arbitrary kernel.
     Lines are defined by a velocity field.
 
-    Parameters
-    ----------
-    input : array_like
-        Random image to be convolved (can be created for instance with
-        ``1. * (np.random.random(shape) > 0.5)``).
-    velocity: array_like
-        One velocity vector for each pixel. Must have shape
-        ``input.shape + (input.ndim,)``
-        First dimensions are identical to the shape of the random input
-        image, the last dimension defines the coordinate of the velocity.
-    kernel: array_like
-        1-D array with at least on element. Defines the convolution kernel
+    Args:
+      input (array_like): Random image to be convolved (can be created for instance 
+        with``1. * (np.random.random(shape) > 0.5)``).
+      velocity (array_like): One velocity vector for each pixel. Must have shape
+        ``input.shape + (input.ndim,)``. First dimensions are identical to the shape 
+        of the random input image, the last dimension defines the coordinate of the velocity.
+      kernel (array_like): 1-D array with at least on element. Defines the convolution kernel
         (e.g. a Gaussian kernel constructed with
         scipy.stats.norm.norm.pdf(np.linspace(-3,3,50))).
         The flow direction can be visualized by using an asymmetric kernel
         in combination with an ``origin`` parameter equal to ``None`` or
         equivalently ``-(len(kernel) // 2)``.
-    origin: int, optional
-        Placement of the filter, by default 0 (which is correct for
+      origin (int, optional): Placement of the filter, by default 0 (which is correct for
         symmetric kernels). The flow direction can be visualized by using an
         asymmetric kernel in combination with an ``origin`` parameter equal to
         ``None`` or equivalently ``-(len(kernel) // 2)``.
-    order: int, optional
-        The order of the spline interpolation used for interpolating the input
+      order (int, optional): The order of the spline interpolation used for interpolating the input
         image and the velocity field, by default 3.
         See the documentation of
         ``scipy.ndimage.interpolation.map_coordinates`` for more details.
-    weighted: string, optional
-        Can be either ``'average'`` or ``'integral'``, by default
+      weighted (str, optional):Can be either ``'average'`` or ``'integral'``, by default
         ``'average'``. If set to ``'average'``, the weighted average is
         computed. If set to ``'integral'``, the weighted integral is computed.
         See the examples to see which parameter is appropriate each use case.
-    step_size: str, optional
-        Can be either ``'unit_length'`` or ``'unit_time'``, by default
+      step_size (str, optional): Can be either ``'unit_length'`` or ``'unit_time'``, by default
         ``'unit_length'``. If set to ``'unit_length'``, the integration step is
         the velocity scaled to unit length. If set to ``'unit_time'``, the step
         equals the velocity.
-    maximum_velocity: float, optional
-        Is ``None`` by default. If it is not ``None``, the velocity field is
-        mutiplied with a scalar variable s.t. the maximum velocity after
+      maximum_velocity (float, optional): Is ``None`` by default. If it is not ``None``, the 
+        velocity field is mutiplied with a scalar variable s.t. the maximum velocity after
         multiplication equals ``maximum_velocity``.
 
-    Returns
-    -------
-    line_integral_convolution : ndarray
-        Returned array of same shape as `input`.
+    Returns:
+      line_integral_convolution (ndarray): Returned array of same shape as `input`.
 
-    See Also
-    --------
-    scipy.ndimage.filters.convolve1d : Calculate a one-dimensional convolution
+    See Also:
+      * scipy.ndimage.filters.convolve1d : Calculate a one-dimensional convolution
                                        with a kernel.
-    scipy.integrate.ode : Integrate an ordinary differential equation.
-
-    References
-    ----------
-    .. [1] http://dl.acm.org/citation.cfm?id=166151
-
-    Examples
-    --------
-    .. plot:: lic.py
-
+      * scipy.integrate.ode : Integrate an ordinary differential equation.
+      * http://dl.acm.org/citation.cfm?id=166151
     """
     input = np.asarray(input)
     kernel = np.asarray(kernel)
@@ -161,11 +140,11 @@ def line_integral_convolution(input, velocity, kernel, origin=0, order=3,
         return result
 
 def lic_test_plot():
-    # We will visualize a 2-D vortex with different configurations of the
-    # ``line_integral_convolution`` algorithm, and we will use the 2-D vortex to
-    # add motion blur to a sample image. First the necessary modules and functions
-    # need to be imported.
-    #from skimage.filters import line_integral_convolution
+    """ Visualize a 2-D vortex with different configurations of the
+    ``line_integral_convolution`` algorithm, and we will use the 2-D vortex to
+    add motion blur to a sample image. First the necessary modules and functions
+    need to be imported.
+    """
     from scipy.stats import norm
     import matplotlib.pyplot as plt
     from matplotlib import rcParams

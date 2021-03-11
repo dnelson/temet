@@ -55,7 +55,7 @@ if __name__ == '__main__':
     
     ##########################################################
     
-    print "Writing snapshot..."
+    print("Writing snapshot...")
     double_precision = 1
     f=ws.openfile("spoon-new_ics.hdf5")
     
@@ -72,5 +72,4 @@ if __name__ == '__main__':
                                                                         
     ws.writeheader(f, header)
     ws.closefile(f)
-    print "done."
-
+    print("done.")

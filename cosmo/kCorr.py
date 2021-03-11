@@ -299,11 +299,16 @@ def _kCorrection(r, c, redshifts, color_values):
     return
 
 def kCorrections(filter_name, redshifts, color_name, color_values):
-    """ filter_name: name of the filter to calculate K-correction for, e.g. 'u', 'g', 'J2'
-        redshift: redshift of a galaxy, should be between 0.0 and 0.5
-        color_name: name of the color, e.g. 'u - g', 'g - r', 'ui'
-        color_value: value of galaxy color, as specified in color_name
-      return : K-correction in specified filter for given redshift and color
+    """ Obtain k-correction for a given filter, redshift, and color.
+
+    Args:
+      filter_name: name of the filter to calculate K-correction for, e.g. 'u', 'g', 'J2'.
+      redshift: redshift of a galaxy, should be between 0.0 and 0.5.
+      color_name: name of the color, e.g. 'u - g', 'g - r', 'ui'.
+      color_value: value of galaxy color, as specified in color_name.
+    
+    Returns:
+      K-correction in specified filter for given redshift and color.
     """
     assert redshifts.size == color_values.size
     assert redshifts.ndim == color_values.ndim == 1

@@ -103,7 +103,7 @@ def calc_positions(pl, pr, region1, region3, w, xi, t, gamma):
 def region_states(pl, pr, region1, region3, region4, region5):
     """
     :return: dictionary (region no.: p, rho, u), except for rarefaction region
-    where the value is a string, obviously
+      where the value is a string.
     """
     if pl > pr:
         return {'Region 1': region1,

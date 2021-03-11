@@ -373,9 +373,9 @@ def redshiftsToClosestSnaps(data, redshifts, indsNotSnaps=False):
 def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     """ Derive an 'accretion mode' categorization for each tracer based on its group membership history. 
     Specifically, separate all tracers into one of [smooth/merger/stripped] defined as:
-      - smooth: child of MPB or no subhalo at all z>=z_acc 
-      - merger: child of subhalo other than the MPB at z=z_acc 
-      - stripped: child of MPB or no subhalo at z=z_acc, but child of non-MPB subhalo at any z>z_acc 
+    * smooth: child of MPB or no subhalo at all z>=z_acc 
+    * merger: child of subhalo other than the MPB at z=z_acc 
+    * stripped: child of MPB or no subhalo at z=z_acc, but child of non-MPB subhalo at any z>z_acc 
     Where z_acc is the accretion redshift defined as the first (highest z) crossing of the virial radius. """
 
     # check for existence

@@ -1,4 +1,4 @@
-import snapHDF5 as ws
+
 import numpy as np
 import numpy.random as rd
 from scipy.integrate import quad
@@ -44,57 +44,55 @@ INTERPOL_R_MAX = NFW_r200*R_max  #maximum gas sampling radius (gas/halo cut abov
 ############################################################################################################
 
 def GasRho(r):
-  x0=gas_R0/NFW_rs
-  x=r/NFW_rs    
-  return MassCorrection*co.GetRhoCrit() * NFW_delta/((x+x0)*(1+x)**2.0)
+	x0=gas_R0/NFW_rs
+	x=r/NFW_rs    
+	return MassCorrection*co.GetRhoCrit() * NFW_delta/((x+x0)*(1+x)**2.0)
 
 def HaloRho(r):
-  x=r/NFW_rs
-  return co.GetRhoCrit() * NFW_delta/(x*(1+x)**2.0)  
+	x=r/NFW_rs
+	return co.GetRhoCrit() * NFW_delta/(x*(1+x)**2.0)  
 
 def Rho(r):
-  return gas_frac*GasRho(r) + (1.0-gas_frac)*HaloRho(r)
+	return gas_frac*GasRho(r) + (1.0-gas_frac)*HaloRho(r)
 
 def GasMass(r):
-  if (r>NFW_r200):
-    return NFW_M200
-  x0=gas_R0/NFW_rs
-  x=r/NFW_rs  
-  return MassCorrection*MassScale * (x*(x0-1)/(1+x)+x0*x0*np.log(1+x/x0)+(1-2*x0)*np.log(1+x))/(1-x0)**2.0
+	if (r>NFW_r200):
+		return NFW_M200
+	x0=gas_R0/NFW_rs
+	x=r/NFW_rs  
+	return MassCorrection*MassScale * (x*(x0-1)/(1+x)+x0*x0*np.log(1+x/x0)+(1-2*x0)*np.log(1+x))/(1-x0)**2.0
 
 def HaloMass(r):
-    x=r/NFW_rs 
-    return MassScale*(1./(1.+x) + np.log(1.+x)-1.)
+		x=r/NFW_rs 
+		return MassScale*(1./(1.+x) + np.log(1.+x)-1.)
 
 def Mass(r):
-  return gas_frac*GasMass(r) + (1.0-gas_frac)*HaloMass(r)
+	return gas_frac*GasMass(r) + (1.0-gas_frac)*HaloMass(r)
 
 def Omega(r):
-  if (S_omega==0):
-    return 1.0;
-  else:
-    return (Mass(r)/NFW_M200)**S_omega/r**2.0
+	if (S_omega==0):
+		return 1.0;
+	else:
+		return (Mass(r)/NFW_M200)**S_omega/r**2.0
 
 def Sigma_Integrand(r): 
-  return co.G*Mass(r)*Rho(r)/r**2.0
+	return co.G*Mass(r)*Rho(r)/r**2.0
 
 def Sigma(r):
-  if (r>NFW_r200):
-    return 0.0 
-  return np.sqrt(quad(Sigma_Integrand, r, NFW_r200, epsrel=0.1)[0]/Rho(r))
+	if (r>NFW_r200):
+		return 0.0 
+	return np.sqrt(quad(Sigma_Integrand, r, NFW_r200, epsrel=0.1)[0]/Rho(r))
 
 def Potential(r):
-  return co.G * ( (Mass(r)/r) + (MassScale*((1.0/(NFW_rs+r))-(1.0/(NFW_rs+NFW_r200)))))
+	return co.G * ( (Mass(r)/r) + (MassScale*((1.0/(NFW_rs+r))-(1.0/(NFW_rs+NFW_r200)))))
 
 ############################################################################################################  
 
 #set seed
 rd.seed(seed)
 
-print "\n-STARTING-\n"
-
 #vectorize functions
-print "Vectorizing functions..."
+print("Vectorizing functions...")
 vecSigma=np.vectorize(Sigma)
 vecRho=np.vectorize(Rho)
 vecGasMass=np.vectorize(GasMass)
@@ -102,7 +100,6 @@ vecHaloMass=np.vectorize(HaloMass)
 vecMass=np.vectorize(Mass)
 vecOmega=np.vectorize(Omega) 
 vecPotential=np.vectorize(Potential)
-print "done."
 
 
 #mass correction due to gas sofetning
@@ -113,7 +110,7 @@ FC=(2.0/3.0)+(NFW_c/21.5)**0.7
 HaloEnergy=-(co.G*NFW_M200**2.0*FC)/(2*NFW_r200)
 rJ=Lambda * (co.G*NFW_M200**2.5) / np.sqrt(np.abs(HaloEnergy))
 
-print "Inverting/Interpolating functions..."
+print("Inverting/Interpolating functions...")
 #invert function: GasMass^-1 = GasRadius 
 radial_bins=np.exp(np.arange(INTERPOL_BINS)*np.log(INTERPOL_R_MAX/INTERPOL_R_MIN)/INTERPOL_BINS + np.log(INTERPOL_R_MIN))
 mass_bins_gas=vecGasMass(radial_bins)
@@ -138,9 +135,8 @@ InterpolOmega=interp1d(radial_bins, sigma_bins)
 radial_bins=np.exp(np.arange(INTERPOL_BINS)*np.log(INTERPOL_R_MAX/INTERPOL_R_MIN)/INTERPOL_BINS + np.log(INTERPOL_R_MIN))
 sigma_bins=vecPotential(radial_bins)
 InterpolPotential=interp1d(radial_bins, sigma_bins)
-print "done."
 
-print "Inversion sampling..."
+print("Inversion sampling...")
 #generate random positions gas
 radius_gas=GasRadius(rd.random_sample(N_gas)*mass_bins_gas.max())
 phi_gas=2.0*np.pi*rd.random_sample(N_gas)        
@@ -163,9 +159,8 @@ theta_tr=np.arcsin(2.0*rd.random_sample(N_tr)-1.0)
 x_tr=radius_tr*np.cos(theta_tr)*np.cos(phi_tr)
 y_tr=radius_tr*np.cos(theta_tr)*np.sin(phi_tr)
 z_tr=radius_tr*np.sin(theta_tr)
-print "done."
 
-print "Summing up momentum..."
+print("Summing up momentum...")
 #momentum gas
 AxisDistance_gas=radius_gas*np.cos(theta_gas)
 MomentumSum_gas=np.sum(gas_mass * InterpolOmega(radius_gas)*AxisDistance_gas * AxisDistance_gas)	 
@@ -176,12 +171,11 @@ MomentumSum_halo=np.sum(halo_mass * InterpolOmega(radius_halo)*AxisDistance_halo
 MomentumSum=MomentumSum_gas+MomentumSum_halo
 #momentum scale factor
 MomentumScale=rJ/MomentumSum
-print "done."
 
-print "Sampling velocity structure..."
+print("Sampling velocity structure...")
 for iter1 in range (0,100):
 	rd.seed(seed+1)
-	print "iter1 =", iter1
+	print("iter1 =", iter1)
 
 	VelocityR_gas=np.zeros(N_gas)
 	VelocityPhi_gas=InterpolOmega(radius_gas)*AxisDistance_gas*MomentumScale
@@ -191,17 +185,17 @@ for iter1 in range (0,100):
 	VelocityPhi_halo=InterpolOmega(radius_halo)*AxisDistance_halo*MomentumScale
 	VelocityZ_halo=np.zeros(N_halo)
 
-	print " Von Neumann cycles..."
+	print(" Von Neumann cycles...")
 	for iter2 in range (0,100):
 	
 		if (iter2==0):
-			print " iter2 =", iter2, N_halo
+			print(" iter2 =", iter2, N_halo)
 			sigma=InterpolSigma(radius_halo)		
 			VelocityScatterR_halo   = sigma*np.random.randn(N_halo)
 			VelocityScatterZ_halo   = sigma*np.random.randn(N_halo)
 			VelocityScatterPhi_halo = sigma*np.random.randn(N_halo)
 		else:
-			print " iter2 =", iter2, radius_halo[ind].shape[0]		
+			print(" iter2 =", iter2, radius_halo[ind].shape[0])
 			sigma=InterpolSigma(radius_halo[ind])		
 			VelocityScatterR_halo[ind]   = sigma*np.random.randn(radius_halo[ind].shape[0])
 			VelocityScatterZ_halo[ind]   = sigma*np.random.randn(radius_halo[ind].shape[0])
@@ -210,30 +204,27 @@ for iter1 in range (0,100):
 		a1=(VelocityR_halo+VelocityScatterR_halo)**2.0+(VelocityPhi_halo+VelocityScatterPhi_halo)**2.0+(VelocityZ_halo+VelocityScatterZ_halo)
 		a2=2.0*InterpolPotential(radius_halo)
 		
-	        check=a1<a2
-	        if (check.all()):
-	  	  	break
+		check=a1<a2
+		if (check.all()):
+			break
 
 		ind=a1>a2
-	print " done."		
 
 	VelocityR_halo   += VelocityScatterR_halo
 	VelocityPhi_halo += VelocityScatterPhi_halo
 	VelocityZ_halo   += VelocityScatterZ_halo
-      
+			
 	MomentumSum_gas=np.sum(gas_mass * VelocityPhi_gas * AxisDistance_gas)	 
 	MomentumSum_halo=np.sum(halo_mass * VelocityPhi_halo * AxisDistance_halo)	 
 	MomentumSum=MomentumSum_gas+MomentumSum_halo
 
 	if (rJ!=0.0):
-		print "desired momentum:%e    current momentum:%e      desired error:%e    current error:%e" % (rJ, MomentumSum, 0.001, np.abs(1.0-rJ/MomentumSum))
+		print("desired momentum:%e current momentum:%e desired error:%e current error:%e" % (rJ, MomentumSum, 0.001, np.abs(1.0-rJ/MomentumSum)))
 		MomentumScale*=np.sqrt(rJ/MomentumSum)
 	
 	if ((np.abs(1.0-rJ/MomentumSum)<0.001) | (rJ==0.0)):
 		break
-  
-print "done."  
-
+	
 utherm=1.5*InterpolSigma(radius_gas)**2.0 
 vx_gas=VelocityR_gas*np.cos(phi_gas)-VelocityPhi_gas*np.sin(phi_gas)
 vy_gas=VelocityR_gas*np.sin(phi_gas)+VelocityPhi_gas*np.cos(phi_gas)
@@ -244,52 +235,42 @@ vy_halo=VelocityR_halo*np.sin(phi_halo)+VelocityPhi_halo*np.cos(phi_halo)
 vz_halo=VelocityZ_halo
 
 
-print "Writing snapshot..."
-f=ws.openfile("ics_tr.dat.hdf5")
-rtmp=np.sqrt(x_gas*x_gas + y_gas*y_gas + z_gas*z_gas)
-ind=rtmp<Rcut
-N_gas=rtmp[ind].shape[0]
-print "cut=", rtmp.max(), rtmp[ind].max(), Rcut
+print("Writing snapshot...")
+if 0:
+		f=ws.openfile("ics_tr.dat.hdf5")
+		rtmp=np.sqrt(x_gas*x_gas + y_gas*y_gas + z_gas*z_gas)
+		ind=rtmp<Rcut
+		N_gas=rtmp[ind].shape[0]
+		print("cut=", rtmp.max(), rtmp[ind].max(), Rcut)
 
-rtmp=np.sqrt(x_tr*x_tr + y_tr*y_tr + z_tr*z_tr)
-ind_tr = rtmp<Rcut
-N_tr = rtmp[ind_tr].shape[0]
-print "tr cut=",rtmp.max(), rtmp[ind_tr].max(), Rcut
+		rtmp=np.sqrt(x_tr*x_tr + y_tr*y_tr + z_tr*z_tr)
+		ind_tr = rtmp<Rcut
+		N_tr = rtmp[ind_tr].shape[0]
+		print("tr cut=",rtmp.max(), rtmp[ind_tr].max(), Rcut)
 
-ws.write_block(f, "POS ", 0, np.array([x_gas[ind],y_gas[ind],z_gas[ind]]).T)
-ws.write_block(f, "VEL ", 0, np.array([vx_gas[ind],vy_gas[ind],vz_gas[ind]]).T)
-ws.write_block(f, "U   ", 0, utherm[ind])
-ws.write_block(f, "ID  ", 0, np.arange(1,N_gas+1))
+		ws.write_block(f, "POS ", 0, np.array([x_gas[ind],y_gas[ind],z_gas[ind]]).T)
+		ws.write_block(f, "VEL ", 0, np.array([vx_gas[ind],vy_gas[ind],vz_gas[ind]]).T)
+		ws.write_block(f, "U   ", 0, utherm[ind])
+		ws.write_block(f, "ID  ", 0, np.arange(1,N_gas+1))
 
-ws.write_block(f, "POS ", 3, np.array([x_tr[ind_tr],y_tr[ind_tr],z_tr[ind_tr]]).T)
-ws.write_block(f, "VEL ", 3, np.zeros([N_tr,3]))
-ws.write_block(f, "MASS", 3, np.zeros([N_tr]))
-ws.write_block(f, "ID  ", 3, np.arange(1+N_gas,N_gas+N_tr+2))
+		ws.write_block(f, "POS ", 3, np.array([x_tr[ind_tr],y_tr[ind_tr],z_tr[ind_tr]]).T)
+		ws.write_block(f, "VEL ", 3, np.zeros([N_tr,3]))
+		ws.write_block(f, "MASS", 3, np.zeros([N_tr]))
+		ws.write_block(f, "ID  ", 3, np.arange(1+N_gas,N_gas+N_tr+2))
 
-if (add_halo):
-	print "NO LIVE HALO IN THIS VERSION"
-	massarr=np.array([gas_mass,halo_mass,0,0,0,0], dtype="float64")
-	npart=np.array([N_gas,N_halo,0,0,0,0], dtype="uint32")
-	ws.write_block(f, "POS ", 1, np.array([x_halo,y_halo,z_halo]).T)
-	ws.write_block(f, "VEL ", 1, np.array([vx_halo,vy_halo,vz_halo]).T)
-	ws.write_block(f, "MASS", 1, np.repeat(halo_mass, N_gas))
-	ws.write_block(f, "ID  ", 1, np.arange(1+N_gas,N_gas+N_halo+2))
-else:
-	massarr=np.array([gas_mass,0,0,0,0,0], dtype="float64")
-	npart=np.array([N_gas,0,0,N_tr,0,0], dtype="uint32")
-header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr)
-ws.writeheader(f, header)
-ws.closefile(f)
-print "done."
+		if (add_halo):
+			print("NO LIVE HALO IN THIS VERSION")
+			massarr=np.array([gas_mass,halo_mass,0,0,0,0], dtype="float64")
+			npart=np.array([N_gas,N_halo,0,0,0,0], dtype="uint32")
+			ws.write_block(f, "POS ", 1, np.array([x_halo,y_halo,z_halo]).T)
+			ws.write_block(f, "VEL ", 1, np.array([vx_halo,vy_halo,vz_halo]).T)
+			ws.write_block(f, "MASS", 1, np.repeat(halo_mass, N_gas))
+			ws.write_block(f, "ID  ", 1, np.arange(1+N_gas,N_gas+N_halo+2))
+		else:
+			massarr=np.array([gas_mass,0,0,0,0,0], dtype="float64")
+			npart=np.array([N_gas,0,0,N_tr,0,0], dtype="uint32")
+		header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr)
+		ws.writeheader(f, header)
+		ws.closefile(f)
 
-print "\n-FINISHED-\n"
-
-print "r200   = ", NFW_r200
-print "rs     = ", NFW_rs
-print "delta  = ", NFW_delta
-print "m_gas  = ", gas_mass
-print "N_gas  = ", N_gas
-print "N_tr   = ", N_tr
-if (add_halo):
-	print "m_halo = ", halo_mass
-	print "N_halo = ", N_halo
+print("Done.")

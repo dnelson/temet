@@ -157,7 +157,7 @@ def plotSingleResult(ind, sps=None, doSim=None):
     nModelsPlot = 3
 
     # add a number of models
-    np.random.seed(4242424L)
+    np.random.seed(4242424)
     random_indices = np.random.choice( np.arange(samples.shape[0]), size=nModelsPlot, replace=False )
 
     for i in random_indices:

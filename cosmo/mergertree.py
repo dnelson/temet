@@ -41,9 +41,11 @@ def loadMDB(sP, id, fields=None, treeName=treeName_default, fieldNamesOnly=False
 
 def loadMPBs(sP, ids, fields=None, treeName=treeName_default, fieldNamesOnly=False):
     """ Load multiple MPBs at once (e.g. all of them), optimized for speed, with a full tree load (high mem).
-    Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary). 
-      Return: a dictionary whose keys are subhalo IDs, and the contents of each dict value is another 
-      dictionary of identical stucture to the return of loadMPB().
+    Basically a rewrite of illustris_python/sublink.py under specific conditions (hopefully temporary).
+
+    Returns: 
+      mpbs (dict): keys are subhalo IDs, and the contents of each dict value is another 
+        dictionary of identical stucture to the return of loadMPB().
     """
     from glob import glob
     assert treeName in ['SubLink','SubLink_gal'] # otherwise need to generalize tree loading

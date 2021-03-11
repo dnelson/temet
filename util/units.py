@@ -630,7 +630,8 @@ class units(object):
 
     def particleRelativeVelInKmS(self, vel, subhaloVel):
         """ Calculate particle velocity magnitude in [km/s], relative to a given reference frame motion 
-        which is typically SubhaloVel. If not, must be in physical units. """
+        which is typically SubhaloVel. If not, must be in physical units.
+        """
         # make copies of input arrays
         p_vel = vel.astype('float32')
 
@@ -651,10 +652,18 @@ class units(object):
 
     def codeDensToPhys(self, dens, cgs=False, numDens=False, msunpc3=False, totKpc3=False):
         """ Convert mass density comoving->physical and add little_h factors. 
-            Input: dens in code units should have [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3].
-            Return: [10^10 Msun/kpc^3] or [g/cm^3 if cgs=True] or [Msun/pc^3 if msunpc3=True] or
-                    [1/cm^3 if cgs=True and numDens=True] or
-                    [(orig units)/kpc^3 if totKpc3=True].
+
+        Args:
+          dens (array[float]): density in code units, should be 
+            `[10^10 Msun/h / (ckpc/h)^3]` = `[10^10 Msun h^2 / ckpc^3]`. Unless overridden by 
+            a parameter option, the default return units are [10^10 Msun/kpc^3].
+          cgs (bool): if True, return units are [g/cm^3].
+          numDens (bool): if True and cgs == True, return units are [1/cm^3].
+          msunpc3 (bool): if True, return units are [Msun/pc^3].
+          totKpc3 (bool): if True, return units are [[orig units]/kpc^3].
+
+        Returns:
+          dens_phys (array[float]): densities in physical units, as specified above.
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:
@@ -682,7 +691,8 @@ class units(object):
     def physicalDensToCode(self, dens, cgs=False, numDens=False):
         """ Convert mass density in physical units to code units (comoving + w/ little h factors, in unit system).
         Input: dens in [msun/kpc^3] or [g/cm^3 if cgs==True] or [1/cm^3 if cgs==True and numDens==True].
-        Output: dens in [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3] comoving. """
+        Output: dens in [10^10 Msun/h / (ckpc/h)^3] = [10^10 Msun h^2 / ckpc^3] comoving.
+        """
         assert self._sP.redshift is not None
         if numDens and not cgs:
             raise Exception('Odd choice.')
@@ -703,12 +713,18 @@ class units(object):
 
     def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, totKpc2=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
-            Input: colDens in code units should have [10^10 Msun/h / (ckpc/h)^2] = [10^10 Msun * h / ckpc^2].
-            Return: [10^10 Msun/kpc^2] or 
-                    [g/cm^2 if cgs=True] or 
-                    [1/cm^2] if cgs=True and numDens=True, which is in fact [H atoms/cm^2]] or 
-                    [Msun/kpc^2 if msunKpc2=True] or 
-                    [[orig units]/kpc^2 if totKpc2=True].
+
+        Args:
+          colDens (ndarray): column densities in code units, which should be 
+            `[10^10 Msun/h / (ckpc/h)^2]` = `[10^10 Msun * h / ckpc^2].` Unless overridden by 
+            a parameter option, the default return units are [10^10 Msun/kpc^2].
+          cgs (bool): if True, return units in [g/cm^2].
+          numDens (bool): if True and cgs == True, return units in [1/cm^2], which is in fact [H atoms/cm^2].
+          msunKpc2 (bool): return units in [Msun / kpc^2].
+          totKpc2 (bool): return units in [[orig units] / kpc^2].
+        
+        Returns:
+          colDensPhys (ndarray[float32]) physical column densities, units depending on the above.
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:

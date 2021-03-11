@@ -2497,24 +2497,18 @@ def _getPlotExtent(extent, axesUnits, projType, sP):
 
 def renderMultiPanel(panels, conf):
     """ Generalized plotting function which produces a single multi-panel plot with one panel for 
-        each of panels, all of which can vary in their configuration. 
-    Global plot configuration options:
-      plotStyle    : open (show axes), edged (no axes), open_black, edged_black
-      rasterPx     : 2-tuple, each panel will have this number of pixels if making a raster (png) output, 
-                     but note also it controls the relative size balance of raster/vector (e.g. fonts)
-      colorbars    : True or False
-      saveFilename : output file name (extension determines type e.g. pdf or png)
+    each of panels, all of which can vary in their configuration. 
 
-    Each panel in panels must be a dictionary containing the following keys:
-      sP         : simParams() object specifying the box, e.g. run, res, and redshift
-      partType   : dm, gas, stars, tracerMC, ...
-      partField  : coldens, coldens_cgs, temp, velmag, entr, ...
-      method     : sphMap, voronoi_const, voronoi_grads, ...
-      nPixels    : number of pixels per dimension of images when projecting
-      axes       : e.g. [0,1] is x,y
-      boxSizeImg : (x,y,z) extent of the imaging box in simulation units
-      boxCenter  : (x,y,z) coordinates of the imaging box center in simulation units
-      extent     : (axis0_min,axis0_max,axis1_min,axis1_max) in simulation units
+    Args:
+      conf (dict): Global plot configuration options. See :py:func:`~vis.halo.renderSingleHalo` and 
+        :py:func:`~vis.box.renderBox` for available options and their default values.
+        
+      panels (list): Each panel must be a dictionary containing the following keys. See 
+        :py:func:`~vis.halo.renderSingleHalo` and :py:func:`~vis.box.renderBox` for available options 
+        and their default values.
+
+    Returns:
+      None. Figure is produced in current directory.
     """
     assert conf.plotStyle in ['open','open_black','edged','edged_black']
     assert len(panels) > 0

@@ -1,8 +1,4 @@
-import snapHDF5 as ws
 import numpy as np
-import matplotlib.pyplot as plt
-
-#import  matplotlib.axes as maxes
 
 #set unit system
 UnitMass_in_g            = 1.0
@@ -20,7 +16,6 @@ beta = 5.0
 Tinf = 1.0
 
 ###################
-print "\n-STARTING-\n"
 Lx    = 10.0
 Ly    = 10.0
 N_gas = Nx * Ny
@@ -46,26 +41,20 @@ dens = T**(1.0/(GAMMA - 1.0))
 utherm = T/(GAMMA - 1)
 ids = np.arange(1,N_gas+1)
 ##########################################################
-print "Writing snapshot..."
-f=ws.openfile("ics.dat.hdf5")
+print("Writing snapshot...")
+if 0:
+    f=ws.openfile("ics.dat.hdf5")
 
-ws.write_block(f, "POS ", 0, np.array([x,y,z]).T)
-ws.write_block(f, "VEL ", 0, np.array([vx,vy,vz]).T)
-ws.write_block(f, "U   ", 0, utherm)
-ws.write_block(f, "MASS", 0, dens)
-ws.write_block(f, "ID  ", 0, ids)
+    ws.write_block(f, "POS ", 0, np.array([x,y,z]).T)
+    ws.write_block(f, "VEL ", 0, np.array([vx,vy,vz]).T)
+    ws.write_block(f, "U   ", 0, utherm)
+    ws.write_block(f, "MASS", 0, dens)
+    ws.write_block(f, "ID  ", 0, ids)
 
-massarr=np.array([0,0,0,0,0,0], dtype="float64")
-npart=np.array([N_gas,0,0,0,0,0], dtype="uint32")
-header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr, double = np.array([1], dtype="int32"))
-ws.writeheader(f, header)
-ws.closefile(f)
-print "done."
+    massarr=np.array([0,0,0,0,0,0], dtype="float64")
+    npart=np.array([N_gas,0,0,0,0,0], dtype="uint32")
+    header=ws.snapshot_header(npart=npart, nall=npart, massarr=massarr, double = np.array([1], dtype="int32"))
+    ws.writeheader(f, header)
+    ws.closefile(f)
 
-print "\n-FINISHED-\n"
-
-
-
-
-
-
+print("Done.")

@@ -653,20 +653,26 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 
     a radius for each element of posSearch is calculated by searching for nearby points in pos.
         
-      pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords for 2D)
-      boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
-      posSearch[M,3] : search sites
-      posMask[N]     : if not None, bool mask, only True entries are considered in search
-      nNGB           : number of nearest neighbors to search for in order to define HSML
-      nNGBDev        : allowed deviation (+/-) from the requested number of neighbors
-      nDims          : number of dimensions of simulation (1,2,3), to set SPH kernel coefficients
-      weighted_num   : if True, search for SPH kernel weighted number of neighbors, instead of real number
-      treePrec       : construct the tree using 'single' or 'double' precision for coordinates
-      tree           : if not None, should be a list of all the needed tree arrays (pre-computed), 
-                       i.e the exact return of buildFullTree()
-      nThreads       : do multithreaded calculation (on treefind, while tree construction remains serial)
-      nearest        : if True, then instead of returning hsml values based on nNGB, return indices and 
-                       distances to single closest match only
+    Args:
+      pos (ndarray[float][N,3]/[N,2]): array of 3-coordinates for the particles (or 2-coords for 2D).
+      boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic).
+      posSearch (ndarray[float][M,3]): search sites.
+      posMask (ndarray[bool][N]): if not None, bool mask, only True entries are considered in search.
+      nNGB (int): number of nearest neighbors to search for in order to define HSML.
+      nNGBDev (int): allowed deviation (+/-) from the requested number of neighbors.
+      nDims (int): number of dimensions of simulation (1,2,3), to set SPH kernel coefficients.
+      weighted_num (bool): if True, return SPH kernel weighted number of neighbors, instead of real number.
+      treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
+      tree (list or None): if not None, should be a list of all the needed tree arrays (pre-computed), 
+        i.e the exact return of buildFullTree().
+      nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
+      nearest (bool): if True, then instead of returning hsml values based on nNGB, return indices and 
+        distances to single closest match only.
+
+    Returns:
+      hsml (ndarray[float]): derived smoothing length for each input point (if not nearest).
+      dists (ndarray[float]): indices (ndarray[int]): derived distances and indices for each input 
+        point (if nearest).
     """
     # input sanity checks
     treeDims  = [3]
@@ -795,16 +801,20 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
     distance hsml around each pos. If posSearch==None, then pos defines both the neighbor and search point 
     sets, otherwise a reduction at the location of each posSearch is calculated by searching for nearby points in pos.
         
-      pos[N,3]/[N,2]  : array of 3-coordinates for the particles (or 2-coords for 2D)
-      quant[N]        : array of quantity values (i.e. mass, temperature)
-      hsml[N]/hsml[1] : array of search distances, or scalar value if constant
-      op              : 'min', 'max', 'mean', 'kernel_mean', 'sum', 'count'
-      boxSizeSim[1]   : the physical size of the simulation box for periodic wrapping (0=non periodic)
-      posSearch[N,3]  : search coordinates (optional)
-      treePrec        : construct the tree using 'single' or 'double' precision for coordinates
-      tree            : if not None, should be a list of all the needed tree arrays (pre-computed), 
-                        i.e the exact return of buildFullTree()
-      nThreads        : do multithreaded calculation (on treefind, while tree construction remains serial)
+    Args:
+      pos (ndarray[float][N,3]/[N,2]): array of 3-coordinates for the particles (or 2-coords for 2D).
+      quant (ndarray[float][N]): array of quantity values (i.e. mass, temperature).
+      hsml (ndarray[float][1 or N]): array of search distances, or scalar value if constant.
+      op (str): 'min', 'max', 'mean', 'kernel_mean', 'sum', 'count'.
+      boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic).
+      posSearch (ndarray[float][N,3]): search coordinates (optional).
+      treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
+      tree (list or None) if not None, should be a list of all the needed tree arrays (pre-computed), 
+                        i.e the exact return of buildFullTree().
+      nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
+
+    Returns:
+      result (ndarray[float]): reduction operation applied for each input.
     """
     # input sanity checks
     ops = {'sum':1, 'max':2, 'min':3, 'mean':4, 'kernel_mean':5, 'count':6}
@@ -916,14 +926,19 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
     """ Find and return the actual particle indices (indexing pos, hsml) within the search radius hsml 
     of the posSearch location. Serial by construction, since we do only one search.
 
-      pos[N,3]/[N,2] : array of 3-coordinates for the particles (or 2-coords for 2D)
-      posSearch[3]   : search postion
-      hsmlSearch[1]  : search distance
-      boxSizeSim[1]  : the physical size of the simulation box for periodic wrapping (0=non periodic)
-      posMask[N]     : if not None, then only True entries are considered in the search
-      treePrec       : construct the tree using 'single' or 'double' precision for coordinates
-      tree           : if not None, should be a list of all the needed tree arrays (pre-computed), 
-                       i.e the exact return of buildFullTree()
+    Args:
+      pos (ndarray[float][N,3]/[N,2]): array of 3-coordinates for the particles (or 2-coords for 2D).
+      posSearch (ndarray[float][3]): search position.
+      hsmlSearch (float): search distance.
+      boxSizeSim (float): the physical size of the simulation box for periodic wrapping (0=non periodic).
+      posMask (ndarray[bool][N]): if not None, then only True entries are considered in the search.
+      treePrec (str): construct the tree using 'single' or 'double' precision for coordinates.
+      tree (list or None) if not None, should be a list of all the needed tree arrays (pre-computed), 
+                        i.e the exact return of buildFullTree().
+
+    Returns:
+      result (ndarray[int]): list of indices into `pos` of the neighbors within the search distance of 
+        the search position.
     """
     # input sanity checks
     treeDims  = [3]

@@ -877,20 +877,35 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
     """ For every subhalo, use the instantaneous kinematics of gas to derive radial mass, energy, or 
     momemtum flux rates (outflowing/inflowing), and compute high dimensional histograms of this gas 
     mass/energy/mom flux as a function of (rad,vrad,dens,temp,metallicity), as well as a few particular 
-    2D marginalized histograms of interest and 1D marginalized histograms. If massField is something 
-    other than 'Masses' (total gas cell mass), then use instead this field and derive fluxes 
-    only for this mass subset (e.g. 'Mg II mass'). Choose one from the following four options:
-     rawMass  : histogrammed quantity is mass [msun] (per bin, e.g. mass in a given radial+vrad bin)
-     fluxMass : histogrammed quantity is radial mass flux [msun/yr] (default behavior, used in paper)
-     fluxKE   : histogrammed quantity is radial kinetic energy flux [10^30 erg/s]
-     fluxP    : histogrammed quantity is radial momentum flux [10^30 g*cm/s^2]. 
-    If proj2D is True, then all 'rad' bins become 'rad2d' bins (projected distance, z-axis direction, 
-    i.e. these are -annular- apertures on the sky), and all 'vrad' bins become 'vlos' bins (1D line of 
-    sight velocity). In this case, only rawMass is supported, since we have no shell volume element to 
-    normalize by. Additionally, a 'down the barrel' geometry is assumed, e.g. only material in front 
-    of the galaxy contributes.
-    If v200norm is True, then all velocities are binned in thresholds which are fractions of v200 of 
-    the halo, rather than in absolute physical [km/s] units. """
+    2D marginalized histograms of interest and 1D marginalized histograms. Note that this is a 
+    :py:mod:`cosmo.auxcatalog` compatible function, and returns standard format auxCats. To run, 
+    choose one of: ``rawMass``, ``fluxMass``, ``fluxKE``, or ``fluxP`` (see below).
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      pSplit (list[int][2]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total].
+      ptType (str): particle/cell type, can be either 'gas' (PartType0) or 'wind' (PartType4).
+      scope (str): analysis scope, can be one of 'subhalo', 'subhalo_wfuzz', or 'global' (slow).
+      massField (str): if not 'Masses' (total gas cell mass), then use instead this field and derive fluxes 
+        only for this mass subset (e.g. 'Mg II mass'). 
+
+      rawMass (bool): histogrammed quantity is mass [msun] (per bin, e.g. mass in a given radial+vrad bin).
+      fluxMass (bool): histogrammed quantity is radial mass flux [msun/yr] (default behavior, used in paper).
+      fluxKE (bool): histogrammed quantity is radial kinetic energy flux [10^30 erg/s].
+      fluxP (bool): histogrammed quantity is radial momentum flux [10^30 g*cm/s^2]. 
+
+      proj2D (bool): if True, then all 'rad' bins become 'rad2d' bins (projected distance, z-axis direction, 
+        i.e. these are -annular- apertures on the sky), and all 'vrad' bins become 'vlos' bins (1D line of 
+        sight velocity). In this case, only rawMass is supported, since we have no shell volume element to 
+        normalize by. Additionally, a 'down the barrel' geometry is assumed, e.g. only material in front 
+        of the galaxy contributes.
+      v200norm (bool): if True, then all velocities are binned in thresholds which are fractions of v200 of 
+        the halo, rather than in absolute physical [km/s] units.
+
+    Returns:
+      result (:py:class:`~numpy.ndarray`): 1d or 2d array, containing result(s) for each processed subhalo.
+      attrs (dict): metadata.
+    """
     minStellarMass = 7.4 # log msun (30pkpc values)
     cenSatSelect = 'cen' # cen, sat, all
 
@@ -1569,16 +1584,31 @@ def tracerOutflowRates(sP):
 def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous', scope='SubfindWithFuzz', thirdQuant=None, 
                    massField='Masses', fluxKE=False, fluxP=False, v200norm=False):
     """ For every subhalo, compute one of:
-      (i) mass loading factor eta_M^SN = eta_M = Mdot_out / SFR. 
-      (ii) energy loading factor eta_E^SN = Edot_out / Edot_SFR (if fluxKE == True)
-      (iii) momentum loading factor eta_P^SN = Pdot_out / Pdot_SFR (if fluxP == True)
-    In the case of mass loadings, the outflow 
-    rates can be derived using the instantaneous kinematic method, or the tracer tracks method. 
-    The star formation rates can be instantaneous or smoothed over some appropriate timescale. 
-    Return has shape [nSubsInAuxCat,nRadBins,nVradCuts].
-    If thirdQuant is not None, then can be one of (temp,z_solar,numdens,theta), in which the 
-    dependence on this parameter is given instead of integrated over, and the return has one more dimension. 
-    If massField is something other than 'Masses', the radial mass flux of this mass component (e.g. 'Mg II') is used instead. """
+    * mass loading factor ``eta_M^SN = eta_M = Mdot_out / SFR``. 
+    * energy loading factor ``eta_E^SN = Edot_out / Edot_SFR`` (if fluxKE == True)
+    * momentum loading factor ``eta_P^SN = Pdot_out / Pdot_SFR`` (if fluxP == True)
+    In the case of mass loadings, the outflow rates are derived using the instantaneous kinematic/flux 
+    method. Note that this is a :py:mod:`cosmo.auxcatalog` compatible function, and returns standard format auxCats.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      pSplit (list[int][2]): standard parallelization 2-tuple of [cur_job_number, num_jobs_total].
+      sfr_timescale (float): the star formation rates can be instantaneous or smoothed over some appropriate timescale. 
+      outflowMethod (str): instantaneous Eulerian or tracer-based Lagrangian analysis technique.
+      scope (str): analysis scope, can be one of 'subhalo', 'subhalo_wfuzz', or 'global' (slow).
+      thirdQuant (str): if not None, then can be one of (temp,z_solar,numdens,theta), in which the 
+        dependence on this parameter is given instead of integrated over, and the return has one more dimension. 
+      massField (str): if not 'Masses' (total gas cell mass), then use instead this field and derive fluxes 
+        only for this mass subset (e.g. 'Mg II mass'). 
+      fluxKE (bool): compute energy loading factors instead of mass loadings.
+      fluxP (bool): compute momentum loading factors instead of mass loadings.
+      v200norm (bool): if True, then all velocities are binned in thresholds which are fractions of v200 of 
+        the halo, rather than in absolute physical [km/s] units.
+
+    Returns:
+      eta (ndarray[float][nSubsInAuxCat,nRadBins,nVradCuts]): mass loading factors per subhalo.
+      attrs (dict): metadata.
+    """
     assert sfr_timescale in [0, 10, 50, 100] # Myr
     assert fluxKE + fluxP in [0,1] # at most one True
     assert pSplit is None # not supported

@@ -812,7 +812,6 @@ class cloudyIon():
 
     def formatWithSpace(self, str, name=False):
         """ Convert a string of the type e.g. 'Mg2' or 'O6' to 'Mg II' or 'O VI'. """
-
         elName = None
         ionNum = None
 
@@ -860,16 +859,18 @@ class cloudyIon():
 
     def frac(self, element, ionNum, dens, metal, temp, redshift=None):
         """ Interpolate the ion abundance table, return log(ionization fraction).
-            Input gas properties can be scalar or np.array(), in which case they must have the same size.
-            e.g. x = ion.frac('O','VI',-3.0,0.0,6.5)
-                 x = ion.frac('O',6,dens=-3.0,metal=0.0,temp=6.5,redshift=2.2)
-              element : name or symbol
-              ionNum  : roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2)
-                        where I = neutral (e.g. HeI = He), II = single ionized (e.g. HeII = He+)
-                        (e.g. HII region = fully ionized hydrogen, HeIII = fully ionized helium)
-              dens    : hydrogen number density [log cm^-3]
-              temp    : temperature [log K]
-              metal   : metallicity [log solar]
+        Input gas properties can be scalar or np.array(), in which case they must have the same size.
+        e.g. ``x = ion.frac('O','VI',-3.0,0.0,6.5)`` or 
+        ``x = ion.frac('O',6,dens=-3.0,metal=0.0,temp=6.5,redshift=2.2)``
+
+        Args:
+          element : name or symbol
+          ionNum  : roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2)
+            where I = neutral (e.g. HeI = He), II = single ionized (e.g. HeII = He+)
+            (e.g. HII region = fully ionized hydrogen, HeIII = fully ionized helium)
+          dens    : hydrogen number density [log cm^-3]
+          temp    : temperature [log K]
+          metal   : metallicity [log solar]
         """
         from scipy.ndimage import map_coordinates
         import time
@@ -919,9 +920,12 @@ class cloudyIon():
                                assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
         """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
-         aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
-         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. 
-         tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
+
+        Args:
+          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
+          aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. 
+          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp.
+        """
 
         # load required gas properties
         dens = sP.snapshotSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
@@ -1088,11 +1092,14 @@ class cloudyEmission():
 
     def emis(self, line, dens, metal, temp, redshift=None):
         """ Interpolate the line emissivity table, return log(volume emissivity [erg/cm^3/s]).
-            Input gas properties can be scalar or np.array(), in which case they must have the same size.
-              line  : name of line (species, ion number, and wavelength triplet) (or abbreviation)
-              dens  : hydrogen number density [log cm^-3]
-              temp  : temperature [log K]
-              metal : metallicity [log solar]
+        Input gas properties can be scalar or np.array(), in which case they must have the same size.
+
+        Args:
+          line  : name of line (species, ion number, and wavelength triplet) (or abbreviation)
+          dens  : hydrogen number density [log cm^-3]
+          temp  : temperature [log K]
+          metal : metallicity [log solar]
+
         """
         from scipy.ndimage import map_coordinates
         import time
@@ -1135,11 +1142,14 @@ class cloudyEmission():
     def calcGasLineLuminosity(self, sP, line, indRange=None, dustDepletion=False, 
                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
         """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
-        for gas particles in the whole snapshot, optionally restricted to an indRange. 
-         dustDepletion: apply a dust-depletion model for a given species
-         aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
-         aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field.
-         tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp. """
+        for gas particles in the whole snapshot, optionally restricted to an indRange.
+
+        Args:
+          dustDepletion: apply a dust-depletion model for a given species
+          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
+          aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field.
+          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp.
+        """
         ion = cloudyIon(sP=None)
         line = self.resolveLineNames(line, single=True)
 
