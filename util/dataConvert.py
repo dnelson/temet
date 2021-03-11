@@ -3063,7 +3063,7 @@ def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
 
-    sP = simParams(run='tng100-1-dark')
+    sP = simParams(run='tng50-1')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -3094,6 +3094,20 @@ def supplementVirtualSimHDF5():
             filepath = 'postprocessing/StellarAssembly/galaxies_in_rad_%03d.hdf5' % snap
             baseName = 'Groups/%d/Subhalo/StellarAssemblyInRad' % snap
             gNames = ['/']
+            _addPostprocessingCat(fSim,filepath,baseName,gNames)
+
+    if 0:
+        # add StellarMasses (subhalo) catalogs
+        for snap in snaps:
+            #filepath = 'postprocessing/StellarMasses/Subhalo_3DStellarMasses_%03d.hdf5' % snap
+            #baseName = 'Groups/%d/Subhalo/StellarMasses' % snap
+            #gNames = ['Subhalo']
+            #_addPostprocessingCat(fSim,filepath,baseName,gNames)
+
+            # StarFormationRates
+            filepath = 'postprocessing/StarFormationRates/Subhalo_SFRs_%03d.hdf5' % snap
+            baseName = 'Groups/%d/Subhalo/StarFormationRates' % snap
+            gNames = ['Subhalo']
             _addPostprocessingCat(fSim,filepath,baseName,gNames)
 
     if 0:
@@ -3511,36 +3525,29 @@ def exportSubhalosBinary():
 
     print('Saved: [%s]' % fileName)
 
-def exportHierarchicalBoxGrids(sP, partField='mass'):
-    """ Export a series of 3D uniform grids, of different resolutions, to a flat binary format 
-    appropriate for javascript/WebGL processing (volume rendering). """
-    from vis.common import getHsmlForPartType, defaultHsmlFac
+def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,64,128,256,512], 
+    haloID=None, memoryReturn=False):
+    """ Export one or more 3D uniform Cartesian grids, of different resolutions, to a flat binary format 
+    appropriate for javascript/WebGL processing (volume rendering). nCells can be a list of one or more 
+    sizes (number of cells per linear dimension). If haloID is None, then use full box. 
+    If memoryReturn is True, an actual file is not written, and instead a bytes array is returned. """
+    assert partField in ['mass','temp_linear','velmag','xray_lum'] # defaults, can remove restriction
     from util.sphMap import sphGridWholeBox
     from util.simParams import simParams
     from util.helper import logZeroSafe
+    from io import BytesIO
 
     # config
-    #sP = simParams(run='tng100-2',redshift=0.0)
-    partType = 'gas'
-    #partField = 'temp_linear' # mass, temp_linear, velmag, xray_lum
-
-    takeLog = True if partField != 'velmag' else False
-
-    nCells = [32, 64, 128, 256, 512]
+    label, limits, takeLog = sP.simParticleQuantity(partType, partField)
 
     # load
-    pos = sP.snapshotSubsetP(partType, 'pos')
-    mass = sP.snapshotSubsetP(partType, 'mass')
-
-    if sP.isPartType(partType, 'stars'):
-        hsml = getHsmlForPartType(sP, partType, nNGB=32)
-    else:
-        hsml = getHsmlForPartType(sP, partType)
-    hsml *= defaultHsmlFac(partType) # e.g. 2.5 for gas
+    pos = sP.snapshotSubsetP(partType, 'pos', haloID=haloID)
+    mass = sP.snapshotSubsetP(partType, 'mass', haloID=haloID)
+    hsml = sP.snapshotSubsetP(partType, 'hsml', haloID=haloID)
 
     quant = None # grid mass
     if partField != 'mass': # grid a different, mass-weighted quantity
-        quant = sP.snapshotSubsetP(partType, partField)
+        quant = sP.snapshotSubsetP(partType, partField, haloID=haloID)
         assert partField != 'dens' # do mass instead
 
     # make series of grids at progressively better resolution
@@ -3558,36 +3565,44 @@ def exportHierarchicalBoxGrids(sP, partField='mass'):
 
         grid = grid.astype('float16') # 2 bytes per value!
         grids.append( grid.ravel() )
-        print('grid ', nCell, grid.min(), grid.max())
+        #print('grid ', nCell, grid.min(), grid.max())
 
     # save binary
-    fileName = "boxgrid_%s_%s_%s_z%.1f.dat" % \
-            (sP.simName.replace("-2",""),partType,partField.replace("_linear",""),sP.redshift)
+    if memoryReturn:
+        f = BytesIO()
+    else:
+        fileName = "boxgrid_%s_%s_%s_z%.1f.dat" % \
+                (sP.simName.replace("-2",""),partType,partField.replace("_linear",""),sP.redshift)
 
-    with open(fileName,'wb') as f:
-        # header (24 bytes + 12 bytes per grid)
-        binVersion   = 1
-        headerBytes  = 6*4 + len(nCells)*12
-        
-        header = np.array( [binVersion, headerBytes, len(nCells), sP.snap], dtype='int32' )
-        f.write( struct.pack('iiii', *header) )
-        header = np.array( [sP.redshift, sP.boxSize], dtype='float32' )
-        f.write( struct.pack('ff', *header) )
+        f = open(fileName,'wb')
 
-        # for each grid, write [nCells, startOffset, stopOffset], offsets are file global
-        offset = headerBytes
-        for i, grid in enumerate(grids):
-            header = np.array( [nCells[i], offset, offset+grid.nbytes], dtype='int32')
-            offset += grid.nbytes
-            f.write( struct.pack('i'*len(header), *header) )
+    # header (24 bytes + 12 bytes per grid)
+    binVersion   = 1
+    headerBytes  = 6*4 + len(nCells)*12
+    
+    header = np.array( [binVersion, headerBytes, len(nCells), sP.snap], dtype='int32' )
+    f.write( struct.pack('iiii', *header) )
+    header = np.array( [sP.redshift, sP.boxSize], dtype='float32' )
+    f.write( struct.pack('ff', *header) )
 
-        # write each grid (nCells[i]**3*2 bytes each)
-        # to write in float32: only change 'e' to 'f' and 'float16' to 'float32' above
-        for grid in grids:
-            f.write( struct.pack('e'*len(grid), *grid) )
+    # for each grid, write [nCells, startOffset, stopOffset], offsets are file global
+    offset = headerBytes
+    for i, grid in enumerate(grids):
+        header = np.array( [nCells[i], offset, offset+grid.nbytes], dtype='int32')
+        offset += grid.nbytes
+        f.write( struct.pack('i'*len(header), *header) )
 
-        # footer
-        footer = np.array( [99], dtype='int32' )
-        f.write( struct.pack('i', *footer) )
+    # write each grid (nCells[i]**3*2 bytes each)
+    # to write in float32: only change 'e' to 'f' and 'float16' to 'float32' above
+    for grid in grids:
+        f.write( struct.pack('e'*len(grid), *grid) )
 
+    # footer
+    footer = np.array( [99], dtype='int32' )
+    f.write( struct.pack('i', *footer) )
+
+    if memoryReturn:
+        return f
+
+    f.close()
     print('Saved: [%s]' % fileName)
