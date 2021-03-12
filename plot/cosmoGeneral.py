@@ -17,7 +17,7 @@ from scipy.stats import binned_statistic_2d
 
 from util import simParams
 from util.helper import running_median, running_median_sub, logZeroNaN, loadColorTable, \
-       getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess
+       getWhiteBlackColors, sampleColorTable, binned_stat_2d, lowess, iterable
 from cosmo.color import loadSimGalColors, calcMstarColor2dKDE
 from vis.common import setAxisColors, setColorbarColors
 from vis.halo import subsampleRandomSubhalos
@@ -692,42 +692,76 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
             fig.savefig('slice1d_%s_%s_%s_%s_%s.pdf' % (xlabel,cQuant,cStatistic,cenSatSelect,minCount))
         plt.close(fig)
 
-def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', 
-                             sQuant=None, sLowerPercs=None, sUpperPercs=None, sizefac=1.0, alpha=1.0, nBins=50, 
+def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
+                             sizefac=1.0, alpha=1.0, nBins=50, 
                              qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
                              scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, scatterCtName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
                              extraMedians=None, legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
     """ Make a running median of some quantity (e.g. SFR) vs another on the x-axis (e.g. Mstar).
-    For all subhalos, optically restricted by cenSatSelect, load a set of quantities 
+    For all subhalos, load a set of quantities 
     yQuants (could be just one) and plot this (y-axis) against the xQuant. Supports multiple sPs 
     which are overplotted. Multiple yQuants results in a grid.
-    If sQuant is not None, then in addition to the median, load this third quantity and split the 
-    subhalos on it according to (mandatory) sLowerPercs, sUpperPercs, each a list of percentiles, for 
-    which to split plotting the sub-sample yQuant again versus xQuant.
-    If qRestrictions, then a list containing 3-tuples, each of [fieldName,min,max], to restrict all points by.
-    If f_pre, f_post are not None, then these are 'custom' functions accepting the axis as a single argument, which 
-    are called before and after the rest of plotting, respectively.
-    If scatterPoints, include all raw points with a scatterplot. If maxPointsPerDex, then randomly sub-sample down to 
-    this number (equal number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. If scatterColor, 
-    color each point by a third property (use scatterCtName colormap if not None). 
-    If lowessSmooth, smooth the resulting color distribution.
-    If cRel is not None, then should be a 3-tuple of [relMin,relMax,takeLog] in which case the colors are not 
-    scatterColor itself, but the value of that quantity relative to the median at that value of the x-axis (e.g. mass).
-    If markSubhaloIDs, highlight these subhalos especially on the plot. 
-    If mark1to1, show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
-    If drawMedian, then include median line and 1-sigma band (optionally override label to medianLabel).
-    If extraMedians is not empty, then add median lines for these (y-axis) quantities as well.
-    If filterFlag, exclude SubhaloFlag==0 (non-cosmological) objects.
-    If colorbarInside, place colorbar (assuming scatterColor is used) inside the panel. 
-    Note: alpha controls only the scattered points (if plotted), and nBins is only for computing the median lines. """
+
+    Args:
+      sPs (:py:class:`~util.simParams` or list): simulation instance(s).
+      pdf (PdfPages or None): if None, an actual PDF file is written to disk with the figure.
+        If not None, then the figure is added to this existing pdf collection.
+      yQuants (str or list[str]): names of quantities (could be just one) to plot on the y-axis.
+        Multiple yQuants results in a grid of panels.
+      xQuant (str): name of quantity to plot on the x-axis.
+      cenSatSelect (str): restrict subhalo sample to one of 'cen', 'sat', or 'all'.
+      sQuant (str or None): if not None, then in addition to the median, load this third quantity and 
+        split the subhalos on it according to (mandatory) ``sLowerPercs`` and ``sUpperPercs``. Each 
+        such split adds another median line derived from that sub-sample alone.
+      sLowerPercs (tuple[float][2]): a list of percentiles (e.g. ``[16,84]``), to split the sample on.
+      sUpperPercs (tuple[float][2]): a list of percentiles (e.g. ``[16,84]``), to split the sample on.
+      sizefac (float): overrides the default plot sizefac.
+      alpha (float): controls only the scattered points (if plotted).
+      nBins (int): number of bins along the x-axis quantity for computing the median lines.
+      qRestrictions (list): one or more 3-tuples, each containing ``[fieldName,min,max]``, which are then 
+        used to restrict all points by.
+      f_pre (function): if not None, this 'custom' function hook is called just before plotting.
+        It must accept the figure axis as its single argument.
+      f_post (function): if not None, this 'custom' function hook is called just after plotting.
+        It must accept the figure axis as its single argument.
+      xlabel (str): if not None, override x-axis label.
+      ylabel (str): if not None, override y-axis label.
+      lowessSmooth (bool): smooth the resulting color distribution (slow for large number of points).
+      scatterPoints (bool): include all raw points with a scatterplot.
+      markersize (float): 
+      maxPointsPerDex (int): if not None, then randomly sub-sample down to at most this number (equal 
+        number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. 
+      scatterColor (str): color each point by a third property.
+      scatterCtName (str): if not None, then specify a different colormap name to use for the points.
+      markSubhaloIDs (bool): highlight these subhalos especially on the plot. 
+      cRel: if not None, then should be a 3-tuple of ``[relMin,relMax,takeLog]`` in which case the colors 
+        are not scatterColor itself, but the value of that quantity relative to the median at that value 
+        of the x-axis (e.g. mass).
+      mark1to1 (bool): show a 1-to-1 line (i.e. assuming x and y axes could be closely related). 
+      drawMedian (bool): include median line and 1-sigma band.
+      medianLabel (str): if not None, then override the median label with this string.
+      extraMedians (list[str]): if not None, add more median lines for these (y-axis) quantities as well.
+      legendLoc (str):
+      xlim (list[float][2]): if not None, override default x-axis limits.
+      ylim (list[float][2]): if not None, override default y-axis limits.
+      clim (list[float][2]): if not None, override default colorbar limits.
+      cbarticks (list[float]): if not None, override automatic colorbar tick values.
+      filterFlag (bool): exclude SubhaloFlag==0 (non-cosmological) objects.
+      colorbarInside (bool): place colorbar (assuming scatterColor is used) inside the panel. 
+      fig_subplot:
+
+    Returns:
+      None. PDF figure is saved in current directory, or added to ``pdf`` if input.
+    """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if extraMedians is None: extraMedians = [] # avoid mutable keyword argument
     if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
     if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
     if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
 
+    yQuants = iterable(yQuants)
     nRows = int(np.floor(np.sqrt(len(yQuants))))
     nCols = int(np.ceil(len(yQuants) / nRows))
 
@@ -753,7 +787,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
         if f_pre is not None:
             f_pre(ax)
 
-        for j, sP in enumerate(sPs):
+        for j, sP in enumerate(iterable(sPs)):
             # loop over each run and add to the same plot
             print(' ',yQuant,xQuant,sP.simName,cenSatSelect)
 
@@ -829,7 +863,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                     for wPastRestrict in wRestrictions:
                         vals = vals[wPastRestrict] # AND
 
-                    wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
+                    with np.errstate(invalid='ignore'):
+                        wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
 
                     sim_yvals = sim_yvals[wRestrict]
                     sim_xvals = sim_xvals[wRestrict]
@@ -854,21 +889,21 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
             if sP.boxSize < 205000.0: binSize *= 2.0
 
             if drawMedian:
-                xm, ym, _, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
-
+                xm, ym, _, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,
+                                               minNumPerBin=20,percs=[16,50,84])
+                
                 if xm.size > sKn:
                     ym = savgol_filter(ym,sKn,sKo)
-                    #sm = savgol_filter(sm,sKn,sKo)
                     pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-                label = sP.simName + ' z=%.1f' % sP.redshift if medianLabel is None else medianLabel
+                label = sP.simName + ' z=%.1f' % sP.redshift if len(sPs) > 1 else ''
+                if medianLabel is not None: label = medianLabel
                 if extraMedians: label = yQuant
                 color = 'black' if len(sPs) == 1 else c
 
                 l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=0.8, label=label)
-                #ax.plot(xm, pm[0,:], ':', lw=lw, color='black', alpha=0.8)
-                #ax.plot(xm, pm[-1,:], ':', lw=lw, color='black', alpha=0.8)
-                ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
+                if i == 0:
+                    ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
 
             for k, medianProp in enumerate(extraMedians):
                 # load new (y-axis) quantity, subset as before, and median
@@ -997,7 +1032,9 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen',
                             continue
 
                         # normalize all points in this bin by the bin median
-                        cc[w] /= np.nanmedian(cc[w])
+                        normval = np.nanmedian(cc[w])
+                        if normval == 0: normval = np.nanmean(cc[w])
+                        cc[w] /= normval
 
                     if cLog: # log relative?
                         cc = logZeroNaN(cc)

@@ -326,17 +326,29 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
 
             # environment: distance to 5th nearest neighbor with M* at least half of this subhalo [code units]
             # or overdensity (linear dimensionless) if 'delta'
-            if quantName in ['d5_mstar_gthalf','delta5_mstar_gthalf','delta5']:
-                acField = 'Subhalo_Env_d5_MstarRel_GtHalf'
+            if quantName in ['d5_mstar_gthalf','delta5_mstar_gthalf',
+                             'd5_mstar_gt8','delta5_mstar_gt8']:
+                if '_gthalf' in quantName:
+                    acField = 'Subhalo_Env_d5_MstarRel_GtHalf'
+                if '_gt8' in quantName:
+                    acField = 'Subhalo_Env_d5_Mstar_Gt8'
 
                 ac = sP.auxCat(fields=[acField], expandPartial=True)
                 r[field] = ac[acField]
 
                 # compute dimensionless overdensity (rho/rho_mean-1)
                 if 'delta' in quantName:
-                    sigma_N = 5.0 / (4/3 * np.pi * r[field]**3) # local galaxy volume density
+                    N = 5
+                    sigma_N = N / (4/3 * np.pi * r[field]**3) # local galaxy volume density
                     delta_N = sigma_N / np.nanmean(sigma_N) - 1.0
                     r[field] = delta_N
+
+            # environment: counts of neighbors (linear dimensionless)
+            if quantName in ['num_neighbors','num_ngb_mstar_gttenth_2rvir']:
+                acField = 'Subhalo_Env_Count_MstarRel_GtTenth_2rvir'
+
+                ac = sP.auxCat(fields=[acField], expandPartial=True)
+                r[field] = ac[acField]
 
             # auxCat: photometric/broadband colors (e.g. 'color_C_gr', 'color_A_ur')
             if 'color_' in quantName:

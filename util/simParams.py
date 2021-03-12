@@ -951,15 +951,23 @@ class simParams:
         self.setRedshift(self.redshift)
         self.setSnap(self.snap)
 
-    def auxCatSplit(self, field):
+    def auxCatSplit(self, field, nThreads=1):
         """ Automatically do a pSplit auxCat calculation. """
+        import multiprocessing as mp
+
         n = 8
         if self.res > 2000:
             n = 16
 
-        # compute chunked to reduce peak memory load
-        for i in range(n):
-            _ = self.auxCat(field, pSplit=[i,n])
+        if nThreads == 1:
+            # serial: compute chunked to reduce peak memory load
+            for i in range(n):
+                _ = self.auxCat(field, pSplit=[i,n])
+        else:
+            # multiprocess: only for low-memory catalogs (e.g. mergertree/neighbors)
+            pool = mp.Pool(processes=nThreads)
+            func = partial(self.auxCat, field)
+            pool.map(func, [(i,n) for i in np.arange(n)]) # pSplit 2-tuples
 
         # concat and return
         return self.auxCat(field, pSplit=[0,n])

@@ -1694,6 +1694,13 @@ def snapshotSubsetParallel(sP, partType, fields, inds=None, indRange=None, haloI
         if serial and getuser() != 'wwwrun':
             print('NOTE: Detected parallel-load request inside parallel-load, making serial.')
 
+    if not serial:
+        # detect if we are inside a daemonic child process already (e.g. multiprocessing spawned)
+        # in which case we cannot start further child processes, so revert to serial load
+        serial = (mp.current_process().name != 'MainProcess')
+        if serial and getuser() != 'wwwrun':
+            print('NOTE: Detected parallel-load request inside daemonic child, making serial.')
+
     if serial:
         return snapshotSubset(sP, partType, fields, inds=inds, indRange=indRange, haloID=haloID, 
                               subhaloID=subhaloID, sq=sq, haloSubset=haloSubset, float32=float32)

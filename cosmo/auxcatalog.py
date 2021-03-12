@@ -1,5 +1,7 @@
 """
 Cosmological simulations - auxiliary catalog for additional derived galaxy/halo properties.
+The functions here are rarely called directly. Instead they are typically invoked from 
+within a particular auxCat request.
 """
 import numpy as np
 import h5py
@@ -2114,8 +2116,10 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
       cenSatSelect (str): exclusively process 'cen', 'sat', or 'all'.
 
     Returns:
-      result (:py:class:`~numpy.ndarray`): 1d or 2d array, containing result(s) for each processed subhalo.
-      attrs (dict): metadata.
+      tuple: a 2-tuple composed of:
+      
+      - **result** (:py:class:`~numpy.ndarray`): 1d or 2d array, containing result(s) for each processed subhalo.
+      - **attrs** (dict): metadata.
     """
     assert op in ['min','max','mean','median','sum',
                   'closest_rad','d3_rad','d5_rad','d10_rad','closest_quant','count']
@@ -2178,9 +2182,41 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
 
     gc = sP.subhalos(fieldsLoad)
 
-    # apply (globally constant) restriction to those subhalos included in searches?
+    # start all valid mask for search targets
     validMask = np.ones(nSubsTot, dtype=np.bool)
 
+    # if we will apply (locally variable) restrictions
+    if subRestrictionsRel is not None:
+        # then the quantities must be non-nan and non-zero for the subhalos we are processing 
+        # (efficiency improvement only)
+        mask = np.ones( nSubsDo, dtype='bool' )
+
+        for rField, _, _ in subRestrictionsRel:
+            # mark invalid subhalos
+            mask &= np.isfinite(gc[rField][subhaloIDsTodo])
+            mask &= (gc[rField][subhaloIDsTodo] != 0)
+
+        wTodoValid = np.where(mask)
+
+        subhaloIDsTodo = subhaloIDsTodo[wTodoValid]
+        nSubsDo = len(subhaloIDsTodo)
+
+        print(' Note: to make relative cuts on [%s] leaves [%d] subhalos to be processed.' % \
+            (', '.join([rField for rField,_,_ in subRestrictionsRel]), nSubsDo))
+
+        # similarly, we can apply a global pre-filter to the search targets, based on the 
+        # absolute min/max values of the subhalos to be processed
+        for rField, rMin, rMax in subRestrictionsRel:
+            global_min = gc[rField][subhaloIDsTodo].min() * rMin
+            global_max = gc[rField][subhaloIDsTodo].max() * rMax
+
+            ww = np.where( (gc[rField] < global_min) | (gc[rField] > global_max) )
+            validMask[ww] = 0
+
+        print(' Note: most conservative application of relative cuts leaves [%d] subhalos to search over.' % \
+            np.count_nonzero(validMask))
+
+    # apply (globally constant) restriction to those subhalos included in searches?
     if subRestrictions is not None:
         for rField, rFieldMin, rFieldMax in subRestrictions:
             with np.errstate(invalid='ignore'):
@@ -2199,22 +2235,6 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
     # create inverse mapping (subhaloID -> gc_search index)
     gc_search_index = np.zeros( nSubsTot, dtype='int32' ) - 1
     gc_search_index[gc_search['id']] = np.arange(gc_search['id'].size)
-
-    # if we will apply (locally variable) restrictions, the quantities must be non-nan 
-    # for the subhalos we are processing (efficiency improvement only)
-    if subRestrictionsRel is not None:
-        mask = np.ones( nSubsDo, dtype='bool' )
-
-        for rField, _, _ in subRestrictionsRel:
-            mask &= np.isfinite(gc[rField][subhaloIDsTodo])
-
-        wTodoValid = np.where(mask)
-
-        subhaloIDsTodo = subhaloIDsTodo[wTodoValid]
-        nSubsDo = len(subhaloIDsTodo)
-
-        print(' Note: to make relative cuts on [%s] leaves [%d] subhalos to be processed.' % \
-            (', '.join([rField for rField,_,_ in subRestrictionsRel]), nSubsDo))
 
     # initial guess (iterative)
     if op in ['d3_rad','d5_rad','d10_rad']:
@@ -2294,6 +2314,9 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
             # distance to the 3rd, 5th, 10th closest neighbor
             loc_inds = []
 
+            if np.count_nonzero(loc_search_mask) < target_ngb_num + 1:
+                continue # not enough global satisfying subhalos to find locals
+
             iter_num = 0
             while len(loc_inds) < target_ngb_num + 1:
                 # iterative search
@@ -2311,6 +2334,13 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
                 iter_num += 1
                 if iter_num > 100:
                     assert 0 # can continue, but this is catastropic
+
+            if 0:
+                # debug verify
+                wValid = np.where(loc_search_mask)[0]
+                loc_dists = sP.periodicDists(gc['SubhaloPos'][subhaloID,:], loc_search_pos[wValid])
+                loc_inds2 = np.where(loc_dists <= prevMaxSearchRad)[0]
+                assert np.array_equal(np.sort(loc_inds),np.sort(wValid[loc_inds2]))
 
             # if size was excessive, reduce for next time
             if len(loc_inds) > target_ngb_num * 2:
@@ -2339,7 +2369,7 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
             # debug verify
             wValid = np.where(loc_search_mask)[0]
             loc_dists = sP.periodicDists(gc['SubhaloPos'][subhaloID,:], loc_search_pos[wValid])
-            loc_inds2 = np.where(loc_dists <= maxSearchRad)[0]
+            loc_inds2 = np.where(loc_dists <= maxSearchRad[subhaloID])[0]
             assert np.array_equal(np.sort(loc_inds),np.sort(wValid[loc_inds2]))
 
         if op == 'count':
@@ -3412,7 +3442,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_30pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=30.0),
    'Subhalo_Mass_100pkpc_Stars' : \
-     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=100.0),
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=100.0,minStellarMass=10.0),
    'Subhalo_Mass_min_30pkpc_2rhalf_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='30h'),
    'Subhalo_Mass_puchwein10_Stars': \
@@ -3977,18 +4007,26 @@ fieldComputeFunctionMapping = \
      partial(subhaloCatNeighborQuant,quant='mstar_30pkpc_log',op='max',rad=1000.0,subRestrictions=None,cenSatSelect='cen'),
    'Subhalo_Env_sSFR_Median_1Mpc_Mstar_9-10' : \
      partial(subhaloCatNeighborQuant,quant='ssfr',op='median',rad=1000.0,subRestrictions=[['mstar_30pkpc_log',9.0,10.0]],cenSatSelect='cen'),
+
    'Subhalo_Env_Closest_Distance_Mstar_Gt8' : \
      partial(subhaloCatNeighborQuant,quant=None,op='closest_rad',subRestrictions=[['mstar_30pkpc_log',8.0,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_d5_Mstar_Gt8' : \
      partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictions=[['mstar_30pkpc_log',8.0,np.inf]],cenSatSelect='cen'),
+   'Subhalo_Env_d5_Mstar_Gt7' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictions=[['mstar_30pkpc_log',7.0,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_Closest_Distance_MstarRel_GtHalf' : \
-     partial(subhaloCatNeighborQuant,quant=None,op='closest_rad',subRestrictionsRel=[['mstar_30pkpc_log',0.5,np.inf]],cenSatSelect='cen'),
+     partial(subhaloCatNeighborQuant,quant=None,op='closest_rad',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_d5_MstarRel_GtHalf' : \
-     partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictionsRel=[['mstar_30pkpc_log',0.5,np.inf]],cenSatSelect='cen'),
+     partial(subhaloCatNeighborQuant,quant=None,op='d5_rad',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
+
    'Subhalo_Env_Closest_SubhaloID_MstarRel_GtHalf' : \
-     partial(subhaloCatNeighborQuant,quant='id',op='closest_quant',subRestrictionsRel=[['mstar_30pkpc_log',0.5,np.inf]],cenSatSelect='cen'),
+     partial(subhaloCatNeighborQuant,quant='id',op='closest_quant',subRestrictionsRel=[['mstar_30pkpc',0.5,np.inf]],cenSatSelect='cen'),
    'Subhalo_Env_Count_Mstar_Gt8_2rvir' : \
      partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictions=[['mstar_30pkpc_log',8.0,np.inf]],cenSatSelect='cen'),
+   'Subhalo_Env_Count_Mstar_Gt7_2rvir' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictions=[['mstar_30pkpc_log',7.0,np.inf]],cenSatSelect='cen'),
+   'Subhalo_Env_Count_MstarRel_GtTenth_2rvir' : \
+     partial(subhaloCatNeighborQuant,quant=None,op='count',rad='2rvir',subRestrictionsRel=[['mstar_30pkpc',0.1,np.inf]],cenSatSelect='cen'),
 
    # radial profiles: oxygen
    'Subhalo_RadProfile3D_Global_OVI_Mass' : \

@@ -46,6 +46,7 @@ quantDescriptions = {
   'mhalo_subfind'    : 'Parent dark matter (sub)halo total mass, defined by the gravitationally bound mass as determined by Subfind.',
   'mhalo_200_parent' : 'Total mass of the host/parent dark matter halo, defined by M_200_Crit. Satellites have the value of their host/parent halo.',
   'mhalo_vir'        : 'Total mass of the parent dark matter halo, defined by M_DeltaC_Crit where DeltaC is the overdensity based on spherical tophat collapse. Because satellites have no such measure, they are excluded.',
+  'halo_numsubs'     : 'Total number of subhalos in the parent dark matter halo (GroupNsubs). A value of one implies only a central subhalo exists, while a value of two indicates a central and one satellite, and so on. Because satellites have no such measure, they are excluded.',
   'rhalo_200'        : 'Virial radius of the parent dark matter halo, defined by R_200_Crit. Because satellites have no such measure, they are excluded.',
   'rhalo_500'        : 'The radius R500 of the parent dark matter halo, defined by R_500_Crit. Because satellites have no such measure, they are excluded.',
   'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
@@ -141,7 +142,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     # generally available (masses)
     quants_mass = ['mstar1','mstar2','mstar_30pkpc','mstar_r500',
                    'mgas1','mgas2','mhi_30pkpc','mhi2','mgas_r500','fgas_r500',
-                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mhalo_vir',
+                   'mhalo_200','mhalo_500','mhalo_subfind','mhalo_200_parent','mhalo_vir','halo_numsubs',
                    'mstar2_mhalo200_ratio','mstar30pkpc_mhalo200_ratio']
 
     quants_rad = ['rhalo_200','rhalo_500']
@@ -174,7 +175,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
 
     quants_rshock = ['rshock', 'rshock_rvir', 'rshock_ShocksMachNum_m2p2']
 
-    quants_env = ['delta5_mstar_gthalf']
+    quants_env = ['delta5_mstar_gthalf','delta5_mstar_gt8','num_ngb_mstar_gttenth_2rvir','num_ngb_mstar_gt7_2rvir']
 
     quants_color = ['color_C_gr','color_snap_gr','color_C_ur'] # color_nodust_UV, color_nodust_VJ, color_C-30kpc-z_UV, color_C-30kpc-z_VJ
 
@@ -334,6 +335,14 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         label = 'Halo Mass M$_{\\rm %s}$ [ log M$_{\\rm sun}$ ]' % mTypeStr
         #if clean: label = 'M$_{\\rm halo}$ [ log M$_{\\rm sun}$ ]'
 
+    if quantname in ['halo_numsubs','halo_nsubs','nsubs','numsubs']:
+        # number of subhalos in halo
+        vals = sP.groupCat(sub=quantname)
+
+        minMax = [0, 2]
+        if tight: minMax = [0,3]
+        label = 'N$_{\\rm sub}$ in Halo [ log ]'
+
     if quantname in ['rhalo_200','rhalo_500']:
         # R200crit or R500crit
         vals = sP.groupCat(sub=quantname)
@@ -423,16 +432,43 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [0.0, 5.0]
             if tight: minMax = [0.0, 5.0]
 
-    if quantname in ['delta5','delta5_mstar_gthalf']:
+    if quantname in ['delta5_mstar_gthalf','delta5_mstar_gt8','delta5_mstar_gt7']:
         # environment: galaxy overdensity, in terms of distance to the 5th nearest neighbor
         # whose stellar mass is at least half our own (default unless specified)
+        if '_gthalf' in quantname: relStr = 'M_{\star}/2'
+        if '_gt8' in quantname: relStr = '10^8 M_\odot'
+        if '_gt7' in quantname: relStr = '10^7 M_\odot'
+
         vals = sP.subhalos(quantname)
 
         vals += 1.0 # 1 + delta
 
-        label = 'log( 1 + $\delta_{5}$ )  [$M_{\\rm \star,ngb} \geq M_{\star}/2$]'
-        minMax = [-1.0, 3.0]
-        if tight: minMax = [-1.0, 4.0]
+        label = 'log( 1 + $\delta_{5}$ )  [$M_{\\rm \star,ngb} \geq %s$]' % relStr
+        minMax = [-2.0, 3.0]
+        if tight: minMax = [-2.0, 3.0]
+
+    if quantname in ['num_ngb_mstar_gttenth_2rvir','num_ngb_mstar_gt7_2rvir','num_ngb_mstar_gt8_2rvir']:
+        # environment: counts of nearby neighbors within a given 3d aperture, and satisfying 
+        # some minimum (relative) stellar mass criterion
+        vals = sP.subhalos(quantname)
+
+        if '_gthalf' in quantname:
+          relStr = 'M_{\star}/2'
+          maxVal = 5
+        if '_gttenth' in quantname:
+          relStr = 'M_{\star}/10'
+          maxVal = 10
+        if '_gt8' in quantname:
+          relStr = '10^8 M_\odot'
+          maxVal = 5
+        if '_gt7' in quantname:
+          relStr = '10^7 M_\odot'
+          maxVal = 10
+
+        label = 'N$_{\\rm neighbors}$  [$d < 2r_{\\rm vir}, M_{\\rm \star,ngb} \geq %s$]' % relStr
+        minMax = [0, maxVal]
+        if tight: minMax = [0, maxVal]
+        takeLog = False
 
     if quantname in ['mass_ovi','mass_ovii','mass_oviii','mass_o','mass_z',
                      'mass_halogas_cold','mass_halogas_sfcold','mass_halogasfof_cold','mass_halogasfof_sfcold',
@@ -1812,7 +1848,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             vals = ac[acField][:,isophot_inds[0]]
 
             label = 'MgII Emission Shape (Axis Ratio)' # (SB$_{\\rm %.1f}$)' % isophot_level
-            minMax = [0,1]
+            minMax = [0.95, 2.4]
             takeLog = False
         elif 'area' in quantname:
             # load auxCat

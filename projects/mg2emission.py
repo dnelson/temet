@@ -833,7 +833,23 @@ def paperPlots():
             #singleHaloImageMGII(sP, subID, conf=1, size=70, rotation=None, labelCustom=[label],
             #                    rVirFracs=[2*mg2_lumsize[subID]], fracsType='kpc', font=26, cbars=False, psf=True)
 
-    # figure 6: emission morphology: spherically symmetric or not? shape a/b axis ratio of different isophotes
+    # figure 6 - impact of environment: MgII halo size versus neighbor counts / overdensity
+    if 0:
+        mstar = [9.8, 10.2]
+        sColor = 'mstar_30pkpc_log'
+        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='num_ngb_mstar_gt7_2rvir', 
+                                 cenSatSelect='cen', xlim=[-0.5, 10.5], ylim=[0, 20], drawMedian=True, 
+                                 scatterPoints=True, scatterColor=sColor, nBins=24, 
+                                 qRestrictions=[['mstar_30pkpc_log',mstar[0],mstar[1]]],
+                                 clim=mstar, cRel=None, sizefac=sizefac, markersize=80)
+
+        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='delta5_mstar_gt7', 
+                                 cenSatSelect='cen', xlim=[-2,3], ylim=[0, 20], drawMedian=True, 
+                                 scatterPoints=True, scatterColor=sColor, nBins=24, 
+                                 qRestrictions=[['mstar_30pkpc_log',mstar[0],mstar[1]]],
+                                 clim=mstar, cRel=None, sizefac=sizefac, markersize=80)
+
+    # figure 7: emission morphology: spherically symmetric or not? shape a/b axis ratio of different isophotes
     if 0:
         xQuant = 'mstar_30pkpc_log'
         yQuant = 'mg2_shape_-18.5'
@@ -858,7 +874,7 @@ def paperPlots():
                                  alpha=alpha, cRel=cRel, maxPointsPerDex=maxPointsPerDex, 
                                  extraMedians=extraMedians, scatterCtName='matter', legendLoc='upper left')
 
-    # figure 7 - L_MgII vs Sigma_SFR, and r_1/2,MgII correlation with sSFR
+    # figure 8 - L_MgII vs Sigma_SFR, and r_1/2,MgII correlation with sSFR
     if 0:
         for cQuant in ['mg2_lum','mg2_lumsize']:
             quantMedianVsSecondQuant([sP], pdf=None, yQuants=['sfr2_surfdens'], xQuant='mstar_30pkpc_log', cenSatSelect='cen', 
@@ -870,7 +886,7 @@ def paperPlots():
                                      scatterPoints=True, scatterColor=cQuant, sizefac=sizefac, 
                                      alpha=0.7, maxPointsPerDex=1000, colorbarInside=False, lowessSmooth=True)
 
-    # figure 8: area of MgII in [kpc^2] vs M*/z
+    # figure 9: area of MgII in [kpc^2] vs M*/z
     if 0:
         xQuant = 'mstar_30pkpc_log'
         yQuant = 'mg2_area_-18.5'
@@ -899,7 +915,7 @@ def paperPlots():
                                  cenSatSelect=cenSatSelect, xlim=xlim, ylim=ylim, drawMedian=drawMedian, 
                                  sizefac=sizefac, extraMedians=extraMedians, f_post=f_post, legendLoc='upper left')
 
-    # figure 9 - relation of MgII flux and vrad (inflow vs outflow)
+    # figure 10 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
         mStarBin = [9.99, 10.01] #[10.4, 10.42]
         haloIDs = _select_haloIDs(sP, mStarBin)
@@ -913,46 +929,16 @@ def paperPlots():
                          ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
                          normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post, addHistY=50)
 
-    # figure 10 - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
+    # figure 11 - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
     if 0:
         cumulativeLumVsVrad(sP)
-
-    # fig X: impact of environment, merger history/recent mergers/tidal features etc?
-    if 0:
-        xQuant = 'mstar_30pkpc_log'
-        yQuant = 'mg2_lumsize' # tbd
-        cenSatSelect = 'cen'
-
-        xlim = [8.5, 11.5]
-        ylim = [1, 25]
-        drawMedian = True
-        nBins = 30
-        scatterPoints = True
-        scatterColor = 'delta5'
-        markersize = 40
-        cRel = [0.5,1.5,False]
-
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=[yQuant], xQuant=xQuant, nBins=nBins, 
-                                 cenSatSelect=cenSatSelect, xlim=xlim, ylim=ylim, drawMedian=drawMedian, 
-                                 scatterPoints=scatterPoints, scatterColor=scatterColor, 
-                                 cRel=cRel, markersize=markersize, legendLoc='upper left')
 
     # TODO: How can we use the spatially resolved spectroscopy to infer the actual 3D spatial 
     # and kinematics distribution of MgII (and hence of the 10^4K CGM)?
 
-    # figure X: impact of stellar orientation (face-on vs edge-on) on MgII size, morphology
-    if 0:
-        inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
-        inclinationPlotDriver(sP, quant='inclination_mg2_shape_-20.0')
-
-    # figure X - line-center optical depth for MgII all-sky map, show low values
+    # figure 12 - line-center optical depth for MgII all-sky map
     if 0:
         singleHaloImageMGII(sP, subhaloID, conf=6, font=26)
-
-    # figure X - individual SB profiles
-    if 0:
-        mStarBins = [ [10.9,11.1] ] # [10.0,10.1]
-        radialSBProfiles([sP], mStarBins, indiv=70, xlim=[0,30], psf=True)
 
     # figure A1 - impact of dust depletion
     if 0:
@@ -969,3 +955,40 @@ def paperPlots():
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1] ]
         sPs = [simParams(run=run, redshift=0.7) for run in runs]
         radialSBProfiles(sPs, mStarBins, xlim=[0,50], ylim=[-23.0,-16.5])
+
+    # explore: impact of environment or merger history/recent mergers
+    if 0:
+        mg2quants = ['mg2_lumsize','mg2_lum','mg2_lumsize','mg2_area_-18.5',
+                     'mg2_shape_-18.5','mg2_shape_-19.5']
+        envquants = ['num_ngb_mstar_gt7_2rvir','delta5_mstar_gt8','num_mergers_minor_gyr',
+                     'num_mergers_minor','num_mergers_major']
+
+        for quant in mg2quants:
+            for envquant in envquants:
+                xQuant = 'mstar_30pkpc_log'
+                xlim = [8.0, 11.5]
+
+                cRel = None if 'num_' in envquant else [0.5,1.5,False]
+
+                quantMedianVsSecondQuant([sP], pdf=None, yQuants=[quant], xQuant=xQuant, nBins=35, 
+                                         cenSatSelect='cen', xlim=xlim, ylim=[0,25], drawMedian=True, 
+                                         scatterPoints=True, scatterColor=envquant, 
+                                         cRel=cRel, markersize=40)
+
+                quantMedianVsSecondQuant([sP], pdf=None, yQuants=[quant], xQuant=envquant, nBins=35, 
+                                         cenSatSelect='cen', xlim=None, drawMedian=True, 
+                                         scatterPoints=True, scatterColor=xQuant, markersize=40)
+
+                quantMedianVsSecondQuant([sP], pdf=None, yQuants=[envquant], xQuant=xQuant, nBins=35, 
+                                         cenSatSelect='cen', xlim=xlim, drawMedian=True, 
+                                         scatterPoints=True, scatterColor=quant, markersize=40)
+
+    # explore - individual SB profiles
+    if 0:
+        mStarBins = [ [10.9,11.1] ] # [10.0,10.1]
+        radialSBProfiles([sP], mStarBins, indiv=70, xlim=[0,30], psf=True)
+
+    # explore: impact of stellar orientation (face-on vs edge-on) on MgII size, morphology
+    if 0:
+        inclinationPlotDriver(sP, quant='inclination_mg2_lumsize')
+        inclinationPlotDriver(sP, quant='inclination_mg2_shape_-20.0')
