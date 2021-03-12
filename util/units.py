@@ -1,5 +1,7 @@
 """
-Physical units, conversions.
+Conversion from 'code units' to physical units, conversions between different unit systems, and 
+derivations of common halo properties (e.g. virial temperature) and cosmological quantities 
+(e.g. age at a given redshift).
 """
 import numpy as np
 from util.helper import logZeroSafe, logZeroNaN, logZeroMin
@@ -648,18 +650,18 @@ class units(object):
 
     def codeDensToPhys(self, dens, cgs=False, numDens=False, msunpc3=False, totKpc3=False):
         """ Convert mass density comoving->physical and add little_h factors. 
-
+        Unless overridden by a parameter option, the default return units are :math:`[10^{10} M_\odot/\\rm{kpc}^3]`.
+        
         Args:
           dens (array[float]): density in code units, should be 
-            `[10^10 Msun/h / (ckpc/h)^3]` = `[10^10 Msun h^2 / ckpc^3]`. Unless overridden by 
-            a parameter option, the default return units are [10^10 Msun/kpc^3].
+            :math:`[10^{10} M_\odot/h / (ckpc/h)^3]` = :math:`[10^{10} M_\odot h^2 / ckpc^3]`. 
           cgs (bool): if True, return units are [g/cm^3].
           numDens (bool): if True and cgs == True, return units are [1/cm^3].
           msunpc3 (bool): if True, return units are [Msun/pc^3].
           totKpc3 (bool): if True, return units are [[orig units]/kpc^3].
 
         Returns:
-          dens_phys (array[float]): densities in physical units, as specified above.
+          array[float]: densities in physical units, as specified above.
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:
@@ -709,18 +711,18 @@ class units(object):
 
     def codeColDensToPhys(self, colDens, cgs=False, numDens=False, msunKpc2=False, totKpc2=False):
         """ Convert a mass column density [mass/area] from comoving -> physical and remove little_h factors.
+        Unless overridden by a parameter option, the default return units are :math:`[10^{10} M_{\odot}/kpc^2]`.
 
         Args:
           colDens (ndarray): column densities in code units, which should be 
-            `[10^10 Msun/h / (ckpc/h)^2]` = `[10^10 Msun * h / ckpc^2].` Unless overridden by 
-            a parameter option, the default return units are [10^10 Msun/kpc^2].
+            :math:`[10^{10} M_{\odot}/h / (ckpc/h)^2]` = :math:`[10^{10} M_{\odot} * h / ckpc^2].` 
           cgs (bool): if True, return units in [g/cm^2].
           numDens (bool): if True and cgs == True, return units in [1/cm^2], which is in fact [H atoms/cm^2].
           msunKpc2 (bool): return units in [Msun / kpc^2].
           totKpc2 (bool): return units in [[orig units] / kpc^2].
         
         Returns:
-          colDensPhys (ndarray[float32]) physical column densities, units depending on the above.
+          ndarray[float32]: physical column densities, units depending on the above.
         """
         assert self._sP.redshift is not None
         if numDens and not cgs:

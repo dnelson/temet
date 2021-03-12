@@ -666,9 +666,8 @@ def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, 
         distances to single closest match only.
 
     Returns:
-      hsml (ndarray[float]): derived smoothing length for each input point (if not nearest).
-      dists (ndarray[int]): derived distances for each input point (if nearest).
-      indices (ndarray[int]): derived indices for each input point (if nearest).
+      ndarray[float or int]: derived smoothing length for each input point (if not ``nearest``). Instead if 
+      ``nearest == True``, then a 2-tuple of ``(dists,indices)``.
     """
     # input sanity checks
     treeDims  = [3]
@@ -810,7 +809,7 @@ def calcQuantReduction(pos, quant, hsml, op, boxSizeSim, posSearch=None, treePre
       nThreads (int): do multithreaded calculation (on treefind, while tree construction remains serial).
 
     Returns:
-      result (ndarray[float]): reduction operation applied for each input.
+      ndarray[float]: reduction operation applied for each input.
     """
     # input sanity checks
     ops = {'sum':1, 'max':2, 'min':3, 'mean':4, 'kernel_mean':5, 'count':6}
@@ -933,8 +932,8 @@ def calcParticleIndices(pos, posSearch, hsmlSearch, boxSizeSim, posMask=None, tr
                         i.e the exact return of buildFullTree().
 
     Returns:
-      result (ndarray[int]): list of indices into `pos` of the neighbors within the search distance of 
-        the search position.
+      ndarray[int]: list of indices into `pos` of the neighbors within the search distance of 
+      the search position.
     """
     # input sanity checks
     treeDims  = [3]

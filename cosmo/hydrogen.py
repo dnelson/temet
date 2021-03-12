@@ -15,7 +15,7 @@ def photoCrossSec(freq, atom='H'):
       atom (str): specify coefficients.
 
     Returns:
-      cross (ndarray[float]): cross-section [cm^2].
+      ndarray[float]: cross-section [cm^2].
     """
     if atom == 'H':
         nuthr  = 13.6

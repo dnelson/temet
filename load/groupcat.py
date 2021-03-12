@@ -158,6 +158,19 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                     wSat = np.where(mask == 0)
                     r[field][wSat] = np.nan
 
+            # number of satellites in (fof) halo, only for centrals
+            if quantName in ['halo_numsubs','halo_nsubs','nsubs','numsubs']:
+                haloField = 'GroupNsubs'
+                gc = groupCat(sP, fieldsHalos=[haloField,'GroupFirstSub'], fieldsSubhalos=['SubhaloGrNr'])
+
+                r[field] = gc['halos'][haloField][gc['subhalos']].astype('float32') # int dtype
+
+                # satellites given nan
+                mask = np.zeros(gc['subhalos'].size, dtype='int16')
+                mask[gc['halos']['GroupFirstSub']] = 1
+                wSat = np.where(mask == 0)
+                r[field][wSat] = np.nan
+
             # subhalo mass [msun or log msun]
             if quantName in ['mhalo_subfind']:
                 gc = groupCat(sP, fieldsSubhalos=['SubhaloMass'])
@@ -327,11 +340,10 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             # environment: distance to 5th nearest neighbor with M* at least half of this subhalo [code units]
             # or overdensity (linear dimensionless) if 'delta'
             if quantName in ['d5_mstar_gthalf','delta5_mstar_gthalf',
-                             'd5_mstar_gt8','delta5_mstar_gt8']:
-                if '_gthalf' in quantName:
-                    acField = 'Subhalo_Env_d5_MstarRel_GtHalf'
-                if '_gt8' in quantName:
-                    acField = 'Subhalo_Env_d5_Mstar_Gt8'
+                             'd5_mstar_gt8','delta5_mstar_gt8','delta5_mstar_gt7']:
+                if '_gthalf' in quantName: acField = 'Subhalo_Env_d5_MstarRel_GtHalf'
+                if '_gt8' in quantName: acField = 'Subhalo_Env_d5_Mstar_Gt8'
+                if '_gt7' in quantName: acField = 'Subhalo_Env_d5_Mstar_Gt7'
 
                 ac = sP.auxCat(fields=[acField], expandPartial=True)
                 r[field] = ac[acField]
@@ -344,11 +356,18 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                     r[field] = delta_N
 
             # environment: counts of neighbors (linear dimensionless)
-            if quantName in ['num_neighbors','num_ngb_mstar_gttenth_2rvir']:
-                acField = 'Subhalo_Env_Count_MstarRel_GtTenth_2rvir'
+            # e.g. 'num_ngb_mstar_gttenth_2rvir','num_ngb_mstar_gt7_2rvir','num_ngb_mstar_gt7_2rvir'
+            if 'num_ngb_' in quantName:
+                if '_gttenth' in quantName: relStr = 'MstarRel_GtTenth'
+                if '_gthalf' in quantName: relStr = 'MstarRel_GtHalf'
+                if '_gt7' in quantName: relStr = 'Mstar_Gt7'
+                if '_gt8' in quantName: relStr = 'Mstar_Gt8'
+
+                distStr = '2rvir'
+                acField = 'Subhalo_Env_Count_%s_%s' % (relStr,distStr)
 
                 ac = sP.auxCat(fields=[acField], expandPartial=True)
-                r[field] = ac[acField]
+                r[field] = ac[acField].astype('float32') # int dtype
 
             # auxCat: photometric/broadband colors (e.g. 'color_C_gr', 'color_A_ur')
             if 'color_' in quantName:

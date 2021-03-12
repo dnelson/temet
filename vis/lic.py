@@ -44,11 +44,11 @@ def line_integral_convolution(input, velocity, kernel, origin=0, order=3,
         multiplication equals ``maximum_velocity``.
 
     Returns:
-      line_integral_convolution (ndarray): Returned array of same shape as `input`.
+      ndarray: Returned array of same shape as ``input``.
 
     See Also:
       * scipy.ndimage.filters.convolve1d : Calculate a one-dimensional convolution
-                                       with a kernel.
+        with a kernel.
       * scipy.integrate.ode : Integrate an ordinary differential equation.
       * http://dl.acm.org/citation.cfm?id=166151
     """

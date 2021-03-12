@@ -899,8 +899,10 @@ def instantaneousMassFluxes(sP, pSplit=None, ptType='gas', scope='subhalo_wfuzz'
         the halo, rather than in absolute physical [km/s] units.
 
     Returns:
-      result (:py:class:`~numpy.ndarray`): 1d or 2d array, containing result(s) for each processed subhalo.
-      attrs (dict): metadata.
+      tuple: a 2-tuple composed of:
+      
+      - **result** (:py:class:`~numpy.ndarray`): 1d or 2d array, containing result(s) for each processed subhalo.
+      - **attrs** (dict): metadata.
     """
     minStellarMass = 7.4 # log msun (30pkpc values)
     cenSatSelect = 'cen' # cen, sat, all
@@ -1602,8 +1604,11 @@ def massLoadingsSN(sP, pSplit, sfr_timescale=100, outflowMethod='instantaneous',
         the halo, rather than in absolute physical [km/s] units.
 
     Returns:
-      eta (ndarray[float][nSubsInAuxCat,nRadBins,nVradCuts]): mass loading factors per subhalo.
-      attrs (dict): metadata.
+      tuple: a 2-tuple composed of:
+      
+      - **result** (ndarray[float][nSubsInAuxCat,nRadBins,nVradCuts]): 3d array, 
+        containing result(s) for each processed subhalo.
+      - **attrs** (dict): metadata.
     """
     assert sfr_timescale in [0, 10, 50, 100] # Myr
     assert fluxKE + fluxP in [0,1] # at most one True

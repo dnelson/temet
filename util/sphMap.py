@@ -971,8 +971,8 @@ def sphMap(pos, hsml, mass, quant, axes, boxSizeImg, boxSizeSim, boxCen, nPixels
       minIntProj (bool): perform a minimum intensity projection, instead of the usual weighting.
 
     Returns:
-      map (ndarray[float][nPixels]): computed 2D or 3D array, depositing either `mass` or `mass`-weighted `quant`.
-      dens_map, quant_map (ndarray,ndarray): if ``multi`` is True, then a 2-tuple of both arrays separately.
+      ndarray[float][nPixels]: computed 2D or 3D array, depositing either `mass` or `mass`-weighted `quant`.
+      If ``multi`` is True, then a 2-tuple of the ``(dens_map, quant_map)`` arrays separately.
 
     Notes:
       * the transpose of :py:func:`_calcSphMap()` is taken such that with default plotting approaches e.g.

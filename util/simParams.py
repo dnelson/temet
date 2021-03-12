@@ -18,7 +18,17 @@ the two follow calls are functionally identical:
    masses = load.snapshot.snapshotSubset(sP, 'gas', 'mass')
    masses = sP.snapshotSubset('gas', 'mass')
 
-The second providing a convenient short-hand. Note that upon creation, each 
+The second providing a convenient short-hand. If you were using the public data release scripts 
+alone, these two calls would also be identical to:
+
+.. code-block:: python
+
+    import illustris_python as il
+    basePath = 'sims.TNG/TNG100-1/output/'
+    snap = 99
+    masses = il.snapshot.loadSubset(basePath, snap, 'gas', fields=['Masses'])
+
+Note that upon creation, each 
 :py:class:`simParams` object instantiates and fills a :py:class:`util.units` class which is 
 automatically tailored to this simulation and its unit system. For example
 
@@ -27,7 +37,7 @@ automatically tailored to this simulation and its unit system. For example
    dists = sP.snapshotSubset('gas', 'rad', haloID=1234)
    dists_kpc = sP.units.codeLengthToKpc(dists)
 
-converts the original ``dists`` arrary from code units to physical kpc. While "code units" 
+converts the original ``dists`` array from code units to physical kpc. While "code units" 
 typically implies ``ckpc/h``, this particular simultion could be instead using a Mpc-unit 
 system, and this difference is handled transparently, as are different values of `h` for 
 different simulations.

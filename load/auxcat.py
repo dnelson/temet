@@ -31,7 +31,16 @@ def auxCat(sP, fields=None, pSplit=None, reCalculate=False, searchExists=False, 
       expandPartial (bool): if data was only computed for a subset of all subhalos, expand this now into a total nSubs sized array.
 
     Returns:
-      dict.
+      dict: A catalog dict with three entries for each ``field``, which are 'field' (ndarray), 'field_attrs' 
+      (dict of metadata), and 'subhaloIDs', which correspond to the first dimension of the 'field' array.
+
+    Notes:
+      Catalogs constructed without pSplit parallelism will be saved sparse if possible, with an array whose 
+      size is smaller than sP.numSubhalos and with subhaloIDs providing the mapping. However, catalogs 
+      constructed with pSplit parallelism will usually be expanded to full rather than sparse 
+      representations (denoted by writeSparseCalcFullSize). In this second case, unprocessed always have 
+      a result of np.nan which should always be filtered out, each with a corresponding entry of -1 in 
+      subhaloIDs.
     """
     assert np.sum([el is not None for el in [indRange,subhaloIDs]]) in [0,1] # specify at most one
 
@@ -231,6 +240,8 @@ def _expand_partial(sP, r, field):
 
     if r['subhaloIDs'].size == nSubsTot:
         return r[field]
+
+    assert r['subhaloIDs'].min() >= 0, 'Have a -1 entry in subhaloIDs, should not occur.'
     
     if r['subhaloIDs'].size < nSubsTot:
         shape = np.array(r[field].shape)

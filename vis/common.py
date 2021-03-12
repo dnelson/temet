@@ -12,7 +12,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage import gaussian_filter
-from vis.lic import line_integral_convolution
 
 from util.sphMap import sphMap
 from util.treeSearch import calcHsml
@@ -1749,6 +1748,8 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
 
     # temporary: line integral convolution test
     if 'licMethod' in kwargs and kwargs['licMethod'] is not None:
+        from vis.lic import line_integral_convolution
+        
         # temp config
         vecSliceWidth = kwargs['licSliceDepth']
         pixelFrac = kwargs['licPixelFrac']

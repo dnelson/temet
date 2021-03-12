@@ -695,7 +695,7 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
                              sizefac=1.0, alpha=1.0, nBins=50, 
                              qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
-                             scatterPoints=False, markersize=4.0, maxPointsPerDex=None, scatterColor=None, scatterCtName=None, 
+                             scatterPoints=False, markersize=6.0, maxPointsPerDex=None, scatterColor=None, scatterCtName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
                              extraMedians=None, legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
@@ -757,11 +757,13 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
     """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if extraMedians is None: extraMedians = [] # avoid mutable keyword argument
-    if scatterColor is not None or maxPointsPerDex is not None: assert scatterPoints
+    if scatterColor is not None or maxPointsPerDex is not None: scatterPoints = True # enable
     if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
     if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
 
     yQuants = iterable(yQuants)
+    sPs = iterable(sPs)
+
     nRows = int(np.floor(np.sqrt(len(yQuants))))
     nCols = int(np.ceil(len(yQuants) / nRows))
 
@@ -787,7 +789,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
         if f_pre is not None:
             f_pre(ax)
 
-        for j, sP in enumerate(iterable(sPs)):
+        for j, sP in enumerate(sPs):
             # loop over each run and add to the same plot
             print(' ',yQuant,xQuant,sP.simName,cenSatSelect)
 

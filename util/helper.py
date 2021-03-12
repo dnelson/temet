@@ -1131,7 +1131,7 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
         (matplotlib colormaps only).
 
     Returns:
-      cmap (:py:class:`matplotlib.colors.Colormap`): requested colormap.
+      :py:class:`matplotlib.colors.Colormap`: requested colormap.
     """
     if ctName is None: return None
 
