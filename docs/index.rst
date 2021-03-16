@@ -17,6 +17,8 @@ This code was written by Dylan Nelson (dnelson@uni-heidelberg.de).
     :titlesonly:
     :caption: General Usage
 
+    quantities
+    catalogs
     cookbook
     parallelism
 
@@ -25,6 +27,7 @@ This code was written by Dylan Nelson (dnelson@uni-heidelberg.de).
     :caption: Reference
 
     source/modules
+
 
 Index
 =====

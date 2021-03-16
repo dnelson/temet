@@ -91,14 +91,14 @@ run_abbreviations = {'illustris-1':['illustris',1820],
 
 class simParams:
     # paths and names
-    simPath     = ''    # root path to simulation snapshots and group catalogs
-    arepoPath   = ''    # root path to Arepo and param.txt for e.g. projections/fof
-    savPrefix   = ''    # save prefix for simulation (make unique, e.g. 'G')
-    simName     = ''    # label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
-    simNameAlt  = ''    # alternative label for simulation names (e.g. "L75n1820FP", "L205n1250TNG_DM")
-    plotPath    = ''    # working path to put plots
-    derivPath   = ''    # path to put derivative files ("data.files/")
-    postPath    = ''    # path to put postprocessed files ("postprocessing/")
+    simPath     = ''    #: root path to simulation snapshots and group catalogs
+    arepoPath   = ''    #: root path to Arepo and param.txt for e.g. projections/fof
+    savPrefix   = ''    #: save prefix for simulation (make unique, e.g. 'G')
+    simName     = ''    #: label to add to plot legends (e.g. "Illustris-2", "TNG300-1")
+    simNameAlt  = ''    #: alternative label for simulation names (e.g. "L75n1820FP", "L205n1250TNG_DM")
+    plotPath    = ''    #: working path to put plots
+    derivPath   = ''    #: path to put derivative files ("data.files/")
+    postPath    = ''    #: path to put postprocessed files ("postprocessing/")
 
     # snapshots
     groupOrdered  = None  # False: IDs stored in group catalog, True: snapshot is group ordered (by type) 

@@ -2128,6 +2128,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     log = True # does caller need to take log10() of vals to obtain the units indicated in the label?
 
     ptType = ptType.lower()
+    ptProperty = ptProperty.lower()
     typeStr = ptType.capitalize()
 
     #if '_real' in typeStr: typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
@@ -2139,7 +2140,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [3.5, 8.0]
         log = False
 
-    if ptProperty == 'temp_old':
+    if ptProperty in ['temp_old']:
         label = 'Gas Temperature (Uncorrected) [ log K ]'
         lim = [2.0, 8.0]
         if haloLims: lim = [3.5, 8.0]
@@ -2166,31 +2167,31 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [-5.0, 3.0]
         log = True
 
-    if ptProperty == 'dens_critratio':
+    if ptProperty in ['dens_critratio']:
         label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$ [ log ]'
         lim = [-6.0, 5.0]
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
-    if ptProperty == 'dens_critb':
+    if ptProperty in ['dens_critb']:
         label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$ [ log ]'
         lim = [-2.0, 9.0]
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
-    if ptProperty == 'density':
+    if ptProperty in ['density']:
         label = '$\\rho_{\\rm gas}$ [ log 10$^{10}$ M$_{\\rm sun}$ h$^2$ ckpc$^{-3}$ ]'
         lim = [-12.0, 0.0]
         if haloLims: lim = [-4.0, 2.0]
         log = True
 
-    if ptProperty == 'mass':
+    if ptProperty in ['mass']:
         label = '%s Mass [ 10$^{10}$ M$_{\\rm sun}$ h$^{-1}$ ]' % typeStr
         lim = [-3.0, 0.0]
         if haloLims: lim = [-6.0, -2.0]
         log = True
 
-    if ptProperty == 'mass_msun':
+    if ptProperty in ['mass_msun']:
         label = '%s Mass [ log M$_{\\rm sun}$ ]' % typeStr
         lim = [5.0, 7.0]
         if haloLims: lim = [3.0, 5.0]
@@ -2220,7 +2221,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         lim = [-15.0, -5.0]
         if haloLims: lim = [-9.0, -4.0]
         log = True
-    if ptProperty.lower() in ['bmag_ug','bfieldmag_ug']:
+    if ptProperty in ['bmag_ug','bfieldmag_ug']:
         label = 'Magnetic Field Strength [ log $\mu$G ]'
         lim = [-9.0, 3.0]
         if haloLims: lim = [-3.0, 2.0]
@@ -2269,14 +2270,14 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: lim = [0.0, 5.0]
         log = False
 
-    if ptProperty == 'p_gas_linear':
+    if ptProperty in ['p_gas_linear']:
         assert ptType == 'gas'
         label = 'Gas Pressure [ log K cm$^{-3}$ ]'
         lim = [-1.0,7.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty == 'p_b_linear':
+    if ptProperty in ['p_b_linear']:
         label = 'Gas Magnetic Pressure [ log K cm$^{-3}$ ]'
         lim = [-15.0, 16.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
@@ -2421,21 +2422,21 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty == 'mass_sfr_dt':
+    if ptProperty in ['mass_sfr_dt']:
         assert ptType == 'gas'
         label = 'Gas Mass / SFR / Timestep [ log ]'
         lim = [-2.0,5.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty == 'mass_sfr_dt_hydro':
+    if ptProperty in ['mass_sfr_dt_hydro']:
         assert ptType == 'gas'
         label = 'Gas Mass / SFR / HydroTimestep [ log ]'
         lim = [-2.0,5.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty == 'dt_yr':
+    if ptProperty in ['dt_yr']:
         label = '%s Timestep [ log yr ]' % typeStr
         lim = [1.0, 6.0]
         if haloLims: lim = [1.0, 5.0]
@@ -2476,7 +2477,7 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         lim = [-1000, 1000]
         if haloLims: lim = [-300, 300]
         log = False
-    if ptProperty in ['vrelmag','halo_vrelmag','relvelmag','halo_relvelmag','relative_velmag','relative_vmag']:
+    if ptProperty in ['vrelmag','halo_vrelmag','relvelmag','relative_vmag']:
         label = '%s Halo-Relative Velocity Magnitude [ km/s ]' % typeStr
         lim = [0, 1000]
         if haloLims: lim = [0, 400]
@@ -2512,8 +2513,8 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
       if haloLims: pass
       log = True
 
-    # non-custom fields (units are correct out of snapshot / code units)
-    if ptProperty == 'sfr':
+    # non-custom fields (units are correct out of snapshot / code units, i.e. no processing)
+    if ptProperty in ['sfr']:
         assert ptType == 'gas'
         label = 'Star Formation Rate [ log M$_{\\rm sun}$/yr ]'
         lim = [-4.0, 2.0]

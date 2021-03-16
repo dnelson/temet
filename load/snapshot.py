@@ -1255,7 +1255,7 @@ def snapshotSubset(sP, partType, fields,
 
             r[field] = sP.units.particleRelativeVelInKmS(vel, refVel)
 
-        if field in ['vrelmag','halo_vrelmag','relvelmag','halo_relvelmag','relative_velmag','relative_vmag']:
+        if field in ['vrelmag','halo_vrelmag','relvelmag','relative_vmag']:
             vel = snapshotSubset(sP, partType, 'halo_relvel', **kwargs)
             r[field] = np.sqrt( vel[:,0]**2 + vel[:,1]**2 + vel[:,2]**2 )
 
