@@ -174,7 +174,7 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
 
     # defaults (all panel fields that can be specified)
     #subhaloInd  = 0            # subhalo (subfind) index to visualize
-    #hInd        = 0            # halo index for zoom run
+    hInd        = None          # halo index for zoom run
     #run         = 'illustris'  # run name
     #res         = 1820         # run resolution
     #redshift    = 0.0          # run redshift
