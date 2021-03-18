@@ -170,3 +170,13 @@ add the following lines to your ``~/.bashrc`` file for permanence
     export PATH=$HOME/.local/bin:$PATH
 
 Now you're all set!
+
+
+Updating
+--------
+
+The instructions above install a local copy into your home directory, which you are free to edit and modify as required. At any time you can then update your copy to the newest version, pulling in any changes, bugfixes, and so on, with::
+
+    git pull
+
+However if you have made changes in the meantime, you may see a message similar to "error: Your local changes to the following files would be overwritten by merge. Please commit your changes or stash them before you merge." In this case, you want to keep your local work, but also make the update. Please read this `quick git tutorial <https://happygitwithr.com/pull-tricky.html>`_ on the topic.

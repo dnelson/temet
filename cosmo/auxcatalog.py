@@ -39,6 +39,11 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     * Method B: do a full snapshot load per type, then halo loop and slice per FoF, to cut down on I/O ops. 
     * Method C: per type: full snapshot load, spherical aperture search per FoF (brute-force global).
     * Method D: per type: full snapshot load, construct octtree, spherical aperture search per FoF (global).
+
+    Warning:
+      This was an early example of a catalog generating function, and is left mostly for reference as a 
+      particularly simple example. In practice, its functionality can be superseded by 
+      :py:func:`subhaloRadialReudction`.
     """
 
     # config
@@ -2116,7 +2121,7 @@ def subhaloCatNeighborQuant(sP, pSplit, quant, op, rad=None, subRestrictions=Non
       cenSatSelect (str): exclusively process 'cen', 'sat', or 'all'.
 
     Returns:
-      tuple: a 2-tuple composed of:
+      a 2-tuple composed of
       
       - **result** (:py:class:`~numpy.ndarray`): 1d or 2d array, containing result(s) for each processed subhalo.
       - **attrs** (dict): metadata.
@@ -3797,7 +3802,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_z' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True),
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True), # main model, with 1 projection per
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr2d' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='efr2d', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr2d_rad30pkpc' : \

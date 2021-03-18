@@ -140,6 +140,8 @@ In general, loading an auxCat which has already been created:
 simParams
 ---------
 
+Testing.
+
 .. automodule:: util.simParams
    :noindex:
 

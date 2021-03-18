@@ -64,7 +64,10 @@ class ExecDirective(Directive):
 
 # -- General configuration ---------------------------------------------------
 
-extensions = ['sphinx.ext.mathjax','sphinx.ext.autodoc','sphinx.ext.napoleon']
+extensions = ['sphinx.ext.mathjax',
+              'sphinx.ext.autodoc',
+              'sphinx.ext.napoleon',
+              'sphinx.ext.intersphinx']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates'] # we use this for apidoc -t templates instead
@@ -83,11 +86,22 @@ def setup(app):
     app.add_css_file('style.css')
     app.add_directive('exec', ExecDirective)
 
+# -- Intersphinx -------------------------------------------------------------
+
+intersphinx_mapping = {
+    'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
+    'python': ('https://docs.python.org/3/', None),
+    'numpy': ('https://numpy.org/doc/stable/', None),
+    'h5py': ('https://docs.h5py.org/en/latest/', None),
+}
+
 # -- Options for HTML output -------------------------------------------------
 
 html_theme = 'sphinx_rtd_theme'
 html_show_sphinx = False
 html_show_copyright = False
+html_title = 'documentation'
+html_logo = '_static/logo_sm.png'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

@@ -1,9 +1,22 @@
-tenet
-=====
 
-Welcome to the documentation for the python scripts.
+tenet toolkit: documentation
+============================
 
-This code was written by Dylan Nelson (dnelson@uni-heidelberg.de).
+Welcome to the documentation for **tenet**, a python toolkit for the execution, analysis, and 
+visualization of numerical simulations. Specifically, hydrodynamical simulations run with the 
+`AREPO <https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/>`_ moving mesh code, as well as codes 
+producing similarly structured outputs including 
+`GIZMO <http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html>`_ and 
+`SWIFT <http://swift.dur.ac.uk/>`_.
+
+In addition, this codebase is focused on cosmological simulations for large-scale structure and 
+galaxy formation, particularly those processed with a substructure identification algorithm 
+(halo finder) such as ``subfind``, including `Illustris <https://www.illustris-project.org/>`_, 
+`IllustrisTNG <https://www.tng-project.org/>`_, EAGLE, and so on. Generally speaking, any 
+simulation data available from the TNG public data release platform can be directly analyzed 
+with this toolkit.
+
+.. image:: _static/logo_lg.png
 
 .. toctree::
     :titlesonly:
@@ -15,18 +28,28 @@ This code was written by Dylan Nelson (dnelson@uni-heidelberg.de).
 
 .. toctree::
     :titlesonly:
-    :caption: General Usage
+    :caption: Usage
 
     quantities
     catalogs
+    visualization
+    plotting
     cookbook
-    parallelism
+    advanced
 
 .. toctree::
     :maxdepth: 1
     :caption: Reference
 
     source/modules
+
+
+Citation and Acknowledgment
+===========================
+
+This code was originally written by Dylan Nelson (dnelson@uni-heidelberg.de).
+
+If you find it useful and/or make use of it for a scientific publication, please cite `Nelson, D. (in prep)`.
 
 
 Index

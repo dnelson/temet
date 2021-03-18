@@ -2128,162 +2128,162 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
     log = True # does caller need to take log10() of vals to obtain the units indicated in the label?
 
     ptType = ptType.lower()
-    ptProperty = ptProperty.lower()
+    prop = ptProperty.lower()
     typeStr = ptType.capitalize()
 
     #if '_real' in typeStr: typeStr = 'Actual ' + typeStr.split('_real')[0] # i.e. 'wind_real' -> 'Actual Wind'
 
     # fields:
-    if ptProperty in ['temp', 'temp_sfcold']:
+    if prop in ['temp', 'temp_sfcold']:
         label = 'Gas Temperature [ log K ]'
         lim = [2.0, 8.0]
         if haloLims: lim = [3.5, 8.0]
         log = False
 
-    if ptProperty in ['temp_old']:
+    if prop in ['temp_old']:
         label = 'Gas Temperature (Uncorrected) [ log K ]'
         lim = [2.0, 8.0]
         if haloLims: lim = [3.5, 8.0]
         log = False
 
-    if ptProperty in ['temp_sfcold_linear', 'temp_linear']:
+    if prop in ['temp_sfcold_linear', 'temp_linear']:
         assert ptType == 'gas'
         label = 'Gas Temperature [ log K ]'
         lim = [3.5, 7.2]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['nh','hdens']:
+    if prop in ['nh','hdens']:
         assert ptType == 'gas'
         label = 'Gas Hydrogen Density n$_{\\rm H}$ [ log cm$^{-3}$ ]'
         lim = [-9.0,3.0]
         if haloLims: lim = [-5.0, 0.0]
         log = True
 
-    if ptProperty in ['numdens']:
+    if prop in ['numdens']:
         assert ptType == 'gas'
         label = 'Gas Number Density [ log cm$^{-3}$ ]'
         lim = [-9.0,3.0]
         if haloLims: lim = [-5.0, 3.0]
         log = True
 
-    if ptProperty in ['dens_critratio']:
+    if prop in ['dens_critratio']:
         label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit}$ [ log ]'
         lim = [-6.0, 5.0]
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
-    if ptProperty in ['dens_critb']:
+    if prop in ['dens_critb']:
         label = '$\\rho_{\\rm gas} / \\rho_{\\rm crit,b}$ [ log ]'
         lim = [-2.0, 9.0]
         if haloLims: lim = [-1.0, 6.0]
         log = True
 
-    if ptProperty in ['density']:
+    if prop in ['density']:
         label = '$\\rho_{\\rm gas}$ [ log 10$^{10}$ M$_{\\rm sun}$ h$^2$ ckpc$^{-3}$ ]'
         lim = [-12.0, 0.0]
         if haloLims: lim = [-4.0, 2.0]
         log = True
 
-    if ptProperty in ['mass']:
+    if prop in ['mass']:
         label = '%s Mass [ 10$^{10}$ M$_{\\rm sun}$ h$^{-1}$ ]' % typeStr
         lim = [-3.0, 0.0]
         if haloLims: lim = [-6.0, -2.0]
         log = True
 
-    if ptProperty in ['mass_msun']:
+    if prop in ['mass_msun']:
         label = '%s Mass [ log M$_{\\rm sun}$ ]' % typeStr
         lim = [5.0, 7.0]
         if haloLims: lim = [3.0, 5.0]
         log = True
 
-    if ptProperty in ['ent','entr','entropy']:
+    if prop in ['ent','entr','entropy']:
         label = 'Gas Entropy [ log K cm$^{2}$ ]'
         lim = [8.0, 11.0]
         if haloLims: [9.0, 11.0]
         log = False
 
-    if ptProperty in ['vol_kpc3','volume_kpc3']:
+    if prop in ['vol_kpc3','volume_kpc3']:
         assert ptType == 'gas'
         label = 'Gas Cell Volume [ log kpc$^{3}$ ]'
         lim = [-6.0, 6.0]
         if haloLims: lim = [-6.0, 2.0]
         log = True
-    if ptProperty in ['vol_cm3','volume_cm3']:
+    if prop in ['vol_cm3','volume_cm3']:
         assert ptType == 'gas'
         label = 'Gas Cell Volume [ log cm$^{3}$ ]'
         lim = [55.0, 65.0]
         if haloLims: lim = [55.0, 62.0]
         log = True
 
-    if ptProperty in ['bmag','bfieldmag']:
+    if prop in ['bmag','bfieldmag']:
         label = 'Magnetic Field Strength [ log Gauss ]'
         lim = [-15.0, -5.0]
         if haloLims: lim = [-9.0, -4.0]
         log = True
-    if ptProperty in ['bmag_ug','bfieldmag_ug']:
+    if prop in ['bmag_ug','bfieldmag_ug']:
         label = 'Magnetic Field Strength [ log $\mu$G ]'
         lim = [-9.0, 3.0]
         if haloLims: lim = [-3.0, 2.0]
         log = True
 
-    if ptProperty in ['vmag','velmag']:
+    if prop in ['vmag','velmag']:
         label = 'Velocity Magnitude [ km/s ]'
         lim = [0, 1000]
         if haloLims: lim = [0, 400]
         log = False
 
-    if ptProperty in ['cellsize_kpc','cellrad_kpc']:
+    if prop in ['cellsize_kpc','cellrad_kpc']:
         assert ptType == 'gas'
         label = 'Gas Cell Size [ log kpc ]'
         lim = [-2.0, 3.0]
         if haloLims: lim = [-2.0, 1.0]
         log = True
 
-    if ptProperty in ['z_solar','metal_solar']:
+    if prop in ['z_solar','metal_solar']:
         label = '%s Metallicity [ log Z$_{\\rm sun}$ ]' % typeStr
         lim = [-3.5, 1.0]
         if haloLims: lim = [-2.0, 1.0]
         log = True
 
     # todo: csnd, ub_ke_ratio
-    if ptProperty in ['xray','xray_lum']:
+    if prop in ['xray','xray_lum']:
         assert ptType == 'gas'
         label = 'L$_{\\rm X,bolometric}$ [ log 10$^{30}$ erg/s ]'
         lim = [1.0, 15.0] # todo
         if haloLims: lim = [5.0, 10.0]
         log = True
     
-    if ptProperty in ['pres_ratio','pressure_ratio','beta']:
+    if prop in ['pres_ratio','pressure_ratio','beta']:
         assert ptType == 'gas'
         label = '$\\beta^{-1}$ = P$_{\\rm B}$ / P$_{\\rm gas}$ [ log ]'
-        if ptProperty == 'beta':
+        if prop == 'beta':
             label = '$\\beta$ = P$_{\\rm gas}$ / P$_{\\rm B}$ [ log ]'
         lim = [-2.5,2.5]
         if haloLims: lim = [-2.0,2.0]
         log = True
 
-    if ptProperty in ['gas_pres','gas_pressure','p_gas']:
+    if prop in ['gas_pres','gas_pressure','p_gas']:
         assert ptType == 'gas'
         label = 'Gas Pressure [ log K cm$^{-3}$ ]'
         lim = [-1.0,7.0]
         if haloLims: lim = [0.0, 5.0]
         log = False
 
-    if ptProperty in ['p_gas_linear']:
+    if prop in ['p_gas_linear']:
         assert ptType == 'gas'
         label = 'Gas Pressure [ log K cm$^{-3}$ ]'
         lim = [-1.0,7.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['p_b_linear']:
+    if prop in ['p_b_linear']:
         label = 'Gas Magnetic Pressure [ log K cm$^{-3}$ ]'
         lim = [-15.0, 16.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:
+    if prop in ['p_tot','pres_tot','pres_total','pressure_tot','pressure_total']:
         label = 'Gas Total Pressure [ log K cm$^{-3}$ ]'
         lim = [-15.0, 16.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
@@ -2381,140 +2381,140 @@ def simParticleQuantity(sP, ptType, ptProperty, clean=False, haloLims=False):
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['gravpot','gravpotential']:
+    if prop in ['gravpot','gravpotential']:
         label = '%s Gravitational Potential [ (km/s)$^2$ ]' % typeStr
         lim = [-1e4, 1e5] # todo
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = False
 
-    if ptProperty in ['tcool','cooltime']:
+    if prop in ['tcool','cooltime']:
         assert ptType == 'gas'
         label = 'Gas Cooling Time [ log Gyr ]'
         lim = [-3.0,2.0]
         if haloLims: lim = [-3.0, 2.5]
         log = True
 
-    if ptProperty in ['coolrate','coolingrate']:
+    if prop in ['coolrate','coolingrate']:
         assert ptType == 'gas'
         label = 'Gas Cooling Rate [ log erg/s/g ]'
         lim = [-8.0, -2.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['heatrate','heatingrate']:
+    if prop in ['heatrate','heatingrate']:
         assert ptType == 'gas'
         label = 'Gas Heating Rate [ log erg/s/g ]'
         lim = [-8.0, -2.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['coolrate_powell']:
+    if prop in ['coolrate_powell']:
         assert ptType == 'gas'
         label = 'PowellSourceTerm Cooling Rate [ log erg/s/g ]'
         lim = [-8.0, -2.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['coolrate_ratio']:
+    if prop in ['coolrate_ratio']:
         assert ptType == 'gas'
         label = 'PowellCoolingTerm / Heating Rate [ log ]'
         lim = [-3.0, 3.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['mass_sfr_dt']:
+    if prop in ['mass_sfr_dt']:
         assert ptType == 'gas'
         label = 'Gas Mass / SFR / Timestep [ log ]'
         lim = [-2.0,5.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['mass_sfr_dt_hydro']:
+    if prop in ['mass_sfr_dt_hydro']:
         assert ptType == 'gas'
         label = 'Gas Mass / SFR / HydroTimestep [ log ]'
         lim = [-2.0,5.0]
         if haloLims: print('todo, no haloLims for [%s] yet' % ptProperty)
         log = True
 
-    if ptProperty in ['dt_yr']:
+    if prop in ['dt_yr']:
         label = '%s Timestep [ log yr ]' % typeStr
         lim = [1.0, 6.0]
         if haloLims: lim = [1.0, 5.0]
         log = True
 
     # halo-centric analysis fields, always relative to SubhaloPos/SubhaloVel
-    if ptProperty in ['rad','halo_rad','rad_kpc','halo_rad_kpc']:
-        unitsStr = 'pkpc' if '_kpc' in ptProperty else 'ckpc/h'
+    if prop in ['rad','halo_rad','rad_kpc','halo_rad_kpc']:
+        unitsStr = 'pkpc' if '_kpc' in prop else 'ckpc/h'
         label = 'Radius [ log %s ]' % unitsStr #'%s Radial Distance [ log %s ]' % (typeStr,unitsStr)
         lim = [0.0, 5.0]
         if haloLims: lim = [0.0, 3.0]
         log = True
-    if ptProperty in ['rad_kpc_linear']:
+    if prop in ['rad_kpc_linear']:
         label = 'Radius [ pkpc ]'
         lim = [0.0, 5000]
         if haloLims: lim = [0, 800]
         log = False
-    if ptProperty in ['rad_rvir','halo_rad_rvir']:
+    if prop in ['rad_rvir','halo_rad_rvir']:
         label = '%s Radial Distance / Halo R$_{\\rm vir}$ [ log ]' % typeStr
         lim = [-2.0, 3.0]
         if haloLims: lim = [-2.5, 0.5]
         log = True
 
-    if ptProperty in ['vrad','halo_vrad','radvel','halo_radvel']:
+    if prop in ['vrad','halo_vrad','radvel','halo_radvel']:
         label = '%s Radial Velocity [ km/s ]' % typeStr
         lim = [-1000, 1000]
         if haloLims: lim = [-300, 300]
         log = False
 
-    if ptProperty in ['vrad_vvir','halo_vrad_vvir']:
+    if prop in ['vrad_vvir','halo_vrad_vvir']:
         label = '%s Radial Velocity / V$_{\\rm 200}$' % typeStr
         lim = [-2, 2]
         if haloLims: lim = [-1, 1]
         log = False
 
-    if ptProperty in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
+    if prop in ['vrel','halo_vrel','relvel','halo_relvel','relative_vel']:
         label = '%s Halo-Relative Velocity [ km/s ]' % typeStr
         lim = [-1000, 1000]
         if haloLims: lim = [-300, 300]
         log = False
-    if ptProperty in ['vrelmag','halo_vrelmag','relvelmag','relative_vmag']:
+    if prop in ['vrelmag','halo_vrelmag','relvelmag','relative_vmag']:
         label = '%s Halo-Relative Velocity Magnitude [ km/s ]' % typeStr
         lim = [0, 1000]
         if haloLims: lim = [0, 400]
         log = False
 
-    if ptProperty in ['specangmom_mag','specj_mag']:
+    if prop in ['specangmom_mag','specj_mag']:
         label = '%s Specific Angular Momentum [log kpc km/s]' % typeStr
         lim = [2.0, 6.0]
         if haloLims: pass
         log = True
 
-    if ptProperty in ['menc','enclosedmass']:
+    if prop in ['menc','enclosedmass']:
         label = 'Enclosed Mass [ log 10$^{10}$ M$_{\\rm sun}$ / h ]'
         lim = [-3.0, 2.0]
         if haloLims: pass
         log = True
 
-    if ptProperty in ['tff','tfreefall','freefalltime']:
+    if prop in ['tff','tfreefall','freefalltime']:
         label = 'Gravitational Free-Fall Time [ log Gyr ]'
         lim = [-2.0, 1.0]
         if haloLims: pass
         log = True
 
-    if ptProperty in ['tcool_tff']:
+    if prop in ['tcool_tff']:
         label = 'log ( t$_{\\rm cool}$ / t$_{\\rm ff}$ )'
         lim = [-1.0, 2.0]
         if haloLims: pass
         log = True
 
-    if ptProperty in ['delta_rho']:
+    if prop in ['delta_rho']:
       label = 'log ( $\\delta \\rho / </rho>$ )'
       lim = [-1.0, 1.0]
       if haloLims: pass
       log = True
 
     # non-custom fields (units are correct out of snapshot / code units, i.e. no processing)
-    if ptProperty in ['sfr']:
+    if prop in ['sfr']:
         assert ptType == 'gas'
         label = 'Star Formation Rate [ log M$_{\\rm sun}$/yr ]'
         lim = [-4.0, 2.0]

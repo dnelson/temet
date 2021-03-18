@@ -1,3 +1,5 @@
+.. _quantities:
+
 Physical Quantities
 ===================
 
@@ -54,7 +56,7 @@ metadata including a description, units, reasonable bounds, and so on.
             continue
 
         # find conditionals
-        if "if ptProperty in [" in line:
+        if "if prop in [" in line:
             m = re.findall("'(.+?)'", line)
             #m = re.search("'(.+?)'", line)
             if m:
@@ -67,6 +69,8 @@ metadata including a description, units, reasonable bounds, and so on.
 
     #print('\n')
 
+
+.. _custom_group_quantities:
 
 Custom Group Catalog Quantities
 -------------------------------
