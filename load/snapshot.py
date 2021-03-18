@@ -773,7 +773,7 @@ def snapshotSubset(sP, partType, fields,
             r[field] = sP.units.calcXrayLumBolometric(sfr, u, ne, mass, dens)
 
         # x-ray luminosity/flux/counts (the latter for a given instrumental configuration)
-        # if 'xray_emis_*', using APEC-based tables, otherwise using XSPEC-based tables (from Nhut)
+        # if decimal point '.' in field, using APEC-based tables, otherwise using XSPEC-based tables (from Nhut)
         if field in ['xray_lum_05-2kev','xray_flux_05-2kev','xray_lum_05-2kev_nomet','xray_flux_05-2kev_nomet',
                      'xray_counts_erosita','xray_counts_chandra',
                      'xray_lum_0.5-2.0kev','xray_lum_0.3-7.0kev','xray_lum_0.5-8.0kev','xray_lum_2.0-10.0kev']:

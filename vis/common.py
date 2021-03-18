@@ -27,7 +27,7 @@ savePathBase = expanduser("~") + "/data/frames/" # for large outputs
 # configure certain behavior types
 volDensityFields  = ['density']
 colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
-                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_emis_0.5-2.0kev',
+                     'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
                      'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
 totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
@@ -1430,7 +1430,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 if len(flagged_ids):
                     # cross-match
                     inds_flag, inds_snap = match3(flagged_ids, sub_ids)
-                    if len(inds_snap):
+                    if inds is not None and len(inds_snap):
                         mass[inds_snap] = 0.0
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector
