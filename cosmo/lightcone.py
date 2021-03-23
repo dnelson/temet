@@ -219,6 +219,7 @@ def generate_lightcone(index_todo=None):
               'minimal'    : minimal,
               'max_z'      : max_redshift,
               'redshifts'  : redshifts,
+              'redshifts_mid' : redshifts_mid,
               'dists_mid'  : dists_mid,
               'remapShape' : remapShape}
 

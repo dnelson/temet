@@ -340,7 +340,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
             # environment: distance to 5th nearest neighbor with M* at least half of this subhalo [code units]
             # or overdensity (linear dimensionless) if 'delta'
             if quantName in ['d5_mstar_gthalf','delta5_mstar_gthalf',
-                             'd5_mstar_gt8','delta5_mstar_gt8','delta5_mstar_gt7']:
+                             'd5_mstar_gt7','d5_mstar_gt8','delta5_mstar_gt8','delta5_mstar_gt7']:
                 if '_gthalf' in quantName: acField = 'Subhalo_Env_d5_MstarRel_GtHalf'
                 if '_gt8' in quantName: acField = 'Subhalo_Env_d5_Mstar_Gt8'
                 if '_gt7' in quantName: acField = 'Subhalo_Env_d5_Mstar_Gt7'
@@ -351,8 +351,8 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 # compute dimensionless overdensity (rho/rho_mean-1)
                 if 'delta' in quantName:
                     N = 5
-                    sigma_N = N / (4/3 * np.pi * r[field]**3) # local galaxy volume density
-                    delta_N = sigma_N / np.nanmean(sigma_N) - 1.0
+                    rho_N = N / (4/3 * np.pi * r[field]**3) # local galaxy volume density
+                    delta_N = rho_N / np.nanmean(rho_N) - 1.0
                     r[field] = delta_N
 
             # environment: counts of neighbors (linear dimensionless)

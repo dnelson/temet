@@ -693,9 +693,9 @@ def quantSlice1D(sPs, pdf, xQuant, yQuants, sQuant, sRange, cenSatSelect='cen', 
         plt.close(fig)
 
 def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQuant=None, sLowerPercs=None, sUpperPercs=None, 
-                             sizefac=1.0, alpha=1.0, nBins=50, 
-                             qRestrictions=None, f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
-                             scatterPoints=False, markersize=6.0, maxPointsPerDex=None, scatterColor=None, scatterCtName=None, 
+                             sizefac=1.0, alpha=1.0, nBins=50, qRestrictions=None, indivRestrictions=False, 
+                             f_pre=None, f_post=None, xlabel=None, ylabel=None, lowessSmooth=False,
+                             scatterPoints=None, markersize=6.0, maxPointsPerDex=None, scatterColor=None, ctName=None, 
                              markSubhaloIDs=None, cRel=None, mark1to1=False, drawMedian=True, medianLabel=None, 
                              extraMedians=None, legendLoc='best', xlim=None, ylim=None, clim=None, cbarticks=None,
                              filterFlag=False, colorbarInside=False, fig_subplot=[None,None]):
@@ -722,6 +722,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
       nBins (int): number of bins along the x-axis quantity for computing the median lines.
       qRestrictions (list): one or more 3-tuples, each containing ``[fieldName,min,max]``, which are then 
         used to restrict all points by.
+      indivRestrictions (bool): if True, then each item in ``qRestrictions`` is applied independently, and 
+        added to the plot, otherwise all are applied simultaneously and only one sample is shown.
       f_pre (function): if not None, this 'custom' function hook is called just before plotting.
         It must accept the figure axis as its single argument.
       f_post (function): if not None, this 'custom' function hook is called just after plotting.
@@ -734,7 +736,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
       maxPointsPerDex (int): if not None, then randomly sub-sample down to at most this number (equal 
         number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. 
       scatterColor (str): color each point by a third property.
-      scatterCtName (str): if not None, then specify a different colormap name to use for the points.
+      ctName (str or list): if not None, then specify a different colormap name to use for the points or medians.
+        If a list, then the first entry should be the string name, while the second should be a bounds 2-tuple.
       markSubhaloIDs (bool): highlight these subhalos especially on the plot. 
       cRel: if not None, then should be a 3-tuple of ``[relMin,relMax,takeLog]`` in which case the colors 
         are not scatterColor itself, but the value of that quantity relative to the median at that value 
@@ -757,7 +760,6 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
     """
     assert cenSatSelect in ['all', 'cen', 'sat']
     if extraMedians is None: extraMedians = [] # avoid mutable keyword argument
-    if scatterColor is not None or maxPointsPerDex is not None: scatterPoints = True # enable
     if lowessSmooth: assert scatterPoints and scatterColor is not None, 'Only LOWESS smooth scattered points.'
     if sQuant is not None: assert sLowerPercs is not None and sUpperPercs is not None
 
@@ -809,6 +811,11 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
             if xlim is not None: xMinMax = xlim
             if xlabel is None: xlabel = xlabel_def
 
+            ax.set_xlim(xMinMax)
+            ax.set_ylim(yMinMax)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
             # splitting on third quantity? load now
             if sQuant is not None:
                 sim_svals, slabel, _, sLog = simSubhaloQuantity(sP, sQuant, clean, tight=True)
@@ -854,235 +861,265 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
             sim_yvals = sim_yvals[wFinite]
             sim_cvals = sim_cvals[wFinite]
 
-            # arbitrary property restriction(s)?
-            wRestrictions = []
+            # loop over (one or more) subsets, i.e. subhalo property restrictions, and plot
+            # if none are requested, then loop just once and apply no restrictions
+            subsets = [None]
+
             if qRestrictions is not None:
-                for rFieldName, rFieldMin, rFieldMax in qRestrictions:
-                    # load and restrict
-                    vals, _, _, _ = sP.simSubhaloQuantity(rFieldName)
-                    vals = vals[wSelect][wFinite]
+                if indivRestrictions:
+                    subsets = [[qR] for qR in qRestrictions] # one at a time in serial (several outputs)
+                else:
+                    subsets = [qRestrictions] # all at once (one output)
 
-                    for wPastRestrict in wRestrictions:
-                        vals = vals[wPastRestrict] # AND
+            for k, locRestrictions in enumerate(subsets):
 
-                    with np.errstate(invalid='ignore'):
-                        wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
+                sim_yy = sim_yvals.view()
+                sim_xx = sim_xvals.view()
+                sim_cc = sim_cvals.view()
 
-                    sim_yvals = sim_yvals[wRestrict]
-                    sim_xvals = sim_xvals[wRestrict]
-                    sim_cvals = sim_cvals[wRestrict]
+                wRestrictions = []
+                if locRestrictions is not None:
+                    # apply one or more restrictions
+                    rDesc = ""
 
-                    wRestrictions.append(wRestrict)
-                    assert len(sim_xvals) # otherwise, no galaxies left
+                    for rFieldName, rFieldMin, rFieldMax in locRestrictions:
+                        # load and restrict
+                        vals, rLabel, _, _ = sP.simSubhaloQuantity(rFieldName, clean=True)
+                        vals = vals[wSelect][wFinite]
 
-            ax.set_xlim(xMinMax)
-            ax.set_ylim(yMinMax)
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
+                        rDesc += "%s = %.1f" % (rLabel,np.mean([rFieldMin,rFieldMax]))
 
-            # plot points (todo: update for medianQuant)
-            c = next(ax._get_lines.prop_cycler)['color']
+                        for wPastRestrict in wRestrictions:
+                            vals = vals[wPastRestrict] # AND
 
-            if sim_xvals.size < ptPlotThresh and not scatterPoints:
-                ax.plot(sim_xvals, sim_yvals, 'o', color=c, alpha=alpha)
+                        with np.errstate(invalid='ignore'):
+                            wRestrict = np.where( (vals>=rFieldMin) & (vals<rFieldMax) )
 
-            # median and 10/90th percentile lines
-            binSize = (xMinMax[1]-xMinMax[0]) / nBins
-            if sP.boxSize < 205000.0: binSize *= 2.0
+                        sim_yy = sim_yy[wRestrict]
+                        sim_xx = sim_xx[wRestrict]
+                        sim_cc = sim_cc[wRestrict]
 
-            if drawMedian:
-                xm, ym, _, pm = running_median(sim_xvals,sim_yvals,binSize=binSize,
-                                               minNumPerBin=20,percs=[16,50,84])
-                
-                if xm.size > sKn:
-                    ym = savgol_filter(ym,sKn,sKo)
-                    pm = savgol_filter(pm,sKn,sKo,axis=1)
+                        wRestrictions.append(wRestrict)
+                        assert len(sim_xx) # otherwise, no galaxies left
 
-                label = sP.simName + ' z=%.1f' % sP.redshift if len(sPs) > 1 else ''
-                if medianLabel is not None: label = medianLabel
-                if extraMedians: label = yQuant
-                color = 'black' if len(sPs) == 1 else c
+                # decide color
+                c = next(ax._get_lines.prop_cycler)['color']
 
-                l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=0.8, label=label)
-                if i == 0:
-                    ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
+                if ctName is not None:
+                    ct = ctName
+                    bounds = None
+                    if isinstance(ctName,list): ct, bounds = ctName
 
-            for k, medianProp in enumerate(extraMedians):
-                # load new (y-axis) quantity, subset as before, and median
-                sim_mvals, mlabel, mMinMax, mLog = simSubhaloQuantity(sP, medianProp, clean, tight=True)
-                mlabel_orig = mlabel
-                if mLog: sim_mvals = logZeroNaN(sim_mvals)
+                    c = sampleColorTable(ct, len(subsets), bounds=bounds)[k]
 
-                # verify units (in theory, must match with y-axis units...)
-                munits = ""
-                yunits = ""
+                # plot points if sample size is small enough, and we are otherwise just showing a median
+                if sim_xx.size < ptPlotThresh and scatterPoints is None:
+                    ax.plot(sim_xx, sim_yy, 'o', color=c, alpha=alpha)
 
-                if "[" in ylabel:
-                    yunits = ylabel.split("[")[1][:-1].strip()
-                    munits = mlabel.split("[")[1][:-1].strip()
-                    mlabel = mlabel.split("[")[0] # delete units
+                # median and 10/90th percentile lines
+                binSize = (xMinMax[1]-xMinMax[0]) / nBins
+                if sP.boxSize < 205000.0: binSize *= 2.0
 
-                if 'log ' in munits and munits.replace("log ","") == yunits:
-                    # munits is log(yunits), can fix this
-                    assert mLog
-                    sim_mvals = 10.0**sim_mvals
-                    munits = munits.replace("log ","")
+                if drawMedian:
+                    xm, ym, _, pm = running_median(sim_xx,sim_yy,binSize=binSize,
+                                                   minNumPerBin=20,percs=[16,50,84])
+                    
+                    if xm.size > sKn:
+                        ym = savgol_filter(ym,sKn,sKo)
+                        pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-                if medianProp == 'size_gas':
-                    sim_mvals /= 10
-                    mlabel = "0.1" + mlabel
+                    label = sP.simName + ' z=%.1f' % sP.redshift if len(sPs) > 1 else ''
+                    if medianLabel is not None: label = medianLabel
+                    if extraMedians: label = yQuant
+                    if len(subsets) > 1: label += rDesc
+                    color = 'black' if (len(sPs) == 1 and len(subsets) == 1) else c
+                    alpha = 1.0
 
-                if munits != yunits:
-                    print('WARNING: Extra median [%s] has units [%s] mismatch with existing y-units [%s]!' % (medianProp,munits,yunits))
+                    l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=alpha, label=label)
+                    if i == 0 and k == 0:
+                        ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
 
-                sim_mvals = sim_mvals[wSelect]
-                sim_mvals = sim_mvals[wFinite]
-                for wRestrict in wRestrictions:
-                    sim_mvals = sim_mvals[wRestrict]
+                for k, medianProp in enumerate(extraMedians):
+                    # load new (y-axis) quantity, subset as before, and median
+                    sim_mvals, mlabel, mMinMax, mLog = simSubhaloQuantity(sP, medianProp, clean, tight=True)
+                    mlabel_orig = mlabel
+                    if mLog: sim_mvals = logZeroNaN(sim_mvals)
 
-                # make sure these new values are also finite
-                w = np.where(np.isfinite(sim_mvals))
-                sim_xvals_e = sim_xvals[w]
-                sim_mvals = sim_mvals[w]
+                    # verify units (in theory, must match with y-axis units...)
+                    munits = ""
+                    yunits = ""
 
-                xm, ym, _, pm = running_median(sim_xvals_e,sim_mvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
-                if xm.size > sKn:
-                    ym = savgol_filter(ym,sKn,sKo)
-                    #sm = savgol_filter(sm,sKn,sKo)
-                    pm = savgol_filter(pm,sKn,sKo,axis=1)
+                    if "[" in ylabel:
+                        yunits = ylabel.split("[")[1][:-1].strip()
+                        munits = mlabel.split("[")[1][:-1].strip()
+                        mlabel = mlabel.split("[")[0] # delete units
 
-                if mlabel in [label,ylabel] or mlabel_orig in [label,ylabel]:
-                    mlabel = medianProp # plotting very similar quantities, be explicit
-                mlabel = mlabel.replace("mg2_shape_","SB > ").replace("mg2_area_","SB > ") # custom
+                    if 'log ' in munits and munits.replace("log ","") == yunits:
+                        # munits is log(yunits), can fix this
+                        assert mLog
+                        sim_mvals = 10.0**sim_mvals
+                        munits = munits.replace("log ","")
 
-                ax.plot(xm, ym, linestyles[k+1], lw=lw, color='black', alpha=0.8, label=mlabel)
+                    if medianProp == 'size_gas':
+                        sim_mvals /= 10
+                        mlabel = "0.1" + mlabel
 
-            # slice value?
-            if sQuant is not None:
-                svals_loc = sim_svals[wSelect][wFinite]
-                binSizeS = binSize*2
+                    if munits != yunits:
+                        print('WARNING: Extra median [%s] has units [%s] mismatch with existing y-units [%s]!' % (medianProp,munits,yunits))
 
-                if 1 or len(sPs) == 1:
-                    # if only one run, use new colors for above and below slices (currently always do this)
-                    c = next(ax._get_lines.prop_cycler)['color']
+                    sim_mvals = sim_mvals[wSelect]
+                    sim_mvals = sim_mvals[wFinite]
+                    for wRestrict in wRestrictions:
+                        sim_mvals = sim_mvals[wRestrict]
 
-                xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
-                                                    sPercs=sLowerPercs)
+                    # make sure these new values are also finite
+                    w = np.where(np.isfinite(sim_mvals))
+                    sim_xx_e = sim_xx[w]
+                    sim_mvals = sim_mvals[w]
 
-                for k, sLowerPerc in enumerate(sLowerPercs):
-                    label = '%s < P[%d]' % (slabel,sLowerPerc)
-                    ax.plot(xm, ymb[k], linestyles[1+k], lw=lw, color=c, label=label)
+                    xm, ym, _, pm = running_median(sim_xx_e,sim_mvals,binSize=binSize,minNumPerBin=20,percs=[16,50,84])
+                    if xm.size > sKn:
+                        ym = savgol_filter(ym,sKn,sKo)
+                        #sm = savgol_filter(sm,sKn,sKo)
+                        pm = savgol_filter(pm,sKn,sKo,axis=1)
 
-                lsOffset = len(sLowerPercs)
-                if 1 or len(sPs) == 1:
-                    c = next(ax._get_lines.prop_cycler)['color']
-                    lsOffset = 0
+                    if mlabel in [label,ylabel] or mlabel_orig in [label,ylabel]:
+                        mlabel = medianProp # plotting very similar quantities, be explicit
+                    mlabel = mlabel.replace("mg2_shape_","SB > ").replace("mg2_area_","SB > ") # custom
 
-                xm, yma, ymb, pma, pmb = running_median_sub(sim_xvals,sim_yvals,svals_loc,binSize=binSizeS,
-                                                    sPercs=sUpperPercs)
+                    ax.plot(xm, ym, linestyles[k+1], lw=lw, color='black', alpha=0.8, label=mlabel)
 
-                for k, sUpperPerc in enumerate(sUpperPercs):
-                    label = '%s > P[%d]' % (slabel,sUpperPerc)
-                    ax.plot(xm, yma[k], linestyles[1+k+lsOffset], lw=lw, color=c, label=label)
+                # slice value?
+                if sQuant is not None:
+                    svals_loc = sim_svals[wSelect][wFinite]
+                    binSizeS = binSize*2
 
-            # contours (optionally conditional, i.e. independently normalized for each x-axis value)
-            # todo
+                    if 1 or len(sPs) == 1:
+                        # if only one run, use new colors for above and below slices (currently always do this)
+                        c = next(ax._get_lines.prop_cycler)['color']
 
-            # handle multi-dimensional (i.e. multiple values per subhalo) arrays
-            maxdim = np.max( [sim_xvals.ndim, sim_yvals.ndim, sim_cvals.ndim] )
+                    xm, yma, ymb, pma, pmb = running_median_sub(sim_xx,sim_yy,svals_loc,binSize=binSizeS,
+                                                        sPercs=sLowerPercs)
 
-            if maxdim > 1:
-                # how many entries per subhalo in the multi-d array?
-                maxdim_ind = np.argmax( [sim_xvals.ndim, sim_yvals.ndim, sim_cvals.ndim] )
-                shape = [sim_xvals.shape, sim_yvals.shape, sim_cvals.shape][maxdim_ind][1]
+                    for k, sLowerPerc in enumerate(sLowerPercs):
+                        label = '%s < P[%d]' % (slabel,sLowerPerc)
+                        ax.plot(xm, ymb[k], linestyles[1+k], lw=lw, color=c, label=label)
 
-                # of {x,y,c}, tile the remaining to match this shape
-                if sim_xvals.ndim == 1:
-                    sim_xvals = np.tile(sim_xvals.reshape((sim_xvals.size,1)), (1,shape))
-                if sim_yvals.ndim == 1:
-                    sim_yvals = np.tile(sim_yvals.reshape((sim_yvals.size,1)), (1,shape))
-                if sim_cvals.ndim == 1:
-                    sim_cvals = np.tile(sim_cvals.reshape((sim_cvals.size,1)), (1,shape))
+                    lsOffset = len(sLowerPercs)
+                    if 1 or len(sPs) == 1:
+                        c = next(ax._get_lines.prop_cycler)['color']
+                        lsOffset = 0
 
-            # scatter all points?
-            if scatterPoints:
-                # reduce PDF weight, skip points outside of visible plot
-                w = np.where( (sim_xvals >= xMinMax[0]) & (sim_xvals <= xMinMax[1]) )
+                    xm, yma, ymb, pma, pmb = running_median_sub(sim_xx,sim_yy,svals_loc,binSize=binSizeS,
+                                                        sPercs=sUpperPercs)
 
-                xx = sim_xvals[w]
-                yy = sim_yvals[w]
-                cc = sim_cvals[w]
+                    for k, sUpperPerc in enumerate(sUpperPercs):
+                        label = '%s > P[%d]' % (slabel,sUpperPerc)
+                        ax.plot(xm, yma[k], linestyles[1+k+lsOffset], lw=lw, color=c, label=label)
 
-                if xx.size > 1000:
-                    ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
+                # contours (optionally conditional, i.e. independently normalized for each x-axis value)
+                # todo
 
-                ctName = 'viridis'
+                # handle multi-dimensional (i.e. multiple values per subhalo) arrays
+                maxdim = np.max( [sim_xx.ndim, sim_yy.ndim, sim_cc.ndim] )
 
-                # relative coloring as a function of the x-axis?
-                if cRel is not None:
-                    # override min,max of color and whether or not to log
-                    if cLog:
-                        cc = 10.0**cc # remove log
+                if maxdim > 1:
+                    # how many entries per subhalo in the multi-d array?
+                    maxdim_ind = np.argmax( [sim_xx.ndim, sim_yy.ndim, sim_cc.ndim] )
+                    shape = [sim_xx.shape, sim_yy.shape, sim_cc.shape][maxdim_ind][1]
 
-                    cMinMax[0], cMinMax[1], cLog = cRel
+                    # of {x,y,c}, tile the remaining to match this shape
+                    if sim_xx.ndim == 1:
+                        sim_xx = np.tile(sim_xx.reshape((sim_xx.size,1)), (1,shape))
+                    if sim_yy.ndim == 1:
+                        sim_yy = np.tile(sim_yy.reshape((sim_yy.size,1)), (1,shape))
+                    if sim_cc.ndim == 1:
+                        sim_cc = np.tile(sim_cc.reshape((sim_cc.size,1)), (1,shape))
 
-                    bins = np.arange(np.nanmin(xx), np.nanmax(xx)+binSize, binSize)
-                    # loop through bins
-                    for k in range(bins.size-1):
-                        w = np.where( (xx>bins[k]) & (xx<=bins[k+1]) )[0]
-                        if len(w) == 0:
-                            continue
+                # scatter all points?
+                if scatterPoints:
+                    # reduce PDF weight, skip points outside of visible plot
+                    w = np.where( (sim_xx >= xMinMax[0]) & (sim_xx <= xMinMax[1]) )
 
-                        # normalize all points in this bin by the bin median
-                        normval = np.nanmedian(cc[w])
-                        if normval == 0: normval = np.nanmean(cc[w])
-                        cc[w] /= normval
+                    xx = sim_xx[w]
+                    yy = sim_yy[w]
+                    cc = sim_cc[w]
 
-                    if cLog: # log relative?
-                        cc = logZeroNaN(cc)
+                    if xx.size > 1000:
+                        ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
-                    ctName = 'curl' # diverging
-                    clabel = '$\Delta$ ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
+                    ct = 'viridis'
 
-                if maxPointsPerDex is not None:
-                    inds, _ = subsampleRandomSubhalos(sP, maxPointsPerDex, xMinMax, mstar=xx)
+                    # relative coloring as a function of the x-axis?
+                    if cRel is not None:
+                        # override min,max of color and whether or not to log
+                        if cLog:
+                            cc = 10.0**cc # remove log
 
-                    xx = xx[inds]
-                    yy = yy[inds]
-                    cc = cc[inds]
+                        cMinMax[0], cMinMax[1], cLog = cRel
 
-                if lowessSmooth:
-                    in1 = np.vstack( (xx,yy) )
-                    cc = lowess(in1, cc, in1, degree=1, l=0.2)
+                        bins = np.arange(np.nanmin(xx), np.nanmax(xx)+binSize, binSize)
+                        # loop through bins
+                        for k in range(bins.size-1):
+                            w = np.where( (xx>bins[k]) & (xx<=bins[k+1]) )[0]
+                            if len(w) == 0:
+                                continue
 
-                # scatter color and marker
-                opts = {'color':c}
+                            # normalize all points in this bin by the bin median
+                            normval = np.nanmedian(cc[w])
+                            if normval == 0: normval = np.nanmean(cc[w])
+                            cc[w] /= normval
 
-                if scatterColor is not None:
-                    # override constant color
-                    if scatterCtName is not None: ctName = scatterCtName
-                    cmap = loadColorTable(ctName)
+                        if cLog: # log relative?
+                            cc = logZeroNaN(cc)
 
-                    opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
-                    #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
-                    opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
+                        ct = 'curl' # diverging
+                        clabel = '$\Delta$ ' + clabel.split('[')[0] + ('[ log ]' if cLog else '')
 
-                # plot scatter
-                sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, zorder=0)
+                    if maxPointsPerDex is not None:
+                        inds, _ = subsampleRandomSubhalos(sP, maxPointsPerDex, xMinMax, mstar=xx)
 
-            # 1-to-1 line?
-            if mark1to1:
-                x0 = np.min( [ax.get_xlim()[0], ax.get_ylim()[0]] )
-                x1 = np.max( [ax.get_xlim()[1], ax.get_ylim()[1]] )
-                ax.plot( [x0,x1], [x0,x1], ':', lw=lw, color='black', alpha=0.9, label='1-to-1')
+                        xx = xx[inds]
+                        yy = yy[inds]
+                        cc = cc[inds]
 
-            # highlight/overplot a single subhalo or a few subhalos?
-            if markSubhaloIDs is not None:
-                c = sampleColorTable('tableau10','red')
-                for subID in markSubhaloIDs:
-                    label = 'Subhalo #%d' % subID if len(markSubhaloIDs) <= 2 else ''                    
-                    ax.scatter(sim_xvals_orig[subID], sim_yvals_orig[subID], s=markersize*2.4, marker='o',
-                        linewidth=1.5, color=c, facecolor='none', alpha=1.0, label=label)
+                    if lowessSmooth:
+                        in1 = np.vstack( (xx,yy) )
+                        cc = lowess(in1, cc, in1, degree=1, l=0.2)
+
+                    # scatter color and marker
+                    opts = {'color':c}
+
+                    if scatterColor is not None:
+                        # override constant color
+                        fracSubset = None # all
+
+                        if ctName is not None:
+                            ct = ctName
+                            if isinstance(ctName,list): ct, fracSubset = ctName
+
+                        cmap = loadColorTable(ct, fracSubset=fracSubset)
+
+                        opts = {'vmin':cMinMax[0], 'vmax':cMinMax[1], 'c':cc, 'cmap':cmap}
+                        #opts['label'] = '%s z=%.1f' % (sP.simName,sP.redshift) if len(sPs) > 1 else ''
+                        opts['marker'] = 's' if sP.simName == 'TNG-Cluster' else 'o'
+
+                    # plot scatter
+                    sc = ax.scatter(xx, yy, s=markersize, alpha=alpha, **opts, zorder=0)
+
+                # 1-to-1 line?
+                if mark1to1:
+                    x0 = np.min( [ax.get_xlim()[0], ax.get_ylim()[0]] )
+                    x1 = np.max( [ax.get_xlim()[1], ax.get_ylim()[1]] )
+                    ax.plot( [x0,x1], [x0,x1], ':', lw=lw, color='black', alpha=0.9, label='1-to-1')
+
+                # highlight/overplot a single subhalo or a few subhalos?
+                if markSubhaloIDs is not None:
+                    c = sampleColorTable('tableau10','red')
+                    for subID in markSubhaloIDs:
+                        label = 'Subhalo #%d' % subID if len(markSubhaloIDs) <= 2 else ''                    
+                        ax.scatter(sim_xvals_orig[subID], sim_yvals_orig[subID], s=markersize*2.4, marker='o',
+                            linewidth=1.5, color=c, facecolor='none', alpha=1.0, label=label)
 
         # legend
         if f_post is not None:
@@ -1100,7 +1137,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
             legend = ax.legend(handles+handlesO, labels+labelsO, loc=legendLoc)
 
     # colorbar?
-    if scatterColor is not None:
+    if scatterPoints and scatterColor is not None:
         if colorbarInside: # can generalize to 'upper left', etc
             #cax = inset_locator.inset_axes(ax, width="40%", height="4%", loc='upper left')
             fig.tight_layout() # avoid warning

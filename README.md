@@ -60,7 +60,7 @@ version, tagged on the date near the finalization of the paper.
 Contributing
 ------------
 
-Any contributions to this open source project, large or small, are welcome. To submit a bug report, feature request, general question, or similar, please open a [new issue](https://github.com/dnelson86/python) directly on github. Please include as much detail as possible, including a minimum working example which reproduces any problem or buggy behavior.
+Any contributions to this open source project, large or small, are welcome. To submit a bug report, feature request, general question, or similar, please open a [new issue](https://github.com/dnelson86/python/issues) directly on github. Please include as much detail as possible, including a minimum working example which reproduces any problem or buggy behavior.
 
 To directly contribute code or documentation please try to follow existing style and structure as much as possible. When you are ready, please make a [pull request](https://github.com/dnelson86/python/pulls) with your proposed changes. To do so you should take the following steps: (i) fork the repository, (ii) clone the project to your local machine, (iii) edit and make changes, (iv) commit your changes to your own branch, (v) push your work back up to your fork, (vi) submit a pull request for review.
 

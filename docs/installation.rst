@@ -73,8 +73,8 @@ and install the Roboto font used by default
 
     mkdir -p ~/.fonts/Roboto
     cd ~/.fonts/Roboto/
-    wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-Light.ttf
-    wget https://github.com/google/fonts/raw/master/apache/roboto/static/Roboto-LightItalic.ttf
+    wget https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Light.ttf
+    wget https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-LightItalic.ttf
 
 7. Several large tabulated data files are used to compute e.g. stellar luminosities (from FSPS), ion abundances and emissivities (from CLOUDY), and x-ray emission (from XPSEC). For convenience these can be downloaded as
 

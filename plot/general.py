@@ -583,13 +583,13 @@ def plotPhaseSpace2D(sP, partType='gas', xQuant='numdens', yQuant='temp', weight
             "nh%d" % len(haloIDs) if haloIDs is not None else 'fullbox') )
     plt.close(fig)
 
-def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='Si_H_numratio', 
+def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant='temp', 
                                     haloIDs=None, radMinKpc=None, radMaxKpc=None, xlim=None, ylim=None, 
-                                    nBins=50, legendLoc='best', total=False, totalCum=False, 
+                                    nBins=50, legendLoc='best', total=False, totalCum=False, sizefac=1.0, 
                                     totalCumBoundsX=None, totalCumRangeX=None, totalCumLog=False,
                                     f_pre=None, f_post=None):
-    """ Plot the relationship between two particle/cell properties, either for a full box 
-    (if haloIDs) is None, or else for one or more (sets of) halos.
+    """ Plot the relationship between two particle/cell properties, either across a full box 
+    (if haloIDs is None), or else for one or more (sets of) halos.
 
     Args:
       sPs (list): one or more :py:class:`~util.simParams` to be overplotted.
@@ -601,7 +601,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
       radMaxKpc (float): above, optionally restrict to radii below this value (physical kpc).
         (Can generalize to qRestrictions approach).
       total (bool): plot the total sum, instead of the (otherwise default) median.
-      totalCum (bool): plot the total cumulative sum.
+      totalCum (bool): plot the total cumulative sum, in ascending x-axis bins.
       totalCumRangeX (list[float]): if totalCum, then this gives the x-quantity range to include.
       totalCumLog (bool): controls whether the y-axis is in linear or log.
       totalCumBoundsX (list): If not None, then should be a 2-tuple [min,max] within which to -exclude- 
@@ -633,7 +633,7 @@ def plotParticleMedianVsSecondQuant(sPs, partType='gas', xQuant='hdens', yQuant=
     haloLims = haloIDs is not None
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=[figsize[0]*sizefac,figsize[1]*sizefac])
     ax = fig.add_subplot(111)
 
     if f_pre is not None:

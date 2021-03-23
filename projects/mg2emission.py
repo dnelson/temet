@@ -645,14 +645,25 @@ def cumulativeLumVsVrad(sP):
         ax.text( totalCumBoundsX[1], yy, 'Outflow', ha='left', rotation=-90, **textOpts)
 
         # create inset
-        target_frac = 0.1
+        insetVel = False
+
+        if insetVel:
+            target_frac = 0.1
+        else:
+            target_v = 1.0 # vrad/v200
 
         ax_inset = kwargs['fig'].add_axes([0.6,0.69,0.35,0.24]) # x,y,width,height
         ax_inset.set_xlabel('Stellar Mass')
-        ax_inset.set_ylabel('v/v$_{\\rm 200}$ (f=%.1f)' % target_frac)
         ax_inset.set_yscale('log')
-        ax_inset.set_yticks([1,2,3])
-        ax_inset.set_yticklabels(['1','2','3'])
+
+        if insetVel:
+            ax_inset.set_ylabel('v/v$_{\\rm 200}$ (f=%.1f)' % target_frac)
+            ax_inset.set_yticks([1,2,3])
+            ax_inset.set_yticklabels(['1','2','3'])
+        else:
+            ax_inset.set_ylabel('frac (v/v$_{\\rm 200}$=%d)' % target_v)
+            ax_inset.set_yticks([0.05, 0.1, 0.2, 0.3, 0.5])
+            ax_inset.set_yticklabels(['0.05','0.1','0.2','0.3','0.5'])
 
         xx = [mStarBin[0] for mStarBin in mStarBins]
         yy_pos = []
@@ -665,25 +676,35 @@ def cumulativeLumVsVrad(sP):
             ym_neg = kwargs['yms'][0][i]
             ym_pos = kwargs['yms'][1][i]
 
-            pos_sort = np.argsort(ym_pos)
-            neg_sort = np.argsort(ym_neg)
+            if insetVel:
+                pos_sort = np.argsort(ym_pos)
+                neg_sort = np.argsort(ym_neg)
+            else:
+                pos_sort = np.argsort(xm_pos)
+                neg_sort = np.argsort(xm_neg)
+
             xm_pos = xm_pos[pos_sort]
             ym_pos = ym_pos[pos_sort]
             xm_neg = xm_neg[neg_sort]
             ym_neg = ym_neg[neg_sort]
 
-            # vrad/v200 where inflow reaches target_frac
-            vneg = np.interp(target_frac, ym_neg, xm_neg) 
-            vpos = np.interp(target_frac, ym_pos, xm_pos)
+            if insetVel:
+                # vrad/v200 where inflow reaches target_frac
+                neg_val = np.interp(target_frac, ym_neg, xm_neg) 
+                pos_val = np.interp(target_frac, ym_pos, xm_pos)
+            else:
+                # frac at target vrad/v200
+                neg_val = np.interp(-target_v, xm_neg, ym_neg)
+                pos_val = np.interp(target_v, xm_pos, ym_pos)
 
-            yy_neg.append(vneg)
-            yy_pos.append(vpos)
+            yy_neg.append(neg_val)
+            yy_pos.append(pos_val)
 
         ax_inset.plot(xx, np.abs(yy_neg), 'o-', color='#666666', label='Inflow')
         ax_inset.plot(xx, yy_pos, 's:', color='#666666', label='Outflow')
-        ax_inset.legend(loc='upper left')
+        ax_inset.legend(loc='upper left' if insetVel else 'lower right')
 
-    plotParticleMedianVsSecondQuant([sP], partType='gas', xQuant=xQuant, yQuant=yQuant, 
+    plotParticleMedianVsSecondQuant([sP], partType='gas', xQuant=xQuant, yQuant=yQuant, sizefac=sizefac, 
                                 haloIDs=[haloIDs], radMinKpc=radMinMax[0], radMaxKpc=radMinMax[1],
                                 xlim=xlim, ylim=ylim, total=total, totalCum=totalCum, nBins=100, 
                                 totalCumRangeX=totalCumRangeX, totalCumBoundsX=totalCumBoundsX,
@@ -835,19 +856,15 @@ def paperPlots():
 
     # figure 6 - impact of environment: MgII halo size versus neighbor counts / overdensity
     if 0:
-        mstar = [9.8, 10.2]
-        sColor = 'mstar_30pkpc_log'
-        quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='num_ngb_mstar_gt7_2rvir', 
-                                 cenSatSelect='cen', xlim=[-0.5, 10.5], ylim=[0, 20], drawMedian=True, 
-                                 scatterPoints=True, scatterColor=sColor, nBins=24, 
-                                 qRestrictions=[['mstar_30pkpc_log',mstar[0],mstar[1]]],
-                                 clim=mstar, cRel=None, sizefac=sizefac, markersize=80)
+        qRestrictions = [['mstar_30pkpc_log',9.7,10.3],
+                         ['mstar_30pkpc_log',8.8,9.2],
+                         ['mstar_30pkpc_log',7.9,8.1]]
 
         quantMedianVsSecondQuant([sP], pdf=None, yQuants=['mg2_lumsize'], xQuant='delta5_mstar_gt7', 
-                                 cenSatSelect='cen', xlim=[-2,3], ylim=[0, 20], drawMedian=True, 
-                                 scatterPoints=True, scatterColor=sColor, nBins=24, 
-                                 qRestrictions=[['mstar_30pkpc_log',mstar[0],mstar[1]]],
-                                 clim=mstar, cRel=None, sizefac=sizefac, markersize=80)
+                                 cenSatSelect='cen', xlim=[-1,2], ylim=[1, 12], drawMedian=True, 
+                                 scatterPoints=True, nBins=24, ctName=['magma',[0.3,0.7]], 
+                                 qRestrictions=qRestrictions, indivRestrictions=True, 
+                                 clim=mstar, cRel=None, sizefac=sizefac, legendLoc='upper left')
 
     # figure 7: emission morphology: spherically symmetric or not? shape a/b axis ratio of different isophotes
     if 0:
@@ -917,7 +934,7 @@ def paperPlots():
 
     # figure 10 - relation of MgII flux and vrad (inflow vs outflow)
     if 0:
-        mStarBin = [9.99, 10.01] #[10.4, 10.42]
+        mStarBin = [9.99, 10.01]
         haloIDs = _select_haloIDs(sP, mStarBin)
 
         def _f_post(ax):
@@ -932,9 +949,6 @@ def paperPlots():
     # figure 11 - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
     if 0:
         cumulativeLumVsVrad(sP)
-
-    # TODO: How can we use the spatially resolved spectroscopy to infer the actual 3D spatial 
-    # and kinematics distribution of MgII (and hence of the 10^4K CGM)?
 
     # figure 12 - line-center optical depth for MgII all-sky map
     if 0:

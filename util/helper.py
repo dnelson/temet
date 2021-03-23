@@ -1456,7 +1456,13 @@ def loadColorTable(ctName, valMinMax=None, plawScale=None, cmapCenterVal=None, f
 
 def sampleColorTable(ctName, num, bounds=None):
     """ Grab a sequence of colors, evenly spaced, from a given colortable. """
-    from matplotlib.pyplot import cm
+    from matplotlib.pyplot import cm, colormaps
+
+    import cmocean
+
+    # cmocean
+    if 'cmo.%s' % ctName in colormaps():
+        ctName = 'cmo.%s' % ctName
 
     if ctName == 'tableau10':
         # current custom implementation of name-based color picking from this cm
