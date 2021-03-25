@@ -244,7 +244,7 @@ class units(object):
 
         return lum_edd
 
-    def codeBHMassMdotToBolLum(self, mass, mdot, basic_model=False, obscuration=False, force_highmode=False):
+    def codeBHMassMdotToBolLum(self, mass, mdot, basic_model=False, obscuration=False):
         """ Convert a (BH mass, BH mdot) pair to a bolometric luminosity [erg/s]. """
         mdot_edd = self.codeBHMassToMdotEdd(mass)
         lum_edd = self.codeBHMassToLumEdd(mass)
@@ -259,12 +259,9 @@ class units(object):
         assert len(w_high[0]) + len(w_low[0]) == mdot_edd.size
 
         Lbol = self.BH_eps_r * mdot_msun_yr * self.Msun_in_g * self.c_cgs**2 / self.s_in_yr # erg/s
-        if not force_highmode:
+        if not basic_model:
+            # alternatively, we do not use the simplest option for "low" modes:
             Lbol[w_low]  = (10.0 * (mdot_msun_yr[w_low]/mdot_edd[w_low]))**2 * 0.1 * lum_edd[w_low]
-
-        # alternatively, the simplest option (not by default):
-        if basic_model:
-            Lbol = self.BH_eps_r * mdot_msun_yr * self.Msun_in_g * self.c_cgs**2 / self.s_in_yr # erg/s
 
         # obscuration model? as in GFM_AGN_RADIATION (Hopkins+2007)
         if obscuration:
