@@ -681,15 +681,17 @@ def snapshotSubset(sP, partType, fields,
         # ------------------------------------------------------------------------------------------------------
 
         # blackhole bolometric luminosity [erg/s] (model-dependent)
-        if field in ['bh_lbol','bh_bollum']:
+        if field in ['bh_lbol','bh_bollum','bh_bollum_obscured']:
             bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
             bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
-            r[field] = sP.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot)
+            r[field] = sP.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot,
+                obscuration=('_obscured' in field))
 
-        if field in ['bh_lbol_basic','bh_bollum_basic']:
+        if field in ['bh_lbol_basic','bh_bollum_basic','bh_bollum_basic_obscured']:
             bh_mass = snapshotSubset(sP, partType, 'BH_Mass', **kwargs)
             bh_mdot = snapshotSubset(sP, partType, 'BH_Mdot', **kwargs)
-            r[field] = sP.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, basic_model=True)
+            r[field] = sP.units.codeBHMassMdotToBolLum(bh_mass, bh_mdot, 
+                basic_model=True, obscuration=('_obscured' in field))
 
         # blackhole eddington ratio [dimensionless linear]
         if field in ['lambda_edd','edd_ratio','eddington_ratio','bh_eddratio']:
@@ -1401,6 +1403,9 @@ def snapshotSubset(sP, partType, fields,
         # subhalo or halo ID per particle/cell
         if field in ['subid','subhaloid','subhalo_id','haloid','halo_id']:
             # inverse map indRange to subhaloID list
+            if haloID is not None or subhaloID is not None:
+                indRange = _haloOrSubhaloIndRange(sP, partType, haloID=haloID, subhaloID=subhaloID)
+
             if indRange is not None:
                 inds = np.arange(indRange[0], indRange[1]+1)
             else:

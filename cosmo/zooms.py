@@ -1265,11 +1265,11 @@ def test_variant_box():
 def check_all():
     """ TEMP CHECK NSUBS. """
     # zoom config
-    res = 13
+    res = 14
     variant = 'sf3'
     run = 'tng_zoom'
 
-    hInds = _halo_ids_run(onlyDone=True) #[5]
+    hInds = [3693] #_halo_ids_run(onlyDone=True) #[5]
 
     # load total number of halos and subhalos
     lengths = {'Group'   : np.zeros(len(hInds), dtype='int32'),

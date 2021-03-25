@@ -244,7 +244,7 @@ class units(object):
 
         return lum_edd
 
-    def codeBHMassMdotToBolLum(self, mass, mdot, basic_model=False):
+    def codeBHMassMdotToBolLum(self, mass, mdot, basic_model=False, obscuration=False):
         """ Convert a (BH mass, BH mdot) pair to a bolometric luminosity [erg/s]. """
         mdot_edd = self.codeBHMassToMdotEdd(mass)
         lum_edd = self.codeBHMassToLumEdd(mass)
@@ -264,6 +264,16 @@ class units(object):
         # alternatively, the simplest option (not by default):
         if basic_model:
             Lbol = self.BH_eps_r * mdot_msun_yr * self.Msun_in_g * self.c_cgs**2 / self.s_in_yr # erg/s
+
+        # obscuration model? as in GFM_AGN_RADIATION (Hopkins+2007)
+        if obscuration:
+            assert self._sP.BHs in [1,2] # fiducial Illustris or TNG model
+            BlackHoleFeedbackFactor = 0.1
+            ObscurationFactor = 0.3
+            ObscurationSlope = 0.07
+
+            obs_fac = (1.0 - BlackHoleFeedbackFactor) * ObscurationFactor * (Lbol/1e46)**ObscurationSlope
+            Lbol *= obs_fac
 
         return Lbol
 

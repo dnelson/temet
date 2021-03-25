@@ -14,13 +14,39 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def bh_lum_agnrad_check():
+    """ Check that PartType0/GFM_AGNRadiation field/units are consistent with derived BH luminosities. """
+    sP = simParams(run='tng50-1', redshift=3.0)
+    haloID = 410
+
+    subID = sP.halo(haloID)['GroupFirstSub']
+
+    # find BH
+    bh_subIDs = sP.bhs('subhalo_id', subhaloID=subID)
+
+    bh_lum = sP.bhs('bh_bollum_basic_obscured', subhaloID=subID) # erg/s
+
+    # get a single gas cell, compute distance
+    gas_rad = sP.snapshotSubset('gas', 'rad_kpc', subhaloID=subID)
+
+    w = np.where( (gas_rad > 11) & (gas_rad < 12) )[0][0] # pick one
+
+    rad_cm = gas_rad[w] * sP.units.UnitLength_in_cm # physical cm
+
+    # compute BH lum from PartType5 vs that inferred from the gas cell
+    gas_agnrad = sP.gas('GFM_AGNRadiation', subhaloID=subID)[w] # physical erg/s/cm^2
+
+    gas_agnrad_lum = gas_agnrad * rad_cm**2 # erg/s
+
+    print(bh_lum, gas_agnrad_lum, bh_lum/gas_agnrad_lum) # ratio is 1.006
+
 def check_zoom_variations():
     """ Check TNG-Cluster tests: h30, h50, h3232, h3693. """
     redshift = 0.0
 
     # hInd : [variants] pairs
     sets = {3232 : ['sf3','sf3_n128','sf3_n256','sf3_n512'], # L14* running
-            3693 : ['sf3','sf3_m','sf3s','sf3s5008','sf3none_kpc','sf3none_m','sf3s_kpc','sf3_kpc'],
+            3693 : ['sf3','sf3_m','sf3s','sf3s5008','sf3none_kpc','sf3none_m','sf3s_kpc','sf3_kpc','L14_sf3'],
             50   : ['sf2_n160','sf2_n160s','sf2_n160s_mpc','sf2_n320','sf2_n320s','sf3']} # sf3_m running raven
 
     # hInd = 3693 we have the following:
@@ -32,13 +58,12 @@ def check_zoom_variations():
     # sf3s_kpc (kpc, steeper only, no other bugfixes)
     # sf3_kpc = fiducial (kpc)
     # sf3none_m = nobugfixes, updated MaxSfrTimescale (mpc)
-    # sf3_m = fiducial (mpc), updated MaxSfrTimescale, Time: 0.39761 cum 90859.92 = 9.70khr
-    # L14 = running draco n640, Time: 0.39761 cum 293763.26 = 52.22khr
-    #  -- L14 is (5.4x L13, n640 vs 483, draco vs raven) (@ Time: 0.4927 is 5.3x)
+    # sf3_m = new fiducial (mpc), updated MaxSfrTimescale
+    # L14_sf3 = new fiducial, finished on draco n640 (L14 is 5.4x L13 to z=0, n640 vs 483, draco vs raven)
 
     # hInd = 50 we have variations of CPU numbers, with and without steeper 's'
     #  - CPU numbers 160,320,fiducial run on draco/cobra/raven
-    # sf3_m = fiducial (mpc), updated MaxSfrTimescale (running on raven)
+    # sf3_m = fiducial (mpc), updated MaxSfrTimescale (125k cpuh on raven n384 to z=1 vs 83k for orig sf3 on n320)
 
     # hInd = 30 we have variations of CPU numbers (all L13) (partial hawk runs only)
     #  - sf3 fiducial: cobra run, 320 cores: Step 18343, Time: 0.2032 cum 114669.73  = 10.19khr
@@ -67,6 +92,7 @@ def check_zoom_variations():
     # 3693     sf3none_m mstar = [11.82 12.54] mbh = [ 9.63] size = [ 71.61] cpuKHours = 57.7
     # 3693      sf3s_kpc mstar = [11.89 12.59] mbh = [ 9.60] size = [ 73.95] cpuKHours = 40.9
     # 3693       sf3_kpc mstar = [11.88 12.49] mbh = [10.05] size = [ 62.66] cpuKHours = 37.0
+    # 3693       L14_sf3 mstar = [11.93 12.61] mbh = [ 9.52] size = [ 48.11] cpuKHours = 205.1
     #   50      sf2_n160 mstar = [12.61 13.27] mbh = [11.12] size = [297.10] cpuKHours = 269.7
     #   50     sf2_n160s mstar = [12.64 13.33] mbh = [ 9.74] size = [250.89] cpuKHours = 154.1
     #   50 sf2_n160s_mpc mstar = [12.97 13.54] mbh = [ 9.84] size = [135.37] cpuKHours = 107.4
@@ -75,9 +101,9 @@ def check_zoom_variations():
     #   50           sf3 mstar = [12.87 13.55] mbh = [ 9.66] size = [177.39] cpuKHours = 202.4
 
     for hInd,variants in sets.items():
-        for variant in variants:
-            res = 14 if 'L14_' in variant else 13
-            variant = variant.replace('L14_','')
+        for variant_orig in variants:
+            res = 14 if 'L14_' in variant_orig else 13
+            variant = variant_orig.replace('L14_','')
 
             sP = simParams(run='tng_zoom', res=res, hInd=hInd, variant=variant, redshift=redshift)
 
@@ -90,7 +116,7 @@ def check_zoom_variations():
             size = sP.units.codeLengthToKpc( sub['SubhaloHalfmassRadType'][4] )
 
             print('%4s %13s mstar = [%5.2f %5.2f] mbh = [%5.2f] size = [%6.2f] cpuKHours = %.1f' % \
-                (hInd, variant, mass_stellar, mass_halostar, mass_bh, size, sP.cpuHours/1000))
+                (hInd, variant_orig, mass_stellar, mass_halostar, mass_bh, size, sP.cpuHours/1000))
 
     # current size of all L13 zooms: ~85TB, size of z=0 virtual snap: 2.0TB
     # projected size of L14: ~195TB in total, z=0 snapshot: 4.6TB (almost same as TNG300-1)
