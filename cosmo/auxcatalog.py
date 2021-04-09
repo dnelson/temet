@@ -1058,6 +1058,9 @@ def _findHalfLightRadius(rad,mags,vals=None):
 
     # locate radius where sum equals half of total (half-light radius)
     w = np.where(lums_cum >= 0.5*totalLum)[0]
+    if len(w) == 0:
+        return np.nan
+
     w1 = np.min(w)
 
     # linear interpolation in linear(rad) and linear(lum), find radius where lums_cum = totalLum/2
@@ -1076,7 +1079,7 @@ def _findHalfLightRadius(rad,mags,vals=None):
         r1 = lums_cum[w1]
         halfLightRad = (0.5*totalLum - r0)/(r1-r0) * (radii[w1]-radii[w0]) + radii[w0]
 
-        assert halfLightRad >= radii[w0] and halfLightRad <= radii[w1]
+        assert halfLightRad >= radii[w0] and (halfLightRad-radii[w1]) < 1e-6
 
     return halfLightRad
 
@@ -3510,6 +3513,13 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions=sfreq0),
    'Subhalo_Mass_SF0Gas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestrictions=sfreq0),
+   'Subhalo_Mass_SFGas_Metal' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions=sfrgt0),
+   'Subhalo_Mass_SFGas_Hydrogen' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_H',op='sum',rad=None,ptRestrictions=sfrgt0),
+   'Subhalo_Mass_SFGas_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,ptRestrictions=sfrgt0),
+
    'Subhalo_Mass_HaloGas_Oxygen' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad='r015_1rvir_halo'),
    'Subhalo_Mass_HaloGas_Metal' : \
@@ -3666,6 +3676,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber',weighting='bandLum-sdss_r'),
    'Subhalo_StellarZ_SDSSFiber4pkpc_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='sdss_fiber_4pkpc',weighting='bandLum-sdss_r'),
+   'Subhalo_StellarZ_2rhalf_rBandLumWt': \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='metal',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r',minHaloMass='1000dm'),
 
    'Subhalo_StellarAge_2rhalf_rBandLumWt'    : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='stellar_age',op='mean',rad='2rhalfstars',weighting='bandLum-sdss_r'),
@@ -3772,7 +3784,11 @@ fieldComputeFunctionMapping = \
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, # main model, with 12 projections per
                                          iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside=1, rad=30.0),
    'Subhalo_StellarPhot_p07c_cf00dust_res_conv_z_30pkpc' : partial(subhaloStellarPhot, # main model, with 1 projection per
-                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', rad=30.0),
+                                         iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', rad=30.0, minHaloMass='1000dm'),
+   'Subhalo_StellarPhot_p07c_cf00dust_z_30pkpc' : partial(subhaloStellarPhot, # model B, with 1 projection per
+                                         iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=30.0, minHaloMass='1000dm'),
+   'Subhalo_StellarPhot_p07c_cf00dust_z_2rhalf' : partial(subhaloStellarPhot, # model B, with 1 projection per
+                                         iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad='2rhalfstars', minHaloMass='1000dm'),
    'Subhalo_StellarPhot_p07c_cf00b_dust_res_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, 
                                          iso='padova07', imf='chabrier', dust='cf00b_res_conv', Nside=1, rad=30.0),
    'Subhalo_StellarPhot_p07c_cf00dust_res3_conv_ns1_rad30pkpc' : partial(subhaloStellarPhot, 
@@ -3802,7 +3818,7 @@ fieldComputeFunctionMapping = \
    'Subhalo_HalfLightRad_p07c_cf00dust_z_rad100pkpc' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00', Nside='z-axis', rad=100.0, sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_z' : \
-      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True), # main model, with 1 projection per
+      partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='z-axis', sizes=True, minHaloMass='1000dm'), # main model, with 1 projection per
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr2d' : \
       partial(subhaloStellarPhot, iso='padova07', imf='chabrier', dust='cf00_res_conv', Nside='efr2d', sizes=True),
    'Subhalo_HalfLightRad_p07c_cf00dust_res_conv_efr2d_rad30pkpc' : \

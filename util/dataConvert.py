@@ -3538,7 +3538,7 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
 
     # load
     pos = sP.snapshotSubsetP(partType, 'pos', haloID=haloID)
-    mass = sP.snapshotSubsetP(partType, 'mass', haloID=haloID)
+    mass = sP.snapshotSubsetP(partType, 'mass', haloID=haloID) if partType != 'dm' else sP.dmParticleMass
     hsml = sP.snapshotSubsetP(partType, 'hsml', haloID=haloID)
 
     quant = None # grid mass

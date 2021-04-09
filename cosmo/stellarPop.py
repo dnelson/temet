@@ -856,7 +856,7 @@ class sps():
         """ Compute (linear) luminosities in the given band, using either snapshot-stored values or 
         on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
         returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). 
-        Current return is arbitrary units. """
+        Return are linear luminosities in units of [Lsun/Hz]. """
         assert isinstance(band, str)
 
         if 'snap_' in band:

@@ -2658,7 +2658,7 @@ def renderMultiPanel(panels, conf):
         if conf.fontsize == min_fontsize:
             barAreaHeight += 0.03
         barAreaHeight = np.clip(barAreaHeight, 0.035 / aspect, 0.2)
-        print(barAreaHeight)
+
         if nCols >= 3:
             barAreaHeight += 0.014*nCols
         if not conf.colorbars:

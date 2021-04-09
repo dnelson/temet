@@ -52,7 +52,11 @@ quantDescriptions = {
   'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
   'velmag'           : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
   'spinmag'          : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
-  'M_V'              : 'Galaxy absolute magnitude in the visible (V) band. Intrinsic light, with no consideration of dust or obscuration.',
+  'M_V'              : 'Galaxy absolute magnitude in the "visible" (V) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
+  'M_U'              : 'Galaxy absolute magnitude in the "ultraviolet" (U) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
+  'M_B'              : 'Galaxy absolute magnitude in the "blue" (B) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
+  'color_UV'         : 'Galaxy U-V color, which is defined as M_U-M_V. Intrinsic light, with no consideration of dust or obscuration.',
+  'color_VB'         : 'Galaxy V-B color, which is defined as M_V-M_B. Intrinsic light, with no consideration of dust or obscuration.',
   'vcirc'            : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
   'distance'         : 'Radial distance of this satellite galaxy from the center of its parent host halo. Central galaxies have zero distance by definition.',
   'distance_rvir'    : 'Radial distance of this satellite galaxy from the center of its parent host halo, normalized by the virial radius. Central galaxies have zero distance by definition.',
@@ -95,8 +99,9 @@ def bandMagRange(bands, tight=False):
     if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
     if bands[0] == 'r' and bands[1] == 'z': mag_range = [0.0,0.8]
 
-    if bands[0] == 'U' and bands[1] == 'V': mag_range = [0.0,2.5]
+    if bands[0] == 'U' and bands[1] == 'V': mag_range = [-0.4,2.0]
     if bands[0] == 'V' and bands[1] == 'J': mag_range = [-0.4,1.6]
+    if bands[0] == 'V' and bands[1] == 'B': mag_range = [-1.1,0.5]
 
     if tight:
         # alternative set
@@ -130,7 +135,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants1 = ['ssfr','Z_stars','Z_gas','Z_gas_sfr','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',
                'surfdens1_stars','surfdens2_stars','surfdens1_dm','delta_sfms',
                'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens','virtemp','velmag','spinmag',
-               'M_V','vcirc','distance','distance_rvir']
+               'M_U','M_V','M_B','color_UV','color_VB','vcirc','distance','distance_rvir']
 
     # generally available (want to make available on the online interface)
     quants1b = ['zform_mm5', 'stellarage']
@@ -384,7 +389,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [1.5, 3.5]
             if tight: minMax = [1.0, 3.5]
 
-    if quantname in ['M_V', 'M_U']:
+    if quantname in ['M_V', 'M_U', 'M_B']:
         # StellarPhotometrics from snapshot
         vals = sP.groupCat(sub=quantname)
 
@@ -1466,7 +1471,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if par != 'all': label += ' [%s]' % par
 
     if quantname[0:6] == 'color_':
-        # integrated galaxy colors, different dust models (e.g. 'color_C_gr')
+        # integrated galaxy colors, different dust models (e.g. 'color_C_gr') (also e.g. 'color_UV' from snap)
         vals = sP.groupCat(sub=quantname)
 
         from plot.config import bandRenamesToFSPS
