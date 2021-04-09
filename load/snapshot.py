@@ -466,10 +466,10 @@ def snapshotSubset(sP, partType, fields,
         # field name: take lowercase, and strip optional '_log' postfix
         takeLog = False
 
-        field = fieldName.lower()
-        if field[-len('_log'):] == '_log':
-            field = field[:-len('_log')]
+        if fieldName[-len('_log'):].lower() == '_log':
+            fieldName = fieldName[:-len('_log')]
             takeLog = True
+        field = fieldName.lower()
 
         # temperature (from u,nelec) [log K]
         if field in ["temp", "temperature"]:
@@ -1415,6 +1415,23 @@ def snapshotSubset(sP, partType, fields,
                 r[field] = sP.inverseMapPartIndicesToHaloIDs(inds, partType)
             else:
                 r[field] = sP.inverseMapPartIndicesToSubhaloIDs(inds, partType)
+
+        # any property of the parent halo or subhalo, per particle/cell
+        if field.startswith('parent_subhalo_') or field.startswith('parent_halo_'):
+            if 'parent_subhalo_' in field:
+                parentField = fieldName.replace('parent_subhalo_','')
+                parentIDs = snapshotSubset(sP, partType, 'subhalo_id', **kwargs)
+                parentProp = sP.subhalos(parentField)
+            elif 'parent_halo_' in field:
+                parentField = fieldName.replace('parent_halo_','')
+                parentIDs = snapshotSubset(sP, partType, 'halo_id', **kwargs)
+                parentProp = sP.halos(parentField)
+
+            r[fieldName] = parentProp[parentIDs]
+
+            # set NaN for any particles/cells not in a parent
+            w = np.where(parentIDs == -1)
+            r[fieldName][w] = np.nan
 
         # unit-postprocessing
         if takeLog:
