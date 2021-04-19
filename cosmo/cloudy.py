@@ -107,7 +107,7 @@ lineList = """
 #Ne  8 780.324, doublet in Bertone+ (2010b)
 
 def getEmissionLines():
-    """ Helper. """
+    """ Return the list of emission lines (``lineList`` above) that we save from CLOUDY runs. """
     lines = lineList.split('\n')[1:-1] # first and last lines are blank in above string
     emLines = [line[9:22] for line in lines]
     wavelengths = [float(line[14:21]) for line in lines]
@@ -152,11 +152,13 @@ def loadFG11UVB(redshifts=None):
 
     return r
 
-def loadHM12UVB(redshifts=None, puchwein18=False):
-    """ Load the Haardt-Madau (2012) or Puchwein+ (2018) UVB at one or more redshifts and convert to CLOUDY units. """
-    filePath = rootPath + 'data/haardt.madau/hm2012.uvb.txt'
+def _loadExternalUVB(redshifts=None, hm12=False, puchwein18=False):
+    """ Load UVB from an external file. """
+    if hm12:
+        filePath = rootPath + 'data/haardt.madau/hm2012.uvb.txt'
     if puchwein18:
         filePath = rootPath + '/data/puchwein/p18.uvb.txt'
+
     from util.simParams import simParams
     sP = simParams(res=1820,run='tng') # for units
 
@@ -194,9 +196,13 @@ def loadHM12UVB(redshifts=None, puchwein18=False):
 
     return r
 
+def loadHM12UVB(redshifts=None):
+    """ Load the Haardt-Madau (2012) UVB at one or more redshifts and convert to CLOUDY units. """
+    return _loadExternalUVB(redshifts=redshifts, hm12=True)
+
 def loadP18UVB(redshifts=None):
     """ Load the Puchwein+ (2018) UVB at one or more redshifts and convert to CLOUDY units. """
-    return loadHM12UVB(redshifts=redshifts, puchwein18=True)
+    return _loadExternalUVB(redshifts=redshifts, puchwein18=True)
 
 def cloudyUVBInputAttenuated(gv, attenuateUVB=True):
     """ Generate the cloudy input string for the UVB, using the FG11 tables and with the 
@@ -316,7 +322,7 @@ def runCloudySim(gv, temp):
         with open( gv['outputFileName'],'w' ) as f:
             f.write(outputLines)
 
-def getRhoTZzGrid(res):
+def _getRhoTZzGrid(res):
     """ Get the pre-set spacing of grid points in density, temperature, metallicity, redshift.
         Density: log total hydrogen number density. Temp: log Kelvin. Z: log solar. """
     eps = 0.0001
@@ -349,7 +355,7 @@ def runCloudyGrid(redshiftInd, nThreads=61, res='lg'):
     import multiprocessing as mp
 
     # config
-    densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
 
     # init
     gv = {}
@@ -393,7 +399,7 @@ def collectCloudyOutputs(res='lg'):
     # config
     maxNumIons = 10    # keep at most the 10 lowest ions per element
     zeroValLog = -30.0 # what Cloudy reports log(zero fraction) as
-    densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
 
     def parseCloudyIonFile(basePath,r,d,Z,T,maxNumIons=99):
         """ Construct file path to a given Cloudy output, load and parse. """
@@ -469,7 +475,7 @@ def collectCloudyOutputs(res='lg'):
 def collectCloudyEmissivityOutputs(res='lg'):
     """ Combine all CLOUDY (line emissivity) outputs for a grid into a master HDF5 table. """
     zeroValLog = -60.0 # place absolute zeros to 10^-60, as we will log
-    densities, temps, metals, redshifts = getRhoTZzGrid(res=res)
+    densities, temps, metals, redshifts = _getRhoTZzGrid(res=res)
 
     def parseCloudyEmisFile(basePath,r,d,Z,T):
         """ Construct file path to a given Cloudy output, load and parse. """
@@ -554,7 +560,7 @@ class cloudyIon():
     #   mass      = mass in unified atomic mass units (Dalton)
     #   isotopes  = mass numbers (#p+n) of isotopes of this element
     #   ionEnergy = ionization energies [eV]
-    el = [ {'number':1,  'name':'Hydrogen',  'symbol':'H',  'solar':1.00e+00, 'mass':1.008,  'isotopes':[1,2], 
+    _el = [ {'number':1,  'name':'Hydrogen',  'symbol':'H',  'solar':1.00e+00, 'mass':1.008,  'isotopes':[1,2], 
             'ionEnergy':[13.5984]},
            {'number':2,  'name':'Helium',    'symbol':'He', 'solar':8.51e-02, 'mass':4.003,  'isotopes':[3,4],
             'ionEnergy':[24.5874, 54.416]},
@@ -638,31 +644,33 @@ class cloudyIon():
          ]
 
     # currently contents of on-disk table (here as a cache)
-    saved_names   = ['Aluminium', 'Argon', 'Beryllium', 'Boron', 'Calcium', 'Carbon', 'Chlorine', 'Chromium', 
-                     'Cobalt', 'Copper', 'Flourine', 'Helium', 'Hydrogen', 'Iron', 'Lithium', 'Magnesium', 'Manganese', 
-                     'Neon', 'Nickel', 'Nitrogen', 'Oxygen', 'Phosphorus', 'Potassium', 'Scandium', 'Silicon', 'Sodium', 
-                     'Sulfur', 'Titanium', 'Vanadium', 'Zinc']
-    saved_syms    = ['Al', 'Ar', 'Be', 'B', 'Ca', 'C', 'Cl', 'Cr', 'Co', 'Cu', 'F', 'He', 'H', 'Fe', 'Li', 'Mg', 'Mn', 
-                     'Ne', 'Ni', 'N', 'O', 'P', 'K', 'Sc', 'Si', 'Na', 'S', 'Ti', 'V', 'Zn']
-    saved_numIons = [10,10,5,6,10,7,10,10,10,10,10,3,3,10,4,10,10,10,10,8,9,10,10,10,10,10,10,10,10,10]
+    _saved_names   = ['Aluminium', 'Argon', 'Beryllium', 'Boron', 'Calcium', 'Carbon', 'Chlorine', 'Chromium', 
+                      'Cobalt', 'Copper', 'Flourine', 'Helium', 'Hydrogen', 'Iron', 'Lithium', 'Magnesium', 'Manganese', 
+                      'Neon', 'Nickel', 'Nitrogen', 'Oxygen', 'Phosphorus', 'Potassium', 'Scandium', 'Silicon', 'Sodium', 
+                      'Sulfur', 'Titanium', 'Vanadium', 'Zinc']
+    _saved_syms    = ['Al', 'Ar', 'Be', 'B', 'Ca', 'C', 'Cl', 'Cr', 'Co', 'Cu', 'F', 'He', 'H', 'Fe', 'Li', 'Mg', 'Mn', 
+                      'Ne', 'Ni', 'N', 'O', 'P', 'K', 'Sc', 'Si', 'Na', 'S', 'Ti', 'V', 'Zn']
+    _saved_numIons = [10,10,5,6,10,7,10,10,10,10,10,3,3,10,4,10,10,10,10,8,9,10,10,10,10,10,10,10,10,10]
 
     # solar mass fractions (Grevesse+ 2010 Sec 3)
-    solar_X = 0.7380 # M_H / M_tot
-    solar_Y = 0.2485 # M_He / M_tot
-    solar_Z = 0.0134 # M_metals / M_tot (so (M_metals/M_H)_solar = solar_Z/solar_X = 0.0182)
+    _solar_X = 0.7380 #: M_H / M_tot
+    _solar_Y = 0.2485 #: M_He / M_tot
+    _solar_Z = 0.0134 #: M_metals / M_tot (so (M_metals/M_H)_solar = solar_Z/solar_X = 0.0182)
 
     # property helpers
     @property
     def atomicSymbols(self):
-        return [element['symbol'] for element in self.el]
+        """ List of atomic symbols, e.g. 'Mg', we have stored. """
+        return [element['symbol'] for element in self._el]
 
     @property
     def atomicNames(self):
-        return [element['name'] for element in self.el]
+        """ List of atomic names, e.g. 'Magnesium', we have stored. """
+        return [element['name'] for element in self._el]
 
     # simple roman numeral mapping
-    roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
-    romanInv = {1:'I', 2:'II', 3:'III', 4:'IV', 5:'V', 6:'VI', 7:'VII', 8:'VIII', 9:'IX', 10:'X', 11:'XI'}
+    _roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
+    _romanInv = {1:'I', 2:'II', 3:'III', 4:'IV', 5:'V', 6:'VI', 7:'VII', 8:'VIII', 9:'IX', 10:'X', 11:'XI'}
 
     def __init__(self, sP, el=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given element(s). """
@@ -681,7 +689,7 @@ class cloudyIon():
         with h5py.File(basePath + 'grid_' + res + '.hdf5','r') as f:
             # load 5D ion abundance tables
             if el is not None:
-                elements = self.resolveElementNames(el)
+                elements = self._resolveElementNames(el)
             else:
                 elements = f.keys()
 
@@ -732,18 +740,18 @@ class cloudyIon():
     def _solarMetalAbundanceMassRatio(self, element):
         """ Convert solar abundances of the el table above (num dens ratios relative to hydrogen)
         to mass ratios of the element relative to the total (e.g. should be ~0.25 for helium). """
-        numDensRatio = self.solarAbundance(element)
+        numDensRatio = self._solarAbundance(element)
 
         M_H = self.atomicMass('Hydrogen')
         M_X = self.atomicMass(element)
 
-        return numDensRatio * (M_X/M_H) * self.solar_X
+        return numDensRatio * (M_X/M_H) * self._solar_X
 
     def _massRatioToRelSolarNumDensRatio(self, mass_ratio, el1, el2):
         """ Convert a mass (or mass density) ratio of two elements el1 and el2, i.e. Si/H or O/H, to the 
         notation e.g. [Si/H] or [O/H] which is a number density ratio relative to the solar value. """
         numdens_ratio = mass_ratio * (self.atomicMass(el1)/self.atomicMass(el2))
-        numdens_ratio_solar = self.solarAbundance(el1) / self.solarAbundance(el2)
+        numdens_ratio_solar = self._solarAbundance(el1) / self._solarAbundance(el2)
         return np.log10(numdens_ratio) - np.log10(numdens_ratio_solar)
 
     def _getElInfo(self, elements, fieldNameToMatch, fieldNameToReturn):
@@ -753,40 +761,28 @@ class cloudyIon():
         for i in range(len(elements)):
             elements[i] = elements[i].capitalize() # "o" -> "O", "ni" -> "Ni", "carbon" -> "Carbon"
 
-            elInfo = [el for el in self.el if el[fieldNameToMatch] == elements[i]]
+            elInfo = [el for el in self._el if el[fieldNameToMatch] == elements[i]]
 
             if elInfo:
                 elements[i] = elInfo[0][fieldNameToReturn]
 
-            if elements[i] not in [el[fieldNameToReturn] for el in self.el]:
+            if elements[i] not in [el[fieldNameToReturn] for el in self._el]:
                 raise Exception('Failed to locate ['+elements[i]+'] in elInfo.')
 
         if len(elements) == 1: return elements[0]
         return elements
 
-    def resolveElementNames(self, elements):
+    def _resolveElementNames(self, elements):
         """ Map symbols to full element names, and leave full names unchanged. """
         return self._getElInfo(elements, 'symbol', 'name')
 
-    def elementNameToSymbol(self, elements):
-        """ Map full element names to symbols, and leave symbols unchanged. """
-        return self._getElInfo(elements, 'name', 'symbol')
-
-    def solarAbundance(self, elements):
-        """ Return solar abundance ratio for the given element(s). """
-        return self._getElInfo(self.resolveElementNames(elements), 'name', 'solar')
-
-    def atomicMass(self, elements):
-        """ Return atomic mass (A_r in AMUs) for the given element(s). """
-        return self._getElInfo(self.resolveElementNames(elements), 'name', 'mass')
-
-    def resolveIonNumbers(self, ionNums):
+    def _resolveIonNumbers(self, ionNums):
         """ Map roman numeral ion numbers to integers, and leave integers unchanged. """
         ionNums = iterable(ionNums)
 
         for i, ionNum in enumerate(ionNums):
-            if str(ionNum).upper() in self.roman:
-                ionNums[i] = self.roman[str(ionNum).upper()]
+            if str(ionNum).upper() in self._roman:
+                ionNums[i] = self._roman[str(ionNum).upper()]
 
             if not isinstance(ionNums[i], int) or ionNums[i] == 0:
                 raise Exception('Failed to map ionization number to integer, or is 0-based index.')
@@ -794,15 +790,27 @@ class cloudyIon():
         if len(ionNums) == 1: return ionNums[0]
         return ionNums
 
+    def _elementNameToSymbol(self, elements):
+        """ Map full element names to symbols, and leave symbols unchanged. """
+        return self._getElInfo(elements, 'name', 'symbol')
+
+    def _solarAbundance(self, elements):
+        """ Return solar abundance ratio for the given element(s). """
+        return self._getElInfo(self._resolveElementNames(elements), 'name', 'solar')
+
+    def atomicMass(self, elements):
+        """ Return atomic mass (A_r in AMUs) for the given element(s). """
+        return self._getElInfo(self._resolveElementNames(elements), 'name', 'mass')
+
     def numToRoman(self, ionNums):
         """ Map numeric ion numbers to roman numeral strings. """
         ionNums = iterable(ionNums)
         ionNums = [int(num) for num in ionNums]
 
         for i, ionNum in enumerate(ionNums):
-            if ionNum <= 0 or ionNum > len(self.roman):
+            if ionNum <= 0 or ionNum > len(self._roman):
                 raise Exception('Cannot map.')
-            ionNums[i] = [numeral for numeral,arabic in self.roman.items() if arabic == ionNums[i]][0]
+            ionNums[i] = [numeral for numeral,arabic in self._roman.items() if arabic == ionNums[i]][0]
 
         if len(ionNums) == 1: return ionNums[0]
         return ionNums
@@ -827,14 +835,26 @@ class cloudyIon():
 
     def slice(self, element, ionNum, redshift=None, dens=None, metal=None, temp=None):
         """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
-          input can remain None). """
+        input can remain None).
+
+        Args:
+          element (str): name or symbol.
+          ionNum  (str or int): roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2).
+          redshift (float or None): redshift.
+          dens (float or None): hydrogen number density [log cm^-3].
+          metal (float or None): metallicity [log solar].
+          temp (float or None): temperature [log K].
+
+        Return:
+          ndarray: 1d array of ionization fraction [log] as a function of the input which is None.
+        """
         if sum(pt is not None for pt in (redshift,dens,metal,temp)) != 3:
             raise Exception('Must specify 3 of 4 grid positions.')
         if self.redshiftInterp == False:
             raise Exception('Redshift has been already removed from table, not implemented.')
 
-        element = self.resolveElementNames(element)
-        ionNum  = self.resolveIonNumbers(ionNum)
+        element = self._resolveElementNames(element)
+        ionNum  = self._resolveIonNumbers(ionNum)
 
         # closest array indices
         _, i0 = closest( self.grid['redshift'], redshift if redshift else 0 )
@@ -861,19 +881,22 @@ class cloudyIon():
         ``x = ion.frac('O',6,dens=-3.0,metal=0.0,temp=6.5,redshift=2.2)``
 
         Args:
-          element : name or symbol
-          ionNum  : roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2)
+          element (str): name or symbol
+          ionNum  (str or int): roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2)
             where I = neutral (e.g. HeI = He), II = single ionized (e.g. HeII = He+)
             (e.g. HII region = fully ionized hydrogen, HeIII = fully ionized helium)
-          dens    : hydrogen number density [log cm^-3]
-          temp    : temperature [log K]
-          metal   : metallicity [log solar]
+          dens (ndarray): hydrogen number density [log cm^-3]
+          temp (ndarrray): temperature [log K]
+          metal (ndarray): metallicity [log solar]
+
+        Return:
+          ndarray: ionization fraction per cell [log].
         """
         from scipy.ndimage import map_coordinates
         import time
 
-        element = self.resolveElementNames(element)
-        ionNum  = self.resolveIonNumbers(ionNum)
+        element = self._resolveElementNames(element)
+        ionNum  = self._resolveIonNumbers(ionNum)
 
         if redshift is not None and self.redshiftInterp == False:
             raise Exception('Redshift input for interpolation, but we have selected nearest hyperslice.')
@@ -915,20 +938,28 @@ class cloudyIon():
 
     def calcGasMetalAbundances(self, sP, element, ionNum, indRange=None, 
                                assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
-        """ Compute abundance mass fraction (linear) of the given metal ion for gas particles in the 
+        """ Compute abundance mass fraction of the given metal ion for gas particles in the 
         whole snapshot, optionally restricted to an indRange. 
 
         Args:
-          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
-          aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field. 
-          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp.
+          sP (:py:class:`~util.simParams`): simulation instance.
+          element (str): name or symbol.
+          ionNum  (str or int): roman numeral (e.g. IV) or numeral starting at 1 (e.g. CII is ionNum=2).
+          indRange (2-tuple): if not None, the usual particle/cell-level index range to load.
+          assumeSolarAbunds (bool): assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
+          assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field. 
+          tempSfCold (bool): set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp,
+            which is the default behavior.
+
+        Return:
+          ndarray: mass fraction of the requested ion, relative to the total cell gas mass [linear].
         """
 
         # load required gas properties
         dens = sP.snapshotSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
 
         if assumeSolarMetallicity:
-            metal = np.zeros( dens.size, dtype='float32' ) + self.solar_Z
+            metal = np.zeros( dens.size, dtype='float32' ) + self._solar_Z
         else:
             assert sP.snapHasField('gas', 'GFM_Metallicity')
             metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
@@ -951,37 +982,34 @@ class cloudyIon():
         if assumeSolarAbunds:
             # use (M_X/M_metals)_solar for the total amount of this element, using either a 
             # variable GFM_Metallicity from the simulation or a constant Z_solar assumption
-            metal_mass_fraction = (metal/self.solar_Z) * self._solarMetalAbundanceMassRatio(element)
+            metal_mass_fraction = (metal/self._solar_Z) * self._solarMetalAbundanceMassRatio(element)
         else:
             # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
             if sP.snapHasField('gas', 'GFM_Metals'):
-                assert self.elementNameToSymbol(element) in sP.metals
+                assert self._elementNameToSymbol(element) in sP.metals
 
-                fieldName = "metals_" + self.elementNameToSymbol(element)
+                fieldName = "metals_" + self._elementNameToSymbol(element)
                 metal_mass_fraction = sP.snapshotSubset('gas', fieldName, indRange=indRange)
 
                 metal_mass_fraction[metal_mass_fraction < 0.0] = 0.0 # clip -eps values at zero
             else:
                 print('WARNING: metal abunds but GFM_Metals not available (mini-snap). Assuming solar abundances.')
-                metal_mass_fraction = (metal/self.solar_Z) * self._solarMetalAbundanceMassRatio(element)
-
-        if 0: # DISABLED
-            metal_mass_fraction = 0.000549262436107 # oxygen/total mass ratio, 0.1 * solar
+                metal_mass_fraction = (metal/self._solar_Z) * self._solarMetalAbundanceMassRatio(element)
 
         metal_ion_mass_fraction = metal_mass_fraction * ion_fraction
         return metal_ion_mass_fraction
 
 class cloudyEmission():
     """ Use pre-computed Cloudy table to derive line emissivities for simulation gas cells. """
-    lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
-                         'Lyman-beta'  : 'H  1 1025.72A',
-                         'MgII'        : 'Blnd 2798.00A', # 2796+2803A together
-                         'H-alpha'     : 'H  1 6562.81A',
-                         'H-beta'      : 'H  1 4861.33A',
-                         '[OII]3729'   : 'O  2 3728.81A',
-                         'OVII'        : 'O  7 22.1012A',
-                         'OVIII'       : 'O  8 18.9709A'}
+    _lineAbbreviations = {'Lyman-alpha' : 'H  1 1215.67A',
+                          'Lyman-beta'  : 'H  1 1025.72A',
+                          'MgII'        : 'Blnd 2798.00A', # 2796+2803A together
+                          'H-alpha'     : 'H  1 6562.81A',
+                          'H-beta'      : 'H  1 4861.33A',
+                          '[OII]3729'   : 'O  2 3728.81A',
+                          'OVII'        : 'O  7 22.1012A',
+                          'OVIII'       : 'O  8 18.9709A'}
 
     def __init__(self, sP, line=None, res='lg', redshiftInterp=False, order=3):
         """ Load the table, optionally only for a given line(s). """
@@ -1001,7 +1029,7 @@ class cloudyEmission():
             if line is None:
                 lines = f.keys()
             else:
-                lines = self.resolveLineNames(line)
+                lines = self._resolveLineNames(line)
                 lines = [l.replace(" ","_") for l in iterable(lines)]
 
             for line in iterable(lines):
@@ -1025,7 +1053,7 @@ class cloudyEmission():
         for field in self.grid.keys():
             self.range[field] = [ self.grid[field].min(), self.grid[field].max() ]
 
-    def resolveLineNames(self, lines, single=False):
+    def _resolveLineNames(self, lines, single=False):
         """ Map line abbreviations to unambiguous (species,ion,wavelength) triplets, leave inputs
         which are already full and valid unchanged. """
         emLines, _ = getEmissionLines()
@@ -1035,14 +1063,14 @@ class cloudyEmission():
             if line in emLines:
                 validLines.append(line)
                 continue
-            if line in self.lineAbbreviations:
-                validLines.append(self.lineAbbreviations[line])
+            if line in self._lineAbbreviations:
+                validLines.append(self._lineAbbreviations[line])
                 continue
-            if line.replace(" ","") in self.lineAbbreviations:
-                validLines.append(self.lineAbbreviations[line.replace(" ","")])
+            if line.replace(" ","") in self._lineAbbreviations:
+                validLines.append(self._lineAbbreviations[line.replace(" ","")])
                 continue
-            if line.replace(' ','-') in self.lineAbbreviations:
-                validLines.append(self.lineAbbreviations[line.replace(' ','-')])
+            if line.replace(' ','-') in self._lineAbbreviations:
+                validLines.append(self._lineAbbreviations[line.replace(' ','-')])
                 continue
             raise Exception("Failed to recognize line [%s]!" % line)
 
@@ -1054,9 +1082,9 @@ class cloudyEmission():
         return validLines
 
     def lineWavelength(self, lines):
-        """ Return the [rest, vacuum] wavelength of a line given its name, in [Ang]. """
+        """ Return the [rest, vacuum] wavelength of a line (or multiple lines) given its name, in [Ang]. """
         names, wavelengths = getEmissionLines()
-        lines = self.resolveLineNames(lines)
+        lines = self._resolveLineNames(lines)
         inds = [names.index(line) for line in lines]
 
         if len(lines) == 1: return wavelengths[inds[0]]
@@ -1064,13 +1092,24 @@ class cloudyEmission():
 
     def slice(self, line, redshift=None, dens=None, metal=None, temp=None):
         """ Return a 1D slice of the table specified by a value in all other dimensions (only one 
-          input can remain None). """
+        input can remain None).
+
+        Args:
+          line (str): name of line (species, ion number, and wavelength triplet) (or abbreviation).
+          redshift (float or None): redshift.
+          dens (float or None): hydrogen number density [log cm^-3].
+          metal (float or None): metallicity [log solar].
+          temp (float or None): temperature [log K].
+
+        Return:
+          ndarray: 1d array of volume emissivity [log erg/cm^3/s] as a function of the input which is None.
+        """
         if sum(pt is not None for pt in (redshift,dens,metal,temp)) != 3:
             raise Exception('Must specify 3 of 4 grid positions.')
         if self.redshiftInterp == False:
             raise Exception('Redshift has been already removed from table, not implemented.')
 
-        line = self.resolveLineNames(line, single=True)
+        line = self._resolveLineNames(line, single=True)
 
         # closest array indices
         _, i0 = closest( self.grid['redshift'], redshift if redshift else 0 )
@@ -1088,20 +1127,23 @@ class cloudyEmission():
             return self.grid['temp'], self.data[line][i0,i1,i2,:]
 
     def emis(self, line, dens, metal, temp, redshift=None):
-        """ Interpolate the line emissivity table, return log(volume emissivity [erg/cm^3/s]).
+        """ Interpolate the line emissivity table for gas cell(s) with the given properties.
         Input gas properties can be scalar or np.array(), in which case they must have the same size.
 
         Args:
-          line  : name of line (species, ion number, and wavelength triplet) (or abbreviation)
-          dens  : hydrogen number density [log cm^-3]
-          temp  : temperature [log K]
-          metal : metallicity [log solar]
+          line (str): name of line (species, ion number, and wavelength triplet) (or abbreviation).
+          dens (float or None): hydrogen number density [log cm^-3].
+          temp (float or None): temperature [log K].
+          metal (float or None): metallicity [log solar].
+          redshift (float or None): if input, then interpolate also in redshift.
 
+        Return:
+          ndarray: 1d array of volume emissivity, per cell [log erg/cm^3/s].
         """
         from scipy.ndimage import map_coordinates
         import time
 
-        line = self.resolveLineNames(line, single=True)
+        line = self._resolveLineNames(line, single=True)
 
         if redshift is not None and self.redshiftInterp == False:
             raise Exception('Redshift input for interpolation, but we have selected nearest hyperslice.')
@@ -1138,23 +1180,30 @@ class cloudyEmission():
 
     def calcGasLineLuminosity(self, sP, line, indRange=None, dustDepletion=False, 
                               assumeSolarAbunds=False, assumeSolarMetallicity=False, tempSfCold=True):
-        """ Compute luminosity of line emission in linear [erg/s] units for the given 'line',
+        """ Compute luminosity of line emission in for the given 'line',
         for gas particles in the whole snapshot, optionally restricted to an indRange.
 
         Args:
-          dustDepletion: apply a dust-depletion model for a given species
-          aSA : assume solar abundances (metal ratios), thereby ignoring GFM_Metals field
-          aSM : assume solar metallicity, thereby ignoring GFM_Metallicity field.
-          tempSfCold : set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp.
+          sP (:py:class:`~util.simParams`): simulation instance.
+          line (str): name of line (species, ion number, and wavelength triplet) (or abbreviation).
+          indRange (2-tuple): if not None, the usual particle/cell-level index range to load.
+          dustDepletion (bool): apply a dust-depletion model for a given species.
+          assumeSolarAbunds (bool): assume solar abundances (metal ratios), thereby ignoring GFM_Metals field.
+          assumeSolarMetallicity (bool): assume solar metallicity, thereby ignoring GFM_Metallicity field. 
+          tempSfCold (bool): set temperature of SFR>0 gas to cold phase temperature (1000 K) instead of eEOS temp,
+            which is the default behavior.
+
+        Return:
+          ndarray: luminosity of line emission, per cell [linear erg/s].
         """
         ion = cloudyIon(sP=None)
-        line = self.resolveLineNames(line, single=True)
+        line = self._resolveLineNames(line, single=True)
 
         # load required gas properties
         dens = sP.snapshotSubset('gas', 'hdens_log', indRange=indRange) # log [cm^-3]
 
         if assumeSolarMetallicity:
-            metal = np.zeros( dens.size, dtype='float32' ) + ion.solar_Z
+            metal = np.zeros( dens.size, dtype='float32' ) + ion._solar_Z
         else:
             assert sP.snapHasField('gas', 'GFM_Metallicity')
             metal = sP.snapshotSubset('gas', 'metal', indRange=indRange)
@@ -1180,7 +1229,7 @@ class cloudyEmission():
         else:
             # note: GFM_Metals[X] is the mass ratio of each element to total gas mass (M_X/M_gas)
             # so we can use, as long as the requested element X is one of the 9 tracked GFM elements
-            sym = ion.elementNameToSymbol(element)
+            sym = ion._elementNameToSymbol(element)
             if sP.snapHasField('gas', 'GFM_Metals'):
                 if sym not in sP.metals:
                     print('WARNING: [%s] not in sP.metals (expected for sulphur), taking solar abunds.' % sym)

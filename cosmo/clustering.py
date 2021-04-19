@@ -36,10 +36,38 @@ def _covar_matrix(x_avg, x_subs):
 
 def twoPointAutoCorrelationPeriodicCube(sP, cenSatSelect='all', minRad=10.0, numRadBins=20, 
       colorBin=None, cType=None, mstarBin=None, mType=None, jackKnifeNumSub=4):
-    """ Calculate the two-point auto-correlation function in a periodic cube geometry. 
-    If colorBin or mstarBin is not None, then a (min,max) tuple. Then we require the corresponding 
-    cType=[bands,simColorsModel] or mType='appropriate cosmo.general.loadSimSubhaloQuant string'.
-    Optional inputs: cenSatSelect, minRad (in code units), numRadBins. """
+    """ Calculate the two-point auto-correlation function (of galaxies/subhalos) in a periodic cube geometry.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      cenSatSelect (str): restrict to one of 'cen', 'sat', or 'all' (default).
+      minRad (float): minimum radius [code units].
+      numRadBins (int): number of radial bins.
+      colorBin (2-tuple or None): if not None, a ``[min,max]`` tuple giving the minimum and maximum 
+        value of galaxy color to be included in the calculation. In this case we also require the 
+        corresponding ``cType`` to be specified.
+      cType (2-tuple or None): if ``colorBin`` is not None, then should be ``[bands,simColorsModel]`` 
+        specifying the two bands to derive the color, and the model (iso,imf,dust).
+      mstarBin (2-tuple or None): if not None, a ``[min,max]]`` tuple giving the minimum and maximum
+        value of galaxy stellar mass to be included in the calculation. In this case we also require 
+        the corresponding ``mType`` to be specified.
+      mType (str or None): if ``mstarBin`` is not None, then should be a string defining the 
+        stellar mass field (of :py:func:`plot.quantities.simSubhaloQuantity`) and so also units.
+      jackKnifeNumSub (int or None): if not None, gives the number :math:`N` of linear subdivisions 
+        for jackknife error estimation, requiring :math:`N^3` additional tpcf calculations.
+
+    Returns:
+      a 4-tuple composed of
+      
+      - **rad** (ndarray): distance bin mid-points [code units].
+      - **xi** (ndarray): the two-point auto correlation function :math:`\chi(r) = \\rm{DD}/\\rm{RR} - 1` 
+        where ``xi[i]`` is computed between ``rad[i]:rad[i+1]``.
+      - **xi_err** (ndarray): one sigma errors derived from the covariance (None if ``jackKnifeNumSub`` is None).
+      - **covar** (ndarray): 2d covariance matrix (None if ``jackKnifeNumSub`` is None).
+
+    Note:
+      Automatically caching. Result is saved to ``sP.derivPath/clustering/``.
+    """
     assert cenSatSelect in ['all','cen','sat']
     savePath = sP.derivPath + "/clustering/"
 

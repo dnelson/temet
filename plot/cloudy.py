@@ -248,7 +248,7 @@ def plotIonAbundances(res='lg', elements=['Carbon']):
                 for j, ionNum in enumerate(np.arange(ion.numIons[element])+1):
                     T, ionFrac = ion.slice(element, ionNum, redshift=redshift, dens=dens, metal=metal)
                 
-                    label = ion.elementNameToSymbol(element) + ion.numToRoman(ionNum)
+                    label = ion._elementNameToSymbol(element) + ion.numToRoman(ionNum)
                     ax.plot(T, ionFrac, lw=lw, color=cm[j], label=label)
 
             ax.legend(loc='upper right')
@@ -330,7 +330,7 @@ def ionAbundFracs2DHistos(saveName, element='Oxygen', ionNums=[6,7,8], redshift=
         ZZ = z #np.flip(z,axis=1)
         c = contourf(YY, XX, ZZ, V, cmap=ctName)
 
-        labelText = ion.elementNameToSymbol(element) + ion.numToRoman(ionNum)
+        labelText = ion._elementNameToSymbol(element) + ion.numToRoman(ionNum)
         ax.text(y[-1]-0.6, x[0]+0.3,labelText, va='bottom', ha='right', color='white', fontsize='40')
 
     # colorbar on last panel only

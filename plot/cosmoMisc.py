@@ -251,20 +251,26 @@ def simHydroResolutionComparison():
     hagn_totvolcum = np.cumsum(np.array(hagn_volfrac[::-1]) * (100.0 / hagn_h * hagn_a)**3) # pMpc^3
     eh_totvolcum = np.cumsum(np.array(eh_volfrac[::-1]) * (50.0 / hagn_h * hagn_a)**3) # pMpc^3
 
-    # boxes
+    # FOGGIE (6 z=2 runs in FOGGIE IV and FOGGIE V papers) - Raymond Simons email 14 April 2021
+    foggie_totvol = 8.8e-4
+    foggie_dx  = [0.0915, 0.183, 0.366] # pkpc
+    foggie_cumvol = [0.06*foggie_totvol, 0.11*foggie_totvol, 1.0*foggie_totvol] # pMpc^3
+
+    # boxes (all lines sum over all halos)
     boxes = [{'name':'Horizon-AGN (z=2)', 'dx':hagn_cellsize, 'vol':hagn_totvolcum},
              {'name':'Extreme-Horizon (z=2)', 'dx':hagn_cellsize, 'vol':eh_totvolcum},
              {'sP':simParams(run='tng100-1',redshift=2.0)},
              {'sP':simParams(run='tng50-1',redshift=2.0)},
              {'sP':simParams(run='tng300-1',redshift=2.0)}]
 
-    # zooms
+    # zooms (all lines are 'per halo')
     zooms = [{'sP':simParams(run='auriga',hInd=6,res=3,redshift=2.0), 'name': 'Auriga (L3)'},
              {'sP':simParams(run='auriga',hInd=6,res=2,redshift=2.0), 'name': 'Auriga (L2)'},
              {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FPorig',redshift=2.2), 'name':'Suresh+19 (L11)'},
-             {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FP',redshift=2.2), 'name':'Suresh+19 (L12)'}]
+             {'sP':simParams(run='zooms2_josh',res=11,hInd=2,variant='FP',redshift=2.2), 'name':'Suresh+19 (L12)'},
+             {'name':'FOGGIE (z=2)', 'dx':foggie_dx, 'vol':foggie_cumvol}]
 
-    # idealized (constant resolution dx in pkpc, total volume in pMpc^3)
+    # idealized (constant resolution dx in pkpc, total volume in pMpc^3, all lines sum over all runs)
     ideals = [{'name':'CGOLS', 'dx':4.88e-3, 'vol':10*10*20*3/1e9}, # [A,B,C]-2048, Schneider+2018 Table 1
               {'name':'TIGRESS', 'dx':4e-3, 'vol':1*1*9/1e9}, # Kim+ 2018
               {'name':'SILCC', 'dx':3.9e-3, 'vol':0.5*0.5*4*6/1e9}] # Rathjen+ 2020 (6 runs Table 1)
@@ -284,35 +290,80 @@ def simHydroResolutionComparison():
         opts = {'color':'#ffffff', 'fontsize':12, 'va':'center', 'ha':'left'}
 
         # 50 Mpc box
-        ax.plot([xx[0],30], [100**3, 100**3], '-', lw=lwb, color=color)
-        ax.plot([30, 0], [100**3, 100**3], '-', lw=lw, color='#eee', alpha=0.2)
-        ax.text(xx[0]-xfac, 100**3, '100 Mpc Box', **opts)
+        yy = 100**3
+        if yy < ax.get_ylim()[1]:
+            ax.plot([xx[0],xx[0]*0.1], [yy, yy], '-', lw=lwb, color=color)
+            ax.plot([xx[0]*0.1, 0], [yy, yy], '-', lw=lw, color='#eee', alpha=0.2)
+            ax.text(xx[0]*0.88, yy, '100 Mpc Box', **opts)
 
         # Cluster halo
         rvir_cluster = 2130.0 # pkpc, z=0, median of TNG300-1 halos 14.9<M200c<15.2
         vol_cluster = 4/3 * np.pi * rvir_cluster**3 / 1e9 # pMpc^3
 
-        ax.plot([xx[0],20], [vol_cluster,vol_cluster], '-', lw=lwb, color=color)
-        ax.plot([20, 0], [vol_cluster,vol_cluster], '-', lw=lw, color='#eee', alpha=0.2)
-        ax.text(xx[0]-xfac, vol_cluster, '$10^{15}\, M_\odot$ Cluster', **opts)
+        if vol_cluster < ax.get_ylim()[1]:
+            ax.plot([xx[0],xx[0]*0.1], [vol_cluster,vol_cluster], '-', lw=lwb, color=color)
+            ax.plot([xx[0]*0.1, 0], [vol_cluster,vol_cluster], '-', lw=lw, color='#eee', alpha=0.2)
+            ax.text(xx[0]*0.88, vol_cluster, '$10^{15}\, M_\odot$ Cluster', **opts)
 
-        # Milky Way halo
+        # Milky Way halo (z=0)
         rvir_mwhalo = 235.0 # pkpc, z=0, median of TNG100-1 halos 12.1<M200c<12.2
         vol_mwhalo = 4/3 * np.pi * rvir_mwhalo**3 / 1e9 # pMpc^3
 
-        ax.plot([xx[0],15], [vol_mwhalo,vol_mwhalo], '-', lw=lwb, color=color)
-        ax.plot([15, 0], [vol_mwhalo,vol_mwhalo], '-', lw=lw, color='#eee', alpha=0.2)
-        ax.text(xx[0]-xfac, vol_mwhalo, 'Milky Way Halo', **opts)
+        if vol_mwhalo < ax.get_ylim()[1]:
+            ax.plot([xx[0],xx[0]*0.07], [vol_mwhalo,vol_mwhalo], '-', lw=lwb, color=color)
+            ax.plot([xx[0]*0.07, 0], [vol_mwhalo,vol_mwhalo], '-', lw=lw, color='#eee', alpha=0.2)
+            ax.text(xx[0]*0.88, vol_mwhalo, 'Milky Way Halo (z=0)', **opts)
+
+        # Milky Way halo (z=2)
+        rvir_mwhalo = 113.0 # pkpc, z=2, median of TNG100-1 halos 12.1<M200c<12.2
+        vol_mwhalo = 4/3 * np.pi * rvir_mwhalo**3 / 1e9 # pMpc^3
+
+        if ax.get_xlim()[0] < 100 and vol_mwhalo < ax.get_ylim()[1]:
+            ax.plot([xx[0],xx[0]*0.07], [vol_mwhalo,vol_mwhalo], '-', lw=lwb, color=color)
+            ax.plot([xx[0]*0.07, 0], [vol_mwhalo,vol_mwhalo], '-', lw=lw, color='#eee', alpha=0.2)
+            ax.text(xx[0]*0.88, vol_mwhalo, 'Milky Way Halo (z=2)', **opts)
 
         # Disk galaxy
         vol_disk = np.pi * (10)**2 * 1 / 1e9 # disk radius=10kpc, height=1kpc [pMpc^3]
 
-        ax.plot([xx[0],10], [vol_disk,vol_disk], '-', lw=lwb, color=color)
-        ax.plot([10, 0], [vol_disk,vol_disk], '-', lw=lw, color='#eee', alpha=0.2)
-        ax.text(xx[0]-xfac, vol_disk, 'Disk Galaxy', **opts)
+        if vol_disk < ax.get_ylim()[1] and vol_disk > ax.get_ylim()[0]:
+            ax.plot([xx[0],xx[0]*0.05], [vol_disk,vol_disk], '-', lw=lwb, color=color)
+            ax.plot([xx[0]*0.05, 0], [vol_disk,vol_disk], '-', lw=lw, color='#eee', alpha=0.2)
+            ax.text(xx[0]*0.88, vol_disk, 'Disk Galaxy', **opts)
 
-        # vertical line at 1 kpc
-        #ax.plot([1,1], ax.get_ylim(), '-', lw=lw, color='#cccccc', alpha=0.3)
+    def _plot_boxes(ax, ls='solid'):
+        for sim in boxes:
+            # calculated or hard-coded data?
+            if 'sP' in sim:
+                dx, vol = _load_vols(sim['sP'])
+                name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
+            else:
+                dx, vol, name = sim['dx'], sim['vol'], sim['name']
+
+            l, = ax.plot(dx, vol, ls=ls, lw=lw, label=name)
+            ax.plot([dx[-1], 1e10], [vol[-1],vol[-1]], ls=ls, lw=lw, alpha=0.2, color=l.get_color())
+
+    def _plot_zooms(ax, ls='dotted'):
+        for sim in zooms:
+            # calculated or hard-coded data?
+            if 'sP' in sim:
+                dx, vol = _load_vols(sim['sP'])
+                name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
+                if 'name' in sim: name = sim['name']
+            else:
+                dx, vol, name = sim['dx'], sim['vol'], sim['name']
+
+            # add horizontal line to the left, and vertical line at max res
+            xx = np.hstack( [dx[0], dx, 1e10] )
+            yy = np.hstack( [1e-20, vol, vol[-1]] )
+            l, = ax.plot(xx, yy, ls=ls, lw=lw, label=name)
+
+    def _plot_idealized(ax, ls='dashed'):
+        for ideal in ideals:
+            # dx is a constant number, vol is a single number
+            xx = [1e10, ideal['dx'], ideal['dx']]
+            yy = [ideal['vol'], ideal['vol'], 1e-10]
+            l, = ax.plot(xx, yy, ls=ls, lw=lw, label=ideal['name'])
 
     # plot (A) - all simulation types, global view
     fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
@@ -321,53 +372,29 @@ def simHydroResolutionComparison():
     ax.set_xlim([200, 0.001])
     ax.set_ylim([1e-9, 1e7])
 
+    _common_setup(ax)
+
     ax.set_xticks([100, 10, 1, 0.1, 0.01, 0.001])
     ax.set_xticklabels(['100 kpc','10 kpc','1 kpc','100 pc', '10 pc', '1 pc'])
 
-    _common_setup(ax)
-
     # plot arrow towards upper right
-    color = '#555555'
-    arrowstyle = 'fancy, head_width=12, head_length=12, tail_width=8'
-    p = FancyArrowPatch(posA=[5e-1,1e0], posB=[1e-1, 5e1], arrowstyle=arrowstyle, alpha=1.0, color=color)
-    ax.add_artist(p)
+    if 1:
+        color = '#555555'
+        arrowstyle = 'fancy, head_width=12, head_length=12, tail_width=8'
+        p = FancyArrowPatch(posA=[5e-1,1e0], posB=[1e-1, 5e1], arrowstyle=arrowstyle, alpha=1.0, color=color)
+        ax.add_artist(p)
 
-    textOpts = {'color':color, 'fontsize':12, 'rotation':41.0, 'va':'top', 'ha':'left', 'multialignment':'center'}
-    ax.text(4e-1, 2e1, 'Next-generation\nhigh resolution\ncosmological\nvolumes', **textOpts)
+        textOpts = {'color':color, 'fontsize':12, 'rotation':41.0, 'va':'top', 'ha':'left', 'multialignment':'center'}
+        ax.text(4e-1, 2e1, 'Next-generation\nhigh resolution\ncosmological\nvolumes', **textOpts)
 
-    # plot boxes
-    for sim in boxes:
-        # calculated or hard-coded data?
-        if 'sP' in sim:
-            dx, vol = _load_vols(sim['sP'])
-            name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
-        else:
-            dx, vol, name = sim['dx'], sim['vol'], sim['name']
+    _plot_boxes(ax)
 
-        l, = ax.plot(dx, vol, ls='solid', lw=lw, label=name)
-
-    # plot zooms
     ax.set_prop_cycle(None) # reset color cycle
-    for sim in zooms:
-        # calculated or hard-coded data?
-        if 'sP' in sim:
-            dx, vol = _load_vols(sim['sP'])
-            name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
-            if 'name' in sim: name = sim['name']
-        else:
-            dx, vol, name = sim['dx'], sim['vol'], sim['name']
+    _plot_zooms(ax)
 
-        l, = ax.plot(dx, vol, ls='dotted', lw=lw, label=name)
-
-    # plot idealized runs
     ax.set_prop_cycle(None) # reset color cycle
-    for ideal in ideals:
-        # dx is a constant number, vol is a single number
-        xx = [1e10, ideal['dx'], ideal['dx']]
-        yy = [ideal['vol'], ideal['vol'], 1e-10]
-        l, = ax.plot(xx, yy, ls='dashed', lw=lw, label=ideal['name'])
+    _plot_idealized(ax)
 
-    # legend and finish
     legParams = {'ncol':2, 'columnspacing':1.0, 'fontsize':12, 'markerscale':0.6}
     legend = ax.legend(loc='upper right', **legParams)
 
@@ -378,30 +405,40 @@ def simHydroResolutionComparison():
     fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
     ax = fig.add_subplot(111)
     
-    ax.set_xlim([200, 0.1])
-    ax.set_ylim([1e-7, 1e7])
+    ax.set_xlim([100, 0.1])
+    ax.set_ylim([5e-5, 1e7])
 
     _common_setup(ax)
 
-    ax.set_xticks([100, 10, 1, 0.1, 0.01])
-    ax.set_xticklabels(['100 kpc','10 kpc','1 kpc','100 pc', '10 pc'])
+    ax.set_xticks([100, 10, 1, 0.1])
+    ax.set_xticklabels(['100 kpc','10 kpc','1 kpc','100 pc'])
 
-    # plot boxes
-    for sim in boxes:
-        # calculated or hard-coded data?
-        if 'sP' in sim:
-            dx, vol = _load_vols(sim['sP'])
-            name = '%s (z=%d)' % (sim['sP'].simName, sim['sP'].redshift)
-        else:
-            dx, vol, name = sim['dx'], sim['vol'], sim['name']
+    _plot_boxes(ax)
 
-        l, = ax.plot(dx, vol, ls='solid', lw=lw, label=name)
-
-    # legend and finish
     legParams = {'ncol':1, 'columnspacing':1.0, 'fontsize':12, 'markerscale':0.6}
     legend = ax.legend(loc='upper right', **legParams)
 
     fig.savefig('sim_comparison_res_boxes.pdf')
+    plt.close(fig)
+
+    # plot (C) - only cosmological zooms
+    fig = plt.figure(figsize=[figsize[0]*0.8, figsize[1]])
+    ax = fig.add_subplot(111)
+    
+    ax.set_xlim([10, 0.01])
+    ax.set_ylim([5e-12, 1e1])
+
+    _common_setup(ax)
+
+    ax.set_xticks([10, 1, 0.1, 0.01])
+    ax.set_xticklabels(['10 kpc','1 kpc','100 pc', '10 pc'])
+
+    _plot_zooms(ax, ls='solid')
+
+    legParams = {'ncol':1, 'columnspacing':1.0, 'fontsize':12, 'markerscale':0.6}
+    legend = ax.legend(loc='upper right', **legParams)
+
+    fig.savefig('sim_comparison_res_zooms.pdf')
     plt.close(fig)
 
 def plotClumpsEvo():

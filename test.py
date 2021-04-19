@@ -185,7 +185,7 @@ def minify_gergo_hydrogen_files():
 def half_Kband_radii():
     """ Test for Hannah's paper. """
     sP = simParams(run='tng50-1',redshift=2.0)
-    from cosmo.auxcatalog import _findHalfLightRadius
+    from cosmo.auxcatalog import findHalfLightRadius
 
     subhaloIDs = [25821,39745,55106,60750,79350,92271,99303]
 
@@ -204,8 +204,8 @@ def half_Kband_radii():
         mags = sP.snapshotSubset('stars_real', 'phot_K', subhaloID=subhaloID)
         mass = sP.snapshotSubset('stars_real', 'mass', subhaloID=subhaloID)
 
-        rhalf_mass2 = _findHalfLightRadius(rad,mags=None,vals=mass)
-        rhalf = _findHalfLightRadius(rad,mags)
+        rhalf_mass2 = findHalfLightRadius(rad,mass,mags=False)
+        rhalf = findHalfLightRadius(rad,mags)
 
         print(subhaloID,'stars: ',rhalf_mass[4],rhalf_mass2,rhalf)
 
@@ -214,13 +214,13 @@ def half_Kband_radii():
         mass_gas = sP.snapshotSubset('gas', 'mass', subhaloID=subhaloID)
         sfr_gas = sP.snapshotSubset('gas', 'sfr', subhaloID=subhaloID)
 
-        rhalf_gas2 = _findHalfLightRadius(rad_gas,mags=None,vals=mass_gas)
+        rhalf_gas2 = findHalfLightRadius(rad_gas,mass_gas,mags=False)
 
         w = np.where(sfr_gas > 0)
         rad_gas_sfr = rad_gas[w]
         mass_gas_sfr = mass_gas[w]
 
-        rhalf_gas_sfr = _findHalfLightRadius(rad_gas_sfr,mags=None,vals=mass_gas_sfr)
+        rhalf_gas_sfr = findHalfLightRadius(rad_gas_sfr,mass_gas_sfr,mags=False)
 
         print(subhaloID,'gas: ',rhalf_mass[0],rhalf_gas2,rhalf_gas_sfr)
 
@@ -228,7 +228,7 @@ def half_Kband_radii():
         baryon_rad = np.hstack( (rad,rad_gas_sfr) )
         baryon_mass = np.hstack( (mass,mass_gas_sfr) )
 
-        rhalf_baryon = _findHalfLightRadius(baryon_rad,mags=None,vals=baryon_mass)
+        rhalf_baryon = findHalfLightRadius(baryon_rad,baryon_mass,mags=False)
 
         print(subhaloID,'baryon: ',rhalf_baryon,end='\n\n')
 

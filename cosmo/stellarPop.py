@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 import time
 from numba import jit
-from os import mkdir
+from os import mkdir, environ
 from os.path import isfile, isdir, expanduser
 from scipy.ndimage import map_coordinates
 from scipy.interpolate import interp1d
@@ -454,7 +454,7 @@ class sps():
 
         # get nebular emission line names, wavelengths
         line_wave = pop.emline_wavelengths
-        line_file = rootPath + 'fsps/emlines_info.dat'
+        line_file = environ["SPS_HOME"] + '/data/emlines_info.dat'
         with open(line_file,'r') as f:
             line_file = [fline.strip() for fline in f.readlines()]
 
