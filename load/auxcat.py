@@ -596,6 +596,8 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='sum',rad=None),
    'Subhalo_MgII_LumSize_DustDepleted' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='halfrad',rad=None),
+   'Subhalo_MgII_LumConcentration_DustDepleted' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='concentration',rad=None),
 
    'Subhalo_Gas_Wind_vel' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='wind_vel',op='mean',rad='2rhalfstars'),
@@ -1244,7 +1246,8 @@ fieldComputeFunctionMapping = \
 
    'Subhalo_MgII_Emission_Grid2D_Shape' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_shape',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
    'Subhalo_MgII_Emission_Grid2D_Area' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_area',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
-
+   'Subhalo_MgII_Emission_Grid2D_Gini' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_isophot_gini',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
+   'Subhalo_MgII_Emission_Grid2D_M20' : partial(subhaloRadialReduction,ptType='gas',ptProperty='MgII lum_dustdepleted',op='grid2d_m20',rad=None,scope='fof',cenSatSelect='cen',minStellarMass=7.0),
   }
 
 # this list contains the names of auxCatalogs which are computed manually (e.g. require more work than 

@@ -732,7 +732,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
       ylabel (str): if not None, override y-axis label.
       lowessSmooth (bool): smooth the resulting color distribution (slow for large number of points).
       scatterPoints (bool): include all raw points with a scatterplot.
-      markersize (float): 
+      markersize (float): if ``scatterPoints`` then override the default marker size (of 6).
       maxPointsPerDex (int): if not None, then randomly sub-sample down to at most this number (equal 
         number per 0.1 dex bin) as a maximum, to reduce confusion at the low-mass end. 
       scatterColor (str): color each point by a third property.
@@ -746,7 +746,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
       drawMedian (bool): include median line and 1-sigma band.
       medianLabel (str): if not None, then override the median label with this string.
       extraMedians (list[str]): if not None, add more median lines for these (y-axis) quantities as well.
-      legendLoc (str):
+      legendLoc (str): override 'best' default location.
       xlim (list[float][2]): if not None, override default x-axis limits.
       ylim (list[float][2]): if not None, override default y-axis limits.
       clim (list[float][2]): if not None, override default colorbar limits.
@@ -933,9 +933,8 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
                     if extraMedians: label = yQuant
                     if len(subsets) > 1: label += rDesc
                     color = 'black' if (len(sPs) == 1 and len(subsets) == 1) else c
-                    alpha = 1.0
 
-                    l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=alpha, label=label)
+                    l, = ax.plot(xm, ym, linestyles[0], lw=lw, color=color, alpha=1.0, label=label)
                     if i == 0 and k == 0:
                         ax.fill_between(xm, pm[0,:], pm[-1,:], facecolor=l.get_color(), alpha=0.1, interpolate=True)
 
@@ -1045,7 +1044,7 @@ def quantMedianVsSecondQuant(sPs, pdf, yQuants, xQuant, cenSatSelect='cen', sQua
                     yy = sim_yy[w]
                     cc = sim_cc[w]
 
-                    if xx.size > 1000:
+                    if xx.size > 100:
                         ax.set_rasterization_zorder(1) # elements below z=1 are rasterized
 
                     ct = 'viridis'

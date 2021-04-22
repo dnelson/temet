@@ -903,9 +903,9 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         uLabel = 'arcsec$^{-2}$'
         if ster: uLabel = 'ster$^{-1}$'
         if '_kpc' in partField: uLabel = 'kpc$^{-2}$'
-        eLabel = 'SB [log photon s$^{-1}$ cm$^{-2}$'
+        eLabel = 'Surface Brightness [log photon s$^{-1}$ cm$^{-2}$'
         if '_ergs' in partField:
-            eLabel = 'SB [log erg s$^{-1}$ cm$^{-2}$'
+            eLabel = 'Surface Brightness [log erg s$^{-1}$ cm$^{-2}$'
         if '_lum' in partField:
             eLabel = 'Luminosity Surface Density [log erg s$^{-1}$'
 
@@ -2666,11 +2666,13 @@ def renderMultiPanel(panels, conf):
 
         def _heightfac():
             """ Helper. Used later to define height of colorbar. """
-            heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5) / (conf.rasterPx[0]/1000)
+            heightFac = np.clip(1.0*(nCols/nRows)**0.3, 0.35, 2.5)
+            #heightFac /= (conf.rasterPx[0]/1000) # todo: does this make sense for vector output?
 
             heightFac += 0.002*(conf.fontsize-min_fontsize) # larger for larger fonts, and vice versa (needs tuning)
 
-            if nRows == 1: heightFac /= np.sqrt(aspect) # reduce
+            if nRows == 1:
+                heightFac /= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights and barAreaTop == 0.0:
                 heightFac *= 1.3 # increase
             #if nRows == 1 and nCols == 1:
@@ -2862,7 +2864,7 @@ def renderMultiPanel(panels, conf):
             if oneGlobalColorbar:
                 continue
 
-            heightFac = _heightfac() * 0.65
+            heightFac = _heightfac()
 
             if nRows == 2:
                 # both above and below, one per column

@@ -1821,10 +1821,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
-    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel'] or \
-      'mg2_shape_' in quantname or 'mg2_area_' in quantname:
+    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel','mg2_m20','mg2_concentration'] or \
+      quantname.startswith(('mg2_shape_','mg2_area_','mg2_gini_')):
         # MgII emission luminosity [erg/s] or half-light radius, subhalo total, including dust depletion
-        if 'size' in quantname:
+        if '_lumsize' in quantname:
             # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
             acField = 'Subhalo_MgII_LumSize_DustDepleted'
             ac = sP.auxCat(fields=[acField])[acField]
@@ -1841,7 +1841,24 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
                 vals = sP.units.codeLengthToKpc(ac)
                 minMax = [1,10]
                 takeLog = False
-        elif 'shape' in quantname:
+        elif '_m20' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_Emission_Grid2D_M20'
+            vals = np.squeeze(sP.auxCat(fields=[acField])[acField])
+
+            label = 'MgII Emission M$_{\\rm 20}$ Index'
+            minMax = [-3.0, 0.5]
+            takeLog = False
+        elif '_concentration' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_LumConcentration_DustDepleted'
+            vals = sP.auxCat(fields=[acField])[acField]
+
+            label = 'MgII Emission Concentration (C)'
+            minMax = [2.0, 5.0]
+            if tight: minMax = [1.0, 8.0]
+            takeLog = False
+        elif '_shape' in quantname:
             # load auxCat
             acField = 'Subhalo_MgII_Emission_Grid2D_Shape'
             ac = sP.auxCat(fields=[acField])
@@ -1855,7 +1872,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'MgII Emission Shape (Axis Ratio)' # (SB$_{\\rm %.1f}$)' % isophot_level
             minMax = [0.95, 2.4]
             takeLog = False
-        elif 'area' in quantname:
+        elif '_area' in quantname:
             # load auxCat
             acField = 'Subhalo_MgII_Emission_Grid2D_Area'
             ac = sP.auxCat(fields=[acField])
@@ -1869,6 +1886,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
             label = 'MgII Emission Area [ log kpc$^2$ ]' # (SB$_{\\rm %.1f}$)' % isophot_level
             minMax = [1, 4]
+        elif '_gini' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_Emission_Grid2D_Gini'
+            ac = sP.auxCat(fields=[acField])
+
+            isophot_level = float(quantname.split('mg2_gini_')[1])
+            isophot_inds = np.where(ac[acField+'_attrs']['isophot_levels'] == isophot_level)[0]
+            assert len(isophot_inds) == 1, 'Failed to find shape at requested isophot level.'
+
+            vals = ac[acField][:,isophot_inds[0]]
+
+            label = 'MgII Emission Gini Coefficient'
+            minMax = [0, 1]
+            takeLog = False
         else:
             label = 'L$_{\\rm MgII}$ [ log erg/s ]'
 

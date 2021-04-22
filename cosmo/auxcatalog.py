@@ -518,13 +518,14 @@ def pSplitBounds(sP, pSplit, minStellarMass=None, minHaloMass=None, indivStarMag
 
     return subhaloIDsTodo, indRange, nSubsSelection
 
-def findHalfLightRadius(rad, vals, mags=True):
+def findHalfLightRadius(rad, vals, frac=0.5, mags=True):
     """ Linearly interpolate in rr (squared radii) to find the half light radius, given a list of 
     values[i] corresponding to each particle at rad[i].
 
     Args:
       rad (:py:class:`~numpy.ndarray`): list of **squared** radii.
       vals (:py:class:`~numpy.ndarray`): list of values.
+      frac (float): if 0.5, then half-light radius, otherwise e.g. 0.2 for r20.
       mags (bool): input ``vals`` are magnitudes, i.e. conversion to linear luminosity needed.
     
     Return:
@@ -554,7 +555,7 @@ def findHalfLightRadius(rad, vals, mags=True):
     lums_cum = np.cumsum( lums )
 
     # locate radius where sum equals half of total (half-light radius)
-    w = np.where(lums_cum >= 0.5*totalLum)[0]
+    w = np.where(lums_cum >= frac*totalLum)[0]
     if len(w) == 0:
         return np.nan
 
@@ -564,7 +565,7 @@ def findHalfLightRadius(rad, vals, mags=True):
     if w1 == 0:
         # half of total luminosity could be within the radius of the first star
         r1 = lums_cum[w1]
-        halfLightRad = (0.5*totalLum - 0.0)/(r1-0.0) * (radii[w1]-0.0) + 0.0
+        halfLightRad = (frac*totalLum - 0.0)/(r1-0.0) * (radii[w1]-0.0) + 0.0
 
         assert (halfLightRad >= 0.0 and halfLightRad <= radii[w1]) or np.isnan(halfLightRad)
     else:
@@ -574,7 +575,7 @@ def findHalfLightRadius(rad, vals, mags=True):
         
         r0 = lums_cum[w0]
         r1 = lums_cum[w1]
-        halfLightRad = (0.5*totalLum - r0)/(r1-r0) * (radii[w1]-radii[w0]) + radii[w0]
+        halfLightRad = (frac*totalLum - r0)/(r1-r0) * (radii[w1]-radii[w0]) + radii[w0]
 
         assert halfLightRad >= radii[w0] and (halfLightRad-radii[w1]) < 1e-6
 
@@ -687,6 +688,17 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
 
         return rhalf
 
+    # ufunc: '3D concentration' C = 5*log(r80/r20), e.g. Rodriguez-Gomez+2019 Eqn 16
+    if op == 'concentration':
+        loc_val = particles[ptProperty][i0:i1][wValid]
+        loc_rad = np.sqrt( rr[wValid] )
+
+        r20 = findHalfLightRadius(loc_rad, loc_val, frac=0.2, mags=False)
+        r80 = findHalfLightRadius(loc_rad, loc_val, frac=0.8, mags=False)
+
+        c = 5 * np.log10(r80/r20)
+        return c
+
     # distance to 256th closest particle
     if op == 'dist256':
         rr_loc = np.sort( rr[wValid] )
@@ -695,7 +707,7 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
         return dist
 
     # 2d gridding: deposit quantity onto a grid and derive a summary statistic
-    if op in ['grid2d_isophot_shape','grid2d_isophot_area']:
+    if op.startswith('grid2d_'):
         # prepare grid
         pos = np.squeeze( particles['Coordinates'][i0:i1,:][wValid,:] )
         hsml = np.squeeze( particles['hsml'][i0:i1][wValid] )
@@ -726,12 +738,15 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
 
         # derive quantity
         for j, isoval in enumerate(opts['isophot_levels']):
-            with np.errstate(invalid='ignore'):
-                mask = ( (grid > isoval) & (grid < isoval+1.0) )
+            if np.isinf(isoval):
+                mask = np.ones( grid.shape, dtype='bool' )
+            else:
+                with np.errstate(invalid='ignore'):
+                    mask = ( (grid > isoval) & (grid < isoval+1.0) )
 
             ww = np.where(mask)
 
-            if '_shape' in op:
+            if op.endswith('_shape'):
                 if len(ww[0]) <= 3:
                     continue # singular matrix for mvbe
 
@@ -769,8 +784,79 @@ def _process_custom_func(sP,op,ptProperty,gc,subhaloID,particles,rr,i0,i1,wValid
 
                 result[j] = (axislengths.max() / axislengths.min()) # a/b > 1
 
-            if '_area' in op:
+            if op.endswith('_area'):
                 result[j] = len(ww[0]) * opts['pxAreaCode'] # (ckpc/h)^2
+
+            if op.endswith('_gini'):
+                # Gini coefficient (Rodriguez-Gomez+2019 Eqn 9)
+                n = len(ww[0])
+
+                if n < 2:
+                    continue # too few pixels
+
+                Xi = np.sort(np.abs(10.0**grid[ww] * 1e10)) # linear, arbitrary scaling to move closer to one
+                denom = np.nanmean(Xi) * n * (n-1)
+                num = np.sum( (2 * np.arange(1,n+1) - n - 1) * Xi )
+                gini = num / denom
+                assert gini >= 0.0 and gini <= 1.0
+
+                result[j] = gini
+
+            if op.endswith('_m20'):
+                # M20 coefficient (Rodriguez-Gomez+2019 Sec 4.4.2)
+                I = 10.0**grid[ww] * 1e10 # linear, arbitrary scaling to move closer to one
+                I[np.isnan(I)] = 0.0
+
+                x = opts['xxyy'][ww[0]]
+                y = opts['xxyy'][ww[1]]
+
+                # calculate centroid
+                M_00 = np.sum(I)
+                M_10 = np.sum(x * I)
+                M_01 = np.sum(y * I)
+
+                xc = M_10 / M_00
+                yc = M_01 / M_00
+
+                # calculate second total central moment
+                M_20 = np.sum(x**2 * I)
+                M_02 = np.sum(y**2 * I)
+
+                mu_20 = M_20 - xc * M_10
+                mu_02 = M_02 - yc * M_01
+                second_moment_tot = mu_20 + mu_02
+
+                if second_moment_tot <= 0:
+                    continue # negative second moment
+
+                # calculate threshold pixel value
+                sorted_vals = np.sort(I.ravel())
+                lumfrac = np.cumsum(sorted_vals) / np.nansum(sorted_vals)
+                thresh = sorted_vals[np.where(lumfrac >= 0.8)[0]]
+
+                if len(thresh) == 0:
+                    continue # too few pixels
+
+                # calculate second moment of these brightest 20% of pixels
+                I_20 = I.copy()
+                I_20[I < thresh[0]] = 0.0
+
+                M_10 = np.sum(x * I_20)
+                M_01 = np.sum(y * I_20)
+                M_20 = np.sum(x**2 * I_20)
+                M_02 = np.sum(y**2 * I_20)
+
+                mu_20 = M_20 - xc * M_10
+                mu_02 = M_02 - yc * M_01
+
+                second_moment_20 = mu_20 + mu_02
+
+                if second_moment_20 <= 0:
+                    continue # negative moment
+
+                m20 = np.log10(second_moment_20 / second_moment_tot)
+
+                result[j] = m20
 
         return result
 
@@ -808,7 +894,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
       - **attrs** (dict): metadata.
     """
     ops_basic = ['sum','mean','max']
-    ops_custom = ['ufunc','halfrad','dist256','grid2d_isophot_shape','grid2d_isophot_area']
+    ops_custom = ['ufunc','halfrad','dist256','concentration',
+      'grid2d_isophot_shape','grid2d_isophot_area','grid2d_isophot_gini','grid2d_m20']
     assert op in ops_basic + ops_custom
     assert scope in ['subfind','fof','global']
     if op == 'ufunc': assert ptProperty in userCustomFields
@@ -887,7 +974,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
     # global load of all particles of [ptType] in snapshot
     fieldsLoad = []
 
-    if rad is not None or op in ['halfrad','dist256']:
+    if rad is not None or op in ['halfrad','dist256','concentration']:
         fieldsLoad.append('pos')
 
     if ptRestrictions is not None:
@@ -929,10 +1016,23 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
                 'axes' : [0,1], # random orientations
                 'quant' : None, # distribute e.g. mass or light
                 'gridExtentKpc' : 100.0,
-                'pxScaleKpc' : sP.units.arcsecToAngSizeKpcAtRedshift(0.2), # MUSE 0.2"/px
-                'smoothFWHM' : sP.units.arcsecToAngSizeKpcAtRedshift(0.7), # ~MUSE UDF ("), None to disable
-                #'nPixels' : [int(np.round(gridExtentKpc/pxScaleKpc)), int(np.round(gridExtentKpc/pxScaleKpc))]
+                'smoothFWHM' : None, # disabled
                 'nPixels' : [250,250]}
+
+        # hard-code instrumental related grid parameters (can generalize)
+        if 1:
+            # MUSE UDF
+            opts['pxScaleKpc'] = sP.units.arcsecToAngSizeKpcAtRedshift(0.2) # MUSE 0.2"/px
+            opts['smoothFWHM'] = sP.units.arcsecToAngSizeKpcAtRedshift(0.7) # ~MUSE UDF (arcsec, non-AO seeing)
+
+        if op.endswith('_gini') or op.endswith('_m20'):
+            # actual pixel size/counts important
+            nPixels = int(np.round(opts['gridExtentKpc']/opts['pxScaleKpc']))
+            opts['nPixels'] = [nPixels, nPixels]
+
+        if 'isophot_' not in op:
+            # quantities invariant to pixel selection, or where we don't want to explore multiple levels
+            opts['isophot_levels'] = [-np.inf]
 
         opts['gridSizeCodeUnits'] = sP.units.physicalKpcToCodeLength(opts['gridExtentKpc'])
         opts['boxSizeImg'] = opts['gridSizeCodeUnits'] * np.array([1.0,1.0,1.0])
@@ -950,6 +1050,8 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
             opts['sigma_xy'] = (opts['smoothFWHM'] / 2.3548) / pxScaleXY
 
         allocSize = (nSubsDo,len(opts['isophot_levels']))
+        if len(opts['isophot_levels']) == 1:
+            allocSize = (nSubsDo)
 
     fieldsLoad = list(set(fieldsLoad)) # make unique
 
@@ -1039,7 +1141,7 @@ def subhaloRadialReduction(sP, pSplit, ptType, ptProperty, op, rad,
         validMask = np.ones( i1-i0, dtype=np.bool )
 
         rr = None
-        if rad is not None or op in ['halfrad','dist256']:
+        if 'Coordinates' in particles:
 
             if not radRestrictIn2D:
                 # apply in 3D
