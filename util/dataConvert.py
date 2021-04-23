@@ -3522,13 +3522,26 @@ def exportSubhalosBinary():
     print('Saved: [%s]' % fileName)
 
 def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,64,128,256,512], 
-    haloID=None, memoryReturn=False):
-    """ Export one or more 3D uniform Cartesian grids, of different resolutions, to a flat binary format 
-    appropriate for javascript/WebGL processing (volume rendering). nCells can be a list of one or more 
-    sizes (number of cells per linear dimension). If haloID is None, then use full box. 
-    If memoryReturn is True, an actual file is not written, and instead a bytes array is returned. """
-    assert partField in ['mass','temp_linear','velmag','xray_lum'] # defaults, can remove restriction
-    from util.sphMap import sphGridWholeBox
+    haloID=None, haloSizeRvir=2.0, memoryReturn=False):
+    """ Export one or more 3D uniform Cartesian grids, of different resolutions, to a flat binary format.
+
+    Args:
+      sP (:py:class:`~util.simParams`): simulation instance.
+      partType (str): 
+      partField (str):
+      nCells (list[int]): one or more grid sizes (number of cells per linear dimension)
+      haloID (int or None): if None then use full box, otherwise fof-restricted particle load.
+      haloSizeRvir (float): if ``haloID`` is specified, then this gives the box side-length in rvir units.
+      memoryReturn (bool): if True, an actual file is not written, and instead a bytes array is returned.
+
+    Return:
+      Either raw binary inside a :py:class:`io.BytesIO`, or else no return if an actual file is written to disk.
+
+    Note:
+      This function is used to pre-compute the grids used in the Explorer3D WebGL volume rendering interface, as 
+      well as on-the-fly grid generation for halo-scope volume rendering.
+    """
+    from util.sphMap import sphGridWholeBox, sphMap
     from util.simParams import simParams
     from util.helper import logZeroSafe
     from io import BytesIO
@@ -3544,13 +3557,22 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
     quant = None # grid mass
     if partField != 'mass': # grid a different, mass-weighted quantity
         quant = sP.snapshotSubsetP(partType, partField, haloID=haloID)
-        assert partField != 'dens' # do mass instead
+        #assert partField != 'dens' # do mass instead
 
     # make series of grids at progressively better resolution
     grids = []
 
     for nCell in nCells:
-        grid = sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=nCell)
+        if haloID is None:
+            grid = sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=nCell)
+        else:
+            halo = sP.halo(haloID)
+            boxSizeImg = halo['Group_R_Crit200'] * np.array([haloSizeRvir,haloSizeRvir,haloSizeRvir])
+            boxCen = halo['GroupPos']
+
+            grid = sphMap( pos=pos, hsml=hsml, mass=mass, quant=quant, axes=[0,1], 
+                           ndims=3, boxSizeSim=sP.boxSize, boxSizeImg=boxSizeImg, 
+                           boxCen=boxCen, nPixels=[nCell, nCell, nCell] )
 
         if partField == 'mass': # unit conversion
             pxVol = (sP.boxSize / nCell)**3 # code units (ckpc/h)^3
@@ -3561,7 +3583,6 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
 
         grid = grid.astype('float16') # 2 bytes per value!
         grids.append( grid.ravel() )
-        #print('grid ', nCell, grid.min(), grid.max())
 
     # save binary
     if memoryReturn:
