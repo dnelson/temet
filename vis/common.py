@@ -70,7 +70,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
 
     # for all CLOUDY ions
     if ions:
-        cloudy_ions = cloudyIon.ionList
+        cloudy_ions = cloudyIon.ionList()
 
         if ions == 'only':
             return cloudy_ions

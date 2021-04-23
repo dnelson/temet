@@ -668,13 +668,13 @@ class cloudyIon():
         """ List of atomic names, e.g. 'Magnesium', we have stored. """
         return [element['name'] for element in self._el]
 
-    @property
-    def ionList(self):
+    @staticmethod
+    def ionList():
         """ List of all elements + ion numbers we track. """
         ions = []
 
-        for i, sym in enumerate(self._saved_syms):
-            ionNums = [self._romanInv[num+1] for num in range(self._saved_numIons[i])]
+        for i, sym in enumerate(cloudyIon._saved_syms):
+            ionNums = [cloudyIon._romanInv[num+1] for num in range(cloudyIon._saved_numIons[i])]
             el_ions = ['%s %s' % (sym,num) for num in ionNums]
 
             ions += el_ions
