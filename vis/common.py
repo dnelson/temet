@@ -70,13 +70,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
 
     # for all CLOUDY ions
     if ions:
-        cloudy_ions = []
-
-        for i, sym in enumerate(cloudyIon.saved_syms):
-            ionNums = [cloudyIon.romanInv[num+1] for num in range(cloudyIon.saved_numIons[i])]
-            el_ions = ['%s %s' % (sym,num) for num in ionNums]
-
-            cloudy_ions += el_ions
+        cloudy_ions = cloudyIon.ionList
 
         if ions == 'only':
             return cloudy_ions

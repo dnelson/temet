@@ -668,6 +668,19 @@ class cloudyIon():
         """ List of atomic names, e.g. 'Magnesium', we have stored. """
         return [element['name'] for element in self._el]
 
+    @property
+    def ionList(self):
+        """ List of all elements + ion numbers we track. """
+        ions = []
+
+        for i, sym in enumerate(self._saved_syms):
+            ionNums = [self._romanInv[num+1] for num in range(self._saved_numIons[i])]
+            el_ions = ['%s %s' % (sym,num) for num in ionNums]
+
+            ions += el_ions
+
+        return ions
+
     # simple roman numeral mapping
     _roman = {'I':1, 'II':2, 'III':3, 'IV':4, 'V':5, 'VI':6, 'VII':7, 'VIII':8, 'IX':9, 'X':10, 'XI':11}
     _romanInv = {1:'I', 2:'II', 3:'III', 4:'IV', 5:'V', 6:'VI', 7:'VII', 8:'VIII', 9:'IX', 10:'X', 11:'XI'}
