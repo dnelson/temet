@@ -3543,7 +3543,7 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
     """
     from util.sphMap import sphGridWholeBox, sphMap
     from util.simParams import simParams
-    from util.helper import logZeroSafe
+    from util.helper import logZeroSafe, logZeroMin
     from io import BytesIO
 
     # config
@@ -3579,7 +3579,7 @@ def exportHierarchicalBoxGrids(sP, partType='gas', partField='mass', nCells=[32,
             grid = sP.units.codeDensToPhys(grid/pxVol) * 1e10 # Msun/kpc^3
 
         if takeLog:
-            grid = logZeroSafe(grid)
+            grid = logZeroMin(grid)
 
         grid = grid.astype('float16') # 2 bytes per value!
         grids.append( grid.ravel() )

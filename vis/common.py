@@ -83,7 +83,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
     if emlines:
         em_lines, _ = getEmissionLines()
         em_lines = [line_name.replace(' ','-') for line_name in em_lines]
-        em_lines += cloudyEmission.lineAbbreviations.keys()
+        em_lines += cloudyEmission._lineAbbreviations.keys()
         em_fields = ['sb_%s' % line_name for line_name in em_lines]
 
         if emlines == 'only':
