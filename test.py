@@ -14,6 +14,27 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def marc_sigma1():
+    """ Test. """
+    from plot.cosmoGeneral import quantMedianVsSecondQuant
+    sP = simParams(run='tng300-1',redshift=0.0)
+
+    xQuant = 'sigma1kpc_stars'
+    yQuant = 'BH_mass'
+    cQuant = 'ssfr'
+
+    xlim = [7.8,11.0]
+    ylim = None
+    clim = [-2.5, -1.5]
+    ctName = 'seismic_r'
+    maxPointsPerDex = 1000
+
+    qRestrictions = [['mstar_30pkpc_log',10.2,np.inf]]
+
+    quantMedianVsSecondQuant(sP, pdf=None, yQuants=[yQuant], xQuant=xQuant, xlim=xlim, ylim=ylim, scatterColor=cQuant,
+        scatterPoints=True, markersize=30, qRestrictions=qRestrictions, clim=clim, ctName=ctName,
+        maxPointsPerDex=maxPointsPerDex)
+
 def exportBoxGrids(sP, partType='dm', partField='mass', nCells=[64,128,256,512]):
     """ Export 3D uniform Cartesian grids, of different resolutions. """
     from util.sphMap import sphGridWholeBox

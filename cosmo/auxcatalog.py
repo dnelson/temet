@@ -52,7 +52,7 @@ def fofRadialSumType(sP, pSplit, ptProperty, rad, method='B', ptType='all'):
     Warning:
       This was an early example of a catalog generating function, and is left mostly for reference as a 
       particularly simple example. In practice, its functionality can be superseded by 
-      :py:func:`subhaloRadialReudction`.
+      :py:func:`subhaloRadialReduction`.
     """
 
     # config
@@ -284,9 +284,9 @@ def _radialRestriction(sP, nSubsTot, rad):
 
     if isinstance(rad, float):
         # constant scalar, convert [pkpc] -> [ckpc/h] (code units) at this redshift
-        rad_pkpc = sP.units.physicalKpcToCodeLength(rad)
+        rad_code = sP.units.physicalKpcToCodeLength(rad)
         radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
-        radSqMax += rad_pkpc * rad_pkpc
+        radSqMax += rad_code * rad_code
     elif rad is None:
         # no radial restriction (all particles in subhalo)
         radSqMax = np.zeros( nSubsTot, dtype='float32' )
@@ -301,13 +301,13 @@ def _radialRestriction(sP, nSubsTot, rad):
         radSqMax = r_cut * r_cut
     elif rad == '30h':
         # hybrid, minimum of [constant scalar 30 pkpc] and [the usual, 2rhalf,stars]
-        rad_pkpc = sP.units.physicalKpcToCodeLength(30.0)
+        rad_code = sP.units.physicalKpcToCodeLength(30.0)
 
         subHalfmassRadType = sP.groupCat(fieldsSubhalos=['SubhaloHalfmassRadType'])
         twiceStellarRHalf = 2.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
-        ww = np.where(twiceStellarRHalf > rad_pkpc)
-        twiceStellarRHalf[ww] = rad_pkpc
+        ww = np.where(twiceStellarRHalf > rad_code)
+        twiceStellarRHalf[ww] = rad_code
         radSqMax = twiceStellarRHalf**2.0
     elif rad == '10pkpc_shell':
         # shell at 10 +/- 2 pkpc
@@ -361,6 +361,13 @@ def _radialRestriction(sP, nSubsTot, rad):
         twiceStellarRHalf = 1.0 * subHalfmassRadType[:,sP.ptNum('stars')]
 
         radSqMax = twiceStellarRHalf**2
+    elif rad == '1pkpc_2d':
+        # 1 pkpc in 2D projection (e.g. for Sigma_1)
+        rad_code = sP.units.physicalKpcToCodeLength(1.0)
+        radSqMax = np.zeros( nSubsTot, dtype='float32' ) 
+        radSqMax += rad_code * rad_code
+
+        radRestrictIn2D = True
     elif rad == 'sdss_fiber':
         # SDSS fiber is 3" diameter, convert to physical radius at this redshift for all z>0
         # for z=0.0 snapshots only, for this purpose we fake the angular diameter distance at z=0.1

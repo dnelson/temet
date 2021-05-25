@@ -28,6 +28,7 @@ quantDescriptions = {
   'surfdens1_stars'  : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, the stellar half mass radius.',
   'surfdens2_stars'  : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, twice the stellar half mass radius.',
   'surfdens1_dm'     : 'Galaxy dark matter surface density, defined as Sigma = M_DM / (pi R^2), where the DM mass is measured within R, the stellar half mass radius.',
+  'sigma1kpc_stars'  : 'Galaxy stellar surface density, defined as Sigma_1 = M* / (pi * 1kpc^2), where the stellar mass is measured within 1 pkpc.',
   'delta_sfms'       : 'Offset from the galaxy star-formation main sequence (SFMS) in dex. Defined as the difference between the sSFR of this galaxy and the median sSFR of galaxies of this mass.',
   'sfr'              : 'Galaxy star formation rate, instantaneous, integrated over the entire subhalo.',
   'sfr1'             : 'Galaxy star formation rate, instantaneous, integrated within the stellar half mass radius.',
@@ -862,6 +863,17 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax = [6.5, 9.0]
         if tight: minMax = [6.5, 10.0]
+
+    if quantname in ['sigma1kpc_stars']:
+        # load auxcat
+        acField = 'Subhalo_Mass_1pkpc_2D_Stars'
+        mass = sP.auxCat(acField)[acField]
+        area = np.pi * 1.0**2
+
+        vals = sP.units.codeMassToMsun(mass) / area
+
+        label = '$\Sigma_{1,\star}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]'
+        minMax = [6.5, 11.0]
 
     if quantname in ['fgas1','fgas2','fgas','fgas1_alt','fgas2_alt','fgas_alt','fdm1','fdm2','fdm']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)

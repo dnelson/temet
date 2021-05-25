@@ -152,7 +152,7 @@ def plotNumPublicationsVsTime():
     from plot.config import figsize, lw
 
     num_start = 10 # align 'time=0' after this number of publications have appeared
-    xlim = [-0.6, 6.5] # years, [-3.2, 4.0] for num_start=100
+    xlim = [-0.6, 5.0] # years, [-3.2, 4.0] for num_start=100
 
     # load Illustris and TNG
     pub_sets = {
@@ -181,7 +181,7 @@ def plotNumPublicationsVsTime():
         pub_sets['Millennium'].append(pub)
 
     # start plot
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=(figsize[0]*0.7,figsize[1]*0.7))
     ax = fig.add_subplot(111)
     ax.set_ylabel('Number of Publications')
     ax.set_xlabel('Number of Years since %s Publication' % \
@@ -189,8 +189,8 @@ def plotNumPublicationsVsTime():
     ax.set_axisbelow(True)
     ax.grid(alpha=0.6)
 
-    #ax.set_xlim(xlim)
-    #ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
+    ax.set_xlim(xlim)
+    ax.set_ylim([0, len(pub_sets['TNG'])*1.05])
 
     for sim_name, pub_set in pub_sets.items():
         xx = np.array([pub['ts'] for pub in pub_set])
@@ -201,6 +201,7 @@ def plotNumPublicationsVsTime():
         xx_plot = (xx - start_ts) / (60*60*24*7*52) # delta years
 
         ax.plot(xx_plot, np.arange(xx_plot.size), '-', lw=lw, label=sim_name)
+        print(sim_name, len(pub_set))
 
     ax.legend(loc='upper left')
     fig.savefig('numpubs_vs_time_%d.pdf' % num_start)

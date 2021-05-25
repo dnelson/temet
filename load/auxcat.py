@@ -537,6 +537,9 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_r500_Stars_FoF': \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='r500crit',scope='fof',cenSatSelect='cen',minHaloMass='10000dm'),
 
+   'Subhalo_Mass_1pkpc_2D_Stars' : \
+     partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad='1pkpc_2d'),
+
    # subhalo
    'Subhalo_CoolingTime_HaloGas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='tcool',op='mean',rad='r015_1rvir_halo',ptRestrictions=sfreq0),

@@ -29,10 +29,10 @@ volDensityFields  = ['density']
 colDensityFields  = ['coldens','coldens_msunkpc2','coldens_sq_msunkpc2','HI','HI_segmented',
                      'xray','xray_lum','xray_lum_05-2kev','xray_lum_05-2kev_nomet','xray_lum_0.5-2.0kev',
                      'p_sync_ska','coldens_msun_ster','sfr_msunyrkpc2','sfr_halpha','halpha',
-                     'MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']
+                     'H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']
 totSumFields      = ['mass','sfr','tau0_MgII2796','tau0_MgII2803','tau0_LyA','tau0_LyB']
 velLOSFieldNames  = ['vel_los','vel_los_sfrwt','velsigma_los','velsigma_los_sfrwt']
-velCompFieldNames = ['vel_x','vel_y','vel_z','velocity_x','velocity_y','bfield_x','bfield_y','bfield_z']
+velCompFieldNames = ['vel_x','vel_y','vel_z','bfield_x','bfield_y','bfield_z']
 haloCentricFields = ['tff','tcool_tff','menc','specangmom_mag','vrad','vrel','delta_rho']
 loggedFields      = ['temp','temperature','temp_sfcold','ent','entr','entropy','P_gas','P_B']
 
@@ -53,7 +53,7 @@ def validPartFields(ions=True, emlines=True, bands=True):
               'P_gas','P_B','pressure_ratio',
               'metal','Z','metal_solar','Z_solar',
               'SN_IaII_ratio_Fe','SNIaII_ratio_metals','SN_Ia_AGB_ratio_metals',
-              'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z','velocity_x','velocity_y',
+              'vmag','velmag','vel_los','vel_los_sfrwt','vel_x','vel_y','vel_z',
               'velsigma_los','velsigma_los_sfrwt',
               'vrad','halo_vrad','radvel','halo_radvel',
               'vrad_vvir',
@@ -534,9 +534,11 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
 
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
-    if partField in ['MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']:
+    # molecular hydrogen (Popping pre-computed files, here with abbreviated names)
+    if partField in ['H2_BR','H2_GK','M2_KMT','HI_BR','HI_GK','HI_KMT']:
         # should generalize to colDens fields
-        mass = sP.snapshotSubsetP(partType, partField, indRange=indRange).astype('float32')
+        partFieldLoad = 'M%s_popping' % partField.replace('_','') # e.g. H2_BR -> MH2BR_popping
+        mass = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange).astype('float32')
 
     # elemental mass fraction (do column densities)
     if 'metals_' in partField:
@@ -832,13 +834,13 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'HI_segmented'
 
-    if partField in ['MH2BR_popping','MH2GK_popping','MH2KMT_popping','MHIBR_popping','MHIGK_popping','MHIKMT_popping']:
+    if partField in ['H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']:
         grid = sP.units.codeColDensToPhys(grid, cgs=True, numDens=True)
 
-        if 'MH2' in partField:
+        if 'H2' in partField:
             config['label']  = 'N$_{\\rm H2}$ [log cm$^{-2}$]'
             config['ctName'] = 'viridis' # 'H2_segmented'
-        if 'MHI' in partField:
+        if 'HI' in partField:
             config['label']  = 'N$_{\\rm HI}$ [log cm$^{-2}$]'
             config['ctName'] = 'viridis' #'HI_segmented'
 
@@ -1048,7 +1050,7 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         config['ctName'] = 'RdBu_r' # bwr, coolwarm, RdBu_r
         logMin = False
 
-    if partField in ['vel_x','vel_y','vel_z','velocity_x','velocity_y']:
+    if partField in ['vel_x','vel_y','vel_z']:
         grid = grid
         velDirection = partField.split("_")[1]
         config['label'] = '%s %s-Velocity [km/s]' % (ptStr,velDirection)
@@ -1176,7 +1178,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
             boxCenter, boxSizeImg, hsmlFac, rotMatrix, rotCenter, remapRatio, 
             forceRecalculate=False, smoothFWHM=None, snapHsmlForStars=False, 
             alsoSFRgasForStars=False, excludeSubhaloFlag=False, skipCellIndices=None, 
-            ptRestrictions=None, weightField='mass', **kwargs):
+            ptRestrictions=None, weightField='mass', randomNoise=None, **kwargs):
     """ Caching gridding/imaging of a simulation box. """
     from util.rotation import rotateCoordinateArray
     
@@ -1206,7 +1208,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         (nPixels[0], nPixels[1], boxCenter[0], boxCenter[1], boxCenter[2], 
          boxSizeImg[0], boxSizeImg[1], boxSizeImg[2], axes[0], axes[1], 
          hsmlFac, str(rotMatrix), optionalStr)
-    m = hashlib.sha256(hashstr.encode('utf-8')).hexdigest()[::4]
+    hashval = hashlib.sha256(hashstr.encode('utf-8')).hexdigest()[::4]
 
     _, sbStr, _ = sP.subboxVals()
 
@@ -1215,7 +1217,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
     partFieldSave = partFieldSave.replace(' ','_') # convention for filenames
 
     saveFilename = sP.derivPath + 'grids/%s/%s.%s%d.%s.%s.%s.hdf5' % \
-                   (sbStr.replace("_","/"), method, sbStr, sP.snap, partType, partFieldSave, m)
+                   (sbStr.replace("_","/"), method, sbStr, sP.snap, partType, partFieldSave, hashval)
 
     if not isdir(sP.derivPath + 'grids/'):
         mkdir(sP.derivPath + 'grids/')
@@ -1640,6 +1642,15 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
         #print('smoothFWHM: [%.2f pkpc] = sigma of [%.1f px]: ' % (smoothFWHM,sigma_xy[0]))
         grid_master = gaussian_filter(grid_master, sigma_xy, mode='reflect', truncate=5.0)
 
+    # add random noise level/floor, e.g. sky background level
+    if randomNoise is not None:
+        seed = np.int(hashval[::2], base=16)
+        np.random.seed(seed)
+
+        noise_vals = np.random.normal(loc=0.0, scale=randomNoise, size=grid_master.shape) # pos and neg
+
+        grid_master += np.abs(noise_vals) # for now, absolute value
+
     # handle units and come up with units label
     grid_master, config, data_grid = gridOutputProcess(sP, grid_master, partType, partField, boxSizeImg, nPixels, projType, method)
 
@@ -2051,7 +2062,7 @@ def addBoxMarkers(p, conf, ax, pExtent):
             ax.add_artist(c)
 
     if 'labelZ' in p and p['labelZ']:
-        if p['sP'].redshift >= 0.99 or np.round(10*p['sP'].redshift)/10 == p['sP'].redshift:
+        if p['sP'].redshift >= 0.99 or np.abs(np.round(10*p['sP'].redshift)/10 - p['sP'].redshift) < 1e-2:
             zStr = "z$\,$=$\,$%.1f" % p['sP'].redshift
         else:
             zStr = "z$\,$=$\,$%.2f" % p['sP'].redshift
@@ -2347,9 +2358,11 @@ def addContourOverlay(p, conf, ax):
         boxSizeImg[3-p['axes'][0]-p['axes'][1]] = p['sP'].units.physicalKpcToCodeLength(contourSliceDepth)
 
     # load grid of contour quantity
+    smoothFWHM = p['smoothFWHM'] if 'smoothFWHM' in p else None
     hsmlFac = p['hsmlFac'] if p['partType'] == field_pt else defaultHsmlFac(field_pt)
     grid_c, conf_c, _ = gridBox(p['sP'], p['method'], field_pt, field_name, nPixels, p['axes'], p['projType'], p['projParams'], 
-                                p['boxCenter'], boxSizeImg, hsmlFac, p['rotMatrix'], p['rotCenter'], p['remapRatio'])
+                                p['boxCenter'], boxSizeImg, hsmlFac, p['rotMatrix'], p['rotCenter'], p['remapRatio'],
+                                smoothFWHM=smoothFWHM)
 
     # make pixel grid
     XX = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], grid_c.shape[0])
@@ -2367,7 +2380,6 @@ def addContourOverlay(p, conf, ax):
     else:
         # automatic contour levels
         ax.contour(grid_x, grid_y, grid_c, **contourOpts)
-    
 
 def setAxisColors(ax, color2):
     """ Factor out common axis color commands. """
@@ -2586,8 +2598,10 @@ def renderMultiPanel(panels, conf):
                 new_1 = np.transpose( np.dot(p['rotMatrix'], old_1) )
                 new_2 = np.transpose( np.dot(p['rotMatrix'], old_2) )
 
-                ax.set_xlabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_1[0], new_1[1], new_1[2], axStr))
-                ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_2[0], new_2[1], new_2[2], axStr))
+                #ax.set_xlabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_1[0], new_1[1], new_1[2], axStr))
+                #ax.set_ylabel( 'rotated: %4.2fx %4.2fy %4.2fz %s' % (new_2[0], new_2[1], new_2[2], axStr))
+                ax.set_xlabel('x %s' % axStr)
+                ax.set_ylabel('y %s' % axStr)
 
             # color mapping (handle defaults and overrides)
             vMM = p['valMinMax'] if p['valMinMax'] is not None else config['vMM_guess']
@@ -2669,11 +2683,11 @@ def renderMultiPanel(panels, conf):
                 heightFac /= np.sqrt(aspect) # reduce
             if nRows == 2 and not varRowHeights and barAreaTop == 0.0:
                 heightFac *= 1.3 # increase
-            #if nRows == 1 and nCols == 1:
-            #    heightFac *= 0.7 # decrease
-            #    if conf.fontsize == min_fontsize: # small images
-            #        heightFac *= 1.6
-            #        widthFrac = 0.8
+            if nRows == 1 and nCols == 1: # required for 'Visualize Galaxies and Halo' tool proper sizing
+                heightFac *= 0.7 # decrease
+                if conf.fontsize == min_fontsize: # small images
+                    heightFac *= 1.6
+                    widthFrac = 0.8
             if nRows == 2 and nCols == 1 and varRowHeights:
                 # single edge-on face-on combination
                 heightFac = 0.7
