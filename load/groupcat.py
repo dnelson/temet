@@ -870,7 +870,7 @@ def groupCatOffsetListIntoSnap(sP):
     for j in range(sP.nTypes):
         subgroupCount = 0
         
-        # compute group offsets first
+        # compute group offsets first (first entry is zero!)
         r['snapOffsetsGroup'][1:,j] = np.cumsum( groupLenType[:,j] )
         
         for k in np.arange(totGroups):

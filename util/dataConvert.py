@@ -413,19 +413,25 @@ def makeSnapHeadersForLHaloTree():
             fOut.close()
             print('%s' % fileTo % (i,i,j))
 
-def makeSnapSubsetsForMergerTrees():
-    """ Copy snapshot chunks reducing to needed fields for tree calculation. """
+def makeSnapSubsetsForPostProcessing():
+    """ Copy snapshot chunks reducing to needed fields for tree/post-processing calculations. """
     nSnaps  = 100
-    copyFields = {'PartType0':['Masses','ParticleIDs','StarFormationRate'], #for SubLink_gal need 'StarFormationRate'
-                  'PartType1':['ParticleIDs'],
-                  'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
 
-    #copyFields = {'PartType1':['Coordinates','SubfindHsml']}
-    #copyFields = {'PartType4':['Coordinates','ParticleIDs']}
-    #copyFields = {'PartType0':['Masses','Coordinates','Density','GFM_Metals','GFM_Metallicity']}
+    deriveHsml = True
 
-    pathFrom = path.expanduser("~") + '/sims.TNG/L35n1080TNG_DM/output/snapdir_%03d/'
-    pathTo   = path.expanduser("~") + '/data/L35n1080TNG_DM/output/snapdir_%03d/'
+    # SubLink/SubLink_gal
+    #copyFields = {'PartType0':['Masses','ParticleIDs','StarFormationRate'], #for SubLink_gal need 'StarFormationRate'
+    #              'PartType1':['ParticleIDs'],
+    #              'PartType4':['Masses','GFM_StellarFormationTime','ParticleIDs']}
+
+    # Subfind-HBT
+    copyFields = {'PartType0':['Coordinates','Velocities','Masses','ParticleIDs','Density','InternalEnergy'],
+                  'PartType1':['Coordinates','Velocities','ParticleIDs'],
+                  'PartType4':['Coordinates','Velocities','Masses','ParticleIDs'],
+                  'PartType5':['Coordinates','Velocities','Masses','ParticleIDs']}
+
+    pathFrom = path.expanduser("~") + '/sims.TNG/TNG100-3/output/snapdir_%03d/'
+    pathTo   = path.expanduser("~") + '/data/gadget4/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
 
@@ -435,14 +441,14 @@ def makeSnapSubsetsForMergerTrees():
     print('Found [%d] file chunks, copying.' % nChunks)
 
     # loop over snapshots
-    for i in range(82,nSnaps):
+    for i in range(5,nSnaps): # range(nSnaps):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 
         # loop over chunks
         for j in range(nChunks):
             # open destination for writing
-            fOut = h5py.File(fileTo % (i,i,j), 'a') # append to existing file, or create new
+            fOut = h5py.File(fileTo % (i,i,j), 'a') # append or create
 
             # open origin file for reading
             assert path.isfile(fileFrom % (i,i,j))
@@ -453,6 +459,15 @@ def makeSnapSubsetsForMergerTrees():
                     g = fOut.create_group('Header')
                     for attr in f['Header'].attrs:
                         fOut['Header'].attrs[attr] = f['Header'].attrs[attr]
+
+                if 'PartType3' not in copyFields.keys():
+                    # 'fix' header and set tracer counts to zero, if we aren't copying
+                    keys = ['NumPart_ThisFile','NumPart_Total','NumPart_Total_HighWord','MassTable']
+                    for key in keys:
+                        attr_vals = fOut['Header'].attrs[key]
+                        attr_vals[3] = 0
+                        fOut['Header'].attrs[key] = attr_vals
+
                 # loop over partTypes
                 for gName in copyFields.keys():
                     # skip if not in origin
@@ -463,8 +478,233 @@ def makeSnapSubsetsForMergerTrees():
                     for dName in copyFields[gName]:
                         g[dName] = f[gName][dName][()]
 
+                    # calculate SmoothingLength for GADGET post-processing runs?
+                    if deriveHsml and gName == 'PartType0':
+                        if 'Volume' in f[gName]:
+                            vol = f[gName]['Volume'][()]
+                        else:
+                            vol = f[gName]['Masses'][()] / f[gName]['Density']
+                        hsml = (vol * 3.0 / (4*np.pi))**(1.0/3.0)
+                        g['SmoothingLength'] = hsml
+
             fOut.close()
             print('%s' % fileTo % (i,i,j))
+
+def finalizeSubfindHBTGroupCat(snap):
+    """ For a Subfind-HBT post-processing of an original Subfind simulation, extract the new 
+    group ordered IDs from the rewritten snapshot, place them into the catalog itself, and 
+    cross-match to the original snapshot IDs, to write the index mapping into the catalog. 
+    Finally, rewrite the catalog into a single file, and add fof and subhalo cross-matching 
+    to original catalog. """
+    from util.simParams import simParams
+    from tracer.tracerMC import match3
+    from util.helper import crossmatchHalosByCommonIDs
+
+    sP = simParams(run='tng100-3',snap=snap)
+    basePath = path.expanduser("~") + '/data/gadget4/output/'
+
+    snapPath = basePath + 'snapdir_%03d/' % snap
+    groupPath = basePath + 'groups_%03d/fof_subhalo_tab_%03d' % (snap,snap) + '.%s.hdf5'
+    saveFile = basePath + 'subfind_hbt_%03d.hdf5' % snap
+
+    # number of chunks, and total member size by type
+    files = glob.glob(groupPath % '*')
+    nChunks = len(files)
+
+    GroupLenTypeTot = np.zeros(6, dtype='int64')
+
+    for i in range(nChunks):
+        with h5py.File(groupPath % i,'r') as f:
+            assert f['Header'].attrs['NumFiles'] == nChunks
+            GroupLenTypeTot += np.sum(f['Group/GroupLenType'][()], axis=0)
+
+    # (A) create new group catalog single file
+    print('A')
+    with h5py.File(saveFile,'w') as fOut:
+
+        ids = fOut.create_group('IDs')
+
+        for i in range(GroupLenTypeTot.size):
+            if GroupLenTypeTot[i] > 0:
+                ids.create_dataset('PartType%d' % i, (GroupLenTypeTot[i],), dtype='int64')
+
+        # read ordered IDs and write directly
+        offsets = np.zeros(GroupLenTypeTot.size, dtype='int64')
+
+        for i in range(nChunks):
+            with h5py.File(snapPath + 'snap_%03d.%d.hdf5' % (snap,i),'r') as f:
+                for j in range(GroupLenTypeTot.size):
+                    gName = 'PartType%d' % j
+                    if gName not in f:
+                        continue
+
+                    # determine read/write size
+                    rw_size = f[gName]['ParticleIDs'].size
+
+                    if offsets[j] + rw_size > GroupLenTypeTot[j]:
+                        rw_size = GroupLenTypeTot[j] - offsets[j]
+
+                    # read
+                    ids_loc = f[gName]['ParticleIDs'][0:rw_size]
+
+                    # write into hdf5 directly
+                    ids[gName][offsets[j] : offsets[j]+rw_size] = ids_loc
+                    offsets[j] += rw_size
+
+    # (B) concat catalog fields into new single file, update headers
+    print('B')
+    metaGroups = {'Config':{},'Header':{},'Parameters':{}}
+
+    dtypes = {'Group':{}, 'Subhalo':{}}
+    shapes = {'Group':{}, 'Subhalo':{}}
+    totlen = {}
+
+    with h5py.File(groupPath % (0),'r') as f:
+        # record dtype and shapes of all datasets
+        for gName in dtypes.keys():
+            totlen[gName] = f['Header'].attrs['N%ss_Total' % gName.lower()]
+
+            for key in f[gName].keys():
+                dtypes[gName][key] = f[gName][key].dtype
+                shapes[gName][key] = list(f[gName][key].shape)
+                shapes[gName][key][0] = totlen[gName]
+
+        # copy headers and update for single file write
+        for gName in metaGroups.keys():
+            metaGroups[gName] = dict(f[gName].attrs)
+
+        metaGroups['Header']['Nids_Total'] = GroupLenTypeTot.sum() # original value not meaningful
+        metaGroups['Header']['Nsubhalos_ThisFile'] = metaGroups['Header']['Nsubhalos_Total']
+        metaGroups['Header']['Ngroups_ThisFile'] = metaGroups['Header']['Ngroups_Total']
+        metaGroups['Header']['Nids_ThisFile'] = metaGroups['Header']['Nids_Total']
+        metaGroups['Header']['NumFiles'] = 1
+
+    offsets = {'Group':0, 'Subhalo':0}
+
+    with h5py.File(saveFile,'r+') as fOut:
+        # allocate datasets
+        for gName in dtypes.keys():
+            for key in dtypes[gName]:
+                fOut['%s/%s' % (gName,key)] = np.zeros(shapes[gName][key], dtype=dtypes[gName][key])
+
+        # copy datasets
+        for i in range(nChunks):
+            with h5py.File(groupPath % i,'r') as f:
+                for gName in dtypes.keys():
+                    for key in dtypes[gName]:
+                        length = f[gName][key].shape[0]
+                        offset = offsets[gName]
+                        fOut[gName][key][offset:offset+length] = f[gName][key][()]
+                    offsets[gName] += length
+
+        # write headers
+        for gName in metaGroups.keys():
+            g = fOut.create_group(gName)
+            for key in metaGroups[gName].keys():
+                g.attrs[key] = metaGroups[gName][key]
+
+    # (C) cross-match particle IDs by type
+    for i in range(GroupLenTypeTot.size):
+        if GroupLenTypeTot[i] == 0:
+            continue
+        print('C', i)
+
+        # load sorted ids of new fof/subhalos-hbt
+        with h5py.File(saveFile,'r') as f:
+            ids_new = f['IDs/PartType%d' % i][()]
+
+        # load sorted ids of old fof/subhalos (cannot restrict to haloSubset of old catalog, 
+        # possible that the FoFs differ after all)
+        ids_old = sP.snapshotSubsetP(i, 'ids')
+
+        # indices gives, for each ids_new, the index where it is found in ids_old
+        # such that indices[subhalohbt_start:subhalohbt_end] provides the particle 
+        # indices in the original snapshot of the new subfind-hbt subhalo
+        indices, _ = match3(ids_old, ids_new)
+
+        assert indices.size == ids_new.size
+
+        # write
+        with h5py.File(saveFile,'r+') as fOut:
+            fOut['SnapIndices/PartType%d' % i] = indices
+
+    # (D) add group cross-matching results
+    print('D')
+    ptNum = 1 # DM particles only
+
+    with h5py.File(saveFile,'r') as f:
+        ids_group1 = f['IDs/PartType%d' % ptNum][()]
+        lengths_group1 = f['Group/GroupLenType'][:,ptNum]
+        lengths_sub1 = f['Subhalo/SubhaloLenType'][:,ptNum]
+        nsubs1 = f['Group/GroupNsubs'][()]
+
+    ids_group2 = sP.snapshotSubsetP(ptNum, 'ids')
+    lengths_group2 = sP.groups('GroupLenType')[:,ptNum]
+    lengths_sub2 = sP.subhalos('SubhaloLenType')[:,ptNum]
+    nsubs2 = sP.groups('GroupNsubs')
+
+    # match 1->2 and 2->1, then require bijective
+    def match_bijective(ids1, lengths1, ids2, lengths2):
+        index_12 = crossmatchHalosByCommonIDs(ids1, lengths1, ids2, lengths2)
+        index_21 = crossmatchHalosByCommonIDs(ids2, lengths2, ids1, lengths1)
+
+        w = np.where(index_12 < 0)
+        print('Originally have [%d] objects of [%d] without matches.' % (len(w[0]),lengths1.size))
+
+        w12 = np.where(index_21[index_12] != np.arange(lengths1.size))
+        w21 = np.where(index_12[index_21] != np.arange(lengths2.size))
+        print(' Remove [%d] non-bijective 1->2, and [%d] non-bijective 2->1.' % (len(w12[0]),len(w21[0])))
+
+        index_12[w12] = -1
+        index_21[w21] = -1
+
+        return index_12, index_21
+
+    haloindex_12, haloindex_21 = match_bijective(ids_group1, lengths_group1, ids_group2, lengths_group2)
+
+    with h5py.File(saveFile,'r+') as f:
+        f['Matching/GroupOrigToHBT'] = haloindex_21
+        f['Matching/GroupHBTToOrig'] = haloindex_12
+
+    # (E) add subhalo cross-matching results
+    print('E')
+    def dense_subhalo_ids(lengths_sub, lengths_group, ids_group, nsubs):
+        ids_sub = np.zeros(lengths_sub.sum(), dtype=ids_group.dtype)
+        offsets_group = np.hstack( [0,np.cumsum(lengths_group)[:-1]] )
+        w_offset = 0
+        sub_i = 0
+
+        for k in np.arange(lengths_group.size):
+            # subhalo offsets depend on group (to allow fuzz)
+            if nsubs[k] > 0:
+                # first sub
+                offset = offsets_group[k]
+                length = lengths_sub[sub_i]
+                ids_sub[w_offset:w_offset+length] = ids_group[offset:offset+length]
+                w_offset += length
+                sub_i += 1
+
+                # satellite subs
+                for m in np.arange(1, nsubs[k]):
+                    offset += lengths_sub[sub_i-1]
+                    length = lengths_sub[sub_i]
+                    ids_sub[w_offset:w_offset+length] = ids_group[offset:offset+length]
+                    w_offset += length
+                    sub_i += 1
+
+        assert ids_sub.min() > 0
+        return ids_sub
+
+    ids_sub1 = dense_subhalo_ids(lengths_sub1, lengths_group1, ids_group1, nsubs1)
+    ids_sub2 = dense_subhalo_ids(lengths_sub2, lengths_group2, ids_group2, nsubs2)
+
+    subindex_12, subindex_21 = match_bijective(ids_sub1, lengths_sub1, ids_sub2, lengths_sub2)
+
+    with h5py.File(saveFile,'r+') as f:
+        f['Matching/SubhaloOrigToHBT'] = subindex_21
+        f['Matching/SubhaloHBTToOrig'] = subindex_12
+
+    print('Done.')
 
 def makeSdssSpecObjIDhdf5():
     """ Transform some CSV files into a HDF5 for SDSS objid -> specobjid mapping. """
