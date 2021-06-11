@@ -57,7 +57,7 @@ by rotating the galaxy into its edge-on orientation.
   key, and a ``partial(func, args)`` is the value. 
 
   **To add a definition for a new catalog**, you only need 
-  to add an entry to this ``fieldComputeFunctionMapping`` dictionary (by editing the python source file). 
+  to add an entry to the :py:data:`load.auxcat.fieldComputeFunctionMapping` dictionary (by editing the source file).
 
   The easiest way is to follow existing examples.
 

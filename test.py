@@ -14,6 +14,64 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def marc_sigma1():
+    """ Test. """
+    from plot.cosmoGeneral import quantMedianVsSecondQuant
+    sP = simParams(run='tng300-1',redshift=0.0)
+
+    xQuant = 'sigma1kpc_stars'
+    yQuant = 'BH_mass'
+    cQuant = 'ssfr'
+
+    xlim = [7.8,11.0]
+    ylim = None
+    clim = [-2.5, -1.5]
+    ctName = 'seismic_r'
+    maxPointsPerDex = 1000
+
+    qRestrictions = [['mstar_30pkpc_log',10.2,np.inf]]
+
+    quantMedianVsSecondQuant(sP, pdf=None, yQuants=[yQuant], xQuant=xQuant, xlim=xlim, ylim=ylim, scatterColor=cQuant,
+        scatterPoints=True, markersize=30, qRestrictions=qRestrictions, clim=clim, ctName=ctName,
+        maxPointsPerDex=maxPointsPerDex)
+
+def exportBoxGrids(sP, partType='dm', partField='mass', nCells=[64,128,256,512]):
+    """ Export 3D uniform Cartesian grids, of different resolutions. """
+    from util.sphMap import sphGridWholeBox
+    from util.simParams import simParams
+    from util.helper import logZeroSafe
+
+    # config
+    label, limits, takeLog = sP.simParticleQuantity(partType, partField)
+
+    # load
+    pos = sP.snapshotSubsetP(partType, 'pos')
+    mass = sP.snapshotSubsetP(partType, 'mass') if partType != 'dm' else sP.dmParticleMass
+    hsml = sP.snapshotSubset(partType, 'hsml')
+
+    quant = None # grid mass
+    if partField != 'mass': # grid a different, mass-weighted quantity
+        quant = sP.snapshotSubsetP(partType, partField)
+        assert partField != 'dens' # do mass instead
+
+    # make series of grids at progressively better resolution
+    for nCell in nCells:
+        grid = sphGridWholeBox(sP, pos, hsml, mass, quant, nCells=nCell)
+
+        if partField == 'mass': # unit conversion
+            pxVol = (sP.boxSize / nCell)**3 # code units (ckpc/h)^3
+            grid = sP.units.codeDensToPhys(grid/pxVol) * 1e10 # Msun/kpc^3
+
+        if takeLog:
+            grid = logZeroSafe(grid)
+
+        filename = 'grid_%s_%d_%s_%s_%d.hdf5' % (sP.simName,sP.snap,partType,partField,nCell)
+
+        with h5py.File(filename,'w') as f:
+            f['grid'] = grid
+
+        print('Saved: [%s]' % filename)
+
 def bh_lum_agnrad_check():
     """ Check that PartType0/GFM_AGNRadiation field/units are consistent with derived BH luminosities. """
     sP = simParams(run='tng50-1', redshift=3.0)
@@ -121,74 +179,6 @@ def check_zoom_variations():
     # current size of all L13 zooms: ~85TB, size of z=0 virtual snap: 2.0TB
     # projected size of L14: ~195TB in total, z=0 snapshot: 4.6TB (almost same as TNG300-1)
 
-def omega_metals_z(metal_mass=True):
-    """ Compute Omega_Z(z) or Omega(z) for various components. """
-    from cosmo.hydrogen import neutral_fraction
-    sP = simParams(run='eagle')
-    
-    snaps = sP.validSnapList(onlyFull=True)
-
-    rho_z_allgas  = np.zeros(snaps.size, dtype='float32')
-    rho_z_smbhs   = np.zeros(snaps.size, dtype='float32')
-    rho_z_gasdens = np.zeros( (3,snaps.size), dtype='float32' )
-    rho_z_nh0frac = np.zeros( (4,snaps.size), dtype='float32' )
-    rho_z_stars   = np.zeros(snaps.size, dtype='float32')
-    redshifts     = np.zeros(snaps.size, dtype='float32')
-
-    for i, snap in enumerate(snaps):
-        sP.setSnap(snap)
-        print(snap, sP.redshift)
-        redshifts[i] = sP.redshift
-
-        # all gas
-        mass = sP.gas('mass') # 10^10/h msun, total mass
-        if metal_mass: mass *= sP.gas('metallicity') # metal mass
-        rho_z_allgas[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
-
-        # gas density thresholds
-        dens = sP.gas('nh') # 1/cm^3 physical
-
-        rho_z_gasdens[0,i] = np.sum(mass[np.where(dens > 0.1)], dtype='float64') # ~ star-forming gas
-        rho_z_gasdens[1,i] = np.sum(mass[np.where(dens > 0.016)], dtype='float64') # 10^(-1.8) cm^-3
-        rho_z_gasdens[2,i] = np.sum(mass[np.where(dens > 0.004)], dtype='float64') # 10^(-2.4) cm^-3
-
-        # gas neutral fraction thresholds
-        nh0frac = sP.gas('NeutralHydrogenAbundance')
-
-        w = np.where(dens > 0.13) # cm^-3, correct for eEOS for star-forming gas
-        nh0frac[w] = neutral_fraction(dens[w], sP)
-
-        rho_z_nh0frac[0,i] = np.sum(mass[np.where(nh0frac > 0.5)], dtype='float64')
-        rho_z_nh0frac[1,i] = np.sum(mass[np.where(nh0frac > 0.1)], dtype='float64')
-        rho_z_nh0frac[2,i] = np.sum(mass[np.where(nh0frac > 0.05)], dtype='float64')
-        rho_z_nh0frac[3,i] = np.sum(mass[np.where(nh0frac > 0.01)], dtype='float64')
-
-        # stars
-        mass = sP.stars('mass') # 10^10 msun/h, total mass
-        if metal_mass: mass *= sP.stars('metallicity') # metal mass
-        rho_z_stars[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
-
-        # smbhs
-        if sP.numPart[sP.ptNum('bhs')]:
-            mass = sP.bhs('mass') # 10^10 msun/h, total mass
-            if metal_mass: mass *= sP.bhs('metallicity') # metal mass
-            rho_z_smbhs[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
-
-    # units: [10^10 msun] -> [msun/cMpc^3]
-    rho_z_allgas  *= 1e10 / sP.boxSizeCubicComovingMpc
-    rho_z_gasdens *= 1e10 / sP.boxSizeCubicComovingMpc
-    rho_z_nh0frac *= 1e10 / sP.boxSizeCubicComovingMpc
-    rho_z_stars   *= 1e10 / sP.boxSizeCubicComovingMpc
-    rho_z_smbhs   *= 1e10 / sP.boxSizeCubicComovingMpc
-
-    print('metal masses: ', metal_mass)
-    print('redshifts = ', redshifts)
-    print('rho_allgas = ', rho_z_allgas)
-    print('rho_stars = ', rho_z_stars)
-    print('rho_gasdens = ', rho_z_gasdens)
-    print('rho_nh0frac = ', rho_z_nh0frac)
-    print('rho_smbhs = ', rho_z_nh0frac)
-
 def minify_gergo_hydrogen_files():
     """ Rewrite Gergo's hydrogen catalog files to avoid unneeded fields. """
     basePath = '/u/dnelson/sims.TNG/TNG100-1/postprocessing/hydrogen/'
@@ -216,7 +206,7 @@ def minify_gergo_hydrogen_files():
 def half_Kband_radii():
     """ Test for Hannah's paper. """
     sP = simParams(run='tng50-1',redshift=2.0)
-    from cosmo.auxcatalog import _findHalfLightRadius
+    from cosmo.auxcatalog import findHalfLightRadius
 
     subhaloIDs = [25821,39745,55106,60750,79350,92271,99303]
 
@@ -235,8 +225,8 @@ def half_Kband_radii():
         mags = sP.snapshotSubset('stars_real', 'phot_K', subhaloID=subhaloID)
         mass = sP.snapshotSubset('stars_real', 'mass', subhaloID=subhaloID)
 
-        rhalf_mass2 = _findHalfLightRadius(rad,mags=None,vals=mass)
-        rhalf = _findHalfLightRadius(rad,mags)
+        rhalf_mass2 = findHalfLightRadius(rad,mass,mags=False)
+        rhalf = findHalfLightRadius(rad,mags)
 
         print(subhaloID,'stars: ',rhalf_mass[4],rhalf_mass2,rhalf)
 
@@ -245,13 +235,13 @@ def half_Kband_radii():
         mass_gas = sP.snapshotSubset('gas', 'mass', subhaloID=subhaloID)
         sfr_gas = sP.snapshotSubset('gas', 'sfr', subhaloID=subhaloID)
 
-        rhalf_gas2 = _findHalfLightRadius(rad_gas,mags=None,vals=mass_gas)
+        rhalf_gas2 = findHalfLightRadius(rad_gas,mass_gas,mags=False)
 
         w = np.where(sfr_gas > 0)
         rad_gas_sfr = rad_gas[w]
         mass_gas_sfr = mass_gas[w]
 
-        rhalf_gas_sfr = _findHalfLightRadius(rad_gas_sfr,mags=None,vals=mass_gas_sfr)
+        rhalf_gas_sfr = findHalfLightRadius(rad_gas_sfr,mass_gas_sfr,mags=False)
 
         print(subhaloID,'gas: ',rhalf_mass[0],rhalf_gas2,rhalf_gas_sfr)
 
@@ -259,7 +249,7 @@ def half_Kband_radii():
         baryon_rad = np.hstack( (rad,rad_gas_sfr) )
         baryon_mass = np.hstack( (mass,mass_gas_sfr) )
 
-        rhalf_baryon = _findHalfLightRadius(baryon_rad,mags=None,vals=baryon_mass)
+        rhalf_baryon = findHalfLightRadius(baryon_rad,baryon_mass,mags=False)
 
         print(subhaloID,'baryon: ',rhalf_baryon,end='\n\n')
 

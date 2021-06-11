@@ -5,7 +5,7 @@ import numpy as np
 import h5py
 import time
 from numba import jit
-from os import mkdir
+from os import mkdir, environ
 from os.path import isfile, isdir, expanduser
 from scipy.ndimage import map_coordinates
 from scipy.interpolate import interp1d
@@ -454,7 +454,7 @@ class sps():
 
         # get nebular emission line names, wavelengths
         line_wave = pop.emline_wavelengths
-        line_file = rootPath + 'fsps/emlines_info.dat'
+        line_file = environ["SPS_HOME"] + '/data/emlines_info.dat'
         with open(line_file,'r') as f:
             line_file = [fline.strip() for fline in f.readlines()]
 
@@ -856,7 +856,7 @@ class sps():
         """ Compute (linear) luminosities in the given band, using either snapshot-stored values or 
         on the fly sps calculation, optionally restricted to indRange. Note that wind is here 
         returned as NaN luminosity, assuming it is filtered out elsewhere, e.g. in gridBox(). 
-        Current return is arbitrary units. """
+        Return are linear luminosities in units of [Lsun/Hz]. """
         assert isinstance(band, str)
 
         if 'snap_' in band:

@@ -28,6 +28,7 @@ quantDescriptions = {
   'surfdens1_stars'  : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, the stellar half mass radius.',
   'surfdens2_stars'  : 'Galaxy stellar surface density, defined as Sigma = M* / (pi R^2), where the stellar mass is measured within R, twice the stellar half mass radius.',
   'surfdens1_dm'     : 'Galaxy dark matter surface density, defined as Sigma = M_DM / (pi R^2), where the DM mass is measured within R, the stellar half mass radius.',
+  'sigma1kpc_stars'  : 'Galaxy stellar surface density, defined as Sigma_1 = M* / (pi * 1kpc^2), where the stellar mass is measured within 1 pkpc.',
   'delta_sfms'       : 'Offset from the galaxy star-formation main sequence (SFMS) in dex. Defined as the difference between the sSFR of this galaxy and the median sSFR of galaxies of this mass.',
   'sfr'              : 'Galaxy star formation rate, instantaneous, integrated over the entire subhalo.',
   'sfr1'             : 'Galaxy star formation rate, instantaneous, integrated within the stellar half mass radius.',
@@ -52,7 +53,11 @@ quantDescriptions = {
   'virtemp'          : 'The virial temperature of the parent dark matter halo. Because satellites have no such measure, they are excluded.',
   'velmag'           : 'The magnitude of the current velocity of the subhalo, in the simulation reference frame.',
   'spinmag'          : 'The magnitude of the subhalo spin vector, computed as the mass weighted sum of all subhalo particles/cells.',
-  'M_V'              : 'Galaxy absolute magnitude in the visible (V) band. Intrinsic light, with no consideration of dust or obscuration.',
+  'M_V'              : 'Galaxy absolute magnitude in the "visible" (V) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
+  'M_U'              : 'Galaxy absolute magnitude in the "ultraviolet" (U) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
+  'M_B'              : 'Galaxy absolute magnitude in the "blue" (B) band (AB). Intrinsic light, with no consideration of dust or obscuration.',
+  'color_UV'         : 'Galaxy U-V color, which is defined as M_U-M_V. Intrinsic light, with no consideration of dust or obscuration.',
+  'color_VB'         : 'Galaxy V-B color, which is defined as M_V-M_B. Intrinsic light, with no consideration of dust or obscuration.',
   'vcirc'            : 'Maximum value of the spherically-averaged 3D circular velocity curve (i.e. galaxy circular velocity).',
   'distance'         : 'Radial distance of this satellite galaxy from the center of its parent host halo. Central galaxies have zero distance by definition.',
   'distance_rvir'    : 'Radial distance of this satellite galaxy from the center of its parent host halo, normalized by the virial radius. Central galaxies have zero distance by definition.',
@@ -95,8 +100,9 @@ def bandMagRange(bands, tight=False):
     if bands[0] == 'i' and bands[1] == 'z': mag_range = [0.0,0.4]
     if bands[0] == 'r' and bands[1] == 'z': mag_range = [0.0,0.8]
 
-    if bands[0] == 'U' and bands[1] == 'V': mag_range = [0.0,2.5]
+    if bands[0] == 'U' and bands[1] == 'V': mag_range = [-0.4,2.0]
     if bands[0] == 'V' and bands[1] == 'J': mag_range = [-0.4,1.6]
+    if bands[0] == 'V' and bands[1] == 'B': mag_range = [-1.1,0.5]
 
     if tight:
         # alternative set
@@ -130,7 +136,7 @@ def quantList(wCounts=True, wTr=True, wMasses=False, onlyTr=False, onlyBH=False,
     quants1 = ['ssfr','Z_stars','Z_gas','Z_gas_sfr','size_stars','size_gas','fgas1','fgas2','fgas','fdm1','fdm2','fdm',
                'surfdens1_stars','surfdens2_stars','surfdens1_dm','delta_sfms',
                'sfr','sfr1','sfr2','sfr1_surfdens','sfr2_surfdens','virtemp','velmag','spinmag',
-               'M_V','vcirc','distance','distance_rvir']
+               'M_U','M_V','M_B','color_UV','color_VB','vcirc','distance','distance_rvir']
 
     # generally available (want to make available on the online interface)
     quants1b = ['zform_mm5', 'stellarage']
@@ -384,7 +390,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             minMax = [1.5, 3.5]
             if tight: minMax = [1.0, 3.5]
 
-    if quantname in ['M_V', 'M_U']:
+    if quantname in ['M_V', 'M_U', 'M_B']:
         # StellarPhotometrics from snapshot
         vals = sP.groupCat(sub=quantname)
 
@@ -857,6 +863,17 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
         minMax = [6.5, 9.0]
         if tight: minMax = [6.5, 10.0]
+
+    if quantname in ['sigma1kpc_stars']:
+        # load auxcat
+        acField = 'Subhalo_Mass_1pkpc_2D_Stars'
+        mass = sP.auxCat(acField)[acField]
+        area = np.pi * 1.0**2
+
+        vals = sP.units.codeMassToMsun(mass) / area
+
+        label = '$\Sigma_{1,\star}$ [ log M$_{\\rm sun}$ / kpc$^2$ ]'
+        minMax = [6.5, 11.0]
 
     if quantname in ['fgas1','fgas2','fgas','fgas1_alt','fgas2_alt','fgas_alt','fdm1','fdm2','fdm']:
         # gas fraction (Mgas and Mstar both within 2r1/2stars)
@@ -1466,7 +1483,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             if par != 'all': label += ' [%s]' % par
 
     if quantname[0:6] == 'color_':
-        # integrated galaxy colors, different dust models (e.g. 'color_C_gr')
+        # integrated galaxy colors, different dust models (e.g. 'color_C_gr') (also e.g. 'color_UV' from snap)
         vals = sP.groupCat(sub=quantname)
 
         from plot.config import bandRenamesToFSPS
@@ -1816,10 +1833,10 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
-    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel'] or \
-      'mg2_shape_' in quantname or 'mg2_area_' in quantname:
+    if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel','mg2_m20','mg2_concentration'] or \
+      quantname.startswith(('mg2_shape_','mg2_area_','mg2_gini_')):
         # MgII emission luminosity [erg/s] or half-light radius, subhalo total, including dust depletion
-        if 'size' in quantname:
+        if '_lumsize' in quantname:
             # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
             acField = 'Subhalo_MgII_LumSize_DustDepleted'
             ac = sP.auxCat(fields=[acField])[acField]
@@ -1836,7 +1853,24 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
                 vals = sP.units.codeLengthToKpc(ac)
                 minMax = [1,10]
                 takeLog = False
-        elif 'shape' in quantname:
+        elif '_m20' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_Emission_Grid2D_M20'
+            vals = np.squeeze(sP.auxCat(fields=[acField])[acField])
+
+            label = 'MgII Emission M$_{\\rm 20}$ Index'
+            minMax = [-3.0, 0.5]
+            takeLog = False
+        elif '_concentration' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_LumConcentration_DustDepleted'
+            vals = sP.auxCat(fields=[acField])[acField]
+
+            label = 'MgII Emission Concentration (C)'
+            minMax = [2.0, 5.0]
+            if tight: minMax = [1.0, 8.0]
+            takeLog = False
+        elif '_shape' in quantname:
             # load auxCat
             acField = 'Subhalo_MgII_Emission_Grid2D_Shape'
             ac = sP.auxCat(fields=[acField])
@@ -1850,7 +1884,7 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
             label = 'MgII Emission Shape (Axis Ratio)' # (SB$_{\\rm %.1f}$)' % isophot_level
             minMax = [0.95, 2.4]
             takeLog = False
-        elif 'area' in quantname:
+        elif '_area' in quantname:
             # load auxCat
             acField = 'Subhalo_MgII_Emission_Grid2D_Area'
             ac = sP.auxCat(fields=[acField])
@@ -1864,6 +1898,20 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
 
             label = 'MgII Emission Area [ log kpc$^2$ ]' # (SB$_{\\rm %.1f}$)' % isophot_level
             minMax = [1, 4]
+        elif '_gini' in quantname:
+            # load auxCat
+            acField = 'Subhalo_MgII_Emission_Grid2D_Gini'
+            ac = sP.auxCat(fields=[acField])
+
+            isophot_level = float(quantname.split('mg2_gini_')[1])
+            isophot_inds = np.where(ac[acField+'_attrs']['isophot_levels'] == isophot_level)[0]
+            assert len(isophot_inds) == 1, 'Failed to find shape at requested isophot level.'
+
+            vals = ac[acField][:,isophot_inds[0]]
+
+            label = 'MgII Emission Gini Coefficient'
+            minMax = [0, 1]
+            takeLog = False
         else:
             label = 'L$_{\\rm MgII}$ [ log erg/s ]'
 

@@ -186,7 +186,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 r[field] = sP.units.codeMassToMsun(mass)
 
             # snapshot: photometric/broadband magnitudes [AB]
-            if quantName in ['m_v','m_u']:
+            if quantName in ['m_v','m_u','m_b']:
                 assert '_log' not in quant
                 bandName = quantName.split('_')[1].upper()
 
@@ -200,6 +200,18 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 # Vega corrections
                 if bandName in vegaMagCorrections:
                     r[field] += vegaMagCorrections[bandName]
+
+            # snapshot: photometric/broadband colors
+            if quantName in ['color_uv','color_vb']:
+                assert '_log' not in quant
+                bandNames = quantName.split('color_')[1].upper()
+
+                vals = sP.groupCat(fieldsSubhalos=['SubhaloStellarPhotometrics'])
+                r[field] = vals[:,gfmBands[bandNames[0]]] - vals[:,gfmBands[bandNames[1]]]
+
+                # fix zero values
+                w = np.where(np.abs(r[field]) > 1e10)
+                r[field][w] = np.nan
 
             # ssfr (1/yr or 1/Gyr) (SFR and Mstar both within 2r1/2stars) (optionally Mstar in 30pkpc)
             if quantName in ['ssfr','ssfr_gyr','ssfr_30pkpc','ssfr_30pkpc_gyr']:
@@ -370,7 +382,7 @@ def groupCat(sP, sub=None, halo=None, group=None, fieldsSubhalos=None, fieldsHal
                 r[field] = ac[acField].astype('float32') # int dtype
 
             # auxCat: photometric/broadband colors (e.g. 'color_C_gr', 'color_A_ur')
-            if 'color_' in quantName:
+            if 'color_' in quantName and quantName.count('_') == 2:
                 r[field] = loadColors(sP, quant)
 
             # auxCat: photometric/broadband magnitudes (e.g. 'mag_C_g', 'mag_A_r')
@@ -858,7 +870,7 @@ def groupCatOffsetListIntoSnap(sP):
     for j in range(sP.nTypes):
         subgroupCount = 0
         
-        # compute group offsets first
+        # compute group offsets first (first entry is zero!)
         r['snapOffsetsGroup'][1:,j] = np.cumsum( groupLenType[:,j] )
         
         for k in np.arange(totGroups):

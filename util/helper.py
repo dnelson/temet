@@ -1084,6 +1084,56 @@ def periodicDistsIndexed(pos1, pos2, indices, BoxSize):
 
     return dists
 
+@jit(nopython=True, nogil=True, cache=True)
+def crossmatchHalosByCommonIDs(ids1, lengths1, ids2, lengths2):
+    """ For two sets of objects (e.g. halos or subhalos) which contain member IDs, 
+    finding the best matching index of the second set, for each object in each first set,
+    coresponding to the object in the second set with the largest number of shared IDs. """
+    assert lengths1.sum() <= ids1.size
+    assert lengths2.sum() <= ids2.size
+
+    # allocate
+    cand_scores2 = np.zeros( lengths2.size, dtype=np.int32 ) # change to float32 if weighted scores
+    index2 = np.zeros( lengths1.size, dtype=np.int32 )
+
+    # ids must be dense, containing the members of set 1 packed by [lengths1[0], lengths1[1], ...]
+    offset = 0
+
+    # create mapping of ID -> index for set 2
+    id_to_haloindex2 = np.zeros( ids2.max()+1, dtype=np.int32 ) - 1
+    
+    for i in range(lengths2.size):
+        for j in range(lengths2[i]):
+            id_to_haloindex2[ids2[offset]] = i
+            offset += 1
+
+    # loop over objects in set 1
+    offset = 0
+
+    for i in range(lengths1.size):
+        # zero candidate scores
+        cand_scores2 *= 0
+
+        # loop over member IDs
+        for j in range(lengths1[i]):
+            # select id
+            loc_id = ids1[offset]
+            offset += 1
+
+            # what halo in set 2 does this id belong to?
+            halo_index2 = id_to_haloindex2[loc_id]
+
+            # if it belongs to a halo
+            if halo_index2 >= 0:
+                # add to ranking, could optionally use a weighting here
+                weight = 1.0
+                cand_scores2[halo_index2] += weight
+
+        # decide (first is chosen if two or more equally ranked candidates exist)
+        index2[i] = np.argmax(cand_scores2)
+
+    return index2
+
 # --- vis ---
 
 def getWhiteBlackColors(pStyle):

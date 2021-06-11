@@ -643,7 +643,7 @@ def buildFullTree(pos, boxSizeSim, treePrec=None, verbose=False):
     return NextNode, length, center, sibling, nextnode
 
 def calcHsml(pos, boxSizeSim, posSearch=None, posMask=None, nNGB=32, nNGBDev=1, nDims=3, weighted_num=False, 
-             treePrec='single', tree=None, nThreads=40, nearest=False, verbose=False):
+             treePrec='single', tree=None, nThreads=20, nearest=False, verbose=False):
     """ Calculate a characteristic 'size' ('smoothing length') given a set of input particle coordinates, 
     where the size is defined as the radius of the sphere (or circle in 2D) enclosing the nNGB nearest 
     neighbors. If posSearch==None, then pos defines both the neighbor and search point sets, otherwise 

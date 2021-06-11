@@ -828,6 +828,52 @@ def subboxOutflowTimeEvoPanels(conf=0, depth=10):
 
     renderBox(panels, plotConfig, locals(), skipExisting=False)
 
+def outflowSingleVis():
+    """ High-resolution vis of a single panel from the above. """
+
+    depth      = 20
+
+    method     = 'sphMap'
+    nPixels    = [5000, 2500] # [x,y] shape of boxSizeImg must match nPixels aspect ratio
+    boxSizeImg = [1000*2, 500*2, depth]  # depths: 10, 25, 50, 100, 200, sizes: [1000,500], [200,100]
+    axes       = [0,1] # x,y
+    labelZ     = False
+    labelHalos = False
+    labelScale = False #'physical'
+    plotHalos  = False
+
+    # dt = 170 Myr (third row)
+    #sP = simParams(run='tng50-1', variant='subbox2', snap=1513)
+    sP = simParams(run='tng50-1', redshift=1.6905) # 50 Myr after
+
+    hsmlFac = 3.5 # test, not there in fullbox render
+
+    boxCenter = [9260.549, 24325.998, 21890.312]
+
+    # field
+    partType  = 'gas'
+    partField = 'coldens_msunkpc2'
+    mmDens    = [4.0, 6.5]
+
+    extent = [boxCenter[0]-boxSizeImg[0]/2, boxCenter[0]+boxSizeImg[0]/2,
+              boxCenter[1]-boxSizeImg[1]/2, boxCenter[1]+boxSizeImg[1]/2]
+
+    # rotation (by hand, constant in time)
+    angle = -30.0
+    dirVec = [0,0,1]
+    rotMatrixLoc = rotationMatrixFromAngleDirection(angle, dirVec)
+
+    panels = [{'rotMatrix':rotMatrixLoc, 'rotCenter':boxCenter, 
+               'ctName':'inferno', 'plawScale':1.3, 'valMinMax':mmDens}]
+
+    class plotConfig:
+        saveFilename = 'vis_%s_%d_%s_%s.png' % (sP.simName,sP.snap,partType,partField)
+        plotStyle = 'edged'
+        rasterPx  = nPixels
+        colorbars = False
+
+    renderBox(panels, plotConfig, locals(), skipExisting=False)
+
 def run():
     """ Run. """
     redshift = 0.73 # snapshot 58, where intermediate trees were constructed

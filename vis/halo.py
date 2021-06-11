@@ -262,12 +262,13 @@ def renderSingleHalo(panels_in, plotConfig, localVars, skipExisting=True, return
         if 'run' in p:
             v = p['variant'] if 'variant' in p else None
             s = p['snap'] if 'snap' in p else None
+            r = p['res'] if 'res' in p else None
             z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
 
             if 'sP' in p:
                 print('Warning: Overriding common sP with specified run,snap,redshift.')
 
-            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
+            p['sP'] = simParams(run=p['run'], res=r, redshift=z, snap=s, hInd=p['hInd'], variant=v)
 
         if 'subhaloInd' in p and p['sP'].subhaloInd is None:
             p['sP'] = p['sP'].copy()
@@ -393,12 +394,13 @@ def renderSingleHaloFrames(panels_in, plotConfig, localVars, skipExisting=True):
         if 'run' in p:
             v = p['variant'] if 'variant' in p else None
             s = p['snap'] if 'snap' in p else None
+            r = p['res'] if 'res' in p else None
             z = p['redshift'] if 'redshift' in p and s is None else None # skip if snap specified
 
             if 'sP' in p:
                 print('Warning: Overriding common sP with specified run,snap,redshift.')
 
-            p['sP'] = simParams(res=p['res'], run=p['run'], redshift=z, snap=s, hInd=p['hInd'], variant=v)
+            p['sP'] = simParams(run=p['run'], res=r, redshift=z, snap=s, hInd=p['hInd'], variant=v)
 
         if 'subhaloInd' in p and p['sP'].subhaloInd is None:
             p['sP'] = p['sP'].copy()

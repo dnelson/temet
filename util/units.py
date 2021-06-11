@@ -273,6 +273,16 @@ class units(object):
             obs_fac = (1.0 - BlackHoleFeedbackFactor) * ObscurationFactor * (Lbol/1e46)**ObscurationSlope
             Lbol *= obs_fac
 
+        # Vog+13 Eqn 29 'continuous' modulation for low luminosities
+        if self._sP.BHs == 1:
+            # in Illustris this may be more complicated
+            import pdb; pdb.set_trace()
+        if self._sP.BHs == 2:
+            # in TNG this is simple
+            QuasarThreshold = 0.002
+            w = np.where(lum_edd < QuasarThreshold)
+            Lbol[w] = 0.0
+
         return Lbol
 
     def BH_chi(self, M_BH):
