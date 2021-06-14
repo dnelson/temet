@@ -837,7 +837,7 @@ class simParams:
             raise Exception("Invalid resolution.")
 
         self.simPath   = self.arepoPath + 'output/'
-        self.derivPath = "/freya/ptmp/mpa/cbyrohl/python_dnelson_datafiles/"#self.arepoPath + 'data.files/'
+        self.derivPath = self.arepoPath + 'data.files/'
         self.postPath  = self.arepoPath + 'postprocessing/'
         self.plotPath  = self.basePath + 'plots/'
 
