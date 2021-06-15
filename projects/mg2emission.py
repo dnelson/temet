@@ -66,6 +66,27 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
         projParams = {'fov':360.0}
         nPixels    = [1200,600]
         axesUnits  = 'rad_pi'
+    if conf in [7,8]:
+        # BlueMUSE
+        panels.append( {'partType':'gas', 'partField':'sb_MgII_ergs_dustdeplete', 'valMinMax':[-22.0, -17.0]} )
+        axesUnits = 'arcsec'
+
+        if conf == 7:
+            # with realism
+            nPixels = [280, 280] # 0.3 arcsec/px (i.e. unbinned)
+            nPixels = [28, 28] # binned
+            panels[0]['randomNoise'] = 1.4e-20 # 1/3 of the 3sigma BlueMUSE limit from below
+
+        rVirFracs = False
+        labelHalo = 'mstar'
+        size = 1.4
+        sizeType = 'arcmin'
+
+        contour = ['gas','sb_MgII_ergs_dustdeplete']
+        # second is 5h 3sigma detection limit for KWCI, first is 100h 3sigma for BlueMUSE
+        # scaling only by (100/3.5)^{-1/2} - 4.3e-20
+        # (100h S/N=5 for BlueMUSE is 1.5e-20)
+        contourLevels = [np.log10(4.3e-20),np.log10(2.3e-19)] # erg/s/cm^2/arcsec^2
 
     class plotConfig:
         plotStyle    = 'edged'
@@ -74,6 +95,11 @@ def singleHaloImageMGII(sP, subhaloInd, conf=1, size=100, rotation='edge-on', la
         fontsize     = font
         saveFilename = '%s_%d_%d_%s%s.pdf' % \
           (sP.simName,sP.snap,subhaloInd,'-'.join([p['partField'] for p in panels]),'_psf' if psf else '')
+
+    if conf in [7,8]:
+        plotConfig.plotStyle = 'open'
+        plotConfig.title = False
+        plotConfig.rasterPx = [800, 800]
 
     # render
     renderSingleHalo(panels, plotConfig, locals(), skipExisting=False)
@@ -243,7 +269,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
                     yy = np.nanpercentile(sbr_indiv_mean_psf, percs, axis=0)
                 else:
                     yy = np.nanpercentile(sbr_indiv_mean, percs, axis=0)
-                l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color='#bbbbbb', alpha=0.4)
+                l, = ax.plot(radMidPts, yy[1,:], lw=lw, linestyle='-', color='#bbbbbb', alpha=0.6)
 
         if indiv:
             colors = sampleColorTable('rainbow', indiv, bounds=[0.0,1.0])
@@ -411,7 +437,7 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
         #mstar_gals = [9.9, 11.0] # log msun, 5 galaxies, 4<SFR<40 msun/yr
 
         ax.errorbar(dist, sb_lim, xerr=dist_err, yerr=0.4, uplims=True, color='#000000', marker='D', alpha=0.6)
-        ax.text(dist, sb_lim+0.15, 'RV+2019', ha='center', fontsize=20)
+        ax.text(dist-3, sb_lim+0.12, 'RV+2019', ha='center', fontsize=20)
 
         # Burchett+2020
         dist     = np.array([0.33, 1.03, 1.73, 2.44, 3.15, 3.85, 4.55]) # arcsec
@@ -426,6 +452,20 @@ def radialSBProfiles(sPs, massBins, minRedshift=None, psf=False, indiv=False, xl
         else:
             yy = sb[2] + 0.2
         ax.text(dist_kpc[2], sb[2]+0.2, 'Burchett+2020', ha='left', fontsize=20)
+
+        # Zabl+21 (Megaflow VIII)
+        dist_kpc = [1.80, 5.35, 8.95, 12.50, 16.10, 19.65, 25.00]
+        sb_A = [2.80e-18, 4.88e-18, 2.64e-18, 2.74e-18, 1.76e-18, 1.80e-19, 1.16e-19] # erg/s/cm^2/arcsec^2
+        sb_B = [7.32e-19, 1.88e-18, 3.32e-18, 2.43e-18, 4.84e-19, 9.10e-19, 0.0]
+        err_A_up = [5.07e-18, 6.01e-18, 3.64e-18, 3.61e-18, 2.64e-18, 1.09e-18, 9.54e-19]
+        err_A_down = [1.0e-20, 3.71e-18, 1.54e-18, 1.85e-18, 8.68e-19, 1.0e-20, 1.0e-20]
+
+        sb_tot = np.log10(sb_A) # + sb_B)
+        sb_up = np.log10(err_A_up) - np.log10(sb_A)
+        sb_down = np.log10(sb_A) - np.log10(err_A_down)
+
+        ax.errorbar(dist_kpc, sb_tot, yerr=[sb_down,sb_up], color='#000000', marker='o', alpha=0.6)
+        ax.text(dist_kpc[-1]+0.5, sb_tot[-1]-0.7, 'Zabl+2021', ha='left', fontsize=20)
 
     if sP.redshift == 0.3 and not indiv:
         # Rupke+ 2019 Makani
@@ -810,7 +850,7 @@ def paperPlots():
 
     # figure 1 - single halo example
     if 0:
-        singleHaloImageMGII(sP, subhaloID, conf=3) # 1 for paper
+        singleHaloImageMGII(sP, subhaloID, conf=1)
 
     # figure 2 - vis gallery
     if 0:
@@ -820,7 +860,7 @@ def paperPlots():
     # figure 3 - stacked SB profiles
     if 0:
         mStarBins = [ [9.0, 9.05], [9.5, 9.6], [10.0,10.1], [10.4,10.45], [10.9,11.1] ]
-        for redshift in redshifts:
+        for redshift in [0.7]:#redshifts:
             sP.setRedshift(redshift)
             radialSBProfiles([sP], mStarBins, minRedshift=redshifts[0], xlim=[0,50], psf=True)
 
@@ -947,13 +987,22 @@ def paperPlots():
                          ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
                          normContourQuantColMax=False, haloIDs=haloIDs, f_post=_f_post)
 
-    # figure 11 - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
+    # figure 10b - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
     if 0:
         cumulativeLumVsVrad(sP)
 
-    # figure 12 - line-center optical depth for MgII all-sky map
+    # figure 11 - line-center optical depth for MgII all-sky map
     if 0:
         singleHaloImageMGII(sP, subhaloID, conf=6, font=26)
+
+    # figure 12 - mock BlueMUSE image
+    if 1:
+        sP = simParams(run='tng50-1', redshift=0.3)
+        subhaloID = 365126
+        #for subhaloID in [383442,365126,407763,454671,464083]:
+        #    singleHaloImageMGII(sP, subhaloID, conf=7, font=23, psf=True) #, rotation=None)
+        singleHaloImageMGII(sP, subhaloID, conf=7, font=23, psf=True)
+        #singleHaloImageMGII(sP, subhaloID, conf=8, font=23, psf=False)
 
     # figure A1 - impact of dust depletion
     if 0:
