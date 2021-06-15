@@ -3,7 +3,7 @@ Various data exporters/converters, between different formats, etc.
 """
 import numpy as np
 import h5py
-from os import path, mkdir, getcwd
+from os import path, mkdir, getcwd, remove
 import glob
 import time
 import struct
@@ -490,7 +490,7 @@ def makeSnapSubsetsForPostProcessing():
             fOut.close()
             print('%s' % fileTo % (i,i,j))
 
-def finalizeSubfindHBTGroupCat(snap):
+def finalizeSubfindHBTGroupCat(snap, prep=False):
     """ For a Subfind-HBT post-processing of an original Subfind simulation, extract the new 
     group ordered IDs from the rewritten snapshot, place them into the catalog itself, and 
     cross-match to the original snapshot IDs, to write the index mapping into the catalog. 
@@ -501,26 +501,72 @@ def finalizeSubfindHBTGroupCat(snap):
     from util.helper import crossmatchHalosByCommonIDs
 
     sP = simParams(run='tng100-3',snap=snap)
-    basePath = path.expanduser("~") + '/data/gadget4/output/'
+    basePath = path.expanduser("~") + '/data/gadget4/'
 
-    snapPath = basePath + 'snapdir_%03d/' % snap
-    groupPath = basePath + 'groups_%03d/fof_subhalo_tab_%03d' % (snap,snap) + '.%s.hdf5'
-    saveFile = basePath + 'subfind_hbt_%03d.hdf5' % snap
+    snapPath = basePath + 'output/snapdir_%03d/' % snap
+    groupPath = basePath + 'output/groups_%03d/fof_subhalo_tab_%03d' % (snap,snap) + '.%s.hdf5'
+    saveFile = basePath + 'postprocessing/subfind_hbt_%03d.hdf5' % snap
+    saveFileIDs = basePath + 'postprocessing/subfind_hbt_%03d_ids.hdf5' % snap
+    treeOffsetFile = basePath + 'postprocessing/offsets/SubLinkHBT_offsets_subgroup_%d.hdf5' % snap
 
-    # number of chunks, and total member size by type
+    # number of chunks
     files = glob.glob(groupPath % '*')
     nChunks = len(files)
 
+    if prep:
+        # rewrite a few datasets/attrs to make dtypes consistent with TNG (for SubLink)
+        print(snap)
+        for i in range(nChunks):
+            with h5py.File(groupPath % i,'r+') as f:
+                # G4 renamed 'Nsubgroups*' -> 'Nsubhalos*'
+                f['Header'].attrs['Nsubgroups_Total'] = f['Header'].attrs['Nsubhalos_Total'].astype('int32')
+                f['Header'].attrs['Nsubgroups_ThisFile'] = f['Header'].attrs['Nsubhalos_ThisFile'].astype('int32')
+
+                del f['Header'].attrs['Nsubhalos_Total']
+                del f['Header'].attrs['Nsubhalos_ThisFile']
+
+                f['Header'].attrs['Ngroups_Total'] = f['Header'].attrs['Ngroups_Total'].astype('int32')
+                f['Header'].attrs['Ngroups_ThisFile'] = f['Header'].attrs['Ngroups_ThisFile'].astype('int32')
+
+                # G4 renamed SubhaloGrNr to SubhaloGroupNr
+                if 'Subhalo' in f and 'SubhaloGroupNr' in f['Subhalo']:
+                    SubhaloGrNr = f['Subhalo/SubhaloGroupNr'][()].astype('int32') # G4: int64
+                    f['Subhalo/SubhaloGrNr'] = SubhaloGrNr
+                    del f['Subhalo/SubhaloGroupNr']
+
+                # G4 renamed SubhaloParent to SubhaloParentRank
+                if 'Subhalo' in f and 'SubhaloParentRank' in f['Subhalo']:
+                    SubhaloParent = f['Subhalo/SubhaloParentRank'][()]
+                    f['Subhalo/SubhaloParent'] = SubhaloParent
+                    del f['Subhalo/SubhaloParentRank']
+
+                # dtypes
+                if 'Subhalo' in f and 'SubhaloMassType' in f['Subhalo']:
+                    SubhaloMassType = f['Subhalo/SubhaloMassType'][()].astype('float32') # G4: float64
+                    del f['Subhalo/SubhaloMassType']
+                    f['Subhalo/SubhaloMassType'] = SubhaloMassType
+
+                # mass-weighted scalefac of members (redundant if not lightcone)
+                if 'Group' in f and 'GroupAscale' in f['Group']:
+                    del f['Group/GroupAscale']
+
+        for i in range(nChunks):
+            with h5py.File(snapPath + 'snap_%03d.%d.hdf5' % (snap,i),'r+') as f:
+                f['Header'].attrs['NumPart_ThisFile'] = f['Header'].attrs['NumPart_ThisFile'].astype('int32')
+        return
+
+    # total member size by type
     GroupLenTypeTot = np.zeros(6, dtype='int64')
 
     for i in range(nChunks):
         with h5py.File(groupPath % i,'r') as f:
             assert f['Header'].attrs['NumFiles'] == nChunks
-            GroupLenTypeTot += np.sum(f['Group/GroupLenType'][()], axis=0)
+            if 'Group' in f:
+                GroupLenTypeTot += np.sum(f['Group/GroupLenType'][()], axis=0)
 
     # (A) create new group catalog single file
-    print('A')
-    with h5py.File(saveFile,'w') as fOut:
+    print('A [snap = %d]' % snap)
+    with h5py.File(saveFileIDs,'w') as fOut:
 
         ids = fOut.create_group('IDs')
 
@@ -535,7 +581,7 @@ def finalizeSubfindHBTGroupCat(snap):
             with h5py.File(snapPath + 'snap_%03d.%d.hdf5' % (snap,i),'r') as f:
                 for j in range(GroupLenTypeTot.size):
                     gName = 'PartType%d' % j
-                    if gName not in f:
+                    if gName not in f or GroupLenTypeTot[j] == 0:
                         continue
 
                     # determine read/write size
@@ -561,8 +607,12 @@ def finalizeSubfindHBTGroupCat(snap):
 
     with h5py.File(groupPath % (0),'r') as f:
         # record dtype and shapes of all datasets
+        totlen['Group'] = f['Header'].attrs['Ngroups_Total']
+        totlen['Subhalo'] = f['Header'].attrs['Nsubgroups_Total']
+
         for gName in dtypes.keys():
-            totlen[gName] = f['Header'].attrs['N%ss_Total' % gName.lower()]
+            if gName not in f:
+                continue
 
             for key in f[gName].keys():
                 dtypes[gName][key] = f[gName][key].dtype
@@ -574,14 +624,14 @@ def finalizeSubfindHBTGroupCat(snap):
             metaGroups[gName] = dict(f[gName].attrs)
 
         metaGroups['Header']['Nids_Total'] = GroupLenTypeTot.sum() # original value not meaningful
-        metaGroups['Header']['Nsubhalos_ThisFile'] = metaGroups['Header']['Nsubhalos_Total']
+        metaGroups['Header']['Nsubgroups_ThisFile'] = metaGroups['Header']['Nsubgroups_Total']
         metaGroups['Header']['Ngroups_ThisFile'] = metaGroups['Header']['Ngroups_Total']
         metaGroups['Header']['Nids_ThisFile'] = metaGroups['Header']['Nids_Total']
         metaGroups['Header']['NumFiles'] = 1
 
     offsets = {'Group':0, 'Subhalo':0}
 
-    with h5py.File(saveFile,'r+') as fOut:
+    with h5py.File(saveFile,'w') as fOut:
         # allocate datasets
         for gName in dtypes.keys():
             for key in dtypes[gName]:
@@ -591,6 +641,8 @@ def finalizeSubfindHBTGroupCat(snap):
         for i in range(nChunks):
             with h5py.File(groupPath % i,'r') as f:
                 for gName in dtypes.keys():
+                    if gName not in f:
+                        continue
                     for key in dtypes[gName]:
                         length = f[gName][key].shape[0]
                         offset = offsets[gName]
@@ -610,7 +662,7 @@ def finalizeSubfindHBTGroupCat(snap):
         print('C', i)
 
         # load sorted ids of new fof/subhalos-hbt
-        with h5py.File(saveFile,'r') as f:
+        with h5py.File(saveFileIDs,'r') as f:
             ids_new = f['IDs/PartType%d' % i][()]
 
         # load sorted ids of old fof/subhalos (cannot restrict to haloSubset of old catalog, 
@@ -629,11 +681,17 @@ def finalizeSubfindHBTGroupCat(snap):
             fOut['SnapIndices/PartType%d' % i] = indices
 
     # (D) add group cross-matching results
+    if GroupLenTypeTot.sum() == 0:
+        print('Done.')
+        return
+
     print('D')
     ptNum = 1 # DM particles only
 
-    with h5py.File(saveFile,'r') as f:
+    with h5py.File(saveFileIDs,'r') as f:
         ids_group1 = f['IDs/PartType%d' % ptNum][()]
+
+    with h5py.File(saveFile,'r') as f:
         lengths_group1 = f['Group/GroupLenType'][:,ptNum]
         lengths_sub1 = f['Subhalo/SubhaloLenType'][:,ptNum]
         nsubs1 = f['Group/GroupNsubs'][()]
@@ -649,11 +707,11 @@ def finalizeSubfindHBTGroupCat(snap):
         index_21 = crossmatchHalosByCommonIDs(ids2, lengths2, ids1, lengths1)
 
         w = np.where(index_12 < 0)
-        print('Originally have [%d] objects of [%d] without matches.' % (len(w[0]),lengths1.size))
+        #print('Originally have [%d] objects of [%d] without matches.' % (len(w[0]),lengths1.size))
 
         w12 = np.where(index_21[index_12] != np.arange(lengths1.size))
         w21 = np.where(index_12[index_21] != np.arange(lengths2.size))
-        print(' Remove [%d] non-bijective 1->2, and [%d] non-bijective 2->1.' % (len(w12[0]),len(w21[0])))
+        #print(' Remove [%d] non-bijective 1->2, and [%d] non-bijective 2->1.' % (len(w12[0]),len(w21[0])))
 
         index_12[w12] = -1
         index_21[w21] = -1
@@ -703,6 +761,24 @@ def finalizeSubfindHBTGroupCat(snap):
     with h5py.File(saveFile,'r+') as f:
         f['Matching/SubhaloOrigToHBT'] = subindex_21
         f['Matching/SubhaloHBTToOrig'] = subindex_12
+
+    # (F) add offsets into SubLinkHBT merger tree (must be already created)
+    # run: makeSubgroupOffsetsIntoSublinkTreeGlobal('/u/dnelson/gadget4/', treeName='SubLinkHBT')
+    print('F')
+    with h5py.File(treeOffsetFile,'r') as f:
+        LastProgenitorID = f['LastProgenitorID'][()]
+        MainLeafProgenitorID = f['MainLeafProgenitorID'][()]
+        SubhaloID = f['SubhaloID'][()]
+        RowNum = f['RowNum'][()]
+
+    with h5py.File(saveFile,'r+') as f:
+        f['Subhalo/SubLinkHBT/LastProgenitorID'] = LastProgenitorID
+        f['Subhalo/SubLinkHBT/MainLeafProgenitorID'] = MainLeafProgenitorID
+        f['Subhalo/SubLinkHBT/SubhaloID'] = SubhaloID
+        f['Subhalo/SubLinkHBT/RowNum'] = RowNum
+
+    remove(treeOffsetFile)
+    remove(saveFileIDs)
 
     print('Done.')
 
