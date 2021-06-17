@@ -280,7 +280,8 @@ class units(object):
         if self._sP.BHs == 2:
             # in TNG this is simple
             QuasarThreshold = 0.002
-            edd_frac = mdot/mdot_edd
+            mdot_msun_per_yr = self.codeMassOverTimeToMsunPerYear(mdot)
+            edd_frac = mdot_msun_per_yr/mdot_edd
             w = np.where(edd_frac < QuasarThreshold)
             Lbol[w] = 0.0
 
