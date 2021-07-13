@@ -520,9 +520,9 @@ def generate_set():
     if 1:
         # TNG-Cluster
         sP = simParams(res=2048,run='tng_dm',redshift=0.0)
-        zoomFac = 4 #3 # effective 6144^3 in L680 is 2.37 lower times mass res than TNG300-1
-        haloIDs = [1919] #[4,79,84,102,107,136,155,156,179,202,205,210,217,224,239,280,282,361,390]
-        sizeFac = 3.0 #3.0 #[2.0,3.0,4.0]
+        zoomFac = 4
+        haloIDs = [107,280] #[1335] #[4,79,84,102,107,136,155,156,179,202,205,210,217,224,239,280,282,361,390]
+        sizeFac = 3.0 #[2.0,3.0,4.0]
 
     if 0:
         # LRG-CGM paper: TNG50-1 no-MHD test (z=0.5)

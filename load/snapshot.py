@@ -933,22 +933,22 @@ def snapshotSubset(sP, partType, fields,
             with h5py.File(path,'r') as f:
                 if key in f:
                     if indRange is None:
-                        r[field] = f[key][()]
+                        r[fieldName] = f[key][()]
                     else:
-                        r[field] = f[key][indRange[0]:indRange[1]+1]
+                        r[fieldName] = f[key][indRange[0]:indRange[1]+1]
                 else:
                     # more compact storage: only MH and MH2*, where MHI must be derived
                     assert 'MHI' in key
                     if indRange is None:
                         MH = f['MH'][()]
-                        r[field] = MH - f[key.replace('HI','H2')][()]
+                        r[fieldName] = MH - f[key.replace('HI','H2')][()]
                     else:
                         MH = f['MH'][indRange[0]:indRange[1]+1]
-                        r[field] = MH - f[key.replace('HI','H2')][indRange[0]:indRange[1]+1]
+                        r[fieldName] = MH - f[key.replace('HI','H2')][indRange[0]:indRange[1]+1]
 
             if 'numdens' in field:
-                r[field] /= snapshotSubset(sP, partType, 'volume', **kwargs)
-                r[field] = sP.units.codeDensToPhys(r[field],cgs=True,numDens=True) # linear [H atoms/cm^3]
+                r[fieldName] /= snapshotSubset(sP, partType, 'volume', **kwargs)
+                r[fieldName] = sP.units.codeDensToPhys(r[field],cgs=True,numDens=True) # linear [H atoms/cm^3]
 
         if '_diemer' in field:
             # use Diemer+2019 pre-computed results in 'hydrogen' postprocessing catalog

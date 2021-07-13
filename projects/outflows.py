@@ -1192,13 +1192,9 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
                     # median line and 1sigma band
                     minNum = 2 if 'etaM' in xQuant else 5 # for xQuants = mstar, SFR, Lbol, ...
                     if redshift is not None and redshift > 7.0: minNum = 2
-                    #binSize = 0.28
-                    #print('binSize changed, remove')
                     xm, ym, sm, pm = running_median(xx,yy,binSize=binSize,percs=percs,mean=(stat == 'mean'),minNumPerBin=minNum)
 
                     if xm.size > sKn:
-                        #print('extra smoothing, remove')
-                        #extra = 2 if xm.size > sKn+4 else 0
                         extra = 0
                         ym = savgol_filter(ym,sKn+2+extra,sKo+2)
                         sm = savgol_filter(sm,sKn+2+extra,sKo+2) 
@@ -1233,6 +1229,10 @@ def gasOutflowVelocityVsQuant(sP_in, xQuant='mstar_30pkpc', ylog=False, redshift
 
                         # plot bottom
                         ax.fill_between(xm[:], y_down, y_up, color=l.get_color(), interpolate=True, alpha=0.05)
+
+                    #print(label)
+                    #for i in range(xm.size):
+                    #    print('%5.2f %6.2f %6.2f %6.2f' % (xm[i],ym[i],y_down[i],y_up[i]))
 
         # special plotting behavior (including observational data sets)
         from load.data import chen10, rubin14, robertsborsani18, fiore17, heckman15, erb12, fluetsch18, toba17, \

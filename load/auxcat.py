@@ -444,6 +444,13 @@ fieldComputeFunctionMapping = \
    'Subhalo_Mass_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None),
 
+   'Subhalo_Mass_2rstars_MHIGK_popping' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad='2rhalfstars'),
+   'Subhalo_Mass_70pkpc_MHIGK_popping' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad=70.0),
+   'Subhalo_Mass_FoF_MHIGK_popping' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='MHIGK_popping',op='sum',rad=None,scope='fof',cenSatSelect='cen'),
+
    'Subhalo_Mass_10pkpc_Stars' : \
      partial(subhaloRadialReduction,ptType='stars',ptProperty='Masses',op='sum',rad=10.0),
    'Subhalo_Mass_10pkpc_Gas' : \
@@ -488,12 +495,25 @@ fieldComputeFunctionMapping = \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions=sfreq0),
    'Subhalo_Mass_SF0Gas' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='mass',op='sum',rad=None,ptRestrictions=sfreq0),
+
    'Subhalo_Mass_SFGas_Metal' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions=sfrgt0),
    'Subhalo_Mass_SFGas_Hydrogen' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_H',op='sum',rad=None,ptRestrictions=sfrgt0),
    'Subhalo_Mass_SFGas_HI' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,ptRestrictions=sfrgt0),
+   'Subhalo_Mass_nHgt05_Metal' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions={'nh':['gt',0.05]}),
+   'Subhalo_Mass_nHgt05_Hydrogen' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_H',op='sum',rad=None,ptRestrictions={'nh':['gt',0.05]}),
+   'Subhalo_Mass_nHgt05_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,ptRestrictions={'nh':['gt',0.05]}),
+   'Subhalo_Mass_nHgt025_Metal' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass',op='sum',rad=None,ptRestrictions={'nh':['gt',0.025]}),
+   'Subhalo_Mass_nHgt025_Hydrogen' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_H',op='sum',rad=None,ptRestrictions={'nh':['gt',0.025]}),
+   'Subhalo_Mass_nHgt025_HI' : \
+     partial(subhaloRadialReduction,ptType='gas',ptProperty='HI mass',op='sum',rad=None,ptRestrictions={'nh':['gt',0.025]}),
 
    'Subhalo_Mass_HaloGas_Oxygen' : \
      partial(subhaloRadialReduction,ptType='gas',ptProperty='metalmass_O',op='sum',rad='r015_1rvir_halo'),

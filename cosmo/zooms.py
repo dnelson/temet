@@ -38,7 +38,7 @@ def pick_halos():
     # note: skipped h604 (corrupt GroupNsubs != Nsubgroups_Total in snap==53, replaced with 616)
     return hInds
 
-def _halo_ids_run(onlyDone=False):
+def _halo_ids_run(res=13, onlyDone=False):
     """ Parse runs.txt and return the list of (all) halo IDs. """
     path = expanduser("~") + "/sims.TNG_zooms/"
 
@@ -51,10 +51,12 @@ def _halo_ids_run(onlyDone=False):
             line = line.split(' ')[0]
         if line.isdigit():
             halo_inds.append(int(line))
+        if 'OLD:' in line:
+            break
 
     if onlyDone:
         # restrict to completed runs
-        halo_inds_done = [hInd for hInd in halo_inds if isdir(path+'L680n2048TNG_h%d_L13_sf3' % hInd)]
+        halo_inds_done = [hInd for hInd in halo_inds if isdir(path+'L680n2048TNG_h%d_L%d_sf3' % (hInd,res))]
         return halo_inds_done
 
     return halo_inds
@@ -599,14 +601,14 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
     simulation, i.e. concatenate the output/group* and output/snap* of these runs. 
     Process a single snapshot, since all are independent. Note that we write exactly one
     output groupcat file per zoom halo, and exactly two output snapshot files. """
-    outPath = '/u/dnelson/sims.TNG/L680n6144TNG/output/'
+    outPath = '/u/dnelson/sims.TNG/L680n8192TNG/output/'
 
     # zoom config
-    res = 13
+    res = 14
     variant = 'sf3'
     run = 'tng_zoom'
 
-    hInds = _halo_ids_run(onlyDone=True)
+    hInds = _halo_ids_run(res=res, onlyDone=True)
 
     def _newpartid(old_ids, halo_ind, ptNum):
         """ Define convention to offset particle/cell/tracer IDs based on zoom run halo ID. 
@@ -865,7 +867,7 @@ def combineZoomRunsIntoVirtualParentBox(snap=99):
         # particle lengths outside fofs for this hInd (file 2)
         f['OuterFuzzLenType_hInd'] = OuterFuzzLenType_hInd 
         # halo IDs of original zooms
-        f['HaloIDs'] = hInds.astype('int32')
+        f['HaloIDs'] = np.array(hInds, dtype='int32')
 
     print(' Saved [%s%s].' % (outPath,saveFilename))
 
@@ -1054,14 +1056,22 @@ def testVirtualParentBoxGroupCat(snap=99):
     # compare group catalogs: entire (un-contaminated) TNG-Cluster vs. ~same (first) N of TNG300-1
     contam = sP1.halos('GroupContaminationFracByMass')
     m200 = sP1.units.codeMassToLogMsun(sP1.halos('Group_M_Crit200'))
+    m200_sP2 = sP2.units.codeMassToLogMsun(sP2.halos('Group_M_Crit200'))
 
-    haloIDs = np.where( (contam == 0) & (m200 > 14.0) )[0]
+    haloIDs_1 = np.where( (contam < 0.01) & (m200 > 14.0) )[0]
+    haloIDs_2 = np.where( (m200_sP2 > 14.0) )[0]
+
+    haloIDs = [haloIDs_1, haloIDs_2]
 
     # subhalos: all of these groups
-    nSubs = sP1.halos('GroupNsubs')[haloIDs]
-    firstSub = sP1.halos('GroupFirstSub')[haloIDs]
+    subIDs = []
 
-    subIDs = np.hstack( [np.arange(nSubs[i]) + firstSub[i] for i in range(haloIDs.size)] )
+    for i, sP in enumerate([sP1, sP2]):
+        nSubs = sP.halos('GroupNsubs')[haloIDs[i]]
+        firstSub = sP.halos('GroupFirstSub')[haloIDs[i]]
+
+        subIDs_loc = np.hstack( [np.arange(nSubs[i]) + firstSub[i] for i in range(haloIDs[i].size)] )
+        subIDs.append(subIDs_loc)
 
     for gName in ['Group','Subhalo']:
         # get list of halo/subhalo properties
@@ -1083,20 +1093,14 @@ def testVirtualParentBoxGroupCat(snap=99):
             ax.set_ylabel('log N')
 
             # load and histogram
-            count = 0
-
-            for sP in [sP1,sP2]:
+            for i, sP in enumerate([sP1,sP2]):
                 if gName == 'Group':
                     vals = sP.halos(field)
-                    if count == 0: vals = vals[haloIDs] # sP1 uncontaminated
+                    vals = vals[haloIDs[i]]
+
                 if gName == 'Subhalo':
                     vals = sP.subhalos(field)
-                    if count == 0: vals = vals[subIDs] # sP1 uncontaminated
-
-                if count > 0: # slice on sP2
-                    vals = vals[0:count]
-                if count == 0: # set on sP1
-                    count = vals.shape[0]
+                    vals = vals[subIDs[i]]
 
                 vals = vals[np.isfinite(vals) & (vals > 0)]
                 vals = vals.ravel() # 1D for all multi-D
@@ -1104,7 +1108,7 @@ def testVirtualParentBoxGroupCat(snap=99):
                 if field not in ['GroupCM','GroupPos','SubhaloCM','SubhaloGrNr','SubhaloIDMostbound']:
                     vals = np.log10(vals)
 
-                ax.hist(vals, bins=nBins, alpha=0.6, label=sP.simName)
+                ax.hist(vals, bins=nBins, alpha=0.6, density=True, label=sP.simName)
 
             # finish plot
             ax.legend(loc='best')
@@ -1120,7 +1124,7 @@ def testVirtualParentBoxSnapshot(snap=99):
     from util.helper import closest
 
     # config
-    haloID = 4 # for particle comparison, indexing primary targets of TNG-Cluster
+    haloID = 0 # for particle comparison, indexing primary targets of TNG-Cluster
     nBins = 50
 
     sP1 = simParams(run='tng-cluster', snap=snap)

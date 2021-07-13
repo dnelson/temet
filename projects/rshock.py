@@ -982,8 +982,13 @@ def paperPlots():
 
     # figure test: why methods start to fail towards z=0
     if 1:
-        haloID = 200
+        haloID = 100
         sP = simParams(run='tng50-1', redshift=0.0)
         print('halo mass: ', sP.units.codeMassToLogMsun(sP.halo(haloID)['Group_M_Crit200']))
 
         virialShockRadiusSingle(sP, haloID, useExistingAuxCat=True)
+
+    # TODO: check on L75n910FP_NR
+    # TODO: make time evolution plot with time along x-axis, distance along y-axis, color=quant
+    #  -- see if our method may need to be explicitly time aware
+    

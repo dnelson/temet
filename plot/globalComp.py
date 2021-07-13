@@ -2445,7 +2445,8 @@ def plots():
     if 0:
         # single plot and quit
         pdf = PdfPages('comptest_%s.pdf' % (datetime.now().strftime('%d-%m-%Y')))
-        haloXrayLum(sPs, pdf, centralsOnly=True, use30kpc=True, simRedshift=0.0)
+        #stellarMassFunction(sPs, pdf, highMassEnd=False, use30kpc=True, simRedshift=0.0)
+        #stellarMassFunctionMultiPanel(sPs, pdf, use30kpc=True, highMassEnd=False, redshifts=[0,3])
         pdf.close()
         return
 

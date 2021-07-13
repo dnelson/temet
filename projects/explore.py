@@ -615,7 +615,7 @@ def nachoAngularQuenchingImage():
 
     stackedHaloImage(sP, mStarBin, conf=conf, median=median, rvirUnits=rvirUnits, depthFac=depthFac)
 
-def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
+def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, higal=False):
     """ Compute Omega_Q(z) for various components (Q). Rob Yates paper 2021. """
     from cosmo.hydrogen import neutral_fraction
     sP = simParams(run='eagle')
@@ -627,19 +627,28 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
         rho_z_HI      = np.zeros(snaps.size, dtype='float32')
         rho_z_H2      = np.zeros(snaps.size, dtype='float32')
     elif mstar:
+        dens_threshold = 0.05 # cm^3
         rho_z_allgas  = np.zeros(snaps.size, dtype='float32')
 
         mstar_bins    = [ [0,8],[8,9],[9,10],[10,13] ]
         rho_z_allgas_mstar = np.zeros( (len(mstar_bins),snaps.size), dtype='float32')
     elif mstarZ:
-        mstar_bins    = [ [6,13], [8,13], [7,8], [8,9], [9,10], [10,11], [11,12] ]
+        mstar_bins    = [ [6,13], [7,13], [8,13], [7,8], [8,9], [9,10], [10,11], [11,12], [0,13] ]
         metal_to_hydrogen_ratio_hi_weighted = np.zeros( (len(mstar_bins),snaps.size), dtype='float32')
+    elif higal:
+        rho_z_hi_gal  = np.zeros(snaps.size, dtype='float32')
+        rho_z_hi_70   = np.zeros(snaps.size, dtype='float32')
+        rho_z_hi_fof  = np.zeros(snaps.size, dtype='float32')
     else:
+        dens_cuts = [0.1, 0.05, 0.025, 0.016, 0.004] # 10^{-1, -1.3, -1.6, -1.8, -2.4} cm^-3
+        nh0_cuts = [0.5, 0.1, 0.05, 0.01]
+
         rho_z_allgas  = np.zeros(snaps.size, dtype='float32')
+        rho_z_gasdens = np.zeros( (len(dens_cuts),snaps.size), dtype='float32' )
+        rho_z_nh0frac = np.zeros( (len(nh0_cuts),snaps.size), dtype='float32' )
+
         rho_z_smbhs   = np.zeros(snaps.size, dtype='float32')
-        rho_z_gasdens = np.zeros( (3,snaps.size), dtype='float32' )
-        rho_z_nh0frac = np.zeros( (4,snaps.size), dtype='float32' )
-        rho_z_mstar   = np.zeros( (4,snaps.size), dtype='float32' )
+        rho_z_stars   = np.zeros(snaps.size, dtype='float32') 
 
     for i, snap in enumerate(snaps):
         sP.setSnap(snap)
@@ -647,7 +656,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
         redshifts[i] = sP.redshift
 
         if hih2:
-            # HI and H2 (Fig 2)
+            # HI and H2 (Fig 3)
             assert not metal_mass # makes no sense here
 
             mass = sP.gas('MHIGK_popping') # 10^10/h msun
@@ -663,7 +672,7 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
 
             # fiducial ISM cut
             dens = sP.gas('nh') # 1/cm^3 physical
-            w = np.where(dens < 0.1)
+            w = np.where(dens < dens_threshold)
             mass[w] = 0.0 # skip
 
             # sum total, and per bin
@@ -677,11 +686,12 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
                 rho_z_allgas_mstar[j,i] = np.sum(mass[w], dtype='float64') / sP.HubbleParam # 10^10 msun
 
         elif mstarZ:
-            # mean metallicity, in stellar mass bins (Eqn 6, Fig 3)
+            # mean metallicity, in stellar mass bins (Eqn 6, Fig 4)
             # note: operating on per-subhalo quantities, unlike all other options, which are per cell
-            HI_field = 'Subhalo_Mass_SFGas_HI'
-            metal_field = 'Subhalo_Mass_SFGas_Metal'
-            H_field = 'Subhalo_Mass_SFGas_Hydrogen'
+            qRestrict = 'nHgt025' # 'nHgt05' (n>0.05), 'nHgt025' (n>0.025), 'SFgas' (n>0.1)
+            HI_field = 'Subhalo_Mass_%s_HI' % qRestrict
+            metal_field = 'Subhalo_Mass_%s_Metal' % qRestrict
+            H_field = 'Subhalo_Mass_%s_Hydrogen' % qRestrict
 
             HI_mass = sP.auxCatSplit(HI_field)[HI_field] # 10^10/h msun, total HI mass, my simple model
             metal_mass = sP.auxCatSplit(metal_field)[metal_field] # 10^10/h msun, total metal mass
@@ -695,6 +705,20 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
 
                 avg_MH = np.sum( metal_mass[w]/H_mass[w] * HI_mass[w] ) / np.sum(HI_mass[w])
                 metal_to_hydrogen_ratio_hi_weighted[j,i] = avg_MH
+
+        elif higal:
+            # fraction of total HI mass in the box container within (i) galaxies (<2rhalfstars) and (ii) FoFs
+            galField = 'Subhalo_Mass_2rstars_MHIGK_popping' # 'Subhalo_Mass_2rstars_HI'
+            gal70Field = 'Subhalo_Mass_70pkpc_MHIGK_popping'
+            fofField = 'Subhalo_Mass_FoF_MHIGK_popping' # 'Subhalo_Mass_FoF_HI'
+
+            HI_mass_gal = sP.auxCatSplit(galField)[galField]
+            HI_mass_70kpc = sP.auxCatSplit(gal70Field)[gal70Field]
+            HI_mass_fof = sP.auxCatSplit(fofField)[fofField]
+
+            rho_z_hi_gal[i] = np.nansum(HI_mass_gal) / sP.HubbleParam # 10^10 msun
+            rho_z_hi_70[i]  = np.nansum(HI_mass_70kpc) / sP.HubbleParam # 10^10 msun
+            rho_z_hi_fof[i] = np.nansum(HI_mass_fof) / sP.HubbleParam # 10^10 msun
         else:
             # default (Fig 1)
             # all gas
@@ -705,31 +729,31 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
             # gas density thresholds
             dens = sP.gas('nh') # 1/cm^3 physical
 
-            rho_z_gasdens[0,i] = np.sum(mass[np.where(dens > 0.1)], dtype='float64') # ~ star-forming gas
-            rho_z_gasdens[1,i] = np.sum(mass[np.where(dens > 0.016)], dtype='float64') # 10^(-1.8) cm^-3
-            rho_z_gasdens[2,i] = np.sum(mass[np.where(dens > 0.004)], dtype='float64') # 10^(-2.4) cm^-3
+            for j, dens_cut in enumerate(dens_cuts):
+                rho_z_gasdens[j,i] = np.sum(mass[np.where(dens > dens_cut)], dtype='float64')
+            rho_z_gasdens[:,i] /= sP.HubbleParam # 10^10 msun
 
             # gas neutral fraction thresholds
-            nh0frac = sP.gas('NeutralHydrogenAbundance')
+            if 0:
+                nh0frac = sP.gas('NeutralHydrogenAbundance')
 
-            w = np.where(dens > 0.13) # cm^-3, correct for eEOS for star-forming gas
-            nh0frac[w] = neutral_fraction(dens[w], sP)
+                w = np.where(dens > 0.13) # cm^-3, correct for eEOS for star-forming gas
+                nh0frac[w] = neutral_fraction(dens[w], sP)
 
-            rho_z_nh0frac[0,i] = np.sum(mass[np.where(nh0frac > 0.5)], dtype='float64')
-            rho_z_nh0frac[1,i] = np.sum(mass[np.where(nh0frac > 0.1)], dtype='float64')
-            rho_z_nh0frac[2,i] = np.sum(mass[np.where(nh0frac > 0.05)], dtype='float64')
-            rho_z_nh0frac[3,i] = np.sum(mass[np.where(nh0frac > 0.01)], dtype='float64')
+                for j, nh0_cut in enumerate(nh0_cuts):
+                    rho_z_nh0frac[j,i] = np.sum(mass[np.where(nh0frac > nh0_cut)], dtype='float64')
+                rho_z_nh0frac[:,i] /= sP.HubbleParam # 10^10 msun
 
-            # stars
-            mass = sP.stars('mass') # 10^10 msun/h, total mass
-            if metal_mass: mass *= sP.stars('metallicity') # metal mass
-            rho_z_stars[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
+                # stars
+                mass = sP.stars('mass') # 10^10 msun/h, total mass
+                if metal_mass: mass *= sP.stars('metallicity') # metal mass
+                rho_z_stars[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
 
-            # smbhs
-            if sP.numPart[sP.ptNum('bhs')]:
-                mass = sP.bhs('mass') # 10^10 msun/h, total mass
-                if metal_mass: mass *= sP.bhs('metallicity') # metal mass
-                rho_z_smbhs[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
+                # smbhs
+                if sP.numPart[sP.ptNum('bhs')]:
+                    mass = sP.bhs('mass') # 10^10 msun/h, total mass
+                    if metal_mass: mass *= sP.bhs('metallicity') # metal mass
+                    rho_z_smbhs[i] = np.sum(mass, dtype='float64') / sP.HubbleParam # 10^10 msun
 
     # units: [10^10 msun] -> [msun/cMpc^3]
     print(sP.simName)
@@ -746,9 +770,17 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False):
 
         print('rho_allgas_mstarbins = ',rho_z_allgas_mstar)
         print('mstar_bins = ', mstar_bins)
+        print('dens_threshold = ',dens_threshold)
     elif mstarZ:
         print('metal_to_hydrogen_ratio_hi_weighted = ', np.log10(metal_to_hydrogen_ratio_hi_weighted))
         print('mstar_bins = ', mstar_bins)
+    elif higal:
+        rho_z_hi_gal *= 1e10 / sP.boxSizeCubicComovingMpc
+        rho_z_hi_70  *= 1e10 / sP.boxSizeCubicComovingMpc
+        rho_z_hi_fof *= 1e10 / sP.boxSizeCubicComovingMpc
+        print('rho_z_hi_gal = ', rho_z_hi_gal)
+        print('rho_z_hi_70 = ', rho_z_hi_70)
+        print('rho_z_hi_fof = ', rho_z_hi_fof)
     else:
         rho_z_allgas  *= 1e10 / sP.boxSizeCubicComovingMpc
         rho_z_gasdens *= 1e10 / sP.boxSizeCubicComovingMpc

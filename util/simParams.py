@@ -61,6 +61,8 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'illustris-1-dark':['illustris_dm',1820],
                      'illustris-2-dark':['illustris_dm',910],
                      'illustris-3-dark':['illustris_dm',455],
+                     'illustris-2-nr':['illustris_nr',910],
+                     'illustris-3-nr':['illustris_nr',455],
                      'tng100-1':['tng',1820],
                      'tng100-2':['tng',910],
                      'tng100-3':['tng',455],
@@ -81,7 +83,8 @@ run_abbreviations = {'illustris-1':['illustris',1820],
                      'tng50-2-dark':['tng_dm',1080],
                      'tng50-3-dark':['tng_dm',540],
                      'tng50-4-dark':['tng_dm',270],
-                     'tng-cluster':['tng',6144],
+                     'tng-cluster':['tng',8192],
+                     'tng-cluster-old':['tng',6144],
                      'tng-cluster-dark':['tng_dm',2048],
                      'eagle':['eagle',1504],
                      'eagle-dark':['eagle_dm',1504],
@@ -159,7 +162,7 @@ class simParams:
     marker = None # matplotlib marker (for placing single points for zoom sims)
     data   = None # per session memory-based cache
     
-    # phyiscal models: GFM and other indications of optional snapshot fields
+    # physical models: GFM and other indications of optional snapshot fields
     metals    = None  # set to list of string labels for GFM runs outputting abundances by metal
     BHs       = False # set to >0 for BLACK_HOLES (1=Illustris Model, 2=TNG Model, 3=Auriga model)
     winds     = False # set to >0 for GFM_WINDS (1=Illustris Model, 2=TNG Model, 3=Auriga model)
@@ -214,7 +217,7 @@ class simParams:
             res_L35  = [270, 540, 1080, 2160]
             res_L75  = [455, 910, 1820]
             res_L205 = [625, 1250, 2500]
-            res_L680 = [2048, 6144] # DM-parent, virtual
+            res_L680 = [2048, 6144, 8192] # DM-parent, virtual-old, virtual
 
             self.validResLevels = res_L25 + res_L35 + res_L75 + res_L205 + res_L680
             self.groupOrdered = True
@@ -389,7 +392,8 @@ class simParams:
 
                 self.simName = '%s%d-%d' % (runStr,boxSizeName,resInd)
 
-                if res == 6144: self.simName = 'TNG-Cluster'
+                if res == 6144: self.simName = 'TNG-Cluster-Old'
+                if res == 8192: self.simName = 'TNG-Cluster'
                 if '_dm' in run: self.simName += '-Dark'
                 if 'NR' in self.variant: self.simName = 'TNG%d-%d-%s' % (boxSizeName,resInd,self.variant)
 
@@ -528,7 +532,7 @@ class simParams:
             self.simName    = dirStr
 
         # ILLUSTRIS
-        if run in ['illustris','illustris_dm']:
+        if run in ['illustris','illustris_dm','illustris_nr']:
             self.validResLevels = [455,910,1820]
             self.boxSize        = 75000.0
             self.groupOrdered   = True
@@ -571,6 +575,20 @@ class simParams:
                 if res == 455:  self.simName = 'Illustris-3'
                 if res == 910:  self.simName = 'Illustris-2'
                 if res == 1820: self.simName = 'Illustris-1'
+
+            if run == 'illustris_nr': # non-radiative
+                self.winds       = 0
+                self.BHs         = 0
+
+                if res == 455:  self.targetGasMass = 5.66834e-3
+                if res == 910:  self.targetGasMass = 7.08542e-4
+
+                self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'NR/'
+                self.simNameAlt = 'L'+bs+'n'+str(res)+'NR'
+                self.savPrefix  = 'I'
+
+                if res == 455:  self.simName = 'Illustris-3-NR'
+                if res == 910:  self.simName = 'Illustris-2-NR'
 
             if run == 'illustris_dm': # DM-only
                 self.arepoPath  = self.basePath + 'sims.illustris/L'+bs+'n'+str(res)+'DM/'
