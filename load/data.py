@@ -2849,7 +2849,7 @@ def loadSDSSData(loadFields=None, redshiftBounds=[0.0,0.1], petro=False):
     #   s.z BETWEEN 0.0 and 0.1
 
     assert redshiftBounds == [0.0,0.1]
-    path_csv = expanduser("~") + '/obs/sdss_z0.0-0.1'
+    path_csv = expanduser("~") + '/obs/SDSS/sdss_z0.0-0.1'
     nFloatFields = 22
 
     path = path_csv
@@ -2893,8 +2893,8 @@ def loadSDSSFits(redshiftBounds=[0.0,0.1]):
     """ Load the fit results of the SDSS fiber spectrum MCMC chains. """
     from obs.sdss import sdssSpectraFitsCatName, spectralFitQuantities
     assert redshiftBounds == [0.0,0.1]
-    path1 = expanduser("~") + '/obs/%s.hdf5' % sdssSpectraFitsCatName
-    path2 = expanduser("~") + '/obs/sdss_z0.0-0.1.hdf5'
+    path1 = expanduser("~") + '/obs/SDSS/%s.hdf5' % sdssSpectraFitsCatName
+    path2 = expanduser("~") + '/obs/SDSS/sdss_z0.0-0.1.hdf5'
     assert isfile(path1) and isfile(path2)
 
     r = {}

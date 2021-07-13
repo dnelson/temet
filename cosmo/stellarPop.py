@@ -1153,7 +1153,7 @@ def debug_check_redshifting(redshift=0.8):
     age   = np.array( (pop.ages[y_ind],) )
 
     # load lega-c dr2 wavelength grid
-    with h5py.File(expanduser("~") + '/obs/legac_dr2_spectra_wave.hdf5','r') as f:
+    with h5py.File(expanduser("~") + '/obs/LEGAC/legac_dr2_spectra_wave.hdf5','r') as f:
         output_wave = f['wavelength'][()]
 
     for band in ['wfc_acs_f814w']: #['sdss_r','sdss_z','jwst_f444w','wfc_acs_f814w']:

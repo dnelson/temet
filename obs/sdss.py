@@ -56,7 +56,7 @@ def sdss_decompose_objid(id):
 def loadSDSSSpectrum(ind, fits=False):
     """ Remotely acquire (via http) a single SDSS galaxy spectrum, according to the input index 
     which corresponds to the sdss_z0.0-0.1.hdf5 datafile (z<0.1 targets)."""
-    basePath = os.path.expanduser('~') + '/obs/'
+    basePath = os.path.expanduser('~') + '/obs/SDSS/'
     savePath = basePath + 'spectra/'
 
     if not os.path.isdir(savePath): os.mkdir(savePath)
@@ -149,7 +149,7 @@ def loadSimulatedSpectrum(sP, ind, withVel=False, addRealism=False):
     auxCat (index ind). If addRealism == True, use a [random] real SDSS fiber spectrum to 
     convolve the mock with a realistic instrumental resolution, and add realistic noise. If 
     withVel == True, use the mock spectra which account for peculiar stellar velocity. """
-    basePath = os.path.expanduser('~') + '/obs/'
+    basePath = os.path.expanduser('~') + '/obs/SDSS/'
 
     velStr = 'Vel' if withVel else 'NoVel'
     acName = mockSpectraAuxcatName % velStr
@@ -686,7 +686,7 @@ def _indivSavePath(ind, doSim=None):
         basePath = sP.derivPath + '/spectral_fits/snap_%03d/%d/' % (sP.snap,ind % indModulus)
         fileBase = basePath + 'chains_v%d_r%d_%d' % (doSim['withVel'],doSim['addRealism'],ind)
     else:
-        basePath = os.path.expanduser('~') + '/obs/mcmc_fits_%s/%d/' % (zBin,ind % indModulus)
+        basePath = os.path.expanduser('~') + '/obs/SDSS/mcmc_fits_%s/%d/' % (zBin,ind % indModulus)
         fileBase = basePath + 'chains_%d' % ind
 
     fileName = fileBase + '.hdf5'
@@ -794,9 +794,9 @@ def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
     indRange = [0, nSpec-1]
 
     if doSim is None:
-        # SDSS: we save in the same format as the mocks, except in ~/obs/
+        # SDSS: we save in the same format as the mocks, except in ~/obs/SDSS/
         field = sdssSpectraFitsCatName
-        outFileName = os.path.expanduser('~') + '/obs/%s.hdf5' % field
+        outFileName = os.path.expanduser('~') + '/obs/SDSS/%s.hdf5' % field
     else:
         # mocks: we save in the identical format as a normal auxCat
         sP = doSim['sP']
@@ -875,10 +875,10 @@ def combineAndSaveSpectralFits(nSpec, objs=None, doSim=None):
 
 def fitSDSSSpectra(pSplit):
     """ Fit a pSplit work divided segment of the entire z<0.1 SDSS selection. Results are saved 
-    individually, one file per galaxy, in ~/obs/mcmc_fits_{ZBIN}/{DIR}/."""
-    f1 = os.path.expanduser('~') + '/obs/sdss_%s.hdf5' % zBin
+    individually, one file per galaxy, in ~/obs/SDSS/mcmc_fits_{ZBIN}/{DIR}/."""
+    f1 = os.path.expanduser('~') + '/obs/SDSS/sdss_%s.hdf5' % zBin
 
-    basePath = os.path.expanduser('~') + '/obs/mcmc_fits_%s/' % zBin
+    basePath = os.path.expanduser('~') + '/obs/SDSS/mcmc_fits_%s/' % zBin
     if not os.path.isdir(basePath): os.mkdir(basePath)
 
     # get global list of all object IDs of interest

@@ -1333,7 +1333,7 @@ def subhaloStellarPhot(sP, pSplit, iso=None, imf=None, dust=None, Nside=1, rad=N
 
         if 'legac' in rad:
             # load lega-c dr2 wavelength grid
-            with h5py.File(expanduser("~") + '/obs/legac_dr2_spectra_wave.hdf5','r') as f:
+            with h5py.File(expanduser("~") + '/obs/LEGAC/legac_dr2_spectra_wave.hdf5','r') as f:
                 output_wave = f['wavelength'][()]
 
             spec_min_ang = output_wave.min()

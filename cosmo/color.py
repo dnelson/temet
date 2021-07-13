@@ -196,7 +196,7 @@ def calcMstarColor2dKDE(bands, gal_Mstar, gal_color, Mstar_range, mag_range,
     if sP is None, otherwise for simulation (Mstar,color) points if sP is specified. """
     if sP is None:
         kStr = '' if kCorrected else '_noK'
-        saveFilename = expanduser("~") + "/obs/sdss_2dkde_%s_%d-%d_%d-%d%s.hdf5" % \
+        saveFilename = expanduser("~") + "/obs/SDSS/sdss_2dkde_%s_%d-%d_%d-%d%s.hdf5" % \
           (''.join(bands),Mstar_range[0]*10,Mstar_range[1]*10,mag_range[0]*10,mag_range[1]*10,kStr)
         dName = 'kde_obs'
     else:
