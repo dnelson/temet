@@ -14,6 +14,76 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def hbt_check():
+    """ Check SubfindHBT. """
+    sP = simParams(run='tng100-2', snap=50)
+
+    hbtPath = sP.postPath + 'SubfindHBT/subfind_hbt_%03d.hdf5' % sP.snap
+
+    gNames = ['Group','Matching','SnapIndices','Subhalo']
+    data = {}
+
+    # load
+    with h5py.File(hbtPath,'r') as f:
+        for gName in gNames:
+            data[gName] = {}
+            for key in f[gName]:
+                if key == 'SubLinkHBT': # nested group
+                    continue
+                print(gName,key)
+                data[gName][key] = f[gName][key][()]
+
+    # test matched properties, and property recovery from particles using indices
+    ptNum = 0 #4
+
+    for haloID in [0,100,101,102,500,5000,50000,120000]:
+        offset = data['Group']['GroupOffsetType'][haloID,ptNum]
+        length = data['Group']['GroupLenType'][haloID,ptNum]
+        indices = data['SnapIndices']['PartType%d' % ptNum][offset:offset+length]
+
+        if length == 0:
+            continue
+
+        massType = data['Group']['GroupMassType'][haloID,ptNum]
+        pos = data['Group']['GroupPos'][haloID] # of minimum pot particle
+        vel = data['Group']['GroupVel'][haloID] # mass-weighted mean over all types
+        print(haloID,indices.shape,indices.min(),indices.max(),massType,pos,vel)
+
+        # match
+        matchID = data['Matching']['GroupHBTToOrig'][haloID]
+        halo = sP.halo(matchID)
+        print('match',matchID,halo['GroupLenType'][ptNum],halo['GroupMassType'][ptNum],halo['GroupPos'],halo['GroupVel'])
+
+        # particle data
+        masses = sP.snapshotSubset(ptNum, 'mass', inds=indices)
+        print('particle mass sum', np.sum(masses,dtype='float32'))
+
+    print('\nsubhalos:\n')
+
+    for subID in [0,14,12345,50000,80000]:
+        offset = data['Subhalo']['SubhaloOffsetType'][subID,ptNum]
+        length = data['Subhalo']['SubhaloLenType'][subID,ptNum]
+        indices = data['SnapIndices']['PartType%d' % ptNum][offset:offset+length]
+
+        if length == 0:
+            continue
+
+        massType = data['Subhalo']['SubhaloMassType'][subID,ptNum]
+        pos = data['Subhalo']['SubhaloPos'][subID] # of minimum pot particle
+        vel = data['Subhalo']['SubhaloVel'][subID] # mass-weighted mean over all types
+        print(subID,indices.shape,indices.min(),indices.max(),massType,pos,vel)
+
+        # match
+        matchID = data['Matching']['SubhaloHBTToOrig'][subID]
+        sub = sP.subhalo(matchID)
+        print('match',matchID,sub['SubhaloLenType'][ptNum],sub['SubhaloMassType'][ptNum],sub['SubhaloPos'],sub['SubhaloVel'])
+
+        # particle data
+        masses = sP.snapshotSubset(ptNum, 'mass', inds=indices)
+        print('particle mass sum', np.sum(masses,dtype='float32'))
+
+    import pdb; pdb.set_trace()
+
 def marc_sigma1():
     """ Test. """
     from plot.cosmoGeneral import quantMedianVsSecondQuant
@@ -1987,7 +2057,7 @@ def illustris_api_check():
 
     def get(path, params=None):
         # make HTTP GET request to path
-        headers = {"api-key":"3b1618b0629b21396b8af9cbf76caafa"}
+        headers = {"api-key":"10d143a0ef27c6461f94b50275d45d6f"}
         r = requests.get(path, params=params, headers=headers)
         print(r.url)
         # raise exception if response code is not HTTP SUCCESS (200)
@@ -2012,22 +2082,48 @@ def illustris_api_check():
     #return
 
     # test2
-    base_url = "http://www.tng-project.org/api/TNG300-1/snapshots/50/subhalos/10/cutout.hdf5"
-    params = {'gas':'Coordinates,Density'}
-    saved_filename = get(base_url,params)
-    print(saved_filename)
-    return
+    #base_url = "http://www.tng-project.org/api/TNG300-1/snapshots/50/subhalos/10/cutout.hdf5"
+    #params = {'gas':'Coordinates,Density'}
+    #saved_filename = get(base_url,params)
+    #print(saved_filename)
+    #return
 
     # test3
-    base_url = "http://www.illustris-project.org/api/Illustris-1/"
-    sim_metadata = get(base_url)
-    params = {'dm':'Coordinates'}
+    #base_url = "http://www.illustris-project.org/api/Illustris-1/"
+    #sim_metadata = get(base_url)
+    #params = {'dm':'Coordinates'}
     
-    for i in [300]:#range(sim_metadata['num_files_snapshot']):
-        file_url = base_url + "files/snapshot-135." + str(i) + ".hdf5"
-        print(file_url)
-        saved_filename = get(file_url, params)
-        print('done')
+    #for i in [300]:#range(sim_metadata['num_files_snapshot']):
+    #    file_url = base_url + "files/snapshot-135." + str(i) + ".hdf5"
+    #    print(file_url)
+    #    saved_filename = get(file_url, params)
+    #    print('done')
+
+    # test4 (Task 10)
+    import matplotlib.image as mpimg
+    from io import BytesIO
+
+    ids = [41092,338375,257378,110568,260067]
+    sub_count = 1
+    fig = plt.figure(figsize=[15,3])
+
+    for id in ids:
+        url = "http://www.tng-project.org/api/Illustris-1/snapshots/135/subhalos/" + str(id)
+        sub = get(url)
+        if 'stellar_mocks' in sub['supplementary_data']:
+            png_url = sub['supplementary_data']['stellar_mocks']['image_fof']
+            response = get(png_url)
+
+            plt.subplot(1,len(ids),sub_count)
+            plt.text(0,-20,"ID="+str(id),color='blue')
+            plt.gca().axes.get_xaxis().set_ticks([])
+            plt.gca().axes.get_yaxis().set_ticks([])
+            sub_count += 1
+
+            file_object = BytesIO(response.content)
+            plt.imshow(mpimg.imread(file_object))
+
+    fig.savefig('out.png')
 
 def checkStellarAssemblyMergerMass():
     """ Check addition to StellarAssembly catalogs. """

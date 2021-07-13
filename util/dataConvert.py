@@ -430,7 +430,7 @@ def makeSnapSubsetsForPostProcessing():
                   'PartType4':['Coordinates','Velocities','Masses','ParticleIDs'],
                   'PartType5':['Coordinates','Velocities','Masses','ParticleIDs']}
 
-    pathFrom = path.expanduser("~") + '/sims.TNG/TNG100-3/output/snapdir_%03d/'
+    pathFrom = path.expanduser("~") + '/sims.TNG/TNG100-1/output/snapdir_%03d/'
     pathTo   = path.expanduser("~") + '/data/gadget4/output/snapdir_%03d/'
     fileFrom = pathFrom + 'snap_%03d.%s.hdf5'
     fileTo   = pathTo + 'snap_%03d.%s.hdf5'
@@ -441,14 +441,14 @@ def makeSnapSubsetsForPostProcessing():
     print('Found [%d] file chunks, copying.' % nChunks)
 
     # loop over snapshots
-    for i in range(5,nSnaps): # range(nSnaps):
+    for i in range(nSnaps):
         if not path.isdir(pathTo % i):
             mkdir(pathTo % i)
 
         # loop over chunks
         for j in range(nChunks):
             # open destination for writing
-            fOut = h5py.File(fileTo % (i,i,j), 'a') # append or create
+            fOut = h5py.File(fileTo % (i,i,j), 'w')
 
             # open origin file for reading
             assert path.isfile(fileFrom % (i,i,j))
@@ -495,12 +495,15 @@ def finalizeSubfindHBTGroupCat(snap, prep=False):
     group ordered IDs from the rewritten snapshot, place them into the catalog itself, and 
     cross-match to the original snapshot IDs, to write the index mapping into the catalog. 
     Finally, rewrite the catalog into a single file, and add fof and subhalo cross-matching 
-    to original catalog. """
+    to original catalog. To run: (i) first create minimal snaps with makeSnapSubsetsForPostProcessing() 
+    above, (ii) run Gadget-4 SubfindHBT, (iii) run finalizeSubfindHBTGroupCat(prep=True), 
+    (iv) create SubLinkHBT trees, (v) run makeSubgroupOffsetsIntoSublinkTreeGlobal(basePath, treeName='SubLinkHBT'),
+    (vi) run finalizeSubfindHBTGroupCat() to finish. """
     from util.simParams import simParams
     from tracer.tracerMC import match3
     from util.helper import crossmatchHalosByCommonIDs
 
-    sP = simParams(run='tng100-3',snap=snap)
+    sP = simParams(run='tng100-2',snap=snap)
     basePath = path.expanduser("~") + '/data/gadget4/'
 
     snapPath = basePath + 'output/snapdir_%03d/' % snap
