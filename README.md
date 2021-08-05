@@ -1,7 +1,7 @@
 python
 ======
 
-A python toolkit for the execution, analysis, and visualization of numerical simulations. Specifically, hydrodynamical simulations run with the [AREPO](https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/) moving mesh code, as well as codes producing similarly structured outputs including [GIZMO](http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html) and [SWIFT](http://swift.dur.ac.uk/).
+A python toolkit for the execution, analysis, and visualization of numerical simulations. Specifically, hydrodynamical simulations run with the [AREPO](https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/) moving mesh code, as well as codes producing similarly structured outputs including [GADGET-4](https://wwwmpa.mpa-garching.mpg.de/gadget4/), [GIZMO](http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html) and [SWIFT](http://swift.dur.ac.uk/).
 
 In addition, this codebase is focused on cosmological simulations for large-scale structure and galaxy formation, particularly those processed with a substructure identification algorithm (halo finder) such as `subfind`, including [Illustris](https://www.illustris-project.org), [IllustrisTNG](https://www.tng-project.org/), EAGLE, and so on. Generally speaking, any simulation data available from the TNG public data release platform can be directly analyzed with this toolkit.
 
@@ -54,7 +54,7 @@ version, tagged on the date near the finalization of the paper.
 
 [Nelson et al. (2020) - TNG50 small-scale CGM](http://arxiv.org/abs/2005.09654) - `projects.lrg.paperPlots()`
 
-[Nelson et al. (in prep) - TNG50 MgII emission](#) - `projects.mg2emission.paperPlots()`
+[Nelson et al. (2021) - TNG50 MgII emission](http://arxiv.org/abs/2106.09023) - `projects.mg2emission.paperPlots()`
 
 
 Contributing
@@ -63,6 +63,14 @@ Contributing
 Any contributions to this open source project, large or small, are welcome. To submit a bug report, feature request, general question, or similar, please open a [new issue](https://github.com/dnelson86/python/issues) directly on github. Please include as much detail as possible, including a minimum working example which reproduces any problem or buggy behavior.
 
 To directly contribute code or documentation please try to follow existing style and structure as much as possible. When you are ready, please make a [pull request](https://github.com/dnelson86/python/pulls) with your proposed changes. To do so you should take the following steps: (i) fork the repository, (ii) clone the project to your local machine, (iii) edit and make changes, (iv) commit your changes to your own branch, (v) push your work back up to your fork, (vi) submit a pull request for review.
+
+Additional code contributions, fixes, and suggestions to this package have been made by:
+
+* Chris Byrohl
+* Lukas Eisert
+* Andres Aramburo Garcia
+* Martin Glatzle
+* Annalisa Pillepich
 
 
 License

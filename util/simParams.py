@@ -483,7 +483,7 @@ class simParams:
             if self.variant == 'sf3':
                 ics_filename = 'ics_zoom_L%sn%dTNG_DM_halo%d_L%d_sf3.0_mpc.hdf5' % (bs,parentRes,self.hInd,self.res) # generalize if not sf3
                 self.icsPath = self.basePath + 'sims.TNG_zooms/ICs/output/'
-                if self.res == 13: self.icsPath += 'done/' # old set
+                if self.res in [13,14]: self.icsPath += 'done/'
                 self.icsPath += ics_filename
                 with h5py.File(self.icsPath, 'r') as f:
                     self.zoomShiftPhys = f['Header'].attrs['GroupCM'] / 1000 # code (mpc) units
@@ -1285,7 +1285,10 @@ class simParams:
         ptToCheckAgainst could then be e.g. 'stars'. The whole point is to remove any hard-coded 
         dependencies on numeric particle types. Otherwise, you would naively check that e.g. 
         partTypeNum(ptToCheck)==4. This can now vary for different simulations (so far it does not). """
-        return self.ptNum(ptToCheck) == self.ptNum(ptToCheckAgainst)
+        try:
+            return self.ptNum(ptToCheck) == self.ptNum(ptToCheckAgainst)
+        except:
+            return ptToCheck == ptToCheckAgainst
 
     def copy(self):
         """ Return a deep copy of this simParams object, which can then be manipulated/changed without 

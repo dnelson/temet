@@ -1427,7 +1427,7 @@ def gridBox(sP, method, partType, partField, nPixels, axes, projType, projParams
                 if len(flagged_ids):
                     # cross-match
                     inds_flag, inds_snap = match3(flagged_ids, sub_ids)
-                    if inds is not None and len(inds_snap):
+                    if inds_snap is not None and len(inds_snap):
                         mass[inds_snap] = 0.0
 
             # non-orthographic projection? project now, converting pos from a 3-vector into a 2-vector

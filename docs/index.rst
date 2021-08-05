@@ -6,6 +6,7 @@ Welcome to the documentation for **tenet**, a python toolkit for the execution, 
 visualization of numerical simulations. Specifically, hydrodynamical simulations run with the 
 `AREPO <https://wwwmpa.mpa-garching.mpg.de/~volker/arepo/>`_ moving mesh code, as well as codes 
 producing similarly structured outputs including 
+`GADGET-4 <https://wwwmpa.mpa-garching.mpg.de/gadget4/>`_, 
 `GIZMO <http://www.tapir.caltech.edu/~phopkins/Site/GIZMO.html>`_ and 
 `SWIFT <http://swift.dur.ac.uk/>`_.
 
