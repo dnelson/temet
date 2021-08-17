@@ -1247,10 +1247,15 @@ class units(object):
             redshift = self._sP.redshift
 
         d_L_cm = self.redshiftToLumDist(redshift) * self.Mpc_in_cm
+        if isinstance(d_L_cm,np.ndarray):
+            d_L_cm = d_L_cm.astype('float64') # avoid overflow
 
         dist_fac = 4 * np.pi * d_L_cm**2.0
 
         lum = flux * dist_fac
+
+        if lum.max() < np.finfo('float32').max:
+            lum = lum.astype('float32')
 
         return lum
 
@@ -1462,10 +1467,16 @@ class units(object):
     def redshiftToLumDist(self, z):
         """ Convert redshift z to luminosity distance (in Mpc). This then allows the conversion 
         between luminosity and a flux at that redshift. """
-        if z == 0.0:
+        if not isinstance(z,np.ndarray) and z == 0.0:
             # absolute, 10 pc [in Mpc]
             return 10.0/1e6
-        return self.redshiftToComovingDist(z) * (1.0+z)
+
+        lumdist = self.redshiftToComovingDist(z) * (1.0+z)
+        if isinstance(lumdist,np.ndarray):
+            # absolute, 10 pc [in Mpc]
+            lumdist[np.where(z == 0)] = 10.0/1e6
+
+        return lumdist
 
     def arcsecToAngSizeKpcAtRedshift(self, ang_diam, z=None):
         """ Convert an angle in arcseconds to an angular/transverse size (in proper/physical kpc) 

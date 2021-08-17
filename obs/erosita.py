@@ -3,11 +3,12 @@ Observational data processing, reduction, and analysis (eROSITA).
 """
 import numpy as np
 import h5py
-from os.path import expanduser
-from util.helper import logZeroNaN
+from os.path import expanduser, isfile
+from util.helper import logZeroNaN, loadColorTable
 from plot.config import figsize
 
 from scipy.ndimage import gaussian_filter
+from scipy.stats import binned_statistic_2d
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
@@ -15,7 +16,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
 
+# config
 basePath = expanduser("~") + '/obs/eFEDS/'
+basePathOut = basePath + '0.5-2.0kev/'
 basePathGAMA = expanduser("~") + '/obs/GAMA/'
 
 clusterCatName = 'eFEDS_clusters_V3.fits'
@@ -24,7 +27,6 @@ px_scale = 4.0 # arcsec per pixel in maps we generate (rebin == 80) (equals CDEL
 
 def convert_liu_table():
     """ Load Liu+2021 cluster table (currently v3) and convert to HDF5. """
-
     path = basePath + clusterCatName
 
     # define/allocate
@@ -46,23 +48,50 @@ def convert_liu_table():
 
     print('Done.')
 
-    # TODO: once we create a map around such halos, we can try to measure e.g. L_500kpc and 
-    # check a scatterplot against these Liu+ values to test our methodology
+def make_apetool_inputcat(source='liu', param_eef=0.9):
+    """ Make a mllist input fits file for apetool, to do aperture photometry.
 
-def make_apetool_inputcat_from_liu():
-    """ Make a mllist input fits file for apetool, to do aperture photometry on the Liu+ clusters. """
+    Args:
+      source (str): if 'liu' use the Liu+ cluster sample, if 'gama' the GAMA catalog, if 'random' then 
+        generate random sampling points in the survey footprint.
+      param_eef (float): parameter specifying the aperture. If less than 1.0, interpreted as 
+        in units of EEF (enclosed energy fraction), otherwise interpreted as in units of arcsec.
+
+    Returns:
+      None
+    """
 
     # extraction radius [EEF = enclosed energy fraction units]
-    param_eef = 0.9 #0.7
+    #param_eef = 0.9 #0.7
 
     # source removal radius [EEF units]
     param_rr = 0.95 # 0.8
 
     # load
     data = {}
-    with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
-        for key in ['DEC','RA','ID','ID_SRC']:
-            data[key] = f[key][()]
+
+    if source == 'liu':
+        with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
+            for key in ['DEC','RA','ID','ID_SRC']:
+                data[key] = f[key][()]
+
+    if source == 'gama':
+        data = gama_overlap()
+        data['RA'] = data['ra']
+        data['DEC'] = data['dec']
+        print('After catalog cross-matching, have [%d] sources to run.' % data['ra'].size)
+
+    if source == 'random':
+        # uniform random in [RA,DEC] rectangle bounds
+        n = 100000
+        rng = np.random.default_rng(424242)
+
+        file = basePathOut + "events_merged_image.fits"
+        _, _, extent = _load_map(file)
+
+        # extent = [ra_max, ra_min, dec_min, dec_max]
+        data['RA'] = rng.uniform(low=extent[1], high=extent[0], size=n)
+        data['DEC'] = rng.uniform(low=extent[2], high=extent[3], size=n)
 
     # used from the catalog file, whereas command-line input "eefextract=0.6" is unused
     eef = np.zeros(data['RA'].size, dtype='float64') + param_eef
@@ -76,15 +105,20 @@ def make_apetool_inputcat_from_liu():
 
     cols = pyfits.ColDefs([col_ra, col_dec, col_re, col_rr])
     hdu = pyfits.BinTableHDU.from_columns(cols, name='Joined')
-    hdu.writeto(basePath + 'ape_inputcat_liu.fits', overwrite=True)
+    rad_str = 'eef%d' % (param_eef*100) if param_eef < 1.0 else 'arcsec%d' % param_eef
+    hdu.writeto(basePath + 'ape_inputcat_%s_%s.fits' % (source,rad_str), overwrite=True)
     print('Written.')
 
-def parse_apetool_output_cat():
+def parse_apetool_output_cat(source='liu', param_eef=0.9):
     """ Parse output of apetool photometry. """
-    np.random.seed(424242)
+    perc_levels = [16,50,84]
+
+    rng = np.random.default_rng(424242)
+
     from util.simParams import simParams
 
-    file = basePath + 'mllist_ape_out.fits'
+    rad_str = 'eef%d' % (param_eef*100) if param_eef < 1.0 else 'arcsec%d' % param_eef
+    file = basePathOut + 'mllist_ape_out_%s_%s.fits' % (source,rad_str)
 
     data = {}
 
@@ -96,7 +130,7 @@ def parse_apetool_output_cat():
     #APE_BKG: background counts extracted from the ERMLDET source maps within certain energy bands. There is an option to remove nearby sources from the SRCMAP when extracting background counts.
     #APE_EXP: mean exposure time at the used-defined input positions
     #APE_EEF: Encircled Energy Fraction used to define the extraction radius
-    #APE_RADIUS: Extraction radius in PIXELS
+    #APE_RADIUS: Extraction radius in PIXELS (iff EEF!) or ARCSEC (if radius input for apetool > 1.0 i.e. in arcsec)
     #APE_POIS: Poisson probability that the extracted counts (source + background) are a fluctuation of the background.
 
     # ECF: see Brunner+2021 Table D.1 [cm^2/erg]
@@ -106,69 +140,283 @@ def parse_apetool_output_cat():
     ecf_23_5_kev  = 1.147e11
     ecf_5_8_kev   = 2.776e10
 
-    # background-subtracted source count rate
-    data['countrate'] = (data['APE_CTS'] - data['APE_BKG'] ) / data['APE_EXP'] # counts/s
-
-    # flux [count/sec] / [cm^2/erg] -> [erg/s/cm^2]
-    data['flux'] = data['countrate'] / ecf_05_20_kev
+    ecf = ecf_05_2_kev
     print('Using 0.5-2.0 keV ECF.')
 
-    # compare with actual Liu+ catalog
-    with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
-        # Soft band (0.5-2keV) fluxes within 300 or 500 kpc (-1 indicates no reliable measurement)
-        F_300kpc = f['F_300kpc'][()] # 9px at z=0.2, 5.5px at z=0.4
-        F_500kpc = f['F_500kpc'][()] # 15px at z=0.2, 9px at z=0.4
-        z = f['z'][()]
+    # background-subtracted source count rate
+    data['countrate'] = (data['APE_CTS'] - data['APE_BKG'] ) / data['APE_EXP'] # counts/s
+    print('Total counts: %g, total count rate: %g' % (data['APE_CTS'].sum(),data['countrate'].sum()))
+
+    # flux [count/sec] / [cm^2/erg] -> [erg/s/cm^2]
+    data['flux'] = data['countrate'] / ecf
+
+    # some sort of signal/noise ratio
+    data['SN'] = np.zeros( data['APE_CTS'].size, dtype='float32' )
+    w = np.where(data['APE_BKG'] > 0)
+    data['SN'][w] = data['APE_CTS'][w] / data['APE_BKG'][w]
+
+    # source redshifts
+    if source == 'liu':
+        with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
+            # Soft band (0.5-2keV) fluxes within 300 or 500 kpc (-1 indicates no reliable measurement)
+            F_300kpc = f['F_300kpc'][()] # 9px at z=0.2, 5.5px at z=0.4
+            F_500kpc = f['F_500kpc'][()] # 15px at z=0.2, 9px at z=0.4
+            z = f['z'][()]
+
+        # which measurement to compare to?
+        cat_flux = F_300kpc
+
+    if source == 'gama':
+        # config
+        xlim = [9.5,12.0]
+        ylim = [38,45]
+
+        # load
+        gama = gama_overlap()
+        z = gama['z']
+
+        # negative lums are noise fluctuations consistent with a detection threshold
+        # find smallest flux with a reasonable S/N
+        ww = np.where(data['SN'] >= 1.0)
+        thresh1 = np.log10(np.nanpercentile(data['flux'][ww],1))
+
+        # find smallest flux/lum with reasonable POIS, call this a (single object) detection threshold
+        ww = np.where( (data['APE_POIS'] < 0.1) & (data['flux'] > 0) )
+        thresh2 = np.log10(np.nanmin(data['flux'][ww]))
+
+        thresh3 = -14.0 # canonical 0.5-2.0kev value (Merloni+12, Pillepich+12)
+        
+        print('Single object detection thresholds: %.2f %.2f %.2f erg/s/arcsec^2' % (thresh1, thresh2, thresh3))
+
+        # luminosities
+        assert data['flux'].size == gama['z'].size
+
+        sP = simParams(run='tng100-1')
+        data['lum'] = sP.units.fluxToLuminosity(data['flux'], redshift=gama['z'])
+
+        # (A) compute medians/errors in mstar bins
+        binSize = 0.5
+        nBins = np.int(np.ceil((xlim[1] - xlim[0]) / binSize))
+
+        lum_percsA = np.zeros((nBins,3), dtype='float32')
+        lum_percsB = np.zeros((nBins,3), dtype='float32')
+        lum_mean = np.zeros(nBins, dtype='float32')
+
+        lum_percsA.fill(np.nan)
+        lum_percsB.fill(np.nan)
+        lum_mean.fill(np.nan)
+
+        for i in range(nBins):
+            xmin = xlim[0] + binSize*(i+0)
+            xmax = xlim[0] + binSize*(i+1)
+            w = np.where( (gama['mstar'] >= xmin) & (gama['mstar'] < xmax) )
+            print(f"[{i}] {xmin} < M* < {xmax}: {len(w[0]):5d} galaxies, total counts: {data['APE_CTS'][w].sum()}")
+
+            if len(w[0]):
+                # (A) include all zeros/negatives
+                lum_percsA[i,:] = logZeroNaN(np.percentile(data['lum'][w], perc_levels))
+
+                # (B) exclude any negative/zero luminosities
+                lum_percsB[i,:] = np.nanpercentile(logZeroNaN(data['lum'][w]), perc_levels)
+
+                # (C) redo "background-subtracted source count rate" equation, but stack first (in flux), 
+                # i.e. compute: total(counts) - total(bkg) for the stack, rather than per object
+                lumdist_Mpc    = sP.units.redshiftToLumDist(gama['z'][w])
+
+                # L = F * 4 * pi * dL^2
+                # F = CR * ECF = (C - B) / t * ECF = C*ECF/t - B*ECF/t
+                # L = (C*ECF/t - B*ECF/t) * 4 * pi * dL^2
+                # L_i = 4 * pi * ECF * (C_i - B_i) / t_i * dL_i^2
+                # L_tot = 4 * pi * ECF * ( Sum[ C_i/t_i*dL_i^2 ] - Sum[ B_i/t_i*dL_i^2 ] )
+                sum1 = np.sum( data['APE_CTS'][w] * lumdist_Mpc**2 / data['APE_EXP'][w] )
+                sum2 = np.sum( data['APE_BKG'][w] * lumdist_Mpc**2 / data['APE_EXP'][w] )
+                L_tot = 4 * np.pi * ecf * (sum1 - sum2) * sP.units.Mpc_in_cm
+                lum_mean[i] = np.log10(L_tot / len(w[0])) # erg/s
+
+        xmid = xlim[0] + np.arange(nBins) * binSize + binSize/2
+
+        # nan lum_percs correspond are e.g. bottom percentile == 0
+        w = np.where(~np.isfinite(lum_percsA))
+        lum_percsA[w] = ylim[0] # scale to bottom of plot
+
+    if source == 'random':
+        # average flux?
+        percs = np.percentile(data['flux'], perc_levels)
+        print(f'All random samples, flux percs: {logZeroNaN(percs)} [erg/s/cm^2]')
+
+        for poi_limit in [0.05,0.1,0.2,np.inf]:
+            ww = np.where( (data['APE_POIS'] < poi_limit) & (data['flux'] > 0) )
+            percs = np.percentile(data['flux'][ww], perc_levels)
+            print(f'Random samples, nonzero and with POI < {poi_limit}, flux percs: {logZeroNaN(percs)} [erg/s/cm^2]')
+
+        z = np.zeros(data['countrate'].size, dtype='float32') # unused
 
     # some statistics
-    percs = np.percentile(data['APE_RADIUS'], [5,50,95])
-    percs_arcsec = percs * px_scale
+    if param_eef < 1.0:
+        percs = np.percentile(data['APE_RADIUS'], perc_levels) # pixels
+        percs_arcsec = percs * px_scale
+    else:
+        percs_arcsec = np.percentile(data['APE_RADIUS'], perc_levels) # ARCSEC!
+        percs = percs_arcsec / px_scale
+
     print(f'Extraction EEF: {data["APE_EEF"].mean()}')
     print(f'Extraction radii [px] percentiles: {percs}')
     print(f'Extraction radii [arcsec] percentiles: {percs_arcsec}')
-    print(f'Mean cluster redshift: {z.mean() = }')
+    print(f'Mean source redshift: {z.mean() = }')
 
     sP = simParams(run='tng100-1', redshift=z.mean())
     percs_kpc = sP.units.arcsecToAngSizeKpcAtRedshift(percs_arcsec)
     print(f'Extraction radii [kpc] at z: {percs_kpc}')
     print('Total number of sources we tried to measure: ', data['flux'].size)
 
-    # which measuremen to compare to?
-    cat_flux = F_300kpc
+    rad_str = 'eef%d' % (param_eef*100) if param_eef < 1.0 else 'arcsec%d' % param_eef
 
-    # plot
-    fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
-    ax.set_xlabel('catalog_flux [erg s$^{-1}$ cm$^{-2}$]')
-    ax.set_ylabel('my_apetool_flux [erg s$^{-1}$ cm$^{-2}$]')
-    ax.set_xlim([-14.5,-12.0])
-    ax.set_ylim([-16.2,-12.0])
+    # compare with actual Liu+ catalog
+    if source == 'liu':
+        # plot
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        ax.set_xlabel('catalog_flux [erg s$^{-1}$ cm$^{-2}$]')
+        ax.set_ylabel('my_apetool_flux [erg s$^{-1}$ cm$^{-2}$]')
+        ax.set_xlim([-14.5,-12.0])
+        ax.set_ylim([-16.2,-12.0])
 
-    # only include valid points from the original catalog
-    ww = np.where( (cat_flux > 0) & (data['flux'] > 0) )
-    ax.plot(np.log10(cat_flux[ww]), np.log10(data['flux'][ww]), 'o', label='in both')
-    print('Number of good measurements in both: ', len(ww[0]))
+        # only include valid points from the original catalog
+        ww = np.where( (cat_flux > 0) & (data['flux'] > 0) )
+        ax.plot(np.log10(cat_flux[ww]), np.log10(data['flux'][ww]), 'o', label='in both')
+        print('Number of good measurements in both: ', len(ww[0]))
 
-    # any points we miss, but existed in original?
-    ww = np.where( (cat_flux > 0) & (data['flux'] <= 0) )
-    yy = np.random.uniform(low=-12.05, high=-12.2, size=len(ww[0]))
-    ax.plot(np.log10(cat_flux[ww]), yy, 'o', label='in original only')
-    print('Number we missed, but exist in original cat: ', len(ww[0]))
+        # any points we miss, but existed in original?
+        ww = np.where( (cat_flux > 0) & (data['flux'] <= 0) )
+        yy = rng.uniform(low=-12.05, high=-12.2, size=len(ww[0]))
+        ax.plot(np.log10(cat_flux[ww]), yy, 'o', label='in original only')
+        print('Number we missed, but exist in original cat: ', len(ww[0]))
 
-    # any points we have measured, but were missing in original?
-    ww = np.where( (cat_flux < 0) & (data['flux'] > 0) & (data['APE_POIS'] < 0.1) )
-    xx = np.random.uniform(low=-12.05, high=-12.2, size=len(ww[0]))
-    ax.plot(xx,  np.log10(data['flux'][ww]), 'o', label='in myape only')
-    print('Number we have, but missed in original cat: ', len(ww[0]))
+        # any points we have measured, but were missing in original?
+        ww = np.where( (cat_flux < 0) & (data['flux'] > 0) & (data['APE_POIS'] < 0.1) )
+        xx = rng.uniform(low=-12.05, high=-12.2, size=len(ww[0]))
+        ax.plot(xx,  np.log10(data['flux'][ww]), 'o', label='in myape only')
+        print('Number we have, but missed in original cat: ', len(ww[0]))
 
-    ax.plot([-14,-12], [-14,-12], '--', color='black', label='1-to-1')
+        ax.plot([-14,-12], [-14,-12], '--', color='black', label='1-to-1')
 
-    ax.legend(loc='best')
-    fig.savefig('flux_comparison.pdf')
-    plt.close(fig)
+        ax.legend(loc='best')
+        fig.savefig('flux_comparison_liu_%s.pdf' % rad_str)
+        plt.close(fig)
+
+    # compare with Anderson+ ROSAT stacking
+    if source == 'gama':
+        # some statistics
+        ww = np.where( (data['lum']) < 0 )
+        print('Number of negative lums: ', len(ww[0]))
+
+        ww = np.where( (data['lum'] < 0) & (data['APE_POIS'] < 0.1) )
+        print('Number of negative lums with small POIS: ', len(ww[0]))
+
+        # plot
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        ax.set_xlabel('Stellar Mass [ log M$_{\\rm sun}$ ]')
+        ax.set_ylabel('L$_{\\rm X}$ [ log erg/s ]')
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+
+        # scatter plot all, color by POIS
+        cmap = loadColorTable('magma', fracSubset=[0.1,0.9])
+
+        xx = gama['mstar']
+        yy = logZeroNaN(data['lum']) # zeros -> NaN! excluded in percentiles below TODO
+        cc = logZeroNaN(data['APE_POIS'])
+
+        cMinMax = [-5.0, 0.0]
+        
+        sc = ax.scatter(xx, yy, c=cc, s=2.0, alpha=1.0, vmin=cMinMax[0], vmax=cMinMax[1], cmap=cmap, zorder=0)
+
+        # (A) plot median including zeros/faint values
+        yvals    = lum_percsA[:,1]
+        yerr_low = lum_percsA[:,1] - lum_percsA[:,0] # p50 - p14
+        yerr_hi  = lum_percsA[:,2] - lum_percsA[:,1] # p84 - p50
+
+        ax.errorbar(xmid, yvals, xerr=binSize/2, yerr=[yerr_low,yerr_hi],
+                    color='#000000', ecolor='#000000', alpha=0.9, capsize=0.0, fmt='s', label='Median Bins (w/ zeros)')
+
+        # (B) plot median, only including actual detections (ish)
+        yvals    = lum_percsB[:,1]
+        yerr_low = lum_percsB[:,1] - lum_percsB[:,0] # p50 - p14
+        yerr_hi  = lum_percsB[:,2] - lum_percsB[:,1] # p84 - p50
+
+        ax.errorbar(xmid+0.02, yvals, xerr=binSize/2, yerr=[yerr_low,yerr_hi],
+                    color='#000000', ecolor='#000000', alpha=0.9, capsize=0.0, fmt='o', label='Median Bins (only det)')
+
+        # (C) plot mean
+        ax.errorbar(xmid+0.04, lum_mean, xerr=binSize/2, 
+                    color='red', ecolor='red', alpha=0.9, capsize=0.0, fmt='o', label='Mean Stack')
+
+        # observational points from Anderson+
+        from load.data import anderson2015
+        a15 = anderson2015(sP)
+
+        ax.errorbar(a15['stellarMass'], a15['xray_LumBol'],xerr=a15['stellarMass_err'],
+                    yerr=[a15['xray_LumBol_errDown'],a15['xray_LumBol_errUp']],
+                    color='#000000', ecolor='#000000', alpha=0.9, capsize=0.0, fmt='D', label=a15['label'])
+
+        # colorbar
+        cax = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.2)
+        cb = plt.colorbar(sc, cax=cax, orientation='vertical')
+        cb.set_alpha(1) # fix stripes
+        cb.draw_all()
+        cb.ax.set_ylabel('log POIS')
+
+        # legend and finish
+        ax.legend(loc='best')
+        fig.savefig(f'flux_comparison_gama_{rad_str}.pdf')
+        plt.close(fig)
+
+    # generate map to check uniformity
+    if source == 'random':
+        # get extent = [ra_max, ra_min, dec_min, dec_max]
+        file = basePathOut + "events_merged_image.fits"
+        grid, _, extent = _load_map(file)
+
+        aspect = grid.shape[1] / grid.shape[0]
+
+        fig = plt.figure(figsize=[8*aspect, 8])
+        ax = fig.add_subplot(111)
+        ax.set_xlabel('RA [deg]')
+        ax.set_ylabel('DEC [deg]')
+
+        ax.set_xlim([extent[0],extent[1]])
+        ax.set_ylim([extent[2],extent[3]])
+
+        # histogram
+        nBinsX = 50
+        nBinsY = int(nBinsX / aspect)
+
+        h2d, _, _, _ = binned_statistic_2d(data['RA'], data['DEC'], data['flux'], statistic='mean', 
+                                           bins=[nBinsX, nBinsY], 
+                                           range=[[extent[1],extent[0]],[extent[2],extent[3]]])
+        h2d = h2d.T # .T is normal convention for binned_statistic_2d return with imshow(origin='lower'),
+        h2d = h2d[:,::-1] # then reverse x-direction to match axis reversed minmax
+
+        h2d = logZeroNaN(h2d)
+        norm = Normalize(vmin=-15.0, vmax=-14.0) # flux [erg/s/cm^2]
+
+        plt.imshow(h2d, extent=extent, norm=norm, origin='lower', interpolation='none', aspect='equal', cmap='viridis')
+
+        # colorbar and finish
+        cax = make_axes_locatable(ax).append_axes('right', size='3%', pad=0.15)
+        cb = plt.colorbar(cax=cax)
+        cb.ax.set_ylabel('Background/Random Sky Flux [erg/s/cm$^2$]')
+
+        fig.savefig(f'flux_map_random_{rad_str}.pdf')
+        plt.close(fig)
 
 def gama_overlap():
-    """ Load GAMA catalog, find sources which are in the eFEDS footprint. """
+    """ Load GAMA catalog, find sources which are in the eFEDS footprint. 
+    Note this defines the input catalog for the aperture photometry, so changing here e.g. the 
+    additional catalogs we cross-match against requires new photometry to be run. """
+    from tracer.tracerMC import match3
+
     path = basePathGAMA + 'LambdarInputCatUVOptNIR.fits'
 
     # open fits catalog file of Lambdar photometry
@@ -206,29 +454,48 @@ def gama_overlap():
     z = z[w2]
     mstar = mstar[w2]
 
-    # cross-match ids
-    from tracer.tracerMC import match3
-
+    # cross-match ids, construct catalog of available galaxies
     inds1, inds2 = match3(gama_id, gama_id2)
 
-    # final properties of available galaxies
     cat = {'gama_id' : gama_id[inds1],
            'ra'      : ra[inds1],
            'dec'     : dec[inds1],
            'z'       : z[inds2],
            'mstar'   : mstar[inds2]}
 
-    return cat
+    # load MagPhys properties catalog
+    path = basePathGAMA + 'MagPhys.fits'
 
-def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=False, 
-             oplotClusters=False, oplotGAMA=False):
-    """ Visualization helper: load and make a figure of a sky map in a fits file.
-    log : take log of grid.
-    smooth: specify a float [pixel units] for Gaussian smoothing.
-    minmax: 2-tuple for display.
-    expcorrect: if True, normalize the loaded map by the corresponding exposure map.
-    """
-    file_out = file.replace('.fits','.pdf')
+    with pyfits.open(path) as f:
+        gama_id3 = f[1].data['CATAID']
+        ssfr_1gyr = f[1].data['sSFR_0_1Gyr_best_fit'] # 1/yr
+        mstar2 = f[1].data['mass_stellar_best_fit'] # msun, unused
+        metallicity = f[1].data['metalicity_Z_Zo_percentile50'] # units?
+        tform = f[1].data['tform_percentile50'] # dex (yr), "of the oldest stars"
+        age_masswt = f[1].data['agem_percentile50'] # dex (yr)
+        sfr_100myr = f[1].data['sfr18_percentile50'] # dex(msun/yr)
+
+    # cross-match ids
+    inds_cat, inds3 = match3(cat['gama_id'], gama_id3)
+
+    # final properties of available galaxies
+    cat_final = {}
+    for key in cat:
+        cat_final[key] = cat[key][inds_cat]
+
+    cat_new = {'ssfr_1gyr'     : ssfr_1gyr[inds3],
+               'mstar_magphys' : mstar2[inds3],
+               'metallicity'   : metallicity[inds3],
+               'tform'         : tform[inds3],
+               'age_masswt'    : age_masswt[inds3],
+               'sfr_100myr'    : sfr_100myr[inds3]}
+
+    cat_final.update(cat_new)
+
+    return cat_final
+
+def _load_map(file):
+    """ Helper. """
 
     # read
     with pyfits.open(file) as f:
@@ -236,19 +503,7 @@ def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=Fals
         header = dict(f[0].header)
         #wcs = WCS(f[0].header)
 
-    # exposure correct?
-    if expcorrect:
-        exp_file = file.replace('image','expmap')
-        with pyfits.open(exp_file) as f:
-            expmap = np.array(f[0].data, dtype='float32')
-            expheader = dict(f[0].header)
-        for key in ['CTYPE1','CTYPE2','CRVAL1','CRVAL2','CDELT1','CDELT2']:
-            assert header[key] == expheader[key]
-
-        # zero exposure times -> nan
-        with np.errstate(invalid='ignore'):
-            grid /= expmap
-        file_out = file_out.replace('.pdf', '_expcorrected.pdf')
+    #print('Grid sum (counts): ', grid.sum())
 
     # coordinate system
     assert header['CTYPE1'] == 'RA---SIN' and header['CTYPE2'] == 'DEC--SIN' # simple
@@ -264,6 +519,39 @@ def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=Fals
     print(f'{grid.shape = }')
     print(f'{extent = }')
     print(f'pixel scale = {header["CDELT2"]*60*60:.2f} arcsec/px')
+
+    return grid, header, extent
+
+def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=False, 
+             oplotClusters=False, oplotGAMA=False):
+    """ Visualization helper: load and make a figure of a sky map in a fits file.
+    clabel : label for the map.
+    log : take log of grid.
+    smooth: specify a float [pixel units] for Gaussian smoothing.
+    minmax: 2-tuple for display.
+    expcorrect: if True, normalize the loaded map by the corresponding exposure map.
+    oplotClusters: overplot markers for the eFEDS Liu+ cluster catalog.
+    oplotGAMA: overplot markers for GAMA galaxies in the field, within a M* bin.
+    """
+    file_out = file.replace('.fits','.pdf')
+
+    # load
+    grid, header, extent = _load_map(file)
+
+    # exposure correct?
+    if expcorrect:
+        exp_file = file.replace('image','expmap')
+        with pyfits.open(exp_file) as f:
+            expmap = np.array(f[0].data, dtype='float32')
+            expheader = dict(f[0].header)
+        for key in ['CTYPE1','CTYPE2','CRVAL1','CRVAL2','CDELT1','CDELT2']:
+            assert header[key] == expheader[key]
+
+        # zero exposure times -> nan
+        with np.errstate(invalid='ignore'):
+            grid /= expmap
+        file_out = file_out.replace('.pdf', '_expcorrected.pdf')
+        print('Exposure corrected grid sum (countrate): ', np.nansum(grid))
 
     # data manipulation
     if smooth:
@@ -282,14 +570,15 @@ def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=Fals
     ax.set_xlabel('RA [deg]')
     ax.set_ylabel('DEC [deg]')
 
-    plt.imshow(grid, extent=extent, norm=norm, origin='lower', interpolation='nearest', aspect='equal', cmap='viridis')
+    # note! if interpolation='nearest', the raster image inside the pdf is resized according to the figsize
+    plt.imshow(grid, extent=extent, norm=norm, origin='lower', interpolation='none', aspect='equal', cmap='viridis')
 
-    # overplot markers>
+    # overplot markers?
     legend_elements = []
 
-    def _add_markers(color, label):
+    def _add_markers(color, label, lw=1.0):
         # add markers
-        circOpts = {'color':color, 'alpha':0.7, 'linewidth':1.0, 'fill':False}
+        circOpts = {'color':color, 'alpha':0.7, 'linewidth':0.1, 'fill':False}
         legend_elements.append( Line2D([0],[0],marker='o',mew=1.0,mec=color,mfc='none',lw=0,label=label) )
 
         for i in range(objs_ra.size):
@@ -312,27 +601,58 @@ def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=Fals
         objs_z = objs_z[w]
 
         _add_markers('red', label='eFEDS Clusters V3')
+        file_out = file_out.replace('.pdf','_liu.pdf')
 
     if oplotGAMA:
         # load catalog
         cat = gama_overlap()
 
-        # try a simple mstar and z cut
-        mstar_min = 11.4
-        mstar_max = 12.0
+        # simple mstar and z cut
+        mstarBins = [[10.5,11.5],[11.0,11.5],[11.5,12.5]]
+        colors = ['orange','yellow','white']
+
         z_max = 0.5 #0.25
 
-        w = np.where( (cat['mstar'] > mstar_min) & (cat['mstar'] < mstar_max) & (cat['z'] < z_max) )
-        print('GAMA: [%d] galaxies of [%d] made the cuts.' % (len(w[0]),cat['mstar'].size))
+        for color,(mstar_min,mstar_max) in zip(colors,mstarBins):
+            # select
+            w = np.where( (cat['mstar'] > mstar_min) & (cat['mstar'] < mstar_max) & (cat['z'] < z_max) )
+            print(f"GAMA: [{len(w[0])}] galaxies of [{cat['mstar'].size}] made [{mstar_min}-{mstar_max}] M* cut.")
 
-        objs_ra = cat['ra'][w]
-        objs_dec = cat['dec'][w]
-        rad_px = (cat['mstar'][w] - mstar_min) / (mstar_max - mstar_min) # [0,1]
-        rad_px = rad_px/2 + 0.5 # [0.5,1]
-        rad_px *= 5 # 2.5-5px
-        rad_deg = rad_px * header['CDELT2'] # pixels are square
+            objs_ra = cat['ra'][w]
+            objs_dec = cat['dec'][w]
+            rad_px = (cat['mstar'][w] - 10.5) / (12.5-10.5) # [0,1]
+            rad_px = rad_px/2 + 0.5 # [0.5,1]
+            rad_px *= 10 # 5-10px
+            rad_deg = rad_px * header['CDELT2'] # pixels are square
 
-        _add_markers('orange', 'GAMA %.1f < M* < %.1f' % (mstar_min,mstar_max))
+            _add_markers(color, 'GAMA %.1f < M* < %.1f' % (mstar_min,mstar_max), lw=0.1)
+
+            # testing: add EEF radii
+            param_eef = 0.9
+
+            rad_str = 'eef%d' % (param_eef*100) if param_eef < 1.0 else 'arcsec%d' % param_eef
+            file = basePathOut + 'mllist_ape_out_gama_%s.fits' % rad_str
+
+            if 1 and isfile(file):
+                # load
+                data = {}
+
+                with pyfits.open(file) as f:
+                    for key in f[1].data.names:
+                        data[key] = f[1].data[key]
+
+                # plot
+                if param_eef < 1.0:
+                    eef_size_deg = np.median(data['APE_RADIUS']) * px_scale / (60*60) # px->deg
+                else:
+                    eef_size_deg = np.median(data['APE_RADIUS']) / (60*60) # arcsec->deg
+                    
+                rad_deg = np.zeros(rad_deg.size, dtype='float32')
+                rad_deg += eef_size_deg
+
+                _add_markers('black', '', lw=0.1)
+
+        file_out = file_out.replace('.pdf','_gama.pdf')
 
     # legend
     if len(legend_elements):
@@ -346,38 +666,44 @@ def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=Fals
     fig.savefig(file_out)
     plt.close(fig)
 
-def vis_exposure_map():
-    """ Display an exposure map (made with eSASS expmap). """
-    file = basePath + 'events_merged_expmap.fits'
+def vis_map(type='final'):
+    """ Display a gridded image/map (made with eSASS evtool, expmap, erbackmap, ermask, etc). """
 
-    _vis_map(file, 'log sec', log=True, minmax=[1.0,3.3])
+    # raw counts
+    if type == 'counts':
+        file = basePathOut + "events_merged_image.fits"
+        _vis_map(file, 'log events', log=True, minmax=[-1.8,-0.6], smooth=10)
 
-def vis_background_map():
-    """ Display a background map (made with eSASS erbackmap). """
-    file = basePath + 'bkg_map.fits'
+    # raw count rate
+    if type == 'countrate':
+        file = basePathOut + "events_merged_image.fits"
+        _vis_map(file, 'log events', log=True, minmax=[-5.0, -3.5], smooth=10, expcorrect=True)
 
-    _vis_map(file, 'counts')
+    # exposure map
+    if type == 'expmap':
+        file = basePathOut + 'events_merged_expmap.fits'
+        _vis_map(file, 'log sec', log=True, minmax=[1.0,3.3])
 
-def vis_cheese_mask():
-    """ Display a source mask ('cheese') map. """
-    file = basePath + 'cheesemask.fits'
+    # background map
+    if type == 'bkg':
+        file = basePathOut + 'bkg_map.fits'
+        _vis_map(file, 'counts')
 
-    _vis_map(file, 'source mask')
+    # source 'cheese' mask map
+    if type == 'cheese':
+        file = basePathOut + 'cheesemask.fits'
+        _vis_map(file, 'source mask')
 
-def vis_events_image():
-    """ Display a gridded events image (made with eSASS evtool). """
-
-    # seems neither region nor central_position really do anything, and all auto scaling is based on 
-    # the first .fits file of eventfiles only.
-    # - better to run evtool once to merge (image=false), re-center, then image
-    file = basePath + "events_merged_image.fits"
-
-    #_vis_map(file, 'log events', log=True, minmax=[-1.6,-0.4], smooth=10)
-
-    _vis_map(file, 'log counts/sec', log=True, minmax=[-5.0, -3.5], smooth=10, expcorrect=True, 
-             oplotClusters=True, oplotGAMA=True)
+    # count rate, source catalogs overplotted
+    if type == 'final':
+        file = basePathOut + "events_merged_image.fits"
+        _vis_map(file, 'log counts/sec', log=True, minmax=[-5.0, -3.5], smooth=3, expcorrect=True, 
+                 oplotClusters=True, oplotGAMA=True)
 
 # current pipeline:
+# note: seems neither 'region' nor 'central_position' really do anything for evtool, and all autoscaling
+#       is based on the first .fits file of the eventfiles list only. so better to run evtool once just 
+#       to merge (image=false), then re-center, then run evtool again to image
 # -- combine:
 # evtool eventfiles="fm00_300008_020_EventList_c001.fits fm00_300007_020_EventList_c001.fits fm00_300009_020_EventList_c001.fits fm00_300010_020_EventList_c001.fits" outfile="fm00_merged_020_EventList_c001.fits"
 # radec2xy fm00_merged_020_EventList_c001.fits 136.0 1.5
@@ -386,13 +712,17 @@ def vis_events_image():
 # expmap inputdatasets="events_merged_image.fits" emin=0.5 emax=2.0 templateimage="events_merged_image.fits" mergedmaps="events_merged_expmap.fits"
 # ermask expimage="events_merged_expmap.fits" detmask="detmask.fits" threshold1=0.1 threshold2=1.0
 # -- "local" source detection:
-# erbox images="events_merged_image.fits" boxlist="boxlist_local.fits" emin=500 emax=2000 expimages="events_merged_expmap.fits" detmasks="detmask.fits" bkgima_flag=N ecf="1.0e12"
+# erbox images="events_merged_image.fits" boxlist="boxlist_local.fits" emin=500 emax=2000 expimages="events_merged_expmap.fits" detmasks="detmask.fits" bkgima_flag=N ecf="1.2e12"
 # -- background/mask maps, "map-based" source detection:
 # erbackmap image="events_merged_image.fits" expimage="events_merged_expmap.fits" boxlist="boxlist_local.fits" detmask="detmask.fits" bkgimage="bkg_map.fits" emin=500 emax=2000 cheesemask="cheesemask.fits"
-# erbox images="events_merged_image.fits" boxlist="boxlist_map.fits" expimages="events_merged_expmap.fits" detmasks="detmask.fits" bkgimages="bkg_map.fits" emin=500 emax=2000 ecf="1.0e12"
+# erbox images="events_merged_image.fits" boxlist="boxlist_map.fits" expimages="events_merged_expmap.fits" detmasks="detmask.fits" bkgimages="bkg_map.fits" emin=500 emax=2000 ecf="1.2e12"
 # -- characterize sources
 # ermldet mllist="mllist.fits" boxlist="boxlist_map.fits" images="events_merged_image.fits" expimages="events_merged_expmap.fits" detmasks="detmask.fits" bkgimages="bkg_map.fits" extentmodel=beta srcimages="sourceimage.fits" emin=500 emax=2000
 # -- generate psf map:
 # apetool images="events_merged_image.fits" psfmaps="psf_map.fits" psfmapflag="yes"
 # -- aperture photometry on user specified locations/apertures:
-# apetool mllist="mllist.fits" apelist="ape_inputcat_liu.fits" apelistout="mllist_ape_out.fits" images="events_merged_image.fits" expimages="events_merged_expmap.fits" bkgimages="bkg_map.fits" psfmaps="psf_map.fits" srcimages="sourceimage.fits" detmasks="detmask.fits" stackflag=yes emin=500 emax=2000 eefextract=0.7 cutrad=15
+#    (note: seems that 'eefextract' parameter does nothing, and this is instead controlled in the input file)
+# apetool mllist="mllist.fits" apelist="../ape_inputcat_liu.fits" apelistout="mllist_ape_out_liu.fits" images="events_merged_image.fits" expimages="events_merged_expmap.fits" bkgimages="bkg_map.fits" psfmaps="psf_map.fits" srcimages="sourceimage.fits" detmasks="detmask.fits" stackflag=yes emin=500 emax=2000 eefextract=0.0 cutrad=15
+# apetool mllist="mllist.fits" apelist="../ape_inputcat_gama_eef90.fits" apelistout="mllist_ape_out_gama_eef90.fits" images="events_merged_image.fits" expimages="events_merged_expmap.fits" bkgimages="bkg_map.fits" psfmaps="psf_map.fits" srcimages="sourceimage.fits" detmasks="detmask.fits" stackflag=yes emin=500 emax=2000 eefextract=0.0 cutrad=15
+# -- in arcsec instead of eef:
+# apetool mllist="mllist.fits" apelist="../ape_inputcat_gama_arcsec20.fits" apelistout="mllist_ape_out_gama_arcsec20.fits" images="events_merged_image.fits" expimages="events_merged_expmap.fits" bkgimages="bkg_map.fits" psfmaps="psf_map.fits" srcimages="sourceimage.fits" detmasks="detmask.fits" stackflag=yes emin=500 emax=2000 eefextract=0.0 cutrad=15
