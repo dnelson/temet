@@ -764,8 +764,8 @@ def mg2lum_vs_mass(sP, redshifts=None):
     yQuant = 'mg2_lum'
     cenSatSelect = 'cen'
 
-    scatterColor = 'redshift'
-    clim = [0.3, 2.2]
+    scatterColor = 'redshift' # 'size_stars' #'sfr2_surfdens' #
+    clim = [0.3, 2.2] # [-2.0,-0.5] #[-3.0, -1.0] #
     xlim = [8.0, 11.5]
     ylim = [37, 42]
     scatterPoints = True
@@ -866,7 +866,14 @@ def paperPlots():
 
     # figure 4 - L_MgII vs M*, multiple redshifts overplotted
     if 0:
+        # TNG50-1: ww = np.where( (M* > 10.8) & (M* < 11.2) & (L_MgII > 41.2) ) referee check around Makani
+        #  gives subhaloIDs = [337302, 405326, 411559, 420743]
         mg2lum_vs_mass(sP, redshifts)
+
+    # figure 4b - referee check
+    if 0:
+        sP = simParams(run='tng300-1', redshift=0.7)
+        mg2lum_vs_mass(sP, [0.7])
 
     # figure 5 - lumsize vs mstar, compare with other sizes
     if 0:
@@ -978,10 +985,9 @@ def paperPlots():
         haloIDs = _select_haloIDs(sP, mStarBin)
 
         def _f_post(ax):
-            ax.text(0.97, 0.97, 'M$_{\\star} = 10^{%d}\,$M$_{\odot}$' % mStarBin[0], transform=ax.transAxes, 
+            ax.text(0.97, 0.97, 'M$_{\\star} = 10^{%d}\,$M$_{\odot}$' % np.round(mStarBin[0]), transform=ax.transAxes, 
                     color='#ffffff', fontsize=22, ha='right', va='top')
 
-        sP = simParams(run='tng50-3',redshift=0.7)
         plotPhaseSpace2D(sP, partType='gas', xQuant='rad_kpc_linear', yQuant='vrad', weights=['MgII lum_dustdepleted'], meancolors=None, 
                          xlim=[0, 30], ylim=[-160,160], clim=[-5,-3], contours=None, contourQuant=None, normColMax=False, hideBelow=False, 
                          ctName='thermal', colorEmpty=True, smoothSigma=0.0, nBins=100, qRestrictions=None, median=False, 
@@ -989,6 +995,7 @@ def paperPlots():
 
     # figure 10b - cumulative contribution to MgII emission as a function of radial velocity (i.e. of outflows)
     if 0:
+        #sP = simParams(run='tng50-1',redshift=2.0) # referee check
         cumulativeLumVsVrad(sP)
 
     # figure 11 - line-center optical depth for MgII all-sky map
@@ -996,7 +1003,7 @@ def paperPlots():
         singleHaloImageMGII(sP, subhaloID, conf=6, font=26)
 
     # figure 12 - mock BlueMUSE image
-    if 1:
+    if 0:
         sP = simParams(run='tng50-1', redshift=0.3)
         subhaloID = 365126
         #for subhaloID in [383442,365126,407763,454671,464083]:
