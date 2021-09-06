@@ -1507,6 +1507,20 @@ class units(object):
 
         return ang_size
 
+    def physicalKpcToAngularSize(self, length_kpc, z=None, arcsec=True, arcmin=False, deg=False):
+        """ Convert a distance in physical kpc to an angular scale in [arcsec] at the given 
+        redshift z. Assumes flat cosmology. If arcmin or deg is True, then [arcmin] or [deg]. """
+        if z is None: z = self._sP.redshift
+
+        dA = self.redshiftToAngDiamDist(z)
+        ang_size = (length_kpc/1000) / dA / self.arcsec_in_rad # arcsec
+        if arcmin:
+            ang_size /= 60.0
+        if deg:
+            ang_size /= 3600.0
+
+        return ang_size        
+
     def magsToSurfaceBrightness(self, vals, pxSizeCode):
         """ Convert a set of magnitudes (probably on a grid) to surface brightness values, given a constant pxSizeCode. """
         pxSizeX = self.codeLengthToAngularSize(pxSizeCode[0], arcsec=True)

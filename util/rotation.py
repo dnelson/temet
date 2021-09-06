@@ -238,6 +238,17 @@ def rotationMatrixFromAngleDirection(angle, direction):
 
     return R.astype('float32')
 
+def rotationMatrixFromAngle(angle):
+    """ Calculate 2x2 rotation matrix for input angle, in degrees, CCW from the positive x-axis. """
+    assert not isinstance(angle,np.ndarray) # single value
+
+    angle_rad = np.radians(angle)
+    sin_a = np.sin(angle_rad)
+    cos_a = np.cos(angle_rad)
+
+    R = np.array( [[cos_a, -sin_a], [sin_a, cos_a]] )
+    return R.astype('float32')
+
 def rotateCoordinateArray(sP, pos, rotMatrix, rotCenter, shiftBack=True):
     """ Rotate a [N,3] array of Coordinates about rotCenter according to rotMatrix. """
     pos_in = np.array(pos) # do not modify input

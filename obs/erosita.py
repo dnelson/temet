@@ -6,6 +6,8 @@ import h5py
 from os.path import expanduser, isfile
 from util.helper import logZeroNaN, loadColorTable
 from plot.config import figsize
+from util.simParams import simParams
+from util.rotation import rotationMatrixFromAngle
 
 from scipy.ndimage import gaussian_filter
 from scipy.stats import binned_statistic_2d
@@ -15,6 +17,7 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
+from reproject import reproject_adaptive
 
 # config
 basePath = expanduser("~") + '/obs/eFEDS/'
@@ -77,8 +80,6 @@ def make_apetool_inputcat(source='liu', param_eef=0.9):
 
     if source == 'gama':
         data = gama_overlap()
-        data['RA'] = data['ra']
-        data['DEC'] = data['dec']
         print('After catalog cross-matching, have [%d] sources to run.' % data['ra'].size)
 
     if source == 'random':
@@ -109,13 +110,24 @@ def make_apetool_inputcat(source='liu', param_eef=0.9):
     hdu.writeto(basePath + 'ape_inputcat_%s_%s.fits' % (source,rad_str), overwrite=True)
     print('Written.')
 
+def _ecf():
+    """ Energy conversion factor. See Brunner+2021 Table D.1 [cm^2/erg]
+    and http://hea-www.harvard.edu/HRC/calib/ecf/ecf.html. """
+    ecf_02_23_kev = 1.074e12
+    ecf_05_2_kev  = 1.185e12
+    ecf_23_5_kev  = 1.147e11
+    ecf_5_8_kev   = 2.776e10
+
+    ecf = ecf_05_2_kev
+    print('Using 0.5-2.0 keV ECF.')
+
+    return ecf
+
 def parse_apetool_output_cat(source='liu', param_eef=0.9):
     """ Parse output of apetool photometry. """
     perc_levels = [16,50,84]
 
     rng = np.random.default_rng(424242)
-
-    from util.simParams import simParams
 
     rad_str = 'eef%d' % (param_eef*100) if param_eef < 1.0 else 'arcsec%d' % param_eef
     file = basePathOut + 'mllist_ape_out_%s_%s.fits' % (source,rad_str)
@@ -133,21 +145,12 @@ def parse_apetool_output_cat(source='liu', param_eef=0.9):
     #APE_RADIUS: Extraction radius in PIXELS (iff EEF!) or ARCSEC (if radius input for apetool > 1.0 i.e. in arcsec)
     #APE_POIS: Poisson probability that the extracted counts (source + background) are a fluctuation of the background.
 
-    # ECF: see Brunner+2021 Table D.1 [cm^2/erg]
-    # http://hea-www.harvard.edu/HRC/calib/ecf/ecf.html
-    ecf_02_23_kev = 1.074e12
-    ecf_05_2_kev  = 1.185e12
-    ecf_23_5_kev  = 1.147e11
-    ecf_5_8_kev   = 2.776e10
-
-    ecf = ecf_05_2_kev
-    print('Using 0.5-2.0 keV ECF.')
-
     # background-subtracted source count rate
     data['countrate'] = (data['APE_CTS'] - data['APE_BKG'] ) / data['APE_EXP'] # counts/s
     print('Total counts: %g, total count rate: %g' % (data['APE_CTS'].sum(),data['countrate'].sum()))
 
     # flux [count/sec] / [cm^2/erg] -> [erg/s/cm^2]
+    ecf = _ecf()
     data['flux'] = data['countrate'] / ecf
 
     # some sort of signal/noise ratio
@@ -187,6 +190,8 @@ def parse_apetool_output_cat(source='liu', param_eef=0.9):
         thresh3 = -14.0 # canonical 0.5-2.0kev value (Merloni+12, Pillepich+12)
         
         print('Single object detection thresholds: %.2f %.2f %.2f erg/s/arcsec^2' % (thresh1, thresh2, thresh3))
+
+        # TODO: use 'random' to compute an average background flux, and subtract it off (for a given param_eef)
 
         # luminosities
         assert data['flux'].size == gama['z'].size
@@ -399,7 +404,7 @@ def parse_apetool_output_cat(source='liu', param_eef=0.9):
         h2d = h2d[:,::-1] # then reverse x-direction to match axis reversed minmax
 
         h2d = logZeroNaN(h2d)
-        norm = Normalize(vmin=-15.0, vmax=-14.0) # flux [erg/s/cm^2]
+        norm = Normalize(vmin=-16.0, vmax=-15.0) # flux [erg/s/cm^2]
 
         plt.imshow(h2d, extent=extent, norm=norm, origin='lower', interpolation='none', aspect='equal', cmap='viridis')
 
@@ -458,8 +463,8 @@ def gama_overlap():
     inds1, inds2 = match3(gama_id, gama_id2)
 
     cat = {'gama_id' : gama_id[inds1],
-           'ra'      : ra[inds1],
-           'dec'     : dec[inds1],
+           'RA'      : ra[inds1],
+           'DEC'     : dec[inds1],
            'z'       : z[inds2],
            'mstar'   : mstar[inds2]}
 
@@ -492,6 +497,19 @@ def gama_overlap():
 
     cat_final.update(cat_new)
 
+    # load Sersic fit parameter catalog
+    path = basePathGAMA + 'SersicCatSDSS.fits'
+
+    with pyfits.open(path) as f:
+        gama_id4 = f[1].data['CATAID']
+        pa_r = f[1].data['GALPA_r'] # also have u,g,r,z,i PAs [deg, CCW from x+, see notes]
+
+    # cross-match ids
+    inds_cat, inds4 = match3(cat['gama_id'], gama_id4)
+
+    cat_new = {'pa_r' : pa_r[inds4]}
+    cat_final.update(cat_new)
+
     return cat_final
 
 def _load_map(file):
@@ -503,7 +521,9 @@ def _load_map(file):
         header = dict(f[0].header)
         #wcs = WCS(f[0].header)
 
-    #print('Grid sum (counts): ', grid.sum())
+    # fits/wcs fixes
+    header['COMMENT'] = '' # non-ascii characters
+    header['RADESYSa'] = header.pop('RADECSYS')
 
     # coordinate system
     assert header['CTYPE1'] == 'RA---SIN' and header['CTYPE2'] == 'DEC--SIN' # simple
@@ -618,8 +638,8 @@ def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=Fals
             w = np.where( (cat['mstar'] > mstar_min) & (cat['mstar'] < mstar_max) & (cat['z'] < z_max) )
             print(f"GAMA: [{len(w[0])}] galaxies of [{cat['mstar'].size}] made [{mstar_min}-{mstar_max}] M* cut.")
 
-            objs_ra = cat['ra'][w]
-            objs_dec = cat['dec'][w]
+            objs_ra = cat['RA'][w]
+            objs_dec = cat['DEC'][w]
             rad_px = (cat['mstar'][w] - 10.5) / (12.5-10.5) # [0,1]
             rad_px = rad_px/2 + 0.5 # [0.5,1]
             rad_px *= 10 # 5-10px
@@ -699,6 +719,142 @@ def vis_map(type='final'):
         file = basePathOut + "events_merged_image.fits"
         _vis_map(file, 'log counts/sec', log=True, minmax=[-5.0, -3.5], smooth=3, expcorrect=True, 
                  oplotClusters=True, oplotGAMA=True)
+
+def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
+    """ Using the pixel map, stack cutouts around sources. """
+
+    stack_px = 40
+    px_scale_target_kpc = 10.0 # pkpc, as compared to the native 4'' pixels = 7.6kpc for z=0.1
+    sP = simParams(run='tng100-1')
+
+    # quick cache
+    saveFilename = 'temp_%s.hdf5' % source
+    if isfile(saveFilename):
+        # cached
+        with h5py.File(saveFilename,'r') as f:
+            stack = f['stack'][()]
+        print(f'Loaded [{saveFilename}].')
+    else:
+        # load
+        grid_cts, header_cts, _ = _load_map(basePathOut + "events_merged_image.fits")
+        grid_exp, header_exp, _ = _load_map(basePathOut + 'events_merged_expmap.fits')
+        grid_bkg, header_bkg, _ = _load_map(basePathOut + 'bkg_map.fits')
+
+        wcs = WCS(header_cts)
+
+        # background-subtracted source count rate
+        with np.errstate(invalid='ignore'):
+            if bkg_subtract:
+                grid_countrate = (grid_cts - grid_bkg) / grid_exp # counts/s
+            else:
+                grid_countrate = grid_cts / grid_exp # counts/s
+
+        # flux [count/sec] / [cm^2/erg] -> [erg/s/cm^2]
+        grid_flux = grid_countrate / _ecf()
+
+        # surface brightness [erg/s/cm^2/arcsec^2]
+        px_area = np.abs(header_cts['CDELT1']*3600 * header_cts['CDELT2']*3600) # arcsec^2
+        grid_sb = grid_flux / px_area
+
+        w = np.where( ~np.isfinite(grid_sb) )
+        grid_sb[w] = 0.0 # clip, this is the unobserved boundaries of the map anyways
+
+        # load source catalog
+        if source == 'liu':
+            # liu testing
+            src_cat = {}
+            with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
+                for key in ['DEC','RA','z','Lbol_500kpc']:
+                    src_cat[key] = f[key][()]
+            src_cat['pa_r'] = np.zeros(src_cat['DEC'].size, dtype='float32') # no rotations
+
+        if source == 'gama':
+            # gama
+            src_cat = gama_overlap()
+
+            w = np.where(src_cat['pa_r'] < -1000) # three bad values at -9999
+            src_cat['pa_r'][w] = 0.0 # note: -90.0 < pa_r < 90.0
+
+        # convert (ra,dec) coordinates to pixel coordinates
+        px_x_coords, px_y_coords = wcs.wcs_world2pix(src_cat['RA'], src_cat['DEC'], 0)
+
+        # allocate
+        n = src_cat['RA'].size
+
+        stack = np.zeros( (stack_px, stack_px, n), dtype='float64' )
+        stack.fill(np.nan)
+
+        for i in range(n):
+            if i % int(n/10) == 0: print('%d%%' % (i/n*100))
+            # get local
+            if not reproject:
+                # simple testing
+                x = px_x_coords[i]
+                y = px_y_coords[i]
+
+                j0 = int(np.round(x - stack_px/2))
+                j1 = j0 + stack_px
+                i0 = int(np.round(y - stack_px/2))
+                i1 = i0 + stack_px
+
+                loc_sb = grid_sb[i0:i1, j0:j1]
+
+            # use reproject to do cutout with optional transformation
+            # cite: https://ui.adsabs.harvard.edu/abs/2020ascl.soft11023R/citations
+            if reproject:
+                output_wcs = WCS(naxis=2)
+                # transformation
+                output_wcs.wcs.ctype = wcs.wcs.ctype
+                # reference position i.e. center
+                output_wcs.wcs.crval = [src_cat['RA'][i], src_cat['DEC'][i]]
+                # reference pixel (i.e. in exact center of grid)
+                output_wcs.wcs.crpix = [stack_px/2 + 0.5, stack_px/2 + 0.5]
+                # pixel scale
+                px_scale_target_deg = sP.units.physicalKpcToAngularSize(px_scale_target_kpc, z=src_cat['z'][i], deg=True)
+                output_wcs.wcs.cdelt = [px_scale_target_deg, px_scale_target_deg]
+                #output_wcs.wcs.cdelt = wcs.wcs.cdelt # leave unchanged
+                # linear transformation matrix, i.e. rotation
+                angle = -1.0 * src_cat['pa_r'][i] # TODO CHECK ALL CONVENTIONS ETC FOR GAMA
+                output_wcs.wcs.pc = rotationMatrixFromAngle(angle)
+                #output_wcs.wcs.pc = [[1.0,0.0], [0.0,1.0]] # identity
+                # output grid size
+                shape_out = (stack_px, stack_px)
+
+                loc_sb, _ = reproject_adaptive( (grid_sb, wcs), output_wcs, shape_out=shape_out)
+
+                # todo: take into account the source redshift and e.g. convert flux->lum
+                #loc_sb = sP.units.fluxToLuminosity(loc_sb, z=src_cat['z'][i]) # units [erg/s/arcsec^2], is called what?
+
+            # stamp
+            stack[:,:,i] = loc_sb
+
+        with h5py.File(saveFilename,'w') as f:
+            f['stack'] = stack # temp save
+
+    # plot mean stack
+    fig = plt.figure(figsize=figsize)
+
+    if source == 'liu': vminmax = [-18.4, -16.8]
+    if source == 'gama': vminmax = [-18.4, -17.8]
+
+    norm = Normalize(vmin=vminmax[0], vmax=vminmax[1])
+    extent = np.array([-stack_px/2,stack_px/2,-stack_px/2,stack_px/2]) * px_scale_target_kpc
+
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('x [kpc]')
+    ax.set_ylabel('y [kpc]')
+    stack_mean = np.log10(np.nanmean(stack, axis=2))
+    plt.imshow(stack_mean, origin='lower', norm=norm, extent=extent, interpolation='none', aspect='equal', cmap='viridis')
+
+    # colorbar and finish
+    cax = make_axes_locatable(ax).append_axes('right', size='3%', pad=0.15)
+    cb = plt.colorbar(cax=cax)
+    cb.ax.set_ylabel('Surface Brightness [erg/s/cm$^2$/arcsec$^2$]')
+
+    fig.savefig('stack_map_cutouts_%s_%s.pdf' % (source,'reproject' if reproject else 'simple'))
+    plt.close(fig)
+
+    import pdb; pdb.set_trace()
 
 # current pipeline:
 # note: seems neither 'region' nor 'central_position' really do anything for evtool, and all autoscaling
