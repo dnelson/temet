@@ -4,12 +4,14 @@ Observational data processing, reduction, and analysis (eROSITA).
 import numpy as np
 import h5py
 from os.path import expanduser, isfile
-from util.helper import logZeroNaN, loadColorTable
+from util.helper import logZeroNaN, loadColorTable, running_median
 from plot.config import figsize
 from util.simParams import simParams
 from util.rotation import rotationMatrixFromAngle
+from projects.azimuthalAngleCGM import _get_dist_theta_grid
 
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, shift, center_of_mass
+from scipy.interpolate import interp1d
 from scipy.stats import binned_statistic_2d
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
@@ -484,9 +486,8 @@ def gama_overlap():
     inds_cat, inds3 = match3(cat['gama_id'], gama_id3)
 
     # final properties of available galaxies
-    cat_final = {}
     for key in cat:
-        cat_final[key] = cat[key][inds_cat]
+        cat[key] = cat[key][inds_cat]
 
     cat_new = {'ssfr_1gyr'     : ssfr_1gyr[inds3],
                'mstar_magphys' : mstar2[inds3],
@@ -495,7 +496,7 @@ def gama_overlap():
                'age_masswt'    : age_masswt[inds3],
                'sfr_100myr'    : sfr_100myr[inds3]}
 
-    cat_final.update(cat_new)
+    cat.update(cat_new)
 
     # load Sersic fit parameter catalog
     path = basePathGAMA + 'SersicCatSDSS.fits'
@@ -503,14 +504,19 @@ def gama_overlap():
     with pyfits.open(path) as f:
         gama_id4 = f[1].data['CATAID']
         pa_r = f[1].data['GALPA_r'] # also have u,g,r,z,i PAs [deg, CCW from x+, see notes]
+        ellip_r = f[1].data['GALELLIP_r']
 
     # cross-match ids
     inds_cat, inds4 = match3(cat['gama_id'], gama_id4)
 
-    cat_new = {'pa_r' : pa_r[inds4]}
-    cat_final.update(cat_new)
+    cat_new = {'pa_r' : pa_r[inds4],
+               'ellip_r' : ellip_r[inds4]}
+    cat.update(cat_new)
 
-    return cat_final
+    for key in cat.keys():
+        assert cat[key].size == cat['z'].size
+
+    return cat
 
 def _load_map(file):
     """ Helper. """
@@ -727,8 +733,39 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
     px_scale_target_kpc = 10.0 # pkpc, as compared to the native 4'' pixels = 7.6kpc for z=0.1
     sP = simParams(run='tng100-1')
 
+    # load source catalog
+    if source == 'liu':
+        # liu testing
+        src_cat = {}
+        with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
+            for key in ['DEC','RA','z','Lbol_500kpc']:
+                src_cat[key] = f[key][()]
+        src_cat['pa_r'] = np.zeros(src_cat['DEC'].size, dtype='float32') # no rotations
+
+    if source == 'gama':
+        # gama
+        src_cat = gama_overlap()
+
+        w = np.where(src_cat['pa_r'] < -1000) # three bad values at -9999
+        src_cat['pa_r'][w] = 0.0 # note: -90.0 < pa_r < 90.0
+
+    if source == 'random':
+        # uniform random in [RA,DEC] rectangle bounds
+        n = 10000
+        rng = np.random.default_rng(424242)
+
+        file = basePathOut + "events_merged_image.fits"
+        _, _, extent = _load_map(file)
+
+        # extent = [ra_max, ra_min, dec_min, dec_max]
+        src_cat = {}
+        src_cat['RA'] = rng.uniform(low=extent[1], high=extent[0], size=n)
+        src_cat['DEC'] = rng.uniform(low=extent[2], high=extent[3], size=n)
+        src_cat['pa_r'] = np.zeros(src_cat['DEC'].size, dtype='float32') # no rotations
+        src_cat['z'] = src_cat['pa_r'] + 0.1 # uniform
+
     # quick cache
-    saveFilename = 'temp_%s.hdf5' % source
+    saveFilename = 'stack_%s_bkgsub=%s_reproject=%s.hdf5' % (source,bkg_subtract,reproject)
     if isfile(saveFilename):
         # cached
         with h5py.File(saveFilename,'r') as f:
@@ -758,22 +795,6 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
 
         w = np.where( ~np.isfinite(grid_sb) )
         grid_sb[w] = 0.0 # clip, this is the unobserved boundaries of the map anyways
-
-        # load source catalog
-        if source == 'liu':
-            # liu testing
-            src_cat = {}
-            with h5py.File(basePath + clusterCatName.replace('.fits','.hdf5'),'r') as f:
-                for key in ['DEC','RA','z','Lbol_500kpc']:
-                    src_cat[key] = f[key][()]
-            src_cat['pa_r'] = np.zeros(src_cat['DEC'].size, dtype='float32') # no rotations
-
-        if source == 'gama':
-            # gama
-            src_cat = gama_overlap()
-
-            w = np.where(src_cat['pa_r'] < -1000) # three bad values at -9999
-            src_cat['pa_r'][w] = 0.0 # note: -90.0 < pa_r < 90.0
 
         # convert (ra,dec) coordinates to pixel coordinates
         px_x_coords, px_y_coords = wcs.wcs_world2pix(src_cat['RA'], src_cat['DEC'], 0)
@@ -822,39 +843,174 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
 
                 loc_sb, _ = reproject_adaptive( (grid_sb, wcs), output_wcs, shape_out=shape_out)
 
-                # todo: take into account the source redshift and e.g. convert flux->lum
-                #loc_sb = sP.units.fluxToLuminosity(loc_sb, z=src_cat['z'][i]) # units [erg/s/arcsec^2], is called what?
-
             # stamp
             stack[:,:,i] = loc_sb
 
         with h5py.File(saveFilename,'w') as f:
             f['stack'] = stack # temp save
 
-    # plot mean stack
-    fig = plt.figure(figsize=figsize)
+    # plot helper
+    def _plot_stack(im, vminmax, name='', rel=False, recenter=False):
+        """ Helper. """
+        fig = plt.figure(figsize=figsize)
 
+        ylabel = 'SB Flux [log erg/s/cm$^2$/arcsec$^2$]'
+
+        if vminmax[1] > 0:
+            ylabel = 'Surface Brightness [log erg/s/kpc$^2$]'
+
+        if recenter:
+            xxyy = np.arange(stack_px) + 0.5
+            xc = (im*xxyy).sum() / im.sum()
+            cc = np.array(center_of_mass(im))
+
+            im = shift(im, stack_px/2-cc, mode='reflect')
+
+        if rel:
+            # subtract radially symmetric profile
+            size_kpc = px_scale_target_kpc * stack_px
+            dist, _ = _get_dist_theta_grid(size_kpc, [stack_px,stack_px])
+
+            xx, yy, _ = running_median(dist, im, nBins=20) # in log
+
+            f = interp1d(xx, yy, kind='linear', bounds_error=False, fill_value='extrapolate')
+
+            # we have our interpolating function for the average value at a given distance
+            im = 10.0**(im) / 10.0**f(dist) # SB -> SB/<SB> (linear)
+            im = np.log10(im)
+
+            # set bounds
+            ylabel = '$\phi$-Relative SB Flux [log]'
+            if vminmax[1] > 0:
+                ylabel = '$\phi$-Relative SB [log]'
+            vminmax = [-0.2, 0.2]
+
+        norm = Normalize(vmin=vminmax[0], vmax=vminmax[1])
+        extent = np.array([-stack_px/2,stack_px/2,-stack_px/2,stack_px/2]) * px_scale_target_kpc
+
+        ax = fig.add_subplot(111)
+        ax.set_xlabel('x [kpc]')
+        ax.set_ylabel('y [kpc]')
+        
+        plt.imshow(im, origin='lower', norm=norm, extent=extent, interpolation='none', aspect='equal', cmap='viridis')
+
+        # colorbar and finish
+        cax = make_axes_locatable(ax).append_axes('right', size='3%', pad=0.15)
+        cb = plt.colorbar(cax=cax)
+        cb.ax.set_ylabel(ylabel)
+
+        fig.savefig('stack_map_cutouts_%s_%s_%s.pdf' % (source,'reproject' if reproject else 'simple',name))
+        plt.close(fig)
+
+    # stack config
     if source == 'liu': vminmax = [-18.4, -16.8]
-    if source == 'gama': vminmax = [-18.4, -17.8]
+    if source == 'gama': vminmax = [-18.6, -17.8]
+    if source == 'random': vminmax = [-19.0, -18.4]
 
-    norm = Normalize(vmin=vminmax[0], vmax=vminmax[1])
-    extent = np.array([-stack_px/2,stack_px/2,-stack_px/2,stack_px/2]) * px_scale_target_kpc
+    vminmaxnorm = [36.0, 37.5]
 
-    ax = fig.add_subplot(111)
-    ax.set_xlabel('x [kpc]')
-    ax.set_ylabel('y [kpc]')
-    stack_mean = np.log10(np.nanmean(stack, axis=2))
-    plt.imshow(stack_mean, origin='lower', norm=norm, extent=extent, interpolation='none', aspect='equal', cmap='viridis')
+    def _make_stacks(indiv_stacks, inds):
+        """ Helper. For the subset of inds images in indiv_stacks, make mean stack and mean normalized stack. """
+        stack_mean = np.log10(np.nanmean(indiv_stacks[:,:,inds], axis=2))
 
-    # colorbar and finish
-    cax = make_axes_locatable(ax).append_axes('right', size='3%', pad=0.15)
-    cb = plt.colorbar(cax=cax)
-    cb.ax.set_ylabel('Surface Brightness [erg/s/cm$^2$/arcsec$^2$]')
+        # take into account the source redshift and e.g. convert flux->lum (should probably call the latter SB, e.g. erg/s/arcsec^2)
+        stack_norm = np.zeros((stack_px,stack_px,inds.size), dtype='float64')
+        stack_norm.fill(np.nan)
 
-    fig.savefig('stack_map_cutouts_%s_%s.pdf' % (source,'reproject' if reproject else 'simple'))
-    plt.close(fig)
+        for i, ind in enumerate(inds):
+            stack_norm[:,:,i] = sP.units.fluxToLuminosity(indiv_stacks[:,:,ind], redshift=src_cat['z'][ind]) # units [erg/s/arcsec^2]
+            assert np.count_nonzero(np.isinf(stack_norm[:,:,i])) == 0
 
-    import pdb; pdb.set_trace()
+            pxlenfac = sP.units.arcsecToAngSizeKpcAtRedshift(1.0, z=src_cat['z'][ind]) # pkpc per 1.0 arcsec
+
+            stack_norm[:,:,i] /= pxlenfac**2 # [erg/s/arcsec^2] -> [erg/s/pkpc^2]
+
+        stack_norm_mean = np.log10(np.nanmean(stack_norm, axis=2))
+
+        return stack_mean, stack_norm_mean
+
+    # plot mean stack of all objects
+    inds_all = np.arange(stack.shape[2])
+    stack_mean, stack_norm_mean = _make_stacks(stack, inds=inds_all)
+
+    _plot_stack(stack_mean, vminmax, 'all')
+    _plot_stack(stack_mean, vminmax, 'all_rel', rel=True)
+
+    _plot_stack(stack_norm_mean, vminmaxnorm, 'all_norm')
+    _plot_stack(stack_norm_mean, vminmaxnorm, 'all_norm_rel', rel=True)
+
+    _plot_stack(stack_mean, vminmax, 'all_recen', recenter=True)
+    _plot_stack(stack_norm_mean, vminmaxnorm, 'all_norm_recen_rel', recenter=True, rel=True)
+
+    # special plots by source
+    if source == 'gama':
+        # test: restrict to z,M* bin
+        assert src_cat['mstar'].size == stack.shape[2]
+
+        inds = np.where( (np.abs(src_cat['mstar']-11.0) < 0.2) & (np.abs(src_cat['z']-0.1) < 0.03) )[0]
+
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+
+        _plot_stack(stack_mean, vminmax, 'Mstar11z03')
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar11z03_norm')
+
+        # restrict to M*=10.6 bin, relative
+        inds = np.where( (np.abs(src_cat['mstar']-10.6) < 0.2) )[0]
+
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+
+        _plot_stack(stack_mean, vminmax, 'Mstar106_rel', rel=True)
+        _plot_stack(stack_mean, vminmax, 'Mstar106', rel=False)
+
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar106_norm_rel', rel=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar106_norm_recen_rel', rel=True, recenter=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar106_norm', rel=False)
+
+        # restrict to small M*=10.6 bin, relative
+        inds = np.where( (np.abs(src_cat['mstar']-10.6) < 0.1) )[0]
+
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+
+        _plot_stack(stack_mean, vminmax, 'Mstar106sm_rel', rel=True)
+        _plot_stack(stack_mean, vminmax, 'Mstar106sm', rel=False)
+
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar106sm_norm_rel', rel=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar106sm_norm', rel=False)
+
+        # restrict to large M*=10.7 bin
+        inds = np.where( (np.abs(src_cat['mstar']-10.7) < 0.2) )[0]
+
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+
+        _plot_stack(stack_mean, vminmax, 'Mstar107_rel', rel=True)
+        _plot_stack(stack_mean, vminmax, 'Mstar107', rel=False)
+
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar107_norm_rel', rel=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar107_norm', rel=False)
+
+        # restrict to large M*=10.8 bin
+        inds = np.where( (np.abs(src_cat['mstar']-10.8) < 0.3) )[0]
+
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+
+        _plot_stack(stack_mean, vminmax, 'Mstar108_rel', rel=True)
+        _plot_stack(stack_mean, vminmax, 'Mstar108', rel=False)
+
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108_norm_rel', rel=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108_norm_recen_rel', rel=True, recenter=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108_norm', rel=False)
+
+        # large M*=10.8 bin and ellipticity>0.3 (i.e. disk-like)
+        inds = np.where( (np.abs(src_cat['mstar']-10.8) < 0.3) & (src_cat['ellip_r'] > 0.3) )[0]
+
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+
+        _plot_stack(stack_mean, vminmax, 'Mstar108e_rel', rel=True)
+        _plot_stack(stack_mean, vminmax, 'Mstar108e', rel=False)
+
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108e_norm_rel', rel=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108e_norm_recen_rel', rel=True, recenter=True)
+        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108e_norm', rel=False)
 
 # current pipeline:
 # note: seems neither 'region' nor 'central_position' really do anything for evtool, and all autoscaling

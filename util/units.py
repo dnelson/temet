@@ -1254,7 +1254,7 @@ class units(object):
 
         lum = flux * dist_fac
 
-        if lum.max() < np.finfo('float32').max:
+        if lum.max() < np.finfo('float32').max and lum.min() > np.finfo('float32').min:
             lum = lum.astype('float32')
 
         return lum
