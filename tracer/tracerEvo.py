@@ -104,11 +104,11 @@ def tracersTimeEvo(sP, fieldName, snapStep=None, all=True, pSplit=None):
 
             # allocate main return if needed
             if fieldName not in r:
-                r[fieldName] = np.zeros( (rLocal[fieldName].shape[0],nTracerTot), 
-                                         dtype=rLocal[fieldName].dtype )
+                nSnaps = rLocal[fieldName].shape[-1]
+                r[fieldName] = np.zeros( (nTracerTot,nSnaps), dtype=rLocal[fieldName].dtype )
 
             # stamp in return for this partType
-            r[fieldName][:, offset : offset+meta[pt]['length']] = rLocal[fieldName]
+            r[fieldName][offset : offset+meta[pt]['length'], ...] = rLocal[fieldName]
             offset += meta[pt]['length']
 
         return r
@@ -275,7 +275,7 @@ def accTime(sP, snapStep=1, rVirFac=1.0, pSplit=None, indRangeLoad=None):
     data = tracersTimeEvo(sP, 'rad_rvir', snapStep, all=True, pSplit=pSplit)
 
     # reverse so that increasing indices are increasing snapshot numbers
-    data2d = data['rad_rvir'][::-1,:]
+    data2d = data['rad_rvir'][:,::-1]
 
     data['snaps'] = data['snaps'][::-1]
     data['redshifts'] = data['redshifts'][::-1]
@@ -287,11 +287,11 @@ def accTime(sP, snapStep=1, rVirFac=1.0, pSplit=None, indRangeLoad=None):
     ww = np.where( data2d < rVirFac )
     mask2d[ww] = 1
 
-    # along second axis (trInds), take first index (lowest snap number inside) which is nonzero
-    firstSnapInsideInd = np.argmax( mask2d, axis=0 )
+    # along second axis (snaps), take index (lowest snap number inside) which is nonzero
+    firstSnapInsideInd = np.argmax( mask2d, axis=1 )
 
     # interp between index and previous (one snap before first time inside) for non-discrete answer
-    nTr = data['rad_rvir'].shape[1]
+    nTr = data['rad_rvir'].shape[0]
     accTimeInterp = np.zeros( nTr, dtype='float32' )
 
     for i in range(nTr):
@@ -316,8 +316,8 @@ def accTime(sP, snapStep=1, rVirFac=1.0, pSplit=None, indRangeLoad=None):
 
         z0 = data['redshifts'][ind0]
         z1 = data['redshifts'][ind1]
-        r0 = data2d[ind0,i]
-        r1 = data2d[ind1,i]
+        r0 = data2d[i,ind0]
+        r1 = data2d[i,ind1]
 
         # linear interpolation, find redshift where rad_rvir=rVirFac
         accTimeInterp[i] = (rVirFac-r0)/(r1-r0) * (z1-z0) + z0
@@ -456,7 +456,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
     # closest snapshot for each accretion time
     accSnap = redshiftsToClosestSnaps(data, acc_time)
 
-    assert nTr == data['subhalo_id'].shape[1] == accSnap.size
+    assert nTr == data['subhalo_id'].shape[0] == accSnap.size
 
     # prepare a mapping from snapshot number -> mpb[index]
     if sP.isZoom:
@@ -530,7 +530,7 @@ def accMode(sP, snapStep=1, pSplit=None, indRangeLoad=None):
         trParAtAccAndEarlier_HaveAtSnapNums = data['snaps'][ dataIndAcc : ]
         mpbInds_AtMatchingSnapNums = mpbIndexMap[ trParAtAccAndEarlier_HaveAtSnapNums ]
 
-        trParSubfindIDs_AtAccAndEarlier = data['subhalo_id'][ dataIndAcc : , i ] # squeeze?
+        trParSubfindIDs_AtAccAndEarlier = np.squeeze(data['subhalo_id'][ i, dataIndAcc : ])
         mpbSubfindIDs_AtAccAndEarlier = mpb['SubfindID'][ mpbInds_AtMatchingSnapNums ].copy()
 
         # wherever mpbInds_AtMachingSnapNums is -1 (MPB is untracked at this snapshot), 
@@ -632,7 +632,7 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
         for i in np.arange( inds.size ):
             if inds[i] == -1:
                 continue
-            data[fieldName][:inds[i],i] = np.nan
+            data[fieldName][i,:inds[i]] = np.nan
 
     # which functions to use
     if 'min' in extType:
@@ -644,15 +644,15 @@ def valExtremum(sP, fieldName, snapStep=1, extType='max'):
 
     # calculate extremum value
     r = {}
-    r['val'] = fval( data[fieldName], axis=0 )
+    r['val'] = fval( data[fieldName], axis=1 )
 
     # calculate the redshift when it occured
-    r['time'] = np.zeros( data[fieldName].shape[1], dtype='float32' )
-    r['time'][:] = np.nan
+    r['time'] = np.zeros( data[fieldName].shape[0], dtype='float32' )
+    r['time'].fill(np.nan)
 
     ww = np.where( ~np.isnan(r['val']) )
 
-    extInd = fargval( data[fieldName][:,ww], axis=0 )
+    extInd = fargval( data[fieldName][ww,:], axis=1 )
     r['time'][ww] = data['redshifts'][extInd]
 
     # save
@@ -677,17 +677,17 @@ def trValsAtRedshifts(sP, valName, redshifts, snapStep=1):
     # map times to data indices
     if isinstance(redshifts, (float)):
         # replicate into array
-        redshifts = redshifts * np.ones( data[valName].shape[1], dtype='float32' )
+        redshifts = redshifts * np.ones( data[valName].shape[0], dtype='float32' )
 
     inds = redshiftsToClosestSnaps(data, redshifts, indsNotSnaps=True)
 
-    assert inds.max() < data[valName].shape[0]
-    assert inds.size == data[valName].shape[1]
+    assert inds.max() < data[valName].shape[1]
+    assert inds.size == data[valName].shape[0]
 
-    # inds gives, for each tracer (second dimension of data[valName]), the index into the first 
+    # inds gives, for each tracer (first dimension of data[valName]), the index into the second
     # dimension of data[valName] that we want to extract. convert this implicit pair into 1d inds
-    inds_dim2 = np.arange(inds.shape[0])
-    inds_1d = np.ravel_multi_index( (inds, inds_dim2), data[valName].shape, mode='clip' )
+    inds_dim1 = np.arange(inds.size)
+    inds_1d = np.ravel_multi_index( (inds_dim1, inds), data[valName].shape, mode='clip' )
 
     # make a view to the contiguous flattened/1d array
     data_1d = np.ravel( data[valName] )

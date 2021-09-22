@@ -673,15 +673,15 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
         numAllocSnaps = len(snaps) if saveFilename is None else 1 # 1 vs global memory allocation
 
         if field in n_3d_fields:
-            r[field] = np.zeros( (numAllocSnaps,tracerSearchIDs.size,3), dtype=dtype )
+            r[field] = np.zeros( (tracerSearchIDs.size,3,numAllocSnaps), dtype=dtype )
         else:
-            r[field] = np.zeros( (numAllocSnaps,tracerSearchIDs.size), dtype=dtype )
+            r[field] = np.zeros( (tracerSearchIDs.size,numAllocSnaps), dtype=dtype )
 
         if field == 'parent_indextype' and sP.isSubbox:
             r[field] -= 1 # mark those tracers with parents no longer in subbox with -1
 
         # file pre-allocation? if we are saving herein, and not restarting
-        shape = (len(snaps),tracerSearchIDs.size,3) if field in n_3d_fields else (len(snaps),tracerSearchIDs.size)
+        shape = (tracerSearchIDs.size,3,len(snaps)) if field in n_3d_fields else (tracerSearchIDs.size,len(snaps))
 
         if saveFilename is not None and done.sum() == 0:
             with h5py.File(saveFilename,'r+') as f:
@@ -748,9 +748,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
             print(' '+field, flush=True)
 
             if sP.isSubbox:
-                r[field][m,tracerSearchIndsLocal] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
+                r[field][tracerSearchIndsLocal,m] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
             else:
-                r[field][m,:] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
+                r[field][:,m] = sP.snapshotSubsetP('tracer', field, inds=tracerIndsLocal)
 
             # internal saving of this field? do so now, and mark this snapshot as done
             if saveFilename is not None:
@@ -758,7 +758,7 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     f['done'][saveSnapInd] = 1
                     done[saveSnapInd] = 1
 
-                    f[field][saveSnapInd,:] = r[field][m,:]
+                    f[field][:,saveSnapInd] = r[field][:,m]
 
                 print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
 
@@ -866,33 +866,33 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                 # does this property exist for parents of this type? flag NaN if not
                 if field in gas_only_fields and ptName != 'gas':
-                    r[field][m,wType] = np.nan
+                    r[field][wType,m] = np.nan
                     continue
 
                 if field in star_only_fields and ptName != 'stars':
-                    r[field][m,wType] = np.nan
+                    r[field][wType,m] = np.nan
                     continue
 
                 if field in ['metal'] and ptName == 'bhs':
-                    r[field][m,wType] = np.nan
+                    r[field][wType,m] = np.nan
                     continue
 
                 # specialized properties
                 if field in ['parent_indextype']:
                     # encode the snapshot index of the parent (by type) as well as its type in an int64
                     # as parent_indextype = type*1e11 + index
-                    r[field][m,wType] = sP.ptNum(ptName)*int(1e11) + indsType
+                    r[field][wType,m] = sP.ptNum(ptName)*int(1e11) + indsType
                     continue
 
                 if field in ['subhalo_id']:
                     # determine parent subhalo ID
-                    r[field][m,wType] = inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, 
+                    r[field][wType,m] = inverseMapPartIndicesToSubhaloIDs(sP, indsType, ptName, 
                                           SubhaloLenType=SubhaloLenType, SnapOffsetsSubhalo=SnapOffsetsSubhalo)
                     continue
 
                 if field in ['halo_id']:
                     # determine parent subhalo ID
-                    r[field][m,wType] = inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
+                    r[field][wType,m] = inverseMapPartIndicesToHaloIDs(sP, indsType, ptName, 
                                           GroupLenType=GroupLenType, SnapOffsetsGroup=SnapOffsetsGroup)
                     continue
 
@@ -904,9 +904,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
 
                     # save directly (by dimension) if not calculating further
                     if data.ndim == 1:
-                        r[field][m,wType] = data
+                        r[field][wType,m] = data
                     else:
-                        r[field][m,wType,:] = data
+                        r[field][wType,:,m] = data
 
                     continue
 
@@ -998,13 +998,13 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     raise Exception('Unexpected.')
 
                 # save
-                r[field][m,wType] = val
+                r[field][wType,m] = val
 
                 # handle untracked halos at this snapshot which are marked by -1 (fill with NaN)
                 if not sP.isZoom:
                     w_untracked = np.where(subhaloIDs_target < 0)[0]
                     if len(w_untracked):
-                        r[field][m,wType[w_untracked]] = np.nan
+                        r[field][wType[w_untracked],m] = np.nan
 
             # internal saving of this field? do so now, and mark this snapshot as done
             if saveFilename is not None:
@@ -1013,9 +1013,9 @@ def tracersTimeEvo(sP, tracerSearchIDs, trFields, parFields, toRedshift=None, sn
                     done[saveSnapInd] = 1
 
                     if r[field].ndim == 2:
-                        f[field][saveSnapInd,:] = r[field][m,:]
+                        f[field][:,saveSnapInd] = r[field][:,m]
                     else:
-                        f[field][saveSnapInd,:,:] = r[field][m,:,:]
+                        f[field][:,:,saveSnapInd] = r[field][:,:,m]
 
                 print('  Saved snapshot index [%d] to [%s].' % (saveSnapInd,saveFilename.split("/")[-1]))
 
@@ -1352,7 +1352,7 @@ def globalTracerMPBMap(sP, halos=False, subhalos=False, trIDs=None, retMPBs=Fals
         trVals['halo_id'] = np.squeeze(trVals['halo_id']) # single snap
     else:
         # load parent_indextype of the subset
-        indRange3 = [indRange[0], indRange[1], 0] # take i=0 slice along snapshot axis
+        indRange3 = [indRange[0], indRange[1], 0] # take i=0 (z=0) slice along snapshot axis
         par_indtype = globalAllTracersTimeEvo(sP, 'parent_indextype', halos=True, indRange=indRange3)
         assert par_indtype['snaps'][0] == sP.snap
         assert par_indtype['parent_indextype'].size == trIDs.size
@@ -1484,14 +1484,14 @@ def globalAllTracersTimeEvo(sP, field, halos=True, subhalos=False, indRange=None
                                 # read full dataset for 1D (e.g. redshifts)
                                 r[k1] = f[k1][()]
                             else:
-                                # read partial dataset for 2D/3D (shape is [Nsnaps,Ntr] or [Nsnaps,Ntr,3])
+                                # read partial dataset for 2D/3D (shape is [Ntr,Nsnaps] or [Ntr,3,Nsnaps])
                                 assert len(indRange) in [1,2,3]
                                 if len(indRange) == 2:
-                                    r[k1] = f[k1][:, indRange[0]:indRange[1]]
+                                    r[k1] = f[k1][indRange[0]:indRange[1], ...]
                                 elif len(indRange) == 3:
-                                    r[k1] = f[k1][indRange[2], indRange[0]:indRange[1]]
+                                    r[k1] = f[k1][indRange[0]:indRange[1], ..., indRange[2]]
                                 else:
-                                    r[k1] = f[k1][indRange[0],:]
+                                    r[k1] = f[k1][..., indRange[0]]
 
                         continue
 

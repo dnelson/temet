@@ -14,6 +14,30 @@ from util import simParams
 from illustris_python.util import partTypeNum
 from matplotlib.backends.backend_pdf import PdfPages
 
+def reorder_tracer_tracks(name='temp'):
+    """ Reshape from (20,nTr) to (Ntr,20). """
+    print(name)
+    fname_old = f'tr_all_groups_99_{name}.hdf5'
+    fname_new = f'tr_all_groups_99_{name}_new.hdf5'
+
+    fold = h5py.File(fname_old,'r')
+    fnew = h5py.File(fname_new,'w')
+
+    fnew['redshifts'] = fold['redshifts'][()]
+    fnew['snaps'] = fold['snaps'][()]
+
+    # make dataset
+    shape = fold[name].shape[::-1] # (nSnaps,nTr) or (nSnaps,3,nTr) to (nTr,nSnaps) or (nTr,3,nSnaps)
+    dset = fnew.create_dataset(name, shape, fold[name].dtype)
+
+    for i in range(shape[1]):
+        print(i)
+        dset[...,i] = fold[name][i,...]
+
+    fold.close()
+    fnew.close()
+    print('Done.')
+
 def hbt_check():
     """ Check SubfindHBT. """
     sP = simParams(run='tng100-2', snap=50)
