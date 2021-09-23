@@ -536,7 +536,7 @@ def loadMassAndQuantity(sP, partType, partField, rotMatrix, rotCenter, method, w
         mass *= sP.units.hydrogen_massfrac * nh0_frac
 
     # molecular hydrogen (Popping pre-computed files, here with abbreviated names)
-    if partField in ['H2_BR','H2_GK','M2_KMT','HI_BR','HI_GK','HI_KMT']:
+    if partField in ['H2_BR','H2_GK','H2_KMT','HI_BR','HI_GK','HI_KMT']:
         # should generalize to colDens fields
         partFieldLoad = 'M%s_popping' % partField.replace('_','') # e.g. H2_BR -> MH2BR_popping
         mass = sP.snapshotSubsetP(partType, partFieldLoad, indRange=indRange).astype('float32')
