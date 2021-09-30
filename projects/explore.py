@@ -615,7 +615,7 @@ def nachoAngularQuenchingImage():
 
     stackedHaloImage(sP, mStarBin, conf=conf, median=median, rvirUnits=rvirUnits, depthFac=depthFac)
 
-def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, higal=False):
+def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, hot=False, higal=False):
     """ Compute Omega_Q(z) for various components (Q). Rob Yates paper 2021. """
     from cosmo.hydrogen import neutral_fraction
     sP = simParams(run='eagle')
@@ -635,6 +635,11 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, higal
     elif mstarZ:
         mstar_bins    = [ [6,13], [7,13], [8,13], [7,8], [8,9], [9,10], [10,11], [11,12], [0,13] ]
         metal_to_hydrogen_ratio_hi_weighted = np.zeros( (len(mstar_bins),snaps.size), dtype='float32')
+    elif hot:
+        mhalo_bins = [ [7,15], [10,11], [11,12], [12,13], [13,14], [13,15] ]
+        temp_cuts = [5.0, 5.5, 6.0, 6.5] # log K
+
+        rho_z_hotgas = np.zeros( (len(mhalo_bins),snaps.size,len(temp_cuts)), dtype='float32' )
     elif higal:
         rho_z_hi_gal  = np.zeros(snaps.size, dtype='float32')
         rho_z_hi_70   = np.zeros(snaps.size, dtype='float32')
@@ -706,6 +711,21 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, higal
                 avg_MH = np.sum( metal_mass[w]/H_mass[w] * HI_mass[w] ) / np.sum(HI_mass[w])
                 metal_to_hydrogen_ratio_hi_weighted[j,i] = avg_MH
 
+        elif hot:
+            # hot gas (above some temperature threshold), in halo mass bins
+            mass = sP.gas('mass') # 10^10/h msun, total mass
+            if metal_mass: mass *= sP.gas('metallicity') # metal mass
+
+            temp = sP.gas('temp')
+            parent_mhalo = sP.gas('parent_subhalo_mhalo_subfind_log') # SubhaloMass [log msun]
+
+            for j, mhalo_bin in enumerate(mhalo_bins):
+                for k, temp_threshold in enumerate(temp_cuts):
+                    with np.errstate(invalid='ignore'):
+                        w = np.where( (parent_mhalo >= mhalo_bin[0]) & (parent_mhalo < mhalo_bin[1]) & (temp > temp_threshold) )
+
+                    rho_z_hotgas[j,i,k] = np.sum(mass[w], dtype='float64') / sP.HubbleParam # 10^10 msun
+
         elif higal:
             # fraction of total HI mass in the box container within (i) galaxies (<2rhalfstars) and (ii) FoFs
             galField = 'Subhalo_Mass_2rstars_MHIGK_popping' # 'Subhalo_Mass_2rstars_HI'
@@ -774,6 +794,12 @@ def omega_metals_z(metal_mass=True, hih2=False, mstar=False, mstarZ=False, higal
     elif mstarZ:
         print('metal_to_hydrogen_ratio_hi_weighted = ', np.log10(metal_to_hydrogen_ratio_hi_weighted))
         print('mstar_bins = ', mstar_bins)
+    elif hot:
+        rho_z_hotgas *= 1e10 / sP.boxSizeCubicComovingMpc
+        print('mhalo_bins = ', mhalo_bins)
+        for k, temp_cut in enumerate(temp_cuts):
+            print('temp_cut = ', temp_cut)
+            print('rho_z_hotgas = ', rho_z_hotgas[:,:,k])
     elif higal:
         rho_z_hi_gal *= 1e10 / sP.boxSizeCubicComovingMpc
         rho_z_hi_70  *= 1e10 / sP.boxSizeCubicComovingMpc

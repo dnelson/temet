@@ -119,7 +119,7 @@ class units(object):
         self._sP = sP
 
         # Mpc for lengths instead of the usual kpc?
-        if self._sP.mpcUnits:
+        if self._sP is not None and self._sP.mpcUnits:
             self.UnitLength_in_cm = 3.085678e24 # 1000.0 kpc
 
         # derived units

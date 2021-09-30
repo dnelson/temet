@@ -1833,6 +1833,21 @@ def simSubhaloQuantity(sP, quant, clean=False, tight=False):
         minMax = [37, 42]
         #if tight: minMax = [38, 45]
 
+    if quantname in ['xray_05-2kev_r500','xray_0.5-2.0kev_r500']:
+        # x-ray luminosity from APEC (no '.' in name) or XPEC (if '.' in name, from Nhut) tables
+        eStr = '0.5-2 keV'
+        label = 'L$_{\\rm X,%s}$ [ log erg/s ]' % eStr
+
+        acStr = quantname.replace('xray_','').replace('_r500','')
+        acField = 'Subhalo_XrayLum_%s' % acStr
+
+        # load auxCat, unit conversion: [10^30 erg/s] -> [erg/s]
+        ac = sP.auxCat(fields=[acField])[acField]
+        vals = ac.astype('float64') * 1e30
+
+        minMax = [37, 42]
+        #if tight: minMax = [38, 45]
+
     if quantname in ['mg2_lum','mg2_lumsize','mg2_lumsize_rel','mg2_m20','mg2_concentration'] or \
       quantname.startswith(('mg2_shape_','mg2_area_','mg2_gini_')):
         # MgII emission luminosity [erg/s] or half-light radius, subhalo total, including dust depletion
