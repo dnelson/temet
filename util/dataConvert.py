@@ -3378,7 +3378,7 @@ def supplementVirtualSimHDF5():
     """ Add to existing 'simulation.hdf5' file (modify as needed, careful!). """
     from util.simParams import simParams
 
-    sP = simParams(run='tng50-1')
+    sP = simParams(run='tng100-1')
     assert sP.simName in getcwd() or sP.simNameAlt in getcwd() # careful
 
     # open (append mode)
@@ -3478,6 +3478,22 @@ def supplementVirtualSimHDF5():
                 gNames = ['/']
 
             _addPostprocessingCat(fSim,filepath,baseName,gNames)
+
+    if 0:
+        # change to re-ordered tracer_tracks, first delete old then add new
+        gName = '/Snapshots/99/PartType2/'
+        for key in fSim[gName]:
+            if key in ['ParentIDs','TracerIDs','redshifts','snaps']:
+                continue
+            print(f'delete old: {key}')
+            del fSim[gName+key]
+
+        filepaths = glob.glob('postprocessing/tracer_tracks/tr_all_groups*.hdf5')
+        for filepath in filepaths:
+            if '_meta' in filepath:
+                continue
+
+            _addPostprocessingCat(fSim,filepath,'Snapshots/99/PartType2',['/'])
 
     # finish custom
 

@@ -27,12 +27,18 @@ def reorder_tracer_tracks(name='temp'):
     fnew['snaps'] = fold['snaps'][()]
 
     # make dataset
-    shape = fold[name].shape[::-1] # (nSnaps,nTr) or (nSnaps,3,nTr) to (nTr,nSnaps) or (nTr,3,nSnaps)
+    shape = np.roll(fold[name].shape,-1) # (nSnaps,nTr) or (nSnaps,nTr,3) to (nTr,nSnaps) or (nTr,3,nSnaps)
     dset = fnew.create_dataset(name, shape, fold[name].dtype)
 
-    for i in range(shape[1]):
+    for i in range(shape[-1]):
         print(i)
-        dset[...,i] = fold[name][i,...]
+        if len(shape) == 2:
+            # (nSnaps,nTr) -> (nTr,nSnaps)
+            dset[...,i] = fold[name][i,...]
+        else:
+            # (nSnaps,nTr,3) -> (nTr,3,nSnaps)
+            for j in range(3):
+                dset[...,j,i] = fold[name][i,...,j]
 
     fold.close()
     fnew.close()
