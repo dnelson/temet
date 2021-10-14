@@ -1,5 +1,17 @@
 """
 Observational data processing, reduction, and analysis (eROSITA).
+
+ * aperture photometry on GAMA sources with apetool
+  - multiple eef and arcsec apertures, could interpolate to fixed pkpc apertures
+  - verification against Liu catalog values
+  - random positions: assess residual background even after 'background subtraction'
+  - could re-do anderson+ L_x vs M* plot
+
+ * image stacking on GAMA sources
+  - pretty clear detection down to M*=10.6
+  - could do: Lx vs M* split on galaxy properties (other than SFR)
+              radial profiles
+              angular anisotropy signal (truong) - not clearly there
 """
 import numpy as np
 import h5py
@@ -10,7 +22,7 @@ from util.simParams import simParams
 from util.rotation import rotationMatrixFromAngle
 from projects.azimuthalAngleCGM import _get_dist_theta_grid
 
-from scipy.ndimage import gaussian_filter, shift, center_of_mass
+from scipy.ndimage import gaussian_filter, shift, center_of_mass, rotate
 from scipy.interpolate import interp1d
 from scipy.stats import binned_statistic_2d
 import matplotlib.pyplot as plt
@@ -19,7 +31,7 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
-from reproject import reproject_adaptive
+from reproject import reproject_adaptive, reproject_interp
 
 # config
 basePath = expanduser("~") + '/obs/eFEDS/'
@@ -126,7 +138,17 @@ def _ecf():
     return ecf
 
 def parse_apetool_output_cat(source='liu', param_eef=0.9):
-    """ Parse output of apetool photometry. """
+    """ Parse output of apetool photometry and plot results, e.g. L_X vs M*.
+
+    Args:
+      source (str): if 'liu' use the Liu+ cluster sample, if 'gama' the GAMA catalog, if 'random' then 
+        generate random sampling points in the survey footprint.
+      param_eef (float): parameter specifying the aperture. If less than 1.0, interpreted as 
+        in units of EEF (enclosed energy fraction), otherwise interpreted as in units of arcsec.
+
+    Returns:
+      None
+    """
     perc_levels = [16,50,84]
 
     rng = np.random.default_rng(424242)
@@ -485,7 +507,7 @@ def gama_overlap():
     # cross-match ids
     inds_cat, inds3 = match3(cat['gama_id'], gama_id3)
 
-    # final properties of available galaxies
+    # update properties of available galaxies
     for key in cat:
         cat[key] = cat[key][inds_cat]
 
@@ -508,9 +530,27 @@ def gama_overlap():
 
     # cross-match ids
     inds_cat, inds4 = match3(cat['gama_id'], gama_id4)
+    assert inds_cat.size == cat['gama_id'].size # must find all
 
     cat_new = {'pa_r' : pa_r[inds4],
                'ellip_r' : ellip_r[inds4]}
+    cat.update(cat_new)
+
+    # load ApMatched values (for PAs)
+    path = basePathGAMA + 'ApMatchedCat.fits'
+
+    with pyfits.open(path) as f:
+        gama_id5 = f[1].data['CATAID']
+
+        theta_image = f[1].data['THETA_IMAGE'] # Position angle on image (counterclockwise, r band)
+        theta_j2000 = f[1].data['THETA_J2000'] # Position angle on sky (east of north, r band)
+
+    # cross-match ids
+    inds_cat, inds5 = match3(cat['gama_id'], gama_id5)
+    assert inds_cat.size == cat['gama_id'].size # must find all
+
+    cat_new = {'theta_image' : theta_image[inds5],
+               'theta_j2000' : theta_j2000[inds5]}
     cat.update(cat_new)
 
     for key in cat.keys():
@@ -542,22 +582,24 @@ def _load_map(file):
     #radec = wcs.pixel_to_world(0,0)
     extent = [ra_max, ra_min, dec_min, dec_max]
 
-    print(f'{grid.shape = }')
-    print(f'{extent = }')
-    print(f'pixel scale = {header["CDELT2"]*60*60:.2f} arcsec/px')
+    #print(f'{grid.shape = }')
+    #print(f'{extent = }')
+    #print(f'pixel scale = {header["CDELT2"]*60*60:.2f} arcsec/px')
 
     return grid, header, extent
 
 def _vis_map(file, clabel, log=False, smooth=False, minmax=None, expcorrect=False, 
              oplotClusters=False, oplotGAMA=False):
     """ Visualization helper: load and make a figure of a sky map in a fits file.
-    clabel : label for the map.
-    log : take log of grid.
-    smooth: specify a float [pixel units] for Gaussian smoothing.
-    minmax: 2-tuple for display.
-    expcorrect: if True, normalize the loaded map by the corresponding exposure map.
-    oplotClusters: overplot markers for the eFEDS Liu+ cluster catalog.
-    oplotGAMA: overplot markers for GAMA galaxies in the field, within a M* bin.
+
+    Args:
+      clabel (str): label for the map.
+      log (bool): take log of grid.
+      smooth (float): specify a float [pixel units] for Gaussian smoothing.
+      minmax (float[2]): 2-tuple for scaling the displayed map.
+      expcorrect (bool): if True, normalize the loaded map by the corresponding exposure map.
+      oplotClusters (bool): overplot markers for the eFEDS Liu+ cluster catalog.
+      oplotGAMA (bool): overplot markers for GAMA galaxies in the field, within a M* bin.
     """
     file_out = file.replace('.fits','.pdf')
 
@@ -727,10 +769,22 @@ def vis_map(type='final'):
                  oplotClusters=True, oplotGAMA=True)
 
 def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
-    """ Using the pixel map, stack cutouts around sources. """
+    """ Using the pixel map, stack cutouts around sources.
 
-    stack_px = 40
+    Args:
+      source (str): if 'liu' use the Liu+ cluster sample, if 'gama' the GAMA catalog, if 'random' then 
+        generate random sampling points in the survey footprint.
+      bkg_subtract (bool): if True, then also load the background map and subtract, prior to stacking.
+      reproject (bool): if True, use the (expensive) reprojection algorithm. If 'interp', then use 
+        faster interpolation algorithm within reproject. If False, do a very simple 
+        shift approach, with no sub-pixel sampling, and no support for rotation.
+    """
+
+    # config
+    stack_px = 40 # final map size, per dimension
     px_scale_target_kpc = 10.0 # pkpc, as compared to the native 4'' pixels = 7.6kpc for z=0.1
+    exptime_thresh = 500.0 # sources in areas below this mean value are skipped [sec]
+
     sP = simParams(run='tng100-1')
 
     # load source catalog
@@ -765,7 +819,8 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         src_cat['z'] = src_cat['pa_r'] + 0.1 # uniform
 
     # quick cache
-    saveFilename = 'stack_%s_bkgsub=%s_reproject=%s.hdf5' % (source,bkg_subtract,reproject)
+    saveFilename = basePath + 'stack_%s_bkgsub=%s_reproject=%s.hdf5' % (source,bkg_subtract,reproject)
+
     if isfile(saveFilename):
         # cached
         with h5py.File(saveFilename,'r') as f:
@@ -806,48 +861,84 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         stack.fill(np.nan)
 
         for i in range(n):
-            if i % int(n/10) == 0: print('%d%%' % (i/n*100))
-            # get local
+            if i % int(n/20) == 0: print('%d%%' % (i/n*100))
+
+            # (ra,dec) -> (x,y)
+            x = px_x_coords[i]
+            y = px_y_coords[i]
+
+            j0 = int(np.round(x - stack_px/2))
+            j1 = j0 + stack_px
+            i0 = int(np.round(y - stack_px/2))
+            i1 = i0 + stack_px
+
+            # is position within the sampled map?
+            if (j0 < 0 or j0 > grid_sb.shape[1]) or (j1 < 0 or j1 > grid_sb.shape[1]) or \
+               (i0 < 0 or i0 > grid_sb.shape[0]) or (i1 < 0 or i1 > grid_sb.shape[1]):
+               # cutout intersects edge of map
+               continue
+
+            loc_exptime = grid_exp[i0:i1, j0:j1]
+
+            if loc_exptime.mean() < exptime_thresh:
+                # heavily vignetted, or entirely off pointings
+                continue
+
+            # get local map cutout: simple local portion of original map
             if not reproject:
-                # simple testing
-                x = px_x_coords[i]
-                y = px_y_coords[i]
-
-                j0 = int(np.round(x - stack_px/2))
-                j1 = j0 + stack_px
-                i0 = int(np.round(y - stack_px/2))
-                i1 = i0 + stack_px
-
                 loc_sb = grid_sb[i0:i1, j0:j1]
+
+                # do rough rotation: pa_r directly from GAMA/GALFIT, "PA (x+, CCW)"
+                angle = src_cat['pa_r'][i] + (src_cat['theta_j2000'][i] - src_cat['theta_image'][i]) # 'on-sky angle'
+                angle *= -1.0 # undo pa
+
+                loc_sb = rotate(loc_sb, angle, axes=(1,0), reshape=False, mode='constant', cval=loc_sb.min()/10)
 
             # use reproject to do cutout with optional transformation
             # cite: https://ui.adsabs.harvard.edu/abs/2020ascl.soft11023R/citations
             if reproject:
                 output_wcs = WCS(naxis=2)
+
                 # transformation
                 output_wcs.wcs.ctype = wcs.wcs.ctype
+
                 # reference position i.e. center
                 output_wcs.wcs.crval = [src_cat['RA'][i], src_cat['DEC'][i]]
+
                 # reference pixel (i.e. in exact center of grid)
-                output_wcs.wcs.crpix = [stack_px/2 + 0.5, stack_px/2 + 0.5]
+                output_wcs.wcs.crpix = [stack_px/2, stack_px/2] #[stack_px/2 + 0.5, stack_px/2 + 0.5]
+
                 # pixel scale
                 px_scale_target_deg = sP.units.physicalKpcToAngularSize(px_scale_target_kpc, z=src_cat['z'][i], deg=True)
                 output_wcs.wcs.cdelt = [px_scale_target_deg, px_scale_target_deg]
                 #output_wcs.wcs.cdelt = wcs.wcs.cdelt # leave unchanged
+
                 # linear transformation matrix, i.e. rotation
-                angle = -1.0 * src_cat['pa_r'][i] # TODO CHECK ALL CONVENTIONS ETC FOR GAMA
+                #angle = -1.0 * src_cat['pa_r'][i] # directly from GAMA/GALFIT is "PA (x+, CCW)"
+                angle = src_cat['pa_r'][i] + (src_cat['theta_j2000'][i] - src_cat['theta_image'][i]) # 'on-sky angle'
+                angle *= -1.0 # undo pa
+
                 output_wcs.wcs.pc = rotationMatrixFromAngle(angle)
                 #output_wcs.wcs.pc = [[1.0,0.0], [0.0,1.0]] # identity
+
                 # output grid size
                 shape_out = (stack_px, stack_px)
 
-                loc_sb, _ = reproject_adaptive( (grid_sb, wcs), output_wcs, shape_out=shape_out)
+                if reproject == 'interp':
+                    loc_sb, _ = reproject_interp( (grid_sb, wcs), output_wcs, shape_out=shape_out)
+                else:
+                    loc_sb, _ = reproject_adaptive( (grid_sb, wcs), output_wcs, shape_out=shape_out)
 
             # stamp
             stack[:,:,i] = loc_sb
 
         with h5py.File(saveFilename,'w') as f:
             f['stack'] = stack # temp save
+
+    # count valid
+    bad_counts = np.count_nonzero( np.isnan(stack), axis=(0,1) )
+    num_bad = len(np.where(bad_counts > 0)[0])
+    print(f'Stackable sources in exposed area: {stack.shape[2]-num_bad}')
 
     # plot helper
     def _plot_stack(im, vminmax, name='', rel=False, recenter=False):
@@ -860,18 +951,22 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
             ylabel = 'Surface Brightness [log erg/s/kpc$^2$]'
 
         if recenter:
-            xxyy = np.arange(stack_px) + 0.5
-            xc = (im*xxyy).sum() / im.sum()
-            cc = np.array(center_of_mass(im))
+            #xxyy = np.arange(stack_px) + 0.5
+            #xc = (im*xxyy).sum() / im.sum()
+            im2 = im.copy()
+            im2[np.isnan(im)] = np.nanmin(im) - 1.0
 
-            im = shift(im, stack_px/2-cc, mode='reflect')
+            cc = np.array(center_of_mass(im2))
+
+            im = shift(im2, stack_px/2-cc, mode='constant', cval=np.nanmin(im)-1.0)
 
         if rel:
             # subtract radially symmetric profile
             size_kpc = px_scale_target_kpc * stack_px
             dist, _ = _get_dist_theta_grid(size_kpc, [stack_px,stack_px])
 
-            xx, yy, _ = running_median(dist, im, nBins=20) # in log
+            w = np.where(~np.isnan(im))
+            xx, yy, _ = running_median(dist[w], im[w], nBins=20) # in log
 
             f = interp1d(xx, yy, kind='linear', bounds_error=False, fill_value='extrapolate')
 
@@ -899,7 +994,10 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         cb = plt.colorbar(cax=cax)
         cb.ax.set_ylabel(ylabel)
 
-        fig.savefig('stack_map_cutouts_%s_%s_%s.pdf' % (source,'reproject' if reproject else 'simple',name))
+        rStr = 'simple'
+        if reproject == True: rStr = 'reproject'
+        if reproject in ['interp']: rStr = reproject
+        fig.savefig('stack_map_cutouts_%s_%s_%s.pdf' % (source,rStr,name))
         plt.close(fig)
 
     # stack config
@@ -909,9 +1007,10 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
 
     vminmaxnorm = [36.0, 37.5]
 
-    def _make_stacks(indiv_stacks, inds):
+    def _make_stacks(indiv_stacks, inds, name=''):
         """ Helper. For the subset of inds images in indiv_stacks, make mean stack and mean normalized stack. """
-        stack_mean = np.log10(np.nanmean(indiv_stacks[:,:,inds], axis=2))
+        stack_mean = logZeroNaN(np.nanmean(indiv_stacks[:,:,inds], axis=2))
+        print(f'[{name}] stacking [{inds.size}] galaxies.')
 
         # take into account the source redshift and e.g. convert flux->lum (should probably call the latter SB, e.g. erg/s/arcsec^2)
         stack_norm = np.zeros((stack_px,stack_px,inds.size), dtype='float64')
@@ -925,13 +1024,13 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
 
             stack_norm[:,:,i] /= pxlenfac**2 # [erg/s/arcsec^2] -> [erg/s/pkpc^2]
 
-        stack_norm_mean = np.log10(np.nanmean(stack_norm, axis=2))
+        stack_norm_mean = logZeroNaN(np.nanmean(stack_norm, axis=2))
 
         return stack_mean, stack_norm_mean
 
     # plot mean stack of all objects
     inds_all = np.arange(stack.shape[2])
-    stack_mean, stack_norm_mean = _make_stacks(stack, inds=inds_all)
+    stack_mean, stack_norm_mean = _make_stacks(stack, inds=inds_all, name='all')
 
     _plot_stack(stack_mean, vminmax, 'all')
     _plot_stack(stack_mean, vminmax, 'all_rel', rel=True)
@@ -949,7 +1048,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
 
         inds = np.where( (np.abs(src_cat['mstar']-11.0) < 0.2) & (np.abs(src_cat['z']-0.1) < 0.03) )[0]
 
-        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds, name='Mstar11z03')
 
         _plot_stack(stack_mean, vminmax, 'Mstar11z03')
         _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar11z03_norm')
@@ -957,7 +1056,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         # restrict to M*=10.6 bin, relative
         inds = np.where( (np.abs(src_cat['mstar']-10.6) < 0.2) )[0]
 
-        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds, name='Mstar106')
 
         _plot_stack(stack_mean, vminmax, 'Mstar106_rel', rel=True)
         _plot_stack(stack_mean, vminmax, 'Mstar106', rel=False)
@@ -969,7 +1068,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         # restrict to small M*=10.6 bin, relative
         inds = np.where( (np.abs(src_cat['mstar']-10.6) < 0.1) )[0]
 
-        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds, name='Mstar106sm')
 
         _plot_stack(stack_mean, vminmax, 'Mstar106sm_rel', rel=True)
         _plot_stack(stack_mean, vminmax, 'Mstar106sm', rel=False)
@@ -980,7 +1079,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         # restrict to large M*=10.7 bin
         inds = np.where( (np.abs(src_cat['mstar']-10.7) < 0.2) )[0]
 
-        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds, name='Mstar107')
 
         _plot_stack(stack_mean, vminmax, 'Mstar107_rel', rel=True)
         _plot_stack(stack_mean, vminmax, 'Mstar107', rel=False)
@@ -991,7 +1090,7 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         # restrict to large M*=10.8 bin
         inds = np.where( (np.abs(src_cat['mstar']-10.8) < 0.3) )[0]
 
-        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+        stack_mean, stack_norm_mean = _make_stacks(stack, inds, name='Mstar108')
 
         _plot_stack(stack_mean, vminmax, 'Mstar108_rel', rel=True)
         _plot_stack(stack_mean, vminmax, 'Mstar108', rel=False)
@@ -1001,16 +1100,18 @@ def stack_map_cutouts(source='liu', bkg_subtract=True, reproject=True):
         _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108_norm', rel=False)
 
         # large M*=10.8 bin and ellipticity>0.3 (i.e. disk-like)
-        inds = np.where( (np.abs(src_cat['mstar']-10.8) < 0.3) & (src_cat['ellip_r'] > 0.3) )[0]
+        for e_thresh in [0.3,0.5,0.6,0.7]:
+            inds = np.where( (np.abs(src_cat['mstar']-10.8) < 0.3) & (src_cat['ellip_r'] > e_thresh) )[0]
 
-        stack_mean, stack_norm_mean = _make_stacks(stack, inds)
+            name = 'Mstar108e%d' % (e_thresh*10)
+            stack_mean, stack_norm_mean = _make_stacks(stack, inds, name=name)
 
-        _plot_stack(stack_mean, vminmax, 'Mstar108e_rel', rel=True)
-        _plot_stack(stack_mean, vminmax, 'Mstar108e', rel=False)
+            _plot_stack(stack_mean, vminmax, name+'_rel', rel=True)
+            _plot_stack(stack_mean, vminmax, name, rel=False)
 
-        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108e_norm_rel', rel=True)
-        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108e_norm_recen_rel', rel=True, recenter=True)
-        _plot_stack(stack_norm_mean, vminmaxnorm, 'Mstar108e_norm', rel=False)
+            _plot_stack(stack_norm_mean, vminmaxnorm, name+'_norm_rel', rel=True)
+            _plot_stack(stack_norm_mean, vminmaxnorm, name+'_norm_recen_rel', rel=True, recenter=True)
+            _plot_stack(stack_norm_mean, vminmaxnorm, name+'_norm', rel=False)
 
 # current pipeline:
 # note: seems neither 'region' nor 'central_position' really do anything for evtool, and all autoscaling
