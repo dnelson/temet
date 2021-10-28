@@ -322,7 +322,7 @@ class sps():
 
         zStr = ''
         if redshifted:
-            zStr = '_z=%.1f' % sP.redshift
+            zStr = '_z=%.3f' % sP.redshift
             #print(' COMPUTING STELLAR MAGS/SPECTRA WITH REDSHIFT (z=%.1f)!' % sP.redshift)
             # cosmology in FSPS is hard-coded (sps_vars.f90), and this has been set to TNG values
             assert sP.omega_m == 0.3089 and sP.omega_L == 0.6911 and sP.HubbleParam == 0.6774

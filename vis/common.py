@@ -1102,9 +1102,14 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
 
     if 'stellarBandObsFrame-' in partField:
         # convert linear luminosities back to magnitudes
-        grid = sP.units.lumToAbsMag( grid )
+        ww = np.where(grid == 0.0)
+        w2 = np.where(grid > 0.0)
+        grid[w2] = sP.units.lumToAbsMag( grid[w2] )
+
         pxSizeCode = [boxSizeImg[0] / nPixels[0], boxSizeImg[1] / nPixels[1]]
         grid = sP.units.magsToSurfaceBrightness(grid, pxSizeCode)
+
+        grid[ww] = 99.0
 
         bandName = partField.split("stellarBandObsFrame-")[1]
         config['label'] = 'Stellar %s Luminosity [mag / arcsec$^2$]' % bandName
@@ -1162,10 +1167,16 @@ def gridOutputProcess(sP, grid, partType, partField, boxSizeImg, nPixels, projTy
         # compute a guess for an adaptively clipped heuristic [min,max] bound
         if logMin:
             data_grid = logZeroNaN(grid) + gridOffset
-            config['vMM_guess'] = np.nanpercentile(data_grid, [15,99.5])
+            guess_grid = data_grid[np.isfinite(data_grid)]
+            config['vMM_guess'] = np.nanpercentile(guess_grid, [15,99.5])
         else:
             data_grid = grid.copy() + gridOffset
-            config['vMM_guess'] = np.nanpercentile(data_grid, [5,99.5])
+            guess_grid = data_grid[np.isfinite(data_grid)]
+            config['vMM_guess'] = np.nanpercentile(guess_grid, [5,99.5])
+
+        if 'stellarBand' in partField:
+            guess_grid = data_grid[data_grid < 99.0]
+            config['vMM_guess'] = np.nanpercentile(guess_grid, [5,99.5])
 
         # handle requested log
         if logMin:
